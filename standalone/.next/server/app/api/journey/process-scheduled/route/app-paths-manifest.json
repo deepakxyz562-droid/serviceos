@@ -1,0 +1,3 @@
+{
+  "/api/journey/process-scheduled/route": "app/api/journey/process-scheduled/route.js"
+}

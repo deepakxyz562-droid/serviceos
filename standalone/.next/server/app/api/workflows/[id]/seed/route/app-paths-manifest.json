@@ -1,0 +1,3 @@
+{
+  "/api/workflows/[id]/seed/route": "app/api/workflows/[id]/seed/route.js"
+}

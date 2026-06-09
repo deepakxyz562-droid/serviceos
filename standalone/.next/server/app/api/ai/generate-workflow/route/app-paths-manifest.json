@@ -1,0 +1,3 @@
+{
+  "/api/ai/generate-workflow/route": "app/api/ai/generate-workflow/route.js"
+}

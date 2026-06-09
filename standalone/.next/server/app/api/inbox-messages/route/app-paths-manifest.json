@@ -1,0 +1,3 @@
+{
+  "/api/inbox-messages/route": "app/api/inbox-messages/route.js"
+}

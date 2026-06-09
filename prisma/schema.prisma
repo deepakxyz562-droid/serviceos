@@ -1,0 +1,1659 @@
+generator client {
+  provider = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// MULTI-TENANT CORE
+// ==========================================
+
+model Tenant {
+  id                String   @id @default(cuid())
+  name              String
+  slug              String   @unique
+  industry          String?
+  logo              String?
+  phone             String?
+  email             String?
+  address           String?
+  country           String   @default("US")
+  currency          String   @default("USD")
+  whatsappPhone     String?
+  whatsappConfigJson String @default("{}")
+  plan              String   @default("starter")
+  planStatus        String   @default("trial")
+  trialEndsAt       DateTime?
+  planStartedAt     DateTime?
+  planEndsAt        DateTime?
+  settingsJson      String   @default("{}")
+  onboardingCompleted Boolean @default(false)
+  onboardingStep    Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  users           User[]
+  workspaces      Workspace[]
+  leads           Lead[]
+  invoices        Invoice[]
+  subscriptions   Subscription[]
+  services        Service[]
+  reviews         Review[]
+  notifications   Notification[]
+  quotes          Quote[]
+  notificationLogs NotificationLog[]
+  conversations   Conversation[]
+
+  @@index([slug])
+  @@index([plan])
+}
+
+model Subscription {
+  id                      String   @id @default(cuid())
+  tenantId                String
+  plan                    String
+  status                  String   @default("trial")
+  amount                  Float    @default(0)
+  currency                String   @default("USD")
+  billingCycle            String   @default("monthly")
+  startDate               DateTime @default(now())
+  endDate                 DateTime?
+  trialEndsAt             DateTime?
+  paypalSubscriptionId    String?
+  paypalPlanId            String?
+  paypalOrderId           String?
+  paypalPayerEmail        String?
+  paymentProvider         String   @default("none")
+  maxUsers                Int      @default(1)
+  maxJobs                 Int      @default(100)
+  maxWorkflows            Int      @default(10)
+  featuresJson            String   @default("{}")
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+}
+
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  name            String?
+  passwordHash    String?
+  avatar          String?
+  role            String   @default("owner")
+  authProvider    String   @default("email")
+  authProviderId  String?
+  phone           String?
+  isActive        Boolean  @default(true)
+  lastLoginAt     DateTime?
+  tenantId        String?
+  workspaceId     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant       Tenant?     @relation(fields: [tenantId], references: [id])
+  workspace    Workspace?  @relation(fields: [workspaceId], references: [id])
+  apiKeys      ApiKey[]
+  auditLogs    AuditLog[]
+  workflows    Workflow[]  @relation("WorkflowCreator")
+  credentials  Credential[] @relation("CredentialOwner")
+  notifications Notification[]
+  employeeAccount Employee?
+  employeeStatusLogs EmployeeStatusLog[]
+
+  @@index([email])
+  @@index([tenantId])
+}
+
+// ==========================================
+// SERVICE CATALOG
+// ==========================================
+
+model Service {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  category    String   @default("general")
+  basePrice   Float    @default(0)
+  duration    Int      @default(60)
+  icon        String?
+  isActive    Boolean  @default(true)
+  tenantId    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([category])
+}
+
+// ==========================================
+// LEAD MANAGEMENT
+// ==========================================
+
+model Lead {
+  id              String   @id @default(cuid())
+  name            String
+  phone           String
+  email           String?
+  source          String   @default("manual")
+  status          String   @default("new")
+  priority        String   @default("medium")
+  value           Float    @default(0)
+  description     String?
+  address         String?
+  serviceType     String?
+  serviceId       String?
+  assignedToId    String?
+  tenantId        String?
+  customerId      String?
+  jobId           String?  @unique
+  notesJson       String   @default("[]")
+  tagsJson        String   @default("[]")
+  followUpAt      DateTime?
+  convertedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant     Tenant?   @relation(fields: [tenantId], references: [id])
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  job        Job?      @relation(fields: [jobId], references: [id])
+  assignedTo Employee? @relation(fields: [assignedToId], references: [id])
+  conversation Conversation?
+  journey      CustomerJourney?
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([source])
+  @@index([createdAt])
+}
+
+// ==========================================
+// INVOICES
+// ==========================================
+
+model Invoice {
+  id          String    @id @default(cuid())
+  number      String    @unique
+  tenantId    String?
+  jobId       String?
+  customerId  String?
+  employeeId  String?
+  amount      Float     @default(0)
+  tax         Float     @default(0)
+  discount    Float     @default(0)
+  total       Float     @default(0)
+  currency    String    @default("USD")
+  status      String    @default("draft")
+  dueDate     DateTime?
+  paidAt      DateTime?
+  itemsJson   String    @default("[]")
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant   Tenant?   @relation(fields: [tenantId], references: [id])
+  job      Job?      @relation(fields: [jobId], references: [id])
+  customer Customer? @relation(fields: [customerId], references: [id])
+  employee Employee? @relation(fields: [employeeId], references: [id])
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([customerId])
+}
+
+// ==========================================
+// REVIEWS
+// ==========================================
+
+model Review {
+  id          String   @id @default(cuid())
+  rating      Int      @default(5)
+  comment     String?
+  jobId       String?  @unique
+  customerId  String?
+  employeeId  String?
+  tenantId    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([employeeId])
+  @@index([rating])
+}
+
+// ==========================================
+// NOTIFICATIONS
+// ==========================================
+
+model Notification {
+  id        String   @id @default(cuid())
+  title     String
+  message   String
+  type      String   @default("info")
+  userId    String?
+  tenantId  String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user   User?   @relation(fields: [userId], references: [id])
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@index([userId])
+  @@index([tenantId])
+  @@index([read])
+}
+
+// ==========================================
+// QUOTES
+// ==========================================
+
+model Quote {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  itemsJson   String    @default("[]")
+  subtotal    Float     @default(0)
+  tax         Float     @default(0)
+  discount    Float     @default(0)
+  total       Float     @default(0)
+  status      String    @default("draft")
+  tenantId    String?
+  customerId  String?
+  leadId      String?
+  validUntil  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([status])
+}
+
+// ==========================================
+// WORKFLOW AUTOMATION
+// ==========================================
+
+model Workspace {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  industry      String?
+  logo          String?
+  plan          String   @default("free")
+  planExpiresAt DateTime?
+  ownerId       String
+  tenantId      String?
+  settingsJson  String   @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant?     @relation(fields: [tenantId], references: [id])
+  users         User[]
+  workflows     Workflow[]
+  credentials   Credential[]
+  variables     Variable[]
+  employees     Employee[]
+  customers     Customer[]
+  resources     Resource[]
+  jobs          Job[]
+  contactLists  ContactList[]
+  folders       Folder[]
+  webhookSources WebhookSource[]
+
+  @@index([tenantId])
+}
+
+model Workflow {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  nodesJson     String   @default("[]")
+  edgesJson     String   @default("[]")
+  settingsJson  String   @default("{}")
+  active        Boolean  @default(false)
+  tags          String   @default("[]")
+  folderId      String?
+  workspaceId   String?
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workspace    Workspace?    @relation(fields: [workspaceId], references: [id])
+  createdBy    User?         @relation("WorkflowCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  versions     WorkflowVersion[]
+  executions   Execution[]
+  webhooks     WebhookRegistration[]
+  folder       Folder?       @relation(fields: [folderId], references: [id])
+
+  @@index([workspaceId])
+  @@index([active])
+}
+
+model WorkflowVersion {
+  id           String   @id @default(cuid())
+  workflowId   String
+  snapshotJson String
+  message      String?
+  createdById  String?
+  createdAt    DateTime @default(now())
+  workflow     Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+}
+
+model Credential {
+  id            String   @id @default(cuid())
+  name          String
+  type          String
+  encryptedData String
+  workspaceId   String?
+  userId        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+  user      User?      @relation("CredentialOwner", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+}
+
+model Execution {
+  id           String    @id @default(cuid())
+  workflowId   String
+  status       String    @default("running")
+  mode         String    @default("manual")
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+  dataJson     String    @default("{}")
+  errorJson    String?
+  durationMs   Int?
+  workflow     Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  nodeData     ExecutionNodeData[]
+
+  @@index([workflowId])
+  @@index([status])
+}
+
+model ExecutionNodeData {
+  id          String   @id @default(cuid())
+  executionId String
+  nodeName    String
+  nodeId      String
+  inputJson   String   @default("[]")
+  outputJson  String   @default("[]")
+  errorJson   String?
+  durationMs  Int?
+  status      String   @default("success")
+  execution   Execution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([executionId])
+}
+
+model WebhookRegistration {
+  id          String   @id @default(cuid())
+  workflowId  String
+  path        String
+  method      String   @default("POST")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+  @@index([path])
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  userId       String?
+  action       String
+  resourceType String?
+  resourceId   String?
+  ip           String?
+  metadataJson String?
+  createdAt    DateTime @default(now())
+  user         User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  userId    String
+  keyHash   String
+  name      String
+  scopes    String   @default("[]")
+  lastUsed  DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@unique([keyHash])
+}
+
+model Variable {
+  id             String   @id @default(cuid())
+  key            String
+  valueEncrypted String
+  workspaceId    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  workspace      Workspace? @relation(fields: [workspaceId], references: [id])
+
+  @@unique([key, workspaceId])
+}
+
+model Folder {
+  id          String   @id @default(cuid())
+  name        String
+  parentId    String?
+  workspaceId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+  workflows   Workflow[]
+  parent      Folder?  @relation("FolderHierarchy", fields: [parentId], references: [id])
+  children    Folder[] @relation("FolderHierarchy")
+
+  @@index([workspaceId])
+}
+
+model Template {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  workflowJson String
+  category     String
+  icon         String?
+  featured     Boolean  @default(false)
+  usageCount   Int      @default(0)
+  rating       Float    @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([category])
+}
+
+// ==========================================
+// BUSINESS OPERATIONS
+// ==========================================
+
+model Employee {
+  id              String    @id @default(cuid())
+  name            String
+  phone           String
+  email           String?
+  role            String    @default("technician")
+  skills          String    @default("[]")
+  status          String    @default("available")
+  avatar          String?
+  whatsappId      String?
+  rating          Float     @default(0)
+  completedJobs   Int       @default(0)
+  location        String?
+  latitude        Float?
+  longitude       Float?
+  workspaceId     String?
+  lastSeenAt      DateTime?
+  currentJobId    String?   @unique
+  userId          String?   @unique
+  lastLocationAt  DateTime?
+  onLeaveUntil    DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  workspace       Workspace?              @relation(fields: [workspaceId], references: [id])
+  assignedJobs    Job[]                   @relation("JobAssignee")
+  leads           Lead[]
+  invoices        Invoice[]
+  currentJob      Job?                    @relation("EmployeeCurrentJob", fields: [currentJobId], references: [id])
+  userAccount     User?                   @relation(fields: [userId], references: [id])
+  statusLogs      EmployeeStatusLog[]
+  notificationLogs NotificationLog[]
+
+  @@index([role])
+  @@index([status])
+  @@index([workspaceId])
+  @@index([lastSeenAt])
+  @@index([currentJobId])
+  @@index([userId])
+}
+
+model EmployeeStatusLog {
+  id           String   @id @default(cuid())
+  employeeId   String
+  fromStatus   String?
+  toStatus     String
+  reason       String?
+  changedById  String?
+  metadataJson String   @default("{}")
+  createdAt    DateTime @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  changedBy User?   @relation(fields: [changedById], references: [id])
+
+  @@index([employeeId])
+  @@index([toStatus])
+  @@index([createdAt])
+}
+
+model NotificationLog {
+  id            String   @id @default(cuid())
+  type          String   @default("whatsapp")  // whatsapp, email, sms, push, in_app
+  recipient     String
+  recipientName String?
+  recipientRole String?  // employee, customer, manager
+  subject       String?
+  message       String
+  status        String   @default("sent")  // sent, delivered, read, failed
+  externalId    String?  // WhatsApp message ID, email message ID, etc.
+  jobId         String?
+  employeeId    String?
+  customerId    String?
+  tenantId      String?
+  metadataJson  String   @default("{}")
+  createdAt     DateTime @default(now())
+
+  job      Job?      @relation(fields: [jobId], references: [id])
+  employee Employee? @relation(fields: [employeeId], references: [id])
+  customer Customer? @relation(fields: [customerId], references: [id])
+  tenant   Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@index([type])
+  @@index([status])
+  @@index([jobId])
+  @@index([employeeId])
+  @@index([customerId])
+  @@index([createdAt])
+}
+
+model Customer {
+  id          String   @id @default(cuid())
+  name        String
+  phone       String
+  email       String?
+  address     String?
+  whatsappId  String?
+  workspaceId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+  jobs      Job[]
+  invoices  Invoice[]
+  leads     Lead[]
+  notificationLogs NotificationLog[]
+  conversations        Conversation[]
+  journeys             CustomerJourney[]
+  portalSessions       CustomerPortalSession[]
+
+  @@index([phone])
+  @@index([workspaceId])
+}
+
+model Resource {
+  id            String   @id @default(cuid())
+  name          String
+  phone         String
+  type          String   @default("driver")
+  status        String   @default("available")
+  skills        String   @default("[]")
+  location      String?
+  avatar        String?
+  whatsappId    String?
+  rating        Float    @default(0)
+  completedJobs Int      @default(0)
+  metadataJson  String?
+  workspaceId   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  workspace    Workspace? @relation(fields: [workspaceId], references: [id])
+  assignedJobs Job[]      @relation("JobResource")
+
+  @@index([type])
+  @@index([status])
+}
+
+model Job {
+  id                 String    @id @default(cuid())
+  jobNumber          String?
+  title              String
+  description        String?
+  status             String    @default("pending")
+  priority           String    @default("medium")
+  type               String    @default("service")
+  address            String?
+  pickup             String?
+  dropoff            String?
+  scheduledAt        DateTime?
+  scheduledTime      String?
+  estimatedDuration  Int?
+  actualStartTime    DateTime?
+  actualEndTime      DateTime?
+  notes              String?
+  customerId         String?
+  customerName       String?
+  customerPhone      String?
+  assigneeId         String?
+  assigneeName       String?
+  assigneePhone      String?
+  resourceId         String?
+  serviceId          String?
+  checkInLat         Float?
+  checkInLng         Float?
+  checkOutLat        Float?
+  checkOutLng        Float?
+  customerRating     Int?
+  employeeRating     Int?
+  externalId         String?
+  externalSource     String?
+  whatsappMessageId  String?
+  whatsappSessionId  String?
+  assignmentStatus   String?
+  notificationLogJson String @default("[]")
+  workspaceId        String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  workspace  Workspace? @relation(fields: [workspaceId], references: [id])
+  assignee   Employee?  @relation("JobAssignee", fields: [assigneeId], references: [id])
+  customer   Customer?  @relation(fields: [customerId], references: [id])
+  resource   Resource?  @relation("JobResource", fields: [resourceId], references: [id])
+  lead       Lead?
+  invoices   Invoice[]
+  currentEmployee Employee? @relation("EmployeeCurrentJob")
+  notificationLogs NotificationLog[]
+  conversation      Conversation?
+  journey           CustomerJourney?
+
+  @@index([status])
+  @@index([assigneeId])
+  @@index([customerId])
+  @@index([scheduledAt])
+  @@index([workspaceId])
+}
+
+model ContactList {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  type        String   @default("custom")
+  roleFilter  String?
+  icon        String?
+  color       String?
+  isDefault   Boolean  @default(false)
+  workspaceId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+  entries   ContactListEntry[]
+
+  @@index([type])
+  @@index([workspaceId])
+}
+
+model ContactListEntry {
+  id            String   @id @default(cuid())
+  contactListId String
+  name          String
+  phone         String
+  email         String?
+  role          String?
+  employeeId    String?
+  customerId    String?
+  whatsappId    String?
+  avatar        String?
+  metadataJson  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  contactList ContactList @relation(fields: [contactListId], references: [id], onDelete: Cascade)
+
+  @@index([contactListId])
+}
+
+model WebhookSource {
+  id          String    @id @default(cuid())
+  name        String
+  type        String
+  configJson  String    @default("{}")
+  status      String    @default("active")
+  lastSyncAt  DateTime?
+  lastError   String?
+  workspaceId String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+
+  @@index([type])
+  @@index([status])
+}
+
+// Universal Webhook Endpoint — receives inbound webhooks from any source (WordPress, Zapier, custom forms, etc.)
+model WebhookEndpoint {
+  id            String   @id @default(cuid())
+  name          String                    // e.g., "WordPress Lead Capture"
+  endpointId    String   @unique          // Unique path segment: /api/webhooks/ingest/{endpointId}
+  apiKeyHash    String                    // Hash of the API key for authentication
+  apiKeyPrefix  String                    // First 8 chars for display: "sos_prod_••••"
+  source        String   @default("universal") // wordpress, zapier, custom, universal
+  active        Boolean  @default(true)
+  leadSource    String   @default("webhook")   // Value for Lead.source field
+  fieldMapping  String   @default("{}")        // JSON: source field → lead field mapping
+  autoCreateCustomer Boolean @default(true)
+  sendWhatsApp  Boolean  @default(true)
+  whatsappTemplate String @default("new_lead")
+  tenantId      String?
+  workspaceId   String?
+  totalReceived Int      @default(0)
+  lastReceived  DateTime?
+  lastError     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  logs          WebhookEndpointLog[]
+
+  @@index([endpointId])
+  @@index([apiKeyHash])
+  @@index([tenantId])
+  @@index([active])
+}
+
+// Log of inbound webhook requests for debugging and audit trail
+model WebhookEndpointLog {
+  id              String   @id @default(cuid())
+  webhookEndpointId String
+  sourceIp        String?
+  source          String   // wordpress, zapier, custom
+  payloadJson     String
+  leadId          String?  // If a lead was created
+  status          String   @default("received") // received, processed, error
+  error           String?
+  processingMs    Int?
+  createdAt       DateTime @default(now())
+
+  webhookEndpoint WebhookEndpoint @relation(fields: [webhookEndpointId], references: [id], onDelete: Cascade)
+
+  @@index([webhookEndpointId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model WebhookTestRequest {
+  id              String   @id @default(cuid())
+  path            String
+  method          String
+  headersJson     String   @default("{}")
+  queryParamsJson String   @default("{}")
+  bodyJson        String?
+  contentType     String   @default("")
+  receivedAt      DateTime @default(now())
+
+  @@index([path])
+}
+
+model WhatsAppMessageAction {
+  id                 String   @id @default(cuid())
+  whatsappMessageId  String   @unique
+  workflowId         String
+  nodeId             String
+  onSelectWebhookUrl String?
+  onSelectWorkflowId String?
+  nodeConfigJson     String   @default("{}")
+  phoneRecipient     String
+  createdAt          DateTime @default(now())
+
+  @@index([whatsappMessageId])
+  @@index([workflowId])
+}
+
+// ==========================================
+// EVENT WEBHOOKS (n8n integration)
+// ==========================================
+// Stores external webhook URLs (e.g., n8n workflows) that ServiceOS
+// calls when job events occur. This bridges the gap between
+// ServiceOS job lifecycle and n8n automation workflows.
+
+model EventWebhook {
+  id            String   @id @default(cuid())
+  name          String                    // e.g., "n8n - Job Created → WhatsApp Employee"
+  event         String                    // job.created, job.assigned, job.accepted, job.started, job.completed, job.cancelled, job.rejected
+  url           String                    // The n8n webhook URL to call (e.g., https://n8n.example.com/webhook/abc123)
+  method        String   @default("POST") // HTTP method
+  headersJson   String   @default("{}")   // Custom headers to send (e.g., auth headers for n8n)
+  active        Boolean  @default(true)
+  retryOnFail   Boolean  @default(true)   // Retry if webhook call fails
+  maxRetries    Int      @default(3)
+  timeoutMs     Int      @default(10000)  // Request timeout
+  lastTriggered DateTime?                 // When this webhook was last fired
+  lastStatus    String?                   // success, failed, timeout
+  lastError     String?                   // Error message from last attempt
+  failCount     Int      @default(0)      // Consecutive failures
+  workspaceId   String?                   // Optional: scope to workspace
+  tenantId      String?                   // Optional: scope to tenant
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([event])
+  @@index([active])
+  @@index([workspaceId])
+  @@index([tenantId])
+}
+
+// Log of webhook dispatches for debugging and audit trail
+model EventWebhookLog {
+  id            String   @id @default(cuid())
+  eventWebhookId String                   // FK to EventWebhook
+  event         String                    // The event that triggered this
+  jobId         String?                   // Related job
+  payloadJson   String                    // The JSON payload sent
+  responseStatus Int?                     // HTTP status code received
+  responseBody  String?                   // Response body (truncated)
+  error         String?                   // Error if failed
+  durationMs    Int?                      // How long the webhook call took
+  retried       Boolean  @default(false)  // Was this a retry?
+  createdAt     DateTime @default(now())
+
+  @@index([eventWebhookId])
+  @@index([event])
+  @@index([jobId])
+  @@index([createdAt])
+}
+
+// ==========================================
+// ENTERPRISE FEATURES
+// ==========================================
+
+model Conversation {
+  id              String   @id @default(cuid())
+  conversationId  String   @unique  // WhatsApp conversation ID
+  customerPhone   String
+  customerName    String?
+  customerWhatsappId String?
+  customerId      String?
+  leadId          String?  @unique
+  jobId           String?  @unique
+  status          String   @default("active")  // active, completed, archived
+  currentStage    String   @default("greeting") // greeting, intent_detected, booking, assigned, in_progress, completed, review
+  intentDetected  String?  // e.g., "cleaning_service", "plumbing", "booking"
+  intentConfidence Float?
+  lastMessageAt   DateTime @default(now())
+  lastMessageBody String?
+  lastDirection   String?  // inbound, outbound
+  messagesJson    String   @default("[]")  // Message history as JSON
+  metadataJson    String   @default("{}")
+  tenantId        String?
+  workspaceId     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  customer Customer? @relation(fields: [customerId], references: [id])
+  lead     Lead?     @relation(fields: [leadId], references: [id])
+  job      Job?      @relation(fields: [jobId], references: [id])
+  tenant   Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@index([conversationId])
+  @@index([customerPhone])
+  @@index([status])
+  @@index([tenantId])
+  @@index([lastMessageAt])
+}
+
+model CustomerJourney {
+  id              String    @id @default(cuid())
+  customerId      String?
+  jobId           String?   @unique
+  leadId          String?   @unique
+  currentStage    String    @default("lead")  // lead, booking, assigned, en_route, in_progress, completed, review
+  previousStage   String?
+  stageChangedAt  DateTime  @default(now())
+  nextActionAt    DateTime?  // When the next automated action should fire
+  nextActionType  String?    // whatsapp_message, email, internal_update
+  nextActionData  String?    // JSON with action details
+  automationActive Boolean   @default(true)
+  completedStagesJson String @default("[]")  // Array of completed stages with timestamps
+  tenantId        String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  customer Customer? @relation(fields: [customerId], references: [id])
+  job      Job?      @relation(fields: [jobId], references: [id])
+  lead     Lead?     @relation(fields: [leadId], references: [id])
+
+  @@index([customerId])
+  @@index([jobId])
+  @@index([currentStage])
+  @@index([nextActionAt])
+  @@index([tenantId])
+}
+
+model CustomerPortalSession {
+  id              String   @id @default(cuid())
+  token           String   @unique
+  customerId      String
+  customerPhone   String
+  expiresAt       DateTime
+  lastAccessedAt  DateTime @default(now())
+  tenantId        String?
+  createdAt       DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([token])
+  @@index([customerId])
+  @@index([expiresAt])
+}
+
+model IntegrationConfig {
+  id              String   @id @default(cuid())
+  name            String   // e.g., "n8n", "Zapier", "Custom Webhook"
+  type            String   // n8n, zapier, custom_webhook, google_sheets, slack
+  configJson      String   @default("{}")
+  active          Boolean  @default(true)
+  lastSyncAt      DateTime?
+  lastError       String?
+  failCount       Int      @default(0)
+  workspaceId     String?
+  tenantId        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([type])
+  @@index([active])
+  @@index([tenantId])
+}
+
+model AnalyticsSnapshot {
+  id              String   @id @default(cuid())
+  date            String   // YYYY-MM-DD
+  metric          String   // revenue, jobs_completed, leads_created, avg_response_time, etc.
+  value           Float
+  dimensionsJson  String   @default("{}")  // e.g., { "source": "whatsapp", "employee": "emp_123" }
+  tenantId        String?
+  workspaceId     String?
+  createdAt       DateTime @default(now())
+
+  @@unique([date, metric, tenantId])
+  @@index([date])
+  @@index([metric])
+  @@index([tenantId])
+}
+
+// ==========================================
+// WHATSAPP CUSTOMER ENGAGEMENT PLATFORM
+// ==========================================
+
+// --- Module 1: Multi-Agent Shared WhatsApp Inbox ---
+
+model InboxMessage {
+  id              String   @id @default(cuid())
+  conversationId  String
+  senderType      String   @default("customer")  // customer, agent, system, bot
+  senderId        String?  // userId for agent, customerId for customer
+  senderName      String?
+  content         String
+  messageType     String   @default("text")  // text, image, document, audio, video, location, template, interactive
+  mediaUrl        String?
+  mediaCaption    String?
+  direction       String   @default("inbound")  // inbound, outbound
+  status          String   @default("sent")  // sent, delivered, read, failed
+  externalId      String?  // WhatsApp message ID
+  replyToId       String?  // ID of message being replied to
+  isInternalNote  Boolean  @default(false)
+  mentionsJson    String   @default("[]")  // @mentioned user IDs
+  reactionsJson   String   @default("[]")
+  metadataJson    String   @default("{}")
+  tenantId        String?
+  workspaceId     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([conversationId])
+  @@index([senderType])
+  @@index([direction])
+  @@index([status])
+  @@index([tenantId])
+  @@index([createdAt])
+}
+
+model ChatLabel {
+  id          String   @id @default(cuid())
+  name        String
+  color       String   @default("#10b981")
+  icon        String?
+  tenantId    String?
+  workspaceId String?
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+model ConversationLabel {
+  id              String   @id @default(cuid())
+  conversationId  String
+  labelId         String
+  createdAt       DateTime @default(now())
+
+  @@unique([conversationId, labelId])
+  @@index([conversationId])
+  @@index([labelId])
+}
+
+model ConversationAssignment {
+  id              String    @id @default(cuid())
+  conversationId  String
+  agentId         String    // userId of the agent
+  agentName       String?
+  assignedById    String?
+  type            String    @default("primary")  // primary, secondary, watcher
+  status          String    @default("active")   // active, transferred, resolved
+  transferredFrom String?
+  transferReason  String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([conversationId])
+  @@index([agentId])
+  @@index([status])
+}
+
+// --- Module 2: Customer 360 Profile ---
+
+model TimelineEvent {
+  id              String   @id @default(cuid())
+  customerId      String
+  eventType       String   // message, booking, job_update, payment, campaign, note, call, form_submission
+  title           String
+  description     String?
+  actorId         String?  // who performed the action
+  actorName       String?
+  actorType       String?  // customer, agent, system, bot
+  metadataJson    String   @default("{}")
+  tenantId        String?
+  createdAt       DateTime @default(now())
+
+  @@index([customerId])
+  @@index([eventType])
+  @@index([tenantId])
+  @@index([createdAt])
+}
+
+// --- Module 3: WhatsApp Campaign Engine ---
+
+model Campaign {
+  id              String    @id @default(cuid())
+  name            String
+  description     String?
+  type            String    @default("promotional")  // promotional, service_reminder, seasonal, re_engagement, follow_up
+  status          String    @default("draft")  // draft, scheduled, running, paused, completed
+  audienceType    String    @default("all")  // all, segment, contact_list, custom
+  audienceId      String?   // segment or contact list ID
+  audienceFiltersJson String @default("{}")
+  templateId      String?
+  messageContent  String
+  mediaUrl        String?
+  mediaType       String?   // image, video, document
+  ctaText         String?
+  ctaUrl          String?
+  scheduledAt     DateTime?
+  timezone        String    @default("UTC")
+  totalRecipients Int       @default(0)
+  sentCount       Int       @default(0)
+  deliveredCount  Int       @default(0)
+  readCount       Int       @default(0)
+  clickedCount    Int       @default(0)
+  repliedCount    Int       @default(0)
+  convertedCount  Int       @default(0)
+  revenueGenerated Float    @default(0)
+  followUpSequenceJson String @default("[]")
+  cloneFromId     String?
+  approvedBy      String?
+  approvedAt      DateTime?
+  createdById     String?
+  tenantId        String?
+  workspaceId     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status])
+  @@index([type])
+  @@index([tenantId])
+  @@index([scheduledAt])
+}
+
+model CampaignMessage {
+  id              String   @id @default(cuid())
+  campaignId      String
+  recipientPhone  String
+  recipientName   String?
+  recipientId     String?  // customerId
+  status          String   @default("pending")  // pending, sent, delivered, read, failed
+  externalId      String?
+  sentAt          DateTime?
+  deliveredAt     DateTime?
+  readAt          DateTime?
+  repliedAt       DateTime?
+  clickedAt       DateTime?
+  convertedAt     DateTime?
+  error           String?
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+
+  @@index([campaignId])
+  @@index([status])
+  @@index([recipientPhone])
+}
+
+model CampaignTemplate {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  category        String   @default("general")  // promotional, reminder, seasonal, follow_up, re_engagement
+  content         String
+  mediaUrl        String?
+  mediaType       String?
+  ctaText         String?
+  ctaUrl          String?
+  variablesJson   String   @default("[]")  // template variables like {{name}}, {{date}}
+  isApproved      Boolean  @default(false)
+  externalId      String?  // WhatsApp template ID
+  usageCount      Int      @default(0)
+  tenantId        String?
+  workspaceId     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([category])
+  @@index([tenantId])
+}
+
+// --- Module 4: Customer Segmentation Engine ---
+
+model Segment {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  type            String   @default("dynamic")  // dynamic, static
+  rulesJson       String   @default("[]")  // Array of filter rules
+  matchLogic      String   @default("and")  // and, or
+  memberCount     Int      @default(0)
+  lastCalculated  DateTime?
+  color           String?
+  icon            String?
+  isDefault       Boolean  @default(false)
+  tenantId        String?
+  workspaceId     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([type])
+}
+
+model SegmentMember {
+  id          String   @id @default(cuid())
+  segmentId   String
+  customerId  String
+  addedAt     DateTime @default(now())
+
+  @@unique([segmentId, customerId])
+  @@index([segmentId])
+  @@index([customerId])
+}
+
+// --- Module 5: WhatsApp Retargeting System ---
+
+model RetargetingRule {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  triggerType     String   // no_booking_days, unpaid_invoice, quote_not_accepted, job_not_scheduled, clicked_no_conversion
+  triggerConfigJson String @default("{}")  // Thresholds, time windows
+  actionType      String   // whatsapp_reminder, special_offer, follow_up_sequence
+  actionConfigJson String @default("{}")  // Message template, offer details, sequence
+  status          String   @default("active")  // active, paused, archived
+  priority        Int      @default(0)
+  cooldownHours   Int      @default(24)
+  maxTriggers     Int      @default(3)  // Max times per customer
+  triggersToday   Int      @default(0)
+  totalTriggers   Int      @default(0)
+  lastTriggered   DateTime?
+  tenantId        String?
+  workspaceId     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([triggerType])
+  @@index([status])
+  @@index([tenantId])
+}
+
+model RetargetingLog {
+  id                String   @id @default(cuid())
+  ruleId            String
+  customerId        String
+  customerPhone     String
+  triggerType       String
+  actionType        String
+  actionResult      String?  // sent, failed, skipped
+  messageContent    String?
+  error             String?
+  tenantId          String?
+  createdAt         DateTime @default(now())
+
+  @@index([ruleId])
+  @@index([customerId])
+  @@index([createdAt])
+}
+
+// --- Module 6: Drag & Drop Chatbot Builder ---
+
+model Chatbot {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  status          String   @default("draft")  // draft, active, paused, archived
+  triggerType     String   @default("keyword")  // keyword, all_messages, new_conversation, no_agent_response
+  triggerConfigJson String @default("{}")
+  nodesJson       String   @default("[]")
+  edgesJson       String   @default("[]")
+  startNodeId     String?
+  fallbackNodeId  String?
+  isDefault       Boolean  @default(false)
+  totalSessions   Int      @default(0)
+  activeSessions  Int      @default(0)
+  completionRate  Float    @default(0)
+  tenantId        String?
+  workspaceId     String?
+  createdById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status])
+  @@index([tenantId])
+}
+
+model ChatbotSession {
+  id              String   @id @default(cuid())
+  chatbotId       String
+  customerId      String?
+  customerPhone   String
+  customerName    String?
+  conversationId  String?
+  status          String   @default("active")  // active, completed, abandoned, handed_over
+  currentNodeId   String?
+  collectedDataJson String @default("{}")
+  messagesJson    String   @default("[]")
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+  tenantId        String?
+
+  @@index([chatbotId])
+  @@index([customerId])
+  @@index([status])
+  @@index([startedAt])
+}
+
+// --- Module 9: WhatsApp Form Builder ---
+
+model WAForm {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  type            String   @default("lead")  // lead, booking, feedback, survey, quote_request
+  fieldsJson      String   @default("[]")
+  welcomeMessage  String?
+  completionMessage String?
+  status          String   @default("active")  // active, paused, archived
+  totalSubmissions Int     @default(0)
+  conversionRate  Float    @default(0)
+  tenantId        String?
+  workspaceId     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([type])
+  @@index([tenantId])
+  @@index([status])
+}
+
+model WAFormResponse {
+  id              String   @id @default(cuid())
+  formId          String
+  respondentPhone String
+  respondentName  String?
+  respondentId    String?  // customerId
+  responsesJson   String   @default("{}")
+  status          String   @default("completed")  // started, completed, abandoned
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+  tenantId        String?
+
+  @@index([formId])
+  @@index([respondentPhone])
+}
+
+// --- Module 10: WhatsApp Webview Engine ---
+
+model WAWebview {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  type            String   @default("booking")  // booking, payment, quote_approval, portal, invoice
+  url             String
+  configJson      String   @default("{}")
+  status          String   @default("active")
+  views           Int      @default(0)
+  clicks          Int      @default(0)
+  conversions     Int      @default(0)
+  tenantId        String?
+  workspaceId     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([type])
+  @@index([tenantId])
+}
+
+// --- Module 11: Click-to-WhatsApp Ads ---
+
+model AdCampaign {
+  id              String   @id @default(cuid())
+  name            String
+  platform        String   @default("meta")  // meta, google
+  adId            String?  // External ad ID
+  adsetName       String?
+  campaignName    String?
+  budget          Float    @default(0)
+  spent           Float    @default(0)
+  currency        String   @default("USD")
+  status          String   @default("active")  // active, paused, completed
+  leadCount       Int      @default(0)
+  costPerLead     Float    @default(0)
+  conversionCount Int      @default(0)
+  conversionRate  Float    @default(0)
+  startDate       DateTime?
+  endDate         DateTime?
+  configJson      String   @default("{}")
+  tenantId        String?
+  workspaceId     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([platform])
+  @@index([status])
+  @@index([tenantId])
+}
+
+model AdConversion {
+  id              String   @id @default(cuid())
+  adCampaignId    String
+  customerId      String?
+  leadId          String?
+  phone           String
+  source          String   @default("click_to_whatsapp")  // click_to_whatsapp, lead_ad, message_ad
+  convertedTo     String?  // lead, customer, job, booking
+  convertedAt     DateTime?
+  tenantId        String?
+  createdAt       DateTime @default(now())
+
+  @@index([adCampaignId])
+  @@index([customerId])
+  @@index([leadId])
+  @@index([createdAt])
+}
+
+// --- Module 12: Customer Journey Automation ---
+
+model JourneyWorkflow {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  status          String   @default("draft")  // draft, active, paused, archived
+  triggerType     String   // new_lead, new_customer, new_booking, job_assigned, job_completed, payment_received
+  triggerConfigJson String @default("{}")
+  nodesJson       String   @default("[]")  // Visual journey nodes
+  edgesJson       String   @default("[]")  // Connections between nodes
+  totalEnrolled   Int      @default(0)
+  activeCount     Int      @default(0)
+  completedCount  Int      @default(0)
+  tenantId        String?
+  workspaceId     String?
+  createdById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([status])
+  @@index([triggerType])
+  @@index([tenantId])
+}
+
+model JourneyExecution {
+  id                String   @id @default(cuid())
+  journeyId         String
+  customerId        String?
+  customerPhone     String?
+  status            String   @default("active")  // active, completed, failed, paused
+  currentNodeId     String?
+  executedStepsJson String   @default("[]")
+  startedAt         DateTime @default(now())
+  completedAt       DateTime?
+  nextActionAt      DateTime?
+  error             String?
+  tenantId          String?
+
+  @@index([journeyId])
+  @@index([customerId])
+  @@index([status])
+  @@index([nextActionAt])
+}
+
+// --- Module 14: WhatsApp Sales Pipeline ---
+
+model Deal {
+  id              String    @id @default(cuid())
+  title           String
+  value           Float     @default(0)
+  currency        String    @default("USD")
+  stage           String    @default("new_lead")  // new_lead, contacted, qualified, quote_sent, negotiation, won, lost
+  probability     Int       @default(10)
+  customerId      String?
+  customerName    String?
+  customerPhone   String?
+  assigneeId      String?   // userId of agent
+  assigneeName    String?
+  leadId          String?
+  source          String    @default("whatsapp")
+  notesJson       String    @default("[]")
+  expectedCloseDate DateTime?
+  closedAt        DateTime?
+  lossReason      String?
+  tenantId        String?
+  workspaceId     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([stage])
+  @@index([assigneeId])
+  @@index([customerId])
+  @@index([tenantId])
+}
+
+model DealStageHistory {
+  id          String   @id @default(cuid())
+  dealId      String
+  fromStage   String?
+  toStage     String
+  changedById String?
+  note        String?
+  createdAt   DateTime @default(now())
+
+  @@index([dealId])
+  @@index([toStage])
+  @@index([createdAt])
+}
+
+// --- Module 15: Omnichannel Communication ---
+
+model ChannelConfig {
+  id              String   @id @default(cuid())
+  channel         String   // whatsapp, email, sms, instagram, facebook, telegram
+  name            String
+  configJson      String   @default("{}")
+  status          String   @default("active")  // active, disconnected, error
+  lastSyncAt      DateTime?
+  lastError       String?
+  isDefault       Boolean  @default(false)
+  tenantId        String?
+  workspaceId     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([channel])
+  @@index([status])
+  @@index([tenantId])
+}
+
+model UnifiedMessage {
+  id              String   @id @default(cuid())
+  channelId       String?  // FK to ChannelConfig
+  channel         String   @default("whatsapp")  // whatsapp, email, sms, instagram, facebook, telegram
+  direction       String   @default("inbound")  // inbound, outbound
+  senderId        String?
+  senderName      String?
+  recipientId     String?
+  recipientName   String?
+  subject         String?
+  content         String
+  contentType     String   @default("text")  // text, html, image, video
+  mediaUrl        String?
+  externalId      String?
+  threadId        String?  // conversation thread
+  customerId      String?
+  status          String   @default("sent")  // sent, delivered, read, failed
+  metadataJson    String   @default("{}")
+  tenantId        String?
+  workspaceId     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([channel])
+  @@index([direction])
+  @@index([customerId])
+  @@index([tenantId])
+  @@index([createdAt])
+}
+
+// --- Module 16: Workflow Marketplace ---
+
+model MarketplaceTemplate {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  category        String   // lead_follow_up, appointment_reminder, payment_reminder, review_collection, win_back
+  subcategory     String?
+  workflowJson    String   @default("{}")
+  icon            String?
+  color           String?
+  author          String?
+  authorAvatar    String?
+  downloads       Int      @default(0)
+  rating          Float    @default(0)
+  reviewCount     Int      @default(0)
+  featured        Boolean  @default(false)
+  premium         Boolean  @default(false)
+  price           Float    @default(0)
+  currency        String   @default("USD")
+  tagsJson        String   @default("[]")
+  screenshotsJson String   @default("[]")
+  tenantId        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([category])
+  @@index([featured])
+  @@index([downloads])
+}
+
+// --- Module 17: Enterprise Features ---
+
+model RolePermission {
+  id          String   @id @default(cuid())
+  role        String   // owner, manager, dispatcher, employee, customer, superadmin
+  resource    String   // conversations, campaigns, chatbots, segments, deals, etc.
+  actionsJson String   @default("[]")  // ["create", "read", "update", "delete", "assign", "approve"]
+  tenantId    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([role, resource, tenantId])
+  @@index([role])
+  @@index([tenantId])
+}
+
+model AgentMonitor {
+  id              String   @id @default(cuid())
+  agentId         String   // userId
+  agentName       String?
+  status          String   @default("online")  // online, offline, busy, away
+  activeChats     Int      @default(0)
+  resolvedToday   Int      @default(0)
+  avgResponseTime Float    @default(0)  // in seconds
+  avgResolutionTime Float  @default(0)  // in minutes
+  customerSatisfaction Float @default(0)
+  lastActivityAt  DateTime @default(now())
+  shiftStart      String?  // HH:mm
+  shiftEnd        String?  // HH:mm
+  tenantId        String?
+  updatedAt       DateTime @updatedAt
+
+  @@index([agentId])
+  @@index([status])
+  @@index([tenantId])
+}
+
+model DataRetentionPolicy {
+  id              String   @id @default(cuid())
+  resourceType    String   // conversations, messages, campaigns, audit_logs, notifications
+  retentionDays   Int      @default(365)
+  autoDelete      Boolean  @default(false)
+  archiveFirst    Boolean  @default(true)
+  tenantId        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([resourceType, tenantId])
+  @@index([tenantId])
+}
+
+model ConversationExport {
+  id              String   @id @default(cuid())
+  requestedById   String?
+  format          String   @default("json")  // json, csv, pdf
+  status          String   @default("pending")  // pending, processing, completed, failed
+  filtersJson     String   @default("{}")
+  fileUrl         String?
+  recordCount     Int      @default(0)
+  error           String?
+  tenantId        String?
+  createdAt       DateTime @default(now())
+  completedAt     DateTime?
+
+  @@index([requestedById])
+  @@index([status])
+  @@index([tenantId])
+}
