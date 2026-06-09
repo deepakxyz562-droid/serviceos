@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { verifyPassword, generateToken, COOKIE_OPTIONS } from '@/lib/auth';
+import { verifyPassword, generateToken, getCookieOptions } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
@@ -99,9 +99,9 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
 
-    // Set auth cookie
+    // Set auth cookie (secure flag based on request protocol)
     response.cookies.set({
-      ...COOKIE_OPTIONS,
+      ...getCookieOptions(request),
       value: token,
     });
 

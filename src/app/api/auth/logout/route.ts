@@ -9,6 +9,7 @@ export async function POST() {
     );
 
     // Clear the auth cookie by setting maxAge to 0
+    // Use the same secure flag as the login cookie
     response.cookies.set({
       ...COOKIE_OPTIONS,
       value: '',

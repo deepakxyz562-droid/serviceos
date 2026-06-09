@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { generateToken, generateSlug, COOKIE_OPTIONS, getAuthUser } from '@/lib/auth';
+import { generateToken, generateSlug, getCookieOptions, getAuthUser } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
 
     // Set auth cookie with updated token
     response.cookies.set({
-      ...COOKIE_OPTIONS,
+      ...getCookieOptions(request),
       value: token,
     });
 

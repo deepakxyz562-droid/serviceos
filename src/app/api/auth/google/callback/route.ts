@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { generateToken, generateSlug, COOKIE_OPTIONS } from '@/lib/auth';
+import { generateToken, generateSlug, getCookieOptions } from '@/lib/auth';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -216,7 +216,7 @@ export async function GET(request: NextRequest) {
           `${baseUrl}/?google_onboarding=true&email=${encodeURIComponent(userInfo.email)}&name=${encodeURIComponent(userInfo.name || '')}&avatar=${encodeURIComponent(userInfo.picture || '')}`
         );
         response.cookies.set({
-          ...COOKIE_OPTIONS,
+          ...getCookieOptions(request),
           value: token,
         });
         return response;
@@ -224,7 +224,7 @@ export async function GET(request: NextRequest) {
 
       const response = NextResponse.redirect(`${baseUrl}/?google_login=success`);
       response.cookies.set({
-        ...COOKIE_OPTIONS,
+        ...getCookieOptions(request),
         value: token,
       });
       return response;
@@ -264,7 +264,7 @@ export async function GET(request: NextRequest) {
       `${baseUrl}/?google_onboarding=true&email=${encodeURIComponent(userInfo.email)}&name=${encodeURIComponent(userInfo.name || '')}&avatar=${encodeURIComponent(userInfo.picture || '')}`
     );
     response.cookies.set({
-      ...COOKIE_OPTIONS,
+      ...getCookieOptions(request),
       value: token,
     });
     return response;
