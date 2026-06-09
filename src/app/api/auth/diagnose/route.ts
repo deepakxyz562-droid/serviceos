@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { normalizeBaseUrl } from '@/lib/auth';
 
 /**
  * Diagnostic endpoint to check auth configuration on deployment.
@@ -32,20 +33,38 @@ export async function GET() {
       : '✗ Missing',
   };
 
-  // 4. Check APP URL
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  // 4. Check APP URL (and detect trailing slash issues)
+  const rawAppUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+  const normalizedAppUrl = normalizeBaseUrl(rawAppUrl);
+  const hasTrailingSlash = rawAppUrl !== normalizedAppUrl;
   diagnostics.app_url = {
-    status: appUrl ? 'configured' : 'missing',
-    detail: appUrl || '✗ Not set',
+    status: rawAppUrl ? 'configured' : 'missing',
+    detail: hasTrailingSlash
+      ? `⚠️ "${rawAppUrl}" has trailing slash — will be auto-corrected to "${normalizedAppUrl}"`
+      : normalizedAppUrl || '✗ Not set',
   };
 
-  // 5. Check Node environment
+  // 5. Google OAuth redirect URI (what will actually be used)
+  const redirectUri = `${normalizedAppUrl}/api/auth/google/callback`;
+  diagnostics.google_redirect_uri = {
+    status: 'info',
+    detail: redirectUri,
+  };
+
+  // 6. Check Node environment
   diagnostics.environment = {
     status: 'info',
     detail: `NODE_ENV=${process.env.NODE_ENV || 'not set'}`,
   };
 
-  // 6. Test database connectivity
+  // 7. Cookie secure flag
+  const secureFlag = process.env.NODE_ENV === 'production';
+  diagnostics.cookie_secure = {
+    status: 'info',
+    detail: `secure=${secureFlag} (based on NODE_ENV=${process.env.NODE_ENV})`,
+  };
+
+  // 8. Test database connectivity
   try {
     const { db } = await import('@/lib/db');
     await db.$queryRaw`SELECT 1`;
@@ -53,14 +72,43 @@ export async function GET() {
       status: 'connected',
       detail: '✓ Successfully connected to database',
     };
+
+    // 9. Check users in database
+    try {
+      const userCount = await db.user.count();
+      const usersWithPassword = await db.user.count({
+        where: { passwordHash: { not: null } },
+      });
+      const usersWithGoogle = await db.user.count({
+        where: { authProvider: 'google' },
+      });
+
+      diagnostics.users = {
+        status: userCount > 0 ? 'configured' : 'warning',
+        detail: `${userCount} total user(s), ${usersWithPassword} with password, ${usersWithGoogle} with Google auth`,
+      };
+
+      if (userCount === 0) {
+        diagnostics.users.detail += ' ⚠️ No users found! You need to register first.';
+      }
+    } catch (userCountError: any) {
+      diagnostics.users = {
+        status: 'error',
+        detail: `✗ Failed to count users: ${userCountError.message}`,
+      };
+    }
   } catch (dbError: any) {
     diagnostics.database_connectivity = {
       status: 'error',
       detail: `✗ ${dbError.message || 'Failed to connect to database'}`,
     };
+    diagnostics.users = {
+      status: 'error',
+      detail: '✗ Cannot check — database not connected',
+    };
   }
 
-  // 7. Check PayPal configuration
+  // 10. Check PayPal configuration
   const paypalClientId = process.env.PAYPAL_CLIENT_ID;
   diagnostics.paypal = {
     status: paypalClientId ? 'configured' : 'missing',
@@ -71,9 +119,12 @@ export async function GET() {
   const hasErrors = Object.values(diagnostics).some(
     (d) => d.status === 'missing' || d.status === 'error'
   );
+  const hasWarnings = Object.values(diagnostics).some(
+    (d) => d.status === 'warning'
+  );
 
   return NextResponse.json({
-    status: hasErrors ? 'issues_found' : 'all_configured',
+    status: hasErrors ? 'issues_found' : hasWarnings ? 'warnings_found' : 'all_configured',
     timestamp: new Date().toISOString(),
     diagnostics,
   });

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { generateToken, generateSlug, getCookieOptions } from '@/lib/auth';
+import { generateToken, generateSlug, getCookieOptions, normalizeBaseUrl } from '@/lib/auth';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -84,10 +84,10 @@ function getBaseUrl(request: NextRequest, stateRedirectUri?: string): string {
     return `${forwardedProto}://${hostHeader}`;
   }
 
-  // Fallback to NEXT_PUBLIC_APP_URL
+  // Fallback to NEXT_PUBLIC_APP_URL (normalized)
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   if (appUrl) {
-    return appUrl;
+    return normalizeBaseUrl(appUrl);
   }
 
   // Last resort: request origin
@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
     // Determine the redirect URI that was used when initiating the OAuth flow
     // This must match exactly what was sent to Google in the authorization URL
     const redirectUri = state.redirectUri ||
-      `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/auth/google/callback`;
+      `${normalizeBaseUrl(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000')}/api/auth/google/callback`;
     console.log('[Google OAuth Callback] Using redirect URI:', redirectUri);
     console.log('[Google OAuth Callback] Base URL for redirects:', baseUrl);
 

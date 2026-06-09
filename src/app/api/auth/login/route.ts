@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!user || !user.passwordHash) {
+      console.warn('[Login] No user found or no passwordHash for:', email);
       return NextResponse.json(
         { error: 'Invalid email or password' },
         { status: 401 }
@@ -37,8 +38,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify password
-    const isValid = await verifyPassword(password, user.passwordHash);
+    let isValid: boolean;
+    try {
+      isValid = await verifyPassword(password, user.passwordHash);
+    } catch (bcryptError) {
+      console.error('[Login] bcrypt verification error:', bcryptError);
+      return NextResponse.json(
+        { error: 'Authentication service error. Please try again.' },
+        { status: 500 }
+      );
+    }
+
     if (!isValid) {
+      console.warn('[Login] Invalid password for:', email);
       return NextResponse.json(
         { error: 'Invalid email or password' },
         { status: 401 }
@@ -46,10 +58,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Update lastLoginAt
-    await db.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
-    });
+    try {
+      await db.user.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() },
+      });
+    } catch (dbUpdateError) {
+      // Non-critical — don't block login if this fails
+      console.error('[Login] Failed to update lastLoginAt:', dbUpdateError);
+    }
 
     // Generate JWT token
     const authUser = {
@@ -100,14 +117,22 @@ export async function POST(request: NextRequest) {
     );
 
     // Set auth cookie (secure flag based on request protocol)
+    const cookieOptions = getCookieOptions(request);
+    console.log('[Login] Setting cookie:', {
+      name: cookieOptions.name,
+      secure: cookieOptions.secure,
+      sameSite: cookieOptions.sameSite,
+      path: cookieOptions.path,
+      tokenLength: token.length,
+    });
     response.cookies.set({
-      ...getCookieOptions(request),
+      ...cookieOptions,
       value: token,
     });
 
     return response;
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('[Login] Unhandled error:', error);
     return NextResponse.json(
       { error: 'Failed to sign in. Please try again.' },
       { status: 500 }

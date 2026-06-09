@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { normalizeBaseUrl } from '@/lib/auth';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 
@@ -6,9 +7,10 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
  * Determine the redirect URI for Google OAuth.
  *
  * CRITICAL: The redirect URI MUST match exactly what's registered in
- * Google Cloud Console → Authorized redirect URIs. Since the app
- * domain is configured via NEXT_PUBLIC_APP_URL, we prioritize that
- * over the dynamic browser origin.
+ * Google Cloud Console → Authorized redirect URIs.
+ *
+ * We normalize the base URL to remove trailing slashes to prevent
+ * double-slash issues (e.g., "https://example.com//api/auth/callback").
  *
  * Priority:
  * 1. NEXT_PUBLIC_APP_URL env variable (matches Google Cloud Console config)
@@ -20,11 +22,10 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 function getRedirectUri(request: NextRequest, clientOrigin?: string): string {
   const callbackPath = '/api/auth/google/callback';
 
-  // 1. NEXT_PUBLIC_APP_URL — this is the production domain registered in Google Cloud Console
-  // This MUST be the primary source to avoid redirect_uri_mismatch errors
+  // 1. NEXT_PUBLIC_APP_URL — normalized to remove trailing slash
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   if (appUrl) {
-    return `${appUrl}${callbackPath}`;
+    return `${normalizeBaseUrl(appUrl)}${callbackPath}`;
   }
 
   // 2. Client-origin from query param (for environments where APP_URL is not set)
@@ -57,13 +58,13 @@ function getRedirectUri(request: NextRequest, clientOrigin?: string): string {
 
 /**
  * Get the base URL for redirects back to the app.
- * Uses NEXT_PUBLIC_APP_URL first (production domain), then falls back to proxy headers.
+ * Normalized to remove trailing slashes.
  */
 function getBaseUrl(request: NextRequest): string {
-  // 1. Use NEXT_PUBLIC_APP_URL (production domain)
+  // 1. Use NEXT_PUBLIC_APP_URL (normalized)
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   if (appUrl) {
-    return appUrl;
+    return normalizeBaseUrl(appUrl);
   }
 
   // 2. Try proxy headers
@@ -95,7 +96,7 @@ export async function GET(request: NextRequest) {
   const redirectTo = searchParams.get('redirect') || '';
   const clientOrigin = searchParams.get('origin') || undefined;
 
-  // Compute the redirect URI — prioritizes NEXT_PUBLIC_APP_URL
+  // Compute the redirect URI — prioritizes NEXT_PUBLIC_APP_URL (normalized)
   const redirectUri = getRedirectUri(request, clientOrigin);
   console.log('[Google OAuth] Debug:', {
     clientOrigin: clientOrigin || '(not provided)',

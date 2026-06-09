@@ -68,6 +68,15 @@ export function getTokenName(): string {
 }
 
 /**
+ * Normalize a base URL by removing trailing slashes.
+ * This prevents double-slash issues like:
+ *   "https://example.com/" + "/api/callback" → "https://example.com//api/callback"
+ */
+export function normalizeBaseUrl(url: string): string {
+  return url.replace(/\/+$/, '');
+}
+
+/**
  * Determine if cookies should use the Secure flag.
  *
  * - In production (Netlify, Vercel, etc.): browsers access the site over HTTPS,
@@ -115,6 +124,15 @@ export const COOKIE_OPTIONS = {
   path: '/',
   maxAge: 60 * 60 * 24 * 7, // 7 days
 };
+
+/**
+ * Get the normalized app URL (without trailing slash).
+ * This is the canonical way to read NEXT_PUBLIC_APP_URL.
+ */
+export function getAppUrl(): string {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+  return normalizeBaseUrl(appUrl);
+}
 
 /**
  * Generate a URL-safe slug from a business name
