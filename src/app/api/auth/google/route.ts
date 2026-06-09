@@ -4,21 +4,18 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 
 /**
  * Determine the redirect URI dynamically based on the request origin.
- * This allows Google OAuth to work in any environment (localhost, sandbox, production)
- * without needing to hardcode the APP_URL.
  *
  * Priority:
- * 1. `origin` query parameter (sent from client-side — most reliable)
+ * 1. `origin` query parameter (sent from client-side — the browser knows its own origin)
  * 2. NEXT_PUBLIC_APP_URL env variable
- * 3. Referer header (contains the actual external URL the user came from)
- * 4. X-Forwarded-Host + X-Forwarded-Proto (set by reverse proxy)
- * 5. Host header + X-Forwarded-Proto (Caddy forwards original Host)
- * 6. Fallback to the request URL's origin
+ * 3. X-Forwarded-Host + X-Forwarded-Proto (set by reverse proxy)
+ * 4. Host header + X-Forwarded-Proto
+ * 5. Fallback to the request URL's origin
  */
 function getRedirectUri(request: NextRequest, clientOrigin?: string): string {
   const callbackPath = '/api/auth/google/callback';
 
-  // 1. Client-origin from query param (the browser knows its own origin)
+  // 1. Client-origin from query param (the browser knows its own origin — MOST RELIABLE)
   if (clientOrigin) {
     try {
       const originUrl = new URL(clientOrigin);
@@ -34,44 +31,44 @@ function getRedirectUri(request: NextRequest, clientOrigin?: string): string {
     return `${appUrl}${callbackPath}`;
   }
 
-  // 3. Try Referer header — the browser sends this with navigation requests
-  const referer = request.headers.get('referer');
-  if (referer) {
-    try {
-      const refererUrl = new URL(referer);
-      if (refererUrl.host && !refererUrl.host.startsWith('localhost')) {
-        return `${refererUrl.protocol}//${refererUrl.host}${callbackPath}`;
-      }
-      if (refererUrl.protocol === 'https:') {
-        return `${refererUrl.origin}${callbackPath}`;
-      }
-    } catch {
-      // Ignore malformed referer
-    }
-  }
-
-  // 4. X-Forwarded-Host + X-Forwarded-Proto (set by reverse proxy)
-  const forwardedHost = request.headers.get('x-forwarded-host');
+  // 3. X-Forwarded-Host + X-Forwarded-Proto (set by reverse proxy)
   const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
+  const forwardedHost = request.headers.get('x-forwarded-host');
   if (forwardedHost && !forwardedHost.startsWith('localhost')) {
     return `${forwardedProto}://${forwardedHost}${callbackPath}`;
   }
 
-  // 5. Host header + protocol (Caddy forwards original Host)
+  // 4. Host header + protocol (Caddy forwards original Host)
   const hostHeader = request.headers.get('host');
   if (hostHeader && !hostHeader.startsWith('localhost')) {
     return `${forwardedProto}://${hostHeader}${callbackPath}`;
   }
 
-  // 6. Fallback to request origin (last resort — likely localhost, may not work with OAuth)
+  // 5. Fallback to request origin (last resort — likely localhost, may not work with OAuth)
   const url = new URL(request.url);
   return `${url.protocol}//${url.host}${callbackPath}`;
+}
+
+/**
+ * Get the base URL for redirects back to the app, respecting reverse proxy headers.
+ */
+function getBaseUrl(request: NextRequest): string {
+  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
+  const forwardedHost = request.headers.get('x-forwarded-host');
+  if (forwardedHost && !forwardedHost.startsWith('localhost')) {
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+  const hostHeader = request.headers.get('host');
+  if (hostHeader && !hostHeader.startsWith('localhost')) {
+    return `${forwardedProto}://${hostHeader}`;
+  }
+  return new URL('/', request.url).origin;
 }
 
 export async function GET(request: NextRequest) {
   if (!GOOGLE_CLIENT_ID) {
     console.error('Google OAuth: GOOGLE_CLIENT_ID is not configured');
-    const baseUrl = getRedirectUri(request).replace('/api/auth/google/callback', '');
+    const baseUrl = getBaseUrl(request);
     return NextResponse.redirect(
       new URL('/?auth_error=google_not_configured', baseUrl)
     );

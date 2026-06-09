@@ -4,8 +4,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ==========================================
@@ -31,8 +32,10 @@ model Tenant {
   planStartedAt     DateTime?
   planEndsAt        DateTime?
   settingsJson      String   @default("{}")
+  featureFlagsJson  String   @default("{}")
   onboardingCompleted Boolean @default(false)
   onboardingStep    Int      @default(0)
+  suspendedAt       DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -88,6 +91,7 @@ model User {
   passwordHash    String?
   avatar          String?
   role            String   @default("owner")
+  isSuperAdmin    Boolean  @default(false)
   authProvider    String   @default("email")
   authProviderId  String?
   phone           String?

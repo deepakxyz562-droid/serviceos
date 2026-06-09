@@ -20,6 +20,7 @@ export type ActiveView =
   | 'canvas'
   | 'versionHistory'
   | 'saasDashboard'
+  | 'superAdmin'
   | 'employeePortal'
   | 'customerPortal'
   // WhatsApp Customer Engagement Platform
@@ -38,7 +39,8 @@ export type ActiveView =
   | 'omnichannel'
   | 'marketplace'
   | 'enterprise'
-  | 'broadcast';
+  | 'broadcast'
+  | 'superAdmin';
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -82,6 +84,11 @@ interface AppState {
   setCurrentWorkspaceId: (id: string | null) => void;
   currentWorkspaceName: string;
   setCurrentWorkspaceName: (name: string) => void;
+
+  // Workspace visibility — hides switcher for small businesses (90% of customers)
+  // Shows only for: Super Admin, Enterprise customers, Agencies managing multiple companies
+  showWorkspace: boolean;
+  setShowWorkspace: (show: boolean) => void;
 
   // Workflow (for canvas)
   currentWorkflowId: string | null;
@@ -129,6 +136,8 @@ export const useAppStore = create<AppState>((set) => ({
   setCurrentWorkspaceId: (id: string | null) => set({ currentWorkspaceId: id }),
   currentWorkspaceName: '',
   setCurrentWorkspaceName: (name: string) => set({ currentWorkspaceName: name }),
+  showWorkspace: false,
+  setShowWorkspace: (show: boolean) => set({ showWorkspace: show }),
 
   // Workflow
   currentWorkflowId: null,

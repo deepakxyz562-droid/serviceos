@@ -1,5 +1,6 @@
 'use client';
 
+// PayPal billing & subscription management view
 import React, { useState, useEffect } from 'react';
 import {
   CreditCard,
@@ -310,35 +311,21 @@ function PayPalCheckoutDialog({
   billingCycle,
   onClose,
   onSuccess,
+  paypalConfig,
 }: {
   plan: Plan;
   billingCycle: 'monthly' | 'yearly';
   onClose: () => void;
   onSuccess: () => void;
+  paypalConfig: PayPalConfig | null;
 }) {
-  const [paypalConfig, setPaypalConfig] = useState<PayPalConfig | null>(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const price = billingCycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
 
-  useEffect(() => {
-    async function fetchConfig() {
-      try {
-        const res = await fetch('/api/paypal/config');
-        const config = await res.json();
-        setPaypalConfig(config);
-      } catch {
-        setError('Failed to load PayPal configuration');
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchConfig();
-  }, []);
-
-  const handleCreateOrder = async () => {
+  const handleCreateOrder = async (): Promise<string> => {
     try {
+      setError(null);
       const res = await fetch('/api/paypal/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -346,11 +333,20 @@ function PayPalCheckoutDialog({
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to create order');
+        const errMsg = data.error || data.details || 'Failed to create order';
+        console.error('[PayPal] create-order failed:', errMsg);
+        throw new Error(errMsg);
       }
-      return data.orderID;
+      // Ensure we return a string order ID — PayPal requires this
+      const orderId = String(data.orderID || data.id || '');
+      if (!orderId) {
+        throw new Error('No order ID returned from PayPal');
+      }
+      return orderId;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create PayPal order');
+      const msg = err instanceof Error ? err.message : 'Failed to create PayPal order';
+      setError(msg);
+      console.error('[PayPal] createOrder error:', msg);
       throw err;
     }
   };
@@ -372,10 +368,12 @@ function PayPalCheckoutDialog({
       });
       onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Payment failed');
+      const msg = err instanceof Error ? err.message : 'Payment failed';
+      setError(msg);
       toast.error('Payment failed', {
-        description: err instanceof Error ? err.message : 'Please try again.',
+        description: msg,
       });
+      console.error('[PayPal] capture error:', msg);
     } finally {
       setIsProcessing(false);
     }
@@ -425,7 +423,7 @@ function PayPalCheckoutDialog({
             </div>
           )}
 
-          {!paypalConfig?.configured && !loading && (
+          {!paypalConfig?.configured && (
             <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-950/30">
               <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
               <div>
@@ -446,44 +444,32 @@ function PayPalCheckoutDialog({
             </div>
           )}
 
-          {/* PayPal Buttons */}
-          {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
-              <span className="ml-2 text-sm text-muted-foreground">Loading PayPal...</span>
-            </div>
-          ) : paypalConfig?.configured && paypalConfig.clientId ? (
-            <PayPalScriptProvider
-              options={{
-                clientId: paypalConfig.clientId,
-                intent: 'capture',
-                currency: 'USD',
+          {/* PayPal Buttons — rendered inside existing PayPalScriptProvider from parent */}
+          {paypalConfig?.configured && paypalConfig.clientId ? (
+            <PayPalButtons
+              key={`${plan.id}-${billingCycle}`}
+              style={{
+                layout: 'vertical',
+                color: 'gold',
+                shape: 'rect',
+                label: 'pay',
+                height: 45,
               }}
-            >
-              <PayPalButtons
-                style={{
-                  layout: 'vertical',
-                  color: 'gold',
-                  shape: 'rect',
-                  label: 'pay',
-                  height: 45,
-                }}
-                createOrder={handleCreateOrder}
-                onApprove={async (data) => {
-                  await handleApprove(data.orderID);
-                }}
-                onError={(err) => {
-                  console.error('PayPal button error:', err);
-                  setError('PayPal encountered an error. Please try again.');
-                }}
-                onCancel={() => {
-                  toast.info('Payment cancelled', {
-                    description: 'Your subscription was not changed.',
-                  });
-                }}
-                disabled={isProcessing}
-              />
-            </PayPalScriptProvider>
+              createOrder={handleCreateOrder}
+              onApprove={async (data) => {
+                await handleApprove(data.orderID);
+              }}
+              onError={(err) => {
+                console.error('[PayPal] button error:', err);
+                setError('PayPal encountered an error. Please try again.');
+              }}
+              onCancel={() => {
+                toast.info('Payment cancelled', {
+                  description: 'Your subscription was not changed.',
+                });
+              }}
+              disabled={isProcessing}
+            />
           ) : (
             /* Fallback: Demo upgrade when PayPal is not configured */
             <div className="space-y-3">
@@ -556,7 +542,9 @@ export function BillingView() {
   const [paypalCheckoutPlan, setPaypalCheckoutPlan] = useState<Plan | null>(null);
   const [isUpgrading, setIsUpgrading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [paypalConfig, setPaypalConfig] = useState<PayPalConfig | null>(null);
 
+  // Fetch subscription data + PayPal config on mount
   useEffect(() => {
     async function fetchSubscription() {
       try {
@@ -581,6 +569,18 @@ export function BillingView() {
       }
     }
     fetchSubscription();
+
+    // Fetch PayPal config once at BillingView level — avoids re-mounting PayPalScriptProvider
+    async function fetchPayPalConfig() {
+      try {
+        const res = await fetch('/api/paypal/config');
+        const config = await res.json();
+        setPaypalConfig(config);
+      } catch {
+        // PayPal will fall back to demo mode
+      }
+    }
+    fetchPayPalConfig();
   }, []);
 
   const trialDays = getTrialDaysRemaining(data.trialEndsAt);
@@ -1067,14 +1067,32 @@ export function BillingView() {
       </Card>
 
       {/* ── PayPal Checkout Dialog ─────────────────────────────────────── */}
-      {paypalCheckoutPlan && (
+      {paypalCheckoutPlan && paypalConfig?.clientId ? (
+        <PayPalScriptProvider
+          options={{
+            clientId: paypalConfig.clientId,
+            intent: 'capture',
+            currency: 'USD',
+          }}
+        >
+          <PayPalCheckoutDialog
+            plan={paypalCheckoutPlan}
+            billingCycle={isYearly ? 'yearly' : 'monthly'}
+            onClose={() => setPaypalCheckoutPlan(null)}
+            onSuccess={handlePaymentSuccess}
+            paypalConfig={paypalConfig}
+          />
+        </PayPalScriptProvider>
+      ) : paypalCheckoutPlan ? (
+        /* Fallback dialog when PayPal is not yet configured */
         <PayPalCheckoutDialog
           plan={paypalCheckoutPlan}
           billingCycle={isYearly ? 'yearly' : 'monthly'}
           onClose={() => setPaypalCheckoutPlan(null)}
           onSuccess={handlePaymentSuccess}
+          paypalConfig={paypalConfig}
         />
-      )}
+      ) : null}
     </div>
   );
 }

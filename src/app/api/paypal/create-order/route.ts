@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { getPayPalAccessToken, PAYPAL_PLANS, getPayPalBaseUrl, isPayPalConfigured } from '@/lib/paypal';
+import { randomUUID } from 'crypto';
 
 /**
  * POST /api/paypal/create-order
@@ -46,58 +46,50 @@ export async function POST(request: NextRequest) {
     const accessToken = await getPayPalAccessToken();
     const baseUrl = getPayPalBaseUrl();
 
-    // Create PayPal order
+    // Use a unique PayPal-Request-Id per request to avoid idempotency issues
+    const paypalRequestId = `serviceos-${plan}-${randomUUID()}`;
+
+    // Create PayPal order — simplified payload to avoid validation errors
+    const orderPayload: Record<string, unknown> = {
+      intent: 'CAPTURE',
+      purchase_units: [
+        {
+          reference_id: `serviceos-${plan}-${cycle}`,
+          description: `ServiceOS ${planConfig.name} Plan - ${cycle === 'yearly' ? 'Yearly' : 'Monthly'}`,
+          amount: {
+            currency_code: 'USD',
+            value: price.toFixed(2),
+          },
+        },
+      ],
+      application_context: {
+        brand_name: 'ServiceOS',
+        landing_page: 'BILLING',
+        shipping_preference: 'NO_SHIPPING',
+        user_action: 'PAY_NOW',
+      },
+    };
+
+    // Only add return/cancel URLs if we have a valid app URL
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+    if (appUrl && appUrl.startsWith('https://')) {
+      (orderPayload.application_context as Record<string, unknown>).return_url = `${appUrl}/?paypal_success=true&plan=${plan}&cycle=${cycle}`;
+      (orderPayload.application_context as Record<string, unknown>).cancel_url = `${appUrl}/?paypal_cancel=true`;
+    }
+
     const orderResponse = await fetch(`${baseUrl}/v2/checkout/orders`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${accessToken}`,
-        'PayPal-Request-Id': `serviceos-${plan}-${Date.now()}`,
+        'PayPal-Request-Id': paypalRequestId,
       },
-      body: JSON.stringify({
-        intent: 'CAPTURE',
-        purchase_units: [
-          {
-            reference_id: `serviceos-${plan}-${cycle}`,
-            description: `ServiceOS ${planConfig.name} Plan - ${cycle === 'yearly' ? 'Yearly' : 'Monthly'}`,
-            amount: {
-              currency_code: 'USD',
-              value: price.toFixed(2),
-              breakdown: {
-                item_total: {
-                  currency_code: 'USD',
-                  value: price.toFixed(2),
-                },
-              },
-            },
-            items: [
-              {
-                name: `ServiceOS ${planConfig.name} - ${cycle === 'yearly' ? 'Annual' : 'Monthly'}`,
-                description: `ServiceOS ${planConfig.name} plan subscription - ${cycle} billing`,
-                quantity: '1',
-                unit_amount: {
-                  currency_code: 'USD',
-                  value: price.toFixed(2),
-                },
-                category: 'DIGITAL_GOODS',
-              },
-            ],
-          },
-        ],
-        application_context: {
-          brand_name: 'ServiceOS',
-          landing_page: 'BILLING',
-          shipping_preference: 'NO_SHIPPING',
-          user_action: 'PAY_NOW',
-          return_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/?paypal_success=true&plan=${plan}&cycle=${cycle}`,
-          cancel_url: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/?paypal_cancel=true`,
-        },
-      }),
+      body: JSON.stringify(orderPayload),
     });
 
     if (!orderResponse.ok) {
       const errorData = await orderResponse.json();
-      console.error('PayPal create order error:', JSON.stringify(errorData, null, 2));
+      console.error('[PayPal] create order error:', JSON.stringify(errorData, null, 2));
       return NextResponse.json(
         { error: 'Failed to create PayPal order', details: errorData.message || 'Unknown error' },
         { status: 500 }
@@ -105,6 +97,7 @@ export async function POST(request: NextRequest) {
     }
 
     const order = await orderResponse.json();
+    console.log(`[PayPal] order created successfully: ${order.id} for plan=${plan} cycle=${cycle}`);
 
     return NextResponse.json({
       orderID: order.id,
@@ -112,7 +105,7 @@ export async function POST(request: NextRequest) {
       links: order.links,
     });
   } catch (error) {
-    console.error('PayPal create-order error:', error);
+    console.error('[PayPal] create-order error:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to create PayPal order' },
       { status: 500 }

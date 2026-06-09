@@ -48,6 +48,7 @@ const OmnichannelView = lazy(() => import('@/components/views/omnichannel-view')
 const MarketplaceView = lazy(() => import('@/components/views/marketplace-view').then(m => ({ default: m.MarketplaceView })));
 const EnterpriseView = lazy(() => import('@/components/views/enterprise-view').then(m => ({ default: m.EnterpriseView })));
 const BroadcastView = lazy(() => import('@/components/views/broadcast-view').then(m => ({ default: m.BroadcastView })));
+const SuperAdminView = lazy(() => import('@/components/views/super-admin-view').then(m => ({ default: m.SuperAdminView })));
 
 // ─── View mapping ───────────────────────────────────────────────────────────
 
@@ -91,6 +92,7 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   marketplace: MarketplaceView,
   enterprise: EnterpriseView,
   broadcast: BroadcastView,
+  superAdmin: SuperAdminView,
 };
 
 // ─── Loading fallback ────────────────────────────────────────────────────────

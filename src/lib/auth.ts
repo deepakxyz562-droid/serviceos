@@ -11,6 +11,7 @@ export interface AuthUser {
   email: string;
   name: string | null;
   role: string;
+  isSuperAdmin: boolean;
   tenantId: string | null;
   workspaceId: string | null;
   avatar: string | null;
@@ -31,6 +32,7 @@ export function generateToken(user: AuthUser): string {
       email: user.email,
       name: user.name,
       role: user.role,
+      isSuperAdmin: user.isSuperAdmin || false,
       tenantId: user.tenantId,
       workspaceId: user.workspaceId,
       avatar: user.avatar,

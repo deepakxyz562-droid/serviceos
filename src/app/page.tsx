@@ -45,8 +45,12 @@ export default function HomePage() {
     const authError = params.get('auth_error');
 
     if (authError) {
+      const decodedError = decodeURIComponent(authError);
+      // Show longer duration for configuration errors that need user action
+      const isConfigError = decodedError.includes('redirect_uri_mismatch') || decodedError.includes('not configured');
       toast.error('Authentication failed', {
-        description: decodeURIComponent(authError),
+        description: decodedError,
+        duration: isConfigError ? 15000 : 5000,
       });
       window.history.replaceState({}, '', window.location.pathname);
       return;
@@ -161,9 +165,9 @@ export default function HomePage() {
       if (user?.role === 'employee' || user?.role === 'technician') {
         useAppStore.getState().setCurrentView('employeePortal');
         toast.success('Welcome to your portal!');
-      } else if (user?.role === 'admin' && !tenant) {
-        // SuperAdmin without tenant — show SaaS Dashboard
-        useAppStore.getState().setCurrentView('saasDashboard');
+      } else if (user?.isSuperAdmin === true) {
+        // SuperAdmin — show Platform Admin dashboard
+        useAppStore.getState().setCurrentView('superAdmin');
         toast.success('Welcome, Platform Admin!');
       } else {
         toast.success('Welcome to ServiceOS!');
@@ -186,7 +190,10 @@ export default function HomePage() {
     );
   }
 
-  if (googleOnboarding && !auth.isAuthenticated) {
+  // Show Google onboarding when the user authenticated via Google but has no tenant yet
+  // NOTE: After Google OAuth callback, the user IS authenticated (JWT cookie is set),
+  // so we check for the presence of auth + absence of tenant, NOT !auth.isAuthenticated
+  if (googleOnboarding && auth.isAuthenticated && !auth.tenant) {
     return (
       <GoogleOnboarding
         email={auth.user?.email || ''}

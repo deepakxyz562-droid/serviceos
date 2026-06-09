@@ -92,6 +92,16 @@ interface NavSection {
 
 // ─── Navigation sections ────────────────────────────────────────────────────
 
+const superAdminNavSections: NavSection[] = [
+  {
+    title: 'Platform',
+    items: [
+      { view: 'superAdmin', label: 'Dashboard', icon: Shield },
+      { view: 'dashboard', label: 'Business View', icon: LayoutDashboard },
+    ],
+  },
+];
+
 const ownerNavSections: NavSection[] = [
   {
     title: 'Operations',
@@ -197,6 +207,8 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
     setCurrentWorkspaceId,
     currentWorkspaceName,
     setCurrentWorkspaceName,
+    showWorkspace,
+    setShowWorkspace,
     auth,
   } = useAppStore();
 
@@ -205,7 +217,13 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
   const [creating, setCreating] = useState(false);
 
-  // ─── Fetch workspaces on mount ──────────────────────────────────────────
+  // ─── Determine workspace visibility & fetch workspaces ────────────────────
+  // Rule: Small Businesses (90% of customers) → Hide Workspace
+  //       Super Admin, Enterprise customers, Agencies with multiple companies → Show Workspace
+
+  const isSuperAdmin = auth.user?.isSuperAdmin === true;
+  const isEnterprise = auth.tenant?.plan === 'enterprise';
+  const isEmployee = auth.user?.role === 'employee' || auth.user?.role === 'technician';
 
   useEffect(() => {
     async function fetchWorkspaces() {
@@ -218,13 +236,19 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
             setCurrentWorkspaceId(data[0].id);
             setCurrentWorkspaceName(data[0].name);
           }
+          // Show workspace if: Super Admin, Enterprise plan, or has multiple workspaces (agencies)
+          const shouldShow = isSuperAdmin || isEnterprise || data.length > 1;
+          setShowWorkspace(shouldShow);
+        } else {
+          // If API fails, still determine based on what we know
+          setShowWorkspace(isSuperAdmin || isEnterprise);
         }
       } catch {
-        // Silently fail — workspace switcher will just show default
+        setShowWorkspace(isSuperAdmin || isEnterprise);
       }
     }
     fetchWorkspaces();
-  }, []);
+  }, [isSuperAdmin, isEnterprise]);
 
   // ─── Create workspace handler ───────────────────────────────────────────
 
@@ -273,13 +297,23 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
   };
 
   const getPlanBadge = () => {
-    // SuperAdmin badge
-    if (!auth.tenant) {
+    // SuperAdmin badge — uses isSuperAdmin from auth
+    const isSuperAdmin = auth.user?.isSuperAdmin === true;
+    if (isSuperAdmin) {
       return {
-        label: 'Admin',
+        label: 'Super Admin',
         className: 'bg-red-600/30 text-red-300 border-red-500/30',
       };
     }
+    // Employee badge
+    const isEmployee = auth.user?.role === 'employee' || auth.user?.role === 'technician';
+    if (isEmployee) {
+      return {
+        label: 'Employee',
+        className: 'bg-teal-600/30 text-teal-300 border-teal-500/30',
+      };
+    }
+    // Owner plan badge
     const plan = auth.tenant?.plan || 'starter';
     const colors: Record<string, string> = {
       starter: 'bg-slate-600/40 text-slate-300 border-slate-500/30',
@@ -295,10 +329,15 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
 
   const planBadge = getPlanBadge();
 
-  // Role-based navigation
-  const isEmployee = auth.user?.role === 'employee' || auth.user?.role === 'technician';
-  const isSuperAdmin = auth.user?.role === 'admin' && !auth.tenant;
-  const navSections = isEmployee && !isSuperAdmin ? employeeNavSections : ownerNavSections;
+  // Role-based navigation (isSuperAdmin and isEmployee already defined above)
+  let navSections: NavSection[];
+  if (isSuperAdmin) {
+    navSections = superAdminNavSections;
+  } else if (isEmployee) {
+    navSections = employeeNavSections;
+  } else {
+    navSections = ownerNavSections;
+  }
 
   // ─── Render nav item ───────────────────────────────────────────────────
 
@@ -378,8 +417,8 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
         )}
       </div>
 
-      {/* ─── Workspace Switcher ───────────────────────────────────────── */}
-      {leftSidebarOpen ? (
+      {/* ─── Workspace Switcher (only for Super Admin, Enterprise, Agencies) ── */}
+      {showWorkspace && leftSidebarOpen ? (
         <div className="px-3 py-2 border-b border-slate-800/60">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -421,7 +460,7 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      ) : (
+      ) : showWorkspace ? (
         <div className="flex justify-center py-2 border-b border-slate-800/60">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -434,7 +473,17 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
             </TooltipContent>
           </Tooltip>
         </div>
-      )}
+      ) : !showWorkspace && leftSidebarOpen ? (
+        /* Small Business: Show company name as static label (no switcher) */
+        <div className="px-3 py-2 border-b border-slate-800/60">
+          <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-slate-400">
+            <Building2 className="size-4 text-slate-500 shrink-0" />
+            <span className="truncate text-left text-slate-300">
+              {auth.tenant?.name || 'My Company'}
+            </span>
+          </div>
+        </div>
+      ) : null}
 
       {/* ─── Navigation Sections ──────────────────────────────────────── */}
       <ScrollArea className="flex-1 py-3 min-h-0">

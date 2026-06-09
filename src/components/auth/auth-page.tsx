@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
@@ -43,6 +43,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface AuthPageProps {
   onAuthSuccess: (user: any, tenant: any) => void;
@@ -117,6 +118,15 @@ const formVariants = {
 export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab }: AuthPageProps) {
   const [activeTab, setActiveTab] = useState<string>(initialTab || 'login');
   const [isLoading, setIsLoading] = useState(false);
+  const [googleConfigured, setGoogleConfigured] = useState<boolean | null>(null);
+
+  // Check if Google OAuth is configured on mount
+  useEffect(() => {
+    fetch('/api/auth/google/config?XTransformPort=3000')
+      .then((res) => res.json())
+      .then((data) => setGoogleConfigured(data.configured === true))
+      .catch(() => setGoogleConfigured(false));
+  }, []);
 
   // Login state
   const [loginEmail, setLoginEmail] = useState('');
@@ -503,18 +513,38 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab }: AuthPag
                       initial="hidden"
                       animate="visible"
                     >
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full h-10 border-slate-200 hover:bg-slate-50 cursor-pointer"
-                        onClick={() => {
-                          const origin = encodeURIComponent(window.location.origin);
-                          window.location.href = `/api/auth/google?mode=login&XTransformPort=3000&origin=${origin}`;
-                        }}
-                      >
-                        <GoogleIcon />
-                        Continue with Google
-                      </Button>
+                      {googleConfigured === false ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="w-full h-10 border-slate-200 opacity-60 cursor-not-allowed"
+                              disabled
+                            >
+                              <GoogleIcon />
+                              Google Sign-in Unavailable
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Google OAuth is not configured. Please use email/password to sign in.</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full h-10 border-slate-200 hover:bg-slate-50 cursor-pointer"
+                          onClick={() => {
+                            const origin = encodeURIComponent(window.location.origin);
+                            window.location.href = `/api/auth/google?mode=login&XTransformPort=3000&origin=${origin}`;
+                          }}
+                          disabled={googleConfigured === null}
+                        >
+                          <GoogleIcon />
+                          Continue with Google
+                        </Button>
+                      )}
                     </motion.div>
 
                     <motion.div
@@ -753,18 +783,38 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab }: AuthPag
                       initial="hidden"
                       animate="visible"
                     >
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full h-10 border-slate-200 hover:bg-slate-50 cursor-pointer"
-                        onClick={() => {
-                          const origin = encodeURIComponent(window.location.origin);
-                          window.location.href = `/api/auth/google?mode=register&XTransformPort=3000&origin=${origin}`;
-                        }}
-                      >
-                        <GoogleIcon />
-                        Continue with Google
-                      </Button>
+                      {googleConfigured === false ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="w-full h-10 border-slate-200 opacity-60 cursor-not-allowed"
+                              disabled
+                            >
+                              <GoogleIcon />
+                              Google Sign-in Unavailable
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Google OAuth is not configured. Please use email/password to create an account.</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full h-10 border-slate-200 hover:bg-slate-50 cursor-pointer"
+                          onClick={() => {
+                            const origin = encodeURIComponent(window.location.origin);
+                            window.location.href = `/api/auth/google?mode=register&XTransformPort=3000&origin=${origin}`;
+                          }}
+                          disabled={googleConfigured === null}
+                        >
+                          <GoogleIcon />
+                          Continue with Google
+                        </Button>
+                      )}
                     </motion.div>
 
                     {/* Already have account */}

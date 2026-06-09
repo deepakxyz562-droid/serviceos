@@ -39,6 +39,7 @@ export async function GET() {
         name: user.name,
         email: user.email,
         role: user.role,
+        isSuperAdmin: user.isSuperAdmin || false,
         phone: user.phone,
         tenantId: user.tenantId,
         workspaceId: user.workspaceId,
