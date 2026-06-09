@@ -98,8 +98,6 @@ export function GoogleOnboarding({
         toast.error(data.error || 'Failed to complete setup');
         return;
       }
-      localStorage.setItem('serviceos_user', JSON.stringify(data.user));
-      if (data.tenant) localStorage.setItem('serviceos_tenant', JSON.stringify(data.tenant));
       toast.success('Business account created!');
       onOnboardingComplete(data.user, data.tenant);
     } catch {

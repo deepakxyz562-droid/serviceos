@@ -133,7 +133,12 @@ export default function HomePage() {
     }
 
     if (typeof window !== 'undefined') {
+      // Clear all possible auth-related localStorage keys
       localStorage.removeItem('serviceos_auth');
+      localStorage.removeItem('user');
+      localStorage.removeItem('tenant');
+      localStorage.removeItem('serviceos_user');
+      localStorage.removeItem('serviceos_tenant');
     }
 
     clearAuth();

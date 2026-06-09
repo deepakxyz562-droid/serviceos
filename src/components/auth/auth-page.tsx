@@ -158,8 +158,6 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab }: AuthPag
         toast.error(data.error || 'Login failed');
         return;
       }
-      localStorage.setItem('user', JSON.stringify(data.user));
-      if (data.tenant) localStorage.setItem('tenant', JSON.stringify(data.tenant));
       toast.success('Welcome back!');
       onAuthSuccess(data.user, data.tenant);
     } catch {
@@ -198,8 +196,6 @@ export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab }: AuthPag
         toast.error(data.error || 'Registration failed');
         return;
       }
-      localStorage.setItem('user', JSON.stringify(data.user));
-      if (data.tenant) localStorage.setItem('tenant', JSON.stringify(data.tenant));
       toast.success('Account created successfully!');
       onAuthSuccess(data.user, data.tenant);
     } catch {

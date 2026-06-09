@@ -3,11 +3,16 @@ import { NextRequest, NextResponse } from 'next/server';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 
 /**
- * Determine the redirect URI dynamically based on the request origin.
+ * Determine the redirect URI for Google OAuth.
+ *
+ * CRITICAL: The redirect URI MUST match exactly what's registered in
+ * Google Cloud Console → Authorized redirect URIs. Since the app
+ * domain is configured via NEXT_PUBLIC_APP_URL, we prioritize that
+ * over the dynamic browser origin.
  *
  * Priority:
- * 1. `origin` query parameter (sent from client-side — the browser knows its own origin)
- * 2. NEXT_PUBLIC_APP_URL env variable
+ * 1. NEXT_PUBLIC_APP_URL env variable (matches Google Cloud Console config)
+ * 2. `origin` query parameter (sent from client-side — for dev/preview)
  * 3. X-Forwarded-Host + X-Forwarded-Proto (set by reverse proxy)
  * 4. Host header + X-Forwarded-Proto
  * 5. Fallback to the request URL's origin
@@ -15,7 +20,14 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 function getRedirectUri(request: NextRequest, clientOrigin?: string): string {
   const callbackPath = '/api/auth/google/callback';
 
-  // 1. Client-origin from query param (the browser knows its own origin — MOST RELIABLE)
+  // 1. NEXT_PUBLIC_APP_URL — this is the production domain registered in Google Cloud Console
+  // This MUST be the primary source to avoid redirect_uri_mismatch errors
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (appUrl) {
+    return `${appUrl}${callbackPath}`;
+  }
+
+  // 2. Client-origin from query param (for environments where APP_URL is not set)
   if (clientOrigin) {
     try {
       const originUrl = new URL(clientOrigin);
@@ -23,12 +35,6 @@ function getRedirectUri(request: NextRequest, clientOrigin?: string): string {
     } catch {
       // Invalid origin, fall through
     }
-  }
-
-  // 2. Check NEXT_PUBLIC_APP_URL env variable
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  if (appUrl) {
-    return `${appUrl}${callbackPath}`;
   }
 
   // 3. X-Forwarded-Host + X-Forwarded-Proto (set by reverse proxy)
@@ -50,18 +56,28 @@ function getRedirectUri(request: NextRequest, clientOrigin?: string): string {
 }
 
 /**
- * Get the base URL for redirects back to the app, respecting reverse proxy headers.
+ * Get the base URL for redirects back to the app.
+ * Uses NEXT_PUBLIC_APP_URL first (production domain), then falls back to proxy headers.
  */
 function getBaseUrl(request: NextRequest): string {
+  // 1. Use NEXT_PUBLIC_APP_URL (production domain)
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (appUrl) {
+    return appUrl;
+  }
+
+  // 2. Try proxy headers
   const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
   const forwardedHost = request.headers.get('x-forwarded-host');
   if (forwardedHost && !forwardedHost.startsWith('localhost')) {
     return `${forwardedProto}://${forwardedHost}`;
   }
+
   const hostHeader = request.headers.get('host');
   if (hostHeader && !hostHeader.startsWith('localhost')) {
     return `${forwardedProto}://${hostHeader}`;
   }
+
   return new URL('/', request.url).origin;
 }
 
@@ -79,17 +95,13 @@ export async function GET(request: NextRequest) {
   const redirectTo = searchParams.get('redirect') || '';
   const clientOrigin = searchParams.get('origin') || undefined;
 
-  // Dynamically determine the redirect URI from the request
+  // Compute the redirect URI — prioritizes NEXT_PUBLIC_APP_URL
   const redirectUri = getRedirectUri(request, clientOrigin);
   console.log('[Google OAuth] Debug:', {
     clientOrigin: clientOrigin || '(not provided)',
-    referer: request.headers.get('referer'),
-    'x-forwarded-host': request.headers.get('x-forwarded-host'),
-    'x-forwarded-proto': request.headers.get('x-forwarded-proto'),
-    host: request.headers.get('host'),
     'NEXT_PUBLIC_APP_URL': process.env.NEXT_PUBLIC_APP_URL || '(not set)',
+    computedRedirectUri: redirectUri,
   });
-  console.log('[Google OAuth] Computed redirect URI:', redirectUri);
 
   // Build state parameter to pass mode, redirect info, AND the redirect URI used
   // so the callback can verify it matches

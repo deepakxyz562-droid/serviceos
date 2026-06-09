@@ -141,6 +141,7 @@ export function AppHeader() {
     searchQuery,
     setSearchQuery,
     auth,
+    clearAuth,
   } = useAppStore();
 
   const isCanvas = currentView === 'canvas';
@@ -335,7 +336,25 @@ export function AppHeader() {
               Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" className="cursor-pointer gap-2">
+            <DropdownMenuItem
+              variant="destructive"
+              className="cursor-pointer gap-2"
+              onClick={async () => {
+                try {
+                  await fetch('/api/auth/logout?XTransformPort=3000', { method: 'POST' });
+                } catch {
+                  // API logout failed
+                }
+                if (typeof window !== 'undefined') {
+                  localStorage.removeItem('serviceos_auth');
+                  localStorage.removeItem('user');
+                  localStorage.removeItem('tenant');
+                  localStorage.removeItem('serviceos_user');
+                  localStorage.removeItem('serviceos_tenant');
+                }
+                clearAuth();
+              }}
+            >
               <LogOut className="size-4" />
               Log out
             </DropdownMenuItem>
