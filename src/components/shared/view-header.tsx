@@ -13,23 +13,22 @@ interface ViewHeaderProps {
 }
 
 /**
- * Consistent header component for all views.
- * Provides icon + title + description + optional action button on the right.
+ * Enterprise view header with gradient icon, better typography, and responsive layout.
  */
 export function ViewHeader({
   icon: Icon,
-  iconBg = 'bg-emerald-600',
+  iconBg = 'bg-gradient-to-br from-emerald-500 to-teal-500',
   title,
   description,
   action,
   badge,
 }: ViewHeaderProps) {
   return (
-    <div className="flex items-center justify-between flex-wrap gap-4">
+    <div className="flex items-start sm:items-center justify-between flex-wrap gap-3 sm:gap-4 mb-6 animate-fade-up">
       <div className="flex items-center gap-3">
         <div
           className={cn(
-            'flex items-center justify-center size-10 rounded-lg shrink-0',
+            'flex items-center justify-center size-10 rounded-xl shrink-0 shadow-sm',
             iconBg
           )}
         >
@@ -37,10 +36,10 @@ export function ViewHeader({
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold truncate">{title}</h2>
+            <h2 className="text-lg sm:text-xl font-bold truncate">{title}</h2>
             {badge}
           </div>
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1">{description}</p>
         </div>
       </div>
       {action && <div className="shrink-0">{action}</div>}

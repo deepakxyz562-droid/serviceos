@@ -36,11 +36,13 @@ export async function POST(request: NextRequest) {
     // Hash the password
     const passwordHash = await hashPassword(password);
 
-    // Create tenant first
+    // Create tenant first (with subdomain = slug for subdomain-based access)
     const tenant = await db.tenant.create({
       data: {
         name: businessName,
         slug,
+        subdomain: slug,  // Auto-set subdomain = slug for company access
+        subdomainVerified: true,
         industry: industry || null,
         phone: phone || null,
         email,
@@ -134,6 +136,7 @@ export async function POST(request: NextRequest) {
           id: tenant.id,
           name: tenant.name,
           slug: tenant.slug,
+          subdomain: tenant.subdomain,
           industry: tenant.industry,
           phone: tenant.phone,
           email: tenant.email,

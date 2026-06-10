@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { EventBus } from '@/lib/event-bus';
 
 // ─── WordPress Lead Capture Endpoint ──────────────────────────────────────
 // POST: Receive lead data from WordPress plugin
@@ -195,6 +196,24 @@ export async function POST(request: NextRequest) {
         },
       });
     } catch {}
+
+    // ─── 7.5 Emit lead.created event via EventBus ────────────────────
+    try {
+      await EventBus.emit('lead.created', {
+        leadId: lead.id,
+        name: lead.name,
+        phone: lead.phone,
+        email: lead.email,
+        source: 'wordpress',
+        serviceType: lead.serviceType,
+        tenantId: lead.tenantId,
+        resourceType: 'lead',
+        resourceId: lead.id,
+        summary: `New WordPress lead: ${lead.name} (score: ${leadScore})`,
+      }, { tenantId: endpoint.tenantId || undefined, workspaceId: endpoint.workspaceId || undefined });
+    } catch (eventErr) {
+      console.error('[WordPressLeads] Failed to emit lead.created event:', eventErr);
+    }
 
     // ─── 8. Log ─────────────────────────────────────────────────────────
     try {

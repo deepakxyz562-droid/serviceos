@@ -28,6 +28,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAppStore } from '@/store/app-store';
+import { authFetch } from '@/lib/client-auth';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
@@ -251,7 +252,7 @@ export function SaaSDashboardView() {
   useEffect(() => {
     async function fetchStats() {
       try {
-        const res = await fetch('/api/saas-stats');
+        const res = await authFetch('/api/saas-stats');
         if (!res.ok) throw new Error('Failed to fetch dashboard stats');
         const data = await res.json();
         setStats(data);

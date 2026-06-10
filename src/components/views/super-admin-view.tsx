@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/client-auth';
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import {
@@ -529,7 +530,7 @@ export function SuperAdminView() {
     }
     setCreating(true);
     try {
-      const res = await fetch('/api/admin/tenants', {
+      const res = await authFetch('/api/admin/tenants', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -558,7 +559,7 @@ export function SuperAdminView() {
 
   const handleTenantAction = async (tenantId: string, action: 'suspend' | 'activate' | 'delete') => {
     try {
-      const res = await fetch('/api/admin/tenants', {
+      const res = await authFetch('/api/admin/tenants', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: tenantId, action }),
@@ -586,7 +587,7 @@ export function SuperAdminView() {
 
   const handleUserAction = async (userId: string, action: 'lock' | 'unlock' | 'resetPassword' | 'impersonate') => {
     try {
-      const res = await fetch('/api/admin/users', {
+      const res = await authFetch('/api/admin/users', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: userId, action }),
@@ -616,7 +617,7 @@ export function SuperAdminView() {
     value: boolean
   ) => {
     try {
-      const res = await fetch('/api/admin/feature-flags', {
+      const res = await authFetch('/api/admin/feature-flags', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tenantId, featureFlags: { [feature]: value } }),

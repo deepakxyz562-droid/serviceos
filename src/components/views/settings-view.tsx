@@ -40,6 +40,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAppStore } from '@/store/app-store';
+import { authFetch } from '@/lib/client-auth';
 import { toast } from 'sonner';
 
 // ─── Event Webhook Types ──────────────────────────────────────────────────
@@ -141,7 +142,7 @@ export function SettingsView() {
 
   const fetchWebhooks = useCallback(async () => {
     try {
-      const res = await fetch('/api/event-webhooks');
+      const res = await authFetch('/api/event-webhooks');
       if (res.ok) {
         const data = await res.json();
         setWebhooks(data.webhooks || []);
@@ -157,7 +158,7 @@ export function SettingsView() {
   const fetchWpEndpoints = useCallback(async () => {
     setWpLoading(true);
     try {
-      const res = await fetch('/api/wordpress/config');
+      const res = await authFetch('/api/wordpress/config');
       if (res.ok) {
         const data = await res.json();
         setWpEndpoints(data.endpoints || []);
@@ -175,7 +176,7 @@ export function SettingsView() {
   const handleGenerateWpConfig = async () => {
     setWpGenerating(true);
     try {
-      const res = await fetch('/api/wordpress/config', {
+      const res = await authFetch('/api/wordpress/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -208,7 +209,7 @@ export function SettingsView() {
     }
     setWpTesting(true);
     try {
-      const res = await fetch('/api/wordpress/test', {
+      const res = await authFetch('/api/wordpress/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ api_key: wpNewConfig.api_key }),
@@ -229,7 +230,7 @@ export function SettingsView() {
   // ─── WordPress: Delete Endpoint ──────────────────────────────────────────
   const handleDeleteWpEndpoint = async (id: string) => {
     try {
-      const res = await fetch(`/api/wordpress/config?id=${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/wordpress/config?id=${id}`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('WordPress endpoint deleted');
         fetchWpEndpoints();
@@ -254,7 +255,7 @@ export function SettingsView() {
       return;
     }
     try {
-      const res = await fetch('/api/event-webhooks', {
+      const res = await authFetch('/api/event-webhooks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(webhookForm),
@@ -275,7 +276,7 @@ export function SettingsView() {
 
   const handleDeleteWebhook = async (id: string) => {
     try {
-      const res = await fetch(`/api/event-webhooks/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/event-webhooks/${id}`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('Webhook deleted');
         fetchWebhooks();
@@ -287,7 +288,7 @@ export function SettingsView() {
 
   const handleToggleWebhook = async (id: string, active: boolean) => {
     try {
-      const res = await fetch(`/api/event-webhooks/${id}`, {
+      const res = await authFetch(`/api/event-webhooks/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ active }),
@@ -304,7 +305,7 @@ export function SettingsView() {
   const handleTestWebhook = async (event: string) => {
     setTestingWebhook(event);
     try {
-      const res = await fetch('/api/event-webhooks/test', {
+      const res = await authFetch('/api/event-webhooks/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ event }),

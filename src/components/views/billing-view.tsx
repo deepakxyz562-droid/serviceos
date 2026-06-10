@@ -24,6 +24,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { authFetch } from '@/lib/client-auth';
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -326,7 +327,7 @@ function PayPalCheckoutDialog({
   const handleCreateOrder = async (): Promise<string> => {
     try {
       setError(null);
-      const res = await fetch('/api/paypal/create-order', {
+      const res = await authFetch('/api/paypal/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan: plan.id, billingCycle }),
@@ -354,7 +355,7 @@ function PayPalCheckoutDialog({
   const handleApprove = async (orderId: string) => {
     setIsProcessing(true);
     try {
-      const res = await fetch('/api/paypal/capture-order', {
+      const res = await authFetch('/api/paypal/capture-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderID: orderId, plan: plan.id, billingCycle }),
@@ -478,7 +479,7 @@ function PayPalCheckoutDialog({
                 onClick={async () => {
                   setIsProcessing(true);
                   try {
-                    const res = await fetch('/api/subscriptions', {
+                    const res = await authFetch('/api/subscriptions', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
@@ -548,7 +549,7 @@ export function BillingView() {
   useEffect(() => {
     async function fetchSubscription() {
       try {
-        const res = await fetch('/api/subscriptions');
+        const res = await authFetch('/api/subscriptions');
         if (!res.ok) throw new Error('Failed to fetch');
         const json = await res.json();
         setData({
@@ -573,7 +574,7 @@ export function BillingView() {
     // Fetch PayPal config once at BillingView level — avoids re-mounting PayPalScriptProvider
     async function fetchPayPalConfig() {
       try {
-        const res = await fetch('/api/paypal/config');
+        const res = await authFetch('/api/paypal/config');
         const config = await res.json();
         setPaypalConfig(config);
       } catch {
@@ -643,7 +644,7 @@ export function BillingView() {
   async function handleCancelSubscription() {
     setIsUpgrading(true);
     try {
-      const res = await fetch('/api/paypal/cancel-subscription', {
+      const res = await authFetch('/api/paypal/cancel-subscription', {
         method: 'POST',
       });
       if (!res.ok) throw new Error('Failed');

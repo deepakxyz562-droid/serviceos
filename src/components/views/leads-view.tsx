@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAppStore } from '@/store/app-store';
+import { authFetch } from '@/lib/client-auth';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -331,7 +332,7 @@ export function LeadsView() {
       params.set('page', String(page));
       params.set('limit', String(pageSize));
 
-      const res = await fetch(`/api/leads?${params.toString()}`);
+      const res = await authFetch(`/api/leads?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setLeads(data.leads || []);
@@ -424,7 +425,7 @@ export function LeadsView() {
         serviceType: leadForm.serviceType || null,
       };
 
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -450,7 +451,7 @@ export function LeadsView() {
   const handleDeleteLead = async () => {
     if (!deletingLead) return;
     try {
-      const res = await fetch(`/api/leads/${deletingLead.id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/leads/${deletingLead.id}`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('Lead deleted');
         setShowDeleteDialog(false);
@@ -472,7 +473,7 @@ export function LeadsView() {
     if (!convertingLead) return;
     setConverting(true);
     try {
-      const res = await fetch('/api/leads/convert', {
+      const res = await authFetch('/api/leads/convert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ leadId: convertingLead.id }),
@@ -499,7 +500,7 @@ export function LeadsView() {
 
   const handleStatusChange = async (leadId: string, newStatus: string) => {
     try {
-      const res = await fetch(`/api/leads/${leadId}`, {
+      const res = await authFetch(`/api/leads/${leadId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
@@ -562,7 +563,7 @@ export function LeadsView() {
         try { return JSON.parse(selectedLead.notesJson || '[]'); } catch { return []; }
       })();
       const updatedNotes = [...existingNotes, { text: newNote.trim(), createdAt: new Date().toISOString() }];
-      const res = await fetch(`/api/leads/${selectedLead.id}`, {
+      const res = await authFetch(`/api/leads/${selectedLead.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ notesJson: JSON.stringify(updatedNotes) }),

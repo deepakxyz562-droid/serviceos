@@ -151,6 +151,46 @@ export async function PUT(
       console.error('[LeadsUpdate] Failed to emit lead.updated event:', eventErr);
     }
 
+    // If lead was assigned/reassigned, emit lead.assigned event
+    if (assignedToId !== undefined && assignedToId !== existingLead.assignedToId) {
+      try {
+        await EventBus.emit('lead.assigned', {
+          leadId: lead.id,
+          name: lead.name,
+          phone: lead.phone,
+          email: lead.email,
+          source: lead.source,
+          serviceType: lead.serviceType,
+          assignedToId,
+          tenantId: lead.tenantId,
+          resourceType: 'lead',
+          resourceId: lead.id,
+          summary: `Lead assigned: ${lead.name}`,
+        }, { tenantId: lead.tenantId || undefined });
+      } catch (eventErr) {
+        console.error('[LeadsUpdate] Failed to emit lead.assigned event:', eventErr);
+      }
+    }
+
+    // If lead was converted (status = won), emit lead.converted event
+    if (status === 'won' && existingLead.status !== 'won') {
+      try {
+        await EventBus.emit('lead.converted', {
+          leadId: lead.id,
+          name: lead.name,
+          phone: lead.phone,
+          tenantId: lead.tenantId,
+          resourceType: 'lead',
+          resourceId: lead.id,
+          fromStatus: existingLead.status,
+          toStatus: 'won',
+          summary: `Lead converted: ${lead.name}`,
+        }, { tenantId: lead.tenantId || undefined });
+      } catch (eventErr) {
+        console.error('[LeadsUpdate] Failed to emit lead.converted event:', eventErr);
+      }
+    }
+
     return NextResponse.json({ lead });
   } catch (error) {
     console.error('Update lead error:', error);

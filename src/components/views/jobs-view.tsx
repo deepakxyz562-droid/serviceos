@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Briefcase, Plus, Search, RefreshCw, Filter, Clock, MapPin, User,
   Phone, Calendar, Play, CheckCircle2, XCircle, Eye, ChevronRight,
   ArrowRight, AlertCircle, Activity, Zap, Navigation, Timer,
+  Pencil, Trash2, Camera, Image,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -27,6 +28,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { toast } from 'sonner';
+import { authFetch } from '@/lib/client-auth';
 import { ViewHeader } from '@/components/shared/view-header';
 import { EmptyState } from '@/components/shared/empty-state';
 import { CardGridSkeleton } from '@/components/shared/view-loader';
@@ -73,6 +75,17 @@ interface Employee {
   skills: string;
   rating: number;
   completedJobs: number;
+}
+
+interface CompletionProof {
+  id: string;
+  jobId: string;
+  completionNotes?: string;
+  completionPhotosJson?: string;
+  completionSignatureData?: string;
+  paymentMethod?: string;
+  amountCollected?: number;
+  createdAt: string;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -174,6 +187,44 @@ export function JobsView() {
   const [assigningJob, setAssigningJob] = useState<Job | null>(null);
   const [lifecycleLoading, setLifecycleLoading] = useState(false);
 
+  // Edit job dialog
+  const [showEditJob, setShowEditJob] = useState(false);
+  const [editingJob, setEditingJob] = useState<Job | null>(null);
+  const [editForm, setEditForm] = useState({
+    title: '',
+    customerName: '',
+    customerPhone: '',
+    type: 'service',
+    priority: 'medium',
+    address: '',
+    scheduledDate: '',
+    scheduledTime: '',
+    notes: '',
+  });
+
+  // Delete confirmation
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletingJob, setDeletingJob] = useState<Job | null>(null);
+
+  // Complete with proof
+  const [showCompleteProof, setShowCompleteProof] = useState(false);
+  const [proofForm, setProofForm] = useState({
+    completionNotes: '',
+    completionPhotos: [] as string[],
+    completionSignatureData: '',
+    amountCollected: '',
+  });
+  const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+
+  // View proof
+  const [showProofView, setShowProofView] = useState(false);
+  const [proofData, setProofData] = useState<CompletionProof | null>(null);
+  const [proofLoading, setProofLoading] = useState(false);
+
+  // Lightbox
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+
   // Create job form
   const [jobForm, setJobForm] = useState({
     title: '',
@@ -196,7 +247,7 @@ export function JobsView() {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (search) params.set('search', search);
-      const res = await fetch(`/api/jobs?${params.toString()}`);
+      const res = await authFetch(`/api/jobs?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setJobs(Array.isArray(data) ? data : []);
@@ -210,7 +261,7 @@ export function JobsView() {
 
   const fetchEmployees = useCallback(async () => {
     try {
-      const res = await fetch('/api/employees');
+      const res = await authFetch('/api/employees');
       if (res.ok) {
         const data = await res.json();
         setEmployees(Array.isArray(data) ? data : []);
@@ -255,7 +306,7 @@ export function JobsView() {
         ? new Date(`${jobForm.scheduledDate}T${jobForm.scheduledTime}`).toISOString()
         : undefined;
 
-      const res = await fetch('/api/jobs', {
+      const res = await authFetch('/api/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -295,7 +346,7 @@ export function JobsView() {
   const handleLifecycleAction = async (action: string, jobId: string, resourceId?: string) => {
     setLifecycleLoading(true);
     try {
-      const res = await fetch('/api/jobs/lifecycle', {
+      const res = await authFetch('/api/jobs/lifecycle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, jobId, resourceId }),
@@ -308,7 +359,7 @@ export function JobsView() {
           setAssigningJob(null);
         }
         if (showJobDetail && selectedJob?.id === jobId) {
-          const detailRes = await fetch(`/api/jobs/lifecycle?jobId=${jobId}`);
+          const detailRes = await authFetch(`/api/jobs/lifecycle?jobId=${jobId}`);
           if (detailRes.ok) {
             const data = await detailRes.json();
             setSelectedJob(data);
@@ -327,7 +378,7 @@ export function JobsView() {
 
   const openJobDetail = async (job: Job) => {
     try {
-      const res = await fetch(`/api/jobs/lifecycle?jobId=${job.id}`);
+      const res = await authFetch(`/api/jobs/lifecycle?jobId=${job.id}`);
       if (res.ok) {
         const data = await res.json();
         setSelectedJob(data);
@@ -347,7 +398,7 @@ export function JobsView() {
 
   const handleCancelJob = async (jobId: string) => {
     try {
-      const res = await fetch(`/api/jobs/${jobId}`, {
+      const res = await authFetch(`/api/jobs/${jobId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: jobId, status: 'cancelled' }),
@@ -364,21 +415,337 @@ export function JobsView() {
     }
   };
 
+  // ─── Edit Job ──────────────────────────────────────────────────────────
+
+  const openEditJob = (job: Job) => {
+    setEditingJob(job);
+    const scheduledDate = job.scheduledAt
+      ? new Date(job.scheduledAt).toISOString().split('T')[0]
+      : '';
+    setEditForm({
+      title: job.title || '',
+      customerName: job.customerName || '',
+      customerPhone: job.customerPhone || '',
+      type: job.type || 'service',
+      priority: job.priority || 'medium',
+      address: job.address || '',
+      scheduledDate,
+      scheduledTime: job.scheduledTime || '',
+      notes: job.notes || '',
+    });
+    setShowEditJob(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingJob || !editForm.title) {
+      toast.error('Job title is required');
+      return;
+    }
+    try {
+      const scheduledAt = editForm.scheduledDate && editForm.scheduledTime
+        ? new Date(`${editForm.scheduledDate}T${editForm.scheduledTime}`).toISOString()
+        : undefined;
+
+      const res = await authFetch(`/api/jobs/${editingJob.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingJob.id,
+          title: editForm.title,
+          type: editForm.type,
+          priority: editForm.priority,
+          address: editForm.address || undefined,
+          customerName: editForm.customerName || undefined,
+          customerPhone: editForm.customerPhone || undefined,
+          scheduledAt,
+          scheduledTime: editForm.scheduledTime || undefined,
+          notes: editForm.notes || undefined,
+        }),
+      });
+
+      if (res.ok) {
+        toast.success('Job updated successfully');
+        setShowEditJob(false);
+        setEditingJob(null);
+        fetchJobs();
+        // Refresh detail if open
+        if (showJobDetail && selectedJob?.id === editingJob.id) {
+          const detailRes = await authFetch(`/api/jobs/lifecycle?jobId=${editingJob.id}`);
+          if (detailRes.ok) {
+            const data = await detailRes.json();
+            setSelectedJob(data);
+          }
+        }
+      } else {
+        toast.error('Failed to update job');
+      }
+    } catch {
+      toast.error('Network error');
+    }
+  };
+
+  // ─── Delete Job ────────────────────────────────────────────────────────
+
+  const openDeleteConfirm = (job: Job) => {
+    setDeletingJob(job);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDeleteJob = async () => {
+    if (!deletingJob) return;
+    try {
+      const res = await authFetch(`/api/jobs/${deletingJob.id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        toast.success('Job deleted successfully');
+        setShowDeleteConfirm(false);
+        setDeletingJob(null);
+        setShowJobDetail(false);
+        setSelectedJob(null);
+        fetchJobs();
+      } else {
+        toast.error('Failed to delete job');
+      }
+    } catch {
+      toast.error('Network error');
+    }
+  };
+
+  // ─── Complete with Proof ──────────────────────────────────────────────
+
+  const openCompleteProof = (job: Job) => {
+    setEditingJob(job);
+    setProofForm({
+      completionNotes: '',
+      completionPhotos: [],
+      completionSignatureData: '',
+      amountCollected: '',
+    });
+    setShowCompleteProof(true);
+    // Initialize canvas after dialog opens
+    setTimeout(() => {
+      const canvas = signatureCanvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.strokeStyle = '#000000';
+          ctx.lineWidth = 2;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+        }
+      }
+    }, 100);
+  };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    const maxPhotos = 3;
+    const maxSize = 2 * 1024 * 1024; // 2MB
+    const remaining = maxPhotos - proofForm.completionPhotos.length;
+
+    if (remaining <= 0) {
+      toast.error('Maximum 3 photos allowed');
+      return;
+    }
+
+    const filesToProcess = Array.from(files).slice(0, remaining);
+
+    filesToProcess.forEach((file) => {
+      if (file.size > maxSize) {
+        toast.error(`${file.name} exceeds 2MB limit`);
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result as string;
+        setProofForm(prev => ({
+          ...prev,
+          completionPhotos: [...prev.completionPhotos, base64],
+        }));
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Reset file input
+    e.target.value = '';
+  };
+
+  const removePhoto = (index: number) => {
+    setProofForm(prev => ({
+      ...prev,
+      completionPhotos: prev.completionPhotos.filter((_, i) => i !== index),
+    }));
+  };
+
+  // Signature canvas handlers
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    setIsDrawing(true);
+
+    const rect = canvas.getBoundingClientRect();
+    let clientX: number, clientY: number;
+
+    if ('touches' in e) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(clientX - rect.left, clientY - rect.top);
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    let clientX: number, clientY: number;
+
+    if ('touches' in e) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+      e.preventDefault();
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+
+    ctx.lineTo(clientX - rect.left, clientY - rect.top);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+  };
+
+  const clearSignature = () => {
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+  };
+
+  const saveSignature = () => {
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL('image/png');
+    setProofForm(prev => ({ ...prev, completionSignatureData: dataUrl }));
+  };
+
+  const handleSubmitProof = async () => {
+    if (!editingJob) return;
+
+    // Save signature before submitting
+    saveSignature();
+
+    const amount = proofForm.amountCollected ? parseFloat(proofForm.amountCollected) : 0;
+
+    try {
+      const res = await authFetch(`/api/jobs/${editingJob.id}/complete-proof`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          completionNotes: proofForm.completionNotes || undefined,
+          completionPhotosJson: proofForm.completionPhotos.length > 0
+            ? JSON.stringify(proofForm.completionPhotos)
+            : undefined,
+          completionSignatureData: proofForm.completionSignatureData || undefined,
+          paymentMethod: amount > 0 ? 'cod' : undefined,
+          amountCollected: amount > 0 ? amount : undefined,
+        }),
+      });
+
+      if (res.ok) {
+        toast.success('Job completed with proof successfully');
+        setShowCompleteProof(false);
+        setEditingJob(null);
+        fetchJobs();
+        // Refresh detail if open
+        if (showJobDetail && selectedJob?.id === editingJob.id) {
+          const detailRes = await authFetch(`/api/jobs/lifecycle?jobId=${editingJob.id}`);
+          if (detailRes.ok) {
+            const data = await detailRes.json();
+            setSelectedJob(data);
+          }
+        }
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to complete job with proof');
+      }
+    } catch {
+      toast.error('Network error');
+    }
+  };
+
+  // ─── View Proof ───────────────────────────────────────────────────────
+
+  const handleViewProof = async (job: Job) => {
+    setProofLoading(true);
+    setShowProofView(true);
+    try {
+      const res = await authFetch(`/api/jobs/${job.id}/complete-proof`);
+      if (res.ok) {
+        const data = await res.json();
+        setProofData(data);
+      } else {
+        toast.error('Failed to load completion proof');
+        setProofData(null);
+      }
+    } catch {
+      toast.error('Network error');
+      setProofData(null);
+    } finally {
+      setProofLoading(false);
+    }
+  };
+
   const getActionButtons = (job: Job) => {
     switch (job.status) {
       case 'pending':
         return (
-          <Button
-            size="sm"
-            className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs"
-            onClick={(e) => { e.stopPropagation(); openAssignDialog(job); }}
-          >
-            <User className="size-3 mr-1" /> Assign
-          </Button>
+          <div className="flex gap-1 flex-wrap">
+            <Button
+              size="sm"
+              className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs"
+              onClick={(e) => { e.stopPropagation(); openAssignDialog(job); }}
+            >
+              <User className="size-3 mr-1" /> Assign
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={(e) => { e.stopPropagation(); openEditJob(job); }}
+            >
+              <Pencil className="size-3 mr-1" /> Edit
+            </Button>
+          </div>
         );
       case 'assigned':
         return (
-          <div className="flex gap-1">
+          <div className="flex gap-1 flex-wrap">
             <Button
               size="sm"
               className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs"
@@ -394,31 +761,76 @@ export function JobsView() {
             >
               Reassign
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={(e) => { e.stopPropagation(); openEditJob(job); }}
+            >
+              <Pencil className="size-3" />
+            </Button>
           </div>
         );
       case 'in_progress':
         return (
-          <Button
-            size="sm"
-            className="bg-green-600 hover:bg-green-700 h-7 text-xs"
-            onClick={(e) => { e.stopPropagation(); handleLifecycleAction('complete', job.id); }}
-          >
-            <CheckCircle2 className="size-3 mr-1" /> Complete
-          </Button>
+          <div className="flex gap-1 flex-wrap">
+            <Button
+              size="sm"
+              className="bg-green-600 hover:bg-green-700 h-7 text-xs"
+              onClick={(e) => { e.stopPropagation(); handleLifecycleAction('complete', job.id); }}
+            >
+              <CheckCircle2 className="size-3 mr-1" /> Complete
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={(e) => { e.stopPropagation(); openCompleteProof(job); }}
+            >
+              <Camera className="size-3 mr-1" /> Proof
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={(e) => { e.stopPropagation(); openEditJob(job); }}
+            >
+              <Pencil className="size-3" />
+            </Button>
+          </div>
         );
       case 'completed':
+        return (
+          <div className="flex gap-1">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={(e) => { e.stopPropagation(); openJobDetail(job); }}
+            >
+              <Eye className="size-3 mr-1" /> View
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={(e) => { e.stopPropagation(); handleViewProof(job); }}
+            >
+              <Image className="size-3 mr-1" alt="Proof" /> Proof
+            </Button>
+          </div>
+        );
+      case 'cancelled':
         return (
           <Button
             size="sm"
             variant="outline"
             className="h-7 text-xs"
-            onClick={(e) => { e.stopPropagation(); openJobDetail(job); }}
+            onClick={(e) => { e.stopPropagation(); openEditJob(job); }}
           >
-            <Eye className="size-3 mr-1" /> View
+            <Pencil className="size-3" />
           </Button>
         );
-      case 'cancelled':
-        return null;
       default:
         return null;
     }
@@ -833,6 +1245,415 @@ export function JobsView() {
         </DialogContent>
       </Dialog>
 
+      {/* ─── Edit Job Dialog ────────────────────────────────────────────── */}
+      <Dialog open={showEditJob} onOpenChange={setShowEditJob}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Job</DialogTitle>
+            <DialogDescription>
+              {editingJob?.jobNumber && (
+                <span className="font-mono">{editingJob.jobNumber}</span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Title *</Label>
+              <Input
+                placeholder="e.g., AC Repair at Customer Site"
+                value={editForm.title}
+                onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Customer Name</Label>
+                <Input
+                  placeholder="Customer name"
+                  value={editForm.customerName}
+                  onChange={(e) => setEditForm({ ...editForm, customerName: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Customer Phone</Label>
+                <Input
+                  placeholder="+1 555 123 4567"
+                  value={editForm.customerPhone}
+                  onChange={(e) => setEditForm({ ...editForm, customerPhone: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Service Type</Label>
+                <Select value={editForm.type} onValueChange={(v) => setEditForm({ ...editForm, type: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="service">Service</SelectItem>
+                    <SelectItem value="delivery">Delivery</SelectItem>
+                    <SelectItem value="installation">Installation</SelectItem>
+                    <SelectItem value="repair">Repair</SelectItem>
+                    <SelectItem value="maintenance">Maintenance</SelectItem>
+                    <SelectItem value="transport">Transport</SelectItem>
+                    <SelectItem value="salon">Salon</SelectItem>
+                    <SelectItem value="healthcare">Healthcare</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Priority</Label>
+                <Select value={editForm.priority} onValueChange={(v) => setEditForm({ ...editForm, priority: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Address</Label>
+              <Input
+                placeholder="Service location address"
+                value={editForm.address}
+                onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Scheduled Date</Label>
+                <Input
+                  type="date"
+                  value={editForm.scheduledDate}
+                  onChange={(e) => setEditForm({ ...editForm, scheduledDate: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Scheduled Time</Label>
+                <Input
+                  type="time"
+                  value={editForm.scheduledTime}
+                  onChange={(e) => setEditForm({ ...editForm, scheduledTime: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <Textarea
+                placeholder="Additional notes or instructions"
+                value={editForm.notes}
+                onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditJob(false)}>Cancel</Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700"
+              onClick={handleSaveEdit}
+              disabled={!editForm.title}
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Delete Confirmation Dialog ──────────────────────────────────── */}
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Job</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this job? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {deletingJob && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-100">
+              <p className="font-medium text-sm">{deletingJob.title}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {deletingJob.jobNumber || deletingJob.id.slice(0, 8).toUpperCase()} &middot; {deletingJob.status.replace('_', ' ')}
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteJob}
+            >
+              <Trash2 className="size-4 mr-1.5" /> Delete Job
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Complete with Proof Dialog ──────────────────────────────────── */}
+      <Dialog open={showCompleteProof} onOpenChange={setShowCompleteProof}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Complete with Proof</DialogTitle>
+            <DialogDescription>
+              Add completion details, photos, and signature for this job
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-5 py-2">
+            {/* Completion Notes */}
+            <div className="space-y-2">
+              <Label>Completion Notes</Label>
+              <Textarea
+                placeholder="Describe what was done, any issues encountered..."
+                value={proofForm.completionNotes}
+                onChange={(e) => setProofForm({ ...proofForm, completionNotes: e.target.value })}
+                rows={3}
+              />
+            </div>
+
+            {/* Photo Upload */}
+            <div className="space-y-2">
+              <Label>Completion Photos (max 3, 2MB each)</Label>
+              <div className="flex items-center gap-2">
+                <label className="cursor-pointer">
+                  <div className="flex items-center gap-2 px-4 py-2 border-2 border-dashed rounded-lg hover:border-emerald-400 hover:bg-emerald-50/50 transition-colors">
+                    <Camera className="size-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">
+                      {proofForm.completionPhotos.length < 3 ? 'Add Photos' : 'Limit Reached'}
+                    </span>
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={handlePhotoUpload}
+                    disabled={proofForm.completionPhotos.length >= 3}
+                  />
+                </label>
+              </div>
+              {proofForm.completionPhotos.length > 0 && (
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  {proofForm.completionPhotos.map((photo, i) => (
+                    <div key={i} className="relative group">
+                      <img
+                        src={photo}
+                        alt={`Photo ${i + 1}`}
+                        className="w-full h-24 object-cover rounded-lg border cursor-pointer"
+                        onClick={() => setLightboxImage(photo)}
+                      />
+                      <button
+                        className="absolute -top-1.5 -right-1.5 size-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => removePhoto(i)}
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Signature Canvas */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Signature</Label>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      clearSignature();
+                      setProofForm(prev => ({ ...prev, completionSignatureData: '' }));
+                    }}
+                  >
+                    Clear
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={saveSignature}
+                  >
+                    Save Signature
+                  </Button>
+                </div>
+              </div>
+              <div className="border-2 border-dashed rounded-lg overflow-hidden bg-white">
+                <canvas
+                  ref={signatureCanvasRef}
+                  width={460}
+                  height={160}
+                  className="w-full touch-none cursor-crosshair"
+                  onMouseDown={startDrawing}
+                  onMouseMove={draw}
+                  onMouseUp={stopDrawing}
+                  onMouseLeave={stopDrawing}
+                  onTouchStart={startDrawing}
+                  onTouchMove={draw}
+                  onTouchEnd={stopDrawing}
+                />
+              </div>
+              {proofForm.completionSignatureData && (
+                <div className="mt-2">
+                  <p className="text-xs text-muted-foreground mb-1">Saved signature:</p>
+                  <img
+                    src={proofForm.completionSignatureData}
+                    alt="Signature"
+                    className="h-16 border rounded bg-white cursor-pointer"
+                    onClick={() => setLightboxImage(proofForm.completionSignatureData)}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* COD Payment */}
+            <div className="space-y-2">
+              <Label>COD Payment Amount (optional)</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  className="pl-7"
+                  value={proofForm.amountCollected}
+                  onChange={(e) => setProofForm({ ...proofForm, amountCollected: e.target.value })}
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+              {proofForm.amountCollected && parseFloat(proofForm.amountCollected) > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Payment method will be set to COD
+                </p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCompleteProof(false)}>Cancel</Button>
+            <Button
+              className="bg-green-600 hover:bg-green-700"
+              onClick={handleSubmitProof}
+            >
+              <CheckCircle2 className="size-4 mr-1.5" /> Complete Job
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── View Proof Dialog ───────────────────────────────────────────── */}
+      <Dialog open={showProofView} onOpenChange={setShowProofView}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Completion Proof</DialogTitle>
+            <DialogDescription>Job completion details and evidence</DialogDescription>
+          </DialogHeader>
+          {proofLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <RefreshCw className="size-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : proofData ? (
+            <div className="space-y-5">
+              {/* Completion Notes */}
+              {proofData.completionNotes && (
+                <div>
+                  <p className="text-sm font-medium mb-1">Completion Notes</p>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap p-3 bg-muted/50 rounded-lg">
+                    {proofData.completionNotes}
+                  </p>
+                </div>
+              )}
+
+              {/* Photos */}
+              {(() => {
+                let photos: string[] = [];
+                try {
+                  photos = proofData.completionPhotosJson ? JSON.parse(proofData.completionPhotosJson) : [];
+                } catch { /* empty */ }
+                if (photos.length === 0) return null;
+                return (
+                  <div>
+                    <p className="text-sm font-medium mb-2">Completion Photos</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {photos.map((photo, i) => (
+                        <img
+                          key={i}
+                          src={photo}
+                          alt={`Completion photo ${i + 1}`}
+                          className="w-full h-40 object-cover rounded-lg border cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={() => setLightboxImage(photo)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Signature */}
+              {proofData.completionSignatureData && (
+                <div>
+                  <p className="text-sm font-medium mb-1">Signature</p>
+                  <img
+                    src={proofData.completionSignatureData}
+                    alt="Completion signature"
+                    className="h-24 border rounded-lg bg-white cursor-pointer hover:opacity-90 transition-opacity"
+                    onClick={() => setLightboxImage(proofData.completionSignatureData)}
+                  />
+                </div>
+              )}
+
+              {/* Payment Details */}
+              {(proofData.paymentMethod || (proofData.amountCollected != null && proofData.amountCollected > 0)) && (
+                <div className="p-3 bg-muted/50 rounded-lg">
+                  <p className="text-sm font-medium mb-1">Payment Details</p>
+                  <div className="flex items-center gap-3 text-sm">
+                    {proofData.paymentMethod && (
+                      <Badge variant="outline" className="text-xs">
+                        {proofData.paymentMethod.toUpperCase()}
+                      </Badge>
+                    )}
+                    {proofData.amountCollected != null && proofData.amountCollected > 0 && (
+                      <span className="font-semibold text-green-700">
+                        ${proofData.amountCollected.toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Timestamp */}
+              <p className="text-xs text-muted-foreground">
+                Completed on {formatDateTime(proofData.createdAt)}
+              </p>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground text-sm">
+              No proof data available
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Lightbox Dialog ─────────────────────────────────────────────── */}
+      <Dialog open={!!lightboxImage} onOpenChange={() => setLightboxImage(null)}>
+        <DialogContent className="max-w-3xl p-2">
+          {lightboxImage && (
+            <img
+              src={lightboxImage}
+              alt="Full size"
+              className="w-full h-auto max-h-[80vh] object-contain rounded-lg"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* ─── Assign Employee Dialog ────────────────────────────────────── */}
       <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
         <DialogContent className="max-w-lg">
@@ -1140,12 +1961,33 @@ export function JobsView() {
                   </>
                 )}
                 {selectedJob.status === 'in_progress' && (
+                  <>
+                    <Button
+                      className="bg-green-600 hover:bg-green-700"
+                      onClick={() => handleLifecycleAction('complete', selectedJob.id)}
+                      disabled={lifecycleLoading}
+                    >
+                      <CheckCircle2 className="size-4 mr-1.5" /> Complete
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="border-green-200 text-green-700 hover:bg-green-50"
+                      onClick={() => {
+                        setShowJobDetail(false);
+                        openCompleteProof(selectedJob);
+                      }}
+                    >
+                      <Camera className="size-4 mr-1.5" /> Complete with Proof
+                    </Button>
+                  </>
+                )}
+                {selectedJob.status === 'completed' && (
                   <Button
-                    className="bg-green-600 hover:bg-green-700"
-                    onClick={() => handleLifecycleAction('complete', selectedJob.id)}
-                    disabled={lifecycleLoading}
+                    variant="outline"
+                    className="border-green-200 text-green-700 hover:bg-green-50"
+                    onClick={() => handleViewProof(selectedJob)}
                   >
-                    <CheckCircle2 className="size-4 mr-1.5" /> Complete
+                    <Image className="size-4 mr-1.5" alt="Proof" /> View Proof
                   </Button>
                 )}
                 {!['completed', 'cancelled'].includes(selectedJob.status) && (
@@ -1157,6 +1999,31 @@ export function JobsView() {
                     <XCircle className="size-4 mr-1.5" /> Cancel Job
                   </Button>
                 )}
+
+                {/* Edit & Delete buttons */}
+                <div className="flex gap-2 ml-auto">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setShowJobDetail(false);
+                      openEditJob(selectedJob);
+                    }}
+                  >
+                    <Pencil className="size-4 mr-1.5" /> Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600 border-red-200 hover:bg-red-50"
+                    onClick={() => {
+                      setShowJobDetail(false);
+                      openDeleteConfirm(selectedJob);
+                    }}
+                  >
+                    <Trash2 className="size-4 mr-1.5" /> Delete
+                  </Button>
+                </div>
               </div>
             </div>
           )}

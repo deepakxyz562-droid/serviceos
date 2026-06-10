@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/client-auth';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useWorkflowStore } from '@/store/workflow-store';
@@ -396,7 +397,7 @@ export function WhatsAppConfigPanel({ node }: WhatsAppConfigPanelProps) {
     const fetchContactLists = async () => {
       setContactListsLoading(true);
       try {
-        const res = await fetch('/api/contact-lists');
+        const res = await authFetch('/api/contact-lists');
         if (res.ok) {
           const data = await res.json();
           setContactLists(data);
@@ -414,7 +415,7 @@ export function WhatsAppConfigPanel({ node }: WhatsAppConfigPanelProps) {
   const fetchCredentials = useCallback(async () => {
     setCredentialsLoading(true);
     try {
-      const res = await fetch('/api/credentials?type=whatsapp');
+      const res = await authFetch('/api/credentials?type=whatsapp');
       if (res.ok) {
         const data = await res.json();
         setCredentials(data.credentials || []);
@@ -434,7 +435,7 @@ export function WhatsAppConfigPanel({ node }: WhatsAppConfigPanelProps) {
   useEffect(() => {
     const fetchWorkflows = async () => {
       try {
-        const res = await fetch('/api/workflows');
+        const res = await authFetch('/api/workflows');
         if (res.ok) {
           const data = await res.json();
           const workflowList = Array.isArray(data) ? data : (data.workflows || []);
@@ -499,7 +500,7 @@ export function WhatsAppConfigPanel({ node }: WhatsAppConfigPanelProps) {
     try {
       if (editingCredential) {
         // Update existing credential
-        const res = await fetch(`/api/credentials/${editingCredential.id}`, {
+        const res = await authFetch(`/api/credentials/${editingCredential.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -521,7 +522,7 @@ export function WhatsAppConfigPanel({ node }: WhatsAppConfigPanelProps) {
         }
       } else {
         // Create new credential
-        const res = await fetch('/api/credentials', {
+        const res = await authFetch('/api/credentials', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -555,7 +556,7 @@ export function WhatsAppConfigPanel({ node }: WhatsAppConfigPanelProps) {
 
   const handleDeleteCredential = useCallback(async (credId: string) => {
     try {
-      const res = await fetch(`/api/credentials/${credId}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/credentials/${credId}`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('Credential deleted');
         if (credentialId === credId) {
@@ -585,7 +586,7 @@ export function WhatsAppConfigPanel({ node }: WhatsAppConfigPanelProps) {
     try {
       // Real API validation: call the WhatsApp Business Account endpoint to verify credentials
       const url = `https://graph.facebook.com/v25.0/${credentialForm.phoneNumberId}?access_token=${credentialForm.accessToken}`;
-      const response = await fetch(url);
+      const response = await authFetch(url);
       const data = await response.json();
 
       if (response.ok && data.id) {
@@ -801,7 +802,7 @@ export function WhatsAppConfigPanel({ node }: WhatsAppConfigPanelProps) {
       if (listDynamicSource.method === 'POST' && listDynamicSource.body) {
         fetchOptions.body = listDynamicSource.body;
       }
-      const response = await fetch(listDynamicSource.url, fetchOptions);
+      const response = await authFetch(listDynamicSource.url, fetchOptions);
       if (!response.ok) {
         setTestFetchResult({ success: false, rows: [], error: `API returned ${response.status}` });
         return;
@@ -2984,7 +2985,7 @@ export function WhatsAppConfigPanel({ node }: WhatsAppConfigPanelProps) {
                         try {
                           setTestingTemplate(true);
                           toast.loading('Sending template message to verify delivery...', { id: 'whatsapp-template-test' });
-                          const res = await fetch('/api/whatsapp/send', {
+                          const res = await authFetch('/api/whatsapp/send', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -3100,7 +3101,7 @@ export function WhatsAppConfigPanel({ node }: WhatsAppConfigPanelProps) {
                             sendBody.type = 'text';
                           }
                           
-                          const res = await fetch('/api/whatsapp/send', {
+                          const res = await authFetch('/api/whatsapp/send', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(sendBody),
@@ -3525,7 +3526,7 @@ function ContactListManagerDialog({
   const fetchContactLists = useCallback(async () => {
     setContactListsLoading(true);
     try {
-      const res = await fetch('/api/contact-lists');
+      const res = await authFetch('/api/contact-lists');
       if (res.ok) {
         const data = await res.json();
         setContactLists(data);
@@ -3540,7 +3541,7 @@ function ContactListManagerDialog({
   const fetchEntries = useCallback(async (listId: string) => {
     setEntriesLoading(true);
     try {
-      const res = await fetch(`/api/contact-lists/${listId}/entries`);
+      const res = await authFetch(`/api/contact-lists/${listId}/entries`);
       if (res.ok) {
         const data = await res.json();
         setEntries(data);
@@ -3586,7 +3587,7 @@ function ContactListManagerDialog({
     try {
       if (editingListId) {
         // Update existing list
-        const res = await fetch('/api/contact-lists', {
+        const res = await authFetch('/api/contact-lists', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -3602,7 +3603,7 @@ function ContactListManagerDialog({
         }
       } else {
         // Create new list
-        const res = await fetch('/api/contact-lists', {
+        const res = await authFetch('/api/contact-lists', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -3628,7 +3629,7 @@ function ContactListManagerDialog({
 
   const handleDeleteList = async (listId: string) => {
     try {
-      const res = await fetch(`/api/contact-lists?id=${listId}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/contact-lists?id=${listId}`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('Contact list deleted');
         if (selectedListId === listId) {
@@ -3658,7 +3659,7 @@ function ContactListManagerDialog({
     }
 
     try {
-      const res = await fetch(`/api/contact-lists/${selectedListId}/entries`, {
+      const res = await authFetch(`/api/contact-lists/${selectedListId}/entries`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newEntryName, phone: newEntryPhone }),
@@ -3680,7 +3681,7 @@ function ContactListManagerDialog({
     if (!selectedListId) return;
 
     try {
-      const res = await fetch(`/api/contact-lists/${selectedListId}/entries?entryId=${entryId}`, {
+      const res = await authFetch(`/api/contact-lists/${selectedListId}/entries?entryId=${entryId}`, {
         method: 'DELETE',
       });
       if (res.ok) {

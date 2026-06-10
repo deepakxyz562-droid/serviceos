@@ -141,16 +141,39 @@ export async function POST(request: NextRequest) {
         leadId: lead.id,
         name: lead.name,
         phone: lead.phone,
+        email: lead.email,
         source: lead.source,
         status: lead.status,
         serviceType: lead.serviceType,
         tenantId: lead.tenantId,
+        assignedToId: lead.assignedToId,
         resourceType: 'lead',
         resourceId: lead.id,
         summary: `New lead: ${lead.name} (${lead.source})`,
       }, { tenantId: lead.tenantId || undefined });
     } catch (eventErr) {
       console.error('[LeadsCreate] Failed to emit lead.created event:', eventErr);
+    }
+
+    // If lead was created with an assigned employee, also emit lead.assigned
+    if (lead.assignedToId) {
+      try {
+        await EventBus.emit('lead.assigned', {
+          leadId: lead.id,
+          name: lead.name,
+          phone: lead.phone,
+          email: lead.email,
+          source: lead.source,
+          serviceType: lead.serviceType,
+          assignedToId: lead.assignedToId,
+          tenantId: lead.tenantId,
+          resourceType: 'lead',
+          resourceId: lead.id,
+          summary: `Lead assigned: ${lead.name}`,
+        }, { tenantId: lead.tenantId || undefined });
+      } catch (eventErr) {
+        console.error('[LeadsCreate] Failed to emit lead.assigned event:', eventErr);
+      }
     }
 
     return NextResponse.json({ lead }, { status: 201 });

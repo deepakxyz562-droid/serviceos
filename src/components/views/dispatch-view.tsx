@@ -22,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
+import { authFetch } from '@/lib/client-auth';
 import { useRealtime, usePresence } from '@/hooks/use-realtime';
 import { useMemo } from 'react';
 
@@ -222,7 +223,7 @@ export function DispatchView() {
   const fetchJobs = useCallback(async () => {
     try {
       const params = new URLSearchParams({ status: 'pending,assigned' });
-      const res = await fetch(`/api/jobs?XTransformPort=3000&${params.toString()}`);
+      const res = await authFetch(`/api/jobs?XTransformPort=3000&${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setJobs(Array.isArray(data) ? data : []);
@@ -232,7 +233,7 @@ export function DispatchView() {
 
   const fetchEmployees = useCallback(async () => {
     try {
-      const res = await fetch('/api/employees?XTransformPort=3000');
+      const res = await authFetch('/api/employees?XTransformPort=3000');
       if (res.ok) {
         const data = await res.json();
         setEmployees(Array.isArray(data) ? data : []);
@@ -313,7 +314,7 @@ export function DispatchView() {
     // Fetch smart match candidates
     setSmartMatchLoading(true);
     try {
-      const res = await fetch('/api/dispatch/smart?XTransformPort=3000', {
+      const res = await authFetch('/api/dispatch/smart?XTransformPort=3000', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobId: job.id, autoAssign: false }),
@@ -339,7 +340,7 @@ export function DispatchView() {
 
     setAssignLoading(true);
     try {
-      const res = await fetch(`/api/jobs/${assigningJob.id}?XTransformPort=3000`, {
+      const res = await authFetch(`/api/jobs/${assigningJob.id}?XTransformPort=3000`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -379,7 +380,7 @@ export function DispatchView() {
       let assigned = 0;
       for (const job of unassigned) {
         try {
-          const res = await fetch('/api/dispatch/smart?XTransformPort=3000', {
+          const res = await authFetch('/api/dispatch/smart?XTransformPort=3000', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ jobId: job.id, autoAssign: true }),
@@ -408,7 +409,7 @@ export function DispatchView() {
 
   const handleStartJob = async (job: Job) => {
     try {
-      const res = await fetch(`/api/jobs/${job.id}?XTransformPort=3000`, {
+      const res = await authFetch(`/api/jobs/${job.id}?XTransformPort=3000`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: job.id, status: 'in_progress' }),

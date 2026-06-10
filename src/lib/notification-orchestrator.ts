@@ -55,6 +55,10 @@ export type NotificationTemplate =
   | 'payment_received'
   | 'payment_failed'
   | 'lead_created'
+  | 'lead_assigned'
+  | 'quote_sent'
+  | 'quote_accepted'
+  | 'invoice_sent'
   | 'custom'
 
 export interface NotificationRecipient {
@@ -428,6 +432,126 @@ const TEMPLATES: Record<NotificationTemplate, TemplateDefinition> = {
       title: 'New Lead',
       message: `${d.leadName || 'Lead'} - ${d.serviceType || 'Service inquiry'}`,
       type: 'lead',
+    }),
+  },
+
+  lead_assigned: {
+    getSubject: (d) => `New Lead Assigned: ${d.leadName || 'N/A'}`,
+    getWhatsAppMessage: (d) => [
+      '🎯 New Lead Assigned to You',
+      '',
+      `Customer: ${d.leadName || 'N/A'}`,
+      `Phone: ${d.leadPhone || 'N/A'}`,
+      `Source: ${d.source || 'Manual'}`,
+      `Service: ${d.serviceType || 'N/A'}`,
+      '',
+      'Please follow up promptly!',
+    ].join('\n'),
+    getEmailBody: (d) => [
+      `<h2>🎯 New Lead Assigned</h2>`,
+      `<ul>`,
+      `<li><strong>Customer:</strong> ${d.leadName || 'N/A'}</li>`,
+      `<li><strong>Phone:</strong> ${d.leadPhone || 'N/A'}</li>`,
+      `<li><strong>Source:</strong> ${d.source || 'Manual'}</li>`,
+      `<li><strong>Service:</strong> ${d.serviceType || 'N/A'}</li>`,
+      `</ul>`,
+      `<p>Please follow up promptly!</p>`,
+    ].join('\n'),
+    getSmsMessage: (d) =>
+      `New lead assigned: ${d.leadName || 'N/A'} (${d.leadPhone || 'N/A'}) - ${d.serviceType || 'Service'}. Follow up promptly!`,
+    getInAppPayload: (d) => ({
+      title: 'New Lead Assigned',
+      message: `${d.leadName || 'Lead'} - ${d.serviceType || 'Service inquiry'}`,
+      type: 'lead',
+    }),
+  },
+
+  quote_sent: {
+    getSubject: (d) => `Quote #${d.quoteNumber || 'N/A'} from ${d.tenantName || 'ServiceOS'}`,
+    getWhatsAppMessage: (d) => [
+      `📋 Your Quote from ${d.tenantName || 'ServiceOS'}`,
+      '',
+      `Quote #: ${d.quoteNumber || 'N/A'}`,
+      `Service: ${d.title || d.serviceTitle || 'N/A'}`,
+      `Amount: ${d.currency || '$'}${d.total || 'N/A'}`,
+      '',
+      d.approvalLink ? `View & Accept: ${d.approvalLink}` : 'Please review and let us know your decision.',
+      '',
+      `— ${d.tenantName || 'ServiceOS'}`,
+    ].join('\n'),
+    getEmailBody: (d) => [
+      `<h2>📋 Your Quote from ${d.tenantName || 'ServiceOS'}</h2>`,
+      `<ul>`,
+      `<li><strong>Quote #:</strong> ${d.quoteNumber || 'N/A'}</li>`,
+      `<li><strong>Service:</strong> ${d.title || d.serviceTitle || 'N/A'}</li>`,
+      `<li><strong>Amount:</strong> ${d.currency || '$'}${d.total || 'N/A'}</li>`,
+      `</ul>`,
+      d.approvalLink ? `<p><a href="${d.approvalLink}" style="background:#10b981;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;">View & Accept Quote</a></p>` : '<p>Please review and let us know your decision.</p>',
+    ].join('\n'),
+    getSmsMessage: (d) =>
+      `Quote #${d.quoteNumber || 'N/A'} from ${d.tenantName || 'ServiceOS'}: ${d.currency || '$'}${d.total || 'N/A'}. ${d.approvalLink ? `View: ${d.approvalLink}` : 'Please review.'}`,
+    getInAppPayload: (d) => ({
+      title: 'Quote Sent',
+      message: `Quote #${d.quoteNumber || 'N/A'} - ${d.currency || '$'}${d.total || 'N/A'}`,
+      type: 'quote',
+      actionUrl: d.approvalLink,
+    }),
+  },
+
+  quote_accepted: {
+    getSubject: (d) => `Quote #${d.quoteNumber || 'N/A'} Accepted! 🎉`,
+    getWhatsAppMessage: (d) => [
+      '🎉 Quote Accepted!',
+      '',
+      `Quote #${d.quoteNumber || 'N/A'} has been accepted by ${d.customerName || 'customer'}.`,
+      `Amount: ${d.currency || '$'}${d.total || 'N/A'}`,
+      '',
+      'A job will be created automatically.',
+    ].join('\n'),
+    getEmailBody: (d) => [
+      `<h2>🎉 Quote Accepted!</h2>`,
+      `<p>Quote #${d.quoteNumber || 'N/A'} has been accepted by ${d.customerName || 'customer'}.</p>`,
+      `<p><strong>Amount:</strong> ${d.currency || '$'}${d.total || 'N/A'}</p>`,
+      `<p>A job will be created automatically.</p>`,
+    ].join('\n'),
+    getSmsMessage: (d) =>
+      `Quote #${d.quoteNumber || 'N/A'} accepted by ${d.customerName || 'customer'}! ${d.currency || '$'}${d.total || 'N/A'}.`,
+    getInAppPayload: (d) => ({
+      title: 'Quote Accepted',
+      message: `Quote #${d.quoteNumber || 'N/A'} accepted by ${d.customerName || 'customer'}`,
+      type: 'quote',
+    }),
+  },
+
+  invoice_sent: {
+    getSubject: (d) => `Invoice #${d.invoiceNumber || 'N/A'} from ${d.tenantName || 'ServiceOS'}`,
+    getWhatsAppMessage: (d) => [
+      `💰 Invoice from ${d.tenantName || 'ServiceOS'}`,
+      '',
+      `Invoice #: ${d.invoiceNumber || 'N/A'}`,
+      `Amount: ${d.currency || '$'}${d.total || 'N/A'}`,
+      `Due: ${d.dueDate || 'Upon receipt'}`,
+      '',
+      d.paymentLink ? `Pay Online: ${d.paymentLink}` : 'Please submit payment at your earliest convenience.',
+      '',
+      `— ${d.tenantName || 'ServiceOS'}`,
+    ].join('\n'),
+    getEmailBody: (d) => [
+      `<h2>💰 Invoice from ${d.tenantName || 'ServiceOS'}</h2>`,
+      `<ul>`,
+      `<li><strong>Invoice #:</strong> ${d.invoiceNumber || 'N/A'}</li>`,
+      `<li><strong>Amount:</strong> ${d.currency || '$'}${d.total || 'N/A'}</li>`,
+      `<li><strong>Due:</strong> ${d.dueDate || 'Upon receipt'}</li>`,
+      `</ul>`,
+      d.paymentLink ? `<p><a href="${d.paymentLink}" style="background:#10b981;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;">Pay Now</a></p>` : '<p>Please submit payment at your earliest convenience.</p>',
+    ].join('\n'),
+    getSmsMessage: (d) =>
+      `Invoice #${d.invoiceNumber || 'N/A'} from ${d.tenantName || 'ServiceOS'}: ${d.currency || '$'}${d.total || 'N/A'}. Due: ${d.dueDate || 'Upon receipt'}.`,
+    getInAppPayload: (d) => ({
+      title: 'Invoice Sent',
+      message: `Invoice #${d.invoiceNumber || 'N/A'} - ${d.currency || '$'}${d.total || 'N/A'}`,
+      type: 'invoice',
+      actionUrl: d.paymentLink,
     }),
   },
 

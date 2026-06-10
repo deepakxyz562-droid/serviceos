@@ -44,11 +44,13 @@ export async function POST(request: NextRequest) {
       slugCounter++;
     }
 
-    // Create tenant
+    // Create tenant (with subdomain = slug for subdomain-based access)
     const tenant = await db.tenant.create({
       data: {
         name: businessName,
         slug,
+        subdomain: slug,  // Auto-set subdomain = slug
+        subdomainVerified: true,
         industry: industry || null,
         phone: phone || null,
         email: authUser.email,
@@ -131,6 +133,7 @@ export async function POST(request: NextRequest) {
           id: tenant.id,
           name: tenant.name,
           slug: tenant.slug,
+          subdomain: tenant.subdomain,
           industry: tenant.industry,
           phone: tenant.phone,
           email: tenant.email,

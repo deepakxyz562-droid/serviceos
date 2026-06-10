@@ -40,7 +40,18 @@ export type ActiveView =
   | 'marketplace'
   | 'enterprise'
   | 'broadcast'
-  | 'superAdmin';
+  | 'employees'
+  // New Modules
+  | 'quotes'
+  | 'bookings'
+  | 'calendar'
+  | 'reviews'
+  | 'serviceCatalog'
+  | 'knowledgeBase'
+  | 'documentCenter'
+  | 'routeOptimization'
+  | 'contacts'
+  | 'leadDiscovery';
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -65,11 +76,14 @@ interface AppState {
   showOnboarding: boolean;
   setShowOnboarding: (show: boolean) => void;
 
-  // Sidebar
+  // Sidebar - mobile first: closed by default on mobile
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
   leftSidebarOpen: boolean;
   toggleLeftSidebar: () => void;
+  setLeftSidebarOpen: (open: boolean) => void;
+  mobileSidebarOpen: boolean;
+  setMobileSidebarOpen: (open: boolean) => void;
 
   // Dark mode
   darkMode: boolean;
@@ -85,20 +99,35 @@ interface AppState {
   currentWorkspaceName: string;
   setCurrentWorkspaceName: (name: string) => void;
 
-  // Workspace visibility — hides switcher for small businesses (90% of customers)
-  // Shows only for: Super Admin, Enterprise customers, Agencies managing multiple companies
+  // Workspace visibility
   showWorkspace: boolean;
   setShowWorkspace: (show: boolean) => void;
 
   // Workflow (for canvas)
   currentWorkflowId: string | null;
   setCurrentWorkflowId: (id: string | null) => void;
+
+  // PWA install prompt
+  installPromptEvent: any;
+  setInstallPromptEvent: (event: any) => void;
 }
 
 const initialAuthState: AuthState = {
   isAuthenticated: false,
   user: null,
   tenant: null,
+};
+
+// Detect initial dark mode preference
+const getInitialDarkMode = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  try {
+    const stored = localStorage.getItem('serviceos_dark_mode');
+    if (stored !== null) return stored === 'true';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  } catch {
+    return false;
+  }
 };
 
 export const useAppStore = create<AppState>((set) => ({
@@ -117,15 +146,32 @@ export const useAppStore = create<AppState>((set) => ({
   showOnboarding: false,
   setShowOnboarding: (show: boolean) => set({ showOnboarding: show }),
 
-  // Sidebar
+  // Sidebar - starts collapsed on mobile (detected via window width)
   sidebarCollapsed: false,
   toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
-  leftSidebarOpen: true,
-  toggleLeftSidebar: () => set((state) => ({ leftSidebarOpen: !state.leftSidebarOpen })),
+  leftSidebarOpen: typeof window !== 'undefined' && window.innerWidth >= 1024,
+  toggleLeftSidebar: () => set((state) => {
+    const next = !state.leftSidebarOpen;
+    return { leftSidebarOpen: next, sidebarCollapsed: !next };
+  }),
+  setLeftSidebarOpen: (open: boolean) => set({ leftSidebarOpen: open, sidebarCollapsed: !open }),
+  mobileSidebarOpen: false,
+  setMobileSidebarOpen: (open: boolean) => set({ mobileSidebarOpen: open }),
 
-  // Dark mode
-  darkMode: false,
-  toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),
+  // Dark mode - respects system preference
+  darkMode: getInitialDarkMode(),
+  toggleDarkMode: () => set((state) => {
+    const next = !state.darkMode;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('serviceos_dark_mode', String(next));
+      if (next) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    }
+    return { darkMode: next };
+  }),
 
   // Search
   searchQuery: '',
@@ -142,4 +188,8 @@ export const useAppStore = create<AppState>((set) => ({
   // Workflow
   currentWorkflowId: null,
   setCurrentWorkflowId: (id: string | null) => set({ currentWorkflowId: id }),
+
+  // PWA install prompt
+  installPromptEvent: null,
+  setInstallPromptEvent: (event: any) => set({ installPromptEvent: event }),
 }));

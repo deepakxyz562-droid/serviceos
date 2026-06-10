@@ -63,9 +63,13 @@ export async function GET(
         phone: tenant.phone,
         email: tenant.email,
         address: tenant.address,
+        city: tenant.city,
+        state: tenant.state,
+        pincode: tenant.pincode,
         country: tenant.country,
         currency: tenant.currency,
         whatsappPhone: tenant.whatsappPhone,
+        whatsappConfigJson: tenant.whatsappConfigJson,
         plan: tenant.plan,
         planStatus: tenant.planStatus,
         trialEndsAt: tenant.trialEndsAt,
@@ -130,10 +134,15 @@ export async function PUT(
       phone,
       email,
       address,
+      city,
+      state,
+      pincode,
       country,
       currency,
       logo,
       whatsappPhone,
+      whatsappConfigJson,
+      plan,
       settingsJson,
       onboardingCompleted,
       onboardingStep,
@@ -146,10 +155,15 @@ export async function PUT(
     if (phone !== undefined) updateData.phone = phone;
     if (email !== undefined) updateData.email = email;
     if (address !== undefined) updateData.address = address;
+    if (city !== undefined) updateData.city = city;
+    if (state !== undefined) updateData.state = state;
+    if (pincode !== undefined) updateData.pincode = pincode;
     if (country !== undefined) updateData.country = country;
     if (currency !== undefined) updateData.currency = currency;
     if (logo !== undefined) updateData.logo = logo;
     if (whatsappPhone !== undefined) updateData.whatsappPhone = whatsappPhone;
+    if (whatsappConfigJson !== undefined) updateData.whatsappConfigJson = whatsappConfigJson;
+    if (plan !== undefined) updateData.plan = plan;
     if (settingsJson !== undefined) updateData.settingsJson = settingsJson;
     if (onboardingCompleted !== undefined) updateData.onboardingCompleted = onboardingCompleted;
     if (onboardingStep !== undefined) updateData.onboardingStep = onboardingStep;
@@ -169,9 +183,13 @@ export async function PUT(
         phone: tenant.phone,
         email: tenant.email,
         address: tenant.address,
+        city: tenant.city,
+        state: tenant.state,
+        pincode: tenant.pincode,
         country: tenant.country,
         currency: tenant.currency,
         whatsappPhone: tenant.whatsappPhone,
+        whatsappConfigJson: tenant.whatsappConfigJson,
         plan: tenant.plan,
         planStatus: tenant.planStatus,
         trialEndsAt: tenant.trialEndsAt,

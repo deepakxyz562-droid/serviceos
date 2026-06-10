@@ -42,6 +42,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAppStore } from '@/store/app-store';
+import { authFetch } from '@/lib/client-auth';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -392,7 +393,7 @@ export function DashboardView() {
   useEffect(() => {
     async function fetchStats() {
       try {
-        const res = await fetch('/api/saas-stats');
+        const res = await authFetch('/api/saas-stats');
         if (!res.ok) throw new Error('Failed to fetch dashboard stats');
         const data = await res.json();
         setStats(data);
@@ -409,7 +410,7 @@ export function DashboardView() {
   useEffect(() => {
     async function fetchEmployees() {
       try {
-        const res = await fetch('/api/employees?XTransformPort=3000');
+        const res = await authFetch('/api/employees?XTransformPort=3000');
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data)) setEmployees(data);
@@ -425,7 +426,7 @@ export function DashboardView() {
   useEffect(() => {
     async function fetchJourney() {
       try {
-        const res = await fetch('/api/journey?XTransformPort=3000');
+        const res = await authFetch('/api/journey?XTransformPort=3000');
         if (res.ok) {
           const data = await res.json();
           // Aggregate by stage
@@ -458,7 +459,7 @@ export function DashboardView() {
   useEffect(() => {
     async function fetchConversations() {
       try {
-        const res = await fetch('/api/conversations?XTransformPort=3000&status=active');
+        const res = await authFetch('/api/conversations?XTransformPort=3000&status=active');
         if (res.ok) {
           const data = await res.json();
           const convos: any[] = data.conversations || [];

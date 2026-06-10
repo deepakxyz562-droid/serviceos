@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/client-auth';
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -98,7 +99,7 @@ export function VariablesView() {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch('/api/variables');
+      const res = await authFetch('/api/variables');
       if (!res.ok) throw new Error('Failed to fetch variables');
       const data = await res.json();
       setVariables(data.variables || []);
@@ -181,7 +182,7 @@ export function VariablesView() {
 
     try {
       setFormSaving(true);
-      const res = await fetch('/api/variables', {
+      const res = await authFetch('/api/variables', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key: formKey.trim(), value: formValue, type: formType }),
@@ -225,7 +226,7 @@ export function VariablesView() {
 
     try {
       setDeleteSaving(true);
-      const res = await fetch(`/api/variables?key=${encodeURIComponent(deletingVariable.key)}`, {
+      const res = await authFetch(`/api/variables?key=${encodeURIComponent(deletingVariable.key)}`, {
         method: 'DELETE',
       });
 

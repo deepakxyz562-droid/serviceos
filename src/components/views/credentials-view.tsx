@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/client-auth';
 
 import { useState, useEffect, useCallback } from 'react';
 import {
@@ -149,7 +150,7 @@ export function CredentialsView() {
   const fetchCredentials = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/credentials');
+      const res = await authFetch('/api/credentials');
       if (res.ok) {
         const data = await res.json();
         setCredentials(data.credentials || []);
@@ -203,7 +204,7 @@ export function CredentialsView() {
     if (!newCredName.trim()) { toast.error('Credential name is required'); return; }
     setCreating(true);
     try {
-      const res = await fetch('/api/credentials', {
+      const res = await authFetch('/api/credentials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -235,7 +236,7 @@ export function CredentialsView() {
   const handleDelete = async (id: string) => {
     setDeleting(id);
     try {
-      const res = await fetch(`/api/credentials/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/credentials/${id}`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('Credential deleted');
         setDetailDialogOpen(false);
@@ -270,7 +271,7 @@ export function CredentialsView() {
     if (!editCredId) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/credentials/${editCredId}`, {
+      const res = await authFetch(`/api/credentials/${editCredId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

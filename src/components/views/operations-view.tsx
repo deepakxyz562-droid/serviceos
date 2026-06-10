@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
+import { authFetch } from '@/lib/client-auth';
 
 // Types
 interface Job {
@@ -194,7 +195,7 @@ export function OperationsView() {
       if (jobStatusFilter !== 'all') params.set('status', jobStatusFilter);
       if (jobTypeFilter !== 'all') params.set('type', jobTypeFilter);
       if (jobSearch) params.set('search', jobSearch);
-      const res = await fetch(`/api/jobs?${params.toString()}`);
+      const res = await authFetch(`/api/jobs?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setJobs(Array.isArray(data) ? data : []);
@@ -214,7 +215,7 @@ export function OperationsView() {
       if (resourceTypeFilter !== 'all') params.set('type', resourceTypeFilter);
       if (resourceStatusFilter !== 'all') params.set('status', resourceStatusFilter);
       if (resourceSearch) params.set('search', resourceSearch);
-      const res = await fetch(`/api/resources?${params.toString()}`);
+      const res = await authFetch(`/api/resources?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setResources(Array.isArray(data) ? data : []);
@@ -230,7 +231,7 @@ export function OperationsView() {
   const fetchWebhookSources = useCallback(async () => {
     setWebhooksLoading(true);
     try {
-      const res = await fetch('/api/webhook-sources');
+      const res = await authFetch('/api/webhook-sources');
       if (res.ok) {
         const data = await res.json();
         setWebhookSources(Array.isArray(data) ? data : []);
@@ -247,7 +248,7 @@ export function OperationsView() {
     try {
       const params = new URLSearchParams({ status: 'available' });
       if (type) params.set('type', type);
-      const res = await fetch(`/api/resources?${params.toString()}`);
+      const res = await authFetch(`/api/resources?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setAvailableResources(Array.isArray(data) ? data : []);
@@ -273,7 +274,7 @@ export function OperationsView() {
   const handleLifecycleAction = async (action: string, jobId: string, resourceId?: string) => {
     setLifecycleLoading(true);
     try {
-      const res = await fetch('/api/jobs/lifecycle', {
+      const res = await authFetch('/api/jobs/lifecycle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, jobId, resourceId }),
@@ -310,7 +311,7 @@ export function OperationsView() {
   // Open job detail
   const openJobDetail = async (job: Job) => {
     try {
-      const res = await fetch(`/api/jobs/lifecycle?jobId=${job.id}`);
+      const res = await authFetch(`/api/jobs/lifecycle?jobId=${job.id}`);
       if (res.ok) {
         const data = await res.json();
         setSelectedJob(data);
@@ -333,7 +334,7 @@ export function OperationsView() {
         ? { id: editingResource!.id, ...resourceForm, skills: resourceForm.skills ? resourceForm.skills.split(',').map((s) => s.trim()) : [] }
         : { ...resourceForm, skills: resourceForm.skills ? resourceForm.skills.split(',').map((s) => s.trim()) : [] };
 
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -354,7 +355,7 @@ export function OperationsView() {
 
   const handleDeleteResource = async (id: string) => {
     try {
-      const res = await fetch(`/api/resources?id=${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/resources?id=${id}`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('Resource deleted');
         fetchResources();
@@ -382,7 +383,7 @@ export function OperationsView() {
   // Webhook source CRUD
   const handleSaveWebhookSource = async () => {
     try {
-      const res = await fetch('/api/webhook-sources', {
+      const res = await authFetch('/api/webhook-sources', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(webhookForm),
@@ -402,7 +403,7 @@ export function OperationsView() {
 
   const handleDeleteWebhookSource = async (id: string) => {
     try {
-      const res = await fetch(`/api/webhook-sources?id=${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/webhook-sources?id=${id}`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('Webhook source deleted');
         fetchWebhookSources();
@@ -417,7 +418,7 @@ export function OperationsView() {
   const handleTestWebhookSource = async (source: WebhookSource) => {
     toast.info(`Testing connection to ${source.name}...`);
     try {
-      const res = await fetch('/api/webhook-ingest', {
+      const res = await authFetch('/api/webhook-ingest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ eventType: 'TEST', source: source.type, sourceId: source.id }),

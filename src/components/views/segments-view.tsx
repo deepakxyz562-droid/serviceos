@@ -1,158 +1,241 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
-  Users, Plus, Search, Filter, Trash2, Edit2, Save, X,
-  ChevronDown, ChevronUp, Copy, Eye,
+  Users, Plus, Search, Filter, Trash2, Pencil, RefreshCw,
+  Eye, Clock, Target,
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Input as InputComponent } from '@/components/ui/input';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
+import { Skeleton } from '@/components/ui/skeleton';
+import { authFetch } from '@/lib/client-auth';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 import { ViewHeader } from '@/components/shared/view-header';
 import { EmptyState } from '@/components/shared/empty-state';
 import { StatCard } from '@/components/shared/stat-card';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-interface FilterRow {
-  id: string;
-  field: string;
-  operator: string;
-  value: string;
-}
-
 interface Segment {
   id: string;
   name: string;
-  description: string;
+  description: string | null;
+  type: string;
+  rulesJson: string;
+  matchLogic: string;
   memberCount: number;
-  matchLogic: 'AND' | 'OR';
-  filters: FilterRow[];
-  isPrebuilt: boolean;
+  lastCalculated: string | null;
+  color: string | null;
+  icon: string | null;
+  isDefault: boolean;
+  tenantId: string | null;
+  workspaceId: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 
-interface SegmentMember {
-  id: string;
+interface SegmentForm {
   name: string;
-  email: string;
-  phone: string;
-  revenue: number;
-  lastBooking: string;
-  tags: string[];
+  description: string;
+  type: string;
+  matchLogic: string;
+  rulesJson: string;
+  color: string;
 }
 
-// ─── Mock Data ──────────────────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
-const MOCK_SEGMENTS: Segment[] = [
-  { id: 'seg1', name: 'Inactive 30 Days', description: 'Customers with no activity in 30 days', memberCount: 145, matchLogic: 'AND', filters: [{ id: 'f1', field: 'last_message', operator: 'more_than', value: '30' }, { id: 'f2', field: 'last_booking', operator: 'more_than', value: '30' }], isPrebuilt: true, createdAt: '2025-01-15' },
-  { id: 'seg2', name: 'VIP Customers', description: 'High-value customers with $1000+ revenue', memberCount: 67, matchLogic: 'OR', filters: [{ id: 'f3', field: 'revenue', operator: 'greater_than', value: '1000' }, { id: 'f4', field: 'customer_tags', operator: 'contains', value: 'VIP' }], isPrebuilt: true, createdAt: '2025-01-10' },
-  { id: 'seg3', name: 'Window Cleaning Customers', description: 'Customers who booked window cleaning', memberCount: 89, matchLogic: 'AND', filters: [{ id: 'f5', field: 'service_type', operator: 'equals', value: 'window_cleaning' }], isPrebuilt: true, createdAt: '2025-02-01' },
-  { id: 'seg4', name: 'New Customers (30 days)', description: 'Recently acquired customers', memberCount: 34, matchLogic: 'AND', filters: [{ id: 'f6', field: 'last_booking', operator: 'less_than', value: '30' }, { id: 'f7', field: 'revenue', operator: 'less_than', value: '500' }], isPrebuilt: false, createdAt: '2025-03-01' },
-  { id: 'seg5', name: 'High Engagement', description: 'Customers who engage with campaigns', memberCount: 210, matchLogic: 'AND', filters: [{ id: 'f8', field: 'campaign_engagement', operator: 'greater_than', value: '50' }], isPrebuilt: false, createdAt: '2025-02-20' },
-];
+const DEFAULT_FORM: SegmentForm = {
+  name: '',
+  description: '',
+  type: 'dynamic',
+  matchLogic: 'and',
+  rulesJson: '[]',
+  color: '#10b981',
+};
 
-const MOCK_MEMBERS: SegmentMember[] = [
-  { id: 'm1', name: 'Alex Rivera', email: 'alex@email.com', phone: '+1 555-0101', revenue: 4500, lastBooking: '2 days ago', tags: ['VIP'] },
-  { id: 'm2', name: 'Maria Santos', email: 'maria@email.com', phone: '+1 555-0102', revenue: 2800, lastBooking: '5 min ago', tags: ['cleaning'] },
-  { id: 'm3', name: 'Robert Kim', email: 'robert@email.com', phone: '+1 555-0105', revenue: 6200, lastBooking: '1 hr ago', tags: ['VIP', 'commercial'] },
-  { id: 'm4', name: 'James Wilson', email: 'james@email.com', phone: '+1 555-0103', revenue: 800, lastBooking: '1 day ago', tags: ['plumbing'] },
-  { id: 'm5', name: 'Sophie Chen', email: 'sophie@email.com', phone: '+1 555-0104', revenue: 1200, lastBooking: '3 days ago', tags: ['packing'] },
-];
+function formatDate(dateStr: string | null) {
+  if (!dateStr) return '--';
+  try {
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+    });
+  } catch {
+    return '--';
+  }
+}
 
-const FILTER_FIELDS = [
-  { value: 'service_type', label: 'Service Type' },
-  { value: 'city', label: 'City' },
-  { value: 'country', label: 'Country' },
-  { value: 'customer_tags', label: 'Customer Tags' },
-  { value: 'revenue', label: 'Revenue ($)' },
-  { value: 'last_booking', label: 'Last Booking (days)' },
-  { value: 'last_message', label: 'Last Message (days)' },
-  { value: 'campaign_engagement', label: 'Campaign Engagement (%)' },
-];
-
-const OPERATORS = [
-  { value: 'equals', label: 'Equals' },
-  { value: 'not_equals', label: 'Not Equals' },
-  { value: 'contains', label: 'Contains' },
-  { value: 'greater_than', label: 'Greater Than' },
-  { value: 'less_than', label: 'Less Than' },
-  { value: 'more_than', label: 'More Than (days)' },
-];
+function formatRelativeTime(dateStr: string | null) {
+  if (!dateStr) return 'Never';
+  try {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  } catch {
+    return '--';
+  }
+}
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function SegmentsView() {
-  const [segments, setSegments] = useState<Segment[]>(MOCK_SEGMENTS);
+  const [segments, setSegments] = useState<Segment[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [selectedSegment, setSelectedSegment] = useState<Segment | null>(null);
-  const [showMembersDialog, setShowMembersDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [editingSegment, setEditingSegment] = useState<Segment | null>(null);
+  const [deletingSegment, setDeletingSegment] = useState<Segment | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  const [createForm, setCreateForm] = useState({
-    name: '', description: '', matchLogic: 'AND' as 'AND' | 'OR',
-    filters: [{ id: 'f-new-1', field: 'service_type', operator: 'equals', value: '' }] as FilterRow[],
-  });
+  const [form, setForm] = useState<SegmentForm>(DEFAULT_FORM);
 
+  // ─── Fetch segments ─────────────────────────────────────────────────────
+  const fetchSegments = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await authFetch('/api/segments');
+      if (res.ok) {
+        const json = await res.json();
+        setSegments(Array.isArray(json) ? json : json.data || []);
+      }
+    } catch {
+      setSegments([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSegments();
+  }, [fetchSegments]);
+
+  // ─── Filtered list ──────────────────────────────────────────────────────
   const filteredSegments = segments.filter(s =>
     s.name.toLowerCase().includes(search.toLowerCase()) ||
-    s.description.toLowerCase().includes(search.toLowerCase())
+    (s.description || '').toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleCreate = () => {
-    if (!createForm.name) { toast.error('Segment name is required'); return; }
-    const newSegment: Segment = {
-      id: `seg-${Date.now()}`, name: createForm.name, description: createForm.description,
-      memberCount: Math.floor(Math.random() * 200), matchLogic: createForm.matchLogic,
-      filters: createForm.filters, isPrebuilt: false, createdAt: new Date().toISOString().split('T')[0],
-    };
-    setSegments(prev => [newSegment, ...prev]);
-    setShowCreateDialog(false);
-    setCreateForm({ name: '', description: '', matchLogic: 'AND', filters: [{ id: 'f-new-1', field: 'service_type', operator: 'equals', value: '' }] });
-    toast.success('Segment created');
+  // ─── Create ─────────────────────────────────────────────────────────────
+  const handleCreate = async () => {
+    if (!form.name) { toast.error('Segment name is required'); return; }
+    setSaving(true);
+    try {
+      const res = await authFetch('/api/segments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...form,
+          memberCount: 0,
+        }),
+      });
+      if (res.ok) {
+        toast.success('Segment created');
+        setShowCreateDialog(false);
+        setForm(DEFAULT_FORM);
+        fetchSegments();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to create segment');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const addFilterRow = () => {
-    setCreateForm(prev => ({
-      ...prev,
-      filters: [...prev.filters, { id: `f-${Date.now()}`, field: 'service_type', operator: 'equals', value: '' }],
-    }));
+  // ─── Edit ───────────────────────────────────────────────────────────────
+  const openEdit = (segment: Segment) => {
+    setEditingSegment(segment);
+    setForm({
+      name: segment.name,
+      description: segment.description || '',
+      type: segment.type,
+      matchLogic: segment.matchLogic,
+      rulesJson: segment.rulesJson || '[]',
+      color: segment.color || '#10b981',
+    });
+    setShowEditDialog(true);
   };
 
-  const removeFilterRow = (id: string) => {
-    setCreateForm(prev => ({
-      ...prev,
-      filters: prev.filters.filter(f => f.id !== id),
-    }));
+  const handleEdit = async () => {
+    if (!editingSegment || !form.name) { toast.error('Segment name is required'); return; }
+    setSaving(true);
+    try {
+      const res = await authFetch(`/api/segments/${editingSegment.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (res.ok) {
+        toast.success('Segment updated');
+        setShowEditDialog(false);
+        setEditingSegment(null);
+        setForm(DEFAULT_FORM);
+        fetchSegments();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to update segment');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const updateFilterRow = (id: string, key: keyof FilterRow, value: string) => {
-    setCreateForm(prev => ({
-      ...prev,
-      filters: prev.filters.map(f => f.id === id ? { ...f, [key]: value } : f),
-    }));
+  // ─── Delete ─────────────────────────────────────────────────────────────
+  const openDelete = (segment: Segment) => {
+    if (segment.isDefault) {
+      toast.error('Cannot delete default segment');
+      return;
+    }
+    setDeletingSegment(segment);
+    setShowDeleteDialog(true);
   };
 
-  const handleDelete = (id: string) => {
-    setSegments(prev => prev.filter(s => s.id !== id));
-    toast.success('Segment deleted');
+  const handleDelete = async () => {
+    if (!deletingSegment) return;
+    setSaving(true);
+    try {
+      const res = await authFetch(`/api/segments/${deletingSegment.id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        toast.success('Segment deleted');
+        setShowDeleteDialog(false);
+        setDeletingSegment(null);
+        fetchSegments();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to delete segment');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setSaving(false);
+    }
   };
 
+  // ─── Stats ──────────────────────────────────────────────────────────────
   const totalMembers = segments.reduce((s, seg) => s + seg.memberCount, 0);
 
+  // ─── Render ─────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
@@ -161,7 +244,7 @@ export function SegmentsView() {
         title="Segments"
         description="Customer segmentation engine"
         action={
-          <Button className="bg-emerald-600 hover:bg-emerald-700 min-h-[44px]" onClick={() => setShowCreateDialog(true)}>
+          <Button className="bg-emerald-600 hover:bg-emerald-700 min-h-[44px]" onClick={() => { setForm(DEFAULT_FORM); setShowCreateDialog(true); }}>
             <Plus className="size-4 mr-1.5" /> Create Segment
           </Button>
         }
@@ -171,71 +254,129 @@ export function SegmentsView() {
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
         <StatCard label="Total Segments" value={segments.length} icon={Users} />
         <StatCard label="Total Members" value={totalMembers.toLocaleString()} icon={Users} color="text-teal-600" />
-        <StatCard label="Pre-built" value={segments.filter(s => s.isPrebuilt).length} icon={Filter} color="text-amber-600" />
-        <StatCard label="Custom" value={segments.filter(s => !s.isPrebuilt).length} icon={Plus} color="text-emerald-600" />
+        <StatCard label="Dynamic" value={segments.filter(s => s.type === 'dynamic').length} icon={Filter} color="text-amber-600" />
+        <StatCard label="Static" value={segments.filter(s => s.type === 'static').length} icon={Target} color="text-emerald-600" />
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-        <Input placeholder="Search segments..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+      {/* Search + Refresh */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input placeholder="Search segments..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+        </div>
+        <Button variant="outline" size="sm" onClick={() => fetchSegments()}>
+          <RefreshCw className="size-3.5 mr-1" /> Refresh
+        </Button>
       </div>
 
-      {/* Segments List */}
-      {filteredSegments.length === 0 ? (
+      {/* Loading */}
+      {loading ? (
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map(i => (
+            <Card key={i}>
+              <CardContent className="p-4 space-y-3">
+                <Skeleton className="h-5 w-3/4" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-1/2" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : filteredSegments.length === 0 ? (
         <EmptyState
           icon={Users}
           title="No segments found"
           description={search ? 'Try adjusting your search' : 'Create your first customer segment to target specific audiences'}
           actionLabel={!search ? 'Create Segment' : undefined}
-          onAction={!search ? () => setShowCreateDialog(true) : undefined}
+          onAction={!search ? () => { setForm(DEFAULT_FORM); setShowCreateDialog(true); } : undefined}
         />
       ) : (
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-        {filteredSegments.map(segment => (
-          <Card key={segment.id} className="hover:shadow-md transition-all group">
-            <CardContent className="p-4 space-y-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-semibold text-sm truncate">{segment.name}</h4>
-                    <Badge variant="outline" className={`text-[9px] shrink-0 ${segment.isPrebuilt ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
-                      {segment.isPrebuilt ? 'Pre-built' : 'Dynamic'}
+        /* Segments List */
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          {filteredSegments.map(segment => {
+            let parsedRules: unknown[] = [];
+            try { parsedRules = JSON.parse(segment.rulesJson || '[]'); } catch { /* ignore */ }
+
+            return (
+              <Card key={segment.id} className="hover:shadow-md transition-all group">
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-semibold text-sm truncate">{segment.name}</h4>
+                        <Badge variant="outline" className={`text-[9px] shrink-0 ${segment.type === 'dynamic' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                          {segment.type}
+                        </Badge>
+                        {segment.isDefault && (
+                          <Badge variant="outline" className="text-[9px] shrink-0 bg-slate-50 text-slate-600 border-slate-200">
+                            Default
+                          </Badge>
+                        )}
+                      </div>
+                      {segment.description && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{segment.description}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => openEdit(segment)}>
+                        <Pencil className="size-3.5" />
+                      </Button>
+                      {!segment.isDefault && (
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500" onClick={() => openDelete(segment)}>
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Color indicator + member count + match logic */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {segment.color && (
+                      <div className="size-3 rounded-full shrink-0" style={{ backgroundColor: segment.color }} />
+                    )}
+                    <Badge variant="outline" className="text-[10px] bg-muted/50">
+                      <Users className="size-3 mr-1" /> {segment.memberCount.toLocaleString()} members
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px] bg-muted/50 uppercase">
+                      {segment.matchLogic} logic
                     </Badge>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">{segment.description}</p>
-                </div>
-                <div className="flex gap-1 shrink-0">
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => { setSelectedSegment(segment); setShowMembersDialog(true); }}>
-                    <Eye className="size-3.5" />
-                  </Button>
-                  {!segment.isPrebuilt && (
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-500" onClick={() => handleDelete(segment.id)}>
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-[10px] bg-muted/50">
-                  <Users className="size-3 mr-1" /> {segment.memberCount.toLocaleString()} members
-                </Badge>
-                <Badge variant="outline" className="text-[10px] bg-muted/50">{segment.matchLogic} logic</Badge>
-              </div>
-              <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
-                {segment.filters.map((filter, idx) => (
-                  <div key={filter.id} className="flex items-center gap-1 flex-wrap">
-                    {idx > 0 && <Badge variant="secondary" className="text-[8px] h-4 px-1 shrink-0">{segment.matchLogic}</Badge>}
-                    <span className="font-medium">{FILTER_FIELDS.find(f => f.value === filter.field)?.label || filter.field}</span>
-                    <span>{OPERATORS.find(o => o.value === filter.operator)?.label || filter.operator}</span>
-                    <span className="font-medium text-emerald-600">&quot;{filter.value}&quot;</span>
+
+                  {/* Last calculated */}
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Clock className="size-3" />
+                    <span>Calculated: {formatRelativeTime(segment.lastCalculated)}</span>
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+
+                  {/* Parsed rules preview */}
+                  {Array.isArray(parsedRules) && parsedRules.length > 0 && (
+                    <div className="text-xs text-muted-foreground pt-2 border-t space-y-1">
+                      {parsedRules.slice(0, 3).map((rule: unknown, idx: number) => {
+                        const r = rule as Record<string, string>;
+                        return (
+                          <div key={idx} className="flex items-center gap-1 flex-wrap">
+                            {idx > 0 && <Badge variant="secondary" className="text-[8px] h-4 px-1 shrink-0 uppercase">{segment.matchLogic}</Badge>}
+                            <span className="font-medium">{r.field || 'field'}</span>
+                            <span>{r.operator || 'equals'}</span>
+                            <span className="font-medium text-emerald-600">&quot;{r.value || ''}&quot;</span>
+                          </div>
+                        );
+                      })}
+                      {parsedRules.length > 3 && (
+                        <span className="text-muted-foreground">+{parsedRules.length - 3} more rules</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Footer */}
+                  <div className="text-[10px] text-muted-foreground pt-2 border-t">
+                    Created {formatDate(segment.createdAt)}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       )}
 
       {/* Create Segment Dialog */}
@@ -248,94 +389,153 @@ export function SegmentsView() {
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label>Segment Name *</Label>
-              <InputComponent placeholder="e.g., Inactive Customers" value={createForm.name} onChange={e => setCreateForm({ ...createForm, name: e.target.value })} />
+              <Input placeholder="e.g., Inactive Customers" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
             </div>
             <div className="space-y-2">
               <Label>Description</Label>
-              <InputComponent placeholder="What is this segment for?" value={createForm.description} onChange={e => setCreateForm({ ...createForm, description: e.target.value })} />
+              <Input placeholder="What is this segment for?" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Type</Label>
+                <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="dynamic">Dynamic</SelectItem>
+                    <SelectItem value="static">Static</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Match Logic</Label>
+                <Select value={form.matchLogic} onValueChange={v => setForm({ ...form, matchLogic: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="and">Match ALL (AND)</SelectItem>
+                    <SelectItem value="or">Match ANY (OR)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="space-y-2">
-              <Label>Match Logic</Label>
-              <Select value={createForm.matchLogic} onValueChange={v => setCreateForm({ ...createForm, matchLogic: v as 'AND' | 'OR' })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="AND">Match ALL conditions (AND)</SelectItem>
-                  <SelectItem value="OR">Match ANY condition (OR)</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>Rules (JSON)</Label>
+              <Textarea
+                placeholder='[{"field":"last_booking","operator":"more_than","value":"30"}]'
+                value={form.rulesJson}
+                onChange={e => setForm({ ...form, rulesJson: e.target.value })}
+                rows={4}
+                className="font-mono text-xs"
+              />
+              <p className="text-[10px] text-muted-foreground">JSON array of rule objects with field, operator, and value</p>
             </div>
-            <Separator />
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label>Filter Conditions</Label>
-                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={addFilterRow}>
-                  <Plus className="size-3 mr-1" /> Add Filter
-                </Button>
+            <div className="space-y-2">
+              <Label>Color</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={form.color}
+                  onChange={e => setForm({ ...form, color: e.target.value })}
+                  className="size-8 rounded cursor-pointer border"
+                />
+                <Input value={form.color} onChange={e => setForm({ ...form, color: e.target.value })} className="flex-1" />
               </div>
-              {createForm.filters.map((filter, idx) => (
-                <div key={filter.id} className="flex items-center gap-2">
-                  {idx > 0 && <Badge variant="secondary" className="text-[9px] shrink-0">{createForm.matchLogic}</Badge>}
-                  <Select value={filter.field} onValueChange={v => updateFilterRow(filter.id, 'field', v)}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {FILTER_FIELDS.map(f => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Select value={filter.operator} onValueChange={v => updateFilterRow(filter.id, 'operator', v)}>
-                    <SelectTrigger className="h-8 text-xs w-32"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {OPERATORS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <InputComponent className="h-8 text-xs" placeholder="Value" value={filter.value} onChange={e => updateFilterRow(filter.id, 'value', e.target.value)} />
-                  {createForm.filters.length > 1 && (
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0" onClick={() => removeFilterRow(filter.id)}>
-                      <X className="size-3" />
-                    </Button>
-                  )}
-                </div>
-              ))}
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreateDialog(false)}>Cancel</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreate} disabled={!createForm.name}>Save Segment</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreate} disabled={!form.name || saving}>
+              {saving ? 'Creating...' : 'Create Segment'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Members Dialog */}
-      <Dialog open={showMembersDialog} onOpenChange={setShowMembersDialog}>
+      {/* Edit Segment Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{selectedSegment?.name} - Members</DialogTitle>
-            <DialogDescription>{selectedSegment?.memberCount} customers in this segment</DialogDescription>
+            <DialogTitle>Edit Segment</DialogTitle>
+            <DialogDescription>Update segment configuration</DialogDescription>
           </DialogHeader>
-          <ScrollArea className="max-h-96">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Revenue</TableHead>
-                  <TableHead>Last Booking</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {MOCK_MEMBERS.map(member => (
-                  <TableRow key={member.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Avatar className="size-6"><AvatarFallback className="text-[10px] bg-emerald-100 text-emerald-700">{member.name[0]}</AvatarFallback></Avatar>
-                        <div><p className="text-sm font-medium">{member.name}</p><p className="text-[10px] text-muted-foreground">{member.email}</p></div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm">${member.revenue.toLocaleString()}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{member.lastBooking}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </ScrollArea>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Segment Name *</Label>
+              <Input placeholder="e.g., Inactive Customers" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Input placeholder="What is this segment for?" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Type</Label>
+                <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="dynamic">Dynamic</SelectItem>
+                    <SelectItem value="static">Static</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Match Logic</Label>
+                <Select value={form.matchLogic} onValueChange={v => setForm({ ...form, matchLogic: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="and">Match ALL (AND)</SelectItem>
+                    <SelectItem value="or">Match ANY (OR)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Rules (JSON)</Label>
+              <Textarea
+                placeholder='[{"field":"last_booking","operator":"more_than","value":"30"}]'
+                value={form.rulesJson}
+                onChange={e => setForm({ ...form, rulesJson: e.target.value })}
+                rows={4}
+                className="font-mono text-xs"
+              />
+              <p className="text-[10px] text-muted-foreground">JSON array of rule objects with field, operator, and value</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Color</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={form.color}
+                  onChange={e => setForm({ ...form, color: e.target.value })}
+                  className="size-8 rounded cursor-pointer border"
+                />
+                <Input value={form.color} onChange={e => setForm({ ...form, color: e.target.value })} className="flex-1" />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleEdit} disabled={!form.name || saving}>
+              {saving ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete Segment</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete &quot;{deletingSegment?.name}&quot;? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={saving}>
+              {saving ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

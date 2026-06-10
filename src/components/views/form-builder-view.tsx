@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/client-auth';
 
 import { useState, useEffect, useCallback } from 'react';
 import {
@@ -472,7 +473,7 @@ export function FormBuilderView() {
       const params = new URLSearchParams();
       if (tenantId) params.set('tenantId', tenantId);
       params.set('limit', '100');
-      let res = await fetch(`/api/wa-forms?${params.toString()}`);
+      let res = await authFetch(`/api/wa-forms?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to fetch');
       let json = await res.json();
       let parsed = (json.data as Record<string, unknown>[]).map(dbRowToForm);
@@ -481,7 +482,7 @@ export function FormBuilderView() {
       if (parsed.length === 0 && tenantId) {
         const fallbackParams = new URLSearchParams();
         fallbackParams.set('limit', '100');
-        res = await fetch(`/api/wa-forms?${fallbackParams.toString()}`);
+        res = await authFetch(`/api/wa-forms?${fallbackParams.toString()}`);
         if (res.ok) {
           json = await res.json();
           parsed = (json.data as Record<string, unknown>[]).map(dbRowToForm);
@@ -514,7 +515,7 @@ export function FormBuilderView() {
   }) => {
     setSubmitting(true);
     try {
-      const res = await fetch('/api/wa-forms', {
+      const res = await authFetch('/api/wa-forms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -554,7 +555,7 @@ export function FormBuilderView() {
     if (!editForm) return;
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/wa-forms/${editForm.id}`, {
+      const res = await authFetch(`/api/wa-forms/${editForm.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -584,7 +585,7 @@ export function FormBuilderView() {
 
   const handleDelete = async (formId: string) => {
     try {
-      const res = await fetch(`/api/wa-forms/${formId}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/wa-forms/${formId}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete form');
       setForms(prev => prev.filter(f => f.id !== formId));
       toast.success('Form deleted');
@@ -598,7 +599,7 @@ export function FormBuilderView() {
   const handleToggleStatus = async (form: WhatsAppForm) => {
     const newStatus = form.status === 'active' ? 'inactive' : 'active';
     try {
-      const res = await fetch(`/api/wa-forms/${form.id}`, {
+      const res = await authFetch(`/api/wa-forms/${form.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
@@ -616,7 +617,7 @@ export function FormBuilderView() {
   const fetchResponses = async (formId: string) => {
     setLoadingResponses(true);
     try {
-      const res = await fetch(`/api/wa-forms/${formId}/responses`);
+      const res = await authFetch(`/api/wa-forms/${formId}/responses`);
       if (!res.ok) throw new Error('Failed to fetch responses');
       const json = await res.json();
       setResponses(json.data as FormResponse[]);
@@ -656,7 +657,7 @@ export function FormBuilderView() {
 
     setWaSending(true);
     try {
-      const res = await fetch('/api/wa-forms/send', {
+      const res = await authFetch('/api/wa-forms/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

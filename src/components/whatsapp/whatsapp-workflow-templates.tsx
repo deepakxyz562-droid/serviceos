@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/client-auth';
 
 import { useState, useEffect, useCallback } from 'react';
 import {
@@ -120,7 +121,7 @@ export function WhatsAppWorkflowTemplates() {
   const fetchTemplates = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/whatsapp/workflows');
+      const res = await authFetch('/api/whatsapp/workflows');
       if (res.ok) {
         const data = await res.json();
         setTemplates(data.templates || []);
@@ -141,7 +142,7 @@ export function WhatsAppWorkflowTemplates() {
   const handleInstall = async (templateId: string) => {
     setInstallingId(templateId);
     try {
-      const res = await fetch('/api/whatsapp/workflows', {
+      const res = await authFetch('/api/whatsapp/workflows', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ templateId }),

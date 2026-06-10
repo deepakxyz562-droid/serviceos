@@ -6,6 +6,7 @@ import {
   Loader2, ChevronDown, ChevronUp, Star, Navigation,
   Radio, MessageSquare, Calendar, AlertTriangle, Eye,
   Wifi, WifiOff, Bell, BellOff, Camera, PenLine, Trash2, Timer,
+  DollarSign, CreditCard, Banknote, Receipt, ImagePlus,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,8 +17,12 @@ import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { useRealtime } from '@/hooks/use-realtime';
+import { authFetch } from '@/lib/client-auth';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -63,6 +68,15 @@ interface Job {
   customerRating?: number;
   employeeRating?: number;
   assignmentStatus?: string;
+  // Payment & COD fields
+  paymentMethod?: string;
+  paymentStatus?: string;
+  amountCollected?: number;
+  // Completion proof fields
+  completionNotes?: string;
+  completionPhotosJson?: string;
+  completionSignatureData?: string;
+  completedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -166,6 +180,12 @@ export function EmployeePortalView() {
   const [completionNotes, setCompletionNotes] = useState('');
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
   const [completingJobId, setCompletingJobId] = useState<string | null>(null);
+  // ── Completion Proof & COD state ──
+  const [proofPhotos, setProofPhotos] = useState<string[]>([]);
+  const [proofSignature, setProofSignature] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<string>('none');
+  const [codAmount, setCodAmount] = useState<string>('');
+  const [completionStep, setCompletionStep] = useState<'proof' | 'payment' | 'confirm'>('proof');
   const [gpsLoading, setGpsLoading] = useState(false);
   const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -194,7 +214,7 @@ export function EmployeePortalView() {
   const fetchCurrentEmployee = useCallback(async () => {
     try {
       // Try to get the employee record linked to the current user
-      const meRes = await fetch('/api/auth/me');
+      const meRes = await authFetch('/api/auth/me');
       let userId: string | undefined;
       if (meRes.ok) {
         const meData = await meRes.json();
@@ -203,7 +223,7 @@ export function EmployeePortalView() {
 
       // Fetch employees, optionally filtered by userId
       const url = userId ? `/api/employees?userId=${userId}` : '/api/employees';
-      const res = await fetch(url);
+      const res = await authFetch(url);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
@@ -273,7 +293,7 @@ export function EmployeePortalView() {
 
     const sendHeartbeat = async () => {
       try {
-        await fetch('/api/employees/heartbeat', {
+        await authFetch('/api/employees/heartbeat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ employeeId: currentEmployee.id }),
@@ -367,7 +387,7 @@ export function EmployeePortalView() {
   const refreshEmployee = useCallback(async () => {
     if (!currentEmployee?.id) return;
     try {
-      const res = await fetch('/api/employees');
+      const res = await authFetch('/api/employees');
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
@@ -386,7 +406,7 @@ export function EmployeePortalView() {
     if (!currentEmployee?.id || newStatus === currentEmployee.status) return;
     setActionLoading(`status-${newStatus}`);
     try {
-      const res = await fetch('/api/employees/status', {
+      const res = await authFetch('/api/employees/status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ employeeId: currentEmployee.id, status: newStatus }),
@@ -409,7 +429,7 @@ export function EmployeePortalView() {
   const handleLifecycleAction = async (action: string, jobId: string) => {
     setActionLoading(`${action}-${jobId}`);
     try {
-      const res = await fetch('/api/jobs/lifecycle', {
+      const res = await authFetch('/api/jobs/lifecycle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, jobId }),
@@ -451,7 +471,7 @@ export function EmployeePortalView() {
       const lng = position.coords.longitude;
 
       // Update job with check-in coordinates
-      const res = await fetch(`/api/jobs/${jobId}`, {
+      const res = await authFetch(`/api/jobs/${jobId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -489,7 +509,7 @@ export function EmployeePortalView() {
       const lat = position.coords.latitude;
       const lng = position.coords.longitude;
 
-      const res = await fetch(`/api/jobs/${jobId}`, {
+      const res = await authFetch(`/api/jobs/${jobId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -514,29 +534,94 @@ export function EmployeePortalView() {
   const handleOpenCompleteDialog = (jobId: string) => {
     setCompletingJobId(jobId);
     setCompletionNotes('');
+    setProofPhotos([]);
+    setProofSignature(null);
+    setPaymentMethod('none');
+    setCodAmount('');
+    setCompletionStep('proof');
     setShowCompleteDialog(true);
   };
 
-  const handleCompleteJob = async () => {
+  const handleAddProofPhoto = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      // Limit to 2MB per photo
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('Photo must be less than 2MB');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const dataUrl = ev.target?.result as string;
+        setProofPhotos(prev => [...prev, dataUrl]);
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
+
+  const handleRemoveProofPhoto = (index: number) => {
+    setProofPhotos(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleCompleteJobWithProof = async () => {
     if (!completingJobId) return;
 
-    // Save notes first
-    if (completionNotes.trim()) {
-      try {
-        await fetch(`/api/jobs/${completingJobId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: completingJobId, notes: completionNotes }),
-        });
-      } catch {
-        // Continue with completion even if notes fail
+    // Validate COD amount
+    if (paymentMethod === 'cod') {
+      const amount = parseFloat(codAmount);
+      if (isNaN(amount) || amount < 0) {
+        toast.error('Please enter a valid amount for COD payment');
+        return;
       }
     }
 
-    setShowCompleteDialog(false);
-    await handleLifecycleAction('complete', completingJobId);
-    setCompletingJobId(null);
-    setCompletionNotes('');
+    setActionLoading(`complete-${completingJobId}`);
+    try {
+      const payload: Record<string, unknown> = {
+        completionNotes: completionNotes.trim() || undefined,
+        completionPhotos: proofPhotos.length > 0 ? proofPhotos : undefined,
+        signatureData: proofSignature || undefined,
+        paymentMethod: paymentMethod !== 'none' ? paymentMethod : undefined,
+      };
+
+      if (paymentMethod === 'cod') {
+        payload.amountCollected = parseFloat(codAmount);
+      }
+
+      const res = await authFetch(`/api/jobs/${completingJobId}/complete-proof`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        toast.success(data.message || 'Job completed successfully with proof');
+        setShowCompleteDialog(false);
+        setCompletingJobId(null);
+        setCompletionNotes('');
+        setProofPhotos([]);
+        setProofSignature(null);
+        setPaymentMethod('none');
+        setCodAmount('');
+        if (currentEmployee?.id) {
+          await fetchJobs(currentEmployee.id);
+          await refreshEmployee();
+        }
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to complete job');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   // ── Push Notification Permission ──
@@ -575,7 +660,7 @@ export function EmployeePortalView() {
 
         // Save to job notes
         try {
-          const res = await fetch(`/api/jobs/${jobId}`, {
+          const res = await authFetch(`/api/jobs/${jobId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -668,7 +753,7 @@ export function EmployeePortalView() {
 
     // Save signature to job metadata
     try {
-      const res = await fetch(`/api/jobs/${jobId}`, {
+      const res = await authFetch(`/api/jobs/${jobId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1437,46 +1522,316 @@ export function EmployeePortalView() {
         </DialogContent>
       </Dialog>
 
-      {/* ─── Complete Job Dialog ──────────────────────────────────────────── */}
+      {/* ─── Complete Job with Proof Dialog ──────────────────────────────────── */}
       <Dialog open={showCompleteDialog} onOpenChange={setShowCompleteDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Complete Job</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="size-5 text-emerald-600" />
+              Complete Job with Proof
+            </DialogTitle>
             <DialogDescription>
-              Add any final notes about the job before marking it as complete.
+              Add completion proof, collect COD payment if applicable, and close the job.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">Completion Notes</label>
-              <Textarea
-                placeholder="Enter any notes about the job completion, issues encountered, or follow-up needed..."
-                value={completionNotes}
-                onChange={(e) => setCompletionNotes(e.target.value)}
-                rows={4}
-                className="resize-none"
-              />
-            </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <MessageSquare className="size-4" />
-              <span>These notes will be saved with the job record.</span>
-            </div>
+
+          {/* Step Indicator */}
+          <div className="flex items-center gap-2 mb-4">
+            {(['proof', 'payment', 'confirm'] as const).map((step, idx) => (
+              <div key={step} className="flex items-center gap-2 flex-1">
+                <div className={`size-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                  completionStep === step ? 'bg-emerald-600 text-white' : idx < ['proof', 'payment', 'confirm'].indexOf(completionStep) ? 'bg-emerald-200 text-emerald-700' : 'bg-gray-100 text-gray-400'
+                }`}>
+                  {idx + 1}
+                </div>
+                <span className={`text-xs font-medium ${
+                  completionStep === step ? 'text-emerald-700' : 'text-muted-foreground'
+                }`}>
+                  {step === 'proof' ? 'Proof' : step === 'payment' ? 'Payment' : 'Confirm'}
+                </span>
+                {idx < 2 && <div className="flex-1 h-px bg-gray-200" />}
+              </div>
+            ))}
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCompleteDialog(false)}>
-              Cancel
+
+          {/* ─── Step 1: Completion Proof ─── */}
+          {completionStep === 'proof' && (
+            <div className="space-y-4">
+              {/* Completion Notes */}
+              <div className="space-y-2">
+                <Label>Completion Notes</Label>
+                <Textarea
+                  placeholder="Enter notes about the job completion, issues, or follow-up needed..."
+                  value={completionNotes}
+                  onChange={(e) => setCompletionNotes(e.target.value)}
+                  rows={3}
+                  className="resize-none"
+                />
+              </div>
+
+              {/* Photo Upload */}
+              <div className="space-y-2">
+                <Label>Completion Photos</Label>
+                <div className="flex flex-wrap gap-2">
+                  {proofPhotos.map((photo, idx) => (
+                    <div key={idx} className="relative size-20 rounded-lg overflow-hidden border">
+                      <img src={photo} alt={`Proof ${idx + 1}`} className="w-full h-full object-cover" />
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="absolute top-0.5 right-0.5 size-5 p-0"
+                        onClick={() => handleRemoveProofPhoto(idx)}
+                      >
+                        <XCircle className="size-3" />
+                      </Button>
+                    </div>
+                  ))}
+                  {proofPhotos.length < 5 && (
+                    <button
+                      onClick={handleAddProofPhoto}
+                      className="size-20 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center gap-1 hover:border-emerald-400 hover:bg-emerald-50 transition-colors"
+                    >
+                      <ImagePlus className="size-5 text-gray-400" />
+                      <span className="text-[10px] text-gray-500">Add Photo</span>
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">Upload up to 5 photos as proof of completion (max 2MB each)</p>
+              </div>
+
+              {/* Signature */}
+              <div className="space-y-2">
+                <Label>Customer Signature</Label>
+                {proofSignature ? (
+                  <div className="relative rounded-lg overflow-hidden border bg-gray-50 p-2">
+                    <img src={proofSignature} alt="Customer signature" className="w-full h-16 object-contain" />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="absolute top-1 right-1 size-6 p-0"
+                      onClick={() => setProofSignature(null)}
+                    >
+                      <XCircle className="size-4 text-red-500" />
+                    </Button>
+                    <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1">
+                      <CheckCircle2 className="size-3" /> Signature captured
+                    </p>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setShowSignature(true); initSignatureCanvas(); }}
+                    className="w-full h-16 rounded-lg border-2 border-dashed border-purple-300 flex items-center justify-center gap-2 text-purple-600 hover:bg-purple-50 transition-colors"
+                  >
+                    <PenLine className="size-5" />
+                    <span className="text-sm">Capture Customer Signature</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex justify-end">
+                <Button
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                  onClick={() => setCompletionStep('payment')}
+                >
+                  Next: Payment <ChevronDown className="size-4 ml-1 rotate-[-90deg]" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* ─── Step 2: Payment / COD ─── */}
+          {completionStep === 'payment' && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Payment Method</Label>
+                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select payment method" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      <span className="flex items-center gap-2">
+                        <XCircle className="size-3" /> No Payment / Already Paid
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="cod">
+                      <span className="flex items-center gap-2">
+                        <Banknote className="size-3" /> Cash on Delivery (COD)
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="online">
+                      <span className="flex items-center gap-2">
+                        <CreditCard className="size-3" /> Online Payment
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="upi">
+                      <span className="flex items-center gap-2">
+                        <DollarSign className="size-3" /> UPI
+                      </span>
+                    </SelectItem>
+                    <SelectItem value="card">
+                      <span className="flex items-center gap-2">
+                        <Receipt className="size-3" /> Card Payment
+                      </span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* COD Amount Input */}
+              {paymentMethod === 'cod' && (
+                <div className="space-y-3 p-4 rounded-lg bg-amber-50 border border-amber-200">
+                  <div className="flex items-center gap-2 text-amber-700">
+                    <Banknote className="size-5" />
+                    <span className="font-semibold text-sm">Collect Cash Payment</span>
+                  </div>
+                  <p className="text-xs text-amber-600">
+                    Enter the amount collected from the customer as cash payment.
+                  </p>
+                  <div className="space-y-1">
+                    <Label htmlFor="cod-amount" className="text-amber-800">Amount Collected ($)</Label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-amber-500" />
+                      <Input
+                        id="cod-amount"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={codAmount}
+                        onChange={(e) => setCodAmount(e.target.value)}
+                        className="pl-9 border-amber-300 focus:border-amber-500"
+                      />
+                    </div>
+                  </div>
+                  {codAmount && parseFloat(codAmount) > 0 && (
+                    <div className="flex items-center gap-2 p-2 rounded bg-emerald-100 border border-emerald-200">
+                      <CheckCircle2 className="size-4 text-emerald-600" />
+                      <span className="text-sm text-emerald-700 font-medium">
+                        Collect ${parseFloat(codAmount).toFixed(2)} in cash from the customer
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {paymentMethod === 'online' && (
+                <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
+                  <p className="text-xs text-blue-700">
+                    Online payment will be marked as pending. The customer can complete payment via the payment link.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex justify-between">
+                <Button variant="outline" onClick={() => setCompletionStep('proof')}>
+                  <ChevronDown className="size-4 mr-1 rotate-[90deg]" /> Back
+                </Button>
+                <Button
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                  onClick={() => setCompletionStep('confirm')}
+                >
+                  Next: Confirm <ChevronDown className="size-4 ml-1 rotate-[-90deg]" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* ─── Step 3: Confirm & Submit ─── */}
+          {completionStep === 'confirm' && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200">
+                <h4 className="font-semibold text-sm text-emerald-700 mb-3">Review Completion Details</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Notes:</span>
+                    <span className="font-medium">{completionNotes ? 'Provided' : 'None'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Photos:</span>
+                    <span className="font-medium">{proofPhotos.length} photo(s)</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Signature:</span>
+                    <span className="font-medium">{proofSignature ? 'Captured' : 'Not captured'}</span>
+                  </div>
+                  <Separator />
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Payment Method:</span>
+                    <Badge variant="outline" className="text-xs">
+                      {paymentMethod === 'none' ? 'No Payment' : paymentMethod === 'cod' ? 'COD' : paymentMethod.toUpperCase()}
+                    </Badge>
+                  </div>
+                  {paymentMethod === 'cod' && codAmount && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Amount Collected:</span>
+                      <span className="font-bold text-emerald-700">${parseFloat(codAmount).toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {paymentMethod === 'cod' && (!codAmount || parseFloat(codAmount) <= 0) && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 border border-red-200">
+                  <AlertTriangle className="size-4 text-red-500 shrink-0" />
+                  <span className="text-xs text-red-700">COD payment selected but no amount entered. Please go back and enter the amount.</span>
+                </div>
+              )}
+
+              <div className="flex justify-between">
+                <Button variant="outline" onClick={() => setCompletionStep('payment')}>
+                  <ChevronDown className="size-4 mr-1 rotate-[90deg]" /> Back
+                </Button>
+                <Button
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                  onClick={handleCompleteJobWithProof}
+                  disabled={actionLoading?.startsWith('complete-') || (paymentMethod === 'cod' && (!codAmount || parseFloat(codAmount) <= 0))}
+                >
+                  {actionLoading?.startsWith('complete-') ? (
+                    <Loader2 className="size-4 mr-2 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="size-4 mr-2" />
+                  )}
+                  {paymentMethod === 'cod' ? 'Complete & Collect Payment' : 'Complete Job'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Signature Canvas Dialog ─────────────────────────────────────── */}
+      <Dialog open={showSignature} onOpenChange={setShowSignature}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Customer Signature</DialogTitle>
+            <DialogDescription>Have the customer sign below to confirm job completion.</DialogDescription>
+          </DialogHeader>
+          <div className="border-2 border-dashed border-gray-300 rounded-lg overflow-hidden bg-white">
+            <canvas
+              ref={signatureCanvasRef}
+              width={350}
+              height={150}
+              className="w-full touch-none"
+            />
+          </div>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={clearSignature}>
+              <Trash2 className="size-4 mr-1" /> Clear
             </Button>
             <Button
               className="bg-emerald-600 hover:bg-emerald-700"
-              onClick={handleCompleteJob}
-              disabled={actionLoading?.startsWith('complete-')}
+              onClick={() => {
+                const canvas = signatureCanvasRef.current;
+                if (canvas) {
+                  const data = canvas.toDataURL('image/png');
+                  setProofSignature(data);
+                  setShowSignature(false);
+                  toast.success('Signature captured');
+                }
+              }}
             >
-              {actionLoading?.startsWith('complete-') ? (
-                <Loader2 className="size-4 mr-2 animate-spin" />
-              ) : (
-                <CheckCircle2 className="size-4 mr-2" />
-              )}
-              Complete Job
+              <CheckCircle2 className="size-4 mr-1" /> Confirm
             </Button>
           </DialogFooter>
         </DialogContent>

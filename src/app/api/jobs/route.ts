@@ -1,7 +1,6 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
-import { notifyCustomerBookingConfirmed, notifyEmployeeJobAssigned } from '@/lib/whatsapp-notifications'
-import { dispatchJobEvent } from '@/lib/event-webhook-dispatcher'
+import { EventBus } from '@/lib/event-bus'
 
 export async function GET(request: NextRequest) {
   try {
@@ -81,51 +80,105 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // If job has a customer phone, send booking confirmation
+    // Build event data with full job + employee + customer info
+    const employee = job.assigneeId
+      ? await db.employee.findUnique({ where: { id: job.assigneeId } })
+      : null
+    const customer = job.customerId
+      ? await db.customer.findUnique({ where: { id: job.customerId } })
+      : null
+
+    // Emit job.created event via EventBus (handles auto-notifications + webhook dispatch + audit)
     try {
-      if (job.customerPhone) {
-        await notifyCustomerBookingConfirmed(job)
-      }
-    } catch (e) {
-      console.error('Failed to send booking confirmation:', e)
+      await EventBus.emit('job.created', {
+        job: {
+          id: job.id,
+          title: job.title,
+          description: job.description,
+          status: job.status,
+          priority: job.priority,
+          type: job.type,
+          address: job.address,
+          scheduledAt: job.scheduledAt?.toISOString(),
+          scheduledTime: job.scheduledTime,
+          customerName: job.customerName,
+          customerPhone: job.customerPhone,
+          customerEmail: customer?.email,
+          customerId: job.customerId,
+          customerUserId: undefined,
+          assigneeId: job.assigneeId,
+          assigneeName: job.assigneeName,
+          workspaceId: job.workspaceId,
+          tenantId: undefined,
+          jobNumber: job.jobNumber,
+        },
+        employee: employee ? {
+          id: employee.id,
+          name: employee.name,
+          phone: employee.phone,
+          email: employee.email,
+          whatsappId: employee.whatsappId,
+          userId: employee.userId,
+          workspaceId: employee.workspaceId,
+        } : null,
+        customer: customer ? {
+          id: customer.id,
+          name: customer.name,
+          phone: customer.phone,
+          email: customer.email,
+        } : (job.customerPhone ? { name: job.customerName, phone: job.customerPhone } : null),
+        jobId: job.id,
+        resourceType: 'job',
+        resourceId: job.id,
+        summary: `New job: ${job.title}`,
+      }, { tenantId: undefined, workspaceId: job.workspaceId || undefined })
+    } catch (eventErr) {
+      console.error('[JobsAPI] Failed to emit job.created event:', eventErr)
     }
 
-    // If job was created with an assignee, send employee notification
-    try {
-      if (job.assigneeId) {
-        const employee = await db.employee.findUnique({ where: { id: job.assigneeId } })
-        if (employee) {
-          await notifyEmployeeJobAssigned(job, employee)
-        }
+    // If job was created with an assignee, also emit job.assigned
+    if (job.assigneeId && employee) {
+      try {
+        await EventBus.emit('job.assigned', {
+          job: {
+            id: job.id,
+            title: job.title,
+            description: job.description,
+            status: job.status,
+            priority: job.priority,
+            type: job.type,
+            address: job.address,
+            scheduledAt: job.scheduledAt?.toISOString(),
+            scheduledTime: job.scheduledTime,
+            customerName: job.customerName,
+            customerPhone: job.customerPhone,
+            customerEmail: customer?.email,
+            customerId: job.customerId,
+            customerUserId: undefined,
+            assigneeId: job.assigneeId,
+            assigneeName: job.assigneeName,
+            workspaceId: job.workspaceId,
+            tenantId: undefined,
+            jobNumber: job.jobNumber,
+          },
+          employee: {
+            id: employee.id,
+            name: employee.name,
+            phone: employee.phone,
+            email: employee.email,
+            whatsappId: employee.whatsappId,
+            userId: employee.userId,
+            workspaceId: employee.workspaceId,
+          },
+          jobId: job.id,
+          employeeId: employee.id,
+          resourceType: 'job',
+          resourceId: job.id,
+          summary: `Job assigned to ${employee.name}`,
+        }, { tenantId: undefined, workspaceId: job.workspaceId || undefined })
+      } catch (eventErr) {
+        console.error('[JobsAPI] Failed to emit job.assigned event:', eventErr)
       }
-    } catch (e) {
-      console.error('Failed to send employee notification:', e)
-    }
-
-    // ─── Fire event webhooks (n8n, Zapier, etc.) ───────────────
-    // Dispatch 'job.created' event to all configured webhook URLs
-    // This is how ServiceOS bridges to n8n for WhatsApp automation
-    try {
-      const employee = job.assigneeId
-        ? await db.employee.findUnique({ where: { id: job.assigneeId } })
-        : null
-      const customer = job.customerId
-        ? await db.customer.findUnique({ where: { id: job.customerId } })
-        : (job.customerPhone ? { name: job.customerName, phone: job.customerPhone } : null)
-
-      // Fire job.created webhook
-      dispatchJobEvent('job.created', job, { employee, customer }).catch(err =>
-        console.error('[EventWebhook] Background dispatch failed for job.created:', err)
-      )
-
-      // If job was created with an assignee, also fire job.assigned
-      if (job.assigneeId && employee) {
-        dispatchJobEvent('job.assigned', job, { employee, customer }).catch(err =>
-          console.error('[EventWebhook] Background dispatch failed for job.assigned:', err)
-        )
-      }
-    } catch (e) {
-      console.error('Failed to dispatch event webhooks:', e)
     }
 
     return NextResponse.json(job, { status: 201 })
@@ -150,6 +203,12 @@ export async function PUT(request: NextRequest) {
     if (data.actualStartTime) updateData.actualStartTime = new Date(data.actualStartTime)
     if (data.actualEndTime) updateData.actualEndTime = new Date(data.actualEndTime)
 
+    // Get current job state for comparison
+    const existingJob = await db.job.findUnique({
+      where: { id },
+      include: { assignee: true, customer: true },
+    })
+
     const job = await db.job.update({
       where: { id },
       data: updateData,
@@ -160,17 +219,190 @@ export async function PUT(request: NextRequest) {
       },
     })
 
-    // ─── Fire event webhook: job.cancelled ────────────────────────
-    if (data.status === 'cancelled') {
-      try {
-        dispatchJobEvent('job.cancelled', job, {
-          employee: job.assigneeId ? { id: job.assigneeId, name: job.assigneeName, phone: job.assigneePhone } : null,
-          customer: job.customerPhone ? { name: job.customerName, phone: job.customerPhone } : null,
-        }).catch(err =>
-          console.error('[EventWebhook] Background dispatch failed for job.cancelled:', err)
-        )
-      } catch (e) {
-        console.error('Failed to dispatch job.cancelled webhook:', e)
+    // Emit events for status changes
+    if (data.status && existingJob) {
+      const employee = job.assignee || existingJob.assignee
+      const customer = job.customer || existingJob.customer
+
+      // Job cancelled
+      if (data.status === 'cancelled') {
+        try {
+          await EventBus.emit('job.cancelled', {
+            job: {
+              id: job.id,
+              title: job.title,
+              status: 'cancelled',
+              customerName: job.customerName,
+              customerPhone: job.customerPhone,
+              assigneeName: job.assigneeName,
+              workspaceId: job.workspaceId,
+              jobNumber: job.jobNumber,
+            },
+            employee: employee ? {
+              id: employee.id,
+              name: employee.name,
+              phone: employee.phone,
+              email: employee.email,
+              whatsappId: employee.whatsappId,
+              userId: employee.userId,
+              workspaceId: employee.workspaceId,
+            } : null,
+            customer: customer ? {
+              id: customer.id,
+              name: customer.name,
+              phone: customer.phone,
+              email: customer.email,
+            } : null,
+            jobId: job.id,
+            reason: data.cancelReason,
+            resourceType: 'job',
+            resourceId: job.id,
+            fromStatus: existingJob.status,
+            toStatus: 'cancelled',
+            summary: `Job cancelled: ${job.title}`,
+          }, { workspaceId: job.workspaceId || undefined })
+        } catch (eventErr) {
+          console.error('[JobsAPI] Failed to emit job.cancelled event:', eventErr)
+        }
+      }
+
+      // Job completed
+      if (data.status === 'completed') {
+        try {
+          await EventBus.emit('job.completed', {
+            job: {
+              id: job.id,
+              title: job.title,
+              description: job.description,
+              status: 'completed',
+              address: job.address,
+              scheduledAt: job.scheduledAt?.toISOString(),
+              scheduledTime: job.scheduledTime,
+              customerName: job.customerName,
+              customerPhone: job.customerPhone,
+              customerEmail: customer?.email,
+              customerId: job.customerId,
+              customerUserId: undefined,
+              assigneeId: job.assigneeId,
+              assigneeName: job.assigneeName,
+              workspaceId: job.workspaceId,
+              tenantId: undefined,
+              jobNumber: job.jobNumber,
+            },
+            employee: employee ? {
+              id: employee.id,
+              name: employee.name,
+              phone: employee.phone,
+              email: employee.email,
+              whatsappId: employee.whatsappId,
+              userId: employee.userId,
+              workspaceId: employee.workspaceId,
+            } : null,
+            customer: customer ? {
+              id: customer.id,
+              name: customer.name,
+              phone: customer.phone,
+              email: customer.email,
+            } : null,
+            jobId: job.id,
+            resourceType: 'job',
+            resourceId: job.id,
+            fromStatus: existingJob.status,
+            toStatus: 'completed',
+            summary: `Job completed: ${job.title}`,
+          }, { workspaceId: job.workspaceId || undefined })
+        } catch (eventErr) {
+          console.error('[JobsAPI] Failed to emit job.completed event:', eventErr)
+        }
+      }
+
+      // Job started (in_progress)
+      if (data.status === 'in_progress' || data.status === 'started') {
+        try {
+          await EventBus.emit('job.started', {
+            job: {
+              id: job.id,
+              title: job.title,
+              description: job.description,
+              status: data.status,
+              address: job.address,
+              scheduledAt: job.scheduledAt?.toISOString(),
+              scheduledTime: job.scheduledTime,
+              customerName: job.customerName,
+              customerPhone: job.customerPhone,
+              customerEmail: customer?.email,
+              customerId: job.customerId,
+              assigneeName: job.assigneeName,
+              workspaceId: job.workspaceId,
+              jobNumber: job.jobNumber,
+            },
+            employee: employee ? {
+              id: employee.id,
+              name: employee.name,
+              phone: employee.phone,
+              email: employee.email,
+              whatsappId: employee.whatsappId,
+              userId: employee.userId,
+              workspaceId: employee.workspaceId,
+            } : null,
+            jobId: job.id,
+            resourceType: 'job',
+            resourceId: job.id,
+            fromStatus: existingJob.status,
+            toStatus: data.status,
+            summary: `Job started: ${job.title}`,
+          }, { workspaceId: job.workspaceId || undefined })
+        } catch (eventErr) {
+          console.error('[JobsAPI] Failed to emit job.started event:', eventErr)
+        }
+      }
+
+      // Job assigned (assigneeId changed)
+      if (data.assigneeId && data.assigneeId !== existingJob.assigneeId) {
+        const newEmployee = await db.employee.findUnique({ where: { id: data.assigneeId } })
+        if (newEmployee) {
+          try {
+            await EventBus.emit('job.assigned', {
+              job: {
+                id: job.id,
+                title: job.title,
+                description: job.description,
+                status: job.status,
+                priority: job.priority,
+                type: job.type,
+                address: job.address,
+                scheduledAt: job.scheduledAt?.toISOString(),
+                scheduledTime: job.scheduledTime,
+                customerName: job.customerName,
+                customerPhone: job.customerPhone,
+                customerEmail: customer?.email,
+                customerId: job.customerId,
+                customerUserId: undefined,
+                assigneeId: data.assigneeId,
+                assigneeName: newEmployee.name,
+                workspaceId: job.workspaceId,
+                tenantId: undefined,
+                jobNumber: job.jobNumber,
+              },
+              employee: {
+                id: newEmployee.id,
+                name: newEmployee.name,
+                phone: newEmployee.phone,
+                email: newEmployee.email,
+                whatsappId: newEmployee.whatsappId,
+                userId: newEmployee.userId,
+                workspaceId: newEmployee.workspaceId,
+              },
+              jobId: job.id,
+              employeeId: newEmployee.id,
+              resourceType: 'job',
+              resourceId: job.id,
+              summary: `Job reassigned to ${newEmployee.name}`,
+            }, { workspaceId: job.workspaceId || undefined })
+          } catch (eventErr) {
+            console.error('[JobsAPI] Failed to emit job.assigned event:', eventErr)
+          }
+        }
       }
     }
 

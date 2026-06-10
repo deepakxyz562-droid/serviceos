@@ -1,5 +1,6 @@
 'use client';
 
+import { authFetch } from '@/lib/client-auth';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -265,7 +266,7 @@ export function IntegrationsView() {
   const fetchIntegrations = useCallback(async () => {
     setLoadingIntegrations(true);
     try {
-      const res = await fetch('/api/integrations?XTransformPort=3000');
+      const res = await authFetch('/api/integrations?XTransformPort=3000');
       if (res.ok) {
         const data = await res.json();
         setIntegrations(data.integrations || []);
@@ -282,7 +283,7 @@ export function IntegrationsView() {
   const fetchEventWebhooks = useCallback(async () => {
     setLoadingWebhooks(true);
     try {
-      const res = await fetch('/api/event-webhooks?XTransformPort=3000');
+      const res = await authFetch('/api/event-webhooks?XTransformPort=3000');
       if (res.ok) {
         const data = await res.json();
         setEventWebhooks(data.webhooks || []);
@@ -302,7 +303,7 @@ export function IntegrationsView() {
   const fetchApiKeys = useCallback(async () => {
     setLoadingApiKeys(true);
     try {
-      const res = await fetch('/api/credentials?XTransformPort=3000');
+      const res = await authFetch('/api/credentials?XTransformPort=3000');
       if (res.ok) {
         const data = await res.json();
         // Credentials double as API keys in this system
@@ -329,7 +330,7 @@ export function IntegrationsView() {
   const fetchWebhookLogs = useCallback(async () => {
     setLoadingLogs(true);
     try {
-      const res = await fetch('/api/event-webhooks/logs?XTransformPort=3000&limit=100');
+      const res = await authFetch('/api/event-webhooks/logs?XTransformPort=3000&limit=100');
       if (res.ok) {
         const data = await res.json();
         setWebhookLogs(data.logs || []);
@@ -354,7 +355,7 @@ export function IntegrationsView() {
 
   const handleToggleIntegration = async (int: IntegrationConfig) => {
     try {
-      const res = await fetch(`/api/integrations/${int.id}?XTransformPort=3000`, {
+      const res = await authFetch(`/api/integrations/${int.id}?XTransformPort=3000`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ active: !int.active }),
@@ -392,7 +393,7 @@ export function IntegrationsView() {
 
   const handleDeleteIntegration = async (id: string) => {
     try {
-      const res = await fetch(`/api/integrations/${id}?XTransformPort=3000`, { method: 'DELETE' });
+      const res = await authFetch(`/api/integrations/${id}?XTransformPort=3000`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('Integration deleted');
         fetchIntegrations();
@@ -410,7 +411,7 @@ export function IntegrationsView() {
       return;
     }
     try {
-      const res = await fetch('/api/integrations?XTransformPort=3000', {
+      const res = await authFetch('/api/integrations?XTransformPort=3000', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -442,7 +443,7 @@ export function IntegrationsView() {
       return;
     }
     try {
-      const res = await fetch('/api/event-webhooks?XTransformPort=3000', {
+      const res = await authFetch('/api/event-webhooks?XTransformPort=3000', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -472,7 +473,7 @@ export function IntegrationsView() {
   const handleTestWebhook = async (webhook: EventWebhook) => {
     setTestingWebhookId(webhook.id);
     try {
-      const res = await fetch('/api/event-webhooks/test?XTransformPort=3000', {
+      const res = await authFetch('/api/event-webhooks/test?XTransformPort=3000', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ webhookId: webhook.id }),
@@ -491,7 +492,7 @@ export function IntegrationsView() {
 
   const handleDeleteWebhook = async (id: string) => {
     try {
-      const res = await fetch(`/api/event-webhooks/${id}?XTransformPort=3000`, { method: 'DELETE' });
+      const res = await authFetch(`/api/event-webhooks/${id}?XTransformPort=3000`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('Webhook deleted');
         fetchEventWebhooks();
@@ -506,7 +507,7 @@ export function IntegrationsView() {
   const handleViewWebhookLogs = async (webhookId: string) => {
     setWebhookLogDialogWebhookId(webhookId);
     try {
-      const res = await fetch(`/api/event-webhooks/logs?XTransformPort=3000&eventWebhookId=${webhookId}&limit=20`);
+      const res = await authFetch(`/api/event-webhooks/logs?XTransformPort=3000&eventWebhookId=${webhookId}&limit=20`);
       if (res.ok) {
         const data = await res.json();
         setWebhookDialogLogs(data.logs || []);
@@ -526,7 +527,7 @@ export function IntegrationsView() {
       return;
     }
     try {
-      const res = await fetch('/api/credentials?XTransformPort=3000', {
+      const res = await authFetch('/api/credentials?XTransformPort=3000', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -553,7 +554,7 @@ export function IntegrationsView() {
 
   const handleDeleteApiKey = async (id: string) => {
     try {
-      const res = await fetch(`/api/credentials/${id}?XTransformPort=3000`, { method: 'DELETE' });
+      const res = await authFetch(`/api/credentials/${id}?XTransformPort=3000`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('API key revoked');
         fetchApiKeys();
@@ -591,7 +592,7 @@ export function IntegrationsView() {
       }
 
       // Create integration + event webhooks
-      const intRes = await fetch('/api/integrations?XTransformPort=3000', {
+      const intRes = await authFetch('/api/integrations?XTransformPort=3000', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

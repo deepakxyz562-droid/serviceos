@@ -1,7 +1,8 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { NextRequest } from 'next/server';
+import { getCookieDomain } from '@/lib/subdomain';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'serviceos-saas-secret-key-change-in-production';
 const TOKEN_NAME = 'serviceos_session';
@@ -52,15 +53,40 @@ export function verifyToken(token: string): AuthUser | null {
   }
 }
 
-export async function getAuthUser(): Promise<AuthUser | null> {
+export async function getAuthUser(request?: NextRequest): Promise<AuthUser | null> {
+  // 1. Try Authorization: Bearer header (most reliable for proxied environments)
+  //    Check request parameter first, then fall back to next/headers()
+  let authHeader: string | null = null;
+  if (request) {
+    authHeader = request.headers.get('authorization');
+  } else {
+    try {
+      const headersList = await headers();
+      authHeader = headersList.get('authorization');
+    } catch {
+      // headers() not available in this context
+    }
+  }
+
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    const user = verifyToken(token);
+    if (user) return user;
+  }
+
+  // 2. Fall back to session cookie
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get(TOKEN_NAME)?.value;
-    if (!token) return null;
-    return verifyToken(token);
+    if (token) {
+      const user = verifyToken(token);
+      if (user) return user;
+    }
   } catch {
-    return null;
+    // Cookie reading failed, continue
   }
+
+  return null;
 }
 
 export function getTokenName(): string {
@@ -100,10 +126,16 @@ function shouldUseSecureCookies(request?: NextRequest): boolean {
 }
 
 /**
- * Get cookie options with the correct Secure flag for the current request.
+ * Get cookie options with the correct Secure flag and domain for the current request.
  * Use this in API route handlers where you have access to the request object.
+ *
+ * The domain attribute is set to ".serviceosapp.netlify.app" (with leading dot)
+ * so that cookies are shared across all subdomains. This means a user who
+ * logs in on the root domain will also be authenticated on their company
+ * subdomain (e.g., abc-plumbing.serviceosapp.netlify.app).
  */
 export function getCookieOptions(request?: NextRequest) {
+  const domain = getCookieDomain();
   return {
     name: TOKEN_NAME,
     httpOnly: true,
@@ -111,11 +143,13 @@ export function getCookieOptions(request?: NextRequest) {
     sameSite: 'lax' as const,
     path: '/',
     maxAge: 60 * 60 * 24 * 7, // 7 days
+    ...(domain ? { domain } : {}),
   };
 }
 
 // Static cookie options for backward compatibility (uses NODE_ENV check)
 // Prefer getCookieOptions(request) in API routes for per-request detection
+const staticDomain = getCookieDomain();
 export const COOKIE_OPTIONS = {
   name: TOKEN_NAME,
   httpOnly: true,
@@ -123,6 +157,7 @@ export const COOKIE_OPTIONS = {
   sameSite: 'lax' as const,
   path: '/',
   maxAge: 60 * 60 * 24 * 7, // 7 days
+  ...(staticDomain ? { domain: staticDomain } : {}),
 };
 
 /**

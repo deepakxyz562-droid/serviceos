@@ -18,6 +18,8 @@ import {
   Briefcase,
   FileText,
   Home,
+  Plus,
+  Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,6 +35,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { authFetch } from '@/lib/client-auth';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 // ─── View label mapping ─────────────────────────────────────────────────────
 
@@ -125,9 +129,9 @@ const viewSections: Record<ViewType, string> = {
 // ─── Notification icon mapping ───────────────────────────────────────────────
 
 const notificationTypes = [
-  { title: 'New lead assigned', desc: 'A new lead has been assigned to you · 2m ago', icon: UserPlus, color: 'text-emerald-600 bg-emerald-50' },
-  { title: 'Job completed', desc: 'Job #1234 has been marked as completed · 15m ago', icon: Briefcase, color: 'text-teal-600 bg-teal-50' },
-  { title: 'Invoice overdue', desc: 'Invoice INV-003 is now overdue · 1h ago', icon: FileText, color: 'text-amber-600 bg-amber-50' },
+  { title: 'New lead assigned', desc: 'A new lead has been assigned to you · 2m ago', icon: UserPlus, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-400' },
+  { title: 'Job completed', desc: 'Job #1234 has been marked as completed · 15m ago', icon: Briefcase, color: 'text-teal-600 bg-teal-50 dark:bg-teal-900/30 dark:text-teal-400' },
+  { title: 'Invoice overdue', desc: 'Invoice INV-003 is now overdue · 1h ago', icon: FileText, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-400' },
 ];
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -138,25 +142,23 @@ export function AppHeader() {
     darkMode,
     toggleDarkMode,
     toggleLeftSidebar,
+    setMobileSidebarOpen,
     searchQuery,
     setSearchQuery,
     auth,
     clearAuth,
+    installPromptEvent,
+    setInstallPromptEvent,
   } = useAppStore();
 
+  const isMobile = useIsMobile();
   const isCanvas = currentView === 'canvas';
   const sectionLabel = viewSections[currentView] || 'Home';
   const viewLabel = viewLabels[currentView] || 'Dashboard';
 
-  // Get user initials for avatar
   const getUserInitials = () => {
     if (auth.user?.name) {
-      return auth.user.name
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .slice(0, 2)
-        .toUpperCase();
+      return auth.user.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
     }
     if (auth.user?.email) {
       return auth.user.email.slice(0, 2).toUpperCase();
@@ -164,52 +166,57 @@ export function AppHeader() {
     return 'U';
   };
 
+  const handleInstallApp = async () => {
+    if (!installPromptEvent) return;
+    installPromptEvent.prompt();
+    const { outcome } = await installPromptEvent.userChoice;
+    if (outcome === 'accepted') {
+      toast.success('App installed successfully!');
+    }
+    setInstallPromptEvent(null);
+  };
+
   return (
-    <header className="flex items-center h-14 px-4 border-b bg-background shrink-0 gap-3">
+    <header className="flex items-center h-14 px-3 sm:px-4 border-b bg-background/80 backdrop-blur-lg shrink-0 gap-2 sm:gap-3 sticky top-0 z-30">
       {/* ─── Mobile menu toggle ────────────────────────────────────────── */}
       <Button
         variant="ghost"
         size="icon"
-        onClick={toggleLeftSidebar}
-        className="shrink-0 lg:hidden min-h-[44px] min-w-[44px]"
+        onClick={() => {
+          if (isMobile) {
+            setMobileSidebarOpen(true);
+          } else {
+            toggleLeftSidebar();
+          }
+        }}
+        className="shrink-0 min-h-[44px] min-w-[44px]"
         aria-label="Toggle menu"
       >
         <Menu className="size-5" />
       </Button>
 
-      {/* ─── Desktop sidebar toggle ────────────────────────────────────── */}
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={toggleLeftSidebar}
-        className="shrink-0 hidden lg:flex min-h-[44px] min-w-[44px]"
-        aria-label="Toggle sidebar"
-      >
-        <Menu className="size-4" />
-      </Button>
-
       {/* ─── Breadcrumb Navigation ────────────────────────────────────── */}
-      <nav className="flex items-center gap-1.5 text-sm" aria-label="Breadcrumb">
-        <Home className="size-3.5 text-muted-foreground" />
-        <span className="text-muted-foreground hidden sm:inline">{sectionLabel}</span>
-        <ChevronRight className="size-3.5 text-muted-foreground/50 hidden sm:inline" />
-        <span className="font-semibold whitespace-nowrap">{viewLabel}</span>
+      <nav className="flex items-center gap-1.5 text-sm min-w-0" aria-label="Breadcrumb">
+        <Home className="size-3.5 text-muted-foreground shrink-0" />
+        <span className="text-muted-foreground hidden sm:inline truncate">{sectionLabel}</span>
+        <ChevronRight className="size-3.5 text-muted-foreground/50 hidden sm:inline shrink-0" />
+        <span className="font-semibold whitespace-nowrap truncate">{viewLabel}</span>
       </nav>
 
       {!isCanvas && (
         <>
-          <Separator orientation="vertical" className="h-6" />
+          <Separator orientation="vertical" className="h-6 hidden sm:block" />
 
-          {/* ─── Search input with Ctrl+K hint ──────────────────────────── */}
-          <div className="relative max-w-sm flex-1 hidden sm:block">
+          {/* ─── Search input ──────────────────────────────────────────── */}
+          <div className="relative max-w-sm flex-1 hidden md:block">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
               placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 h-9 text-sm bg-muted/50 border-muted-foreground/10 focus:bg-background"
+              className="pl-8 h-9 text-sm bg-muted/50 border-muted-foreground/10 focus:bg-background transition-colors"
             />
-            <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none hidden md:inline-flex h-5 select-none items-center gap-1 rounded border border-muted-foreground/20 bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+            <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none hidden lg:inline-flex h-5 select-none items-center gap-1 rounded border border-muted-foreground/20 bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
               <span className="text-xs">⌘</span>K
             </kbd>
           </div>
@@ -220,12 +227,25 @@ export function AppHeader() {
       <div className="flex-1" />
 
       {/* ─── Right side actions ────────────────────────────────────────── */}
-      <div className="flex items-center gap-1 shrink-0">
+      <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+        {/* ─── PWA Install button ────────────────────────────────────── */}
+        {installPromptEvent && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hidden sm:flex h-9 gap-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
+            onClick={handleInstallApp}
+          >
+            <Download className="size-4" />
+            <span className="text-xs font-medium">Install</span>
+          </Button>
+        )}
+
         {/* ─── Help button ────────────────────────────────────────────── */}
         <Button
           variant="ghost"
           size="icon"
-          className="h-9 w-9 min-h-[44px] min-w-[44px] hidden sm:flex"
+          className="h-9 w-9 hidden sm:flex min-h-[44px] min-w-[44px]"
           aria-label="Help"
         >
           <HelpCircle className="size-4" />
@@ -241,8 +261,7 @@ export function AppHeader() {
               aria-label="Notifications"
             >
               <Bell className="size-4" />
-              {/* Notification badge */}
-              <span className="absolute top-1.5 right-1.5 flex items-center justify-center size-2 rounded-full bg-emerald-500">
+              <span className="absolute top-1.5 right-1.5 flex items-center justify-center size-2 rounded-full bg-emerald-500 animate-pulse-soft">
                 <span className="sr-only">3 unread notifications</span>
               </span>
             </Button>
@@ -294,7 +313,7 @@ export function AppHeader() {
         </Button>
 
         {/* ─── Separator ──────────────────────────────────────────────── */}
-        <Separator orientation="vertical" className="h-6 mx-1" />
+        <Separator orientation="vertical" className="h-6 mx-0.5 hidden sm:block" />
 
         {/* ─── User avatar dropdown ────────────────────────────────────── */}
         <DropdownMenu>
@@ -305,7 +324,7 @@ export function AppHeader() {
               className="h-9 w-9 rounded-full min-h-[44px] min-w-[44px]"
             >
               <Avatar className="size-8">
-                <AvatarFallback className="bg-emerald-600 text-white text-xs">
+                <AvatarFallback className="bg-gradient-to-br from-emerald-600 to-teal-600 text-white text-xs">
                   {getUserInitials()}
                 </AvatarFallback>
               </Avatar>
@@ -341,10 +360,8 @@ export function AppHeader() {
               className="cursor-pointer gap-2"
               onClick={async () => {
                 try {
-                  await fetch('/api/auth/logout?XTransformPort=3000', { method: 'POST' });
-                } catch {
-                  // API logout failed
-                }
+                  await authFetch('/api/auth/logout?XTransformPort=3000', { method: 'POST' });
+                } catch { /* silent */ }
                 if (typeof window !== 'undefined') {
                   localStorage.removeItem('serviceos_auth');
                   localStorage.removeItem('user');
@@ -364,3 +381,6 @@ export function AppHeader() {
     </header>
   );
 }
+
+// Need toast import for install handler
+import { toast } from 'sonner';

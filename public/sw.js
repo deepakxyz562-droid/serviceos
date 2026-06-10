@@ -1,12 +1,13 @@
-// ServiceOS Service Worker - Vanilla implementation
-const CACHE_NAME = 'serviceos-v1';
+// ServiceOS Service Worker - PWA Support
+const CACHE_NAME = 'serviceos-v2';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
   '/logo.svg',
+  '/icon.svg',
 ];
 
-// Install event - cache static assets
+// Install event - cache app shell
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -30,7 +31,7 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch event - cache-first for static, network-first for API
+// Fetch event - network-first for API, cache-first for static assets
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -67,7 +68,7 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) {
-        // Return cached and update in background
+        // Return cached version and update cache in background (stale-while-revalidate)
         fetch(request).then((response) => {
           if (response.ok) {
             caches.open(CACHE_NAME).then((cache) => {
@@ -78,7 +79,7 @@ self.addEventListener('fetch', (event) => {
         return cached;
       }
 
-      // Not in cache - fetch from network
+      // Not in cache - fetch from network and cache
       return fetch(request)
         .then((response) => {
           if (response.ok) {

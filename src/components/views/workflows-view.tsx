@@ -1,4 +1,5 @@
 'use client';
+import { authFetch } from '@/lib/client-auth';
 
 import { useState, useEffect, useCallback } from 'react';
 import {
@@ -265,7 +266,7 @@ export function WorkflowsView() {
   const fetchWorkflows = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/workflows');
+      const res = await authFetch('/api/workflows');
       if (res.ok) {
         const data = await res.json();
         const apiWorkflows: WorkflowItem[] = (data.workflows || []).map((w: any) => {
@@ -338,7 +339,7 @@ export function WorkflowsView() {
       // Optimistic update
       setWorkflows(prev => prev.map(w => w.id === id ? { ...w, active: !currentActive } : w));
       
-      const res = await fetch(`/api/workflows/${id}/activate`, {
+      const res = await authFetch(`/api/workflows/${id}/activate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ active: !currentActive }),
@@ -369,7 +370,7 @@ export function WorkflowsView() {
   const triggerWorkflow = async (id: string, name: string) => {
     setTriggeringId(id);
     try {
-      const res = await fetch(`/api/workflows/${id}/execute`, {
+      const res = await authFetch(`/api/workflows/${id}/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -410,7 +411,7 @@ export function WorkflowsView() {
     setRenamingId(null);
     
     try {
-      const res = await fetch(`/api/workflows/${id}`, {
+      const res = await authFetch(`/api/workflows/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: trimmed }),
@@ -435,7 +436,7 @@ export function WorkflowsView() {
     setWorkflows(prev => prev.filter(w => w.id !== id));
     
     try {
-      const res = await fetch(`/api/workflows/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/workflows/${id}`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('Workflow deleted');
       } else {
@@ -472,7 +473,7 @@ export function WorkflowsView() {
     };
 
     try {
-      const res = await fetch('/api/workflows', {
+      const res = await authFetch('/api/workflows', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -507,7 +508,7 @@ export function WorkflowsView() {
   const handleSaveWorkflow = async (workflow: WorkflowItem) => {
     setSaving(true);
     try {
-      const res = await fetch(`/api/workflows/${workflow.id}`, {
+      const res = await authFetch(`/api/workflows/${workflow.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
