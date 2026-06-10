@@ -17,28 +17,41 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search');
 
     // Build where clause - use tenantId if authenticated, otherwise show all
-    const where: Record<string, unknown> = {};
+    // Also include orphan leads (tenantId: null) so WordPress leads without a tenant are visible
+    const andConditions: Record<string, unknown>[] = [];
+
     if (authUser?.tenantId) {
-      where.tenantId = authUser.tenantId;
+      andConditions.push({
+        OR: [
+          { tenantId: authUser.tenantId },
+          { tenantId: null },
+        ],
+      });
     }
 
     if (status) {
-      where.status = status;
+      andConditions.push({ status });
     }
     if (source) {
-      where.source = source;
+      andConditions.push({ source });
     }
     if (priority) {
-      where.priority = priority;
+      andConditions.push({ priority });
     }
     if (search) {
-      where.OR = [
-        { name: { contains: search } },
-        { email: { contains: search } },
-        { phone: { contains: search } },
-        { description: { contains: search } },
-      ];
+      andConditions.push({
+        OR: [
+          { name: { contains: search } },
+          { email: { contains: search } },
+          { phone: { contains: search } },
+          { description: { contains: search } },
+        ],
+      });
     }
+
+    const where = andConditions.length > 0
+      ? (andConditions.length === 1 ? andConditions[0] : { AND: andConditions })
+      : {};
 
     const [leads, total] = await Promise.all([
       db.lead.findMany({

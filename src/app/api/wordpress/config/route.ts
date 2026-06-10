@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser } from '@/lib/auth';
 import { randomBytes } from 'crypto';
 
 // ─── WordPress Integration Config ──────────────────────────────────────────
@@ -31,6 +32,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { name, tenantId, workspaceId, sendWhatsApp } = body;
 
+    // Auto-assign tenantId/workspaceId from authenticated user if not provided
+    const authUser = await getAuthUser(request);
+    const effectiveTenantId = tenantId || authUser?.tenantId || null;
+    const effectiveWorkspaceId = workspaceId || authUser?.workspaceId || null;
+
     // Generate API key + endpoint ID
     const { key, hash, prefix } = await generateApiKey();
     const endpointId = generateEndpointId();
@@ -54,8 +60,8 @@ export async function POST(request: NextRequest) {
           'your-subject': 'serviceType',
           'your-message': 'description',
         }),
-        tenantId: tenantId || null,
-        workspaceId: workspaceId || null,
+        tenantId: effectiveTenantId,
+        workspaceId: effectiveWorkspaceId,
       },
     });
 

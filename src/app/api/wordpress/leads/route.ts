@@ -132,6 +132,9 @@ export async function POST(request: NextRequest) {
     const formName = payload._form_name || payload.form_name || '';
     const pageUrl = payload._page_url || payload.page_url || '';
 
+    // Resolve tenantId: endpoint.tenantId → payload _tenant_id → null
+    const resolvedTenantId = endpoint.tenantId || payload._tenant_id || payload.tenant_id || null;
+
     const lead = await db.lead.create({
       data: {
         name: String(mapped.name || 'Unknown'),
@@ -149,7 +152,7 @@ export async function POST(request: NextRequest) {
         ].filter(Boolean).join(' | '),
         address: mapped.address ? String(mapped.address) : null,
         serviceType: mapped.serviceType ? String(mapped.serviceType) : null,
-        tenantId: endpoint.tenantId,
+        tenantId: resolvedTenantId,
         tagsJson: JSON.stringify([
           'wordpress',
           `plugin:${formPlugin}`,
@@ -206,11 +209,11 @@ export async function POST(request: NextRequest) {
         email: lead.email,
         source: 'wordpress',
         serviceType: lead.serviceType,
-        tenantId: lead.tenantId,
+        tenantId: resolvedTenantId,
         resourceType: 'lead',
         resourceId: lead.id,
         summary: `New WordPress lead: ${lead.name} (score: ${leadScore})`,
-      }, { tenantId: endpoint.tenantId || undefined, workspaceId: endpoint.workspaceId || undefined });
+      }, { tenantId: resolvedTenantId || undefined, workspaceId: endpoint.workspaceId || undefined });
     } catch (eventErr) {
       console.error('[WordPressLeads] Failed to emit lead.created event:', eventErr);
     }

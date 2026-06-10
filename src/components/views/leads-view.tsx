@@ -194,10 +194,14 @@ const ALL_STATUSES = ['new', 'contacted', 'quoted', 'won', 'lost'] as const;
 const SOURCE_CONFIG: Record<string, { label: string; color: string; bgColor: string; borderColor: string; icon: string }> = {
   website: { label: 'Website', color: 'text-teal-700', bgColor: 'bg-teal-50', borderColor: 'border-teal-200', icon: '🌐' },
   whatsapp: { label: 'WhatsApp', color: 'text-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200', icon: '💬' },
+  wordpress: { label: 'WordPress', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200', icon: '📝' },
+  webhook: { label: 'Webhook', color: 'text-orange-700', bgColor: 'bg-orange-50', borderColor: 'border-orange-200', icon: '🔗' },
   google: { label: 'Google', color: 'text-amber-700', bgColor: 'bg-amber-50', borderColor: 'border-amber-200', icon: '🔍' },
   facebook: { label: 'Facebook', color: 'text-sky-700', bgColor: 'bg-sky-50', borderColor: 'border-sky-200', icon: '📘' },
   referral: { label: 'Referral', color: 'text-violet-700', bgColor: 'bg-violet-50', borderColor: 'border-violet-200', icon: '👥' },
   manual: { label: 'Manual', color: 'text-gray-700', bgColor: 'bg-gray-50', borderColor: 'border-gray-200', icon: '✏️' },
+  zapier: { label: 'Zapier', color: 'text-orange-700', bgColor: 'bg-orange-50', borderColor: 'border-orange-200', icon: '⚡' },
+  cf7: { label: 'Contact Form 7', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200', icon: '📝' },
 };
 
 const PRIORITY_CONFIG: Record<string, { label: string; dotColor: string; bgColor: string; textColor: string }> = {

@@ -22,6 +22,7 @@ import {
   Settings2, PlugZap, Unplug, Filter, TrendingUp, Activity, Shield,
   AlertCircle, FileSpreadsheet, MessageSquare, Hash, Cable,
   Trash2, Edit, Eye, Plus, Search, Server, Link2, ChevronDown,
+  WordPress, Code2, BookOpen, ArrowDownToLine,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -213,6 +214,7 @@ const TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; colo
   custom_webhook: { label: 'Custom Webhook', icon: Cable, color: 'text-slate-600', bgColor: 'bg-slate-50' },
   google_sheets: { label: 'Google Sheets', icon: FileSpreadsheet, color: 'text-green-600', bgColor: 'bg-green-50' },
   slack: { label: 'Slack', icon: Hash, color: 'text-purple-600', bgColor: 'bg-purple-50' },
+  wordpress: { label: 'WordPress', icon: WordPress, color: 'text-blue-600', bgColor: 'bg-blue-50' },
 };
 
 // ─── Main Component ──────────────────────────────────────────────────────────
@@ -255,6 +257,19 @@ export function IntegrationsView() {
   const [logFilterEvent, setLogFilterEvent] = useState('all');
   const [logFilterStatus, setLogFilterStatus] = useState('all');
   const [logDetailLog, setLogDetailLog] = useState<EventWebhookLog | null>(null);
+
+  // WordPress CF7 Integration
+  const [wpEndpoints, setWpEndpoints] = useState<any[]>([]);
+  const [loadingWpEndpoints, setLoadingWpEndpoints] = useState(true);
+  const [showWpSetup, setShowWpSetup] = useState(false);
+  const [wpSetupName, setWpSetupName] = useState('');
+  const [wpCreating, setWpCreating] = useState(false);
+  const [wpCreatedConfig, setWpCreatedConfig] = useState<any | null>(null);
+  const [wpSetupStep, setWpSetupStep] = useState(0);
+  const [wpTestResult, setWpTestResult] = useState<any | null>(null);
+  const [wpTesting, setWpTesting] = useState(false);
+  const [wpRepairing, setWpRepairing] = useState(false);
+  const [wpRepairResult, setWpRepairResult] = useState<any | null>(null);
 
   // Template activation
   const [activatingTemplateId, setActivatingTemplateId] = useState<string | null>(null);
@@ -344,11 +359,122 @@ export function IntegrationsView() {
     }
   }, []);
 
+  // ─── WordPress CF7 Actions ──────────────────────────────────────────────
+
+  const fetchWpEndpoints = useCallback(async () => {
+    setLoadingWpEndpoints(true);
+    try {
+      const res = await authFetch('/api/wordpress/config?XTransformPort=3000');
+      if (res.ok) {
+        const data = await res.json();
+        setWpEndpoints(data.endpoints || []);
+      } else {
+        setWpEndpoints([]);
+      }
+    } catch {
+      setWpEndpoints([]);
+    } finally {
+      setLoadingWpEndpoints(false);
+    }
+  }, []);
+
+  const handleCreateWpEndpoint = async () => {
+    setWpCreating(true);
+    try {
+      const res = await authFetch('/api/wordpress/config?XTransformPort=3000', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: wpSetupName || 'WordPress Lead Capture',
+          sendWhatsApp: true,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setWpCreatedConfig(data.config || data.endpoint);
+        setWpSetupStep(1);
+        toast.success('WordPress endpoint created! Copy the API key and URL below.');
+        fetchWpEndpoints();
+      } else {
+        const errData = await res.json();
+        toast.error(errData.error || 'Failed to create WordPress endpoint');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setWpCreating(false);
+    }
+  };
+
+  const handleTestWpConnection = async () => {
+    if (!wpCreatedConfig?.api_key) return;
+    setWpTesting(true);
+    setWpTestResult(null);
+    try {
+      const res = await authFetch('/api/wordpress/test?XTransformPort=3000', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_key: wpCreatedConfig.api_key }),
+      });
+      const data = await res.json();
+      setWpTestResult(data);
+      if (data.success) {
+        toast.success('Connection test successful!');
+      } else {
+        toast.error(data.error || 'Connection test failed');
+      }
+    } catch {
+      setWpTestResult({ success: false, error: 'Network error' });
+      toast.error('Network error');
+    } finally {
+      setWpTesting(false);
+    }
+  };
+
+  const handleDeleteWpEndpoint = async (id: string) => {
+    try {
+      const res = await authFetch(`/api/wordpress/config?XTransformPort=3000&id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        toast.success('WordPress endpoint deleted');
+        fetchWpEndpoints();
+      } else {
+        toast.error('Failed to delete endpoint');
+      }
+    } catch {
+      toast.error('Network error');
+    }
+  };
+
+  const handleRepairWpLeads = async () => {
+    setWpRepairing(true);
+    setWpRepairResult(null);
+    try {
+      const res = await authFetch('/api/wordpress/repair?XTransformPort=3000', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      setWpRepairResult(data);
+      if (data.success) {
+        toast.success(data.message || 'Repair complete!');
+        fetchWpEndpoints();
+      } else {
+        toast.error(data.error || 'Repair failed');
+      }
+    } catch {
+      setWpRepairResult({ success: false, error: 'Network error' });
+      toast.error('Network error');
+    } finally {
+      setWpRepairing(false);
+    }
+  };
+
   useEffect(() => {
     fetchIntegrations();
     fetchEventWebhooks();
     fetchApiKeys();
     fetchWebhookLogs();
+    fetchWpEndpoints();
   }, [fetchIntegrations, fetchEventWebhooks, fetchApiKeys, fetchWebhookLogs]);
 
   // ─── Integration Actions ──────────────────────────────────────────────────
@@ -724,6 +850,9 @@ export function IntegrationsView() {
           <TabsTrigger value="connected" className="gap-1.5">
             <Plug className="size-3.5" /> Connected
           </TabsTrigger>
+          <TabsTrigger value="wordpress" className="gap-1.5">
+            <WordPress className="size-3.5" /> WordPress CF7
+          </TabsTrigger>
           <TabsTrigger value="webhooks" className="gap-1.5">
             <Zap className="size-3.5" /> Event Webhooks
           </TabsTrigger>
@@ -829,7 +958,466 @@ export function IntegrationsView() {
           )}
         </TabsContent>
 
-        {/* ═══ Tab 2: Event Webhooks ══════════════════════════════════════════ */}
+        {/* ═══ Tab: WordPress Contact Form 7 ══════════════════════════════════ */}
+        <TabsContent value="wordpress" className="space-y-6">
+          {/* How it works banner */}
+          <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-800">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex items-center justify-center size-10 rounded-lg bg-blue-600 shrink-0">
+                  <WordPress className="size-5 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-sm">WordPress Contact Form 7 → CRM Leads</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    When someone submits a Contact Form 7 on your WordPress site, the lead automatically appears in your <strong>Leads</strong> section with source <Badge variant="outline" className="text-[9px] h-4 bg-blue-50 text-blue-700 border-blue-200 ml-1">📝 WordPress</Badge>
+                  </p>
+                  <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                    <ArrowRight className="size-3 text-blue-500" />
+                    <span>CF7 Submit</span>
+                    <ArrowRight className="size-3 text-blue-500" />
+                    <span>Webhook</span>
+                    <ArrowRight className="size-3 text-blue-500" />
+                    <span className="font-medium text-blue-700">Leads → New</span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Setup wizard */}
+          {!showWpSetup && !wpCreatedConfig && (
+            <Card className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                <WordPress className="size-12 mb-3 opacity-30" />
+                <p className="text-sm font-medium">Connect WordPress Contact Form 7</p>
+                <p className="text-xs mt-1">Generate an API key and get the webhook URL to send leads from WordPress</p>
+                <Button size="sm" className="mt-4 bg-blue-600 hover:bg-blue-700" onClick={() => { setShowWpSetup(true); setWpSetupStep(0); setWpCreatedConfig(null); }}>
+                  <Plus className="size-3.5 mr-1" /> Set Up WordPress Integration
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Step 0: Create endpoint */}
+          {showWpSetup && wpSetupStep === 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <span className="flex items-center justify-center size-6 rounded-full bg-blue-600 text-white text-xs font-bold">1</span>
+                  Generate API Key & Webhook URL
+                </CardTitle>
+                <CardDescription>Create a secure endpoint to receive leads from your WordPress site</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="wp-name">Endpoint Name</Label>
+                  <Input
+                    id="wp-name"
+                    placeholder="e.g., My Website Lead Capture"
+                    value={wpSetupName}
+                    onChange={(e) => setWpSetupName(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">A friendly name to identify this WordPress connection</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button onClick={handleCreateWpEndpoint} disabled={wpCreating} className="bg-blue-600 hover:bg-blue-700">
+                    {wpCreating ? <Loader2 className="size-4 mr-1 animate-spin" /> : <KeyRound className="size-4 mr-1" />}
+                    Generate API Key
+                  </Button>
+                  <Button variant="outline" onClick={() => { setShowWpSetup(false); setWpSetupName(''); }}>
+                    Cancel
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Step 1: Show config + code snippets */}
+          {showWpSetup && wpSetupStep === 1 && wpCreatedConfig && (
+            <div className="space-y-4">
+              {/* API Key & URL */}
+              <Card className="border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20 dark:border-emerald-800">
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="size-5 text-emerald-600" />
+                    <h3 className="font-semibold text-sm text-emerald-700">API Key Generated Successfully!</h3>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Copy these values now. The full API key will not be shown again.</p>
+
+                  <div className="space-y-2">
+                    <div>
+                      <Label className="text-xs font-medium">API URL</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <code className="text-xs font-mono bg-white dark:bg-gray-900 px-2 py-1.5 rounded border flex-1 truncate">
+                          {wpCreatedConfig.api_url || wpCreatedConfig.webhookUrl}
+                        </code>
+                        <Button variant="outline" size="sm" onClick={() => copyToClipboard(wpCreatedConfig.api_url || wpCreatedConfig.webhookUrl)}>
+                          <Copy className="size-3 mr-1" /> Copy
+                        </Button>
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium">API Key</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <code className="text-xs font-mono bg-white dark:bg-gray-900 px-2 py-1.5 rounded border flex-1 truncate">
+                          {wpCreatedConfig.api_key}
+                        </code>
+                        <Button variant="outline" size="sm" onClick={() => copyToClipboard(wpCreatedConfig.api_key)}>
+                          <Copy className="size-3 mr-1" /> Copy
+                        </Button>
+                      </div>
+                    </div>
+                    {wpCreatedConfig.webhook_url && wpCreatedConfig.webhook_url !== wpCreatedConfig.api_url && (
+                      <div>
+                        <Label className="text-xs font-medium">Universal Webhook URL (alternative)</Label>
+                        <div className="flex items-center gap-2 mt-1">
+                          <code className="text-xs font-mono bg-white dark:bg-gray-900 px-2 py-1.5 rounded border flex-1 truncate">
+                            {wpCreatedConfig.webhook_url}
+                          </code>
+                          <Button variant="outline" size="sm" onClick={() => copyToClipboard(wpCreatedConfig.webhook_url)}>
+                            <Copy className="size-3 mr-1" /> Copy
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2">
+                    <Button size="sm" variant="outline" onClick={handleTestWpConnection} disabled={wpTesting}>
+                      {wpTesting ? <Loader2 className="size-3 mr-1 animate-spin" /> : <TestTube2 className="size-3 mr-1" />}
+                      Test Connection
+                    </Button>
+                    {wpTestResult && (
+                      <Badge variant="outline" className={wpTestResult.success ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}>
+                        {wpTestResult.success ? 'Connected!' : `Failed: ${wpTestResult.error}`}
+                      </Badge>
+                    )}
+                    <Button size="sm" variant="outline" onClick={() => { setShowWpSetup(false); setWpCreatedConfig(null); setWpSetupStep(0); setWpSetupName(''); }}>
+                      Done
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* WordPress Code Snippets */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <span className="flex items-center justify-center size-6 rounded-full bg-blue-600 text-white text-xs font-bold">2</span>
+                    Add to Your WordPress Site
+                  </CardTitle>
+                  <CardDescription>Choose one of these methods to connect Contact Form 7</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Method A: functions.php */}
+                  <div>
+                    <h4 className="text-sm font-medium flex items-center gap-1.5 mb-2">
+                      <Code2 className="size-4 text-blue-600" />
+                      Method A: Add to functions.php (Recommended)
+                    </h4>
+                    <p className="text-xs text-muted-foreground mb-2">Add this code to your theme&apos;s functions.php file:</p>
+                    <div className="relative">
+                      <pre className="text-xs font-mono bg-gray-950 text-gray-100 p-3 rounded-lg overflow-x-auto max-h-[280px]">
+{`// ServiceOS CRM - Contact Form 7 Integration
+add_action('wpcf7_mail_sent', 'send_to_serviceos_crm');
+function send_to_serviceos_crm($contact_form) {
+  $submission = WPCF7_Submission::get_instance();
+  if (!$submission) return;
+
+  $data = array(
+    'your-name'    => $submission->get_posted_string('your-name'),
+    'your-email'   => $submission->get_posted_string('your-email'),
+    'your-phone'   => $submission->get_posted_string('your-phone'),
+    'your-subject' => $submission->get_posted_string('your-subject'),
+    'your-message' => $submission->get_posted_string('your-message'),
+    '_form_plugin' => 'contact_form_7',
+    '_form_name'   => $contact_form->title(),
+    '_page_url'    => $submission->get_meta('url'),
+  );
+
+  wp_remote_post('${wpCreatedConfig.api_url || wpCreatedConfig.webhookUrl}', array(
+    'headers' => array(
+      'Content-Type' => 'application/json',
+      'Authorization' => 'Bearer ${wpCreatedConfig.api_key}',
+    ),
+    'body'    => json_encode($data),
+    'timeout' => 10,
+  ));
+}`}
+                      </pre>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="absolute top-2 right-2 size-7 p-0"
+                        onClick={() => copyToClipboard(`// ServiceOS CRM - Contact Form 7 Integration
+add_action('wpcf7_mail_sent', 'send_to_serviceos_crm');
+function send_to_serviceos_crm($contact_form) {
+  $submission = WPCF7_Submission::get_instance();
+  if (!$submission) return;
+
+  $data = array(
+    'your-name'    => $submission->get_posted_string('your-name'),
+    'your-email'   => $submission->get_posted_string('your-email'),
+    'your-phone'   => $submission->get_posted_string('your-phone'),
+    'your-subject' => $submission->get_posted_string('your-subject'),
+    'your-message' => $submission->get_posted_string('your-message'),
+    '_form_plugin' => 'contact_form_7',
+    '_form_name'   => $contact_form->title(),
+    '_page_url'    => $submission->get_meta('url'),
+  );
+
+  wp_remote_post('${wpCreatedConfig.api_url || wpCreatedConfig.webhookUrl}', array(
+    'headers' => array(
+      'Content-Type' => 'application/json',
+      'Authorization' => 'Bearer ${wpCreatedConfig.api_key}',
+    ),
+    'body'    => json_encode($data),
+    'timeout' => 10,
+  ));
+}`)}
+                      >
+                        <Copy className="size-3" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Method B: WP Webhooks plugin */}
+                  <div>
+                    <h4 className="text-sm font-medium flex items-center gap-1.5 mb-2">
+                      <Plug className="size-4 text-blue-600" />
+                      Method B: Using WP Webhooks Plugin
+                    </h4>
+                    <p className="text-xs text-muted-foreground mb-2">Install the <strong>WP Webhooks</strong> plugin and configure:</p>
+                    <div className="bg-white dark:bg-gray-900 rounded-lg border p-3 space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Webhook URL:</span>
+                        <code className="font-mono text-[10px] bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded truncate max-w-[200px]">{wpCreatedConfig.api_url || wpCreatedConfig.webhookUrl}</code>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">HTTP Method:</span>
+                        <span className="font-medium">POST</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Header:</span>
+                        <code className="font-mono text-[10px] bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">Authorization: Bearer {wpCreatedConfig.api_key?.slice(0, 12)}...</code>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Method C: CF7 API plugin */}
+                  <div>
+                    <h4 className="text-sm font-medium flex items-center gap-1.5 mb-2">
+                      <Globe className="size-4 text-blue-600" />
+                      Method C: Using Contact Form 7 Webhook Plugin
+                    </h4>
+                    <p className="text-xs text-muted-foreground mb-2">Install <strong>Contact Form 7 Webhook</strong> plugin and set:</p>
+                    <div className="bg-white dark:bg-gray-900 rounded-lg border p-3 space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Webhook URL:</span>
+                        <code className="font-mono text-[10px] bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded truncate max-w-[200px]">{wpCreatedConfig.api_url || wpCreatedConfig.webhookUrl}</code>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">API Key Header:</span>
+                        <code className="font-mono text-[10px] bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">X-API-Key: {wpCreatedConfig.api_key?.slice(0, 12)}...</code>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Field Mapping Reference */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <BookOpen className="size-4 text-blue-600" />
+                    Field Mapping Reference
+                  </CardTitle>
+                  <CardDescription>How Contact Form 7 fields map to CRM Lead fields</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="rounded-lg border overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="bg-muted/50">
+                          <th className="text-left p-2 font-medium">CF7 Field Name</th>
+                          <th className="text-center p-2 font-medium">→</th>
+                          <th className="text-left p-2 font-medium">CRM Lead Field</th>
+                          <th className="text-left p-2 font-medium">Example</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[
+                          ['your-name', 'Name', 'John Smith'],
+                          ['your-phone', 'Phone', '+1 234 567 8900'],
+                          ['your-email', 'Email', 'john@example.com'],
+                          ['your-subject', 'Service Type', 'Plumbing Repair'],
+                          ['your-message', 'Description', 'Need help with...'],
+                        ].map(([cf7, crm, example]) => (
+                          <tr key={cf7} className="border-t">
+                            <td className="p-2 font-mono text-blue-700">{cf7}</td>
+                            <td className="p-2 text-center text-muted-foreground">→</td>
+                            <td className="p-2 font-medium">{crm}</td>
+                            <td className="p-2 text-muted-foreground">{example}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    These are the default Contact Form 7 field names. Custom field mappings are also supported.
+                  </p>
+                </CardContent>
+              </Card>
+
+              {/* Where leads appear */}
+              <Card className="border-emerald-200 bg-emerald-50/50 dark:bg-emerald-950/20 dark:border-emerald-800">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <ArrowDownToLine className="size-5 text-emerald-600 mt-0.5 shrink-0" />
+                    <div>
+                      <h3 className="font-semibold text-sm text-emerald-700">Where do leads appear?</h3>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        When a visitor submits your Contact Form 7, a new lead is created in your CRM with these defaults:
+                      </p>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
+                        <div className="bg-white dark:bg-gray-900 rounded border p-2 text-xs">
+                          <span className="text-muted-foreground">Source</span>
+                          <p className="font-medium text-blue-700">WordPress</p>
+                        </div>
+                        <div className="bg-white dark:bg-gray-900 rounded border p-2 text-xs">
+                          <span className="text-muted-foreground">Status</span>
+                          <p className="font-medium text-teal-700">New</p>
+                        </div>
+                        <div className="bg-white dark:bg-gray-900 rounded border p-2 text-xs">
+                          <span className="text-muted-foreground">Priority</span>
+                          <p className="font-medium text-amber-700">Auto-scored</p>
+                        </div>
+                        <div className="bg-white dark:bg-gray-900 rounded border p-2 text-xs">
+                          <span className="text-muted-foreground">Location</span>
+                          <p className="font-medium text-emerald-700">Leads → New Column</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Existing WordPress Endpoints */}
+          <div>
+            <h3 className="text-sm font-medium text-muted-foreground mb-3">
+              {wpEndpoints.length} WordPress endpoint{wpEndpoints.length !== 1 ? 's' : ''} configured
+            </h3>
+            {loadingWpEndpoints ? (
+              <div className="flex items-center justify-center py-8"><RefreshCw className="size-5 animate-spin text-muted-foreground" /></div>
+            ) : wpEndpoints.length === 0 && !showWpSetup ? (
+              <p className="text-xs text-muted-foreground">No WordPress endpoints yet. Click "Set Up WordPress Integration" above to get started.</p>
+            ) : (
+              <div className="space-y-3">
+                {wpEndpoints.map((ep: any) => (
+                  <Card key={ep.id} className={!ep.active ? 'opacity-60' : ''}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center justify-center size-10 rounded-lg bg-blue-50">
+                            <WordPress className="size-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm">{ep.name}</span>
+                              <Badge variant="outline" className={ep.active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}>
+                                {ep.active ? 'Active' : 'Inactive'}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <KeyRound className="size-3" /> {ep.apiKeyPrefix}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <ArrowDownToLine className="size-3" /> {ep.totalReceived || 0} leads received
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Clock className="size-3" /> Last: {formatTime(ep.lastReceived)}
+                              </span>
+                              {ep.lastError && (
+                                <span className="flex items-center gap-1 text-red-600">
+                                  <AlertCircle className="size-3" /> {ep.lastError.slice(0, 40)}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 mt-1.5 text-xs text-muted-foreground">
+                              <Globe className="size-3 shrink-0" />
+                              <span className="truncate">{ep.webhookUrl || ep.apiUrl}</span>
+                              <Button variant="ghost" size="sm" className="size-5 p-0 shrink-0" onClick={() => copyToClipboard(ep.webhookUrl || ep.apiUrl)}>
+                                <Copy className="size-2.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => handleDeleteWpEndpoint(ep.id)}>
+                          <Trash2 className="size-3" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Troubleshooting: Repair Orphan Leads */}
+          <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-800">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex items-center justify-center size-10 rounded-lg bg-amber-500 shrink-0">
+                  <AlertCircle className="size-5 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-sm">Missing WordPress Leads?</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    If you submitted WordPress forms but leads don't appear in the <strong>Leads</strong> section, they may have been created without a tenant association. Click "Repair" to re-link orphan leads to your account.
+                  </p>
+                  <div className="flex items-center gap-2 mt-3">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-amber-300 text-amber-700 hover:bg-amber-100"
+                      onClick={handleRepairWpLeads}
+                      disabled={wpRepairing}
+                    >
+                      {wpRepairing ? <Loader2 className="size-3.5 mr-1.5 animate-spin" /> : <Settings2 className="size-3.5 mr-1.5" />}
+                      Repair Orphan Leads
+                    </Button>
+                  </div>
+                  {wpRepairResult && (
+                    <div className={`mt-3 p-3 rounded-md text-xs ${wpRepairResult.success ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                      {wpRepairResult.success ? (
+                        <div className="space-y-1">
+                          <p className="font-medium">✅ {wpRepairResult.message}</p>
+                          {wpRepairResult.details && (
+                            <div className="text-[11px] opacity-80 space-y-0.5">
+                              <p>Endpoints fixed: {wpRepairResult.details.endpointsFixed}</p>
+                              <p>Leads fixed: {wpRepairResult.details.leadsFixed}</p>
+                              <p>Customers fixed: {wpRepairResult.details.customersFixed}</p>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <p>❌ {wpRepairResult.error || 'Repair failed'}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
         <TabsContent value="webhooks" className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-medium text-muted-foreground">{eventWebhooks.length} event webhook{eventWebhooks.length !== 1 ? 's' : ''}</h3>
