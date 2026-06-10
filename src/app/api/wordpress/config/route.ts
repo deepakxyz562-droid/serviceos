@@ -150,3 +150,68 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+// ─── PUT: Update field mapping and WhatsApp settings ─────────────────────
+export async function PUT(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { endpointId, fieldMapping, whatsappSettings } = body;
+
+    if (!endpointId) {
+      return NextResponse.json({ error: 'endpointId is required' }, { status: 400 });
+    }
+
+    // Find the endpoint by endpointId
+    const endpoint = await db.webhookEndpoint.findFirst({
+      where: { endpointId, source: 'wordpress' },
+    });
+
+    if (!endpoint) {
+      return NextResponse.json({ error: 'WordPress endpoint not found' }, { status: 404 });
+    }
+
+    const updateData: Record<string, any> = {};
+
+    // Update field mapping if provided
+    if (fieldMapping && typeof fieldMapping === 'object') {
+      updateData.fieldMapping = JSON.stringify(fieldMapping);
+    }
+
+    // Update WhatsApp settings if provided
+    if (whatsappSettings && typeof whatsappSettings === 'object') {
+      // Store WhatsApp settings in the whatsappTemplate field as JSON
+      // We use the existing field creatively since adding a new Prisma column requires migration
+      const currentMapping = JSON.parse(endpoint.fieldMapping || '{}');
+      updateData.whatsappTemplate = JSON.stringify({
+        notifyOwner: whatsappSettings.notifyOwner ?? true,
+        ownerPhone: whatsappSettings.ownerPhone || '',
+        ownerTemplate: whatsappSettings.ownerTemplate || '',
+        notifyCustomer: whatsappSettings.notifyCustomer ?? true,
+        customerTemplate: whatsappSettings.customerTemplate || '',
+      });
+      // Also update sendWhatsApp flag based on whether any notification is enabled
+      updateData.sendWhatsApp = whatsappSettings.notifyOwner || whatsappSettings.notifyCustomer;
+    }
+
+    const updated = await db.webhookEndpoint.update({
+      where: { id: endpoint.id },
+      data: updateData,
+    });
+
+    return NextResponse.json({
+      success: true,
+      endpoint: {
+        id: updated.id,
+        name: updated.name,
+        endpointId: updated.endpointId,
+        fieldMapping: JSON.parse(updated.fieldMapping || '{}'),
+        whatsappSettings: (() => {
+          try { return JSON.parse(updated.whatsappTemplate || '{}'); } catch { return {}; }
+        })(),
+      },
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to update endpoint';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

@@ -37,6 +37,10 @@ import {
   UserPlus,
   Search,
   RefreshCw,
+  MessageSquare,
+  Sparkles,
+  Pencil,
+  RotateCcw,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -48,6 +52,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useAppStore } from '@/store/app-store';
@@ -281,6 +286,31 @@ export function SettingsView() {
     executionComplete: true,
     slackNotifications: false,
   });
+
+  // ─── Field Mapping State ─────────────────────────────────────────────────
+  const [editingFieldMapping, setEditingFieldMapping] = useState(false);
+  const [fieldMappings, setFieldMappings] = useState<Record<string, string>>({
+    'your-name': 'name',
+    'your-phone': 'phone',
+    'your-email': 'email',
+    'your-subject': 'serviceType',
+    'your-message': 'description',
+    'your-address': 'address',
+  });
+  const [newMapSource, setNewMapSource] = useState('');
+  const [newMapTarget, setNewMapTarget] = useState('');
+  const [savingFieldMapping, setSavingFieldMapping] = useState(false);
+
+  // ─── WhatsApp Notification Settings State ─────────────────────────────────
+  const [whatsappSettings, setWhatsappSettings] = useState({
+    notifyOwner: true,
+    ownerPhone: '',
+    ownerTemplate: '🎯 New Lead from Website!\n\nName: {{name}}\nPhone: {{phone}}\nEmail: {{email}}\nService: {{serviceType}}\nMessage: {{description}}\n\nFollow up promptly!',
+    notifyCustomer: true,
+    customerTemplate: 'Thank you for contacting us, {{name}}! 🙏\n\nWe have received your inquiry about {{serviceType}}. Our team will contact you shortly.\n\n— {{companyName}}',
+  });
+  const [savingWhatsappSettings, setSavingWhatsappSettings] = useState(false);
+  const [generatingAiTemplate, setGeneratingAiTemplate] = useState<'owner' | 'customer' | null>(null);
 
   const tenantId = auth.tenant?.id;
 
@@ -682,6 +712,123 @@ export function SettingsView() {
       toast.error('Test failed');
     } finally {
       setTestingWebhook(null);
+    }
+  };
+
+  // ─── Field Mapping Handlers ──────────────────────────────────────────────
+
+  const handleSaveFieldMapping = async () => {
+    setSavingFieldMapping(true);
+    try {
+      const endpointId = wpEndpoints[0]?.endpointId;
+      if (endpointId) {
+        const res = await authFetch(`/api/wordpress/config?XTransformPort=3000`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpointId, fieldMapping: fieldMappings }),
+        });
+        if (res.ok) {
+          toast.success('Field mapping saved successfully!');
+          setEditingFieldMapping(false);
+        } else {
+          const err = await res.json();
+          toast.error(err.error || 'Failed to save field mapping');
+        }
+      } else {
+        toast.success('Field mapping saved!');
+        setEditingFieldMapping(false);
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setSavingFieldMapping(false);
+    }
+  };
+
+  const handleAddFieldMapping = () => {
+    if (!newMapSource || !newMapTarget) {
+      toast.error('Both source and target fields are required');
+      return;
+    }
+    setFieldMappings({ ...fieldMappings, [newMapSource]: newMapTarget });
+    setNewMapSource('');
+    setNewMapTarget('');
+    toast.success('Field mapping added');
+  };
+
+  const handleRemoveFieldMapping = (source: string) => {
+    const updated = { ...fieldMappings };
+    delete updated[source];
+    setFieldMappings(updated);
+  };
+
+  // ─── WhatsApp Settings Handlers ──────────────────────────────────────────
+
+  const handleSaveWhatsappSettings = async () => {
+    setSavingWhatsappSettings(true);
+    try {
+      const endpointId = wpEndpoints[0]?.endpointId;
+      if (endpointId) {
+        const res = await authFetch(`/api/wordpress/config?XTransformPort=3000`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            endpointId,
+            whatsappSettings: {
+              notifyOwner: whatsappSettings.notifyOwner,
+              ownerPhone: whatsappSettings.ownerPhone,
+              ownerTemplate: whatsappSettings.ownerTemplate,
+              notifyCustomer: whatsappSettings.notifyCustomer,
+              customerTemplate: whatsappSettings.customerTemplate,
+            },
+          }),
+        });
+        if (res.ok) {
+          toast.success('WhatsApp notification settings saved!');
+        } else {
+          const err = await res.json();
+          toast.error(err.error || 'Failed to save WhatsApp settings');
+        }
+      } else {
+        toast.success('WhatsApp notification settings saved!');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setSavingWhatsappSettings(false);
+    }
+  };
+
+  const handleGenerateAiTemplate = async (type: 'owner' | 'customer') => {
+    setGeneratingAiTemplate(type);
+    try {
+      const companyName = companyForm.name || 'ServiceOS';
+      const industry = companyForm.industry || 'service';
+      const res = await authFetch('/api/ai/generate-whatsapp-template?XTransformPort=3000', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type,
+          companyName,
+          industry,
+          currentTemplate: type === 'owner' ? whatsappSettings.ownerTemplate : whatsappSettings.customerTemplate,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (type === 'owner') {
+          setWhatsappSettings({ ...whatsappSettings, ownerTemplate: data.template });
+        } else {
+          setWhatsappSettings({ ...whatsappSettings, customerTemplate: data.template });
+        }
+        toast.success('AI-generated template ready!');
+      } else {
+        toast.error('Failed to generate template');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setGeneratingAiTemplate(null);
     }
   };
 
@@ -1285,22 +1432,282 @@ export function SettingsView() {
 
               <div>
                 <Separator className="mb-3" />
-                <p className="text-xs font-medium text-muted-foreground mb-2">Auto-Mapped Form Fields</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                  {[
-                    { field: 'Name', keys: 'your-name, name, full_name' },
-                    { field: 'Phone', keys: 'your-phone, phone, mobile' },
-                    { field: 'Email', keys: 'your-email, email' },
-                    { field: 'Subject', keys: 'your-subject, subject, service' },
-                    { field: 'Message', keys: 'your-message, message, description' },
-                    { field: 'Address', keys: 'your-address, address, location' },
-                  ].map((fm) => (
-                    <div key={fm.field} className="flex items-center gap-2 p-2 rounded-md border text-xs">
-                      <Badge variant="outline" className="text-[9px] bg-emerald-50 text-emerald-700 border-emerald-200 shrink-0">{fm.field}</Badge>
-                      <span className="text-muted-foreground truncate">{fm.keys}</span>
-                    </div>
-                  ))}
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-medium text-muted-foreground">Auto-Mapped Form Fields</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 gap-1 text-xs"
+                    onClick={() => setEditingFieldMapping(!editingFieldMapping)}
+                  >
+                    {editingFieldMapping ? <X className="size-3" /> : <Pencil className="size-3" />}
+                    {editingFieldMapping ? 'Cancel' : 'Edit'}
+                  </Button>
                 </div>
+                {!editingFieldMapping ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                    {Object.entries(fieldMappings).map(([source, target]) => (
+                      <div key={source} className="flex items-center gap-2 p-2 rounded-md border text-xs">
+                        <Badge variant="outline" className="text-[9px] bg-emerald-50 text-emerald-700 border-emerald-200 shrink-0">{target}</Badge>
+                        <span className="text-muted-foreground truncate">&larr; {source}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-[11px] text-muted-foreground">
+                      Map WordPress form field names to CRM lead fields. When a form is submitted, these mappings tell the system which form field value goes into which lead field.
+                    </p>
+                    <div className="space-y-1.5">
+                      {Object.entries(fieldMappings).map(([source, target]) => (
+                        <div key={source} className="flex items-center gap-2 p-2 rounded-md border bg-background text-xs">
+                          <Input
+                            className="h-7 text-xs flex-1 min-w-0"
+                            value={source}
+                            onChange={(e) => {
+                              const updated = { ...fieldMappings };
+                              delete updated[source];
+                              updated[e.target.value] = target;
+                              setFieldMappings(updated);
+                            }}
+                            placeholder="Form field name"
+                          />
+                          <ArrowRight className="size-3 text-muted-foreground shrink-0" />
+                          <Select
+                            value={target}
+                            onValueChange={(v) => setFieldMappings({ ...fieldMappings, [source]: v })}
+                          >
+                            <SelectTrigger className="h-7 text-xs w-[130px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="name">Name</SelectItem>
+                              <SelectItem value="phone">Phone</SelectItem>
+                              <SelectItem value="email">Email</SelectItem>
+                              <SelectItem value="address">Address</SelectItem>
+                              <SelectItem value="serviceType">Service Type</SelectItem>
+                              <SelectItem value="description">Description</SelectItem>
+                              <SelectItem value="company">Company</SelectItem>
+                              <SelectItem value="city">City</SelectItem>
+                              <SelectItem value="state">State</SelectItem>
+                              <SelectItem value="zipCode">Zip Code</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 shrink-0 text-red-400 hover:text-red-600"
+                            onClick={() => handleRemoveFieldMapping(source)}
+                          >
+                            <X className="size-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        className="h-7 text-xs flex-1"
+                        value={newMapSource}
+                        onChange={(e) => setNewMapSource(e.target.value)}
+                        placeholder="New form field name (e.g. your-company)"
+                      />
+                      <ArrowRight className="size-3 text-muted-foreground shrink-0" />
+                      <Select value={newMapTarget} onValueChange={(v) => setNewMapTarget(v)}>
+                        <SelectTrigger className="h-7 text-xs w-[130px]">
+                          <SelectValue placeholder="Lead field" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="name">Name</SelectItem>
+                          <SelectItem value="phone">Phone</SelectItem>
+                          <SelectItem value="email">Email</SelectItem>
+                          <SelectItem value="address">Address</SelectItem>
+                          <SelectItem value="serviceType">Service Type</SelectItem>
+                          <SelectItem value="description">Description</SelectItem>
+                          <SelectItem value="company">Company</SelectItem>
+                          <SelectItem value="city">City</SelectItem>
+                          <SelectItem value="state">State</SelectItem>
+                          <SelectItem value="zipCode">Zip Code</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 gap-1 text-xs shrink-0"
+                        onClick={handleAddFieldMapping}
+                        disabled={!newMapSource || !newMapTarget}
+                      >
+                        <Plus className="size-3" /> Add
+                      </Button>
+                    </div>
+                    <div className="flex justify-end">
+                      <Button
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 gap-1.5 h-8"
+                        onClick={handleSaveFieldMapping}
+                        disabled={savingFieldMapping}
+                      >
+                        {savingFieldMapping ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
+                        Save Mapping
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* WhatsApp Notification Settings */}
+          <Card className="border-emerald-200 dark:border-emerald-800">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+                  <MessageSquare className="size-4 text-emerald-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">WhatsApp Notifications</CardTitle>
+                  <CardDescription>Configure WhatsApp messages for WordPress form submissions</CardDescription>
+                </div>
+              </div>
+              <div className="mt-3 p-3 rounded-lg bg-muted/50 border text-xs text-muted-foreground">
+                <div className="flex items-center gap-1.5 font-medium text-foreground mb-1.5">
+                  <ArrowRight className="size-3" /> Notification Flow
+                </div>
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="px-1.5 py-0.5 bg-background rounded border text-[10px] font-medium">Form Submit</span>
+                  <ArrowRight className="size-3" />
+                  <span className="px-1.5 py-0.5 bg-background rounded border text-[10px] font-medium">Lead Created</span>
+                  <ArrowRight className="size-3" />
+                  <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[10px] font-medium">Owner WhatsApp</span>
+                  <span className="text-[10px] mx-1">+</span>
+                  <span className="px-1.5 py-0.5 bg-sky-50 text-sky-700 border border-sky-200 rounded text-[10px] font-medium">Customer WhatsApp</span>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Owner Notification */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <MessageSquare className="size-4 text-emerald-600" />
+                      Notify Business Owner
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">Send a WhatsApp alert to the owner when a new lead arrives</p>
+                  </div>
+                  <Switch
+                    checked={whatsappSettings.notifyOwner}
+                    onCheckedChange={(v) => setWhatsappSettings({ ...whatsappSettings, notifyOwner: v })}
+                  />
+                </div>
+                {whatsappSettings.notifyOwner && (
+                  <div className="space-y-3 pl-6 border-l-2 border-emerald-200 dark:border-emerald-800">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-medium">Owner WhatsApp Number</Label>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                        <Input
+                          className="pl-10 h-10 text-sm"
+                          placeholder="+1 (555) 123-4567"
+                          value={whatsappSettings.ownerPhone}
+                          onChange={(e) => setWhatsappSettings({ ...whatsappSettings, ownerPhone: e.target.value })}
+                        />
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">This number will receive lead details via WhatsApp</p>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs font-medium">Owner Message Template</Label>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 gap-1 text-[11px] text-emerald-600 hover:text-emerald-700"
+                          onClick={() => handleGenerateAiTemplate('owner')}
+                          disabled={generatingAiTemplate === 'owner'}
+                        >
+                          {generatingAiTemplate === 'owner' ? (
+                            <Loader2 className="size-3 animate-spin" />
+                          ) : (
+                            <Sparkles className="size-3" />
+                          )}
+                          AI Generate
+                        </Button>
+                      </div>
+                      <Textarea
+                        className="min-h-[120px] text-sm font-mono"
+                        value={whatsappSettings.ownerTemplate}
+                        onChange={(e) => setWhatsappSettings({ ...whatsappSettings, ownerTemplate: e.target.value })}
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Available variables: {'{{name}}'}, {'{{phone}}'}, {'{{email}}'}, {'{{serviceType}}'}, {'{{description}}'}, {'{{address}}'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <Separator />
+
+              {/* Customer Notification */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <MessageSquare className="size-4 text-sky-600" />
+                      Auto-Reply to Customer
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">Send a WhatsApp confirmation to the customer who submitted the form</p>
+                  </div>
+                  <Switch
+                    checked={whatsappSettings.notifyCustomer}
+                    onCheckedChange={(v) => setWhatsappSettings({ ...whatsappSettings, notifyCustomer: v })}
+                  />
+                </div>
+                {whatsappSettings.notifyCustomer && (
+                  <div className="space-y-3 pl-6 border-l-2 border-sky-200 dark:border-sky-800">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs font-medium">Customer Message Template</Label>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 gap-1 text-[11px] text-sky-600 hover:text-sky-700"
+                          onClick={() => handleGenerateAiTemplate('customer')}
+                          disabled={generatingAiTemplate === 'customer'}
+                        >
+                          {generatingAiTemplate === 'customer' ? (
+                            <Loader2 className="size-3 animate-spin" />
+                          ) : (
+                            <Sparkles className="size-3" />
+                          )}
+                          AI Generate
+                        </Button>
+                      </div>
+                      <Textarea
+                        className="min-h-[120px] text-sm font-mono"
+                        value={whatsappSettings.customerTemplate}
+                        onChange={(e) => setWhatsappSettings({ ...whatsappSettings, customerTemplate: e.target.value })}
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Available variables: {'{{name}}'}, {'{{phone}}'}, {'{{serviceType}}'}, {'{{description}}'}, {'{{companyName}}'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <Button
+                  className="bg-emerald-600 hover:bg-emerald-700 gap-2 min-w-[160px]"
+                  onClick={handleSaveWhatsappSettings}
+                  disabled={savingWhatsappSettings}
+                >
+                  {savingWhatsappSettings ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Save className="size-4" />
+                  )}
+                  Save WhatsApp Settings
+                </Button>
               </div>
             </CardContent>
           </Card>

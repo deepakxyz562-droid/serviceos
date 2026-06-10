@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
 
     // Apply custom field mapping
     try {
-      const customMapping = JSON.parse(endpoint.fieldMapping || '{}');
+      const customMapping = JSON.parse(endpoint.fieldMapping || '{}') as Record<string, string>;
       for (const [srcField, leadField] of Object.entries(customMapping)) {
         if (payload[srcField] !== undefined && !mapped[leadField]) {
           mapped[leadField] = payload[srcField];
@@ -216,6 +216,80 @@ export async function POST(request: NextRequest) {
       }, { tenantId: resolvedTenantId || undefined, workspaceId: endpoint.workspaceId || undefined });
     } catch (eventErr) {
       console.error('[WordPressLeads] Failed to emit lead.created event:', eventErr);
+    }
+
+    // ─── 7.6 Send WhatsApp notifications ──────────────────────────────
+    if (endpoint.sendWhatsApp) {
+      try {
+        // Parse WhatsApp settings from the whatsappTemplate field
+        let waSettings: Record<string, any> = {};
+        try {
+          waSettings = JSON.parse(endpoint.whatsappTemplate || '{}');
+        } catch {}
+
+        const { sendJobNotification } = await import('@/lib/whatsapp-notifications');
+
+        // Resolve tenant name for template variables
+        let tenantName = 'ServiceOS';
+        try {
+          if (resolvedTenantId) {
+            const tenant = await db.tenant.findUnique({ where: { id: resolvedTenantId } });
+            if (tenant?.name) tenantName = tenant.name;
+          }
+        } catch {}
+
+        // Helper to replace template variables
+        const replaceTemplateVars = (template: string, vars: Record<string, string>) => {
+          let result = template;
+          for (const [key, value] of Object.entries(vars)) {
+            result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value || 'N/A');
+          }
+          return result;
+        };
+
+        const templateVars = {
+          name: lead.name,
+          phone: lead.phone,
+          email: lead.email || '',
+          serviceType: lead.serviceType || '',
+          description: mapped.description ? String(mapped.description) : '',
+          address: mapped.address ? String(mapped.address) : '',
+          companyName: tenantName,
+        };
+
+        // Notify owner
+        if (waSettings.notifyOwner && waSettings.ownerPhone) {
+          const ownerTemplate = waSettings.ownerTemplate || '🎯 New Lead!\n\nName: {{name}}\nPhone: {{phone}}\nService: {{serviceType}}\n\nFollow up promptly!';
+          const ownerMessage = replaceTemplateVars(ownerTemplate, templateVars);
+
+          sendJobNotification({
+            to: waSettings.ownerPhone,
+            message: ownerMessage,
+            recipientName: 'Business Owner',
+            recipientRole: 'employee' as const,
+            subject: `New Lead: ${lead.name}`,
+            tenantId: resolvedTenantId || undefined,
+          }).catch((err: unknown) => console.error('[WordPressLeads] Owner WhatsApp notification failed:', err));
+        }
+
+        // Notify customer (auto-reply)
+        if (waSettings.notifyCustomer && lead.phone) {
+          const customerTemplate = waSettings.customerTemplate || 'Thank you for contacting us, {{name}}! We will get back to you shortly.\n\n— {{companyName}}';
+          const customerMessage = replaceTemplateVars(customerTemplate, templateVars);
+
+          sendJobNotification({
+            to: lead.phone,
+            message: customerMessage,
+            recipientName: lead.name,
+            recipientRole: 'customer',
+            subject: 'Thank you for your inquiry',
+            tenantId: resolvedTenantId || undefined,
+          }).catch((err: unknown) => console.error('[WordPressLeads] Customer WhatsApp notification failed:', err));
+        }
+      } catch (waErr) {
+        // Non-fatal: WhatsApp notification failure shouldn't block lead creation
+        console.error('[WordPressLeads] WhatsApp notification error:', waErr);
+      }
     }
 
     // ─── 8. Log ─────────────────────────────────────────────────────────
