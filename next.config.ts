@@ -1,9 +1,5 @@
 import type { NextConfig } from "next";
 
-if (process.env.DATABASE_URL?.startsWith('file:')) {
-  process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/serviceos';
-}
-
 const nextConfig: NextConfig = {
   compress: false,
   typescript: {
@@ -14,10 +10,10 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
-  allowedDevOrigins: ["21.0.11.123"],
-  experimental: {
-    instrumentationHook: true,
-  },
+  allowedDevOrigins: [
+    "21.0.11.123",
+    ".space-z.ai",
+  ],
   async rewrites() {
     return [
       {
