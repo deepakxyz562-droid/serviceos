@@ -121,12 +121,9 @@ const TABLE_MAP: Record<string, string> = {
 };
 
 // Known missing tables in Supabase (return empty results gracefully)
-const MISSING_TABLES = new Set([
-  'CommunicationProvider',
-  'Contact',
-  'Form',
-  'FormResponse',
-  'WorkflowAutomation',
+const MISSING_TABLES = new Set<string>([
+  // CommunicationProvider, Contact, Form, FormResponse, WorkflowAutomation
+  // have been migrated to Supabase — removed from missing list
 ]);
 
 // ── Relation Mapping ───────────────────────────────────────────────────────
@@ -209,6 +206,26 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
   },
   EventWebhook: {
     workspace: { targetTable: 'Workspace', fkColumn: 'workspaceId' },
+  },
+  CommunicationProvider: {
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+  },
+  Contact: {
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+  },
+  Form: {
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+    responses: { targetTable: 'FormResponse', targetFkColumn: 'formId', isMany: true },
+  },
+  FormResponse: {
+    form: { targetTable: 'Form', fkColumn: 'formId' },
+  },
+  WorkflowAutomation: {
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+    executions: { targetTable: 'TriggerExecution', targetFkColumn: 'automationId', isMany: true },
+  },
+  TriggerExecution: {
+    automation: { targetTable: 'WorkflowAutomation', fkColumn: 'automationId' },
   },
 };
 
@@ -866,7 +883,28 @@ export const supabaseDb = new Proxy({} as Record<string, SupabaseModel>, {
 export { getAdminClient as getSupabaseAdmin };
 
 export function shouldUseSupabaseDB(): boolean {
-  return process.env.USE_SUPABASE_DB === 'true' && !!supabaseUrl && !!supabaseServiceKey;
+  const flag = process.env.USE_SUPABASE_DB;
+  const isTruthy = flag === 'true' || flag === '1' || flag === 'yes' || flag === 'TRUE' || flag === 'Yes';
+  const hasCredentials = !!supabaseUrl && !!supabaseServiceKey;
+
+  if (isTruthy && !hasCredentials) {
+    console.error(
+      '[SupabaseDB] USE_SUPABASE_DB is set but credentials are missing!',
+      `URL: ${supabaseUrl ? 'SET' : 'MISSING'},`,
+      `ServiceKey: ${supabaseServiceKey ? 'SET' : 'MISSING'}`
+    );
+  }
+
+  if (isTruthy && hasCredentials) {
+    console.log('[SupabaseDB] Supabase REST API mode ENABLED');
+    return true;
+  }
+
+  if (isTruthy) {
+    console.warn('[SupabaseDB] USE_SUPABASE_DB is set but credentials incomplete, falling back to Prisma');
+  }
+
+  return false;
 }
 
 export function getMissingTables(): string[] {

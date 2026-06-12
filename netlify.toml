@@ -1,0 +1,24 @@
+# Netlify Configuration for ServiceOS CRM
+# This ensures proper build and runtime behavior on Netlify
+
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+# Ensure Prisma client is generated before build
+[build.environment]
+  NEXT_USE_NETLIFY_EDGE = "false"
+
+# Required environment variables for Netlify deployment:
+# Set these in Netlify Dashboard → Site settings → Environment variables:
+#
+# DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
+# DIRECT_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
+# USE_SUPABASE_DB=true
+# NEXT_PUBLIC_SUPABASE_URL=https://[PROJECT-REF].supabase.co
+# SUPABASE_ANON_KEY=eyJ...
+# SUPABASE_SERVICE_ROLE_KEY=eyJ...
+# JWT_SECRET=your-production-jwt-secret
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
