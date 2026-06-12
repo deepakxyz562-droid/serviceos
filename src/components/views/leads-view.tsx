@@ -37,7 +37,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAppStore } from '@/store/app-store';
-import { authFetch } from '@/lib/client-auth';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -104,16 +103,15 @@ interface LeadFormData {
 // 5 pipeline stages for Kanban view
 const KANBAN_STATUSES = ['new', 'contacted', 'quoted', 'won', 'lost'] as const;
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; borderColor: string; headerBg: string; headerText: string; dotColor: string; icon: string }> = {
+const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; borderColor: string; headerBg: string; headerText: string; dotColor: string }> = {
   new: {
     label: 'New',
-    color: 'text-teal-700',
-    bgColor: 'bg-teal-50',
-    borderColor: 'border-teal-200',
-    headerBg: 'bg-teal-600',
+    color: 'text-blue-700',
+    bgColor: 'bg-blue-50',
+    borderColor: 'border-blue-200',
+    headerBg: 'bg-blue-600',
     headerText: 'text-white',
-    dotColor: 'bg-teal-500',
-    icon: '✨',
+    dotColor: 'bg-blue-500',
   },
   contacted: {
     label: 'Contacted',
@@ -123,17 +121,15 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: str
     headerBg: 'bg-amber-500',
     headerText: 'text-white',
     dotColor: 'bg-amber-500',
-    icon: '📞',
   },
   quoted: {
     label: 'Quoted',
-    color: 'text-violet-700',
-    bgColor: 'bg-violet-50',
-    borderColor: 'border-violet-200',
-    headerBg: 'bg-violet-600',
+    color: 'text-purple-700',
+    bgColor: 'bg-purple-50',
+    borderColor: 'border-purple-200',
+    headerBg: 'bg-purple-600',
     headerText: 'text-white',
-    dotColor: 'bg-violet-500',
-    icon: '📋',
+    dotColor: 'bg-purple-500',
   },
   won: {
     label: 'Won',
@@ -143,7 +139,6 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: str
     headerBg: 'bg-emerald-600',
     headerText: 'text-white',
     dotColor: 'bg-emerald-500',
-    icon: '🎉',
   },
   lost: {
     label: 'Lost',
@@ -153,7 +148,6 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: str
     headerBg: 'bg-red-600',
     headerText: 'text-white',
     dotColor: 'bg-red-500',
-    icon: '✕',
   },
   // Map legacy statuses for API compatibility
   qualified: {
@@ -164,17 +158,15 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: str
     headerBg: 'bg-teal-600',
     headerText: 'text-white',
     dotColor: 'bg-teal-500',
-    icon: '✓',
   },
   proposal: {
     label: 'Proposal',
-    color: 'text-violet-700',
-    bgColor: 'bg-violet-50',
-    borderColor: 'border-violet-200',
-    headerBg: 'bg-violet-600',
+    color: 'text-purple-700',
+    bgColor: 'bg-purple-50',
+    borderColor: 'border-purple-200',
+    headerBg: 'bg-purple-600',
     headerText: 'text-white',
-    dotColor: 'bg-violet-500',
-    icon: '📋',
+    dotColor: 'bg-purple-500',
   },
   negotiation: {
     label: 'Negotiation',
@@ -184,31 +176,28 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: str
     headerBg: 'bg-orange-500',
     headerText: 'text-white',
     dotColor: 'bg-orange-500',
-    icon: '🤝',
   },
 };
 
 // All statuses available for filtering
 const ALL_STATUSES = ['new', 'contacted', 'quoted', 'won', 'lost'] as const;
 
-const SOURCE_CONFIG: Record<string, { label: string; color: string; bgColor: string; borderColor: string; icon: string }> = {
-  website: { label: 'Website', color: 'text-teal-700', bgColor: 'bg-teal-50', borderColor: 'border-teal-200', icon: '🌐' },
-  whatsapp: { label: 'WhatsApp', color: 'text-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200', icon: '💬' },
-  wordpress: { label: 'WordPress', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200', icon: '📝' },
-  webhook: { label: 'Webhook', color: 'text-orange-700', bgColor: 'bg-orange-50', borderColor: 'border-orange-200', icon: '🔗' },
-  google: { label: 'Google', color: 'text-amber-700', bgColor: 'bg-amber-50', borderColor: 'border-amber-200', icon: '🔍' },
-  facebook: { label: 'Facebook', color: 'text-sky-700', bgColor: 'bg-sky-50', borderColor: 'border-sky-200', icon: '📘' },
-  referral: { label: 'Referral', color: 'text-violet-700', bgColor: 'bg-violet-50', borderColor: 'border-violet-200', icon: '👥' },
-  manual: { label: 'Manual', color: 'text-gray-700', bgColor: 'bg-gray-50', borderColor: 'border-gray-200', icon: '✏️' },
-  zapier: { label: 'Zapier', color: 'text-orange-700', bgColor: 'bg-orange-50', borderColor: 'border-orange-200', icon: '⚡' },
-  cf7: { label: 'Contact Form 7', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200', icon: '📝' },
+const SOURCE_CONFIG: Record<string, { label: string; color: string; bgColor: string; borderColor: string }> = {
+  website: { label: 'Website', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
+  whatsapp: { label: 'WhatsApp', color: 'text-emerald-700', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200' },
+  wordpress: { label: 'WordPress', color: 'text-indigo-700', bgColor: 'bg-indigo-50', borderColor: 'border-indigo-200' },
+  google: { label: 'Google', color: 'text-amber-700', bgColor: 'bg-amber-50', borderColor: 'border-amber-200' },
+  facebook: { label: 'Facebook', color: 'text-sky-700', bgColor: 'bg-sky-50', borderColor: 'border-sky-200' },
+  instagram: { label: 'Instagram', color: 'text-pink-700', bgColor: 'bg-pink-50', borderColor: 'border-pink-200' },
+  referral: { label: 'Referral', color: 'text-purple-700', bgColor: 'bg-purple-50', borderColor: 'border-purple-200' },
+  manual: { label: 'Manual', color: 'text-gray-700', bgColor: 'bg-gray-50', borderColor: 'border-gray-200' },
 };
 
-const PRIORITY_CONFIG: Record<string, { label: string; dotColor: string; bgColor: string; textColor: string }> = {
-  low: { label: 'Low', dotColor: 'bg-slate-400', bgColor: 'bg-slate-50', textColor: 'text-slate-600' },
-  medium: { label: 'Medium', dotColor: 'bg-amber-500', bgColor: 'bg-amber-50', textColor: 'text-amber-700' },
-  high: { label: 'High', dotColor: 'bg-orange-500', bgColor: 'bg-orange-50', textColor: 'text-orange-700' },
-  urgent: { label: 'Urgent', dotColor: 'bg-red-500', bgColor: 'bg-red-50', textColor: 'text-red-700' },
+const PRIORITY_CONFIG: Record<string, { label: string; dotColor: string }> = {
+  low: { label: 'Low', dotColor: 'bg-gray-400' },
+  medium: { label: 'Medium', dotColor: 'bg-blue-500' },
+  high: { label: 'High', dotColor: 'bg-orange-500' },
+  urgent: { label: 'Urgent', dotColor: 'bg-red-500' },
 };
 
 const SERVICE_TYPES = [
@@ -336,7 +325,7 @@ export function LeadsView() {
       params.set('page', String(page));
       params.set('limit', String(pageSize));
 
-      const res = await authFetch(`/api/leads?${params.toString()}`);
+      const res = await fetch(`/api/leads?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setLeads(data.leads || []);
@@ -429,7 +418,7 @@ export function LeadsView() {
         serviceType: leadForm.serviceType || null,
       };
 
-      const res = await authFetch(url, {
+      const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -455,7 +444,7 @@ export function LeadsView() {
   const handleDeleteLead = async () => {
     if (!deletingLead) return;
     try {
-      const res = await authFetch(`/api/leads/${deletingLead.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/leads/${deletingLead.id}`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('Lead deleted');
         setShowDeleteDialog(false);
@@ -477,7 +466,7 @@ export function LeadsView() {
     if (!convertingLead) return;
     setConverting(true);
     try {
-      const res = await authFetch('/api/leads/convert', {
+      const res = await fetch('/api/leads/convert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ leadId: convertingLead.id }),
@@ -504,7 +493,7 @@ export function LeadsView() {
 
   const handleStatusChange = async (leadId: string, newStatus: string) => {
     try {
-      const res = await authFetch(`/api/leads/${leadId}`, {
+      const res = await fetch(`/api/leads/${leadId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
@@ -567,7 +556,7 @@ export function LeadsView() {
         try { return JSON.parse(selectedLead.notesJson || '[]'); } catch { return []; }
       })();
       const updatedNotes = [...existingNotes, { text: newNote.trim(), createdAt: new Date().toISOString() }];
-      const res = await authFetch(`/api/leads/${selectedLead.id}`, {
+      const res = await fetch(`/api/leads/${selectedLead.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ notesJson: JSON.stringify(updatedNotes) }),
@@ -609,8 +598,7 @@ export function LeadsView() {
     const config = SOURCE_CONFIG[source];
     if (!config) return <Badge variant="outline" className="text-xs">{source}</Badge>;
     return (
-      <Badge variant="outline" className={`text-[10px] h-5 gap-1 ${config.bgColor} ${config.color} ${config.borderColor}`}>
-        <span className="text-[11px]">{config.icon}</span>
+      <Badge variant="outline" className={`text-[10px] h-5 ${config.bgColor} ${config.color} ${config.borderColor}`}>
         {config.label}
       </Badge>
     );
@@ -660,32 +648,20 @@ export function LeadsView() {
   const renderKanbanCard = (lead: Lead) => (
     <Card
       key={lead.id}
-      className={cn(
-        "cursor-pointer hover:shadow-md transition-all group relative border-l-4",
-        PRIORITY_CONFIG[lead.priority]?.borderColor || 'border-l-gray-300'
-      )}
-      style={{
-        borderLeftColor:
-          lead.priority === 'urgent' ? '#ef4444' :
-          lead.priority === 'high' ? '#f97316' :
-          lead.priority === 'medium' ? '#f59e0b' :
-          '#94a3b8',
-      }}
+      className="cursor-pointer hover:shadow-md transition-all group relative"
       onClick={() => openDetail(lead)}
     >
       <CardContent className="p-3 space-y-2">
-        {/* Header row with initials avatar */}
+        {/* Header row */}
         <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            <div className="flex items-center justify-center size-8 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold shrink-0">
-              {lead.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-            </div>
-            <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className={`size-2 rounded-full shrink-0 ${PRIORITY_CONFIG[lead.priority]?.dotColor || 'bg-gray-400'}`} />
               <h4 className="font-semibold text-sm truncate">{lead.name}</h4>
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <Phone className="size-3" /> {lead.phone}
-              </p>
             </div>
+            <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+              <Phone className="size-3" /> {lead.phone}
+            </p>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -710,7 +686,7 @@ export function LeadsView() {
           </DropdownMenu>
         </div>
 
-        {/* Source badge with icon + Service type */}
+        {/* Source badge */}
         <div className="flex flex-wrap items-center gap-1">
           {renderSourceBadge(lead.source)}
           {lead.serviceType && (
@@ -720,24 +696,11 @@ export function LeadsView() {
           )}
         </div>
 
-        {/* Value - prominently displayed */}
-        {lead.value > 0 ? (
-          <div className="flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 border border-emerald-100">
-            <DollarSign className="size-3.5 text-emerald-600" />
-            <span className="text-sm font-bold text-emerald-700">{formatUSD(lead.value)}</span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <DollarSign className="size-3" />
-            <span>No value set</span>
-          </div>
-        )}
-
-        {/* Assigned to */}
-        {lead.assignedTo && (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <User className="size-3" />
-            <span className="truncate">{lead.assignedTo.name}</span>
+        {/* Value */}
+        {lead.value > 0 && (
+          <div className="flex items-center gap-1 text-sm font-semibold text-emerald-700">
+            <DollarSign className="size-3.5" />
+            {formatUSD(lead.value)}
           </div>
         )}
 
@@ -751,7 +714,7 @@ export function LeadsView() {
             <Button
               variant="ghost"
               size="sm"
-              className="min-h-[32px] text-[10px] px-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+              className="h-5 text-[10px] px-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
               onClick={(e) => { e.stopPropagation(); openConvertDialog(lead); }}
             >
               <ArrowRight className="size-3 mr-0.5" /> Convert
@@ -791,7 +754,6 @@ export function LeadsView() {
                 {/* Column header */}
                 <div className={`rounded-t-lg px-3 py-2.5 ${config.headerBg} ${config.headerText} flex items-center justify-between`}>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm">{config.icon}</span>
                     <span className="font-semibold text-sm">{config.label}</span>
                     <Badge className="bg-white/20 text-white border-0 text-xs hover:bg-white/30">
                       {columnLeads.length}

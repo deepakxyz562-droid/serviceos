@@ -1,7 +1,6 @@
 'use client';
 
-// PayPal billing & subscription management view
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   CreditCard,
   Check,
@@ -24,7 +23,6 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { authFetch } from '@/lib/client-auth';
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -312,42 +310,47 @@ function PayPalCheckoutDialog({
   billingCycle,
   onClose,
   onSuccess,
-  paypalConfig,
 }: {
   plan: Plan;
   billingCycle: 'monthly' | 'yearly';
   onClose: () => void;
   onSuccess: () => void;
-  paypalConfig: PayPalConfig | null;
 }) {
+  const [paypalConfig, setPaypalConfig] = useState<PayPalConfig | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const price = billingCycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
 
-  const handleCreateOrder = async (): Promise<string> => {
+  useEffect(() => {
+    async function fetchConfig() {
+      try {
+        const res = await fetch('/api/paypal/config');
+        const config = await res.json();
+        setPaypalConfig(config);
+      } catch {
+        setError('Failed to load PayPal configuration');
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchConfig();
+  }, []);
+
+  const handleCreateOrder = async () => {
     try {
-      setError(null);
-      const res = await authFetch('/api/paypal/create-order', {
+      const res = await fetch('/api/paypal/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan: plan.id, billingCycle }),
       });
       const data = await res.json();
       if (!res.ok) {
-        const errMsg = data.error || data.details || 'Failed to create order';
-        console.error('[PayPal] create-order failed:', errMsg);
-        throw new Error(errMsg);
+        throw new Error(data.error || 'Failed to create order');
       }
-      // Ensure we return a string order ID — PayPal requires this
-      const orderId = String(data.orderID || data.id || '');
-      if (!orderId) {
-        throw new Error('No order ID returned from PayPal');
-      }
-      return orderId;
+      return data.orderID;
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to create PayPal order';
-      setError(msg);
-      console.error('[PayPal] createOrder error:', msg);
+      setError(err instanceof Error ? err.message : 'Failed to create PayPal order');
       throw err;
     }
   };
@@ -355,7 +358,7 @@ function PayPalCheckoutDialog({
   const handleApprove = async (orderId: string) => {
     setIsProcessing(true);
     try {
-      const res = await authFetch('/api/paypal/capture-order', {
+      const res = await fetch('/api/paypal/capture-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderID: orderId, plan: plan.id, billingCycle }),
@@ -369,12 +372,10 @@ function PayPalCheckoutDialog({
       });
       onSuccess();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Payment failed';
-      setError(msg);
+      setError(err instanceof Error ? err.message : 'Payment failed');
       toast.error('Payment failed', {
-        description: msg,
+        description: err instanceof Error ? err.message : 'Please try again.',
       });
-      console.error('[PayPal] capture error:', msg);
     } finally {
       setIsProcessing(false);
     }
@@ -424,7 +425,7 @@ function PayPalCheckoutDialog({
             </div>
           )}
 
-          {!paypalConfig?.configured && (
+          {!paypalConfig?.configured && !loading && (
             <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-950/30">
               <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
               <div>
@@ -445,32 +446,44 @@ function PayPalCheckoutDialog({
             </div>
           )}
 
-          {/* PayPal Buttons — rendered inside existing PayPalScriptProvider from parent */}
-          {paypalConfig?.configured && paypalConfig.clientId ? (
-            <PayPalButtons
-              key={`${plan.id}-${billingCycle}`}
-              style={{
-                layout: 'vertical',
-                color: 'gold',
-                shape: 'rect',
-                label: 'pay',
-                height: 45,
+          {/* PayPal Buttons */}
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+              <span className="ml-2 text-sm text-muted-foreground">Loading PayPal...</span>
+            </div>
+          ) : paypalConfig?.configured && paypalConfig.clientId ? (
+            <PayPalScriptProvider
+              options={{
+                clientId: paypalConfig.clientId,
+                intent: 'capture',
+                currency: 'USD',
               }}
-              createOrder={handleCreateOrder}
-              onApprove={async (data) => {
-                await handleApprove(data.orderID);
-              }}
-              onError={(err) => {
-                console.error('[PayPal] button error:', err);
-                setError('PayPal encountered an error. Please try again.');
-              }}
-              onCancel={() => {
-                toast.info('Payment cancelled', {
-                  description: 'Your subscription was not changed.',
-                });
-              }}
-              disabled={isProcessing}
-            />
+            >
+              <PayPalButtons
+                style={{
+                  layout: 'vertical',
+                  color: 'gold',
+                  shape: 'rect',
+                  label: 'pay',
+                  height: 45,
+                }}
+                createOrder={handleCreateOrder}
+                onApprove={async (data) => {
+                  await handleApprove(data.orderID);
+                }}
+                onError={(err) => {
+                  console.error('PayPal button error:', err);
+                  setError('PayPal encountered an error. Please try again.');
+                }}
+                onCancel={() => {
+                  toast.info('Payment cancelled', {
+                    description: 'Your subscription was not changed.',
+                  });
+                }}
+                disabled={isProcessing}
+              />
+            </PayPalScriptProvider>
           ) : (
             /* Fallback: Demo upgrade when PayPal is not configured */
             <div className="space-y-3">
@@ -479,7 +492,7 @@ function PayPalCheckoutDialog({
                 onClick={async () => {
                   setIsProcessing(true);
                   try {
-                    const res = await authFetch('/api/subscriptions', {
+                    const res = await fetch('/api/subscriptions', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
@@ -543,13 +556,11 @@ export function BillingView() {
   const [paypalCheckoutPlan, setPaypalCheckoutPlan] = useState<Plan | null>(null);
   const [isUpgrading, setIsUpgrading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [paypalConfig, setPaypalConfig] = useState<PayPalConfig | null>(null);
 
-  // Fetch subscription data + PayPal config on mount
   useEffect(() => {
     async function fetchSubscription() {
       try {
-        const res = await authFetch('/api/subscriptions');
+        const res = await fetch('/api/subscriptions');
         if (!res.ok) throw new Error('Failed to fetch');
         const json = await res.json();
         setData({
@@ -570,18 +581,6 @@ export function BillingView() {
       }
     }
     fetchSubscription();
-
-    // Fetch PayPal config once at BillingView level — avoids re-mounting PayPalScriptProvider
-    async function fetchPayPalConfig() {
-      try {
-        const res = await authFetch('/api/paypal/config');
-        const config = await res.json();
-        setPaypalConfig(config);
-      } catch {
-        // PayPal will fall back to demo mode
-      }
-    }
-    fetchPayPalConfig();
   }, []);
 
   const trialDays = getTrialDaysRemaining(data.trialEndsAt);
@@ -644,7 +643,7 @@ export function BillingView() {
   async function handleCancelSubscription() {
     setIsUpgrading(true);
     try {
-      const res = await authFetch('/api/paypal/cancel-subscription', {
+      const res = await fetch('/api/paypal/cancel-subscription', {
         method: 'POST',
       });
       if (!res.ok) throw new Error('Failed');
@@ -717,7 +716,7 @@ export function BillingView() {
                 {data.status === 'trialing' ? 'Trial' : data.status === 'active' ? 'Active' : data.status === 'past_due' ? 'Past Due' : 'Cancelled'}
               </Badge>
               {data.paymentProvider === 'paypal' && (
-                <Badge variant="outline" className="border-teal-300 bg-teal-50 text-teal-700 dark:border-teal-700 dark:bg-teal-900/20 dark:text-teal-400">
+                <Badge variant="outline" className="border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
                   <Wallet className="mr-1 h-3 w-3" />
                   PayPal
                 </Badge>
@@ -815,21 +814,13 @@ export function BillingView() {
               key={plan.id}
               className={`relative flex flex-col transition-all ${
                 isCurrentPlan
-                  ? 'border-emerald-400 shadow-lg ring-2 ring-emerald-400 dark:border-emerald-600 dark:ring-emerald-600 bg-gradient-to-b from-emerald-50/50 to-transparent dark:from-emerald-950/20'
+                  ? 'border-emerald-400 shadow-md ring-1 ring-emerald-400 dark:border-emerald-600 dark:ring-emerald-600'
                   : plan.popular
                   ? 'border-teal-300 shadow-sm hover:border-emerald-300 hover:shadow-md dark:border-teal-700 dark:hover:border-emerald-700'
                   : 'hover:border-emerald-300 hover:shadow-md dark:hover:border-emerald-700'
               }`}
             >
-              {isCurrentPlan && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <Badge className="bg-emerald-600 text-white shadow-sm">
-                    <Check className="mr-1 h-3 w-3" />
-                    Current Plan
-                  </Badge>
-                </div>
-              )}
-              {!isCurrentPlan && plan.popular && (
+              {plan.popular && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                   <Badge className="bg-emerald-600 text-white shadow-sm hover:bg-emerald-700">
                     <Star className="mr-1 h-3 w-3" />
@@ -839,9 +830,7 @@ export function BillingView() {
               )}
               <CardHeader className="pb-0">
                 <div className="flex items-center gap-2">
-                  <div className={`flex items-center justify-center size-8 rounded-lg ${isCurrentPlan ? 'bg-emerald-600' : 'bg-muted'}`}>
-                    {isCurrentPlan ? React.cloneElement(getPlanIcon(plan.id), { className: 'size-4 text-white' }) : getPlanIcon(plan.id)}
-                  </div>
+                  {getPlanIcon(plan.id)}
                   <CardTitle className="text-lg">{plan.name}</CardTitle>
                 </div>
                 <CardDescription>{plan.description}</CardDescription>
@@ -950,9 +939,9 @@ export function BillingView() {
         <CardContent>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-teal-50 dark:bg-teal-900/20">
+              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-900/20">
                 {data.paymentProvider === 'paypal' ? (
-                  <Wallet className="h-6 w-6 text-teal-600 dark:text-teal-400" />
+                  <Wallet className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                 ) : (
                   <CreditCard className="h-6 w-6 text-muted-foreground" />
                 )}
@@ -962,7 +951,7 @@ export function BillingView() {
                   <>
                     <p className="font-medium flex items-center gap-2">
                       PayPal
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-teal-300 text-teal-600">Active</Badge>
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-blue-300 text-blue-600">Active</Badge>
                     </p>
                     <p className="text-sm text-muted-foreground">
                       {data.paypalPayerEmail || 'Connected'}
@@ -1068,32 +1057,14 @@ export function BillingView() {
       </Card>
 
       {/* ── PayPal Checkout Dialog ─────────────────────────────────────── */}
-      {paypalCheckoutPlan && paypalConfig?.clientId ? (
-        <PayPalScriptProvider
-          options={{
-            clientId: paypalConfig.clientId,
-            intent: 'capture',
-            currency: 'USD',
-          }}
-        >
-          <PayPalCheckoutDialog
-            plan={paypalCheckoutPlan}
-            billingCycle={isYearly ? 'yearly' : 'monthly'}
-            onClose={() => setPaypalCheckoutPlan(null)}
-            onSuccess={handlePaymentSuccess}
-            paypalConfig={paypalConfig}
-          />
-        </PayPalScriptProvider>
-      ) : paypalCheckoutPlan ? (
-        /* Fallback dialog when PayPal is not yet configured */
+      {paypalCheckoutPlan && (
         <PayPalCheckoutDialog
           plan={paypalCheckoutPlan}
           billingCycle={isYearly ? 'yearly' : 'monthly'}
           onClose={() => setPaypalCheckoutPlan(null)}
           onSuccess={handlePaymentSuccess}
-          paypalConfig={paypalConfig}
         />
-      ) : null}
+      )}
     </div>
   );
 }

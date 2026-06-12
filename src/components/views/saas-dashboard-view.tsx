@@ -28,7 +28,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAppStore } from '@/store/app-store';
-import { authFetch } from '@/lib/client-auth';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
@@ -252,7 +251,7 @@ export function SaaSDashboardView() {
   useEffect(() => {
     async function fetchStats() {
       try {
-        const res = await authFetch('/api/saas-stats');
+        const res = await fetch('/api/saas-stats');
         if (!res.ok) throw new Error('Failed to fetch dashboard stats');
         const data = await res.json();
         setStats(data);
@@ -305,7 +304,7 @@ export function SaaSDashboardView() {
       {/* ─── Header ─────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">ServiceOS Dashboard</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">FlowForge Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Your business at a glance — leads, jobs, revenue &amp; team
           </p>

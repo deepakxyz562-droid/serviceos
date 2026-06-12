@@ -1,34 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { normalizeBaseUrl } from '@/lib/auth';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 
 /**
- * Determine the redirect URI for Google OAuth.
- *
- * CRITICAL: The redirect URI MUST match exactly what's registered in
- * Google Cloud Console → Authorized redirect URIs.
- *
- * We normalize the base URL to remove trailing slashes to prevent
- * double-slash issues (e.g., "https://example.com//api/auth/callback").
+ * Determine the redirect URI dynamically based on the request origin.
+ * This allows Google OAuth to work in any environment (localhost, sandbox, production)
+ * without needing to hardcode the APP_URL.
  *
  * Priority:
- * 1. NEXT_PUBLIC_APP_URL env variable (matches Google Cloud Console config)
- * 2. `origin` query parameter (sent from client-side — for dev/preview)
- * 3. X-Forwarded-Host + X-Forwarded-Proto (set by reverse proxy)
- * 4. Host header + X-Forwarded-Proto
- * 5. Fallback to the request URL's origin
+ * 1. `origin` query parameter (sent from client-side — most reliable)
+ * 2. NEXT_PUBLIC_APP_URL env variable
+ * 3. Referer header (contains the actual external URL the user came from)
+ * 4. X-Forwarded-Host + X-Forwarded-Proto (set by reverse proxy)
+ * 5. Host header + X-Forwarded-Proto (Caddy forwards original Host)
+ * 6. Fallback to the request URL's origin
  */
 function getRedirectUri(request: NextRequest, clientOrigin?: string): string {
   const callbackPath = '/api/auth/google/callback';
 
-  // 1. NEXT_PUBLIC_APP_URL — normalized to remove trailing slash
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  if (appUrl) {
-    return `${normalizeBaseUrl(appUrl)}${callbackPath}`;
-  }
-
-  // 2. Client-origin from query param (for environments where APP_URL is not set)
+  // 1. Client-origin from query param (the browser knows its own origin)
   if (clientOrigin) {
     try {
       const originUrl = new URL(clientOrigin);
@@ -38,54 +28,50 @@ function getRedirectUri(request: NextRequest, clientOrigin?: string): string {
     }
   }
 
-  // 3. X-Forwarded-Host + X-Forwarded-Proto (set by reverse proxy)
-  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
+  // 2. Check NEXT_PUBLIC_APP_URL env variable
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (appUrl) {
+    return `${appUrl}${callbackPath}`;
+  }
+
+  // 3. Try Referer header — the browser sends this with navigation requests
+  const referer = request.headers.get('referer');
+  if (referer) {
+    try {
+      const refererUrl = new URL(referer);
+      if (refererUrl.host && !refererUrl.host.startsWith('localhost')) {
+        return `${refererUrl.protocol}//${refererUrl.host}${callbackPath}`;
+      }
+      if (refererUrl.protocol === 'https:') {
+        return `${refererUrl.origin}${callbackPath}`;
+      }
+    } catch {
+      // Ignore malformed referer
+    }
+  }
+
+  // 4. X-Forwarded-Host + X-Forwarded-Proto (set by reverse proxy)
   const forwardedHost = request.headers.get('x-forwarded-host');
+  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
   if (forwardedHost && !forwardedHost.startsWith('localhost')) {
     return `${forwardedProto}://${forwardedHost}${callbackPath}`;
   }
 
-  // 4. Host header + protocol (Caddy forwards original Host)
+  // 5. Host header + protocol (Caddy forwards original Host)
   const hostHeader = request.headers.get('host');
   if (hostHeader && !hostHeader.startsWith('localhost')) {
     return `${forwardedProto}://${hostHeader}${callbackPath}`;
   }
 
-  // 5. Fallback to request origin (last resort — likely localhost, may not work with OAuth)
+  // 6. Fallback to request origin (last resort — likely localhost, may not work with OAuth)
   const url = new URL(request.url);
   return `${url.protocol}//${url.host}${callbackPath}`;
-}
-
-/**
- * Get the base URL for redirects back to the app.
- * Normalized to remove trailing slashes.
- */
-function getBaseUrl(request: NextRequest): string {
-  // 1. Use NEXT_PUBLIC_APP_URL (normalized)
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  if (appUrl) {
-    return normalizeBaseUrl(appUrl);
-  }
-
-  // 2. Try proxy headers
-  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
-  const forwardedHost = request.headers.get('x-forwarded-host');
-  if (forwardedHost && !forwardedHost.startsWith('localhost')) {
-    return `${forwardedProto}://${forwardedHost}`;
-  }
-
-  const hostHeader = request.headers.get('host');
-  if (hostHeader && !hostHeader.startsWith('localhost')) {
-    return `${forwardedProto}://${hostHeader}`;
-  }
-
-  return new URL('/', request.url).origin;
 }
 
 export async function GET(request: NextRequest) {
   if (!GOOGLE_CLIENT_ID) {
     console.error('Google OAuth: GOOGLE_CLIENT_ID is not configured');
-    const baseUrl = getBaseUrl(request);
+    const baseUrl = getRedirectUri(request).replace('/api/auth/google/callback', '');
     return NextResponse.redirect(
       new URL('/?auth_error=google_not_configured', baseUrl)
     );
@@ -96,13 +82,17 @@ export async function GET(request: NextRequest) {
   const redirectTo = searchParams.get('redirect') || '';
   const clientOrigin = searchParams.get('origin') || undefined;
 
-  // Compute the redirect URI — prioritizes NEXT_PUBLIC_APP_URL (normalized)
+  // Dynamically determine the redirect URI from the request
   const redirectUri = getRedirectUri(request, clientOrigin);
   console.log('[Google OAuth] Debug:', {
     clientOrigin: clientOrigin || '(not provided)',
+    referer: request.headers.get('referer'),
+    'x-forwarded-host': request.headers.get('x-forwarded-host'),
+    'x-forwarded-proto': request.headers.get('x-forwarded-proto'),
+    host: request.headers.get('host'),
     'NEXT_PUBLIC_APP_URL': process.env.NEXT_PUBLIC_APP_URL || '(not set)',
-    computedRedirectUri: redirectUri,
   });
+  console.log('[Google OAuth] Computed redirect URI:', redirectUri);
 
   // Build state parameter to pass mode, redirect info, AND the redirect URI used
   // so the callback can verify it matches

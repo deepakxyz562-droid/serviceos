@@ -12,7 +12,7 @@ import { ChevronDown, ChevronRight, Search, GripVertical } from 'lucide-react';
 export function NodeSidebar() {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
-    new Set(['trigger', 'logic', 'action', 'data', 'communication']),
+    new Set(['trigger', 'crmTrigger', 'logic', 'action', 'data', 'communication']),
   );
 
   const toggleCategory = useCallback((categoryId: string) => {
@@ -46,12 +46,12 @@ export function NodeSidebar() {
     : null;
 
   return (
-    <div className="w-64 border-r bg-white flex flex-col shrink-0">
+    <div className="w-64 border-r bg-background flex flex-col shrink-0 h-full overflow-hidden">
       {/* Header */}
-      <div className="p-3 border-b">
-        <h3 className="text-sm font-semibold text-gray-700 mb-2">Nodes</h3>
+      <div className="p-3 border-b shrink-0">
+        <h3 className="text-sm font-semibold text-muted-foreground mb-2">Nodes</h3>
         <div className="relative">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-gray-400" />
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
           <Input
             placeholder="Search nodes..."
             value={searchQuery}
@@ -62,7 +62,7 @@ export function NodeSidebar() {
       </div>
 
       {/* Node list */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 h-0">
         <div className="p-2">
           {filteredByCategory
             ? // Show filtered results
@@ -72,7 +72,7 @@ export function NodeSidebar() {
                 const CategoryIcon = (LucideIcons as unknown as Record<string, LucideIcons.LucideIcon>)[category.icon] || LucideIcons.Circle;
                 return (
                   <div key={categoryId} className="mb-1">
-                    <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       <CategoryIcon className="size-3.5" />
                       {category.label}
                       <span className="text-gray-300 font-normal ml-auto">{catNodes.length}</span>
@@ -92,7 +92,7 @@ export function NodeSidebar() {
                   <div key={category.id} className="mb-1">
                     <button
                       onClick={() => toggleCategory(category.id)}
-                      className="flex items-center gap-1.5 w-full px-2 py-1.5 text-xs font-semibold text-gray-500 uppercase tracking-wider hover:bg-gray-50 rounded"
+                      className="flex items-center gap-1.5 w-full px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:bg-muted/50 rounded"
                     >
                       {isExpanded ? (
                         <ChevronDown className="size-3.5" />
@@ -111,7 +111,7 @@ export function NodeSidebar() {
                 );
               })}
           {filteredByCategory && Object.keys(filteredByCategory).length === 0 && (
-            <div className="px-3 py-6 text-center text-sm text-gray-400">
+            <div className="px-3 py-6 text-center text-sm text-muted-foreground">
               No nodes found matching &quot;{searchQuery}&quot;
             </div>
           )}
@@ -137,12 +137,12 @@ function NodeCard({
       onDragStart={(e) => onDragStart(e, nodeDef.type)}
       className={cn(
         'flex items-center gap-2 px-2 py-1.5 mx-1 rounded-md cursor-grab',
-        'hover:bg-gray-50 active:cursor-grabbing active:bg-gray-100',
+        'hover:bg-muted/50 active:cursor-grabbing active:bg-muted',
         'transition-colors duration-100 group',
       )}
       title={nodeDef.description}
     >
-      <GripVertical className="size-3 text-gray-300 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+      <GripVertical className="size-3 text-muted-foreground/50 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
       <div
         className={cn(
           'flex items-center justify-center size-6 rounded shrink-0',
@@ -151,7 +151,7 @@ function NodeCard({
       >
         <IconComponent className="size-3 text-white" />
       </div>
-      <span className="text-xs text-gray-700 truncate">{nodeDef.displayName}</span>
+      <span className="text-xs text-foreground truncate">{nodeDef.displayName}</span>
     </div>
   );
 }

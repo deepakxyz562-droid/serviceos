@@ -1,5 +1,6 @@
-import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { db } from '@/lib/db'
+import { getAuthUser } from '@/lib/auth'
 
 export async function GET(
   request: NextRequest,
@@ -7,15 +8,10 @@ export async function GET(
 ) {
   try {
     const { id } = await params
-
-    const segment = await db.segment.findUnique({
-      where: { id },
-    })
-
+    const segment = await db.segment.findUnique({ where: { id } })
     if (!segment) {
       return NextResponse.json({ error: 'Segment not found' }, { status: 404 })
     }
-
     return NextResponse.json({ data: segment })
   } catch (error) {
     console.error('Error fetching segment:', error)
@@ -28,17 +24,17 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authUser = await getAuthUser()
     const { id } = await params
     const body = await request.json()
 
+    const existing = await db.segment.findUnique({ where: { id } })
+    if (!existing) {
+      return NextResponse.json({ error: 'Segment not found' }, { status: 404 })
+    }
+
     const updateData: Record<string, unknown> = { ...body }
     delete updateData.id
-    delete updateData.createdAt
-
-    // Convert date strings to Date objects
-    if (updateData.lastCalculated && typeof updateData.lastCalculated === 'string') {
-      updateData.lastCalculated = new Date(updateData.lastCalculated)
-    }
 
     const segment = await db.segment.update({
       where: { id },
@@ -59,23 +55,21 @@ export async function DELETE(
   try {
     const { id } = await params
 
-    // Check if segment is default - don't allow deleting default segments
-    const segment = await db.segment.findUnique({ where: { id } })
-    if (!segment) {
+    const existing = await db.segment.findUnique({ where: { id } })
+    if (!existing) {
       return NextResponse.json({ error: 'Segment not found' }, { status: 404 })
     }
-    if (segment.isDefault) {
-      return NextResponse.json({ error: 'Cannot delete default segment' }, { status: 403 })
+
+    if (existing.isDefault) {
+      return NextResponse.json({ error: 'Cannot delete default segment' }, { status: 400 })
     }
 
     // Delete segment members first
     await db.segmentMember.deleteMany({ where: { segmentId: id } })
 
-    await db.segment.delete({
-      where: { id },
-    })
+    await db.segment.delete({ where: { id } })
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ data: { id, deleted: true } })
   } catch (error) {
     console.error('Error deleting segment:', error)
     return NextResponse.json({ error: 'Failed to delete segment' }, { status: 500 })

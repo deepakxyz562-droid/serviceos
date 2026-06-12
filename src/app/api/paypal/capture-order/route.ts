@@ -4,30 +4,6 @@ import { getAuthUser } from '@/lib/auth';
 import { getPayPalAccessToken, PAYPAL_PLANS, getPayPalBaseUrl, isPayPalConfigured } from '@/lib/paypal';
 
 /**
- * Helper: Resolve a tenant ID, using auth user's tenant or falling back
- * to the first tenant in the database (for demo / cookieless sessions).
- */
-async function resolveTenantId(authUser: Awaited<ReturnType<typeof getAuthUser>>): Promise<string | null> {
-  // 1. Authenticated user with a tenant
-  if (authUser?.tenantId) {
-    return authUser.tenantId;
-  }
-
-  // 2. Fallback: find the first tenant (demo mode)
-  try {
-    const firstTenant = await db.tenant.findFirst({ orderBy: { createdAt: 'asc' } });
-    if (firstTenant) {
-      console.log('[paypal/capture-order] Using fallback tenant:', firstTenant.id, firstTenant.name);
-      return firstTenant.id;
-    }
-  } catch {
-    // DB lookup failed
-  }
-
-  return null;
-}
-
-/**
  * POST /api/paypal/capture-order
  * Captures a PayPal order after user approval and activates the subscription
  */
@@ -41,14 +17,17 @@ export async function POST(request: NextRequest) {
     }
 
     const authUser = await getAuthUser();
-    // Auth is optional — we fall back to the first tenant for demo mode
-    if (authUser && authUser.role !== 'owner') {
+    if (!authUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    if (authUser.role !== 'owner') {
       return NextResponse.json({ error: 'Only owners can manage subscriptions' }, { status: 403 });
     }
 
-    const tenantId = await resolveTenantId(authUser);
+    const tenantId = authUser.tenantId;
     if (!tenantId) {
-      return NextResponse.json({ error: 'No tenant found. Please complete onboarding first.' }, { status: 400 });
+      return NextResponse.json({ error: 'No tenant associated with user' }, { status: 400 });
     }
 
     const body = await request.json();
@@ -92,27 +71,24 @@ export async function POST(request: NextRequest) {
     const planConfig = PAYPAL_PLANS[selectedPlan];
     const price = cycle === 'yearly' ? planConfig.yearlyPrice : planConfig.monthlyPrice;
 
-    // Plan details (prices sourced from PAYPAL_PLANS to stay consistent with frontend)
-    const planDetails: Record<string, { monthlyAmount: number; yearlyAmount: number; maxUsers: number; maxJobs: number; maxWorkflows: number; features: Record<string, boolean> }> = {
+    // Plan details
+    const planDetails: Record<string, { amount: number; maxUsers: number; maxJobs: number; maxWorkflows: number; features: Record<string, boolean> }> = {
       starter: {
-        monthlyAmount: 29,
-        yearlyAmount: 290,
+        amount: 10,
         maxUsers: 1,
         maxJobs: 100,
         maxWorkflows: 10,
         features: { whatsappIntegration: true, customWorkflows: false, apiAccess: false, prioritySupport: false },
       },
       growth: {
-        monthlyAmount: 79,
-        yearlyAmount: 790,
+        amount: 25,
         maxUsers: 5,
         maxJobs: 1000,
         maxWorkflows: 50,
-        features: { whatsappIntegration: true, customWorkflows: true, apiAccess: true, prioritySupport: true },
+        features: { whatsappIntegration: true, customWorkflows: true, apiAccess: false, prioritySupport: true },
       },
       pro: {
-        monthlyAmount: 149,
-        yearlyAmount: 1490,
+        amount: 50,
         maxUsers: 999,
         maxJobs: 99999,
         maxWorkflows: 999,

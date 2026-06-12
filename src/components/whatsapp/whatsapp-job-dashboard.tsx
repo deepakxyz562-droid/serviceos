@@ -1,5 +1,4 @@
 'use client';
-import { authFetch } from '@/lib/client-auth';
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
@@ -1115,7 +1114,7 @@ export function WhatsAppJobDashboard() {
 
   const handleAssignConfirm = async (jobId: string, employeeId: string, employee: Employee) => {
     try {
-      const assignRes = await authFetch('/api/jobs', {
+      const assignRes = await fetch('/api/jobs', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1131,7 +1130,7 @@ export function WhatsAppJobDashboard() {
       if (!assignRes.ok) throw new Error('Failed to assign job');
 
       // Send via WhatsApp API
-      await authFetch('/api/whatsapp/assign', {
+      await fetch('/api/whatsapp/assign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobId }),
@@ -1155,7 +1154,7 @@ export function WhatsAppJobDashboard() {
 
   const handleUpdateStatus = async (jobId: string, status: JobStatus) => {
     try {
-      const res = await authFetch(`/api/jobs/${jobId}`, {
+      const res = await fetch(`/api/jobs/${jobId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status }),
@@ -1170,7 +1169,7 @@ export function WhatsAppJobDashboard() {
 
   const handleCreateJob = async (data: typeof defaultJobForm & { scheduledAt: string | null }) => {
     try {
-      const res = await authFetch('/api/jobs', {
+      const res = await fetch('/api/jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -1185,7 +1184,7 @@ export function WhatsAppJobDashboard() {
 
   const handleAddEmployee = async (data: typeof defaultEmployeeForm) => {
     try {
-      const res = await authFetch('/api/employees', {
+      const res = await fetch('/api/employees', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),

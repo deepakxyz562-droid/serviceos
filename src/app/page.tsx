@@ -2,22 +2,55 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
-import { Loader2, Wrench } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-// Lazy load all major components to reduce memory
-const LandingPage = dynamic(() => import('@/components/landing/landing-page').then(m => ({ default: m.LandingPage })), { ssr: false });
-const AuthPage = dynamic(() => import('@/components/auth/auth-page').then(m => ({ default: m.AuthPage })), { ssr: false });
-const GoogleOnboarding = dynamic(() => import('@/components/auth/google-onboarding').then(m => ({ default: m.GoogleOnboarding })), { ssr: false });
-const AcceptInvitation = dynamic(() => import('@/components/auth/accept-invitation').then(m => ({ default: m.AcceptInvitation })), { ssr: false });
-const SaaSOnboarding = dynamic(() => import('@/components/onboarding/saas-onboarding').then(m => ({ default: m.SaaSOnboarding })), { ssr: false });
-const AppLayout = dynamic(() => import('@/components/layout/app-layout').then(m => ({ default: m.AppLayout })), { ssr: false });
-const SuperAdminPortal = dynamic(() => import('@/components/superadmin/super-admin-portal').then(m => ({ default: m.SuperAdminPortal })), { ssr: false });
+// Lazy load all major components with error handling
+const LandingPage = dynamic(
+  () => import('@/components/landing/landing-page').then(m => ({ default: m.LandingPage })),
+  { ssr: false, loading: () => <ViewLoader /> }
+);
+const AuthPage = dynamic(
+  () => import('@/components/auth/auth-page').then(m => ({ default: m.AuthPage })),
+  { ssr: false, loading: () => <ViewLoader /> }
+);
+const GoogleOnboarding = dynamic(
+  () => import('@/components/auth/google-onboarding').then(m => ({ default: m.GoogleOnboarding })),
+  { ssr: false, loading: () => <ViewLoader /> }
+);
+const SaaSOnboarding = dynamic(
+  () => import('@/components/onboarding/saas-onboarding').then(m => ({ default: m.SaaSOnboarding })),
+  { ssr: false, loading: () => <ViewLoader /> }
+);
+const AppLayout = dynamic(
+  () => import('@/components/layout/app-layout').then(m => ({ default: m.AppLayout })),
+  { ssr: false, loading: () => <ViewLoader /> }
+);
+const PWAInstallBanner = dynamic(
+  () => import('@/components/pwa/pwa-install-banner').then(m => ({ default: m.PWAInstallBanner })),
+  { ssr: false, loading: () => null }
+);
+const IOSInstallBanner = dynamic(
+  () => import('@/components/pwa/pwa-install-banner').then(m => ({ default: m.IOSInstallBanner })),
+  { ssr: false, loading: () => null }
+);
 
 import { useAppStore } from '@/store/app-store';
-import { setToken, removeToken, getToken } from '@/lib/client-auth';
 
 type UnauthView = 'landing' | 'auth';
+
+function ViewLoader() {
+  return (
+    <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 bg-background">
+      <div className="flex items-center gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+        <span className="text-xl font-semibold text-foreground">
+          Loading ServiceOS...
+        </span>
+      </div>
+    </div>
+  );
+}
 
 export default function HomePage() {
   const {
@@ -26,98 +59,85 @@ export default function HomePage() {
     clearAuth,
     showOnboarding,
     setShowOnboarding,
-    darkMode,
-    toggleDarkMode,
   } = useAppStore();
 
   const [isLoading, setIsLoading] = useState(true);
   const [unauthView, setUnauthView] = useState<UnauthView>('landing');
   const [googleOnboarding, setGoogleOnboarding] = useState(false);
-  const [inviteToken, setInviteToken] = useState<string | null>(null);
-  const [mounted, setMounted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Initialize dark mode on mount
-  useEffect(() => {
-    setMounted(true);
-    // Apply dark mode class based on stored preference or system preference
-    const stored = localStorage.getItem('serviceos_dark_mode');
-    const prefersDark = stored === 'true' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    if (prefersDark && !darkMode) {
-      toggleDarkMode();
-    }
-  }, []);
+  // Handle Google OAuth callback URL parameters
+  const [googleOnboardingData, setGoogleOnboardingData] = useState<{ email: string; name: string; avatar: string }>({ email: '', name: '', avatar: '' });
 
-  // Handle Google OAuth callback URL parameters and invite tokens
   const handleOAuthCallback = useCallback(() => {
     if (typeof window === 'undefined') return;
 
-    const params = new URLSearchParams(window.location.search);
-    const googleLogin = params.get('google_login');
-    const googleOnboardingParam = params.get('google_onboarding');
-    const authError = params.get('auth_error');
-    const inviteParam = params.get('invite');
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const googleLogin = params.get('google_login');
+      const googleOnboardingParam = params.get('google_onboarding');
+      const authError = params.get('auth_error');
 
-    // Check for invitation token
-    if (inviteParam) {
-      setInviteToken(inviteParam);
-      return;
-    }
+      if (authError) {
+        toast.error('Authentication failed', {
+          description: decodeURIComponent(authError),
+        });
+        window.history.replaceState({}, '', window.location.pathname);
+        return;
+      }
 
-    if (authError) {
-      const decodedError = decodeURIComponent(authError);
-      const isConfigError = decodedError.includes('redirect_uri_mismatch') || decodedError.includes('not configured');
-      toast.error('Authentication failed', {
-        description: decodedError,
-        duration: isConfigError ? 15000 : 5000,
-      });
-      window.history.replaceState({}, '', window.location.pathname);
-      return;
-    }
+      if (googleLogin === 'success') {
+        toast.success('Successfully signed in with Google!');
+        window.history.replaceState({}, '', window.location.pathname);
+      }
 
-    if (googleLogin === 'success') {
-      toast.success('Successfully signed in with Google!');
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-
-    if (googleOnboardingParam === 'true') {
-      setGoogleOnboarding(true);
-      window.history.replaceState({}, '', window.location.pathname);
+      if (googleOnboardingParam === 'true') {
+        const email = params.get('email') || '';
+        const name = params.get('name') || '';
+        const avatar = params.get('avatar') || '';
+        setGoogleOnboardingData({ email, name, avatar });
+        setGoogleOnboarding(true);
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    } catch (err) {
+      console.error('OAuth callback error:', err);
     }
   }, []);
 
   // Check for existing session on mount
   const checkSession = useCallback(async () => {
     try {
-      const { authFetch } = await import('@/lib/client-auth');
-      const response = await authFetch('/api/auth/me?XTransformPort=3000');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const response = await fetch('/api/auth/me?XTransformPort=3000', { signal: controller.signal });
+      clearTimeout(timeoutId);
       if (response.ok) {
         const data = await response.json();
         if (data.user) {
-          const tenantData = data.tenant || null;
           setAuth({
             isAuthenticated: true,
             user: data.user,
-            tenant: tenantData,
+            tenant: data.tenant || null,
           });
           if (typeof window !== 'undefined') {
+            // Preserve existing token if available, or update with new one
+            const existingAuth = localStorage.getItem('serviceos_auth');
+            const existingToken = existingAuth ? JSON.parse(existingAuth).token : null;
             localStorage.setItem(
               'serviceos_auth',
               JSON.stringify({
                 isAuthenticated: true,
                 user: data.user,
-                tenant: tenantData,
+                tenant: data.tenant || null,
+                token: existingToken,
               })
             );
-          }
-          // Show onboarding if tenant has not completed it
-          if (tenantData && tenantData.onboardingCompleted === false) {
-            setShowOnboarding(true);
           }
           return;
         }
       }
     } catch {
-      // API failed, fall back to localStorage
+      // API failed or timed out, fall back to localStorage
     }
 
     try {
@@ -126,15 +146,11 @@ export default function HomePage() {
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed.isAuthenticated && parsed.user) {
-            const tenantData = parsed.tenant || null;
             setAuth({
               isAuthenticated: true,
               user: parsed.user,
-              tenant: tenantData,
+              tenant: parsed.tenant || null,
             });
-            if (tenantData && tenantData.onboardingCompleted === false) {
-              setShowOnboarding(true);
-            }
             return;
           }
         }
@@ -142,16 +158,54 @@ export default function HomePage() {
     } catch {
       // localStorage read failed
     }
-  }, [setAuth, setShowOnboarding]);
+  }, [setAuth]);
 
   useEffect(() => {
     const init = async () => {
-      handleOAuthCallback();
-      await checkSession();
+      try {
+        handleOAuthCallback();
+        await checkSession();
+      } catch (err) {
+        console.error('Init error:', err);
+      }
       setIsLoading(false);
     };
     init();
   }, [handleOAuthCallback, checkSession]);
+
+  // Global error handler
+  useEffect(() => {
+    let chunkRetryCount = 0;
+    const MAX_CHUNK_RETRIES = 2;
+
+    const handleError = (event: ErrorEvent) => {
+      console.error('Client-side error:', event.error);
+      const msg = event.error?.message || '';
+      if ((msg.includes('Failed to load chunk') || msg.includes('ChunkLoadError')) && chunkRetryCount < MAX_CHUNK_RETRIES) {
+        chunkRetryCount++;
+        setTimeout(() => window.location.reload(), 2000);
+        return;
+      }
+      if (!msg.includes('Failed to load chunk') && !msg.includes('ChunkLoadError')) {
+        setError(msg || 'An unexpected error occurred');
+      }
+    };
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      console.error('Unhandled rejection:', event.reason);
+      const msg = event.reason?.message || '';
+      if ((msg.includes('Failed to load chunk') || msg.includes('ChunkLoadError')) && chunkRetryCount < MAX_CHUNK_RETRIES) {
+        chunkRetryCount++;
+        setTimeout(() => window.location.reload(), 2000);
+        return;
+      }
+    };
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -162,11 +216,6 @@ export default function HomePage() {
 
     if (typeof window !== 'undefined') {
       localStorage.removeItem('serviceos_auth');
-      localStorage.removeItem('user');
-      localStorage.removeItem('tenant');
-      localStorage.removeItem('serviceos_user');
-      localStorage.removeItem('serviceos_tenant');
-      removeToken();
     }
 
     clearAuth();
@@ -183,34 +232,31 @@ export default function HomePage() {
   }, []);
 
   const handleAuthSuccess = useCallback(
-    (user: any, tenant?: any, token?: string) => {
-      const tenantData = tenant || null;
+    (user: any, tenant?: any) => {
       const authData = {
         isAuthenticated: true,
         user,
-        tenant: tenantData,
+        tenant: tenant || null,
       };
       setAuth(authData);
 
       if (typeof window !== 'undefined') {
-        localStorage.setItem('serviceos_auth', JSON.stringify(authData));
-        if (token) {
-          setToken(token);
-        }
+        // Preserve the token that was already stored by the login/register handler
+        const existingAuth = localStorage.getItem('serviceos_auth');
+        const existingToken = existingAuth ? JSON.parse(existingAuth).token : null;
+        localStorage.setItem('serviceos_auth', JSON.stringify({
+          ...authData,
+          token: existingToken,
+        }));
       }
 
-      // Show onboarding if tenant has not completed it
-      if (tenantData && tenantData.onboardingCompleted === false) {
-        setShowOnboarding(true);
-        return;
-      }
-
-      if (user?.role === 'employee' || user?.role === 'technician') {
+      if (user?.role === 'employee') {
         useAppStore.getState().setCurrentView('employeePortal');
         toast.success('Welcome to your portal!');
-      } else if (user?.isSuperAdmin === true) {
-        useAppStore.getState().setCurrentView('superAdmin');
-        toast.success('Welcome, Platform Admin!');
+      } else if (!tenant) {
+        // New user without a tenant — show onboarding
+        setShowOnboarding(true);
+        toast.success('Welcome to ServiceOS! Let\'s set up your workspace.');
       } else {
         toast.success('Welcome to ServiceOS!');
       }
@@ -219,95 +265,100 @@ export default function HomePage() {
   );
 
   // Don't render anything until client-side mounted
-  if (!mounted || isLoading) {
+  if (isLoading) {
+    return <ViewLoader />;
+  }
+
+  // Show error state
+  if (error) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background">
-        <div className="flex flex-col items-center gap-4 animate-fade-in">
-          <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow-xl shadow-emerald-500/25">
-            <Wrench className="h-8 w-8 text-white" />
-          </div>
-          <div className="flex items-center gap-3">
-            <Loader2 className="h-5 w-5 animate-spin text-emerald-500" />
-            <span className="text-lg font-semibold text-foreground">
-              Loading ServiceOS...
-            </span>
-          </div>
+      <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 bg-background p-8">
+        <div className="max-w-md text-center space-y-4">
+          <div className="text-4xl">⚠️</div>
+          <h2 className="text-xl font-semibold text-foreground">Something went wrong</h2>
+          <p className="text-muted-foreground text-sm">{error}</p>
+          <button
+            onClick={() => {
+              setError(null);
+              window.location.reload();
+            }}
+            className="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
+          >
+            Reload Page
+          </button>
         </div>
       </div>
     );
   }
 
-  // Show Google onboarding when the user authenticated via Google but has no tenant yet
-  if (googleOnboarding && auth.isAuthenticated && !auth.tenant) {
+  if (googleOnboarding && !auth.tenant) {
     return (
-      <GoogleOnboarding
-        email={auth.user?.email || ''}
-        name={auth.user?.name || ''}
-        avatar={auth.user?.avatar || ''}
-        onOnboardingComplete={(user: any, tenant?: any) => {
-          setGoogleOnboarding(false);
-          handleAuthSuccess(user, tenant);
-        }}
-        onBackToLanding={() => {
-          setGoogleOnboarding(false);
-        }}
-      />
+      <>
+        <GoogleOnboarding
+          email={googleOnboardingData.email || auth.user?.email || ''}
+          name={googleOnboardingData.name || auth.user?.name || ''}
+          avatar={googleOnboardingData.avatar || auth.user?.avatar || ''}
+          onOnboardingComplete={(user: any, tenant?: any) => {
+            setGoogleOnboarding(false);
+            handleAuthSuccess(user, tenant);
+          }}
+          onBackToLanding={() => {
+            setGoogleOnboarding(false);
+          }}
+        />
+        <PWAInstallBanner />
+        <IOSInstallBanner />
+      </>
     );
   }
 
   if (showOnboarding && auth.isAuthenticated) {
     return (
-      <SaaSOnboarding
-        tenant={auth.tenant}
-        user={auth.user}
-        onComplete={() => {
-          setShowOnboarding(false);
-        }}
-      />
+      <>
+        <SaaSOnboarding
+          tenant={auth.tenant}
+          user={auth.user}
+          onComplete={() => {
+            setShowOnboarding(false);
+          }}
+        />
+        <PWAInstallBanner />
+        <IOSInstallBanner />
+      </>
     );
-  }
-
-  // Show invitation acceptance page if invite token is present
-  if (inviteToken) {
-    return (
-      <AcceptInvitation
-        token={inviteToken}
-        onAuthSuccess={(user: any, tenant?: any) => {
-          setInviteToken(null);
-          window.history.replaceState({}, '', window.location.pathname);
-          handleAuthSuccess(user, tenant);
-        }}
-        onBackToLanding={() => {
-          setInviteToken(null);
-          window.history.replaceState({}, '', window.location.pathname);
-          setUnauthView('landing');
-        }}
-      />
-    );
-  }
-
-  // Show SuperAdmin portal for super admin users (full-page, no AppLayout wrapper)
-  if (auth.isAuthenticated && auth.user?.isSuperAdmin === true) {
-    return <SuperAdminPortal onLogout={handleLogout} />;
   }
 
   if (auth.isAuthenticated) {
-    return <AppLayout onLogout={handleLogout} />;
+    return (
+      <>
+        <AppLayout onLogout={handleLogout} />
+        <PWAInstallBanner />
+        <IOSInstallBanner />
+      </>
+    );
   }
 
   if (unauthView === 'auth') {
     return (
-      <AuthPage
-        onAuthSuccess={handleAuthSuccess}
-        onBackToLanding={handleShowLanding}
-      />
+      <>
+        <AuthPage
+          onAuthSuccess={handleAuthSuccess}
+          onBackToLanding={handleShowLanding}
+        />
+        <PWAInstallBanner />
+        <IOSInstallBanner />
+      </>
     );
   }
 
   return (
-    <LandingPage
-      onGetStarted={handleShowAuth}
-      onSignIn={handleShowAuth}
-    />
+    <>
+      <LandingPage
+        onGetStarted={handleShowAuth}
+        onSignIn={handleShowAuth}
+      />
+      <PWAInstallBanner />
+      <IOSInstallBanner />
+    </>
   );
 }

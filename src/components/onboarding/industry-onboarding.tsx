@@ -1,5 +1,4 @@
 'use client';
-import { authFetch } from '@/lib/client-auth';
 
 import { useState, useEffect } from 'react';
 import { useAppStore } from '@/store/app-store';
@@ -44,7 +43,7 @@ export function IndustryOnboarding() {
   useEffect(() => {
     async function fetchIndustries() {
       try {
-        const res = await authFetch('/api/workspaces/industries');
+        const res = await fetch('/api/workspaces/industries');
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data) && data.length > 0) {
@@ -66,7 +65,7 @@ export function IndustryOnboarding() {
 
     try {
       const workspaceId = currentWorkspaceId || 'default';
-      const res = await authFetch(`/api/workflows/${workspaceId}/seed`, {
+      const res = await fetch(`/api/workflows/${workspaceId}/seed`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ industry: industryId }),
@@ -99,7 +98,7 @@ export function IndustryOnboarding() {
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" showCloseButton={!seeding}>
         <DialogHeader className="text-center">
           <DialogTitle className="text-2xl font-bold">
-            Welcome to ServiceOS! 🎉
+            Welcome to FlowForge! 🎉
           </DialogTitle>
           <DialogDescription className="text-base mt-2">
             What industry is your business in? We&apos;ll set up workflows tailored to your needs.

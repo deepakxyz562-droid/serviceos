@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { generateToken, generateSlug, getCookieOptions, getAuthUser } from '@/lib/auth';
+import { generateToken, generateSlug, COOKIE_OPTIONS, getAuthUser } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
@@ -44,13 +44,11 @@ export async function POST(request: NextRequest) {
       slugCounter++;
     }
 
-    // Create tenant (with subdomain = slug for subdomain-based access)
+    // Create tenant
     const tenant = await db.tenant.create({
       data: {
         name: businessName,
         slug,
-        subdomain: slug,  // Auto-set subdomain = slug
-        subdomainVerified: true,
         industry: industry || null,
         phone: phone || null,
         email: authUser.email,
@@ -133,7 +131,6 @@ export async function POST(request: NextRequest) {
           id: tenant.id,
           name: tenant.name,
           slug: tenant.slug,
-          subdomain: tenant.subdomain,
           industry: tenant.industry,
           phone: tenant.phone,
           email: tenant.email,
@@ -149,7 +146,7 @@ export async function POST(request: NextRequest) {
 
     // Set auth cookie with updated token
     response.cookies.set({
-      ...getCookieOptions(request),
+      ...COOKIE_OPTIONS,
       value: token,
     });
 

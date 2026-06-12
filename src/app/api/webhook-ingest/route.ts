@@ -1,35 +1,14 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 
-/**
- * Map dot-notation events (e.g., job.created) to their
- * SCREAMING_SNAKE_CASE equivalents for backward compatibility.
- */
-const EVENT_ALIASES: Record<string, string> = {
-  'job.created': 'NEW_JOB',
-  'job.updated': 'UPDATE_JOB',
-  'job.cancelled': 'CANCEL_JOB',
-  'job.assigned': 'UPDATE_JOB',
-  'job.accepted': 'UPDATE_JOB',
-  'job.started': 'UPDATE_JOB',
-  'job.completed': 'UPDATE_JOB',
-  'job.rejected': 'UPDATE_JOB',
-}
-
-function normalizeEvent(event: string): string {
-  return EVENT_ALIASES[event] || event
-}
-
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { source, event: rawEvent, data } = body
+    const { source, event, data } = body
 
-    if (!rawEvent || !data) {
+    if (!event || !data) {
       return NextResponse.json({ error: 'event and data are required' }, { status: 400 })
     }
-
-    const event = normalizeEvent(rawEvent)
 
     switch (event) {
       case 'NEW_JOB': {
@@ -145,13 +124,7 @@ export async function POST(request: NextRequest) {
       }
 
       default:
-        return NextResponse.json(
-          {
-            error: `Unknown event: ${rawEvent}`,
-            hint: 'Supported events: NEW_JOB, UPDATE_JOB, CANCEL_JOB, job.created, job.updated, job.cancelled, job.assigned, job.accepted, job.started, job.completed, job.rejected',
-          },
-          { status: 400 }
-        )
+        return NextResponse.json({ error: `Unknown event: ${event}` }, { status: 400 })
     }
   } catch (error) {
     console.error('Error processing webhook:', error)

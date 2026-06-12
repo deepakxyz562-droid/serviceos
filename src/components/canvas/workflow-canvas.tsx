@@ -285,6 +285,21 @@ export function WorkflowCanvasInner() {
       const nodeDef = getNodeTypeDefinition(type);
       if (!nodeDef) return;
 
+      // Build default config from node properties
+      const defaultConfig: Record<string, any> = {};
+      if (nodeDef.properties) {
+        for (const prop of nodeDef.properties) {
+          if (prop.default !== undefined) {
+            defaultConfig[prop.name] = prop.default;
+          }
+        }
+      }
+
+      // Special handling for webhook triggers
+      if (type === 'webhookTrigger' || type === 'httpRequestTrigger') {
+        defaultConfig.path = crypto.randomUUID();
+      }
+
       const newNode: WorkflowNode = {
         id: `${type}_${Date.now()}`,
         type: type,
@@ -292,7 +307,7 @@ export function WorkflowCanvasInner() {
         position,
         data: {
           nodeType: type,
-          config: (type === 'webhookTrigger' || type === 'httpRequestTrigger') ? { path: crypto.randomUUID() } : {},
+          config: defaultConfig,
         },
       };
 

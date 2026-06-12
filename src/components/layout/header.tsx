@@ -1,6 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { useAppStore } from '@/store/app-store';
+import { useIsMobile } from '@/hooks/use-mobile';
 import type { ViewType } from '@/types/workflow';
 import {
   Search,
@@ -12,14 +14,6 @@ import {
   Key,
   Settings,
   LogOut,
-  HelpCircle,
-  ChevronRight,
-  UserPlus,
-  Briefcase,
-  FileText,
-  Home,
-  Plus,
-  Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,8 +29,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { authFetch } from '@/lib/client-auth';
-import { useIsMobile } from '@/hooks/use-mobile';
 
 // ─── View label mapping ─────────────────────────────────────────────────────
 
@@ -60,7 +52,6 @@ const viewLabels: Record<ViewType, string> = {
   settings: 'Settings',
   versionHistory: 'Version History',
   saasDashboard: 'SaaS Dashboard',
-  superAdmin: 'Platform Admin',
   employeePortal: 'My Portal',
   customerPortal: 'Customer Portal',
   inbox: 'Inbox',
@@ -80,59 +71,22 @@ const viewLabels: Record<ViewType, string> = {
   marketplace: 'Marketplace',
   enterprise: 'Enterprise',
   broadcast: 'Broadcast',
+  quotes: 'Quotes',
+  workflowAutomations: 'Automations',
+  marketingTemplates: 'Marketing Templates',
+  marketingAnalytics: 'Marketing Analytics',
+  communicationProviders: 'Communication Providers',
+  contacts: 'Contacts',
+  leadDiscovery: 'Lead Discovery',
+  booking: 'Booking',
+  calendar: 'Calendar',
+  employees: 'Employees',
+  reviews: 'Reviews',
+  serviceCatalog: 'Service Catalog',
+  knowledgeBase: 'Knowledge Base',
+  documentCenter: 'Document Center',
+  triggers: 'CRM Triggers',
 };
-
-// ─── Breadcrumb section mapping ──────────────────────────────────────────────
-
-const viewSections: Record<ViewType, string> = {
-  dashboard: 'Home',
-  workflows: 'Automation',
-  canvas: 'Automation',
-  operations: 'Automation',
-  whatsapp: 'Messaging',
-  leads: 'Sales',
-  crm: 'Sales',
-  jobs: 'Operations',
-  dispatch: 'Operations',
-  billing: 'Finance',
-  executions: 'Automation',
-  credentials: 'Settings',
-  invoices: 'Finance',
-  reports: 'Analytics',
-  variables: 'Settings',
-  templates: 'Automation',
-  settings: 'Settings',
-  versionHistory: 'Settings',
-  saasDashboard: 'Home',
-  superAdmin: 'Platform',
-  employeePortal: 'Portal',
-  customerPortal: 'Portal',
-  inbox: 'Messaging',
-  customer360: 'Sales',
-  campaigns: 'Marketing',
-  segments: 'Marketing',
-  retargeting: 'Marketing',
-  chatbotBuilder: 'Marketing',
-  aiAssistant: 'Marketing',
-  aiCampaignGenerator: 'Marketing',
-  formBuilder: 'Marketing',
-  webviewEngine: 'Marketing',
-  adsIntegration: 'Marketing',
-  journeyAutomation: 'Marketing',
-  salesPipeline: 'Sales',
-  omnichannel: 'Messaging',
-  marketplace: 'Home',
-  enterprise: 'Settings',
-  broadcast: 'Marketing',
-};
-
-// ─── Notification icon mapping ───────────────────────────────────────────────
-
-const notificationTypes = [
-  { title: 'New lead assigned', desc: 'A new lead has been assigned to you · 2m ago', icon: UserPlus, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 dark:text-emerald-400' },
-  { title: 'Job completed', desc: 'Job #1234 has been marked as completed · 15m ago', icon: Briefcase, color: 'text-teal-600 bg-teal-50 dark:bg-teal-900/30 dark:text-teal-400' },
-  { title: 'Invoice overdue', desc: 'Invoice INV-003 is now overdue · 1h ago', icon: FileText, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-400' },
-];
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
@@ -142,23 +96,25 @@ export function AppHeader() {
     darkMode,
     toggleDarkMode,
     toggleLeftSidebar,
-    setMobileSidebarOpen,
+    toggleMobileSidebar,
     searchQuery,
     setSearchQuery,
     auth,
-    clearAuth,
-    installPromptEvent,
-    setInstallPromptEvent,
   } = useAppStore();
 
   const isMobile = useIsMobile();
   const isCanvas = currentView === 'canvas';
-  const sectionLabel = viewSections[currentView] || 'Home';
-  const viewLabel = viewLabels[currentView] || 'Dashboard';
+  const [searchOpen, setSearchOpen] = useState(false);
 
+  // Get user initials for avatar
   const getUserInitials = () => {
     if (auth.user?.name) {
-      return auth.user.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
+      return auth.user.name
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase();
     }
     if (auth.user?.email) {
       return auth.user.email.slice(0, 2).toUpperCase();
@@ -166,60 +122,64 @@ export function AppHeader() {
     return 'U';
   };
 
-  const handleInstallApp = async () => {
-    if (!installPromptEvent) return;
-    installPromptEvent.prompt();
-    const { outcome } = await installPromptEvent.userChoice;
-    if (outcome === 'accepted') {
-      toast.success('App installed successfully!');
-    }
-    setInstallPromptEvent(null);
-  };
-
   return (
-    <header className="flex items-center h-14 px-3 sm:px-4 border-b bg-background/80 backdrop-blur-lg shrink-0 gap-2 sm:gap-3 sticky top-0 z-30">
+    <header className={cn(
+      'flex items-center h-14 px-2 sm:px-4 border-b bg-background shrink-0 gap-2 sm:gap-3',
+      // Safe area for iOS notch on standalone mode
+      'pt-[env(safe-area-inset-top,0px)]'
+    )}>
       {/* ─── Mobile menu toggle ────────────────────────────────────────── */}
       <Button
         variant="ghost"
         size="icon"
-        onClick={() => {
-          if (isMobile) {
-            setMobileSidebarOpen(true);
-          } else {
-            toggleLeftSidebar();
-          }
-        }}
-        className="shrink-0 min-h-[44px] min-w-[44px]"
-        aria-label="Toggle menu"
+        onClick={toggleMobileSidebar}
+        className="shrink-0 lg:hidden h-9 w-9"
+        aria-label="Open navigation menu"
       >
         <Menu className="size-5" />
       </Button>
 
-      {/* ─── Breadcrumb Navigation ────────────────────────────────────── */}
-      <nav className="flex items-center gap-1.5 text-sm min-w-0" aria-label="Breadcrumb">
-        <Home className="size-3.5 text-muted-foreground shrink-0" />
-        <span className="text-muted-foreground hidden sm:inline truncate">{sectionLabel}</span>
-        <ChevronRight className="size-3.5 text-muted-foreground/50 hidden sm:inline shrink-0" />
-        <span className="font-semibold whitespace-nowrap truncate">{viewLabel}</span>
-      </nav>
+      {/* ─── Desktop sidebar toggle ────────────────────────────────────── */}
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={toggleLeftSidebar}
+        className="shrink-0 hidden lg:flex h-9 w-9"
+        aria-label="Toggle sidebar"
+      >
+        <Menu className="size-4" />
+      </Button>
+
+      {/* ─── Current view title ────────────────────────────────────────── */}
+      <h1 className="text-sm sm:text-base font-semibold whitespace-nowrap truncate">
+        {viewLabels[currentView] || 'Dashboard'}
+      </h1>
 
       {!isCanvas && (
         <>
           <Separator orientation="vertical" className="h-6 hidden sm:block" />
 
-          {/* ─── Search input ──────────────────────────────────────────── */}
-          <div className="relative max-w-sm flex-1 hidden md:block">
+          {/* ─── Search input (desktop) ──────────────────────────────── */}
+          <div className="relative max-w-sm flex-1 hidden sm:block">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
               placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 h-9 text-sm bg-muted/50 border-muted-foreground/10 focus:bg-background transition-colors"
+              className="pl-8 h-8 text-sm"
             />
-            <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none hidden lg:inline-flex h-5 select-none items-center gap-1 rounded border border-muted-foreground/20 bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
-              <span className="text-xs">⌘</span>K
-            </kbd>
           </div>
+
+          {/* ─── Search toggle (mobile) ──────────────────────────────── */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="shrink-0 sm:hidden h-9 w-9"
+            onClick={() => setSearchOpen(!searchOpen)}
+            aria-label="Search"
+          >
+            <Search className="size-4" />
+          </Button>
         </>
       )}
 
@@ -228,70 +188,50 @@ export function AppHeader() {
 
       {/* ─── Right side actions ────────────────────────────────────────── */}
       <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
-        {/* ─── PWA Install button ────────────────────────────────────── */}
-        {installPromptEvent && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="hidden sm:flex h-9 gap-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
-            onClick={handleInstallApp}
-          >
-            <Download className="size-4" />
-            <span className="text-xs font-medium">Install</span>
-          </Button>
-        )}
-
-        {/* ─── Help button ────────────────────────────────────────────── */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-9 w-9 hidden sm:flex min-h-[44px] min-w-[44px]"
-          aria-label="Help"
-        >
-          <HelpCircle className="size-4" />
-        </Button>
-
         {/* ─── Notifications bell ──────────────────────────────────────── */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9 relative min-h-[44px] min-w-[44px]"
+              className="h-9 w-9 relative"
               aria-label="Notifications"
             >
               <Bell className="size-4" />
-              <span className="absolute top-1.5 right-1.5 flex items-center justify-center size-2 rounded-full bg-emerald-500 animate-pulse-soft">
+              {/* Notification badge */}
+              <span className="absolute top-1.5 right-1.5 flex items-center justify-center size-2 rounded-full bg-emerald-500">
                 <span className="sr-only">3 unread notifications</span>
               </span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80 rounded-xl">
+          <DropdownMenuContent align="end" className="w-72">
             <DropdownMenuLabel className="flex items-center justify-between">
               Notifications
-              <Badge variant="secondary" className="text-[10px] h-5 px-2">
+              <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
                 3 new
               </Badge>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {notificationTypes.map((notif, idx) => {
-              const Icon = notif.icon;
-              return (
-                <DropdownMenuItem key={idx} className="flex items-start gap-3 cursor-pointer py-3 px-3">
-                  <div className={cn('size-8 rounded-lg flex items-center justify-center shrink-0', notif.color)}>
-                    <Icon className="size-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm font-medium block">{notif.title}</span>
-                    <span className="text-xs text-muted-foreground block mt-0.5">
-                      {notif.desc}
-                    </span>
-                  </div>
-                </DropdownMenuItem>
-              );
-            })}
+            <DropdownMenuItem className="flex flex-col items-start gap-1 cursor-pointer py-3">
+              <span className="text-sm font-medium">New lead assigned</span>
+              <span className="text-xs text-muted-foreground">
+                A new lead has been assigned to you · 2m ago
+              </span>
+            </DropdownMenuItem>
+            <DropdownMenuItem className="flex flex-col items-start gap-1 cursor-pointer py-3">
+              <span className="text-sm font-medium">Job completed</span>
+              <span className="text-xs text-muted-foreground">
+                Job #1234 has been marked as completed · 15m ago
+              </span>
+            </DropdownMenuItem>
+            <DropdownMenuItem className="flex flex-col items-start gap-1 cursor-pointer py-3">
+              <span className="text-sm font-medium">Invoice overdue</span>
+              <span className="text-xs text-muted-foreground">
+                Invoice INV-003 is now overdue · 1h ago
+              </span>
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-center cursor-pointer text-emerald-600 dark:text-emerald-400 justify-center py-2.5">
+            <DropdownMenuItem className="text-center cursor-pointer text-emerald-600 dark:text-emerald-400 justify-center">
               View all notifications
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -302,7 +242,7 @@ export function AppHeader() {
           variant="ghost"
           size="icon"
           onClick={toggleDarkMode}
-          className="h-9 w-9 min-h-[44px] min-w-[44px]"
+          className="h-9 w-9"
           aria-label="Toggle dark mode"
         >
           {darkMode ? (
@@ -313,7 +253,7 @@ export function AppHeader() {
         </Button>
 
         {/* ─── Separator ──────────────────────────────────────────────── */}
-        <Separator orientation="vertical" className="h-6 mx-0.5 hidden sm:block" />
+        <Separator orientation="vertical" className="h-6 mx-0.5 sm:mx-1" />
 
         {/* ─── User avatar dropdown ────────────────────────────────────── */}
         <DropdownMenu>
@@ -321,16 +261,16 @@ export function AppHeader() {
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9 rounded-full min-h-[44px] min-w-[44px]"
+              className="h-9 w-9 rounded-full"
             >
-              <Avatar className="size-8">
-                <AvatarFallback className="bg-gradient-to-br from-emerald-600 to-teal-600 text-white text-xs">
+              <Avatar className="size-7">
+                <AvatarFallback className="bg-emerald-600 text-white text-xs">
                   {getUserInitials()}
                 </AvatarFallback>
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56 rounded-xl">
+          <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
               <div className="flex flex-col gap-0.5">
                 <span className="font-medium">
@@ -355,23 +295,7 @@ export function AppHeader() {
               Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              variant="destructive"
-              className="cursor-pointer gap-2"
-              onClick={async () => {
-                try {
-                  await authFetch('/api/auth/logout?XTransformPort=3000', { method: 'POST' });
-                } catch { /* silent */ }
-                if (typeof window !== 'undefined') {
-                  localStorage.removeItem('serviceos_auth');
-                  localStorage.removeItem('user');
-                  localStorage.removeItem('tenant');
-                  localStorage.removeItem('serviceos_user');
-                  localStorage.removeItem('serviceos_tenant');
-                }
-                clearAuth();
-              }}
-            >
+            <DropdownMenuItem variant="destructive" className="cursor-pointer gap-2">
               <LogOut className="size-4" />
               Log out
             </DropdownMenuItem>
@@ -381,6 +305,3 @@ export function AppHeader() {
     </header>
   );
 }
-
-// Need toast import for install handler
-import { toast } from 'sonner';

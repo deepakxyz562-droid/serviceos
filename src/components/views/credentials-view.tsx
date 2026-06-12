@@ -1,7 +1,6 @@
 'use client';
-import { authFetch } from '@/lib/client-auth';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import {
   Plus,
   KeyRound,
@@ -23,7 +22,6 @@ import {
   MessageSquare,
   Save,
   Loader2,
-  RefreshCw,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -63,12 +61,59 @@ interface CredentialItem {
   id: string;
   name: string;
   type: string;
+  serviceName: string;
   data: Record<string, string>;
-  workspaceId?: string | null;
-  userId?: string | null;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
+  isActive: boolean;
 }
+
+// ─── Mock Data ──────────────────────────────────────────────────────────────
+
+const MOCK_CREDENTIALS: CredentialItem[] = [
+  {
+    id: 'cred1', name: 'WhatsApp Business API', type: 'whatsapp', serviceName: 'Meta / WhatsApp',
+    data: { phoneNumberId: '1234567890', businessAccountId: 'BIZ-9876', apiKey: 'wh_api_k8f2j9d7s3m1n5p0q4r6', webhookVerifyToken: 'verify_token_xyz789' },
+    lastUsedAt: '2025-03-13T14:30:00Z', expiresAt: null, createdAt: '2025-01-15T10:00:00Z', updatedAt: '2025-03-10T14:30:00Z', isActive: true,
+  },
+  {
+    id: 'cred2', name: 'Stripe Payment Gateway', type: 'apiKey', serviceName: 'Stripe',
+    data: { secretKey: 'sk_live_4eC39HqLyjWDarjtT1zdp7dc', publishableKey: 'pk_live_1234567890abcdef' },
+    lastUsedAt: '2025-03-13T12:00:00Z', expiresAt: null, createdAt: '2025-01-20T08:00:00Z', updatedAt: '2025-02-15T09:00:00Z', isActive: true,
+  },
+  {
+    id: 'cred3', name: 'Google OAuth Integration', type: 'oAuth2', serviceName: 'Google Cloud',
+    data: { clientId: '103697710141-q4l7vubq2dalip21qb31pdo9jemf8uk4.apps.googleusercontent.com', clientSecret: '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', refreshToken: '1//0g7h8i9j0k1l2m3n4o5p6q7r8s9t0u' },
+    lastUsedAt: '2025-03-12T16:00:00Z', expiresAt: '2025-12-31T23:59:59Z', createdAt: '2025-02-01T12:00:00Z', updatedAt: '2025-03-01T10:00:00Z', isActive: true,
+  },
+  {
+    id: 'cred4', name: 'SMTP Email Server', type: 'httpBasic', serviceName: 'SendGrid',
+    data: { host: 'smtp.sendgrid.net', port: '587', username: 'apikey', password: 'SG.abc123def456ghi789jkl012mno345pqr678stu901vwx234yz' },
+    lastUsedAt: '2025-03-11T09:00:00Z', expiresAt: null, createdAt: '2025-02-10T14:00:00Z', updatedAt: '2025-02-10T14:00:00Z', isActive: true,
+  },
+  {
+    id: 'cred5', name: 'Database Connection', type: 'dbConnection', serviceName: 'PostgreSQL / Supabase',
+    data: { host: 'db.supabase.co', port: '5432', database: 'serviceos_prod', username: 'admin', password: 'Pr0d$ecureP@ssw0rd!2025', sslMode: 'require' },
+    lastUsedAt: '2025-03-13T14:00:00Z', expiresAt: null, createdAt: '2025-01-10T08:00:00Z', updatedAt: '2025-03-05T11:00:00Z', isActive: true,
+  },
+  {
+    id: 'cred6', name: 'AWS S3 Storage', type: 'awsIam', serviceName: 'Amazon Web Services',
+    data: { accessKeyId: 'AKIA5F2J9D7S3M1N5P0Q', secretAccessKey: 'r7s8t9u0v1w2x3y4z5a6b7c8d9e0f1g2', region: 'us-east-1', bucket: 'serviceos-uploads' },
+    lastUsedAt: '2025-03-10T11:00:00Z', expiresAt: null, createdAt: '2025-03-01T09:00:00Z', updatedAt: '2025-03-01T09:00:00Z', isActive: true,
+  },
+  {
+    id: 'cred7', name: 'Slack Webhook (Expired)', type: 'httpBearer', serviceName: 'Slack',
+    data: { token: 'xoxb-1234567890-1234567890123-AbCdEfGhIjKlMnOpQrStUvWxYz' },
+    lastUsedAt: '2025-02-28T10:00:00Z', expiresAt: '2025-03-01T00:00:00Z', createdAt: '2024-12-01T10:00:00Z', updatedAt: '2025-02-01T09:00:00Z', isActive: false,
+  },
+  {
+    id: 'cred8', name: 'SSH Server Access', type: 'sshKey', serviceName: 'DigitalOcean',
+    data: { host: '192.168.1.100', port: '22', username: 'deploy', privateKey: '-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA...\n-----END RSA PRIVATE KEY-----' },
+    lastUsedAt: '2025-03-08T15:00:00Z', expiresAt: null, createdAt: '2025-01-25T08:00:00Z', updatedAt: '2025-01-25T08:00:00Z', isActive: true,
+  },
+];
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -109,20 +154,21 @@ function maskValue(value: string): string {
   return value.slice(0, 4) + '••••••••' + value.slice(-4);
 }
 
+function isExpired(expiresAt: string | null): boolean {
+  if (!expiresAt) return false;
+  return new Date(expiresAt) < new Date();
+}
+
 function isSensitiveField(field: string): boolean {
   const lower = field.toLowerCase();
   return lower.includes('key') || lower.includes('secret') || lower.includes('password') || lower.includes('token') || lower.includes('private');
 }
 
-function isMaskedValue(value: string): boolean {
-  return value.includes('•');
-}
-
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function CredentialsView() {
-  const [credentials, setCredentials] = useState<CredentialItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [credentials, setCredentials] = useState<CredentialItem[]>(MOCK_CREDENTIALS);
+  const [loading] = useState(false);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -134,49 +180,29 @@ export function CredentialsView() {
   // Create form
   const [newCredName, setNewCredName] = useState('');
   const [newCredType, setNewCredType] = useState('whatsapp');
+  const [newCredService, setNewCredService] = useState('');
   const [newCredFields, setNewCredFields] = useState<Record<string, string>>({});
-  const [creating, setCreating] = useState(false);
 
   // Edit form state (used in detail dialog edit mode)
   const [editCredId, setEditCredId] = useState<string | null>(null);
   const [editCredName, setEditCredName] = useState('');
   const [editCredType, setEditCredType] = useState('');
+  const [editCredService, setEditCredService] = useState('');
   const [editCredFields, setEditCredFields] = useState<Record<string, string>>({});
   const [editRevealedFields, setEditRevealedFields] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState<string | null>(null);
-
-  // ─── Fetch credentials from API ────────────────────────────────────────
-  const fetchCredentials = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await authFetch('/api/credentials');
-      if (res.ok) {
-        const data = await res.json();
-        setCredentials(data.credentials || []);
-      } else {
-        toast.error('Failed to load credentials');
-      }
-    } catch (err) {
-      console.error('Failed to fetch credentials:', err);
-      toast.error('Failed to load credentials');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchCredentials();
-  }, [fetchCredentials]);
 
   // Stats
   const stats = {
     total: credentials.length,
+    active: credentials.filter(c => c.isActive).length,
+    expired: credentials.filter(c => isExpired(c.expiresAt)).length,
     types: new Set(credentials.map(c => c.type)).size,
   };
 
   const filtered = credentials.filter((c) => {
     if (search && !c.name.toLowerCase().includes(search.toLowerCase()) &&
+        !c.serviceName.toLowerCase().includes(search.toLowerCase()) &&
         !c.type.toLowerCase().includes(search.toLowerCase())) return false;
     if (typeFilter !== 'all' && c.type !== typeFilter) return false;
     return true;
@@ -199,105 +225,54 @@ export function CredentialsView() {
     return editRevealedFields[fieldKey] || false;
   };
 
-  // ─── Create credential ─────────────────────────────────────────────────
-  const handleCreate = async () => {
+  const handleCreate = () => {
     if (!newCredName.trim()) { toast.error('Credential name is required'); return; }
-    setCreating(true);
-    try {
-      const res = await authFetch('/api/credentials', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newCredName.trim(),
-          type: newCredType,
-          data: { ...newCredFields },
-        }),
-      });
-      if (res.ok) {
-        toast.success('Credential created successfully');
-        setDialogOpen(false);
-        setNewCredName('');
-        setNewCredType('whatsapp');
-        setNewCredFields({});
-        await fetchCredentials();
-      } else {
-        const data = await res.json();
-        toast.error(data.error || 'Failed to create credential');
-      }
-    } catch (err) {
-      console.error('Failed to create credential:', err);
-      toast.error('Failed to create credential');
-    } finally {
-      setCreating(false);
-    }
+    const newCred: CredentialItem = {
+      id: `cred-${Date.now()}`, name: newCredName.trim(), type: newCredType,
+      serviceName: newCredService.trim() || 'Custom', data: { ...newCredFields },
+      lastUsedAt: null, expiresAt: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), isActive: true,
+    };
+    setCredentials(prev => [newCred, ...prev]);
+    setDialogOpen(false);
+    setNewCredName('');
+    setNewCredType('whatsapp');
+    setNewCredService('');
+    setNewCredFields({});
+    toast.success('Credential created');
   };
 
-  // ─── Delete credential ─────────────────────────────────────────────────
-  const handleDelete = async (id: string) => {
-    setDeleting(id);
-    try {
-      const res = await authFetch(`/api/credentials/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        toast.success('Credential deleted');
-        setDetailDialogOpen(false);
-        setIsDetailEditMode(false);
-        setSelectedCred(null);
-        await fetchCredentials();
-      } else {
-        const data = await res.json();
-        toast.error(data.error || 'Failed to delete credential');
-      }
-    } catch (err) {
-      console.error('Failed to delete credential:', err);
-      toast.error('Failed to delete credential');
-    } finally {
-      setDeleting(null);
-    }
+  const handleDelete = (id: string) => {
+    setCredentials(prev => prev.filter(c => c.id !== id));
+    toast.success('Credential deleted');
   };
 
-  // ─── Open edit mode ────────────────────────────────────────────────────
   const openEdit = (cred: CredentialItem) => {
     setEditCredId(cred.id);
     setEditCredName(cred.name);
     setEditCredType(cred.type);
-    // Pre-fill fields with the data from the API (which may be masked)
+    setEditCredService(cred.serviceName);
     setEditCredFields({ ...cred.data });
     setEditRevealedFields({});
   };
 
-  // ─── Save edited credential ────────────────────────────────────────────
-  const handleEditSave = async () => {
+  const handleEditSave = () => {
     if (!editCredName.trim()) { toast.error('Credential name is required'); return; }
-    if (!editCredId) return;
     setSaving(true);
-    try {
-      const res = await authFetch(`/api/credentials/${editCredId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: editCredName.trim(),
-          data: { ...editCredFields },
-        }),
-      });
-      if (res.ok) {
-        toast.success('Credential updated successfully');
-        setIsDetailEditMode(false);
-        setEditCredId(null);
-        // Refresh credentials from API
-        await fetchCredentials();
-        // Update the selected credential for the detail view
-        const updated = await res.json();
-        setSelectedCred(updated);
-      } else {
-        const data = await res.json();
-        toast.error(data.error || 'Failed to update credential');
-      }
-    } catch (err) {
-      console.error('Failed to update credential:', err);
-      toast.error('Failed to update credential');
-    } finally {
+    
+    // Simulate save
+    setTimeout(() => {
+      setCredentials(prev => prev.map(c =>
+        c.id === editCredId
+          ? { ...c, name: editCredName.trim(), serviceName: editCredService.trim() || c.serviceName, data: { ...editCredFields }, updatedAt: new Date().toISOString() }
+          : c
+      ));
       setSaving(false);
-    }
+      setIsDetailEditMode(false);
+      setEditCredId(null);
+      // Update selectedCred to reflect changes in detail view
+      setSelectedCred(prev => prev ? { ...prev, name: editCredName.trim(), serviceName: editCredService.trim() || prev.serviceName, data: { ...editCredFields }, updatedAt: new Date().toISOString() } : null);
+      toast.success('Credential updated');
+    }, 500);
   };
 
   const handleCopy = (value: string) => {
@@ -308,13 +283,12 @@ export function CredentialsView() {
   const openDetail = (cred: CredentialItem) => {
     setSelectedCred(cred);
     setDetailDialogOpen(true);
-    setIsDetailEditMode(false);
   };
 
   // Dynamic fields for create dialog based on type
   const getCreateFields = (): string[] => {
     switch (newCredType) {
-      case 'whatsapp': return ['accessToken', 'phoneNumberId', 'businessAccountId', 'webhookVerifyToken'];
+      case 'whatsapp': return ['phoneNumberId', 'businessAccountId', 'apiKey', 'webhookVerifyToken'];
       case 'apiKey': return ['apiKey'];
       case 'httpBasic': return ['username', 'password'];
       case 'httpBearer': return ['token'];
@@ -332,7 +306,6 @@ export function CredentialsView() {
     const labels: Record<string, string> = {
       phoneNumberId: 'Phone Number ID',
       businessAccountId: 'Business Account ID',
-      accessToken: 'Access Token',
       apiKey: 'API Key',
       webhookVerifyToken: 'Webhook Verify Token',
       secretKey: 'Secret Key',
@@ -358,15 +331,6 @@ export function CredentialsView() {
     return labels[field] || field.replace(/([A-Z])/g, ' $1').trim();
   };
 
-  // Get the field keys for edit mode based on the credential type
-  const getEditFieldKeys = (): string[] => {
-    if (editCredType === 'whatsapp') {
-      return ['accessToken', 'phoneNumberId', 'businessAccountId', 'webhookVerifyToken'];
-    }
-    // For other types, derive from the existing data keys
-    return Object.keys(editCredFields);
-  };
-
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
@@ -380,21 +344,17 @@ export function CredentialsView() {
             <p className="text-sm text-muted-foreground">Manage API keys, tokens, and connection secrets</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={fetchCredentials} title="Refresh">
-            <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
-          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => { setNewCredType('whatsapp'); setDialogOpen(true); }}>
-            <Plus className="size-4 mr-1.5" /> New Credential
-          </Button>
-        </div>
+        <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => { setNewCredType('whatsapp'); setDialogOpen(true); }}>
+          <Plus className="size-4 mr-1.5" /> New Credential
+        </Button>
       </div>
 
       {/* Stats */}
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
         {[
           { label: 'Total', value: stats.total, icon: Lock, color: 'text-foreground' },
-          { label: 'Active', value: stats.total, icon: CheckCircle2, color: 'text-emerald-600' },
+          { label: 'Active', value: stats.active, icon: CheckCircle2, color: 'text-emerald-600' },
+          { label: 'Expired', value: stats.expired, icon: AlertTriangle, color: 'text-red-600' },
           { label: 'Types', value: stats.types, icon: KeyRound, color: 'text-blue-600' },
         ].map(stat => {
           const Icon = stat.icon;
@@ -451,8 +411,9 @@ export function CredentialsView() {
           {filtered.map((cred) => {
             const config = typeConfig[cred.type] || typeConfig.apiKey;
             const Icon = config.icon;
+            const expired = isExpired(cred.expiresAt);
             return (
-              <Card key={cred.id} className="hover:shadow-md transition-all cursor-pointer" onClick={() => openDetail(cred)}>
+              <Card key={cred.id} className={cn('hover:shadow-md transition-all cursor-pointer', expired && 'opacity-70')} onClick={() => openDetail(cred)}>
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-3 min-w-0">
@@ -461,7 +422,7 @@ export function CredentialsView() {
                       </div>
                       <div className="min-w-0">
                         <h3 className="font-semibold text-sm truncate">{cred.name}</h3>
-                        <p className="text-xs text-muted-foreground">{config.label}</p>
+                        <p className="text-xs text-muted-foreground">{cred.serviceName}</p>
                       </div>
                     </div>
                     <DropdownMenu>
@@ -477,8 +438,8 @@ export function CredentialsView() {
                         <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setSelectedCred(cred); openEdit(cred); setIsDetailEditMode(true); setDetailDialogOpen(true); }}>
                           <Pencil className="size-3.5 mr-2" /> Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem variant="destructive" onClick={(e) => { e.stopPropagation(); handleDelete(cred.id); }} disabled={deleting === cred.id}>
-                          {deleting === cred.id ? <Loader2 className="size-3.5 mr-2 animate-spin" /> : <Trash2 className="size-3.5 mr-2" />} Delete
+                        <DropdownMenuItem variant="destructive" onClick={(e) => { e.stopPropagation(); handleDelete(cred.id); }}>
+                          <Trash2 className="size-3.5 mr-2" /> Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -488,16 +449,24 @@ export function CredentialsView() {
                     <Badge variant="outline" className={cn('text-[10px]', config.bgColor, config.color)}>
                       {config.label}
                     </Badge>
-                    <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-600 border-emerald-200">
-                      <CheckCircle2 className="size-3 mr-1" />Active
-                    </Badge>
+                    {expired ? (
+                      <Badge variant="outline" className="text-[10px] bg-red-50 text-red-600 border-red-200">
+                        <AlertTriangle className="size-3 mr-1" />Expired
+                      </Badge>
+                    ) : cred.isActive ? (
+                      <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-600 border-emerald-200">
+                        <CheckCircle2 className="size-3 mr-1" />Active
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] bg-gray-50 text-gray-500 border-gray-200">Inactive</Badge>
+                    )}
                   </div>
 
                   {/* Masked fields preview */}
                   <div className="space-y-1.5">
                     {Object.entries(cred.data).slice(0, 2).map(([key, value]) => (
                       <div key={key} className="flex items-center gap-2 text-xs">
-                        <span className="text-muted-foreground w-28 truncate">{getFieldLabel(key)}:</span>
+                        <span className="text-muted-foreground w-24 truncate">{getFieldLabel(key)}:</span>
                         <code className="flex-1 bg-muted px-1.5 py-0.5 rounded text-[10px] font-mono truncate">
                           {isRevealed(cred.id, key) ? value : maskValue(String(value))}
                         </code>
@@ -509,7 +478,7 @@ export function CredentialsView() {
                   </div>
 
                   <div className="flex items-center justify-between pt-2 border-t text-[11px] text-muted-foreground">
-                    <span className="flex items-center gap-1"><Clock className="size-3" />{formatRelative(cred.updatedAt)}</span>
+                    <span className="flex items-center gap-1"><Clock className="size-3" />{cred.lastUsedAt ? formatRelative(cred.lastUsedAt) : 'Never used'}</span>
                     <span>{formatDate(cred.createdAt)}</span>
                   </div>
                 </CardContent>
@@ -530,6 +499,10 @@ export function CredentialsView() {
             <div className="space-y-2">
               <Label>Credential Name *</Label>
               <Input placeholder="e.g., WhatsApp Business API" value={newCredName} onChange={e => setNewCredName(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Service Name</Label>
+              <Input placeholder="e.g., Meta / WhatsApp, Stripe, AWS" value={newCredService} onChange={e => setNewCredService(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label>Type</Label>
@@ -563,19 +536,19 @@ export function CredentialsView() {
                 <Label className="text-xs">{getFieldLabel(field)}</Label>
                 {isSensitiveField(field) ? (
                   <div className="relative">
-                    <Input
-                      type="password"
-                      placeholder={`Enter ${getFieldLabel(field).toLowerCase()}...`}
-                      value={newCredFields[field] || ''}
-                      onChange={e => setNewCredFields(prev => ({ ...prev, [field]: e.target.value }))}
+                    <Input 
+                      type="password" 
+                      placeholder={`Enter ${getFieldLabel(field).toLowerCase()}...`} 
+                      value={newCredFields[field] || ''} 
+                      onChange={e => setNewCredFields(prev => ({ ...prev, [field]: e.target.value }))} 
                       className="pr-9"
                     />
                   </div>
                 ) : (
-                  <Input
-                    placeholder={`Enter ${getFieldLabel(field).toLowerCase()}...`}
-                    value={newCredFields[field] || ''}
-                    onChange={e => setNewCredFields(prev => ({ ...prev, [field]: e.target.value }))}
+                  <Input 
+                    placeholder={`Enter ${getFieldLabel(field).toLowerCase()}...`} 
+                    value={newCredFields[field] || ''} 
+                    onChange={e => setNewCredFields(prev => ({ ...prev, [field]: e.target.value }))} 
                   />
                 )}
               </div>
@@ -583,9 +556,7 @@ export function CredentialsView() {
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreate} disabled={!newCredName.trim() || creating}>
-              {creating ? <><Loader2 className="size-4 mr-1.5 animate-spin" /> Creating...</> : 'Create'}
-            </Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreate} disabled={!newCredName.trim()}>Create</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -604,6 +575,10 @@ export function CredentialsView() {
                 <div className="space-y-2">
                   <Label>Credential Name *</Label>
                   <Input placeholder="Credential name" value={editCredName} onChange={e => setEditCredName(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Service Name</Label>
+                  <Input placeholder="Service name" value={editCredService} onChange={e => setEditCredService(e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <Label>Type</Label>
@@ -627,28 +602,21 @@ export function CredentialsView() {
                   {editCredType === 'whatsapp' && (
                     <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-xs text-emerald-700 mb-3">
                       <p className="font-medium mb-1">WhatsApp Business API</p>
-                      <p className="text-emerald-600">Update your WhatsApp API credentials from Meta Business Settings. Sensitive fields show masked values — clear and re-enter to update.</p>
+                      <p className="text-emerald-600">Update your WhatsApp API credentials from Meta Business Settings</p>
                     </div>
                   )}
                   <div className="space-y-3">
-                    {getEditFieldKeys().map(field => {
+                    {Object.keys(editCredFields).map(field => {
                       const sensitive = isSensitiveField(field);
                       const revealed = isEditRevealed(field);
-                      const currentValue = editCredFields[field] || '';
-                      const isCurrentlyMasked = isMaskedValue(currentValue);
                       return (
                         <div key={field} className="space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <Label className="text-xs">{getFieldLabel(field)}</Label>
-                            {isCurrentlyMasked && (
-                              <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">Clear & re-enter to update</span>
-                            )}
-                          </div>
+                          <Label className="text-xs">{getFieldLabel(field)}</Label>
                           <div className="relative">
                             <Input
                               type={sensitive && !revealed ? 'password' : 'text'}
-                              placeholder={isCurrentlyMasked ? `Enter new ${getFieldLabel(field).toLowerCase()}...` : `Enter ${getFieldLabel(field).toLowerCase()}...`}
-                              value={currentValue}
+                              placeholder={`Enter ${getFieldLabel(field).toLowerCase()}...`}
+                              value={editCredFields[field] || ''}
                               onChange={e => setEditCredFields(prev => ({ ...prev, [field]: e.target.value }))}
                               className={cn(sensitive && 'pr-9')}
                             />
@@ -681,10 +649,13 @@ export function CredentialsView() {
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   {selectedCred?.name}
+                  {selectedCred && isExpired(selectedCred.expiresAt) && (
+                    <Badge variant="outline" className="text-[10px] bg-red-50 text-red-600 border-red-200">
+                      <AlertTriangle className="size-3 mr-1" />Expired
+                    </Badge>
+                  )}
                 </DialogTitle>
-                <DialogDescription>
-                  {selectedCred ? (typeConfig[selectedCred.type]?.label || selectedCred.type) : ''}
-                </DialogDescription>
+                <DialogDescription>{selectedCred?.serviceName}</DialogDescription>
               </DialogHeader>
               {selectedCred && (
                 <div className="space-y-4">
@@ -692,8 +663,8 @@ export function CredentialsView() {
                     <Badge variant="outline" className={cn('text-xs', typeConfig[selectedCred.type]?.bgColor, typeConfig[selectedCred.type]?.color)}>
                       {typeConfig[selectedCred.type]?.label || selectedCred.type}
                     </Badge>
-                    <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-600 border-emerald-200">
-                      Active
+                    <Badge variant="outline" className={cn('text-xs', selectedCred.isActive ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-gray-50 text-gray-500 border-gray-200')}>
+                      {selectedCred.isActive ? 'Active' : 'Inactive'}
                     </Badge>
                   </div>
 
@@ -725,6 +696,10 @@ export function CredentialsView() {
                   <div className="grid grid-cols-2 gap-3 text-xs">
                     <div><span className="text-muted-foreground">Created:</span> <span className="font-medium">{formatDate(selectedCred.createdAt)}</span></div>
                     <div><span className="text-muted-foreground">Updated:</span> <span className="font-medium">{formatDate(selectedCred.updatedAt)}</span></div>
+                    <div><span className="text-muted-foreground">Last Used:</span> <span className="font-medium">{selectedCred.lastUsedAt ? formatRelative(selectedCred.lastUsedAt) : 'Never'}</span></div>
+                    {selectedCred.expiresAt && (
+                      <div><span className="text-muted-foreground">Expires:</span> <span className={cn('font-medium', isExpired(selectedCred.expiresAt) ? 'text-red-600' : '')}>{formatDate(selectedCred.expiresAt)}</span></div>
+                    )}
                   </div>
 
                   <Separator />
@@ -733,8 +708,8 @@ export function CredentialsView() {
                     <Button variant="outline" onClick={(e) => { e.stopPropagation(); openEdit(selectedCred); setIsDetailEditMode(true); }}>
                       <Pencil className="size-4 mr-1.5" /> Edit
                     </Button>
-                    <Button variant="outline" onClick={(e) => { e.stopPropagation(); handleDelete(selectedCred.id); }} className="text-red-600 hover:text-red-700 hover:bg-red-50" disabled={deleting === selectedCred.id}>
-                      {deleting === selectedCred.id ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Trash2 className="size-4 mr-1.5" />} Delete
+                    <Button variant="outline" onClick={(e) => { e.stopPropagation(); handleDelete(selectedCred.id); }} className="text-red-600 hover:text-red-700 hover:bg-red-50">
+                      <Trash2 className="size-4 mr-1.5" /> Delete
                     </Button>
                   </div>
                 </div>

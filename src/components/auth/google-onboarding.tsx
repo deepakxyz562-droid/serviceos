@@ -30,7 +30,6 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import { authFetch } from '@/lib/client-auth';
 
 interface GoogleOnboardingProps {
   email: string;
@@ -85,7 +84,7 @@ export function GoogleOnboarding({
     }
     setIsLoading(true);
     try {
-      const res = await authFetch('/api/auth/google/complete', {
+      const res = await fetch('/api/auth/google/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -99,6 +98,8 @@ export function GoogleOnboarding({
         toast.error(data.error || 'Failed to complete setup');
         return;
       }
+      localStorage.setItem('serviceos_user', JSON.stringify(data.user));
+      if (data.tenant) localStorage.setItem('serviceos_tenant', JSON.stringify(data.tenant));
       toast.success('Business account created!');
       onOnboardingComplete(data.user, data.tenant);
     } catch {

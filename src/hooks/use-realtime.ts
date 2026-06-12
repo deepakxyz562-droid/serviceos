@@ -36,19 +36,45 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
   const [connected, setConnected] = useState(false);
   const [onlineEmployees, setOnlineEmployees] = useState<Set<string>>(new Set());
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const connectionAttemptedRef = useRef(false);
 
-  // Initialize socket connection
+  // Stabilize callback refs to avoid re-creating socket on callback changes
+  const onEmployeeStatusRef = useRef(onEmployeeStatus);
+  const onJobUpdateRef = useRef(onJobUpdate);
+  const onPresenceUpdateRef = useRef(onPresenceUpdate);
+  const onChatTypingRef = useRef(onChatTyping);
+
+  useEffect(() => {
+    onEmployeeStatusRef.current = onEmployeeStatus;
+    onJobUpdateRef.current = onJobUpdate;
+    onPresenceUpdateRef.current = onPresenceUpdate;
+    onChatTypingRef.current = onChatTyping;
+  });
+
+  // Initialize socket connection with graceful error handling
   useEffect(() => {
     if (!enabled) return;
 
-    const socket = io('/?XTransformPort=3003', {
-      transports: ['websocket', 'polling'],
-      autoConnect: true,
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 10000,
-    });
+    // Prevent duplicate connections
+    if (connectionAttemptedRef.current) return;
+    connectionAttemptedRef.current = true;
+
+    let socket: Socket | null = null;
+
+    try {
+      socket = io('/?XTransformPort=3003', {
+        transports: ['websocket', 'polling'],
+        autoConnect: true,
+        reconnection: true,
+        reconnectionAttempts: 5, // Limit reconnection attempts instead of Infinity
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 10000,
+        timeout: 10000, // Connection timeout
+      });
+    } catch (err) {
+      console.warn('[useRealtime] Failed to create socket connection:', err);
+      return;
+    }
 
     socketRef.current = socket;
 
@@ -57,7 +83,7 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
 
       // Join tenant room if tenantId is provided
       if (tenantId) {
-        socket.emit('join-tenant', { tenantId, employeeId });
+        socket?.emit('join-tenant', { tenantId, employeeId });
       }
     });
 
@@ -65,23 +91,24 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
       setConnected(false);
     });
 
-    socket.on('connect_error', () => {
+    socket.on('connect_error', (err) => {
+      console.warn('[useRealtime] Connection error:', err.message);
       setConnected(false);
     });
 
     // Listen for employee status updates
     socket.on('employee-status', (data: any) => {
-      onEmployeeStatus?.(data);
+      onEmployeeStatusRef.current?.(data);
     });
 
     // Listen for job updates
     socket.on('job-update', (data: any) => {
-      onJobUpdate?.(data);
+      onJobUpdateRef.current?.(data);
     });
 
     // Listen for presence updates - track online employees
     socket.on('presence-update', (data: any) => {
-      onPresenceUpdate?.(data);
+      onPresenceUpdateRef.current?.(data);
 
       if (data.employeeId) {
         setOnlineEmployees((prev) => {
@@ -98,7 +125,7 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
 
     // Listen for chat typing indicators
     socket.on('chat-typing', (data: any) => {
-      onChatTyping?.(data);
+      onChatTypingRef.current?.(data);
     });
 
     // Handle initial online employees list from server
@@ -111,11 +138,16 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
         clearInterval(heartbeatRef.current);
         heartbeatRef.current = null;
       }
-      socket.disconnect();
+      try {
+        socket?.disconnect();
+      } catch {
+        // Ignore disconnect errors
+      }
       socketRef.current = null;
+      connectionAttemptedRef.current = false;
       setConnected(false);
     };
-  }, [enabled, tenantId, employeeId, onEmployeeStatus, onJobUpdate, onPresenceUpdate, onChatTyping]);
+  }, [enabled, tenantId, employeeId]);
 
   // Set up heartbeat interval when connected and employeeId is provided
   useEffect(() => {
@@ -124,7 +156,11 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
     // Send heartbeat every 30 seconds
     heartbeatRef.current = setInterval(() => {
       if (socketRef.current?.connected) {
-        socketRef.current.emit('heartbeat', { employeeId, status: 'online' });
+        try {
+          socketRef.current.emit('heartbeat', { employeeId, status: 'online' });
+        } catch {
+          // Ignore heartbeat errors
+        }
       }
     }, 30000);
 
@@ -140,7 +176,11 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
   const sendHeartbeat = useCallback(
     (empId: string, status: string) => {
       if (socketRef.current?.connected) {
-        socketRef.current.emit('heartbeat', { employeeId: empId, status });
+        try {
+          socketRef.current.emit('heartbeat', { employeeId: empId, status });
+        } catch {
+          // Ignore errors
+        }
       }
     },
     []
@@ -150,7 +190,11 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
   const emitStatusChange = useCallback(
     (empId: string, status: string) => {
       if (socketRef.current?.connected) {
-        socketRef.current.emit('status-change', { employeeId: empId, status, tenantId });
+        try {
+          socketRef.current.emit('status-change', { employeeId: empId, status, tenantId });
+        } catch {
+          // Ignore errors
+        }
       }
     },
     [tenantId]
@@ -160,7 +204,11 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
   const emitJobUpdate = useCallback(
     (jobId: string, status: string, data?: any) => {
       if (socketRef.current?.connected) {
-        socketRef.current.emit('job-update', { jobId, status, tenantId, ...data });
+        try {
+          socketRef.current.emit('job-update', { jobId, status, tenantId, ...data });
+        } catch {
+          // Ignore errors
+        }
       }
     },
     [tenantId]

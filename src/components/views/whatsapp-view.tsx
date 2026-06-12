@@ -23,7 +23,6 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
-import { authFetch } from '@/lib/client-auth';
 import { useRealtime } from '@/hooks/use-realtime';
 import { WhatsAppWorkflowTemplates } from '@/components/whatsapp/whatsapp-workflow-templates';
 
@@ -232,7 +231,7 @@ export function WhatsAppView() {
   const fetchConversations = useCallback(async () => {
     setLoadingConvos(true);
     try {
-      const res = await authFetch('/api/conversations?XTransformPort=3000&limit=50');
+      const res = await fetch('/api/conversations?XTransformPort=3000&limit=50');
       if (res.ok) {
         const data = await res.json();
         setConversations(data.conversations || []);
@@ -249,7 +248,7 @@ export function WhatsAppView() {
   const fetchLeads = useCallback(async () => {
     setLoadingLeads(true);
     try {
-      const res = await authFetch('/api/leads?XTransformPort=3000&source=whatsapp&limit=50');
+      const res = await fetch('/api/leads?XTransformPort=3000&source=whatsapp&limit=50');
       if (res.ok) {
         const data = await res.json();
         setWhatsappLeads(data.leads || []);
@@ -266,7 +265,7 @@ export function WhatsAppView() {
   const fetchNotificationLogs = useCallback(async () => {
     setLoadingLogs(true);
     try {
-      const res = await authFetch('/api/notification-logs?XTransformPort=3000&type=whatsapp&limit=50');
+      const res = await fetch('/api/notification-logs?XTransformPort=3000&type=whatsapp&limit=50');
       if (res.ok) {
         const data = await res.json();
         setNotificationLogs(Array.isArray(data) ? data : []);
@@ -292,7 +291,7 @@ export function WhatsAppView() {
 
   const fetchCredentials = useCallback(async () => {
     try {
-      const res = await authFetch('/api/credentials?XTransformPort=3000');
+      const res = await fetch('/api/credentials?XTransformPort=3000');
       if (res.ok) {
         const data = await res.json();
         setCredentials(data.credentials || []);
@@ -326,7 +325,7 @@ export function WhatsAppView() {
     if (!selectedConversation || !replyText.trim()) return;
     setSending(true);
     try {
-      const res = await authFetch('/api/whatsapp/send?XTransformPort=3000', {
+      const res = await fetch('/api/whatsapp/send?XTransformPort=3000', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -338,16 +337,35 @@ export function WhatsAppView() {
       });
       if (res.ok) {
         toast.success('Reply sent!');
+        const sentText = replyText;
         setReplyText('');
         // Add message to local state
         const newMsg: ConversationMessage = {
           id: `msg_${Date.now()}`,
           direction: 'outbound',
-          body: replyText,
+          body: sentText,
           timestamp: new Date().toISOString(),
           status: 'sent',
         };
         setConversationMessages(prev => [...prev, newMsg]);
+
+        // Persist the reply to the conversation in the database
+        try {
+          await fetch(`/api/conversations/${selectedConversation.id}?XTransformPort=3000`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message: {
+                body: sentText,
+                direction: 'outbound',
+                type: 'text',
+              },
+            }),
+          });
+        } catch (persistErr) {
+          console.error('Failed to persist reply to conversation:', persistErr);
+        }
+
         fetchConversations();
       } else {
         toast.error('Failed to send reply');
@@ -407,7 +425,7 @@ export function WhatsAppView() {
         };
       }
 
-      const res = await authFetch('/api/whatsapp/send?XTransformPort=3000', {
+      const res = await fetch('/api/whatsapp/send?XTransformPort=3000', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
@@ -434,7 +452,7 @@ export function WhatsAppView() {
   const handleConvertLead = async (leadId: string) => {
     setConvertingLeadId(leadId);
     try {
-      const res = await authFetch('/api/leads/convert?XTransformPort=3000', {
+      const res = await fetch('/api/leads/convert?XTransformPort=3000', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ leadId }),
@@ -1212,7 +1230,7 @@ export function WhatsAppView() {
                         {log.status === 'failed' && (
                           <Button variant="outline" size="sm" onClick={async () => {
                             try {
-                              const res = await authFetch('/api/notification-logs?XTransformPort=3000', {
+                              const res = await fetch('/api/notification-logs?XTransformPort=3000', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ id: log.id }),

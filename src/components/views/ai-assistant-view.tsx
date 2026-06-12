@@ -19,8 +19,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { ViewHeader } from '@/components/shared/view-header';
-import { StatCard } from '@/components/shared/stat-card';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -120,24 +118,37 @@ export function AiAssistantView() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <ViewHeader
-        icon={Sparkles}
-        title="AI Assistant"
-        description="AI-powered conversation intelligence"
-        badge={
-          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-            <Sparkles className="size-3 mr-1" /> AI Active
-          </Badge>
-        }
-      />
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600">
+            <Sparkles className="size-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold">AI Assistant</h2>
+            <p className="text-sm text-muted-foreground">AI-powered conversation intelligence</p>
+          </div>
+        </div>
+        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+          <Sparkles className="size-3 mr-1" /> AI Active
+        </Badge>
+      </div>
 
       {/* Stats */}
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-5">
-        <StatCard label="Suggestions" value={MOCK_SUGGESTED_REPLIES.length} icon={MessageSquare} color="text-teal-600" />
-        <StatCard label="Summaries" value={MOCK_SUMMARIES.length} icon={Brain} color="text-purple-600" />
-        <StatCard label="Intents Detected" value={MOCK_INTENTS.length} icon={Zap} color="text-orange-600" />
-        <StatCard label="Lead Scores" value={MOCK_LEAD_SCORES.length} icon={TrendingUp} color="text-emerald-600" />
-        <StatCard label="Avg Confidence" value="91%" icon={BarChart3} color="text-green-600" />
+        {[
+          { label: 'Suggestions', value: MOCK_SUGGESTED_REPLIES.length, icon: MessageSquare, color: 'text-blue-600' },
+          { label: 'Summaries', value: MOCK_SUMMARIES.length, icon: Brain, color: 'text-purple-600' },
+          { label: 'Intents Detected', value: MOCK_INTENTS.length, icon: Zap, color: 'text-orange-600' },
+          { label: 'Lead Scores', value: MOCK_LEAD_SCORES.length, icon: TrendingUp, color: 'text-emerald-600' },
+          { label: 'Avg Confidence', value: '91%', icon: BarChart3, color: 'text-green-600' },
+        ].map(stat => {
+          const Icon = stat.icon;
+          return (
+            <Card key={stat.label} className="p-3">
+              <div className="flex items-center gap-2"><Icon className={`size-4 ${stat.color}`} /><div><p className="text-[10px] text-muted-foreground">{stat.label}</p><p className={`text-lg font-bold ${stat.color}`}>{stat.value}</p></div></div>
+            </Card>
+          );
+        })}
       </div>
 
       {/* Tabs */}
@@ -162,7 +173,7 @@ export function AiAssistantView() {
                         <Avatar className="size-7"><AvatarFallback className="bg-emerald-100 text-emerald-700 text-xs">{suggestion.customerName[0]}</AvatarFallback></Avatar>
                         <span className="font-medium text-sm">{suggestion.customerName}</span>
                         <Badge variant="outline" className={INTENT_COLORS[suggestion.intent] || ''}>{suggestion.intent.replace('_', ' ')}</Badge>
-                        <Badge variant="outline" className={cn('text-[10px] gap-1', suggestion.confidence >= 90 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : suggestion.confidence >= 80 ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-600 border-slate-200')}>{suggestion.confidence}% confidence</Badge>
+                        <Badge variant="outline" className="text-[10px]">{suggestion.confidence}% confidence</Badge>
                       </div>
                       <div className="bg-muted/50 rounded-lg p-2 mb-3 text-sm text-muted-foreground">
                         &quot;{suggestion.message}&quot;
@@ -224,7 +235,7 @@ export function AiAssistantView() {
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-medium text-sm">{intent.customerName}</span>
                         <Badge variant="outline" className={INTENT_COLORS[intent.type] || ''}>{intent.type.replace('_', ' ')}</Badge>
-                        <Badge variant="outline" className={cn('text-[10px] gap-1', intent.confidence >= 90 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : intent.confidence >= 80 ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-600 border-slate-200')}>{intent.confidence}%</Badge>
+                        <Badge variant="outline" className="text-[10px]">{intent.confidence}%</Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">&quot;{intent.message}&quot;</p>
                     </div>

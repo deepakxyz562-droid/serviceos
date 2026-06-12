@@ -55,25 +55,25 @@ export interface PayPalPlanConfig {
   yearlyPrice: number;
 }
 
-// Plan definitions matching our SaaS tiers (source of truth: frontend billing-view.tsx PLANS)
+// Plan definitions matching our SaaS tiers
 export const PAYPAL_PLANS: Record<string, PayPalPlanConfig> = {
   starter: {
     planId: 'starter',
     name: 'Starter',
-    monthlyPrice: 29,
-    yearlyPrice: 290,
+    monthlyPrice: 10,
+    yearlyPrice: 100,
   },
   growth: {
     planId: 'growth',
     name: 'Growth',
-    monthlyPrice: 79,
-    yearlyPrice: 790,
+    monthlyPrice: 25,
+    yearlyPrice: 250,
   },
   pro: {
     planId: 'pro',
     name: 'Pro',
-    monthlyPrice: 149,
-    yearlyPrice: 1490,
+    monthlyPrice: 50,
+    yearlyPrice: 500,
   },
 };
 

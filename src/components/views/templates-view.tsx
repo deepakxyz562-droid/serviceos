@@ -1,5 +1,4 @@
 'use client';
-import { authFetch } from '@/lib/client-auth';
 
 import { useEffect, useState, useCallback } from 'react';
 import {
@@ -78,7 +77,7 @@ export function TemplatesView() {
   useEffect(() => {
     async function fetchTemplates() {
       try {
-        const res = await authFetch('/api/templates');
+        const res = await fetch('/api/templates');
         if (!res.ok) throw new Error('Failed to fetch templates');
         const data = await res.json();
         setTemplates(data.templates || data);
@@ -104,7 +103,7 @@ export function TemplatesView() {
   const handleUseTemplate = async (template: TemplateItem) => {
     try {
       // Create a new workflow from the template
-      const res = await authFetch('/api/workflows', {
+      const res = await fetch('/api/workflows', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -127,7 +126,7 @@ export function TemplatesView() {
   const handleCreateJobAssignmentFlow = useCallback(async () => {
     setCreatingJobFlow(true);
     try {
-      const res = await authFetch('/api/templates/job-assignment', {
+      const res = await fetch('/api/templates/job-assignment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -150,7 +149,7 @@ export function TemplatesView() {
   const handleSeedDemoData = useCallback(async () => {
     setSeedingData(true);
     try {
-      const res = await authFetch('/api/seed-demo', {
+      const res = await fetch('/api/seed-demo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ force: true }),

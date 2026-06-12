@@ -12,7 +12,12 @@ const nextConfig: NextConfig = {
   },
   allowedDevOrigins: [
     "21.0.11.123",
+    "21.0.19.13",
+    "space-z.ai",
     ".space-z.ai",
+    "0.0.0.0",
+    "127.0.0.1",
+    "localhost",
   ],
   async rewrites() {
     return [

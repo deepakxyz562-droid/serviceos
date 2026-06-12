@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
   GitBranch, Plus, Search, Play, Pause, Eye, Clock,
-  Zap, MessageSquare, Mail, Tag, User, Users, ArrowRight,
+  Zap, MessageSquare, Mail, Tag, User, ArrowRight,
   Settings, Trash2, CheckCircle2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,9 +18,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { ViewHeader } from '@/components/shared/view-header';
-import { EmptyState } from '@/components/shared/empty-state';
-import { StatCard } from '@/components/shared/stat-card';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -135,23 +132,34 @@ export function JourneyAutomationView() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <ViewHeader
-        icon={GitBranch}
-        title="Journey Automation"
-        description="Customer journey builder"
-        action={
-          <Button className="bg-emerald-600 hover:bg-emerald-700 min-h-[44px]" onClick={() => setShowCreateDialog(true)}>
-            <Plus className="size-4 mr-1.5" /> Create Journey
-          </Button>
-        }
-      />
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600">
+            <GitBranch className="size-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold">Journey Automation</h2>
+            <p className="text-sm text-muted-foreground">Customer journey builder</p>
+          </div>
+        </div>
+        <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowCreateDialog(true)}>
+          <Plus className="size-4 mr-1.5" /> Create Journey
+        </Button>
+      </div>
 
       {/* Stats */}
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
-        <StatCard label="Total Journeys" value={journeys.length} icon={GitBranch} />
-        <StatCard label="Active" value={journeys.filter(j => j.status === 'active').length} icon={Play} color="text-emerald-600" />
-        <StatCard label="Enrolled" value={journeys.reduce((s, j) => s + j.enrolledCount, 0).toLocaleString()} icon={Users} color="text-teal-600" />
-        <StatCard label="Completed" value={journeys.reduce((s, j) => s + j.completedCount, 0).toLocaleString()} icon={CheckCircle2} color="text-green-600" />
+        {[
+          { label: 'Total Journeys', value: journeys.length, color: 'text-foreground' },
+          { label: 'Active', value: journeys.filter(j => j.status === 'active').length, color: 'text-emerald-600' },
+          { label: 'Enrolled', value: journeys.reduce((s, j) => s + j.enrolledCount, 0).toLocaleString(), color: 'text-blue-600' },
+          { label: 'Completed', value: journeys.reduce((s, j) => s + j.completedCount, 0).toLocaleString(), color: 'text-green-600' },
+        ].map(stat => (
+          <Card key={stat.label} className="p-4">
+            <p className="text-xs text-muted-foreground">{stat.label}</p>
+            <p className={`text-lg font-bold ${stat.color}`}>{stat.value}</p>
+          </Card>
+        ))}
       </div>
 
       {/* Search */}
@@ -161,80 +169,51 @@ export function JourneyAutomationView() {
       </div>
 
       {/* Journey List */}
-      {filteredJourneys.length === 0 ? (
-        <EmptyState
-          icon={GitBranch}
-          title="No journeys found"
-          description={search ? 'Try adjusting your search' : 'Create your first customer journey automation'}
-          actionLabel={!search ? 'Create Journey' : undefined}
-          onAction={!search ? () => setShowCreateDialog(true) : undefined}
-        />
-      ) : (
       <div className="space-y-4">
-        {filteredJourneys.map(journey => {
-          const completionRate = journey.enrolledCount > 0 ? Math.round(journey.completedCount / journey.enrolledCount * 100) : 0;
-          return (
-          <Card key={journey.id} className="hover:shadow-md transition-all group">
-            <CardContent className="p-4 space-y-3">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
+        {filteredJourneys.map(journey => (
+          <Card key={journey.id} className="hover:shadow-md transition-all">
+            <CardContent className="p-4">
+              <div className="flex items-start justify-between gap-4 mb-3">
+                <div>
+                  <div className="flex items-center gap-2">
                     <h4 className="font-semibold">{journey.name}</h4>
-                    <Badge variant="outline" className={cn('text-[10px] gap-1', journey.status === 'active' ? 'bg-emerald-100 text-emerald-700' : journey.status === 'inactive' ? 'bg-slate-100 text-slate-600' : 'bg-amber-100 text-amber-700')}>
-                      {journey.status === 'active' && <span className="relative flex size-1.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" /><span className="relative inline-flex rounded-full size-1.5 bg-emerald-500" /></span>}
+                    <Badge variant="outline" className={journey.status === 'active' ? 'bg-emerald-100 text-emerald-700 text-[10px]' : journey.status === 'inactive' ? 'bg-slate-100 text-slate-600 text-[10px]' : 'bg-amber-100 text-amber-700 text-[10px]'}>
                       {journey.status}
                     </Badge>
                   </div>
-                  <div className="flex items-center gap-4 mt-1.5 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
                     <span>{journey.enrolledCount} enrolled</span>
                     <span>{journey.completedCount} completed</span>
                     <span>{journey.nodes.length} steps</span>
                   </div>
                 </div>
-                <div className="flex gap-1 shrink-0">
-                  <Button variant="outline" size="sm" className="min-h-[36px] text-xs" onClick={() => handleToggle(journey.id)}>
+                <div className="flex gap-1">
+                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => handleToggle(journey.id)}>
                     {journey.status === 'active' ? <><Pause className="size-3 mr-1" />Pause</> : <><Play className="size-3 mr-1" />Activate</>}
                   </Button>
-                  <Button variant="outline" size="sm" className="min-h-[36px] text-xs" onClick={() => setSelectedJourney(journey)}>
+                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setSelectedJourney(journey)}>
                     <Eye className="size-3 mr-1" /> View
                   </Button>
                 </div>
               </div>
-              {/* Completion Rate */}
-              {journey.enrolledCount > 0 && (
-                <div className="space-y-1.5">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-muted-foreground">Completion Rate</span>
-                    <span className={cn('font-semibold', completionRate >= 70 ? 'text-emerald-600' : completionRate >= 40 ? 'text-amber-600' : 'text-red-600')}>{completionRate}%</span>
-                  </div>
-                  <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                    <div className={cn('h-full rounded-full transition-all', completionRate >= 70 ? 'bg-emerald-500' : completionRate >= 40 ? 'bg-amber-500' : 'bg-red-500')} style={{ width: `${completionRate}%` }} />
-                  </div>
-                </div>
-              )}
               {/* Visual Flow */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-2 pt-2 border-t">
+              <div className="flex items-center gap-2 overflow-x-auto pb-2">
                 {journey.nodes.map((node, idx) => (
-                  <div key={node.id} className="flex items-center gap-1.5 shrink-0">
-                    <div className={cn('flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium', node.color)}>
+                  <div key={node.id} className="flex items-center gap-2 shrink-0">
+                    <div className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium', node.color)}>
                       {getNodeIcon(node.type)}
                       <span>{node.label}</span>
                     </div>
-                    {idx < journey.nodes.length - 1 && (
-                      <div className="flex items-center">
-                        <div className="w-4 h-px bg-muted-foreground/30" />
-                        <ArrowRight className="size-2.5 text-muted-foreground/50 shrink-0" />
-                      </div>
-                    )}
+                    {idx < journey.nodes.length - 1 && <ArrowRight className="size-3 text-muted-foreground shrink-0" />}
                   </div>
                 ))}
               </div>
             </CardContent>
           </Card>
-          );
-        })}
+        ))}
       </div>
-      )}
+
+      {/* Journey Detail */}
       {selectedJourney && (
         <Card>
           <CardHeader className="p-4 pb-2">

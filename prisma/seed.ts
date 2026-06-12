@@ -1,11 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
-// Ensure DATABASE_URL points to PostgreSQL if legacy SQLite URL is detected
-if (process.env.DATABASE_URL?.startsWith('file:')) {
-  process.env.DATABASE_URL = 'postgresql://postgres:postgres@localhost:5432/serviceos';
-}
-
 const db = new PrismaClient();
 
 // ──────────────────────────────────────────────
@@ -84,7 +79,6 @@ async function main() {
       email: 'admin@serviceos.com',
       name: 'Platform Admin',
       role: 'admin',
-      isSuperAdmin: true,
       passwordHash: adminPasswordHash,
       phone: '+1-800-555-0000',
       tenantId: null, // Platform admin, not tied to any tenant

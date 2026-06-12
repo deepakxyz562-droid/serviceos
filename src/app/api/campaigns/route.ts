@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
         description: body.description,
         type: body.type || 'promotional',
         status: body.status || 'draft',
+        channel: body.channel || 'whatsapp',
         audienceType: body.audienceType || 'all',
         audienceId: body.audienceId,
         audienceFiltersJson: body.audienceFiltersJson || '{}',

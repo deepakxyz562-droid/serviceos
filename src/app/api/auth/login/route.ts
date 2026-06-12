@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { verifyPassword, generateToken, getCookieOptions } from '@/lib/auth';
+import { verifyPassword, generateToken, COOKIE_OPTIONS } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,7 +22,6 @@ export async function POST(request: NextRequest) {
     });
 
     if (!user || !user.passwordHash) {
-      console.warn('[Login] No user found or no passwordHash for:', email);
       return NextResponse.json(
         { error: 'Invalid email or password' },
         { status: 401 }
@@ -38,19 +37,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify password
-    let isValid: boolean;
-    try {
-      isValid = await verifyPassword(password, user.passwordHash);
-    } catch (bcryptError) {
-      console.error('[Login] bcrypt verification error:', bcryptError);
-      return NextResponse.json(
-        { error: 'Authentication service error. Please try again.' },
-        { status: 500 }
-      );
-    }
-
+    const isValid = await verifyPassword(password, user.passwordHash);
     if (!isValid) {
-      console.warn('[Login] Invalid password for:', email);
       return NextResponse.json(
         { error: 'Invalid email or password' },
         { status: 401 }
@@ -58,15 +46,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Update lastLoginAt
-    try {
-      await db.user.update({
-        where: { id: user.id },
-        data: { lastLoginAt: new Date() },
-      });
-    } catch (dbUpdateError) {
-      // Non-critical — don't block login if this fails
-      console.error('[Login] Failed to update lastLoginAt:', dbUpdateError);
-    }
+    await db.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
 
     // Generate JWT token
     const authUser = {
@@ -74,7 +57,6 @@ export async function POST(request: NextRequest) {
       email: user.email,
       name: user.name,
       role: user.role,
-      isSuperAdmin: user.isSuperAdmin || false,
       tenantId: user.tenantId,
       workspaceId: user.workspaceId,
       avatar: user.avatar,
@@ -89,7 +71,6 @@ export async function POST(request: NextRequest) {
           name: user.name,
           email: user.email,
           role: user.role,
-          isSuperAdmin: user.isSuperAdmin || false,
           phone: user.phone,
           tenantId: user.tenantId,
           workspaceId: user.workspaceId,
@@ -116,23 +97,15 @@ export async function POST(request: NextRequest) {
       { status: 200 }
     );
 
-    // Set auth cookie (secure flag based on request protocol)
-    const cookieOptions = getCookieOptions(request);
-    console.log('[Login] Setting cookie:', {
-      name: cookieOptions.name,
-      secure: cookieOptions.secure,
-      sameSite: cookieOptions.sameSite,
-      path: cookieOptions.path,
-      tokenLength: token.length,
-    });
+    // Set auth cookie
     response.cookies.set({
-      ...cookieOptions,
+      ...COOKIE_OPTIONS,
       value: token,
     });
 
     return response;
   } catch (error) {
-    console.error('[Login] Unhandled error:', error);
+    console.error('Login error:', error);
     return NextResponse.json(
       { error: 'Failed to sign in. Please try again.' },
       { status: 500 }

@@ -1,14 +1,16 @@
 'use client';
 
-import { lazy, Suspense, useEffect, useRef } from 'react';
+import { lazy, Suspense, Component, ReactNode, ErrorInfo } from 'react';
 import { useAppStore } from '@/store/app-store';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { AppSidebar } from '@/components/layout/sidebar';
 import { AppHeader } from '@/components/layout/header';
-import { Loader2, Heart } from 'lucide-react';
+import { MobileBottomNav } from '@/components/layout/mobile-bottom-nav';
+import { Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { Button } from '@/components/ui/button';
 
-// ─── Lazy-loaded views ──────────────────────────────────────────────────────
+// ─── Lazy-loaded views (reduces initial bundle & memory) ──────────────────────
 const DashboardView = lazy(() => import('@/components/views/dashboard-view').then(m => ({ default: m.DashboardView })));
 const LeadsView = lazy(() => import('@/components/views/leads-view').then(m => ({ default: m.LeadsView })));
 const JobsView = lazy(() => import('@/components/views/jobs-view').then(m => ({ default: m.JobsView })));
@@ -32,6 +34,7 @@ const VersionHistoryView = lazy(() => import('@/components/views/version-history
 const EmployeePortalView = lazy(() => import('@/components/views/employee-portal-view').then(m => ({ default: m.EmployeePortalView })));
 const CustomerPortalView = lazy(() => import('@/components/views/customer-portal-view').then(m => ({ default: m.CustomerPortalView })));
 
+// WhatsApp Customer Engagement Platform Views
 const InboxView = lazy(() => import('@/components/views/inbox-view').then(m => ({ default: m.InboxView })));
 const Customer360View = lazy(() => import('@/components/views/customer360-view').then(m => ({ default: m.Customer360View })));
 const CampaignsView = lazy(() => import('@/components/views/campaigns-view').then(m => ({ default: m.CampaignsView })));
@@ -42,25 +45,32 @@ const AiAssistantView = lazy(() => import('@/components/views/ai-assistant-view'
 const AiCampaignGeneratorView = lazy(() => import('@/components/views/ai-campaign-generator-view').then(m => ({ default: m.AiCampaignGeneratorView })));
 const FormBuilderView = lazy(() => import('@/components/views/form-builder-view').then(m => ({ default: m.FormBuilderView })));
 const WebviewEngineView = lazy(() => import('@/components/views/webview-engine-view').then(m => ({ default: m.WebviewEngineView })));
+const AdsIntegrationView = lazy(() => import('@/components/views/ads-integration-view').then(m => ({ default: m.AdsIntegrationView })));
 const JourneyAutomationView = lazy(() => import('@/components/views/journey-automation-view').then(m => ({ default: m.JourneyAutomationView })));
 const SalesPipelineView = lazy(() => import('@/components/views/sales-pipeline-view').then(m => ({ default: m.SalesPipelineView })));
 const OmnichannelView = lazy(() => import('@/components/views/omnichannel-view').then(m => ({ default: m.OmnichannelView })));
 const MarketplaceView = lazy(() => import('@/components/views/marketplace-view').then(m => ({ default: m.MarketplaceView })));
 const EnterpriseView = lazy(() => import('@/components/views/enterprise-view').then(m => ({ default: m.EnterpriseView })));
 const BroadcastView = lazy(() => import('@/components/views/broadcast-view').then(m => ({ default: m.BroadcastView })));
-const SuperAdminView = lazy(() => import('@/components/views/super-admin-view').then(m => ({ default: m.SuperAdminView })));
-const EmployeesView = lazy(() => import('@/components/views/employees-view').then(m => ({ default: m.EmployeesView })));
-
 const QuotesView = lazy(() => import('@/components/views/quotes-view').then(m => ({ default: m.QuotesView })));
-const BookingsView = lazy(() => import('@/components/views/bookings-view').then(m => ({ default: m.BookingsView })));
+const WorkflowAutomationsView = lazy(() => import('@/components/views/workflow-automations-view').then(m => ({ default: m.WorkflowAutomationsView })));
+
+// Marketing Hub Views
+const MarketingTemplatesView = lazy(() => import('@/components/views/marketing-templates-view').then(m => ({ default: m.MarketingTemplatesView })));
+const MarketingAnalyticsView = lazy(() => import('@/components/views/marketing-analytics-view').then(m => ({ default: m.MarketingAnalyticsView })));
+const CommunicationProvidersView = lazy(() => import('@/components/views/communication-providers-view').then(m => ({ default: m.CommunicationProvidersView })));
+
+// Contacts & People Views
+const ContactsView = lazy(() => import('@/components/views/contacts-view').then(m => ({ default: m.ContactsView })));
+const LeadDiscoveryView = lazy(() => import('@/components/views/lead-discovery-view').then(m => ({ default: m.LeadDiscoveryView })));
+const BookingView = lazy(() => import('@/components/views/booking-view').then(m => ({ default: m.BookingView })));
 const CalendarView = lazy(() => import('@/components/views/calendar-view').then(m => ({ default: m.CalendarView })));
+const EmployeesView = lazy(() => import('@/components/views/employees-view').then(m => ({ default: m.EmployeesView })));
 const ReviewsView = lazy(() => import('@/components/views/reviews-view').then(m => ({ default: m.ReviewsView })));
 const ServiceCatalogView = lazy(() => import('@/components/views/service-catalog-view').then(m => ({ default: m.ServiceCatalogView })));
 const KnowledgeBaseView = lazy(() => import('@/components/views/knowledge-base-view').then(m => ({ default: m.KnowledgeBaseView })));
-const RouteOptimizationView = lazy(() => import('@/components/views/route-optimization-view').then(m => ({ default: m.RouteOptimizationView })));
 const DocumentCenterView = lazy(() => import('@/components/views/document-center-view').then(m => ({ default: m.DocumentCenterView })));
-const ContactsView = lazy(() => import('@/components/views/contacts-view').then(m => ({ default: m.ContactsView })));
-const LeadDiscoveryView = lazy(() => import('@/components/views/lead-discovery-view').then(m => ({ default: m.LeadDiscoveryView })));
+const TriggersView = lazy(() => import('@/components/views/triggers-view').then(m => ({ default: m.TriggersView })));
 
 // ─── View mapping ───────────────────────────────────────────────────────────
 
@@ -74,6 +84,7 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   workflows: WorkflowsView,
   executions: ExecutionsView,
   credentials: CredentialsView,
+
   invoices: InvoicesView,
   reports: ReportsView,
   billing: BillingView,
@@ -86,6 +97,7 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   saasDashboard: SaaSDashboardView,
   employeePortal: EmployeePortalView,
   customerPortal: CustomerPortalView,
+  // WhatsApp Customer Engagement Platform
   inbox: InboxView,
   customer360: Customer360View,
   campaigns: CampaignsView,
@@ -96,24 +108,30 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   aiCampaignGenerator: AiCampaignGeneratorView,
   formBuilder: FormBuilderView,
   webviewEngine: WebviewEngineView,
+  adsIntegration: AdsIntegrationView,
   journeyAutomation: JourneyAutomationView,
   salesPipeline: SalesPipelineView,
   omnichannel: OmnichannelView,
   marketplace: MarketplaceView,
   enterprise: EnterpriseView,
   broadcast: BroadcastView,
-  superAdmin: SuperAdminView,
-  employees: EmployeesView,
   quotes: QuotesView,
-  bookings: BookingsView,
+  workflowAutomations: WorkflowAutomationsView,
+  // Marketing Hub
+  marketingTemplates: MarketingTemplatesView,
+  marketingAnalytics: MarketingAnalyticsView,
+  communicationProviders: CommunicationProvidersView,
+  // Contacts & People
+  contacts: ContactsView,
+  leadDiscovery: LeadDiscoveryView,
+  booking: BookingView,
   calendar: CalendarView,
+  employees: EmployeesView,
   reviews: ReviewsView,
   serviceCatalog: ServiceCatalogView,
   knowledgeBase: KnowledgeBaseView,
-  routeOptimization: RouteOptimizationView,
   documentCenter: DocumentCenterView,
-  contacts: ContactsView,
-  leadDiscovery: LeadDiscoveryView,
+  triggers: TriggersView,
 };
 
 // ─── Loading fallback ────────────────────────────────────────────────────────
@@ -121,72 +139,82 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
 function ViewLoader() {
   return (
     <div className="flex items-center justify-center min-h-[50vh]">
-      <div className="flex flex-col items-center gap-3 animate-fade-in">
-        <div className="relative">
-          <Loader2 className="size-8 animate-spin text-emerald-500" />
-          <div className="absolute inset-0 size-8 animate-ping opacity-20 rounded-full bg-emerald-500" />
-        </div>
+      <div className="flex flex-col items-center gap-3">
+        <Loader2 className="size-8 animate-spin text-emerald-500" />
         <span className="text-muted-foreground text-sm">Loading view...</span>
       </div>
     </div>
   );
 }
 
-// ─── Fade-in wrapper with stagger ─────────────────────────────────────────
+// ─── Error Boundary ──────────────────────────────────────────────────────────
 
-function FadeInView({ children, viewKey }: { children: React.ReactNode; viewKey: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.opacity = '0';
-    el.style.transform = 'translateY(8px)';
-    // Trigger reflow then animate
-    void el.offsetHeight;
-    el.style.transition = 'opacity 300ms ease-out, transform 300ms ease-out';
-    el.style.opacity = '1';
-    el.style.transform = 'translateY(0)';
-  }, [viewKey]);
-
-  return (
-    <div ref={ref}>
-      {children}
-    </div>
-  );
+interface ErrorBoundaryProps {
+  children: ReactNode;
+  fallback?: ReactNode;
 }
 
-// ─── PWA install prompt handler ──────────────────────────────────────────
-
-function PWAInstallListener() {
-  const { setInstallPromptEvent } = useAppStore();
-
-  useEffect(() => {
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setInstallPromptEvent(e);
-    };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, [setInstallPromptEvent]);
-
-  return null;
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
 }
 
-// ─── Dark mode sync ────────────────────────────────────────────────────
+class ViewErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
 
-function DarkModeSync() {
-  const { darkMode } = useAppStore();
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
 
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('View component error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      if (this.props.fallback) return this.props.fallback;
+      const isChunkError = this.state.error?.message?.includes('Failed to load chunk') || this.state.error?.message?.includes('ChunkLoadError');
+      return (
+        <div className="flex items-center justify-center min-h-[50vh] p-4">
+          <div className="flex flex-col items-center gap-4 max-w-md text-center p-6">
+            <div className="size-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+              <AlertTriangle className="size-6 text-amber-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-foreground">Something went wrong</h3>
+            <p className="text-sm text-muted-foreground">
+              {isChunkError
+                ? 'A resource failed to load. This usually happens when the server is restarting. Please reload the page.'
+                : 'This section failed to load. You can try refreshing it.'}
+            </p>
+            {isChunkError ? (
+              <Button
+                size="sm"
+                onClick={() => window.location.reload()}
+                className="gap-2"
+              >
+                <RefreshCw className="size-3.5" />
+                Reload Page
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => this.setState({ hasError: false, error: null })}
+                className="gap-2"
+              >
+                <RefreshCw className="size-3.5" />
+                Try Again
+              </Button>
+            )}
+          </div>
+        </div>
+      );
     }
-  }, [darkMode]);
-
-  return null;
+    return this.props.children;
+  }
 }
 
 // ─── Props ──────────────────────────────────────────────────────────────────
@@ -208,46 +236,34 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   const isCanvas = currentView === 'canvas';
 
   return (
-    <div className={cn('min-h-screen flex flex-col bg-background', darkMode && 'dark')}>
-      <DarkModeSync />
-      <PWAInstallListener />
+    <div className={cn('h-[100dvh] flex overflow-hidden bg-background', darkMode && 'dark')}>
+      {/* ─── Sidebar (desktop only, mobile uses Sheet) ──────────────────── */}
+      <AppSidebar onLogout={onLogout} />
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* ─── Sidebar (desktop only, mobile uses Sheet) ─────────── */}
-        <AppSidebar onLogout={onLogout} />
+      {/* ─── Main content area ──────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        {/* ─── Header ──────────────────────────────────────────────────── */}
+        <AppHeader />
 
-        {/* ─── Main content area ──────────────────────────────────── */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden min-h-screen">
-          {/* ─── Header ──────────────────────────────────────────── */}
-          <AppHeader />
-
-          {/* ─── View content ────────────────────────────────────── */}
-          <main
-            className={cn(
-              'flex-1 overflow-auto',
-              isCanvas ? 'p-0' : 'p-3 sm:p-4 lg:p-6 bg-muted/30'
-            )}
-          >
-            <FadeInView viewKey={currentView}>
-              <Suspense fallback={<ViewLoader />}>
-                <ActiveView />
-              </Suspense>
-            </FadeInView>
-          </main>
-
-          {/* ─── Sticky Footer ──────────────────────────────────── */}
-          {!isCanvas && (
-            <footer className="shrink-0 border-t bg-background/80 backdrop-blur-sm px-3 sm:px-4 py-2.5 safe-bottom">
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  Built with <Heart className="size-3 text-emerald-500 fill-emerald-500" /> by ServiceOS
-                </span>
-                <span className="hidden sm:inline">© {new Date().getFullYear()} ServiceOS Inc. All rights reserved.</span>
-              </div>
-            </footer>
+        {/* ─── View content ────────────────────────────────────────────── */}
+        <main
+          className={cn(
+            'flex-1 overflow-auto animate-fade-in',
+            isCanvas ? 'p-0' : isMobile ? 'p-3 sm:p-4 bg-muted/30' : 'p-4 lg:p-6 bg-muted/30',
+            // Add bottom padding for mobile nav
+            isMobile && 'pb-mobile-nav'
           )}
-        </div>
+        >
+          <ViewErrorBoundary>
+            <Suspense fallback={<ViewLoader />}>
+              <ActiveView />
+            </Suspense>
+          </ViewErrorBoundary>
+        </main>
       </div>
+
+      {/* ─── Mobile Bottom Navigation ──────────────────────────────────── */}
+      <MobileBottomNav />
     </div>
   );
 }

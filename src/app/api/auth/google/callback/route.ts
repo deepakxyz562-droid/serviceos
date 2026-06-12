@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { generateToken, generateSlug, getCookieOptions, normalizeBaseUrl } from '@/lib/auth';
+import { generateToken, generateSlug, COOKIE_OPTIONS } from '@/lib/auth';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -60,37 +60,35 @@ async function getUserInfo(accessToken: string): Promise<GoogleUserInfo> {
 
 /**
  * Get the base URL for redirects, respecting reverse proxy headers.
- * Uses the same priority as the google/route.ts getRedirectUri logic.
+ *
+ * Priority:
+ * 1. NEXT_PUBLIC_APP_URL env variable (most reliable if set)
+ * 2. X-Forwarded-Host + X-Forwarded-Proto (set by reverse proxy)
+ * 3. Host header + X-Forwarded-Proto (Caddy forwards original Host)
+ * 4. Fallback to the request URL's origin
  */
-function getBaseUrl(request: NextRequest, stateRedirectUri?: string): string {
-  // If we have the redirect URI from state, derive base URL from it
-  if (stateRedirectUri) {
-    try {
-      const url = new URL(stateRedirectUri);
-      return url.origin;
-    } catch {
-      // Fall through
-    }
+function getBaseUrl(request: NextRequest): string {
+  // 1. Check env variable first (most reliable)
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (appUrl) {
+    return appUrl;
   }
 
   const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
+
+  // 2. X-Forwarded-Host (set by reverse proxy)
   const forwardedHost = request.headers.get('x-forwarded-host');
   if (forwardedHost && !forwardedHost.startsWith('localhost')) {
     return `${forwardedProto}://${forwardedHost}`;
   }
 
+  // 3. Host header forwarded by Caddy contains the external host
   const hostHeader = request.headers.get('host');
   if (hostHeader && !hostHeader.startsWith('localhost')) {
     return `${forwardedProto}://${hostHeader}`;
   }
 
-  // Fallback to NEXT_PUBLIC_APP_URL (normalized)
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  if (appUrl) {
-    return normalizeBaseUrl(appUrl);
-  }
-
-  // Last resort: request origin
+  // 4. Fallback to request origin
   return new URL('/', request.url).origin;
 }
 
@@ -101,7 +99,38 @@ export async function GET(request: NextRequest) {
     const stateParam = searchParams.get('state');
     const error = searchParams.get('error');
 
-    // Parse state parameter first (we need it for base URL)
+    // Handle Google OAuth errors (e.g., user denied access, redirect_uri_mismatch)
+    if (error) {
+      console.error('Google OAuth callback error:', error, 'Full URL:', request.url);
+      const baseUrl = getBaseUrl(request);
+      const errorDetail = searchParams.get('error_description') || error;
+      // Map specific errors to user-friendly messages
+      let errorMessage = errorDetail;
+      if (error === 'redirect_uri_mismatch') {
+        errorMessage = 'Google OAuth redirect URI not configured. Please add this app\'s URL to your Google Cloud Console authorized redirect URIs.';
+      }
+      return NextResponse.redirect(
+        new URL(`/?auth_error=${encodeURIComponent(errorMessage)}`, baseUrl)
+      );
+    }
+
+    if (!code) {
+      console.error('Google OAuth: No authorization code received');
+      const baseUrl = getBaseUrl(request);
+      return NextResponse.redirect(
+        new URL('/?auth_error=google_no_code', baseUrl)
+      );
+    }
+
+    if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+      console.error('Google OAuth: Client ID or Secret not configured');
+      const baseUrl = getBaseUrl(request);
+      return NextResponse.redirect(
+        new URL('/?auth_error=google_not_configured', baseUrl)
+      );
+    }
+
+    // Parse state parameter
     let state: { mode?: string; redirect?: string; redirectUri?: string } = {};
     try {
       if (stateParam) {
@@ -111,45 +140,11 @@ export async function GET(request: NextRequest) {
       // Ignore invalid state
     }
 
-    const baseUrl = getBaseUrl(request, state.redirectUri);
-
-    // Handle Google OAuth errors (e.g., user denied access, redirect_uri_mismatch)
-    if (error) {
-      console.error('Google OAuth callback error:', error, 'Full URL:', request.url);
-      const errorDetail = searchParams.get('error_description') || error;
-      // Map specific errors to user-friendly messages
-      let errorMessage = errorDetail;
-      if (error === 'redirect_uri_mismatch') {
-        const usedUri = state.redirectUri || 'unknown';
-        errorMessage = `Google OAuth redirect URI mismatch. The URI "${usedUri}" is not authorized in Google Cloud Console. Please add it under APIs & Services → Credentials → Authorized redirect URIs.`;
-      } else if (error === 'access_denied') {
-        errorMessage = 'You denied access to Google sign-in. Please try again.';
-      }
-      return NextResponse.redirect(
-        new URL(`/?auth_error=${encodeURIComponent(errorMessage)}`, baseUrl)
-      );
-    }
-
-    if (!code) {
-      console.error('Google OAuth: No authorization code received');
-      return NextResponse.redirect(
-        new URL('/?auth_error=google_no_code', baseUrl)
-      );
-    }
-
-    if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
-      console.error('Google OAuth: Client ID or Secret not configured');
-      return NextResponse.redirect(
-        new URL('/?auth_error=google_not_configured', baseUrl)
-      );
-    }
-
     // Determine the redirect URI that was used when initiating the OAuth flow
     // This must match exactly what was sent to Google in the authorization URL
-    const redirectUri = state.redirectUri ||
-      `${normalizeBaseUrl(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000')}/api/auth/google/callback`;
+    const redirectUri = state.redirectUri || 
+      `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/auth/google/callback`;
     console.log('[Google OAuth Callback] Using redirect URI:', redirectUri);
-    console.log('[Google OAuth Callback] Base URL for redirects:', baseUrl);
 
     // Exchange code for tokens
     const tokens = await exchangeCodeForTokens(code, redirectUri);
@@ -157,12 +152,11 @@ export async function GET(request: NextRequest) {
 
     if (!userInfo.email) {
       console.error('Google OAuth: No email in user info');
+      const baseUrl = getBaseUrl(request);
       return NextResponse.redirect(
         new URL('/?auth_error=google_no_email', baseUrl)
       );
     }
-
-    console.log('[Google OAuth] Successfully authenticated:', userInfo.email);
 
     // Check if user already exists
     const existingUser = await db.user.findUnique({
@@ -192,6 +186,7 @@ export async function GET(request: NextRequest) {
 
       // Check if user is active
       if (!existingUser.isActive) {
+        const baseUrl = getBaseUrl(request);
         return NextResponse.redirect(
           new URL('/?auth_error=account_deactivated', baseUrl)
         );
@@ -203,12 +198,13 @@ export async function GET(request: NextRequest) {
         email: existingUser.email,
         name: existingUser.name,
         role: existingUser.role,
-        isSuperAdmin: existingUser.isSuperAdmin,
         tenantId: existingUser.tenantId,
         workspaceId: existingUser.workspaceId,
         avatar: userInfo.picture || existingUser.avatar,
       };
       const token = generateToken(authUser);
+
+      const baseUrl = getBaseUrl(request);
 
       // If user has no tenant, they need to complete onboarding
       if (!existingUser.tenantId) {
@@ -216,7 +212,7 @@ export async function GET(request: NextRequest) {
           `${baseUrl}/?google_onboarding=true&email=${encodeURIComponent(userInfo.email)}&name=${encodeURIComponent(userInfo.name || '')}&avatar=${encodeURIComponent(userInfo.picture || '')}`
         );
         response.cookies.set({
-          ...getCookieOptions(request),
+          ...COOKIE_OPTIONS,
           value: token,
         });
         return response;
@@ -224,7 +220,7 @@ export async function GET(request: NextRequest) {
 
       const response = NextResponse.redirect(`${baseUrl}/?google_login=success`);
       response.cookies.set({
-        ...getCookieOptions(request),
+        ...COOKIE_OPTIONS,
         value: token,
       });
       return response;
@@ -253,31 +249,24 @@ export async function GET(request: NextRequest) {
       email: tempUser.email,
       name: tempUser.name,
       role: tempUser.role,
-      isSuperAdmin: false,
       tenantId: null,
       workspaceId: null,
       avatar: tempUser.avatar,
     };
     const token = generateToken(authUser);
 
+    const baseUrl = getBaseUrl(request);
     const response = NextResponse.redirect(
       `${baseUrl}/?google_onboarding=true&email=${encodeURIComponent(userInfo.email)}&name=${encodeURIComponent(userInfo.name || '')}&avatar=${encodeURIComponent(userInfo.picture || '')}`
     );
     response.cookies.set({
-      ...getCookieOptions(request),
+      ...COOKIE_OPTIONS,
       value: token,
     });
     return response;
   } catch (error) {
     console.error('Google OAuth callback error:', error);
-    const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
-    const forwardedHost = request.headers.get('x-forwarded-host');
-    const hostHeader = request.headers.get('host');
-    const baseUrl = (forwardedHost && !forwardedHost.startsWith('localhost'))
-      ? `${forwardedProto}://${forwardedHost}`
-      : (hostHeader && !hostHeader.startsWith('localhost'))
-        ? `${forwardedProto}://${hostHeader}`
-        : new URL('/', request.url).origin;
+    const baseUrl = getBaseUrl(request);
     return NextResponse.redirect(
       new URL('/?auth_error=google_callback_failed', baseUrl)
     );

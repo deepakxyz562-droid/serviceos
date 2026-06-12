@@ -17,41 +17,28 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search');
 
     // Build where clause - use tenantId if authenticated, otherwise show all
-    // Also include orphan leads (tenantId: null) so WordPress leads without a tenant are visible
-    const andConditions: Record<string, unknown>[] = [];
-
+    const where: Record<string, unknown> = {};
     if (authUser?.tenantId) {
-      andConditions.push({
-        OR: [
-          { tenantId: authUser.tenantId },
-          { tenantId: null },
-        ],
-      });
+      where.tenantId = authUser.tenantId;
     }
 
     if (status) {
-      andConditions.push({ status });
+      where.status = status;
     }
     if (source) {
-      andConditions.push({ source });
+      where.source = source;
     }
     if (priority) {
-      andConditions.push({ priority });
+      where.priority = priority;
     }
     if (search) {
-      andConditions.push({
-        OR: [
-          { name: { contains: search } },
-          { email: { contains: search } },
-          { phone: { contains: search } },
-          { description: { contains: search } },
-        ],
-      });
+      where.OR = [
+        { name: { contains: search } },
+        { email: { contains: search } },
+        { phone: { contains: search } },
+        { description: { contains: search } },
+      ];
     }
-
-    const where = andConditions.length > 0
-      ? (andConditions.length === 1 ? andConditions[0] : { AND: andConditions })
-      : {};
 
     const [leads, total] = await Promise.all([
       db.lead.findMany({
@@ -154,39 +141,16 @@ export async function POST(request: NextRequest) {
         leadId: lead.id,
         name: lead.name,
         phone: lead.phone,
-        email: lead.email,
         source: lead.source,
         status: lead.status,
         serviceType: lead.serviceType,
         tenantId: lead.tenantId,
-        assignedToId: lead.assignedToId,
         resourceType: 'lead',
         resourceId: lead.id,
         summary: `New lead: ${lead.name} (${lead.source})`,
       }, { tenantId: lead.tenantId || undefined });
     } catch (eventErr) {
       console.error('[LeadsCreate] Failed to emit lead.created event:', eventErr);
-    }
-
-    // If lead was created with an assigned employee, also emit lead.assigned
-    if (lead.assignedToId) {
-      try {
-        await EventBus.emit('lead.assigned', {
-          leadId: lead.id,
-          name: lead.name,
-          phone: lead.phone,
-          email: lead.email,
-          source: lead.source,
-          serviceType: lead.serviceType,
-          assignedToId: lead.assignedToId,
-          tenantId: lead.tenantId,
-          resourceType: 'lead',
-          resourceId: lead.id,
-          summary: `Lead assigned: ${lead.name}`,
-        }, { tenantId: lead.tenantId || undefined });
-      } catch (eventErr) {
-        console.error('[LeadsCreate] Failed to emit lead.assigned event:', eventErr);
-      }
     }
 
     return NextResponse.json({ lead }, { status: 201 });

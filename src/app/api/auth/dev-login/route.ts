@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { generateToken, getCookieOptions } from '@/lib/auth';
+import { generateToken, COOKIE_OPTIONS } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     );
 
     response.cookies.set({
-      ...getCookieOptions(request),
+      ...COOKIE_OPTIONS,
       value: token,
     });
 

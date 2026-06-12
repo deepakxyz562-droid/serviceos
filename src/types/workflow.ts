@@ -7,7 +7,7 @@ export interface NodePort {
 }
 
 // Node categories
-export type NodeCategory = 'trigger' | 'logic' | 'action' | 'code' | 'data' | 'communication' | 'cloud' | 'ai' | 'utility';
+export type NodeCategory = 'trigger' | 'crmTrigger' | 'logic' | 'action' | 'code' | 'data' | 'communication' | 'cloud' | 'ai' | 'utility';
 
 // Node status for execution
 export type NodeStatus = 'idle' | 'running' | 'success' | 'error' | 'waiting';
@@ -161,4 +161,4 @@ export interface WorkflowTemplate {
 }
 
 // View types
-export type ViewType = 'dashboard' | 'workflows' | 'canvas' | 'operations' | 'whatsapp' | 'crm' | 'leads' | 'jobs' | 'dispatch' | 'employees' | 'executions' | 'credentials' | 'invoices' | 'reports' | 'billing' | 'variables' | 'templates' | 'settings' | 'versionHistory' | 'saasDashboard' | 'superAdmin' | 'employeePortal' | 'customerPortal' | 'inbox' | 'customer360' | 'campaigns' | 'segments' | 'retargeting' | 'chatbotBuilder' | 'aiAssistant' | 'aiCampaignGenerator' | 'formBuilder' | 'webviewEngine' | 'adsIntegration' | 'journeyAutomation' | 'salesPipeline' | 'omnichannel' | 'marketplace' | 'enterprise' | 'broadcast' | 'quotes' | 'bookings' | 'calendar' | 'reviews' | 'serviceCatalog' | 'knowledgeBase' | 'documentCenter' | 'routeOptimization' | 'contacts' | 'leadDiscovery';
+export type ViewType = 'dashboard' | 'workflows' | 'canvas' | 'operations' | 'whatsapp' | 'crm' | 'leads' | 'jobs' | 'dispatch' | 'executions' | 'credentials' | 'invoices' | 'quotes' | 'reports' | 'billing' | 'variables' | 'templates' | 'settings' | 'versionHistory' | 'employeePortal' | 'saasDashboard' | 'customerPortal' | 'inbox' | 'customer360' | 'campaigns' | 'segments' | 'retargeting' | 'chatbotBuilder' | 'aiAssistant' | 'aiCampaignGenerator' | 'formBuilder' | 'webviewEngine' | 'adsIntegration' | 'journeyAutomation' | 'salesPipeline' | 'omnichannel' | 'marketplace' | 'enterprise' | 'broadcast' | 'workflowAutomations' | 'marketingTemplates' | 'marketingAnalytics' | 'communicationProviders' | 'contacts' | 'leadDiscovery' | 'booking' | 'calendar' | 'employees' | 'reviews' | 'serviceCatalog' | 'knowledgeBase' | 'documentCenter' | 'triggers';

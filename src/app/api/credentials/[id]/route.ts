@@ -33,15 +33,6 @@ function safeJsonParse(str: string | null, fallback: unknown = {}) {
   }
 }
 
-/**
- * Checks if a value appears to be a masked placeholder from the API.
- * Masked values contain bullet characters (•).
- */
-function isMaskedValue(value: unknown): boolean {
-  if (typeof value !== 'string') return false;
-  return value.includes('•');
-}
-
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -92,28 +83,8 @@ export async function PUT(
     const data: any = {};
     if (body.name !== undefined) data.name = body.name;
     if (body.type !== undefined) data.type = body.type;
+    if (body.data !== undefined) data.encryptedData = JSON.stringify(body.data);
     if (body.workspaceId !== undefined) data.workspaceId = body.workspaceId;
-
-    // Handle data update with smart merge:
-    // If body.data is provided, merge it with existing data, filtering out
-    // masked values (containing •) so that unchanged sensitive fields
-    // retain their original values from the database.
-    if (body.data !== undefined) {
-      const existingData = safeJsonParse(existing.encryptedData, {});
-      const incomingData = body.data as Record<string, any>;
-
-      // Filter out masked values — the user didn't change these fields
-      const cleanedData: Record<string, any> = {};
-      for (const [key, value] of Object.entries(incomingData)) {
-        if (!isMaskedValue(value)) {
-          cleanedData[key] = value;
-        }
-      }
-
-      // Merge: existing data as base, overwritten by non-masked incoming values
-      const mergedData = { ...existingData, ...cleanedData };
-      data.encryptedData = JSON.stringify(mergedData);
-    }
 
     const credential = await db.credential.update({
       where: { id },

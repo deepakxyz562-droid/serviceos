@@ -48,9 +48,9 @@ export function CanvasView() {
   }
 
   return (
-    <div className="flex h-full w-full overflow-hidden">
+    <div className="flex h-[calc(100vh-8rem)] w-full overflow-hidden">
       <NodeSidebar />
-      <div className="flex-1 flex flex-col relative">
+      <div className="flex-1 flex flex-col relative min-w-0">
         <ReactFlowProvider>
           <WorkflowCanvasInner />
         </ReactFlowProvider>

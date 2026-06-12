@@ -26,8 +26,6 @@ import {
   Camera,
   Eye,
   Send,
-  Target,
-  Users,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -42,7 +40,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAppStore } from '@/store/app-store';
-import { authFetch } from '@/lib/client-auth';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -204,18 +201,6 @@ function formatRelativeTime(dateStr?: string | null): string {
   }
 }
 
-function getGreeting(): string {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
-}
-
-function getFirstName(name?: string | null): string {
-  if (!name) return 'there';
-  return name.split(' ')[0];
-}
-
 // ─── Color Configs ───────────────────────────────────────────────────────────
 
 const pipelineColors: Record<string, { bg: string; text: string; border: string; fill: string }> = {
@@ -363,7 +348,7 @@ function KPISparkline({ data, color }: { data: { value: number }[]; color: strin
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export function DashboardView() {
-  const { setCurrentView, auth } = useAppStore();
+  const { setCurrentView } = useAppStore();
   const [stats, setStats] = useState<SaaSStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -393,7 +378,7 @@ export function DashboardView() {
   useEffect(() => {
     async function fetchStats() {
       try {
-        const res = await authFetch('/api/saas-stats');
+        const res = await fetch('/api/saas-stats');
         if (!res.ok) throw new Error('Failed to fetch dashboard stats');
         const data = await res.json();
         setStats(data);
@@ -410,7 +395,7 @@ export function DashboardView() {
   useEffect(() => {
     async function fetchEmployees() {
       try {
-        const res = await authFetch('/api/employees?XTransformPort=3000');
+        const res = await fetch('/api/employees?XTransformPort=3000');
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data)) setEmployees(data);
@@ -426,7 +411,7 @@ export function DashboardView() {
   useEffect(() => {
     async function fetchJourney() {
       try {
-        const res = await authFetch('/api/journey?XTransformPort=3000');
+        const res = await fetch('/api/journey?XTransformPort=3000');
         if (res.ok) {
           const data = await res.json();
           // Aggregate by stage
@@ -459,7 +444,7 @@ export function DashboardView() {
   useEffect(() => {
     async function fetchConversations() {
       try {
-        const res = await authFetch('/api/conversations?XTransformPort=3000&status=active');
+        const res = await fetch('/api/conversations?XTransformPort=3000&status=active');
         if (res.ok) {
           const data = await res.json();
           const convos: any[] = data.conversations || [];
@@ -574,76 +559,29 @@ export function DashboardView() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* ─── Header with Greeting ─────────────────────────────────── */}
+      {/* ─── Header ─────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-            {getGreeting()}, {getFirstName(auth.user?.name)} 👋
-          </h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">ServiceOS Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Here&apos;s what&apos;s happening with your business today
+            Your business at a glance — bookings, jobs, revenue &amp; leads
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-xs px-3 py-1.5 border-emerald-300 text-emerald-700 bg-emerald-50">
+          <Badge variant="outline" className="text-xs px-3 py-1 border-emerald-300 text-emerald-700 bg-emerald-50">
             <Zap className="size-3 mr-1" /> Live
           </Badge>
         </div>
       </div>
 
       {/* ─── KPI Cards Row ─────────────────────────────────────── */}
-      {/* ─── Conversion Rate Highlight ──────────────────────────── */}
-      {!loading && stats && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card className="rounded-xl border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 hover:shadow-lg hover:scale-[1.02] transition-all duration-200 cursor-default">
-            <CardContent className="p-5 flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-emerald-100">
-                <Target className="size-6 text-emerald-700" />
-              </div>
-              <div>
-                <p className="text-sm text-emerald-700 font-medium">Conversion Rate</p>
-                <p className="text-3xl font-bold text-emerald-800">{conversionRate}%</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="rounded-xl border-teal-200 bg-gradient-to-br from-teal-50 to-cyan-50 hover:shadow-lg hover:scale-[1.02] transition-all duration-200 cursor-default">
-            <CardContent className="p-5 flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-teal-100">
-                <DollarSign className="size-6 text-teal-700" />
-              </div>
-              <div>
-                <p className="text-sm text-teal-700 font-medium">Avg. Deal Value</p>
-                <p className="text-3xl font-bold text-teal-800">
-                  {stats.leadPipeline && stats.leadPipeline.find(s => s.stage === 'won')
-                    ? formatUSD(stats.leadPipeline.find(s => s.stage === 'won')!.value / Math.max(1, stats.leadPipeline.find(s => s.stage === 'won')!.count))
-                    : '$0'}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="rounded-xl border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 hover:shadow-lg hover:scale-[1.02] transition-all duration-200 cursor-default">
-            <CardContent className="p-5 flex items-center gap-4">
-              <div className="p-3 rounded-xl bg-amber-100">
-                <Users className="size-6 text-amber-700" />
-              </div>
-              <div>
-                <p className="text-sm text-amber-700 font-medium">Team Online</p>
-                <p className="text-3xl font-bold text-amber-800">
-                  {employees.filter(e => e.status === 'available').length}/{employees.length}
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {loading ? (
           Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)
         ) : stats ? (
           <>
             {/* Today's Bookings */}
-            <Card className="rounded-xl hover:shadow-lg hover:scale-[1.02] transition-all duration-200 cursor-default group">
+            <Card className="hover:shadow-md transition-shadow">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
@@ -659,7 +597,7 @@ export function DashboardView() {
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    <div className="p-2.5 rounded-xl bg-emerald-50 group-hover:bg-emerald-100 transition-colors">
+                    <div className="p-2.5 rounded-xl bg-emerald-50">
                       <CalendarCheck className="size-5 text-emerald-600" />
                     </div>
                     <KPISparkline data={sparklines.bookings} color="#10b981" />
@@ -669,14 +607,14 @@ export function DashboardView() {
             </Card>
 
             {/* Active Jobs */}
-            <Card className="rounded-xl hover:shadow-lg hover:scale-[1.02] transition-all duration-200 cursor-default group">
+            <Card className="hover:shadow-md transition-shadow">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-muted-foreground font-medium">Active Jobs</p>
                     <p className="text-2xl font-bold mt-1">{stats.activeJobs.count}</p>
                     <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                      {Object.entries(stats.activeJobs.byStatus)
+                      {Object.entries(stats.activeJobs.byStatus || {})
                         .filter(([s]) => ['in_progress', 'pending', 'on_hold'].includes(s))
                         .slice(0, 3)
                         .map(([status, count]) => (
@@ -687,7 +625,7 @@ export function DashboardView() {
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    <div className="p-2.5 rounded-xl bg-amber-50 group-hover:bg-amber-100 transition-colors">
+                    <div className="p-2.5 rounded-xl bg-amber-50">
                       <Briefcase className="size-5 text-amber-600" />
                     </div>
                     <KPISparkline data={sparklines.jobs} color="#f59e0b" />
@@ -697,7 +635,7 @@ export function DashboardView() {
             </Card>
 
             {/* Monthly Revenue */}
-            <Card className="rounded-xl hover:shadow-lg hover:scale-[1.02] transition-all duration-200 cursor-default group">
+            <Card className="hover:shadow-md transition-shadow">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
@@ -720,7 +658,7 @@ export function DashboardView() {
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    <div className="p-2.5 rounded-xl bg-teal-50 group-hover:bg-teal-100 transition-colors">
+                    <div className="p-2.5 rounded-xl bg-teal-50">
                       <DollarSign className="size-5 text-teal-600" />
                     </div>
                     <KPISparkline data={sparklines.revenue} color="#14b8a6" />
@@ -730,7 +668,7 @@ export function DashboardView() {
             </Card>
 
             {/* New Leads */}
-            <Card className="rounded-xl hover:shadow-lg hover:scale-[1.02] transition-all duration-200 cursor-default group">
+            <Card className="hover:shadow-md transition-shadow">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
@@ -753,10 +691,10 @@ export function DashboardView() {
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    <div className="p-2.5 rounded-xl bg-teal-50 group-hover:bg-teal-100 transition-colors">
-                      <UserPlus className="size-5 text-teal-600" />
+                    <div className="p-2.5 rounded-xl bg-blue-50">
+                      <UserPlus className="size-5 text-blue-600" />
                     </div>
-                    <KPISparkline data={sparklines.leads} color="#14b8a6" />
+                    <KPISparkline data={sparklines.leads} color="#3b82f6" />
                   </div>
                 </div>
               </CardContent>
@@ -781,7 +719,7 @@ export function DashboardView() {
           </CardContent>
         </Card>
       ) : displayPipeline.length > 0 ? (
-        <Card className="rounded-xl">
+        <Card>
           <CardHeader>
             <CardTitle className="text-base">Lead Pipeline</CardTitle>
             <CardDescription>Track leads through every stage of your funnel</CardDescription>
@@ -796,7 +734,7 @@ export function DashboardView() {
                   <div key={stage.stage} className="flex items-center gap-2">
                     <div
                       className={cn(
-                        'rounded-xl border px-5 py-4 min-w-[130px] flex-shrink-0 transition-all hover:shadow-md hover:scale-[1.03] duration-200',
+                        'rounded-xl border px-5 py-4 min-w-[130px] flex-shrink-0 transition-all hover:shadow-sm',
                         colors.bg,
                         colors.border
                       )}
@@ -819,7 +757,7 @@ export function DashboardView() {
           </CardContent>
         </Card>
       ) : (
-        <Card className="rounded-xl">
+        <Card>
           <CardHeader>
             <CardTitle className="text-base">Lead Pipeline</CardTitle>
             <CardDescription>Track leads through every stage of your funnel</CardDescription>
@@ -838,7 +776,7 @@ export function DashboardView() {
         {loading ? (
           <ChartSkeleton />
         ) : stats?.revenueTrend && stats.revenueTrend.length > 0 ? (
-          <Card className="rounded-xl">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">Revenue Trend</CardTitle>
               <CardDescription>Monthly revenue over the last 6 months</CardDescription>
@@ -848,13 +786,8 @@ export function DashboardView() {
                 <AreaChart data={stats.revenueTrend} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                      <stop offset="50%" stopColor="#14b8a6" stopOpacity={0.15} />
-                      <stop offset="95%" stopColor="#14b8a6" stopOpacity={0.02} />
-                    </linearGradient>
-                    <linearGradient id="revenueStroke" x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0%" stopColor="#10b981" />
-                      <stop offset="100%" stopColor="#14b8a6" />
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
@@ -872,9 +805,9 @@ export function DashboardView() {
                   />
                   <Tooltip
                     contentStyle={{
-                      borderRadius: '12px',
+                      borderRadius: '8px',
                       border: '1px solid #e2e8f0',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
                       fontSize: '12px',
                     }}
                     formatter={(value: number) => [formatUSD(value), 'Revenue']}
@@ -882,7 +815,7 @@ export function DashboardView() {
                   <Area
                     type="monotone"
                     dataKey="revenue"
-                    stroke="url(#revenueStroke)"
+                    stroke="#10b981"
                     strokeWidth={2.5}
                     fill="url(#revenueGradient)"
                     dot={{ r: 4, fill: '#10b981', stroke: '#fff', strokeWidth: 2 }}
@@ -893,7 +826,7 @@ export function DashboardView() {
             </CardContent>
           </Card>
         ) : (
-          <Card className="rounded-xl">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">Revenue Trend</CardTitle>
               <CardDescription>Monthly revenue over the last 6 months</CardDescription>
@@ -910,7 +843,7 @@ export function DashboardView() {
         {loading ? (
           <ChartSkeleton />
         ) : pieData.length > 0 ? (
-          <Card className="rounded-xl">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">Lead Sources</CardTitle>
               <CardDescription>Breakdown of leads by source channel</CardDescription>
@@ -938,9 +871,9 @@ export function DashboardView() {
                     </Pie>
                     <Tooltip
                       contentStyle={{
-                        borderRadius: '12px',
+                        borderRadius: '8px',
                         border: '1px solid #e2e8f0',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
                         fontSize: '12px',
                       }}
                       formatter={(value: number, name: string) => [`${value} leads`, name]}
@@ -963,7 +896,7 @@ export function DashboardView() {
             </CardContent>
           </Card>
         ) : (
-          <Card className="rounded-xl">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">Lead Sources</CardTitle>
               <CardDescription>Breakdown of leads by source channel</CardDescription>
@@ -980,7 +913,7 @@ export function DashboardView() {
       {/* ─── Today's Schedule + Quick Actions ────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Today's Schedule */}
-        <Card className="lg:col-span-2 rounded-xl">
+        <Card className="lg:col-span-2">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
@@ -1014,11 +947,10 @@ export function DashboardView() {
             ) : todaySchedule.length > 0 ? (
               <div className="relative space-y-1 max-h-80 overflow-y-auto">
                 {/* Timeline line */}
-                <div className="absolute left-[30px] top-2 bottom-2 w-0.5 bg-gradient-to-b from-emerald-300 via-teal-200 to-emerald-100 rounded-full" />
+                <div className="absolute left-[30px] top-2 bottom-2 w-px bg-emerald-200" />
                 {todaySchedule.map((job) => {
                   const statusConfig = jobStatusConfig[job.status] || jobStatusConfig.pending;
                   const StatusIcon = statusConfig.icon;
-                  const dotColor = job.status === 'in_progress' ? 'bg-teal-500' : job.status === 'completed' ? 'bg-emerald-500' : job.status === 'on_hold' ? 'bg-amber-500' : 'bg-emerald-500';
                   return (
                     <div
                       key={job.id}
@@ -1027,7 +959,7 @@ export function DashboardView() {
                       {/* Time column */}
                       <div className="flex flex-col items-center min-w-[60px] relative z-10">
                         <span className="text-xs font-semibold text-emerald-700">{job.time}</span>
-                        <div className={cn('size-3 rounded-full mt-1.5 ring-3 ring-white shadow-sm', dotColor)} />
+                        <div className="size-2.5 rounded-full bg-emerald-500 mt-1 ring-2 ring-white" />
                       </div>
 
                       {/* Job details */}
@@ -1067,7 +999,7 @@ export function DashboardView() {
         </Card>
 
         {/* Quick Actions */}
-        <Card className="rounded-xl">
+        <Card>
           <CardHeader>
             <CardTitle className="text-base">Quick Actions</CardTitle>
             <CardDescription>Common tasks to keep your business moving</CardDescription>
@@ -1075,7 +1007,7 @@ export function DashboardView() {
           <CardContent>
             <div className="grid grid-cols-1 gap-3">
               <Button
-                className="justify-start gap-2.5 bg-emerald-600 hover:bg-emerald-700 h-auto py-3 min-h-[44px]"
+                className="justify-start gap-2.5 bg-emerald-600 hover:bg-emerald-700 h-auto py-3"
                 onClick={() => {
                   setCurrentView('leads');
                   toast.info('Opening Leads — click Add Lead');
@@ -1086,7 +1018,7 @@ export function DashboardView() {
               </Button>
               <Button
                 variant="outline"
-                className="justify-start gap-2.5 h-auto py-3 min-h-[44px] border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                className="justify-start gap-2.5 h-auto py-3 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
                 onClick={() => {
                   setCurrentView('jobs');
                   toast.info('Opening Jobs — click Create Job');
@@ -1097,7 +1029,7 @@ export function DashboardView() {
               </Button>
               <Button
                 variant="outline"
-                className="justify-start gap-2.5 h-auto py-3 min-h-[44px] border-teal-200 text-teal-700 hover:bg-teal-50"
+                className="justify-start gap-2.5 h-auto py-3 border-teal-200 text-teal-700 hover:bg-teal-50"
                 onClick={() => {
                   setCurrentView('dispatch');
                   toast.info('Opening Dispatch Board');
@@ -1108,7 +1040,7 @@ export function DashboardView() {
               </Button>
               <Button
                 variant="outline"
-                className="justify-start gap-2.5 h-auto py-3 min-h-[44px] border-green-200 text-green-700 hover:bg-green-50"
+                className="justify-start gap-2.5 h-auto py-3 border-green-200 text-green-700 hover:bg-green-50"
                 onClick={() => {
                   setCurrentView('whatsapp');
                   toast.info('Opening WhatsApp');
@@ -1128,7 +1060,7 @@ export function DashboardView() {
         {loading ? (
           <TableSkeleton />
         ) : stats?.recentLeads && stats.recentLeads.length > 0 ? (
-          <Card className="rounded-xl">
+          <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
@@ -1195,7 +1127,7 @@ export function DashboardView() {
             </CardContent>
           </Card>
         ) : (
-          <Card className="rounded-xl">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">Recent Leads</CardTitle>
               <CardDescription>Latest leads added to your pipeline</CardDescription>
@@ -1213,7 +1145,7 @@ export function DashboardView() {
         {loading ? (
           <TableSkeleton />
         ) : stats?.recentJobs && stats.recentJobs.length > 0 ? (
-          <Card className="rounded-xl">
+          <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
@@ -1270,7 +1202,7 @@ export function DashboardView() {
             </CardContent>
           </Card>
         ) : (
-          <Card className="rounded-xl">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">Recent Jobs</CardTitle>
               <CardDescription>Active and upcoming job assignments</CardDescription>
@@ -1286,7 +1218,7 @@ export function DashboardView() {
       </div>
 
       {/* ─── Real-time Employee Presence Section ────────────────────── */}
-      <Card className="rounded-xl">
+      <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
@@ -1312,16 +1244,16 @@ export function DashboardView() {
               {employees.map((emp) => {
                 const statusDot: Record<string, string> = {
                   available: 'bg-emerald-500',
-                  busy: 'bg-amber-500',
+                  busy: 'bg-red-500',
                   offline: 'bg-gray-400',
-                  traveling: 'bg-teal-500',
+                  traveling: 'bg-blue-500',
                   leave: 'bg-amber-500',
                 };
                 const statusBg: Record<string, string> = {
                   available: 'bg-emerald-50 border-emerald-200',
-                  busy: 'bg-amber-50 border-amber-200',
+                  busy: 'bg-red-50 border-red-200',
                   offline: 'bg-gray-50 border-gray-200',
-                  traveling: 'bg-teal-50 border-teal-200',
+                  traveling: 'bg-blue-50 border-blue-200',
                   leave: 'bg-amber-50 border-amber-200',
                 };
                 const statusLabel: Record<string, string> = {
@@ -1331,22 +1263,14 @@ export function DashboardView() {
                   traveling: 'Traveling',
                   leave: 'On Leave',
                 };
-                const statusTextColor: Record<string, string> = {
-                  available: 'text-emerald-700',
-                  busy: 'text-amber-700',
-                  offline: 'text-gray-600',
-                  traveling: 'text-teal-700',
-                  leave: 'text-amber-700',
-                };
                 const dot = statusDot[emp.status] || 'bg-gray-400';
                 const bg = statusBg[emp.status] || 'bg-gray-50 border-gray-200';
                 const label = statusLabel[emp.status] || emp.status;
-                const textColor = statusTextColor[emp.status] || 'text-gray-600';
 
                 return (
                   <div
                     key={emp.id}
-                    className={cn('rounded-xl border p-3 flex items-center gap-3 transition-all hover:shadow-md hover:scale-[1.02] duration-200', bg)}
+                    className={cn('rounded-lg border p-3 flex items-center gap-3 transition-all hover:shadow-sm', bg)}
                   >
                     <div className="relative shrink-0">
                       <Avatar className="size-9">
@@ -1354,13 +1278,13 @@ export function DashboardView() {
                           {emp.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
-                      <div className={cn('absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border-2 border-white shadow-sm', dot)} />
+                      <div className={cn('absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-white', dot)} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">{emp.name}</p>
                       <p className="text-[11px] text-muted-foreground capitalize">{emp.role}</p>
                     </div>
-                    <Badge variant="outline" className={cn('text-[9px] px-1.5 py-0 shrink-0 border-current/30', textColor)}>
+                    <Badge variant="outline" className={cn('text-[9px] px-1.5 py-0 shrink-0', dot.replace('bg-', 'text-').replace('-500', '-700'))}>
                       {label}
                     </Badge>
                   </div>
@@ -1372,7 +1296,7 @@ export function DashboardView() {
       </Card>
 
       {/* ─── Customer Journey Overview ──────────────────────────────── */}
-      <Card className="rounded-xl">
+      <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
@@ -1414,7 +1338,7 @@ export function DashboardView() {
                     <button
                       onClick={() => setCurrentView(config.view as any)}
                       className={cn(
-                        'rounded-xl border px-4 py-3 min-w-[100px] text-center transition-all hover:shadow-md hover:scale-[1.03] duration-200 cursor-pointer',
+                        'rounded-lg border px-4 py-3 min-w-[100px] text-center transition-all hover:shadow-sm cursor-pointer',
                         config.bg,
                         config.border
                       )}
@@ -1436,7 +1360,7 @@ export function DashboardView() {
       {/* ─── WhatsApp Activity + Scheduled Actions ──────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* WhatsApp Activity Widget */}
-        <Card className="rounded-xl">
+        <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
@@ -1524,7 +1448,7 @@ export function DashboardView() {
         </Card>
 
         {/* Scheduled Actions Widget */}
-        <Card className="rounded-xl">
+        <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>

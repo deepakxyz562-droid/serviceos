@@ -1,5 +1,4 @@
 'use client';
-import { authFetch } from '@/lib/client-auth';
 
 import { useState, useCallback } from 'react';
 import {
@@ -38,7 +37,7 @@ export function AIWorkflowGenerator() {
     setIsGenerating(true);
 
     try {
-      const res = await authFetch('/api/ai/generate-workflow', {
+      const res = await fetch('/api/ai/generate-workflow', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: prompt.trim() }),
@@ -50,7 +49,7 @@ export function AIWorkflowGenerator() {
       const workflow = data.workflow;
 
       // Create the workflow in the database
-      const createRes = await authFetch('/api/workflows', {
+      const createRes = await fetch('/api/workflows', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

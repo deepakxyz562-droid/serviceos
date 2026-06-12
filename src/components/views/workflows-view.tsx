@@ -1,5 +1,4 @@
 'use client';
-import { authFetch } from '@/lib/client-auth';
 
 import { useState, useEffect, useCallback } from 'react';
 import {
@@ -25,6 +24,13 @@ import {
   MessageSquare,
   Loader2,
   RefreshCw,
+  UserPlus, CheckCircle, ArrowRightLeft, Clock3, Edit3, Users,
+  CalendarCheck, CalendarX, CalendarClock, CalendarPlus, AlertCircle,
+  CircleCheck, UserCheck, XCircle, Briefcase, AlertTriangle,
+  MessageCircle, MessageSquarePlus, MailCheck, Banknote, CreditCard,
+  Receipt, FileCheck2, WifiOff, Globe, MousePointerClick, TimerReset,
+  Tag, PlusCircle, Bell, Save, Bot, Store,
+  Settings2, ChevronDown, ChevronUp, Sparkles,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -65,11 +71,14 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useAppStore } from '@/store/app-store';
+
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { ViewHeader } from '@/components/shared/view-header';
-import { EmptyState } from '@/components/shared/empty-state';
-import { StatCard } from '@/components/shared/stat-card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+
+import { PREBUILT_TRIGGERS, TRIGGER_CATEGORIES } from '@/lib/trigger-catalog';
+import type { PrebuiltTrigger } from '@/lib/trigger-catalog';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -243,6 +252,12 @@ export function WorkflowsView() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [triggerFilter, setTriggerFilter] = useState('all');
 
+  // Tabs
+  const [activeTab, setActiveTab] = useState<'workflows' | 'templates'>('workflows');
+  const [templateCategory, setTemplateCategory] = useState('all');
+  const [templateSearch, setTemplateSearch] = useState('');
+  const [enabledTriggers, setEnabledTriggers] = useState<string[]>([]);
+
   // Dialogs
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
@@ -266,7 +281,7 @@ export function WorkflowsView() {
   const fetchWorkflows = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await authFetch('/api/workflows');
+      const res = await fetch('/api/workflows');
       if (res.ok) {
         const data = await res.json();
         const apiWorkflows: WorkflowItem[] = (data.workflows || []).map((w: any) => {
@@ -339,7 +354,7 @@ export function WorkflowsView() {
       // Optimistic update
       setWorkflows(prev => prev.map(w => w.id === id ? { ...w, active: !currentActive } : w));
       
-      const res = await authFetch(`/api/workflows/${id}/activate`, {
+      const res = await fetch(`/api/workflows/${id}/activate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ active: !currentActive }),
@@ -370,7 +385,7 @@ export function WorkflowsView() {
   const triggerWorkflow = async (id: string, name: string) => {
     setTriggeringId(id);
     try {
-      const res = await authFetch(`/api/workflows/${id}/execute`, {
+      const res = await fetch(`/api/workflows/${id}/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -411,7 +426,7 @@ export function WorkflowsView() {
     setRenamingId(null);
     
     try {
-      const res = await authFetch(`/api/workflows/${id}`, {
+      const res = await fetch(`/api/workflows/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: trimmed }),
@@ -436,7 +451,7 @@ export function WorkflowsView() {
     setWorkflows(prev => prev.filter(w => w.id !== id));
     
     try {
-      const res = await authFetch(`/api/workflows/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/workflows/${id}`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('Workflow deleted');
       } else {
@@ -473,7 +488,7 @@ export function WorkflowsView() {
     };
 
     try {
-      const res = await authFetch('/api/workflows', {
+      const res = await fetch('/api/workflows', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -508,7 +523,7 @@ export function WorkflowsView() {
   const handleSaveWorkflow = async (workflow: WorkflowItem) => {
     setSaving(true);
     try {
-      const res = await authFetch(`/api/workflows/${workflow.id}`, {
+      const res = await fetch(`/api/workflows/${workflow.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -536,32 +551,137 @@ export function WorkflowsView() {
     setShowDetailDialog(true);
   };
 
+  // ─── Trigger template handlers ─────────────────────────────────────────
+
+  const fetchEnabledTriggers = useCallback(async () => {
+    try {
+      const res = await fetch('/api/triggers?XTransformPort=3000');
+      if (res.ok) {
+        const data = await res.json();
+        const names = (data.automations || []).map((a: any) => a.name);
+        setEnabledTriggers(names);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => { fetchEnabledTriggers(); }, [fetchEnabledTriggers]);
+
+  const handleEnableTrigger = async (trigger: PrebuiltTrigger) => {
+    try {
+      const actionsToSave = trigger.defaultActions.map(a => ({ type: a.type, config: a.config }));
+      const res = await fetch('/api/triggers?XTransformPort=3000', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: trigger.name,
+          description: trigger.description,
+          triggerType: trigger.triggerType,
+          triggerConfigJson: trigger.triggerConfigJson,
+          conditionsJson: trigger.conditionsJson,
+          actionsJson: JSON.stringify(actionsToSave),
+          active: true,
+        }),
+      });
+      if (res.ok) {
+        setEnabledTriggers(prev => [...prev, trigger.name]);
+        toast.success(`"${trigger.name}" activated!`);
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Failed to activate trigger');
+      }
+    } catch {
+      toast.error('Failed to activate trigger');
+    }
+  };
+
+  const handleDisableTrigger = async (triggerName: string) => {
+    try {
+      const res = await fetch('/api/triggers?XTransformPort=3000');
+      if (res.ok) {
+        const data = await res.json();
+        const automation = (data.automations || []).find((a: any) => a.name === triggerName);
+        if (automation) {
+          await fetch(`/api/triggers/${automation.id}?XTransformPort=3000`, { method: 'DELETE' });
+          setEnabledTriggers(prev => prev.filter(n => n !== triggerName));
+          toast.success('Trigger deactivated');
+        }
+      }
+    } catch {
+      toast.error('Failed to deactivate trigger');
+    }
+  };
+
+  const filteredTemplates = PREBUILT_TRIGGERS.filter(p => {
+    const matchesCategory = templateCategory === 'all' || p.category === templateCategory;
+    const matchesSearch = !templateSearch ||
+      p.name.toLowerCase().includes(templateSearch.toLowerCase()) ||
+      p.description.toLowerCase().includes(templateSearch.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header */}
-      <ViewHeader
-        icon={Workflow}
-        title="Workflows"
-        description="Automate your business processes"
-        action={
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={fetchWorkflows} disabled={loading} className="min-h-[36px]">
-              <RefreshCw className={cn('size-3.5 mr-1.5', loading && 'animate-spin')} /> Refresh
-            </Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700 min-h-[44px]" onClick={() => setShowCreateDialog(true)}>
-              <Plus className="size-4 mr-1.5" /> New Workflow
-            </Button>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600">
+            <Workflow className="size-5 text-white" />
           </div>
-        }
-      />
+          <div>
+            <h2 className="text-xl font-bold">Workflows</h2>
+            <p className="text-sm text-muted-foreground">Automate your business processes</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={fetchWorkflows} disabled={loading}>
+            <RefreshCw className={cn('size-3.5 mr-1.5', loading && 'animate-spin')} /> Refresh
+          </Button>
+          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowCreateDialog(true)}>
+            <Plus className="size-4 mr-1.5" /> New Workflow
+          </Button>
+        </div>
+      </div>
 
       {/* Stats */}
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
-        <StatCard label="Total Workflows" value={stats.total} icon={Workflow} />
-        <StatCard label="Active" value={stats.active} icon={CheckCircle2} color="text-emerald-600" />
-        <StatCard label="Executions Today" value={stats.executionsToday.toLocaleString()} icon={Activity} color="text-teal-600" />
-        <StatCard label="Success Rate" value={`${stats.avgSuccessRate}%`} icon={BarChart3} color="text-purple-600" />
+        {[
+          { label: 'Total Workflows', value: stats.total, icon: Workflow, color: 'text-foreground' },
+          { label: 'Active', value: stats.active, icon: CheckCircle2, color: 'text-emerald-600' },
+          { label: 'Executions Today', value: stats.executionsToday.toLocaleString(), icon: Activity, color: 'text-blue-600' },
+          { label: 'Success Rate', value: `${stats.avgSuccessRate}%`, icon: BarChart3, color: 'text-purple-600' },
+        ].map(stat => {
+          const Icon = stat.icon;
+          return (
+            <Card key={stat.label} className="p-4">
+              <div className="flex items-center gap-2">
+                <Icon className={`size-4 ${stat.color}`} />
+                <div>
+                  <p className="text-xs text-muted-foreground">{stat.label}</p>
+                  <p className={`text-lg font-bold ${stat.color}`}>{stat.value}</p>
+                </div>
+              </div>
+            </Card>
+          );
+        })}
       </div>
+
+      {/* Main Tabs: My Workflows / Trigger Templates */}
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'workflows' | 'templates')}>
+        <TabsList>
+          <TabsTrigger value="workflows" className="gap-1.5">
+            <Workflow className="size-3.5" />
+            My Workflows
+            <Badge variant="secondary" className="text-[9px] h-4 px-1">{workflows.length}</Badge>
+          </TabsTrigger>
+          <TabsTrigger value="templates" className="gap-1.5">
+            <Store className="size-3.5" />
+            Trigger Templates
+            <Badge variant="secondary" className="text-[9px] h-4 px-1">{PREBUILT_TRIGGERS.length}</Badge>
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ─── My Workflows Tab ──────────────────────────────────────────── */}
+        <TabsContent value="workflows" className="mt-4">
 
       {/* Filters & Search */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -817,14 +937,185 @@ export function WorkflowsView() {
 
       {/* Empty State */}
       {!loading && filtered.length === 0 && (
-        <EmptyState
-          icon={Workflow}
-          title="No workflows found"
-          description={search || statusFilter !== 'all' ? 'Try adjusting your filters' : 'Create your first workflow to automate your business processes'}
-          actionLabel={!search && statusFilter === 'all' ? 'New Workflow' : undefined}
-          onAction={!search && statusFilter === 'all' ? () => setShowCreateDialog(true) : undefined}
-        />
+        <div className="text-center py-12">
+          <Workflow className="size-12 mx-auto text-muted-foreground/50 mb-4" />
+          <h3 className="text-lg font-medium mb-1">No workflows found</h3>
+          <p className="text-muted-foreground mb-4">{search || statusFilter !== 'all' ? 'Try adjusting your filters' : 'Create your first workflow to get started'}</p>
+          <Button className="gap-2 bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowCreateDialog(true)}>
+            <Plus className="size-4" /> New Workflow
+          </Button>
+        </div>
       )}
+
+        </TabsContent>
+
+        {/* ─── Trigger Templates Tab ──────────────────────────────────────── */}
+        <TabsContent value="templates" className="mt-4 space-y-4">
+          {/* Search & Filter */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Input placeholder="Search trigger templates..." value={templateSearch} onChange={e => setTemplateSearch(e.target.value)} className="pl-8" />
+            </div>
+            <Badge variant="outline" className="h-9 px-3 gap-1.5 text-xs border-emerald-500/30 text-emerald-600">
+              <Zap className="size-3.5" />
+              {enabledTriggers.length} Active
+            </Badge>
+          </div>
+
+          {/* Category pills */}
+          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+            {TRIGGER_CATEGORIES.map((cat) => {
+              const Icon = cat.icon;
+              const count = cat.id === 'all'
+                ? PREBUILT_TRIGGERS.length
+                : PREBUILT_TRIGGERS.filter(p => p.category === cat.id).length;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setTemplateCategory(cat.id)}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all shrink-0',
+                    templateCategory === cat.id
+                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shadow-sm shadow-emerald-500/10'
+                      : 'bg-muted/50 text-muted-foreground hover:bg-muted border border-transparent'
+                  )}
+                >
+                  <Icon className="size-3" />
+                  {cat.label}
+                  <span className={cn(
+                    'text-[9px] font-semibold',
+                    templateCategory === cat.id ? 'text-emerald-500' : 'text-muted-foreground'
+                  )}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Template grid */}
+          {filteredTemplates.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12 gap-4">
+                <div className="size-16 rounded-full bg-muted flex items-center justify-center">
+                  <Search className="size-8 text-muted-foreground" />
+                </div>
+                <div className="text-center">
+                  <h3 className="font-semibold text-lg">No triggers found</h3>
+                  <p className="text-muted-foreground text-sm mt-1">Try adjusting your search or category filter</p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredTemplates.map((trigger) => {
+                const isEnabled = enabledTriggers.includes(trigger.name);
+                const Icon = trigger.icon;
+                const CategoryIcon = TRIGGER_CATEGORIES.find(c => c.id === trigger.category)?.icon || Zap;
+
+                return (
+                  <Card
+                    key={trigger.id}
+                    className={cn(
+                      'group transition-all hover:shadow-md border',
+                      isEnabled ? 'border-emerald-500/30 bg-emerald-500/[0.03]' : 'border-border hover:border-emerald-500/20'
+                    )}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <div className={cn(
+                          'size-10 rounded-xl flex items-center justify-center shrink-0 transition-colors',
+                          isEnabled ? 'bg-emerald-500/15' : 'bg-muted group-hover:bg-emerald-500/10'
+                        )}>
+                          <Icon className={cn('size-5 transition-colors', isEnabled ? 'text-emerald-500' : 'text-muted-foreground group-hover:text-emerald-500')} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <h3 className="text-sm font-semibold truncate">{trigger.name}</h3>
+                            {trigger.popular && !isEnabled && (
+                              <Badge className="text-[8px] h-3.5 px-1 bg-emerald-500/20 text-emerald-600 border-emerald-500/30">Popular</Badge>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{trigger.description}</p>
+                        </div>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div>
+                              <Switch
+                                checked={isEnabled}
+                                onCheckedChange={() => {
+                                  if (isEnabled) {
+                                    handleDisableTrigger(trigger.name);
+                                  } else {
+                                    handleEnableTrigger(trigger);
+                                  }
+                                }}
+                                className="scale-90 origin-top-right"
+                              />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="left">
+                            {isEnabled ? 'Click to deactivate' : 'Click to enable'}
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+
+                      <div className="mt-3 flex items-center gap-1.5">
+                        <div className={cn(
+                          'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border',
+                          trigger.categoryColor
+                        )}>
+                          <CategoryIcon className="size-2.5" />
+                          {trigger.category}
+                        </div>
+                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                          <Zap className="size-2.5" />
+                          {trigger.eventLabel}
+                        </div>
+                      </div>
+
+                      <div className="mt-2.5 flex flex-wrap gap-1">
+                        {trigger.defaultActions.map((action, idx) => {
+                          const ActionIcon = action.icon;
+                          return (
+                            <div key={idx} className="flex items-center gap-1 text-[10px] text-muted-foreground bg-muted/60 rounded-md px-1.5 py-0.5">
+                              <ActionIcon className="size-2.5" />
+                              {action.label}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="mt-3 pt-2.5 border-t flex items-center justify-between">
+                        <span className={cn('text-[10px] font-medium', isEnabled ? 'text-emerald-600' : 'text-muted-foreground')}>
+                          {isEnabled ? '✓ Active' : 'Toggle to enable'}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="size-6 p-0 text-muted-foreground hover:text-foreground"
+                          onClick={() => {
+                            // Create a new workflow with this trigger
+                            setCreateForm({
+                              name: trigger.name,
+                              triggerType: 'event',
+                              description: trigger.description,
+                            });
+                            setShowCreateDialog(true);
+                          }}
+                        >
+                          <Plus className="size-3" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
       {/* Create Workflow Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>

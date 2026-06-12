@@ -17,8 +17,6 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { authFetch } from '@/lib/client-auth';
-import { useAppStore } from '@/store/app-store';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Building2,
@@ -164,25 +162,24 @@ const slideVariants = {
 // ---------------------------------------------------------------------------
 
 export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps) {
-  const [currentStep, setCurrentStep] = useState(tenant?.onboardingStep ? Math.min(tenant.onboardingStep, 4) : 1);
+  const [currentStep, setCurrentStep] = useState(1);
   const [direction, setDirection] = useState(1);
   const [saving, setSaving] = useState(false);
-  const { setAuth } = useAppStore();
 
   // Step 1
   const [step1, setStep1] = useState<Step1Data>({
     businessName: tenant?.name || user?.name || '',
-    industry: tenant?.industry || null,
-    address: tenant?.address || '',
-    city: tenant?.city || '',
-    state: tenant?.state || '',
-    pincode: tenant?.pincode || '',
+    industry: null,
+    address: '',
+    city: '',
+    state: '',
+    pincode: '',
   });
 
   // Step 2
   const [step2, setStep2] = useState<Step2Data>({
-    whatsappOption: tenant?.whatsappPhone ? 'platform' : 'platform',
-    whatsappPhone: tenant?.whatsappPhone || tenant?.phone || '',
+    whatsappOption: 'platform',
+    whatsappPhone: '',
     phoneNumberId: '',
     businessAccountId: '',
     accessToken: '',
@@ -231,13 +228,17 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
 
   const saveTenantProgress = useCallback(
     async (payload: Record<string, any>) => {
-      const res = await authFetch(`/api/tenants/${tenantId}?XTransformPort=3000`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        throw new Error('Failed to save progress');
+      try {
+        const res = await fetch(`/api/tenants/${tenantId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          throw new Error('Failed to save progress');
+        }
+      } catch (err) {
+        console.error('Save tenant progress error:', err);
       }
     },
     [tenantId],
@@ -246,7 +247,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   const createSubscription = useCallback(
     async (plan: string, billing: string) => {
       try {
-        const res = await authFetch('/api/subscriptions?XTransformPort=3000', {
+        const res = await fetch('/api/subscriptions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ tenantId, plan, billing }),
@@ -361,25 +362,6 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
         onboardingStep: 4,
         onboardingCompleted: true,
       });
-
-      // Update auth state with onboardingCompleted = true so it persists across sessions
-      const updatedTenant = { ...tenant, onboardingCompleted: true, onboardingStep: 4 };
-      setAuth({
-        isAuthenticated: true,
-        user,
-        tenant: updatedTenant,
-      });
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(
-          'serviceos_auth',
-          JSON.stringify({
-            isAuthenticated: true,
-            user,
-            tenant: updatedTenant,
-          })
-        );
-      }
-
       toast.success('Welcome to ServiceOS! 🎉');
       onComplete();
     } catch {
@@ -387,7 +369,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
     } finally {
       setSaving(false);
     }
-  }, [saveTenantProgress, onComplete, tenant, user, setAuth]);
+  }, [saveTenantProgress, onComplete]);
 
   const handleNext = useCallback(() => {
     if (currentStep === 1) handleStep1Next();

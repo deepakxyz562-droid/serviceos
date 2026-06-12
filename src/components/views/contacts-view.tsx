@@ -1,27 +1,34 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { authFetch } from '@/lib/client-auth';
-import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  Contact, Upload, Download, Plus, Search, Filter, Edit, Trash2,
+  MoreVertical, FileSpreadsheet, CheckCircle2, AlertCircle, X,
+  Loader2, Mail, Phone, Building2, Tag, ChevronDown,
+} from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
-import { Skeleton } from '@/components/ui/skeleton';
-import { ViewHeader } from '@/components/shared/view-header';
-import { EmptyState } from '@/components/shared/empty-state';
 import {
-  Users, Plus, Search, Phone, Mail, MessageCircle,
-  Eye, Trash2, Pencil, MapPin, Briefcase,
-  FileText, Calendar,
-} from 'lucide-react';
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -29,44 +36,18 @@ interface Contact {
   id: string;
   name: string;
   email: string | null;
-  phone: string;
-  address: string | null;
-  whatsappId: string | null;
+  phone: string | null;
+  company: string | null;
+  tags: string | null;
   createdAt: string;
   updatedAt: string;
-  _count?: {
-    jobs: number;
-    invoices: number;
-    leads: number;
-  };
 }
 
-interface ContactFormData {
-  name: string;
-  phone: string;
-  email: string;
-  address: string;
-  whatsappId: string;
-}
-
-// ─── Constants ──────────────────────────────────────────────────────────────
-
-const EMPTY_FORM = (): ContactFormData => ({
-  name: '', phone: '', email: '', address: '', whatsappId: '',
-});
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-function formatDate(dateStr: string): string {
-  try {
-    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  } catch {
-    return '—';
-  }
-}
-
-function getInitials(name: string): string {
-  return name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+interface ImportStats {
+  total: number;
+  imported: number;
+  duplicates: number;
+  skipped: number;
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -75,461 +56,800 @@ export function ContactsView() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [tagFilter, setTagFilter] = useState<string>('all');
+  const [allTags, setAllTags] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  // Dialogs
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null);
+
+  // Form state
+  const [formName, setFormName] = useState('');
+  const [formEmail, setFormEmail] = useState('');
+  const [formPhone, setFormPhone] = useState('');
+  const [formCompany, setFormCompany] = useState('');
+  const [formTags, setFormTags] = useState('');
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
-  const [form, setForm] = useState<ContactFormData>(EMPTY_FORM());
   const [saving, setSaving] = useState(false);
 
-  const [showDetailDialog, setShowDetailDialog] = useState(false);
-  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  // Import state
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importPreview, setImportPreview] = useState<Record<string, string>[]>([]);
+  const [importHeaders, setImportHeaders] = useState<string[]>([]);
+  const [fieldMapping, setFieldMapping] = useState<Record<string, string>>({});
+  const [importing, setImporting] = useState(false);
+  const [importStats, setImportStats] = useState<ImportStats | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ─── Debounced Search ─────────────────────────────────────────────────
+  // Export state
+  const [exportFormat, setExportFormat] = useState<string>('csv');
 
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
-  // ─── Data Fetching ──────────────────────────────────────────────────────
+  // ─── Fetch contacts ─────────────────────────────────────────────────────
 
   const fetchContacts = useCallback(async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams();
-      if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim());
-      params.set('limit', '100');
-      params.set('sortBy', 'createdAt');
-      params.set('sortOrder', 'desc');
-
-      const res = await authFetch(`/api/contacts?${params.toString()}`);
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: 'Failed to fetch contacts' }));
-        throw new Error(errorData.error || `Request failed (${res.status})`);
+      const res = await fetch('/api/contacts');
+      if (res.ok) {
+        const data = await res.json();
+        setContacts(data);
+        // Extract unique tags
+        const tagSet = new Set<string>();
+        data.forEach((c: Contact) => {
+          if (c.tags) {
+            c.tags.split(',').map(t => t.trim()).filter(Boolean).forEach(tagSet.add, tagSet);
+          }
+        });
+        setAllTags(Array.from(tagSet).sort());
       }
-      const data = await res.json();
-      setContacts(data.contacts || []);
-    } catch (err) {
-      console.error('Error fetching contacts:', err);
-      const message = err instanceof Error ? err.message : 'Failed to load contacts';
-      toast.error(message);
+    } catch {
+      toast.error('Failed to load contacts');
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch]);
+  }, []);
 
-  useEffect(() => {
-    fetchContacts();
-  }, [fetchContacts]);
+  useEffect(() => { fetchContacts(); }, [fetchContacts]);
 
-  // ─── Stats ──────────────────────────────────────────────────────────────
+  // ─── Filtered contacts ──────────────────────────────────────────────────
 
-  const thisMonth = contacts.filter((c) => {
-    const date = new Date(c.createdAt);
-    const now = new Date();
-    return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-  }).length;
+  const filteredContacts = contacts.filter(c => {
+    const q = searchQuery.toLowerCase();
+    if (q && !c.name.toLowerCase().includes(q) && !(c.email || '').toLowerCase().includes(q) && !(c.phone || '').toLowerCase().includes(q) && !(c.company || '').toLowerCase().includes(q)) {
+      return false;
+    }
+    if (tagFilter !== 'all') {
+      const contactTags = (c.tags || '').split(',').map(t => t.trim());
+      if (!contactTags.includes(tagFilter)) return false;
+    }
+    return true;
+  });
 
-  const withEmail = contacts.filter((c) => c.email).length;
-  const withWhatsApp = contacts.filter((c) => c.whatsappId).length;
+  // ─── Add/Edit contact ───────────────────────────────────────────────────
 
-  const stats = {
-    total: contacts.length,
-    withEmail,
-    withWhatsApp,
-    thisMonth,
+  const handleSave = async () => {
+    if (!formName.trim()) {
+      toast.error('Name is required');
+      return;
+    }
+    setSaving(true);
+    try {
+      const body = {
+        name: formName.trim(),
+        email: formEmail.trim() || null,
+        phone: formPhone.trim() || null,
+        company: formCompany.trim() || null,
+        tags: formTags.trim() || null,
+      };
+
+      const url = editingContact ? `/api/contacts?id=${editingContact.id}` : '/api/contacts';
+      const method = editingContact ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        toast.success(editingContact ? 'Contact updated' : 'Contact created');
+        resetForm();
+        fetchContacts();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to save contact');
+      }
+    } catch {
+      toast.error('Failed to save contact');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  // ─── Handlers ────────────────────────────────────────────────────────────
-
-  const openCreateDialog = () => {
+  const resetForm = () => {
+    setFormName('');
+    setFormEmail('');
+    setFormPhone('');
+    setFormCompany('');
+    setFormTags('');
     setEditingContact(null);
-    setForm(EMPTY_FORM());
-    setShowCreateDialog(true);
+    setAddDialogOpen(false);
+    setEditDialogOpen(false);
   };
 
   const openEditDialog = (contact: Contact) => {
     setEditingContact(contact);
-    setForm({
-      name: contact.name,
-      phone: contact.phone,
-      email: contact.email || '',
-      address: contact.address || '',
-      whatsappId: contact.whatsappId || '',
-    });
-    setShowCreateDialog(true);
+    setFormName(contact.name);
+    setFormEmail(contact.email || '');
+    setFormPhone(contact.phone || '');
+    setFormCompany(contact.company || '');
+    setFormTags(contact.tags || '');
+    setEditDialogOpen(true);
   };
 
-  const openDetailDialog = (contact: Contact) => {
-    setSelectedContact(contact);
-    setShowDetailDialog(true);
-  };
+  // ─── Delete contact ─────────────────────────────────────────────────────
 
-  const handleSave = useCallback(async () => {
-    if (!form.name.trim()) { toast.error('Name is required'); return; }
-    if (!form.phone.trim()) { toast.error('Phone is required'); return; }
-    setSaving(true);
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      const payload = {
-        name: form.name.trim(),
-        phone: form.phone.trim(),
-        email: form.email.trim() || null,
-        address: form.address.trim() || null,
-        whatsappId: form.whatsappId.trim() || null,
-      };
-
-      if (editingContact) {
-        const res = await authFetch(`/api/contacts/${editingContact.id}`, {
-          method: 'PUT',
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) {
-          const errorData = await res.json();
-          throw new Error(errorData.error || 'Failed to update');
-        }
-        toast.success('Contact updated');
+      const res = await fetch(`/api/contacts?id=${deleteTarget.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        toast.success('Contact deleted');
+        setDeleteDialogOpen(false);
+        setDeleteTarget(null);
+        fetchContacts();
       } else {
-        const res = await authFetch('/api/contacts', {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) {
-          const errorData = await res.json();
-          throw new Error(errorData.error || 'Failed to create');
-        }
-        toast.success('Contact created');
+        toast.error('Failed to delete contact');
       }
-      setShowCreateDialog(false);
-      setEditingContact(null);
-      fetchContacts();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to save contact';
-      toast.error(message);
-    } finally {
-      setSaving(false);
+    } catch {
+      toast.error('Failed to delete contact');
     }
-  }, [form, editingContact, fetchContacts]);
+  };
 
-  const handleDelete = useCallback(async (contactId: string) => {
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
     try {
-      const res = await authFetch(`/api/contacts/${contactId}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || 'Failed to delete');
-      }
-      toast.success('Contact deleted');
-      if (selectedContact?.id === contactId) { setShowDetailDialog(false); setSelectedContact(null); }
+      const ids = Array.from(selectedIds);
+      await Promise.all(ids.map(id => fetch(`/api/contacts?id=${id}`, { method: 'DELETE' })));
+      toast.success(`${ids.length} contacts deleted`);
+      setSelectedIds(new Set());
       fetchContacts();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to delete contact';
-      toast.error(message);
+    } catch {
+      toast.error('Failed to delete contacts');
     }
-  }, [selectedContact, fetchContacts]);
-
-  const handleWhatsApp = (phone: string) => {
-    window.open(`https://wa.me/${phone.replace(/[^0-9]/g, '')}`, '_blank');
-    toast.success('Opening WhatsApp');
   };
 
-  const handleCreateJob = (contact: Contact) => {
-    toast.success(`Creating job for ${contact.name}...`);
-    // In a real app, this would navigate to job creation with contact pre-filled
+  // ─── Import ─────────────────────────────────────────────────────────────
+
+  const CONTACT_FIELDS = [
+    { key: 'name', label: 'Name', required: true },
+    { key: 'email', label: 'Email' },
+    { key: 'phone', label: 'Phone' },
+    { key: 'company', label: 'Company' },
+    { key: 'tags', label: 'Tags' },
+  ];
+
+  const parseCSV = (text: string): Record<string, string>[] => {
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    if (lines.length < 2) return [];
+    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+    return lines.slice(1).map(line => {
+      const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+      const row: Record<string, string> = {};
+      headers.forEach((h, i) => { row[h] = values[i] || ''; });
+      return row;
+    });
   };
 
-  const handleCreateQuote = (contact: Contact) => {
-    toast.success(`Creating quote for ${contact.name}...`);
-    // In a real app, this would navigate to quote creation with contact pre-filled
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportFile(file);
+    setImportStats(null);
+
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (ext === 'csv') {
+      const text = await file.text();
+      const rows = parseCSV(text);
+      if (rows.length === 0) {
+        toast.error('No data found in CSV file');
+        return;
+      }
+      const headers = Object.keys(rows[0]);
+      setImportHeaders(headers);
+      setImportPreview(rows.slice(0, 10));
+      // Auto-map fields
+      const mapping: Record<string, string> = {};
+      headers.forEach(h => {
+        const lower = h.toLowerCase();
+        if (lower.includes('name') || lower === 'full name' || lower === 'first name') mapping[h] = 'name';
+        else if (lower.includes('email') || lower === 'e-mail') mapping[h] = 'email';
+        else if (lower.includes('phone') || lower.includes('mobile') || lower.includes('tel')) mapping[h] = 'phone';
+        else if (lower.includes('company') || lower.includes('organization') || lower.includes('org')) mapping[h] = 'company';
+        else if (lower.includes('tag') || lower.includes('label') || lower.includes('category')) mapping[h] = 'tags';
+        else mapping[h] = '_skip';
+      });
+      setFieldMapping(mapping);
+    } else {
+      // For xlsx/xls, send to API for parsing
+      const formData = new FormData();
+      formData.append('file', file);
+      try {
+        const res = await fetch('/api/contacts/import?preview=true', { method: 'POST', body: formData });
+        if (res.ok) {
+          const data = await res.json();
+          setImportHeaders(data.headers || []);
+          setImportPreview(data.preview || []);
+          setFieldMapping(data.mapping || {});
+        } else {
+          toast.error('Failed to parse file. Please use CSV format.');
+        }
+      } catch {
+        toast.error('Failed to parse file');
+      }
+    }
   };
 
-  // ─── Loading Skeletons ──────────────────────────────────────────────────
+  const handleImport = async () => {
+    if (importPreview.length === 0) return;
+    setImporting(true);
+    try {
+      // For CSV, map fields on client side and send JSON
+      const ext = importFile?.name.split('.').pop()?.toLowerCase();
 
-  const renderLoadingSkeletons = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between gap-2">
-                <div className="space-y-2 flex-1">
-                  <Skeleton className="h-3 w-20" />
-                  <Skeleton className="h-6 w-10" />
-                </div>
-                <Skeleton className="size-10 rounded-xl" />
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Card key={i}>
-            <CardContent className="p-4 space-y-3">
-              <div className="flex items-center gap-3">
-                <Skeleton className="size-10 rounded-full" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-3 w-32" />
-                </div>
-              </div>
-              <Skeleton className="h-3 w-40" />
-              <Skeleton className="h-3 w-36" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
+      if (ext === 'csv') {
+        const text = await importFile!.text();
+        const allRows = parseCSV(text);
+        const mappedContacts = allRows.map(row => {
+          const contact: Record<string, string | null> = {};
+          CONTACT_FIELDS.forEach(f => {
+            const sourceHeader = Object.entries(fieldMapping).find(([, target]) => target === f.key)?.[0];
+            contact[f.key] = sourceHeader ? (row[sourceHeader] || null) : null;
+          });
+          return contact;
+        }).filter(c => c.name);
 
-  // ─── Render ──────────────────────────────────────────────────────────────
+        const res = await fetch('/api/contacts/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contacts: mappedContacts }),
+        });
+        if (res.ok) {
+          const stats = await res.json();
+          setImportStats(stats);
+          toast.success(`Imported ${stats.imported} contacts`);
+          fetchContacts();
+        } else {
+          toast.error('Import failed');
+        }
+      } else {
+        const formData = new FormData();
+        if (importFile) formData.append('file', importFile);
+        formData.append('mapping', JSON.stringify(fieldMapping));
+        const res = await fetch('/api/contacts/import', { method: 'POST', body: formData });
+        if (res.ok) {
+          const stats = await res.json();
+          setImportStats(stats);
+          toast.success(`Imported ${stats.imported} contacts`);
+          fetchContacts();
+        } else {
+          toast.error('Import failed');
+        }
+      }
+    } catch {
+      toast.error('Import failed');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  // ─── Export ─────────────────────────────────────────────────────────────
+
+  const handleExport = async () => {
+    try {
+      const params = new URLSearchParams();
+      params.set('format', exportFormat);
+      if (selectedIds.size > 0) {
+        params.set('ids', Array.from(selectedIds).join(','));
+      }
+      if (tagFilter !== 'all') {
+        params.set('tag', tagFilter);
+      }
+      const res = await fetch(`/api/contacts/export?${params}`);
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `contacts.${exportFormat}`;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success('Export complete');
+        setExportDialogOpen(false);
+      } else {
+        toast.error('Export failed');
+      }
+    } catch {
+      toast.error('Export failed');
+    }
+  };
+
+  // ─── Selection ──────────────────────────────────────────────────────────
+
+  const toggleSelect = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelectedIds(next);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredContacts.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredContacts.map(c => c.id)));
+    }
+  };
+
+  // ─── Format date ────────────────────────────────────────────────────────
+
+  const formatDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  // ─── Render ─────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      <ViewHeader
-        icon={Users}
-        iconBg="bg-blue-600"
-        title="Contacts"
-        description="Manage customer contacts, details, and communication"
-        action={
-          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={openCreateDialog}>
-            <Plus className="size-4 mr-1.5" /> Add Contact
-          </Button>
-        }
-      />
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600">
+            <Contact className="size-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold">Contacts</h2>
+            <p className="text-sm text-muted-foreground">Manage your contacts with import & export</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setImportDialogOpen(true)}><Upload className="size-4 mr-1.5" /> Import</Button>
+          <Button variant="outline" onClick={() => setExportDialogOpen(true)}><Download className="size-4 mr-1.5" /> Export</Button>
+          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => { resetForm(); setAddDialogOpen(true); }}><Plus className="size-4 mr-1.5" /> Add Contact</Button>
+        </div>
+      </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {[
-          { label: 'Total Contacts', value: stats.total, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
-          { label: 'With Email', value: stats.withEmail, icon: Mail, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          { label: 'With WhatsApp', value: stats.withWhatsApp, icon: MessageCircle, color: 'text-teal-600', bg: 'bg-teal-50' },
-          { label: 'This Month', value: stats.thisMonth, icon: Calendar, color: 'text-amber-600', bg: 'bg-amber-50' },
-        ].map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={stat.label} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-xs text-muted-foreground truncate">{stat.label}</p>
-                    <p className="text-lg font-bold truncate">{stat.value}</p>
-                  </div>
-                  <div className={`${stat.bg} p-2 rounded-xl shrink-0`}><Icon className={`size-4 ${stat.color}`} /></div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Search */}
-      <div className="flex gap-3 items-center">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input placeholder="Search by name, phone, or email..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
-        </div>
-      </div>
-
-      {/* Content */}
-      {loading ? renderLoadingSkeletons() : contacts.length === 0 ? (
-        <EmptyState
-          icon={Users}
-          title="No contacts found"
-          description={searchQuery ? 'Try adjusting your search query' : 'Start by adding your first contact'}
-          actionLabel="Add Contact"
-          onAction={openCreateDialog}
-        />
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {contacts.map((contact) => (
-            <Card key={contact.id} className="hover:shadow-md transition-shadow cursor-pointer group" onClick={() => openDetailDialog(contact)}>
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="flex items-center justify-center size-10 rounded-full bg-blue-100 text-blue-700 text-sm font-semibold shrink-0">
-                      {getInitials(contact.name)}
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="font-semibold text-sm truncate group-hover:text-emerald-700 transition-colors">{contact.name}</h3>
-                      <p className="text-xs text-muted-foreground truncate">{contact.phone}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5 text-xs text-muted-foreground">
-                  {contact.email && (
-                    <div className="flex items-center gap-1.5">
-                      <Mail className="size-3 shrink-0" />
-                      <span className="truncate">{contact.email}</span>
-                    </div>
-                  )}
-                  {contact.address && (
-                    <div className="flex items-center gap-1.5">
-                      <MapPin className="size-3 shrink-0" />
-                      <span className="truncate">{contact.address}</span>
-                    </div>
-                  )}
-                  {contact.whatsappId && (
-                    <div className="flex items-center gap-1.5">
-                      <MessageCircle className="size-3 shrink-0 text-emerald-600" />
-                      <span className="truncate">{contact.whatsappId}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Quick Actions */}
-                <div className="flex items-center gap-1 pt-2 border-t">
-                  <Button variant="ghost" size="sm" className="h-7 text-xs flex-1" onClick={(e) => { e.stopPropagation(); handleWhatsApp(contact.phone); }}>
-                    <MessageCircle className="size-3 mr-1 text-emerald-600" /> WhatsApp
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-7 text-xs flex-1" onClick={(e) => { e.stopPropagation(); handleCreateJob(contact); }}>
-                    <Briefcase className="size-3 mr-1" /> Job
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-7 text-xs flex-1" onClick={(e) => { e.stopPropagation(); handleCreateQuote(contact); }}>
-                    <FileText className="size-3 mr-1" /> Quote
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {/* Create/Edit Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="max-w-lg max-h-[90vh]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Users className="size-5 text-blue-600" />
-              {editingContact ? 'Edit Contact' : 'Add Contact'}
-            </DialogTitle>
-            <DialogDescription>{editingContact ? 'Update contact information' : 'Add a new contact to your CRM'}</DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="max-h-[65vh] pr-1">
-            <div className="space-y-4 pr-3">
-              <div className="space-y-2">
-                <Label>Name *</Label>
-                <Input placeholder="Full name" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                <Contact className="size-4 text-emerald-600" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Phone *</Label>
-                  <Input placeholder="+91 98765 43210" value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Email</Label>
-                  <Input type="email" placeholder="email@example.com" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Address</Label>
-                <Input placeholder="Full address" value={form.address} onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))} />
-              </div>
-              <div className="space-y-2">
-                <Label>WhatsApp ID</Label>
-                <Input placeholder="e.g., 919876543210" value={form.whatsappId} onChange={(e) => setForm((p) => ({ ...p, whatsappId: e.target.value }))} />
-                <p className="text-xs text-muted-foreground">Phone number with country code, no + sign</p>
+              <div>
+                <p className="text-2xl font-bold">{contacts.length}</p>
+                <p className="text-xs text-muted-foreground">Total Contacts</p>
               </div>
             </div>
-          </ScrollArea>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="size-9 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                <Mail className="size-4 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{contacts.filter(c => c.email).length}</p>
+                <p className="text-xs text-muted-foreground">With Email</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="size-9 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                <Phone className="size-4 text-purple-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{contacts.filter(c => c.phone).length}</p>
+                <p className="text-xs text-muted-foreground">With Phone</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="size-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                <Tag className="size-4 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{allTags.length}</p>
+                <p className="text-xs text-muted-foreground">Tags</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Search and filters */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name, email, phone, or company..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Select value={tagFilter} onValueChange={setTagFilter}>
+              <SelectTrigger className="w-40"><SelectValue placeholder="All Tags" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Tags</SelectItem>
+                {allTags.map(tag => <SelectItem key={tag} value={tag}>{tag}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {selectedIds.size > 0 && (
+              <Button variant="destructive" size="sm" onClick={handleBulkDelete}>
+                <Trash2 className="size-3 mr-1" /> Delete ({selectedIds.size})
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Contact table */}
+      <Card>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="size-8 animate-spin text-emerald-500" />
+            </div>
+          ) : filteredContacts.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-4">
+              <div className="size-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                <Contact className="size-8 text-emerald-600" />
+              </div>
+              <h3 className="text-lg font-semibold">{searchQuery || tagFilter !== 'all' ? 'No matching contacts' : 'No contacts yet'}</h3>
+              <p className="text-sm text-muted-foreground max-w-md">
+                {searchQuery || tagFilter !== 'all'
+                  ? 'Try adjusting your search or filter criteria.'
+                  : 'Add contacts manually or import from a CSV/XLSX file to get started.'}
+              </p>
+              {!searchQuery && tagFilter === 'all' && (
+                <div className="flex gap-2">
+                  <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => { resetForm(); setAddDialogOpen(true); }}><Plus className="size-4 mr-1.5" /> Add Contact</Button>
+                  <Button variant="outline" onClick={() => setImportDialogOpen(true)}><Upload className="size-4 mr-1.5" /> Import</Button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <ScrollArea className="max-h-[600px]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={selectedIds.size === filteredContacts.length && filteredContacts.length > 0}
+                        onCheckedChange={toggleSelectAll}
+                      />
+                    </TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Phone</TableHead>
+                    <TableHead>Company</TableHead>
+                    <TableHead>Tags</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead className="w-12" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredContacts.map(contact => (
+                    <TableRow key={contact.id} className={cn(selectedIds.has(contact.id) && 'bg-emerald-50 dark:bg-emerald-900/10')}>
+                      <TableCell><Checkbox checked={selectedIds.has(contact.id)} onCheckedChange={() => toggleSelect(contact.id)} /></TableCell>
+                      <TableCell className="font-medium">{contact.name}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{contact.email || '-'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{contact.phone || '-'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{contact.company || '-'}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {(contact.tags || '').split(',').map(t => t.trim()).filter(Boolean).map(tag => (
+                            <Badge key={tag} variant="outline" className="text-[10px] h-5 bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800">{tag}</Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{formatDate(contact.createdAt)}</TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="size-4" /></Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEditDialog(contact)}><Edit className="size-3 mr-2" /> Edit</DropdownMenuItem>
+                            <DropdownMenuItem className="text-red-600" onClick={() => { setDeleteTarget(contact); setDeleteDialogOpen(true); }}><Trash2 className="size-3 mr-2" /> Delete</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ─── Add Contact Dialog ──────────────────────────────────────────── */}
+      <Dialog open={addDialogOpen} onOpenChange={(open) => { if (!open) resetForm(); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Contact</DialogTitle>
+            <DialogDescription>Create a new contact manually</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Name *</Label>
+              <Input placeholder="Full name" value={formName} onChange={e => setFormName(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input type="email" placeholder="email@example.com" value={formEmail} onChange={e => setFormEmail(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Phone</Label>
+                <Input placeholder="+1 555-0100" value={formPhone} onChange={e => setFormPhone(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Company</Label>
+              <Input placeholder="Company name" value={formCompany} onChange={e => setFormCompany(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Tags</Label>
+              <Input placeholder="Comma separated: VIP, Client, Lead" value={formTags} onChange={e => setFormTags(e.target.value)} />
+              {allTags.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {allTags.map(tag => (
+                    <Badge
+                      key={tag}
+                      variant="outline"
+                      className="cursor-pointer text-[10px] h-5 hover:bg-emerald-50"
+                      onClick={() => {
+                        const current = formTags.split(',').map(t => t.trim()).filter(Boolean);
+                        if (!current.includes(tag)) {
+                          setFormTags(prev => prev ? `${prev}, ${tag}` : tag);
+                        }
+                      }}
+                    >
+                      + {tag}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateDialog(false)} disabled={saving}>Cancel</Button>
+            <Button variant="outline" onClick={resetForm}>Cancel</Button>
             <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSave} disabled={saving}>
-              {saving ? 'Saving...' : editingContact ? 'Update' : 'Create'}
+              {saving && <Loader2 className="size-4 mr-1 animate-spin" />} Add Contact
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Contact Detail Dialog */}
-      <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
-        <DialogContent className="max-w-md max-h-[90vh]">
-          {selectedContact && (
-            <>
-              <DialogHeader>
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center justify-center size-12 rounded-full bg-blue-100 text-blue-700 text-lg font-semibold shrink-0">
-                    {getInitials(selectedContact.name)}
-                  </div>
-                  <div className="min-w-0">
-                    <DialogTitle className="truncate">{selectedContact.name}</DialogTitle>
-                    <DialogDescription>{selectedContact.phone}</DialogDescription>
-                  </div>
-                </div>
-              </DialogHeader>
-              <ScrollArea className="max-h-[55vh] pr-1">
-                <div className="space-y-4 pr-3">
-                  <div className="space-y-2">
-                    {selectedContact.email && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Mail className="size-4 text-muted-foreground shrink-0" />
-                        <a href={`mailto:${selectedContact.email}`} className="text-blue-600 hover:underline truncate">{selectedContact.email}</a>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2 text-sm">
-                      <Phone className="size-4 text-muted-foreground shrink-0" />
-                      <a href={`tel:${selectedContact.phone}`} className="hover:underline">{selectedContact.phone}</a>
+      {/* ─── Edit Contact Dialog ─────────────────────────────────────────── */}
+      <Dialog open={editDialogOpen} onOpenChange={(open) => { if (!open) resetForm(); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Contact</DialogTitle>
+            <DialogDescription>Update contact information</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Name *</Label>
+              <Input placeholder="Full name" value={formName} onChange={e => setFormName(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input type="email" placeholder="email@example.com" value={formEmail} onChange={e => setFormEmail(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>Phone</Label>
+                <Input placeholder="+1 555-0100" value={formPhone} onChange={e => setFormPhone(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Company</Label>
+              <Input placeholder="Company name" value={formCompany} onChange={e => setFormCompany(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Tags</Label>
+              <Input placeholder="Comma separated: VIP, Client, Lead" value={formTags} onChange={e => setFormTags(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={resetForm}>Cancel</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSave} disabled={saving}>
+              {saving && <Loader2 className="size-4 mr-1 animate-spin" />} Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Delete Confirmation Dialog ──────────────────────────────────── */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete Contact</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete &quot;{deleteTarget?.name}&quot;? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Import Dialog ───────────────────────────────────────────────── */}
+      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Import Contacts</DialogTitle>
+            <DialogDescription>Import contacts from CSV or XLSX files</DialogDescription>
+          </DialogHeader>
+
+          {!importStats ? (
+            <div className="space-y-4 py-4">
+              {/* File upload */}
+              <div
+                className="border-2 border-dashed rounded-lg p-8 text-center hover:border-emerald-400 transition-colors cursor-pointer"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <FileSpreadsheet className="size-10 text-muted-foreground mx-auto mb-3" />
+                <p className="text-sm font-medium">{importFile ? importFile.name : 'Click to select a file'}</p>
+                <p className="text-xs text-muted-foreground mt-1">Supports .csv, .xlsx, .xls files</p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.xlsx,.xls"
+                  className="hidden"
+                  onChange={handleFileSelect}
+                />
+              </div>
+
+              {/* Preview and mapping */}
+              {importPreview.length > 0 && (
+                <>
+                  <Separator />
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">Field Mapping</h4>
+                    <p className="text-xs text-muted-foreground mb-3">Map file columns to contact fields</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {importHeaders.map(header => (
+                        <div key={header} className="flex items-center gap-2">
+                          <span className="text-xs font-mono bg-muted px-2 py-1 rounded truncate flex-1" title={header}>{header}</span>
+                          <ChevronDown className="size-3 text-muted-foreground" />
+                          <Select
+                            value={fieldMapping[header] || '_skip'}
+                            onValueChange={v => setFieldMapping(prev => ({ ...prev, [header]: v }))}
+                          >
+                            <SelectTrigger className="w-28 h-8 text-xs"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="_skip">Skip</SelectItem>
+                              {CONTACT_FIELDS.map(f => (
+                                <SelectItem key={f.key} value={f.key}>{f.label}{f.required ? ' *' : ''}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ))}
                     </div>
-                    {selectedContact.address && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <MapPin className="size-4 text-muted-foreground shrink-0" />
-                        <span>{selectedContact.address}</span>
-                      </div>
-                    )}
-                    {selectedContact.whatsappId && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <MessageCircle className="size-4 text-emerald-600 shrink-0" />
-                        <span>{selectedContact.whatsappId}</span>
-                      </div>
-                    )}
                   </div>
 
                   <Separator />
 
-                  <div className="grid grid-cols-2 gap-3 text-center">
-                    <div>
-                      <p className="text-lg font-bold">{selectedContact._count?.jobs ?? 0}</p>
-                      <p className="text-xs text-muted-foreground">Jobs</p>
-                    </div>
-                    <div>
-                      <p className="text-lg font-bold">{selectedContact._count?.invoices ?? 0}</p>
-                      <p className="text-xs text-muted-foreground">Invoices</p>
-                    </div>
+                  <div>
+                    <h4 className="text-sm font-medium mb-2">Preview ({importPreview.length} rows shown)</h4>
+                    <ScrollArea className="max-h-48">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            {importHeaders.map(h => <TableHead key={h} className="text-[10px]">{h}</TableHead>)}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {importPreview.map((row, i) => (
+                            <TableRow key={i}>
+                              {importHeaders.map(h => (
+                                <TableCell key={h} className="text-xs py-1">{row[h] || '-'}</TableCell>
+                              ))}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </ScrollArea>
                   </div>
-
-                  <Separator />
-
-                  <div className="text-xs text-muted-foreground">
-                    <p>Added {formatDate(selectedContact.createdAt)}</p>
-                    {selectedContact.updatedAt !== selectedContact.createdAt && (
-                      <p>Last updated {formatDate(selectedContact.updatedAt)}</p>
-                    )}
-                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="py-8 text-center space-y-4">
+              <CheckCircle2 className="size-12 text-emerald-600 mx-auto" />
+              <h3 className="text-lg font-semibold">Import Complete</h3>
+              <div className="grid grid-cols-3 gap-4 max-w-sm mx-auto">
+                <div>
+                  <p className="text-2xl font-bold text-emerald-600">{importStats.imported}</p>
+                  <p className="text-xs text-muted-foreground">Imported</p>
                 </div>
-              </ScrollArea>
-              <DialogFooter className="flex-col sm:flex-row gap-2">
-                <div className="flex gap-2 flex-1 flex-wrap">
-                  <Button variant="outline" size="sm" onClick={() => handleWhatsApp(selectedContact.phone)}>
-                    <MessageCircle className="size-3.5 mr-1" /> WhatsApp
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleCreateJob(selectedContact)}>
-                    <Briefcase className="size-3.5 mr-1" /> Create Job
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => handleCreateQuote(selectedContact)}>
-                    <FileText className="size-3.5 mr-1" /> Create Quote
-                  </Button>
+                <div>
+                  <p className="text-2xl font-bold text-amber-600">{importStats.duplicates}</p>
+                  <p className="text-xs text-muted-foreground">Duplicates</p>
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => { openEditDialog(selectedContact); setShowDetailDialog(false); }}>
-                    <Pencil className="size-3.5 mr-1" /> Edit
-                  </Button>
-                  <Button variant="outline" size="sm" className="text-destructive" onClick={() => { handleDelete(selectedContact.id); setShowDetailDialog(false); }}>
-                    <Trash2 className="size-3.5 mr-1" /> Delete
-                  </Button>
+                <div>
+                  <p className="text-2xl font-bold text-red-600">{importStats.skipped}</p>
+                  <p className="text-xs text-muted-foreground">Skipped</p>
                 </div>
-              </DialogFooter>
-            </>
+              </div>
+              <p className="text-xs text-muted-foreground">Total rows: {importStats.total}</p>
+            </div>
           )}
+
+          <DialogFooter>
+            {!importStats ? (
+              <>
+                <Button variant="outline" onClick={() => { setImportDialogOpen(false); setImportFile(null); setImportPreview([]); setImportHeaders([]); }}>Cancel</Button>
+                <Button
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                  onClick={handleImport}
+                  disabled={importing || importPreview.length === 0}
+                >
+                  {importing ? <><Loader2 className="size-4 mr-1 animate-spin" /> Importing...</> : <><Upload className="size-4 mr-1" /> Import</>}
+                </Button>
+              </>
+            ) : (
+              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => { setImportStats(null); setImportFile(null); setImportPreview([]); setImportHeaders([]); setImportDialogOpen(false); }}>Done</Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Export Dialog ───────────────────────────────────────────────── */}
+      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Export Contacts</DialogTitle>
+            <DialogDescription>
+              Export {selectedIds.size > 0 ? `${selectedIds.size} selected` : tagFilter !== 'all' ? `filtered` : 'all'} contacts
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Format</Label>
+              <Select value={exportFormat} onValueChange={setExportFormat}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="csv">CSV</SelectItem>
+                  <SelectItem value="json">JSON</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExportDialogOpen(false)}>Cancel</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleExport}><Download className="size-4 mr-1" /> Export</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

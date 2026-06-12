@@ -22,7 +22,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
-import { authFetch } from '@/lib/client-auth';
 import { useRealtime, usePresence } from '@/hooks/use-realtime';
 import { useMemo } from 'react';
 
@@ -114,7 +113,7 @@ function getPriorityDot(priority: string) {
 function getStatusColor(status: string) {
   const map: Record<string, string> = {
     pending: 'bg-amber-100 text-amber-700 border-amber-200',
-    assigned: 'bg-teal-100 text-teal-700 border-teal-200',
+    assigned: 'bg-blue-100 text-blue-700 border-blue-200',
     in_progress: 'bg-emerald-100 text-emerald-700 border-emerald-200',
     en_route: 'bg-sky-100 text-sky-700 border-sky-200',
     completed: 'bg-green-100 text-green-700 border-green-200',
@@ -223,7 +222,7 @@ export function DispatchView() {
   const fetchJobs = useCallback(async () => {
     try {
       const params = new URLSearchParams({ status: 'pending,assigned' });
-      const res = await authFetch(`/api/jobs?XTransformPort=3000&${params.toString()}`);
+      const res = await fetch(`/api/jobs?XTransformPort=3000&${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setJobs(Array.isArray(data) ? data : []);
@@ -233,7 +232,7 @@ export function DispatchView() {
 
   const fetchEmployees = useCallback(async () => {
     try {
-      const res = await authFetch('/api/employees?XTransformPort=3000');
+      const res = await fetch('/api/employees?XTransformPort=3000');
       if (res.ok) {
         const data = await res.json();
         setEmployees(Array.isArray(data) ? data : []);
@@ -314,7 +313,7 @@ export function DispatchView() {
     // Fetch smart match candidates
     setSmartMatchLoading(true);
     try {
-      const res = await authFetch('/api/dispatch/smart?XTransformPort=3000', {
+      const res = await fetch('/api/dispatch/smart?XTransformPort=3000', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ jobId: job.id, autoAssign: false }),
@@ -340,7 +339,7 @@ export function DispatchView() {
 
     setAssignLoading(true);
     try {
-      const res = await authFetch(`/api/jobs/${assigningJob.id}?XTransformPort=3000`, {
+      const res = await fetch(`/api/jobs/${assigningJob.id}?XTransformPort=3000`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -380,7 +379,7 @@ export function DispatchView() {
       let assigned = 0;
       for (const job of unassigned) {
         try {
-          const res = await authFetch('/api/dispatch/smart?XTransformPort=3000', {
+          const res = await fetch('/api/dispatch/smart?XTransformPort=3000', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ jobId: job.id, autoAssign: true }),
@@ -409,7 +408,7 @@ export function DispatchView() {
 
   const handleStartJob = async (job: Job) => {
     try {
-      const res = await authFetch(`/api/jobs/${job.id}?XTransformPort=3000`, {
+      const res = await fetch(`/api/jobs/${job.id}?XTransformPort=3000`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: job.id, status: 'in_progress' }),
@@ -676,8 +675,8 @@ export function DispatchView() {
         </Card>
         <Card className="border shadow-sm">
           <CardContent className="p-3 flex items-center gap-3">
-            <div className="flex items-center justify-center size-9 rounded-lg bg-teal-100">
-              <ArrowRight className="size-4 text-teal-600" />
+            <div className="flex items-center justify-center size-9 rounded-lg bg-blue-100">
+              <ArrowRight className="size-4 text-blue-600" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Assigned</p>
@@ -708,75 +707,6 @@ export function DispatchView() {
           </CardContent>
         </Card>
       </div>
-
-      {/* ─── Map Visualization Placeholder ─────────────────────────────── */}
-      <Card className="border shadow-sm">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold flex items-center gap-2">
-              <MapPin className="size-4 text-teal-600" />
-              Live Dispatch Map
-            </h3>
-            <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
-              <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse mr-1" /> Live
-            </Badge>
-          </div>
-          <div className="relative rounded-lg bg-gradient-to-br from-teal-50 to-emerald-50 border-2 border-dashed border-teal-200 h-48 flex items-center justify-center overflow-hidden">
-            {/* Grid pattern */}
-            <div className="absolute inset-0" style={{
-              backgroundImage: 'radial-gradient(circle, #d1d5db 1px, transparent 1px)',
-              backgroundSize: '24px 24px',
-              opacity: 0.4,
-            }} />
-            {/* Pin markers for available employees */}
-            {employees.filter(e => e.status === 'available').slice(0, 5).map((emp, i) => (
-              <div
-                key={emp.id}
-                className="absolute"
-                style={{
-                  left: `${20 + i * 15}%`,
-                  top: `${25 + (i % 3) * 20}%`,
-                }}
-              >
-                <div className="relative">
-                  <div className="size-8 rounded-full bg-emerald-500 flex items-center justify-center text-white text-[10px] font-bold shadow-lg border-2 border-white">
-                    {emp.name[0]}
-                  </div>
-                  <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 size-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-emerald-500" />
-                </div>
-              </div>
-            ))}
-            {/* Pin markers for busy employees */}
-            {employees.filter(e => e.status === 'busy').slice(0, 3).map((emp, i) => (
-              <div
-                key={emp.id}
-                className="absolute"
-                style={{
-                  left: `${55 + i * 12}%`,
-                  top: `${35 + (i % 2) * 25}%`,
-                }}
-              >
-                <div className="relative">
-                  <div className="size-8 rounded-full bg-red-500 flex items-center justify-center text-white text-[10px] font-bold shadow-lg border-2 border-white">
-                    {emp.name[0]}
-                  </div>
-                  <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 size-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-red-500" />
-                </div>
-              </div>
-            ))}
-            {/* Center text */}
-            <div className="relative z-10 text-center">
-              <Navigation className="size-6 text-teal-400 mx-auto mb-1" />
-              <p className="text-xs text-teal-600 font-medium">Real-time tracking</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4 mt-2 text-[10px] text-muted-foreground">
-            <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-emerald-500" /> Available</span>
-            <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-red-500" /> Busy</span>
-            <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-gray-400" /> Offline</span>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* ─── Split Panel Layout ────────────────────────────────────────── */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-5 gap-4 min-h-0">

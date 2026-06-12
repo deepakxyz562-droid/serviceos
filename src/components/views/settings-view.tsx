@@ -2,9 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Settings as SettingsIcon,
   Building2,
-  Users,
+  Users as UsersIcon,
   Shield,
   Plug,
   CreditCard,
@@ -21,26 +20,25 @@ import {
   Loader2,
   ArrowRight,
   Copy,
+  Download,
   Link2,
   Eye,
   EyeOff,
   FileCode,
-  Download,
-  Save,
-  Check,
-  X,
-  AlertCircle,
-  ExternalLink,
-  Mail,
   Phone,
+  MessageCircle,
+  Save,
+  Mail,
   MapPin,
   UserPlus,
-  Search,
-  RefreshCw,
-  MessageSquare,
+  MoreHorizontal,
+  ExternalLink,
+  Check,
+  Crown,
+
   Sparkles,
   Pencil,
-  RotateCcw,
+  MessageSquare,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -52,14 +50,12 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Textarea } from '@/components/ui/textarea';
 import { useAppStore } from '@/store/app-store';
-import { authFetch } from '@/lib/client-auth';
 import { toast } from 'sonner';
 
-// ─── Types ─────────────────────────────────────────────────────────────────
+// ─── Event Webhook Types ──────────────────────────────────────────────────
 
 interface EventWebhook {
   id: string;
@@ -87,6 +83,8 @@ interface EventType {
   icon: string;
 }
 
+// ─── WordPress Integration Types ──────────────────────────────────────────
+
 interface WpEndpointConfig {
   id: string;
   name: string;
@@ -101,28 +99,8 @@ interface WpEndpointConfig {
   webhookUrl: string;
   apiUrl: string;
   createdAt: string;
+  _count?: { logs: number };
 }
-
-interface TenantUser {
-  id: string;
-  name: string | null;
-  email: string;
-  role: string;
-  isActive: boolean;
-  avatar: string | null;
-  lastLoginAt: string | null;
-  createdAt: string;
-}
-
-interface RolePermission {
-  role: string;
-  label: string;
-  description: string;
-  permissions: string[];
-  color: string;
-}
-
-// ─── Constants ─────────────────────────────────────────────────────────────
 
 const EVENT_COLORS: Record<string, string> = {
   'job.created': 'bg-emerald-100 text-emerald-700 border-emerald-200',
@@ -142,118 +120,62 @@ const WP_FORM_PLUGINS = [
   { name: 'Elementor Forms', slug: 'elementor' },
 ];
 
-const ROLES: RolePermission[] = [
-  {
-    role: 'owner',
-    label: 'Owner',
-    description: 'Full access to all features and settings. Can manage billing, users, and workspace configuration.',
-    permissions: ['All Features', 'Billing & Payments', 'User Management', 'Role Management', 'Workspace Settings', 'Data Export', 'Integrations', 'API Keys'],
-    color: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  },
-  {
-    role: 'admin',
-    label: 'Admin',
-    description: 'Can manage most features including users and operations, but cannot modify billing or workspace URL.',
-    permissions: ['Most Features', 'User Management', 'Operations', 'CRM', 'Workflows', 'Integrations', 'Reports'],
-    color: 'bg-teal-100 text-teal-700 border-teal-200',
-  },
-  {
-    role: 'manager',
-    label: 'Manager',
-    description: 'Can manage day-to-day operations, jobs, and team members within their scope.',
-    permissions: ['Jobs & Dispatch', 'CRM & Leads', 'Customer Communication', 'Calendar', 'Reports (Read)'],
-    color: 'bg-sky-100 text-sky-700 border-sky-200',
-  },
-  {
-    role: 'employee',
-    label: 'Employee',
-    description: 'Can view and complete assigned jobs, update status, and access the employee portal.',
-    permissions: ['My Jobs', 'Job Status Updates', 'Clock In/Out', 'Customer Details (Assigned)', 'Knowledge Base'],
-    color: 'bg-amber-100 text-amber-700 border-amber-200',
-  },
-  {
-    role: 'technician',
-    label: 'Technician',
-    description: 'Field worker role with mobile-optimized access for job completion and proof collection.',
-    permissions: ['My Jobs', 'Completion Proof', 'Photo Upload', 'Signature Capture', 'Customer Info (Assigned)'],
-    color: 'bg-purple-100 text-purple-700 border-purple-200',
-  },
-];
-
 const INDUSTRIES = [
-  { value: 'plumbing', label: 'Plumbing' },
-  { value: 'cleaning', label: 'Cleaning' },
-  { value: 'packers-movers', label: 'Packers & Movers' },
-  { value: 'hvac', label: 'HVAC' },
-  { value: 'electrical', label: 'Electrical' },
-  { value: 'landscaping', label: 'Landscaping' },
-  { value: 'pest-control', label: 'Pest Control' },
-  { value: 'courier', label: 'Courier' },
-  { value: 'home-repair', label: 'Home Repair' },
-  { value: 'salon-beauty', label: 'Salon & Beauty' },
-  { value: 'other', label: 'Other' },
+  'Home Services',
+  'HVAC',
+  'Plumbing',
+  'Electrical',
+  'Cleaning',
+  'Landscaping',
+  'Pest Control',
+  'Roofing',
+  'Painting',
+  'Moving',
+  'Real Estate',
+  'Healthcare',
+  'Legal',
+  'Education',
+  'Technology',
+  'Other',
 ];
 
-const APP_DOMAIN = process.env.NEXT_PUBLIC_APP_URL
-  ? (() => { try { return new URL(process.env.NEXT_PUBLIC_APP_URL).host; } catch { return 'serviceosapp.netlify.app'; } })()
-  : 'serviceosapp.netlify.app';
+const CURRENCIES = [
+  { value: 'INR', label: 'INR (₹) — Indian Rupee' },
+  { value: 'USD', label: 'USD ($) — US Dollar' },
+  { value: 'EUR', label: 'EUR (€) — Euro' },
+  { value: 'GBP', label: 'GBP (£) — British Pound' },
+  { value: 'AUD', label: 'AUD (A$) — Australian Dollar' },
+  { value: 'CAD', label: 'CAD (C$) — Canadian Dollar' },
+  { value: 'SGD', label: 'SGD (S$) — Singapore Dollar' },
+  { value: 'AED', label: 'AED (د.إ) — UAE Dirham' },
+];
 
-// ─── Slug helper ───────────────────────────────────────────────────────────
-
-function nameToSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
-}
-
-// ─── Component ─────────────────────────────────────────────────────────────
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export function SettingsView() {
-  const { darkMode, toggleDarkMode, auth, setAuth } = useAppStore();
-  const [activeTab, setActiveTab] = useState('company');
+  const { darkMode, toggleDarkMode } = useAppStore();
 
-  // ─── Tenant / Company Profile State ─────────────────────────────────────
-  const [tenantLoading, setTenantLoading] = useState(true);
-  const [tenantSaving, setTenantSaving] = useState(false);
+  // ─── Company Profile State ─────────────────────────────────────────────
+  const [tenantId, setTenantId] = useState<string | null>(null);
   const [companyForm, setCompanyForm] = useState({
     name: '',
     industry: '',
+    currency: 'INR',
     phone: '',
     email: '',
-    address: '',
+    whatsappPhone: '',
+    street: '',
     city: '',
     state: '',
     pincode: '',
-    country: 'US',
-    currency: 'USD',
-    whatsappPhone: '',
+    country: '',
   });
+  const [emailNotifications, setEmailNotifications] = useState(true);
+  const [executionAlerts, setExecutionAlerts] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [tenantLoading, setTenantLoading] = useState(true);
 
-  // ─── Workspace URL State ────────────────────────────────────────────────
-  const [subdomain, setSubdomain] = useState('');
-  const [subdomainVerified, setSubdomainVerified] = useState(false);
-  const [customDomain, setCustomDomain] = useState<string | null>(null);
-  const [editingSubdomain, setEditingSubdomain] = useState(false);
-  const [newSubdomain, setNewSubdomain] = useState('');
-  const [checkingAvailability, setCheckingAvailability] = useState(false);
-  const [availabilityResult, setAvailabilityResult] = useState<{
-    available: boolean;
-    reason?: string;
-    subdomain?: string;
-  } | null>(null);
-  const [savingSubdomain, setSavingSubdomain] = useState(false);
-
-  // ─── Users State ────────────────────────────────────────────────────────
-  const [users, setUsers] = useState<TenantUser[]>([]);
-  const [usersLoading, setUsersLoading] = useState(true);
-  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ email: '', name: '', role: 'employee' });
-  const [inviting, setInviting] = useState(false);
-
-  // ─── Integrations State ─────────────────────────────────────────────────
+  // Event webhooks state
   const [webhooks, setWebhooks] = useState<EventWebhook[]>([]);
   const [eventTypes, setEventTypes] = useState<EventType[]>([]);
   const [webhookLoading, setWebhookLoading] = useState(true);
@@ -267,7 +189,7 @@ export function SettingsView() {
     active: true,
   });
 
-  // ─── WordPress State ────────────────────────────────────────────────────
+  // ─── WordPress Integration State ─────────────────────────────────────────
   const [wpEndpoints, setWpEndpoints] = useState<WpEndpointConfig[]>([]);
   const [wpLoading, setWpLoading] = useState(true);
   const [wpGenerating, setWpGenerating] = useState(false);
@@ -280,130 +202,122 @@ export function SettingsView() {
   const [wpTesting, setWpTesting] = useState(false);
   const [wpShowApiKey, setWpShowApiKey] = useState(false);
 
-  // ─── Notifications State ────────────────────────────────────────────────
-  const [notifications, setNotifications] = useState({
-    emailNotifications: true,
-    executionComplete: true,
-    slackNotifications: false,
-  });
-
-  // ─── Field Mapping State ─────────────────────────────────────────────────
+  // ─── WhatsApp Business Phone State ─────────────────────────────────────
+  const [whatsappPhone, setWhatsappPhone] = useState('');
+  const [whatsappPhoneSaving, setWhatsappPhoneSaving] = useState(false);
+  const [notifyOwner, setNotifyOwner] = useState(true);
+  const [ownerTemplate, setOwnerTemplate] = useState('🎯 New Lead from Website!\n\nName: {{name}}\nPhone: {{phone}}\nEmail: {{email}}\nService: {{serviceType}}\nMessage: {{description}}\n\nFollow up promptly!');
+  const [notifyCustomer, setNotifyCustomer] = useState(true);
+  const [customerTemplate, setCustomerTemplate] = useState('Thank you for contacting us, {{name}}! 🙏\n\nWe have received your inquiry about {{serviceType}}. Our team will contact you shortly.\n\n— {{companyName}}');
+  const [whatsappSettingsSaving, setWhatsappSettingsSaving] = useState(false);
   const [editingFieldMapping, setEditingFieldMapping] = useState(false);
-  const [fieldMappings, setFieldMappings] = useState<Record<string, string>>({
-    'your-name': 'name',
-    'your-phone': 'phone',
-    'your-email': 'email',
-    'your-subject': 'serviceType',
-    'your-message': 'description',
-    'your-address': 'address',
-  });
-  const [newMapSource, setNewMapSource] = useState('');
-  const [newMapTarget, setNewMapTarget] = useState('');
-  const [savingFieldMapping, setSavingFieldMapping] = useState(false);
 
-  // ─── WhatsApp Notification Settings State ─────────────────────────────────
-  const [whatsappSettings, setWhatsappSettings] = useState({
-    notifyOwner: true,
-    ownerPhone: '',
-    ownerTemplate: '🎯 New Lead from Website!\n\nName: {{name}}\nPhone: {{phone}}\nEmail: {{email}}\nService: {{serviceType}}\nMessage: {{description}}\n\nFollow up promptly!',
-    notifyCustomer: true,
-    customerTemplate: 'Thank you for contacting us, {{name}}! 🙏\n\nWe have received your inquiry about {{serviceType}}. Our team will contact you shortly.\n\n— {{companyName}}',
-  });
-  const [savingWhatsappSettings, setSavingWhatsappSettings] = useState(false);
-  const [generatingAiTemplate, setGeneratingAiTemplate] = useState<'owner' | 'customer' | null>(null);
+  // ─── Users State ──────────────────────────────────────────────────────
+  const [users, setUsers] = useState<Array<{
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    phone: string | null;
+    isActive: boolean;
+    lastLoginAt: string | null;
+    createdAt: string;
+  }>>([]);
+  const [usersLoading, setUsersLoading] = useState(true);
+  const [showInviteUser, setShowInviteUser] = useState(false);
+  const [inviteForm, setInviteForm] = useState({ name: '', email: '', role: 'agent' });
+  const [inviting, setInviting] = useState(false);
 
-  const tenantId = auth.tenant?.id;
+  // ─── Roles State ──────────────────────────────────────────────────────
+  const [roles] = useState([
+    { id: 'owner', name: 'Owner', description: 'Full access to all features and settings', users: 1, color: 'bg-amber-100 text-amber-700 border-amber-200' },
+    { id: 'admin', name: 'Admin', description: 'Manage users, settings, and all operations', users: 0, color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+    { id: 'manager', name: 'Manager', description: 'Manage jobs, leads, and team operations', users: 0, color: 'bg-blue-100 text-blue-700 border-blue-200' },
+    { id: 'agent', name: 'Agent', description: 'Handle assigned jobs and leads', users: 0, color: 'bg-sky-100 text-sky-700 border-sky-200' },
+    { id: 'viewer', name: 'Viewer', description: 'Read-only access to dashboards and reports', users: 0, color: 'bg-slate-100 text-slate-600 border-slate-200' },
+  ]);
 
-  // ─── Data Fetching ──────────────────────────────────────────────────────
+  // ─── Workspace URL State ──────────────────────────────────────────────
+  const [workspaceSlug, setWorkspaceSlug] = useState('');
+  const [customDomain, setCustomDomain] = useState('');
+  const [savingWorkspace, setSavingWorkspace] = useState(false);
 
+  // ─── Billing State ────────────────────────────────────────────────────
+  const [billingPlan, setBillingPlan] = useState('starter');
+  const [planStatus, setPlanStatus] = useState('trial');
+  const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
+
+  // ─── Fetch tenant data ──────────────────────────────────────────────────
   const fetchTenantData = useCallback(async () => {
-    if (!tenantId) return;
     setTenantLoading(true);
     try {
-      const res = await authFetch(`/api/tenants/${tenantId}`);
-      if (res.ok) {
-        const data = await res.json();
-        const t = data.tenant;
-        setCompanyForm({
-          name: t.name || '',
-          industry: t.industry || '',
-          phone: t.phone || '',
-          email: t.email || '',
-          address: t.address || '',
-          city: t.city || '',
-          state: t.state || '',
-          pincode: t.pincode || '',
-          country: t.country || 'US',
-          currency: t.currency || 'USD',
-          whatsappPhone: t.whatsappPhone || '',
-        });
-        setSubdomain(t.subdomain || t.slug || '');
-        setSubdomainVerified(t.subdomainVerified || false);
-        setCustomDomain(t.customDomain || null);
+      const authRes = await fetch('/api/auth/me?XTransformPort=3000');
+      if (authRes.ok) {
+        const authData = await authRes.json();
+        const tenant = authData.tenant;
+        if (tenant) {
+          setTenantId(tenant.id);
+          setBillingPlan(tenant.plan || 'starter');
+          setPlanStatus(tenant.planStatus || 'trial');
+          setTrialEndsAt(tenant.trialEndsAt || null);
+          setWorkspaceSlug(tenant.slug || '');
+
+          // Parse address if it's a JSON string or a simple string
+          let street = '';
+          let city = '';
+          let state = '';
+          let pincode = '';
+          let country = tenant.country || '';
+
+          if (tenant.address) {
+            try {
+              const addr = JSON.parse(tenant.address);
+              street = addr.street || '';
+              city = addr.city || '';
+              state = addr.state || '';
+              pincode = addr.pincode || '';
+              country = addr.country || country;
+            } catch {
+              street = tenant.address;
+            }
+          }
+
+          setCompanyForm({
+            name: tenant.name || '',
+            industry: tenant.industry || '',
+            currency: tenant.currency || 'INR',
+            phone: tenant.phone || '',
+            email: tenant.email || '',
+            whatsappPhone: tenant.whatsappPhone || '',
+            street,
+            city,
+            state,
+            pincode,
+            country,
+          });
+
+          setWhatsappPhone(tenant.whatsappPhone || '');
+
+          // Load WhatsApp notification settings from settingsJson
+          try {
+            const settings = tenant.settingsJson ? JSON.parse(tenant.settingsJson) : {};
+            if (settings.notifyOwner !== undefined) setNotifyOwner(settings.notifyOwner);
+            if (settings.ownerTemplate) setOwnerTemplate(settings.ownerTemplate);
+            if (settings.notifyCustomer !== undefined) setNotifyCustomer(settings.notifyCustomer);
+            if (settings.customerTemplate) setCustomerTemplate(settings.customerTemplate);
+          } catch {}
+        }
       }
     } catch {
       // silently fail
     } finally {
       setTenantLoading(false);
     }
-  }, [tenantId]);
-
-  const fetchUsers = useCallback(async () => {
-    if (!tenantId) return;
-    setUsersLoading(true);
-    try {
-      const res = await authFetch(`/api/admin/users?tenantId=${tenantId}`);
-      if (res.ok) {
-        const data = await res.json();
-        const fetchedUsers = data.users || [];
-        if (fetchedUsers.length > 0) {
-          setUsers(fetchedUsers);
-        } else if (auth.user) {
-          // Fallback: show at least the current user
-          setUsers([{
-            id: auth.user.id,
-            name: auth.user.name,
-            email: auth.user.email,
-            role: auth.user.role,
-            isActive: auth.user.isActive ?? true,
-            avatar: auth.user.avatar,
-            lastLoginAt: auth.user.lastLoginAt,
-            createdAt: auth.user.createdAt || new Date().toISOString(),
-          }]);
-        }
-      } else if (auth.user) {
-        setUsers([{
-          id: auth.user.id,
-          name: auth.user.name,
-          email: auth.user.email,
-          role: auth.user.role,
-          isActive: auth.user.isActive ?? true,
-          avatar: auth.user.avatar,
-          lastLoginAt: auth.user.lastLoginAt,
-          createdAt: auth.user.createdAt || new Date().toISOString(),
-        }]);
-      }
-    } catch {
-      if (auth.user) {
-        setUsers([{
-          id: auth.user.id,
-          name: auth.user.name,
-          email: auth.user.email,
-          role: auth.user.role,
-          isActive: auth.user.isActive ?? true,
-          avatar: auth.user.avatar,
-          lastLoginAt: auth.user.lastLoginAt,
-          createdAt: auth.user.createdAt || new Date().toISOString(),
-        }]);
-      }
-    } finally {
-      setUsersLoading(false);
-    }
-  }, [tenantId, auth.user]);
+  }, []);
 
   const fetchWebhooks = useCallback(async () => {
     try {
-      const res = await authFetch('/api/event-webhooks');
+      const res = await fetch('/api/event-webhooks');
       if (res.ok) {
         const data = await res.json();
         setWebhooks(data.webhooks || []);
@@ -419,7 +333,7 @@ export function SettingsView() {
   const fetchWpEndpoints = useCallback(async () => {
     setWpLoading(true);
     try {
-      const res = await authFetch('/api/wordpress/config');
+      const res = await fetch('/api/wordpress/config');
       if (res.ok) {
         const data = await res.json();
         setWpEndpoints(data.endpoints || []);
@@ -431,167 +345,175 @@ export function SettingsView() {
     }
   }, []);
 
+  const fetchUsers = useCallback(async () => {
+    setUsersLoading(true);
+    try {
+      const res = await fetch('/api/users?XTransformPort=3000');
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(data.users || []);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setUsersLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchTenantData();
-    fetchUsers();
     fetchWebhooks();
     fetchWpEndpoints();
-  }, [fetchTenantData, fetchUsers, fetchWebhooks, fetchWpEndpoints]);
+    fetchUsers();
+  }, [fetchTenantData, fetchWebhooks, fetchWpEndpoints, fetchUsers]);
 
-  // ─── Company Profile Handlers ───────────────────────────────────────────
-
+  // ─── Save Company Profile ─────────────────────────────────────────────
   const handleSaveCompany = async () => {
-    if (!tenantId) return;
-    setTenantSaving(true);
-    try {
-      const res = await authFetch(`/api/tenants/${tenantId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(companyForm),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        // Update auth state
-        const updatedTenant = { ...auth.tenant, ...data.tenant };
-        setAuth({ isAuthenticated: true, user: auth.user, tenant: updatedTenant });
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('serviceos_auth', JSON.stringify({
-            isAuthenticated: true,
-            user: auth.user,
-            tenant: updatedTenant,
-          }));
-        }
-        toast.success('Company profile updated successfully');
-      } else {
-        const err = await res.json();
-        toast.error(err.error || 'Failed to update company profile');
-      }
-    } catch {
-      toast.error('Network error');
-    } finally {
-      setTenantSaving(false);
-    }
-  };
-
-  // ─── Subdomain Handlers ─────────────────────────────────────────────────
-
-  const checkSubdomainAvailability = async (sub: string) => {
-    if (!sub || sub.length < 3) {
-      setAvailabilityResult({ available: false, reason: 'Minimum 3 characters required' });
+    if (!tenantId) {
+      toast.error('No tenant found. Complete onboarding first.');
       return;
     }
-    setCheckingAvailability(true);
-    setAvailabilityResult(null);
+    setSaving(true);
     try {
-      const res = await authFetch(`/api/tenant/subdomain-check?subdomain=${encodeURIComponent(sub)}`);
-      if (res.ok) {
-        const data = await res.json();
-        setAvailabilityResult(data);
-      }
-    } catch {
-      setAvailabilityResult({ available: false, reason: 'Failed to check availability' });
-    } finally {
-      setCheckingAvailability(false);
-    }
-  };
+      const addressObj = {
+        street: companyForm.street,
+        city: companyForm.city,
+        state: companyForm.state,
+        pincode: companyForm.pincode,
+        country: companyForm.country,
+      };
 
-  const handleSubdomainSave = async () => {
-    if (!tenantId || !availabilityResult?.available) return;
-    setSavingSubdomain(true);
-    try {
-      const res = await authFetch(`/api/tenants/${tenantId}`, {
+      const res = await fetch(`/api/tenants/${tenantId}?XTransformPort=3000`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subdomain: newSubdomain }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSubdomain(newSubdomain);
-        setEditingSubdomain(false);
-        setAvailabilityResult(null);
-        // Update auth state
-        const updatedTenant = { ...auth.tenant, ...data.tenant, subdomain: newSubdomain };
-        setAuth({ isAuthenticated: true, user: auth.user, tenant: updatedTenant });
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('serviceos_auth', JSON.stringify({
-            isAuthenticated: true,
-            user: auth.user,
-            tenant: updatedTenant,
-          }));
-        }
-        toast.success('Workspace URL updated successfully!');
-      } else {
-        const err = await res.json();
-        toast.error(err.error || 'Failed to update workspace URL');
-      }
-    } catch {
-      toast.error('Network error');
-    } finally {
-      setSavingSubdomain(false);
-    }
-  };
-
-  const startEditSubdomain = () => {
-    setNewSubdomain(subdomain);
-    setEditingSubdomain(true);
-    setAvailabilityResult(null);
-  };
-
-  // ─── User Invite Handler ────────────────────────────────────────────────
-
-  const handleInviteUser = async () => {
-    if (!inviteForm.email) {
-      toast.error('Email is required');
-      return;
-    }
-    setInviting(true);
-    try {
-      const res = await authFetch('/api/employees', {
-        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: inviteForm.name || inviteForm.email.split('@')[0],
-          email: inviteForm.email,
-          phone: '',
-          role: inviteForm.role,
+          name: companyForm.name,
+          industry: companyForm.industry,
+          currency: companyForm.currency,
+          phone: companyForm.phone,
+          email: companyForm.email,
+          whatsappPhone: companyForm.whatsappPhone,
+          address: JSON.stringify(addressObj),
+          country: companyForm.country,
+          settingsJson: JSON.stringify({
+            emailNotifications,
+            executionAlerts,
+          }),
         }),
       });
       if (res.ok) {
-        toast.success('Invitation sent successfully!');
-        setInviteDialogOpen(false);
-        setInviteForm({ email: '', name: '', role: 'employee' });
-        fetchUsers();
+        toast.success('Company profile saved successfully');
       } else {
         const err = await res.json();
-        toast.error(err.error || 'Failed to send invitation');
+        toast.error(err.error || 'Failed to save company profile');
       }
     } catch {
-      toast.error('Network error');
+      toast.error('Network error saving company profile');
     } finally {
-      setInviting(false);
+      setSaving(false);
     }
   };
 
-  // ─── Integration Handlers ───────────────────────────────────────────────
-
-  const copyToClipboard = (text: string, label?: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success(`${label || 'Value'} copied to clipboard`);
+  // Save WhatsApp phone number
+  const handleSaveWhatsappPhone = async () => {
+    setWhatsappPhoneSaving(true);
+    try {
+      const authRes = await fetch('/api/auth/me?XTransformPort=3000');
+      if (!authRes.ok) {
+        toast.error('Not authenticated');
+        return;
+      }
+      const authData = await authRes.json();
+      const tid = authData.tenant?.id;
+      if (!tid) {
+        toast.error('No tenant found. Complete onboarding first.');
+        return;
+      }
+      const res = await fetch(`/api/tenants/${tid}?XTransformPort=3000`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ whatsappPhone }),
+      });
+      if (res.ok) {
+        toast.success('WhatsApp business number saved successfully');
+      } else {
+        toast.error('Failed to save WhatsApp number');
+      }
+    } catch {
+      toast.error('Network error saving WhatsApp number');
+    } finally {
+      setWhatsappPhoneSaving(false);
+    }
   };
 
+  // ─── Save WhatsApp Settings ────────────────────────────────────────────
+  const handleSaveWhatsappSettings = async () => {
+    setWhatsappSettingsSaving(true);
+    try {
+      const authRes = await fetch('/api/auth/me?XTransformPort=3000');
+      if (!authRes.ok) { toast.error('Not authenticated'); return; }
+      const authData = await authRes.json();
+      const tid = authData.tenant?.id;
+      if (!tid) { toast.error('No tenant found'); return; }
+      const res = await fetch(`/api/tenants/${tid}?XTransformPort=3000`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          whatsappPhone,
+          settingsJson: JSON.stringify({
+            emailNotifications,
+            executionAlerts,
+            notifyOwner,
+            ownerTemplate,
+            notifyCustomer,
+            customerTemplate,
+          }),
+        }),
+      });
+      if (res.ok) { toast.success('WhatsApp notification settings saved'); }
+      else { toast.error('Failed to save settings'); }
+    } catch { toast.error('Network error'); }
+    finally { setWhatsappSettingsSaving(false); }
+  };
+
+  // ─── AI Generate Template ──────────────────────────────────────────────
+  const handleAiGenerate = async (type: 'owner' | 'customer') => {
+    try {
+      const res = await fetch('/api/whatsapp/generate-template?XTransformPort=3000', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (type === 'owner') setOwnerTemplate(data.template);
+        else setCustomerTemplate(data.template);
+        toast.success('Template generated with AI');
+      } else {
+        toast.error('Failed to generate template');
+      }
+    } catch {
+      toast.error('AI generation failed');
+    }
+  };
+
+  // ─── WordPress: Generate & Configure ─────────────────────────────────────
   const handleGenerateWpConfig = async () => {
     setWpGenerating(true);
     try {
-      const res = await authFetch('/api/wordpress/config', {
+      const res = await fetch('/api/wordpress/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'WordPress Lead Capture', sendWhatsApp: true }),
+        body: JSON.stringify({
+          name: 'WordPress Lead Capture',
+          sendWhatsApp: true,
+        }),
       });
       if (res.ok) {
         const data = await res.json();
         setWpNewConfig(data.config);
         setWpShowApiKey(true);
-        toast.success('WordPress integration configured!');
+        toast.success('WordPress integration configured! Copy your credentials below.');
         fetchWpEndpoints();
       } else {
         const err = await res.json();
@@ -604,18 +526,22 @@ export function SettingsView() {
     }
   };
 
+  // ─── WordPress: Test Connection ──────────────────────────────────────────
   const handleTestWpConnection = async () => {
-    if (!wpNewConfig?.api_key) return;
+    if (!wpNewConfig?.api_key) {
+      toast.error('Generate a config first');
+      return;
+    }
     setWpTesting(true);
     try {
-      const res = await authFetch('/api/wordpress/test', {
+      const res = await fetch('/api/wordpress/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ api_key: wpNewConfig.api_key }),
       });
       const data = await res.json();
       if (data.success) {
-        toast.success('Connection successful!');
+        toast.success('Connection successful! ServiceOS is ready to receive leads.');
       } else {
         toast.error(data.error || 'Connection failed');
       }
@@ -626,17 +552,26 @@ export function SettingsView() {
     }
   };
 
+  // ─── WordPress: Delete Endpoint ──────────────────────────────────────────
   const handleDeleteWpEndpoint = async (id: string) => {
     try {
-      const res = await authFetch(`/api/wordpress/config?id=${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/wordpress/config?id=${id}`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('WordPress endpoint deleted');
         fetchWpEndpoints();
-        if (wpNewConfig) setWpNewConfig(null);
+        if (wpNewConfig && wpEndpoints.find(e => e.id === id)) {
+          setWpNewConfig(null);
+        }
       }
     } catch {
       toast.error('Failed to delete');
     }
+  };
+
+  // ─── Copy helper ─────────────────────────────────────────────────────────
+  const copyToClipboard = (text: string, label?: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success(`${label || 'Value'} copied to clipboard`);
   };
 
   const handleAddWebhook = async () => {
@@ -645,7 +580,7 @@ export function SettingsView() {
       return;
     }
     try {
-      const res = await authFetch('/api/event-webhooks', {
+      const res = await fetch('/api/event-webhooks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(webhookForm),
@@ -666,7 +601,7 @@ export function SettingsView() {
 
   const handleDeleteWebhook = async (id: string) => {
     try {
-      const res = await authFetch(`/api/event-webhooks/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/event-webhooks/${id}`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('Webhook deleted');
         fetchWebhooks();
@@ -678,7 +613,7 @@ export function SettingsView() {
 
   const handleToggleWebhook = async (id: string, active: boolean) => {
     try {
-      const res = await authFetch(`/api/event-webhooks/${id}`, {
+      const res = await fetch(`/api/event-webhooks/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ active }),
@@ -695,7 +630,7 @@ export function SettingsView() {
   const handleTestWebhook = async (event: string) => {
     setTestingWebhook(event);
     try {
-      const res = await authFetch('/api/event-webhooks/test', {
+      const res = await fetch('/api/event-webhooks/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ event }),
@@ -715,193 +650,101 @@ export function SettingsView() {
     }
   };
 
-  // ─── Field Mapping Handlers ──────────────────────────────────────────────
-
-  const handleSaveFieldMapping = async () => {
-    setSavingFieldMapping(true);
-    try {
-      const endpointId = wpEndpoints[0]?.endpointId;
-      if (endpointId) {
-        const res = await authFetch(`/api/wordpress/config?XTransformPort=3000`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ endpointId, fieldMapping: fieldMappings }),
-        });
-        if (res.ok) {
-          toast.success('Field mapping saved successfully!');
-          setEditingFieldMapping(false);
-        } else {
-          const err = await res.json();
-          toast.error(err.error || 'Failed to save field mapping');
-        }
-      } else {
-        toast.success('Field mapping saved!');
-        setEditingFieldMapping(false);
-      }
-    } catch {
-      toast.error('Network error');
-    } finally {
-      setSavingFieldMapping(false);
-    }
-  };
-
-  const handleAddFieldMapping = () => {
-    if (!newMapSource || !newMapTarget) {
-      toast.error('Both source and target fields are required');
+  // ─── Invite User ──────────────────────────────────────────────────────
+  const handleInviteUser = async () => {
+    if (!inviteForm.name || !inviteForm.email) {
+      toast.error('Name and email are required');
       return;
     }
-    setFieldMappings({ ...fieldMappings, [newMapSource]: newMapTarget });
-    setNewMapSource('');
-    setNewMapTarget('');
-    toast.success('Field mapping added');
-  };
-
-  const handleRemoveFieldMapping = (source: string) => {
-    const updated = { ...fieldMappings };
-    delete updated[source];
-    setFieldMappings(updated);
-  };
-
-  // ─── WhatsApp Settings Handlers ──────────────────────────────────────────
-
-  const handleSaveWhatsappSettings = async () => {
-    setSavingWhatsappSettings(true);
+    setInviting(true);
     try {
-      const endpointId = wpEndpoints[0]?.endpointId;
-      if (endpointId) {
-        const res = await authFetch(`/api/wordpress/config?XTransformPort=3000`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            endpointId,
-            whatsappSettings: {
-              notifyOwner: whatsappSettings.notifyOwner,
-              ownerPhone: whatsappSettings.ownerPhone,
-              ownerTemplate: whatsappSettings.ownerTemplate,
-              notifyCustomer: whatsappSettings.notifyCustomer,
-              customerTemplate: whatsappSettings.customerTemplate,
-            },
-          }),
-        });
-        if (res.ok) {
-          toast.success('WhatsApp notification settings saved!');
-        } else {
-          const err = await res.json();
-          toast.error(err.error || 'Failed to save WhatsApp settings');
-        }
-      } else {
-        toast.success('WhatsApp notification settings saved!');
-      }
-    } catch {
-      toast.error('Network error');
-    } finally {
-      setSavingWhatsappSettings(false);
-    }
-  };
-
-  const handleGenerateAiTemplate = async (type: 'owner' | 'customer') => {
-    setGeneratingAiTemplate(type);
-    try {
-      const companyName = companyForm.name || 'ServiceOS';
-      const industry = companyForm.industry || 'service';
-      const res = await authFetch('/api/ai/generate-whatsapp-template?XTransformPort=3000', {
+      const res = await fetch('/api/users?XTransformPort=3000', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type,
-          companyName,
-          industry,
-          currentTemplate: type === 'owner' ? whatsappSettings.ownerTemplate : whatsappSettings.customerTemplate,
-        }),
+        body: JSON.stringify(inviteForm),
       });
       if (res.ok) {
-        const data = await res.json();
-        if (type === 'owner') {
-          setWhatsappSettings({ ...whatsappSettings, ownerTemplate: data.template });
-        } else {
-          setWhatsappSettings({ ...whatsappSettings, customerTemplate: data.template });
-        }
-        toast.success('AI-generated template ready!');
+        toast.success('User invited successfully');
+        setShowInviteUser(false);
+        setInviteForm({ name: '', email: '', role: 'agent' });
+        fetchUsers();
       } else {
-        toast.error('Failed to generate template');
+        const err = await res.json();
+        toast.error(err.error || 'Failed to invite user');
       }
     } catch {
       toast.error('Network error');
     } finally {
-      setGeneratingAiTemplate(null);
+      setInviting(false);
     }
   };
 
-  // ─── Helper Functions ───────────────────────────────────────────────────
-
-  const getUserInitials = (name: string | null, email: string) => {
-    if (name) return name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
-    return email.slice(0, 2).toUpperCase();
+  // ─── Save Workspace URL ───────────────────────────────────────────────
+  const handleSaveWorkspace = async () => {
+    setSavingWorkspace(true);
+    try {
+      if (!tenantId) {
+        toast.error('No tenant found');
+        return;
+      }
+      const res = await fetch(`/api/tenants/${tenantId}?XTransformPort=3000`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: workspaceSlug }),
+      });
+      if (res.ok) {
+        toast.success('Workspace URL updated successfully');
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to update workspace URL');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setSavingWorkspace(false);
+    }
   };
 
   const getRoleBadgeColor = (role: string) => {
-    const colors: Record<string, string> = {
-      owner: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400',
-      admin: 'bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-900/30 dark:text-teal-400',
-      manager: 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/30 dark:text-sky-400',
-      employee: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400',
-      technician: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400',
-    };
-    return colors[role] || colors.employee;
+    switch (role) {
+      case 'owner': return 'bg-amber-100 text-amber-700 border-amber-200';
+      case 'admin': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+      case 'manager': return 'bg-blue-100 text-blue-700 border-blue-200';
+      case 'agent': return 'bg-sky-100 text-sky-700 border-sky-200';
+      default: return 'bg-slate-100 text-slate-600 border-slate-200';
+    }
   };
 
-  // ─── Render ─────────────────────────────────────────────────────────────
-
-  if (tenantLoading) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="size-8 animate-spin text-emerald-600" />
-          <p className="text-sm text-muted-foreground">Loading settings...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      {/* ─── Header ──────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center justify-center size-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30">
-          <SettingsIcon className="size-5 text-emerald-600" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-          <p className="text-sm text-muted-foreground">Manage your workspace, team, and integrations</p>
-        </div>
-      </div>
-
-      {/* ─── Tabs ────────────────────────────────────────────────────────── */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="flex flex-wrap h-auto gap-1 bg-muted/50 p-1 rounded-xl">
-          <TabsTrigger value="company" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg">
+    <div className="max-w-4xl mx-auto">
+      <Tabs defaultValue="company" className="space-y-6">
+        <TabsList className="bg-muted/50 p-1 rounded-xl h-auto flex-wrap">
+          <TabsTrigger value="company" className="gap-1.5 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 py-2">
             <Building2 className="size-4" />
             <span className="hidden sm:inline">Company Profile</span>
             <span className="sm:hidden">Company</span>
           </TabsTrigger>
-          <TabsTrigger value="users" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg">
-            <Users className="size-4" />
+          <TabsTrigger value="users" className="gap-1.5 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 py-2">
+            <UsersIcon className="size-4" />
             <span className="hidden sm:inline">Users</span>
+            <span className="sm:hidden">Users</span>
           </TabsTrigger>
-          <TabsTrigger value="roles" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg">
+          <TabsTrigger value="roles" className="gap-1.5 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 py-2">
             <Shield className="size-4" />
             <span className="hidden sm:inline">Roles</span>
+            <span className="sm:hidden">Roles</span>
           </TabsTrigger>
-          <TabsTrigger value="integrations" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg">
+          <TabsTrigger value="integrations" className="gap-1.5 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 py-2">
             <Plug className="size-4" />
             <span className="hidden sm:inline">Integrations</span>
             <span className="sm:hidden">Apps</span>
           </TabsTrigger>
-          <TabsTrigger value="billing" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg">
+          <TabsTrigger value="billing" className="gap-1.5 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 py-2">
             <CreditCard className="size-4" />
             <span className="hidden sm:inline">Billing</span>
+            <span className="sm:hidden">Bill</span>
           </TabsTrigger>
-          <TabsTrigger value="workspace-url" className="gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg">
+          <TabsTrigger value="workspace" className="gap-1.5 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 py-2">
             <Globe className="size-4" />
             <span className="hidden sm:inline">Workspace URL</span>
             <span className="sm:hidden">URL</span>
@@ -909,193 +752,216 @@ export function SettingsView() {
         </TabsList>
 
         {/* ═══════════════════════════════════════════════════════════════════
-            TAB: Company Profile
+            Company Profile Tab
             ═══════════════════════════════════════════════════════════════════ */}
         <TabsContent value="company" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                  <Building2 className="size-4 text-emerald-600" />
-                </div>
-                <div>
-                  <CardTitle className="text-base">Company Information</CardTitle>
-                  <CardDescription>Your business details visible across the platform</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2 sm:col-span-2">
-                  <Label className="text-sm font-medium">Company Name</Label>
-                  <div className="relative">
-                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          {tenantLoading ? (
+            <div className="flex items-center justify-center py-12 text-muted-foreground">
+              <Loader2 className="size-5 animate-spin mr-2" /> Loading company profile...
+            </div>
+          ) : (
+            <>
+              {/* Company Information */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+                      <Building2 className="size-4 text-emerald-600" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base">Company Information</CardTitle>
+                      <CardDescription>Update your company details and contact information</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Company Name</Label>
                     <Input
-                      className="pl-10 h-11"
-                      placeholder="Enter company name"
+                      placeholder="Your Company Name"
                       value={companyForm.name}
                       onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })}
                     />
                   </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Industry</Label>
-                  <Select value={companyForm.industry} onValueChange={(v) => setCompanyForm({ ...companyForm, industry: v })}>
-                    <SelectTrigger className="h-11">
-                      <SelectValue placeholder="Select industry" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {INDUSTRIES.map((ind) => (
-                        <SelectItem key={ind.value} value={ind.value}>{ind.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Currency</Label>
-                  <Select value={companyForm.currency} onValueChange={(v) => setCompanyForm({ ...companyForm, currency: v })}>
-                    <SelectTrigger className="h-11">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="USD">USD ($)</SelectItem>
-                      <SelectItem value="EUR">EUR (&euro;)</SelectItem>
-                      <SelectItem value="GBP">GBP (&pound;)</SelectItem>
-                      <SelectItem value="INR">INR (&#8377;)</SelectItem>
-                      <SelectItem value="AUD">AUD (A$)</SelectItem>
-                      <SelectItem value="CAD">CAD (C$)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Phone</Label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                    <Input
-                      className="pl-10 h-11"
-                      placeholder="+1 (555) 123-4567"
-                      value={companyForm.phone}
-                      onChange={(e) => setCompanyForm({ ...companyForm, phone: e.target.value })}
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Industry</Label>
+                      <Select value={companyForm.industry} onValueChange={(v) => setCompanyForm({ ...companyForm, industry: v })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select industry" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {INDUSTRIES.map((ind) => (
+                            <SelectItem key={ind} value={ind}>{ind}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Currency</Label>
+                      <Select value={companyForm.currency} onValueChange={(v) => setCompanyForm({ ...companyForm, currency: v })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select currency" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CURRENCIES.map((c) => (
+                            <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                    <Input
-                      className="pl-10 h-11"
-                      type="email"
-                      placeholder="contact@company.com"
-                      value={companyForm.email}
-                      onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })}
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium flex items-center gap-1.5">
+                        <Phone className="size-3.5" /> Phone
+                      </Label>
+                      <Input
+                        placeholder="+91 98765 43210"
+                        value={companyForm.phone}
+                        onChange={(e) => setCompanyForm({ ...companyForm, phone: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium flex items-center gap-1.5">
+                        <Mail className="size-3.5" /> Email
+                      </Label>
+                      <Input
+                        type="email"
+                        placeholder="company@example.com"
+                        value={companyForm.email}
+                        onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })}
+                      />
+                    </div>
                   </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">WhatsApp Number</Label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium flex items-center gap-1.5">
+                      <MessageCircle className="size-3.5" /> WhatsApp Number
+                    </Label>
                     <Input
-                      className="pl-10 h-11"
-                      placeholder="+1 (555) 123-4567"
+                      placeholder="+91 98765 43210"
                       value={companyForm.whatsappPhone}
                       onChange={(e) => setCompanyForm({ ...companyForm, whatsappPhone: e.target.value })}
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Used for lead notifications and customer communications
+                    </p>
                   </div>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
 
-              <Separator />
+              {/* Business Address */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center size-9 rounded-lg bg-muted">
+                      <MapPin className="size-4 text-emerald-500" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base">Business Address</CardTitle>
+                      <CardDescription>Your company&apos;s physical address</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Street Address</Label>
+                    <Input
+                      placeholder="123 Main Street, Suite 100"
+                      value={companyForm.street}
+                      onChange={(e) => setCompanyForm({ ...companyForm, street: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">City</Label>
+                      <Input
+                        placeholder="Mumbai"
+                        value={companyForm.city}
+                        onChange={(e) => setCompanyForm({ ...companyForm, city: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">State</Label>
+                      <Input
+                        placeholder="Maharashtra"
+                        value={companyForm.state}
+                        onChange={(e) => setCompanyForm({ ...companyForm, state: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Pincode</Label>
+                      <Input
+                        placeholder="400001"
+                        value={companyForm.pincode}
+                        onChange={(e) => setCompanyForm({ ...companyForm, pincode: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-              <div className="space-y-4">
-                <Label className="text-sm font-medium flex items-center gap-2">
-                  <MapPin className="size-4" /> Business Address
-                </Label>
-                <Input
-                  placeholder="Street address"
-                  value={companyForm.address}
-                  onChange={(e) => setCompanyForm({ ...companyForm, address: e.target.value })}
-                  className="h-11"
-                />
-                <div className="grid grid-cols-3 gap-3">
-                  <Input placeholder="City" value={companyForm.city} onChange={(e) => setCompanyForm({ ...companyForm, city: e.target.value })} className="h-11" />
-                  <Input placeholder="State" value={companyForm.state} onChange={(e) => setCompanyForm({ ...companyForm, state: e.target.value })} className="h-11" />
-                  <Input placeholder="Pincode" value={companyForm.pincode} onChange={(e) => setCompanyForm({ ...companyForm, pincode: e.target.value })} className="h-11" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              {/* Preferences */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center size-9 rounded-lg bg-muted">
+                      <Bell className="size-4 text-emerald-500" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base">Preferences</CardTitle>
+                      <CardDescription>Customize your application experience</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-sm font-medium">Dark Mode</Label>
+                      <p className="text-xs text-muted-foreground">Toggle dark mode theme</p>
+                    </div>
+                    <Switch checked={darkMode} onCheckedChange={toggleDarkMode} />
+                  </div>
+                  <Separator />
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-sm font-medium">Email Notifications</Label>
+                      <p className="text-xs text-muted-foreground">Get notified about workflow failures and updates</p>
+                    </div>
+                    <Switch checked={emailNotifications} onCheckedChange={setEmailNotifications} />
+                  </div>
+                  <Separator />
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-sm font-medium">Execution Alerts</Label>
+                      <p className="text-xs text-muted-foreground">Notify when workflow executions finish</p>
+                    </div>
+                    <Switch checked={executionAlerts} onCheckedChange={setExecutionAlerts} />
+                  </div>
+                </CardContent>
+              </Card>
 
-          {/* Appearance & Notifications (moved from old General) */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                  <Bell className="size-4 text-emerald-600" />
-                </div>
-                <div>
-                  <CardTitle className="text-base">Preferences</CardTitle>
-                  <CardDescription>Appearance and notification preferences</CardDescription>
-                </div>
+              {/* Save Changes Button */}
+              <div className="flex justify-end">
+                <Button
+                  className="bg-emerald-600 hover:bg-emerald-700 gap-1.5 px-6"
+                  onClick={handleSaveCompany}
+                  disabled={saving}
+                >
+                  {saving ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Save className="size-4" />
+                  )}
+                  Save Changes
+                </Button>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <Label className="text-sm font-medium">Dark Mode</Label>
-                  <p className="text-xs text-muted-foreground">Toggle dark mode theme</p>
-                </div>
-                <Switch checked={darkMode} onCheckedChange={toggleDarkMode} />
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <Label className="text-sm font-medium">Email Notifications</Label>
-                  <p className="text-xs text-muted-foreground">Get notified about workflow failures</p>
-                </div>
-                <Switch
-                  checked={notifications.emailNotifications}
-                  onCheckedChange={(v) => setNotifications({ ...notifications, emailNotifications: v })}
-                />
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <Label className="text-sm font-medium">Execution Alerts</Label>
-                  <p className="text-xs text-muted-foreground">Notify when workflow executions finish</p>
-                </div>
-                <Switch
-                  checked={notifications.executionComplete}
-                  onCheckedChange={(v) => setNotifications({ ...notifications, executionComplete: v })}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="flex justify-end">
-            <Button
-              className="bg-emerald-600 hover:bg-emerald-700 gap-2 min-w-[140px]"
-              onClick={handleSaveCompany}
-              disabled={tenantSaving}
-            >
-              {tenantSaving ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Save className="size-4" />
-              )}
-              Save Changes
-            </Button>
-          </div>
+            </>
+          )}
         </TabsContent>
 
         {/* ═══════════════════════════════════════════════════════════════════
-            TAB: Users
+            Users Tab
             ═══════════════════════════════════════════════════════════════════ */}
         <TabsContent value="users" className="space-y-6">
           <Card>
@@ -1103,19 +969,19 @@ export function SettingsView() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                    <Users className="size-4 text-emerald-600" />
+                    <UsersIcon className="size-4 text-emerald-600" />
                   </div>
                   <div>
                     <CardTitle className="text-base">Team Members</CardTitle>
-                    <CardDescription>Manage who has access to your workspace</CardDescription>
+                    <CardDescription>Manage your team and invite new members</CardDescription>
                   </div>
                 </div>
                 <Button
                   size="sm"
                   className="bg-emerald-600 hover:bg-emerald-700 gap-1.5"
-                  onClick={() => setInviteDialogOpen(true)}
+                  onClick={() => setShowInviteUser(true)}
                 >
-                  <UserPlus className="size-3.5" /> Invite
+                  <UserPlus className="size-3.5" /> Invite User
                 </Button>
               </div>
             </CardHeader>
@@ -1126,75 +992,73 @@ export function SettingsView() {
                 </div>
               ) : users.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  <Users className="size-8 mx-auto mb-2 opacity-20" />
-                  <p className="text-sm font-medium">No users found</p>
-                  <p className="text-xs">Invite team members to your workspace</p>
+                  <UsersIcon className="size-8 mx-auto mb-2 opacity-20" />
+                  <p className="text-sm font-medium">No team members found</p>
+                  <p className="text-xs">Invite users to your workspace</p>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  {users.map((user) => (
-                    <div key={user.id} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors">
-                      <Avatar className="size-9 shrink-0">
-                        <AvatarFallback className="bg-gradient-to-br from-emerald-600 to-teal-600 text-white text-xs">
-                          {getUserInitials(user.name, user.email)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm truncate">{user.name || user.email.split('@')[0]}</span>
-                          <Badge variant="outline" className={`text-[10px] shrink-0 ${getRoleBadgeColor(user.role)}`}>
-                            {user.role}
-                          </Badge>
-                          {user.id === auth.user?.id && (
-                            <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px]" variant="outline">You</Badge>
-                          )}
-                          {!user.isActive && (
-                            <Badge className="bg-red-100 text-red-700 border-red-200 text-[10px]" variant="outline">Inactive</Badge>
+                <ScrollArea className="max-h-96">
+                  <div className="space-y-2">
+                    {users.map((user) => (
+                      <div key={user.id} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors">
+                        <div className="flex items-center justify-center size-9 rounded-full bg-muted shrink-0">
+                          <span className="text-sm font-medium text-muted-foreground">
+                            {user.name?.charAt(0)?.toUpperCase() || '?'}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="font-medium text-sm truncate">{user.name}</span>
+                            <Badge variant="outline" className={`${getRoleBadgeColor(user.role)} text-[10px] shrink-0 capitalize`}>
+                              {user.role}
+                            </Badge>
+                            {!user.isActive && (
+                              <Badge variant="outline" className="text-[10px] bg-red-50 text-red-600 border-red-200 shrink-0">
+                                Inactive
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                          {user.lastLoginAt && (
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                              Last login: {new Date(user.lastLoginAt).toLocaleDateString()}
+                            </p>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                          <MoreHorizontal className="size-4" />
+                        </Button>
                       </div>
-                      {user.lastLoginAt && (
-                        <div className="text-[10px] text-muted-foreground shrink-0 hidden sm:block">
-                          Last login: {new Date(user.lastLoginAt).toLocaleDateString()}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                </ScrollArea>
               )}
             </CardContent>
           </Card>
 
-          {/* ─── Invite Dialog ──────────────────────────────────────────────── */}
-          <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
+          {/* Invite User Dialog */}
+          <Dialog open={showInviteUser} onOpenChange={setShowInviteUser}>
             <DialogContent className="max-w-md">
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <UserPlus className="size-5 text-emerald-600" /> Invite Team Member
-                </DialogTitle>
+                <DialogTitle>Invite Team Member</DialogTitle>
                 <DialogDescription>Send an invitation to join your workspace</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-2">
                 <div className="space-y-2">
-                  <Label>Email Address</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                    <Input
-                      className="pl-10"
-                      placeholder="colleague@company.com"
-                      value={inviteForm.email}
-                      onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
-                      type="email"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Name (optional)</Label>
+                  <Label>Full Name</Label>
                   <Input
                     placeholder="John Doe"
                     value={inviteForm.name}
                     onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Email Address</Label>
+                  <Input
+                    type="email"
+                    placeholder="john@example.com"
+                    value={inviteForm.email}
+                    onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
@@ -1206,24 +1070,21 @@ export function SettingsView() {
                     <SelectContent>
                       <SelectItem value="admin">Admin</SelectItem>
                       <SelectItem value="manager">Manager</SelectItem>
-                      <SelectItem value="employee">Employee</SelectItem>
-                      <SelectItem value="technician">Technician</SelectItem>
+                      <SelectItem value="agent">Agent</SelectItem>
+                      <SelectItem value="viewer">Viewer</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {ROLES.find((r) => r.role === inviteForm.role)?.description}
-                  </p>
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setInviteDialogOpen(false)}>Cancel</Button>
+                <Button variant="outline" onClick={() => setShowInviteUser(false)}>Cancel</Button>
                 <Button
                   className="bg-emerald-600 hover:bg-emerald-700"
                   onClick={handleInviteUser}
-                  disabled={inviting || !inviteForm.email}
+                  disabled={!inviteForm.name || !inviteForm.email || inviting}
                 >
-                  {inviting ? <Loader2 className="size-4 animate-spin mr-2" /> : <UserPlus className="size-4 mr-2" />}
-                  Send Invitation
+                  {inviting ? <Loader2 className="size-4 animate-spin mr-1" /> : <UserPlus className="size-4 mr-1" />}
+                  Send Invite
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -1231,7 +1092,7 @@ export function SettingsView() {
         </TabsContent>
 
         {/* ═══════════════════════════════════════════════════════════════════
-            TAB: Roles
+            Roles Tab
             ═══════════════════════════════════════════════════════════════════ */}
         <TabsContent value="roles" className="space-y-6">
           <Card>
@@ -1241,49 +1102,137 @@ export function SettingsView() {
                   <Shield className="size-4 text-emerald-600" />
                 </div>
                 <div>
-                  <CardTitle className="text-base">Roles & Permissions</CardTitle>
-                  <CardDescription>Define what each role can access in your workspace</CardDescription>
+                  <CardTitle className="text-base">Roles &amp; Permissions</CardTitle>
+                  <CardDescription>Define access levels for team members</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {roles.map((role) => (
+                <div key={role.id} className="flex items-center gap-3 p-4 rounded-lg border hover:bg-muted/30 transition-colors">
+                  <div className="flex items-center justify-center size-9 rounded-lg bg-muted shrink-0">
+                    {role.id === 'owner' ? (
+                      <Crown className="size-4 text-amber-600" />
+                    ) : (
+                      <Shield className="size-4 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="font-medium text-sm">{role.name}</span>
+                      <Badge variant="outline" className={`${role.color} text-[10px] shrink-0`}>
+                        {role.users} member{role.users !== 1 ? 's' : ''}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{role.description}</p>
+                  </div>
+                  <Button variant="outline" size="sm" className="shrink-0 text-xs gap-1">
+                    Edit Permissions
+                  </Button>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          {/* Permissions Matrix */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center size-9 rounded-lg bg-muted">
+                  <Shield className="size-4 text-emerald-500" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">Permission Matrix</CardTitle>
+                  <CardDescription>Overview of permissions by role</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="max-h-80">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-2 px-3 font-medium text-muted-foreground">Permission</th>
+                        <th className="text-center py-2 px-3 font-medium text-muted-foreground">Owner</th>
+                        <th className="text-center py-2 px-3 font-medium text-muted-foreground">Admin</th>
+                        <th className="text-center py-2 px-3 font-medium text-muted-foreground">Manager</th>
+                        <th className="text-center py-2 px-3 font-medium text-muted-foreground">Agent</th>
+                        <th className="text-center py-2 px-3 font-medium text-muted-foreground">Viewer</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[
+                        { name: 'Manage Users', perms: [true, true, false, false, false] },
+                        { name: 'Manage Roles', perms: [true, true, false, false, false] },
+                        { name: 'Company Settings', perms: [true, true, false, false, false] },
+                        { name: 'Billing & Plans', perms: [true, true, false, false, false] },
+                        { name: 'Create Leads', perms: [true, true, true, true, false] },
+                        { name: 'Assign Leads', perms: [true, true, true, false, false] },
+                        { name: 'Create Jobs', perms: [true, true, true, true, false] },
+                        { name: 'Dispatch Jobs', perms: [true, true, true, false, false] },
+                        { name: 'View Reports', perms: [true, true, true, true, true] },
+                        { name: 'Export Data', perms: [true, true, true, false, false] },
+                        { name: 'Manage Invoices', perms: [true, true, true, false, false] },
+                        { name: 'Manage Workflows', perms: [true, true, true, false, false] },
+                        { name: 'API Access', perms: [true, true, false, false, false] },
+                      ].map((row) => (
+                        <tr key={row.name} className="border-b last:border-0">
+                          <td className="py-2 px-3 font-medium">{row.name}</td>
+                          {row.perms.map((has, i) => (
+                            <td key={i} className="text-center py-2 px-3">
+                              {has ? (
+                                <Check className="size-3.5 text-emerald-500 mx-auto" />
+                              ) : (
+                                <span className="text-muted-foreground/30">—</span>
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+
+          {/* Security Settings */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center size-9 rounded-lg bg-muted">
+                  <KeyRound className="size-4 text-emerald-500" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">Security</CardTitle>
+                  <CardDescription>Security and access control settings</CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {ROLES.map((role) => {
-                const usersWithRole = users.filter((u) => u.role === role.role).length;
-                return (
-                  <div key={role.role} className="rounded-lg border p-4 space-y-3 hover:bg-muted/20 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Badge variant="outline" className={`text-xs ${role.color}`}>{role.label}</Badge>
-                        <span className="text-xs text-muted-foreground">{usersWithRole} member{usersWithRole !== 1 ? 's' : ''}</span>
-                      </div>
-                      <Badge variant="outline" className="text-[10px]">{role.permissions.length} permissions</Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{role.description}</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {role.permissions.map((perm) => (
-                        <Badge key={perm} variant="outline" className="text-[10px] bg-background">
-                          <Check className="size-2.5 mr-0.5 text-emerald-500" /> {perm}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-
-              <div className="p-4 rounded-lg border border-dashed bg-muted/30 text-center">
-                <p className="text-xs text-muted-foreground">
-                  Role permissions are managed by the platform. Contact support for custom role configurations.
-                </p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-sm font-medium">Two-Factor Authentication</Label>
+                  <p className="text-xs text-muted-foreground">Require 2FA for account access</p>
+                </div>
+                <Switch />
+              </div>
+              <Separator />
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Session Timeout</Label>
+                <Input placeholder="30 minutes" defaultValue="30" className="max-w-xs" type="number" />
+                <p className="text-xs text-muted-foreground">Minutes of inactivity before session expires</p>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
         {/* ═══════════════════════════════════════════════════════════════════
-            TAB: Integrations
+            Integrations Tab
             ═══════════════════════════════════════════════════════════════════ */}
         <TabsContent value="integrations" className="space-y-6">
-          {/* WordPress Integration */}
+          {/* ─── Card 1: WordPress / CRM Integration ─────────────────────────── */}
           <Card className="border-emerald-200 dark:border-emerald-800">
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -1302,10 +1251,16 @@ export function SettingsView() {
                   onClick={handleGenerateWpConfig}
                   disabled={wpGenerating}
                 >
-                  {wpGenerating ? <Loader2 className="size-3.5 animate-spin" /> : <Zap className="size-3.5" />}
+                  {wpGenerating ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Zap className="size-3.5" />
+                  )}
                   Generate
                 </Button>
               </div>
+
+              {/* Lead Capture Flow diagram */}
               <div className="mt-3 p-3 rounded-lg bg-muted/50 border text-xs text-muted-foreground">
                 <div className="flex items-center gap-1.5 font-medium text-foreground mb-1.5">
                   <ArrowRight className="size-3" /> Lead Capture Flow
@@ -1320,13 +1275,18 @@ export function SettingsView() {
                   <span className="px-1.5 py-0.5 bg-background rounded border text-[10px] font-medium">WhatsApp Sent</span>
                 </div>
               </div>
+
+              {/* Supported form plugins */}
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {WP_FORM_PLUGINS.map((fp) => (
-                  <Badge key={fp.slug} variant="outline" className="text-[10px] bg-background">{fp.name}</Badge>
+                  <Badge key={fp.slug} variant="outline" className="text-[10px] bg-background">
+                    {fp.name}
+                  </Badge>
                 ))}
               </div>
             </CardHeader>
             <CardContent className="space-y-5">
+              {/* Newly generated config display */}
               {wpNewConfig && (
                 <div className="p-4 rounded-lg border-2 border-emerald-300 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-950/20 space-y-4">
                   <div className="flex items-center gap-2">
@@ -1334,35 +1294,69 @@ export function SettingsView() {
                     <span className="font-semibold text-emerald-700 dark:text-emerald-400 text-sm">Integration Configured!</span>
                     <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px]" variant="outline">New</Badge>
                   </div>
-                  <p className="text-xs text-muted-foreground">Copy these values into your WordPress plugin settings.</p>
-                  {[
-                    { label: 'API URL', icon: Globe, value: wpNewConfig.api_url, name: 'API URL' },
-                    { label: 'API Key', icon: KeyRound, value: wpNewConfig.api_key, name: 'API Key', sensitive: true },
-                    { label: 'Webhook URL', icon: Link2, value: wpNewConfig.webhook_url, name: 'Webhook URL' },
-                  ].map((item) => (
-                    <div key={item.label} className="space-y-1.5">
-                      <Label className="text-xs font-medium flex items-center gap-1.5">
-                        <item.icon className="size-3" /> {item.label}
-                        {item.sensitive && <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200">Show once</Badge>}
-                      </Label>
-                      <div className="flex items-center gap-2">
-                        <code className="text-xs font-mono bg-white dark:bg-gray-900 px-3 py-1.5 rounded border flex-1 truncate">
-                          {item.sensitive && !wpShowApiKey ? item.value.slice(0, 12) + '••••••••' : item.value}
-                        </code>
-                        {item.sensitive && (
-                          <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8" onClick={() => setWpShowApiKey(!wpShowApiKey)}>
-                            {wpShowApiKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-                          </Button>
-                        )}
-                        <Button variant="outline" size="sm" className="shrink-0 gap-1" onClick={() => copyToClipboard(item.value, item.name)}>
-                          <Copy className="size-3" /> Copy
-                        </Button>
-                      </div>
+                  <p className="text-xs text-muted-foreground">Copy these values into your WordPress plugin settings. The API Key is shown only once.</p>
+
+                  {/* API URL */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium flex items-center gap-1.5">
+                      <Globe className="size-3" /> API URL
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs font-mono bg-white dark:bg-gray-900 px-3 py-1.5 rounded border flex-1 truncate">
+                        {wpNewConfig.api_url}
+                      </code>
+                      <Button variant="outline" size="sm" className="shrink-0 gap-1" onClick={() => copyToClipboard(wpNewConfig.api_url, 'API URL')}>
+                        <Copy className="size-3" /> Copy
+                      </Button>
                     </div>
-                  ))}
+                  </div>
+
+                  {/* API Key */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium flex items-center gap-1.5">
+                      <KeyRound className="size-3" /> API Key
+                      <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200">Show once</Badge>
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs font-mono bg-white dark:bg-gray-900 px-3 py-1.5 rounded border flex-1 truncate">
+                        {wpShowApiKey ? wpNewConfig.api_key : wpNewConfig.api_key.slice(0, 12) + '••••••••••••••••'}
+                      </code>
+                      <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8" onClick={() => setWpShowApiKey(!wpShowApiKey)}>
+                        {wpShowApiKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                      </Button>
+                      <Button variant="outline" size="sm" className="shrink-0 gap-1" onClick={() => copyToClipboard(wpNewConfig.api_key, 'API Key')}>
+                        <Copy className="size-3" /> Copy
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Webhook URL */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium flex items-center gap-1.5">
+                      <Link2 className="size-3" /> Webhook URL
+                      <Badge variant="outline" className="text-[9px] bg-sky-50 text-sky-700 border-sky-200">Universal</Badge>
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs font-mono bg-white dark:bg-gray-900 px-3 py-1.5 rounded border flex-1 truncate">
+                        {wpNewConfig.webhook_url}
+                      </code>
+                      <Button variant="outline" size="sm" className="shrink-0 gap-1" onClick={() => copyToClipboard(wpNewConfig.webhook_url, 'Webhook URL')}>
+                        <Copy className="size-3" /> Copy
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
                   <div className="flex items-center gap-2 pt-1">
-                    <Button variant="outline" size="sm" className="gap-1.5" onClick={handleTestWpConnection} disabled={wpTesting}>
-                      {wpTesting ? <Loader2 className="size-3 animate-spin" /> : <TestTube2 className="size-3" />} Test Connection
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={handleTestWpConnection}
+                      disabled={wpTesting}
+                    >
+                      {wpTesting ? <Loader2 className="size-3 animate-spin" /> : <TestTube2 className="size-3" />}
+                      Test Connection
                     </Button>
                     <a
                       href="/downloads/serviceos-crm-lead-capture.php"
@@ -1375,12 +1369,12 @@ export function SettingsView() {
                 </div>
               )}
 
+              {/* WordPress Plugin download row */}
               {!wpNewConfig && (
                 <div className="flex items-center gap-3 p-3 rounded-lg border border-dashed bg-muted/30">
                   <FileCode className="size-5 text-muted-foreground shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium">WordPress Plugin</p>
-                    <p className="text-xs text-muted-foreground">Download the ServiceOS CRM Lead Capture plugin</p>
                   </div>
                   <a
                     href="/downloads/serviceos-crm-lead-capture.php"
@@ -1392,6 +1386,7 @@ export function SettingsView() {
                 </div>
               )}
 
+              {/* Active Endpoints */}
               {wpLoading ? (
                 <div className="flex items-center justify-center py-6 text-muted-foreground">
                   <Loader2 className="size-4 animate-spin mr-2" /> Loading endpoints...
@@ -1408,28 +1403,23 @@ export function SettingsView() {
                           <Badge className={ep.active ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'} variant="outline">
                             <span className="text-[10px]">{ep.active ? 'Active' : 'Inactive'}</span>
                           </Badge>
-                          {ep.totalReceived > 0 && (
-                            <Badge variant="outline" className="text-[10px] bg-sky-50 text-sky-700 border-sky-200">
-                              {ep.totalReceived} lead{ep.totalReceived !== 1 ? 's' : ''}
-                            </Badge>
-                          )}
                         </div>
-                        <p className="text-xs text-muted-foreground font-mono truncate">{ep.apiUrl}</p>
+                        <span className="text-xs text-muted-foreground font-mono truncate block">{ep.apiUrl}</span>
                       </div>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-600 shrink-0" onClick={() => handleDeleteWpEndpoint(ep.id)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-red-400 hover:text-red-600 shrink-0"
+                        onClick={() => handleDeleteWpEndpoint(ep.id)}
+                      >
                         <Trash2 className="size-3.5" />
                       </Button>
                     </div>
                   ))}
                 </div>
-              ) : !wpNewConfig ? (
-                <div className="text-center py-6 text-muted-foreground">
-                  <Plug className="size-8 mx-auto mb-2 opacity-20" />
-                  <p className="text-sm font-medium">No WordPress endpoints configured</p>
-                  <p className="text-xs">Click &quot;Generate&quot; to create one instantly</p>
-                </div>
               ) : null}
 
+              {/* Auto-Mapped Form Fields */}
               <div>
                 <Separator className="mb-3" />
                 <div className="flex items-center justify-between mb-2">
@@ -1440,123 +1430,33 @@ export function SettingsView() {
                     className="h-6 gap-1 text-xs"
                     onClick={() => setEditingFieldMapping(!editingFieldMapping)}
                   >
-                    {editingFieldMapping ? <X className="size-3" /> : <Pencil className="size-3" />}
-                    {editingFieldMapping ? 'Cancel' : 'Edit'}
+                    <Pencil className="size-3" />
+                    {editingFieldMapping ? 'Done' : 'Edit'}
                   </Button>
                 </div>
-                {!editingFieldMapping ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                    {Object.entries(fieldMappings).map(([source, target]) => (
-                      <div key={source} className="flex items-center gap-2 p-2 rounded-md border text-xs">
-                        <Badge variant="outline" className="text-[9px] bg-emerald-50 text-emerald-700 border-emerald-200 shrink-0">{target}</Badge>
-                        <span className="text-muted-foreground truncate">&larr; {source}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <p className="text-[11px] text-muted-foreground">
-                      Map WordPress form field names to CRM lead fields. When a form is submitted, these mappings tell the system which form field value goes into which lead field.
-                    </p>
-                    <div className="space-y-1.5">
-                      {Object.entries(fieldMappings).map(([source, target]) => (
-                        <div key={source} className="flex items-center gap-2 p-2 rounded-md border bg-background text-xs">
-                          <Input
-                            className="h-7 text-xs flex-1 min-w-0"
-                            value={source}
-                            onChange={(e) => {
-                              const updated = { ...fieldMappings };
-                              delete updated[source];
-                              updated[e.target.value] = target;
-                              setFieldMappings(updated);
-                            }}
-                            placeholder="Form field name"
-                          />
-                          <ArrowRight className="size-3 text-muted-foreground shrink-0" />
-                          <Select
-                            value={target}
-                            onValueChange={(v) => setFieldMappings({ ...fieldMappings, [source]: v })}
-                          >
-                            <SelectTrigger className="h-7 text-xs w-[130px]">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="name">Name</SelectItem>
-                              <SelectItem value="phone">Phone</SelectItem>
-                              <SelectItem value="email">Email</SelectItem>
-                              <SelectItem value="address">Address</SelectItem>
-                              <SelectItem value="serviceType">Service Type</SelectItem>
-                              <SelectItem value="description">Description</SelectItem>
-                              <SelectItem value="company">Company</SelectItem>
-                              <SelectItem value="city">City</SelectItem>
-                              <SelectItem value="state">State</SelectItem>
-                              <SelectItem value="zipCode">Zip Code</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 shrink-0 text-red-400 hover:text-red-600"
-                            onClick={() => handleRemoveFieldMapping(source)}
-                          >
-                            <X className="size-3" />
-                          </Button>
-                        </div>
-                      ))}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {[
+                    { field: 'name', source: 'your-name' },
+                    { field: 'phone', source: 'your-phone' },
+                    { field: 'email', source: 'your-email' },
+                    { field: 'serviceType', source: 'your-subject' },
+                    { field: 'description', source: 'your-message' },
+                    { field: 'address', source: 'your-address' },
+                  ].map((fm) => (
+                    <div key={fm.field} className="flex items-center gap-2 p-2 rounded-md border text-xs">
+                      <Badge variant="outline" className="text-[9px] bg-emerald-50 text-emerald-700 border-emerald-200 shrink-0">
+                        {fm.field}
+                      </Badge>
+                      <span className="text-muted-foreground">←</span>
+                      <span className="text-muted-foreground truncate">{fm.source}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        className="h-7 text-xs flex-1"
-                        value={newMapSource}
-                        onChange={(e) => setNewMapSource(e.target.value)}
-                        placeholder="New form field name (e.g. your-company)"
-                      />
-                      <ArrowRight className="size-3 text-muted-foreground shrink-0" />
-                      <Select value={newMapTarget} onValueChange={(v) => setNewMapTarget(v)}>
-                        <SelectTrigger className="h-7 text-xs w-[130px]">
-                          <SelectValue placeholder="Lead field" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="name">Name</SelectItem>
-                          <SelectItem value="phone">Phone</SelectItem>
-                          <SelectItem value="email">Email</SelectItem>
-                          <SelectItem value="address">Address</SelectItem>
-                          <SelectItem value="serviceType">Service Type</SelectItem>
-                          <SelectItem value="description">Description</SelectItem>
-                          <SelectItem value="company">Company</SelectItem>
-                          <SelectItem value="city">City</SelectItem>
-                          <SelectItem value="state">State</SelectItem>
-                          <SelectItem value="zipCode">Zip Code</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 gap-1 text-xs shrink-0"
-                        onClick={handleAddFieldMapping}
-                        disabled={!newMapSource || !newMapTarget}
-                      >
-                        <Plus className="size-3" /> Add
-                      </Button>
-                    </div>
-                    <div className="flex justify-end">
-                      <Button
-                        size="sm"
-                        className="bg-emerald-600 hover:bg-emerald-700 gap-1.5 h-8"
-                        onClick={handleSaveFieldMapping}
-                        disabled={savingFieldMapping}
-                      >
-                        {savingFieldMapping ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
-                        Save Mapping
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                  ))}
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* WhatsApp Notification Settings */}
+          {/* ─── Card 2: WhatsApp Notifications ──────────────────────────────── */}
           <Card className="border-emerald-200 dark:border-emerald-800">
             <CardHeader>
               <div className="flex items-center gap-3">
@@ -1568,6 +1468,8 @@ export function SettingsView() {
                   <CardDescription>Configure WhatsApp messages for WordPress form submissions</CardDescription>
                 </div>
               </div>
+
+              {/* Notification Flow diagram */}
               <div className="mt-3 p-3 rounded-lg bg-muted/50 border text-xs text-muted-foreground">
                 <div className="flex items-center gap-1.5 font-medium text-foreground mb-1.5">
                   <ArrowRight className="size-3" /> Notification Flow
@@ -1578,66 +1480,56 @@ export function SettingsView() {
                   <span className="px-1.5 py-0.5 bg-background rounded border text-[10px] font-medium">Lead Created</span>
                   <ArrowRight className="size-3" />
                   <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[10px] font-medium">Owner WhatsApp</span>
-                  <span className="text-[10px] mx-1">+</span>
+                  <span className="text-[10px] text-muted-foreground mx-1">+</span>
                   <span className="px-1.5 py-0.5 bg-sky-50 text-sky-700 border border-sky-200 rounded text-[10px] font-medium">Customer WhatsApp</span>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Owner Notification */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <Label className="text-sm font-medium flex items-center gap-2">
-                      <MessageSquare className="size-4 text-emerald-600" />
-                      Notify Business Owner
-                    </Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">Send a WhatsApp alert to the owner when a new lead arrives</p>
-                  </div>
-                  <Switch
-                    checked={whatsappSettings.notifyOwner}
-                    onCheckedChange={(v) => setWhatsappSettings({ ...whatsappSettings, notifyOwner: v })}
-                  />
-                </div>
-                {whatsappSettings.notifyOwner && (
-                  <div className="space-y-3 pl-6 border-l-2 border-emerald-200 dark:border-emerald-800">
-                    <div className="space-y-2">
-                      <Label className="text-xs font-medium">Owner WhatsApp Number</Label>
-                      <div className="relative">
-                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                        <Input
-                          className="pl-10 h-10 text-sm"
-                          placeholder="+1 (555) 123-4567"
-                          value={whatsappSettings.ownerPhone}
-                          onChange={(e) => setWhatsappSettings({ ...whatsappSettings, ownerPhone: e.target.value })}
-                        />
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">This number will receive lead details via WhatsApp</p>
+            <CardContent className="space-y-5">
+              {/* Section 1: Notify Business Owner */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="size-4 text-emerald-600" />
+                    <div>
+                      <Label className="text-sm font-medium">Notify Business Owner</Label>
+                      <p className="text-xs text-muted-foreground">Send a WhatsApp notification to the business owner when a new lead arrives</p>
                     </div>
-                    <div className="space-y-2">
+                  </div>
+                  <Switch checked={notifyOwner} onCheckedChange={setNotifyOwner} />
+                </div>
+
+                {notifyOwner && (
+                  <div className="ml-6 pl-4 border-l-2 border-emerald-200 dark:border-emerald-800 space-y-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium flex items-center gap-1.5">
+                        <Phone className="size-3" /> Owner WhatsApp Number
+                      </Label>
+                      <Input
+                        placeholder="+91 98765 43210"
+                        value={whatsappPhone}
+                        onChange={(e) => setWhatsappPhone(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
                         <Label className="text-xs font-medium">Owner Message Template</Label>
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-6 gap-1 text-[11px] text-emerald-600 hover:text-emerald-700"
-                          onClick={() => handleGenerateAiTemplate('owner')}
-                          disabled={generatingAiTemplate === 'owner'}
+                          className="h-6 gap-1 text-xs text-emerald-600 hover:text-emerald-700"
+                          onClick={() => handleAiGenerate('owner')}
                         >
-                          {generatingAiTemplate === 'owner' ? (
-                            <Loader2 className="size-3 animate-spin" />
-                          ) : (
-                            <Sparkles className="size-3" />
-                          )}
-                          AI Generate
+                          <Sparkles className="size-3" /> AI Generate
                         </Button>
                       </div>
                       <Textarea
-                        className="min-h-[120px] text-sm font-mono"
-                        value={whatsappSettings.ownerTemplate}
-                        onChange={(e) => setWhatsappSettings({ ...whatsappSettings, ownerTemplate: e.target.value })}
+                        rows={8}
+                        value={ownerTemplate}
+                        onChange={(e) => setOwnerTemplate(e.target.value)}
+                        className="text-xs font-mono"
                       />
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-[10px] text-muted-foreground">
                         Available variables: {'{{name}}'}, {'{{phone}}'}, {'{{email}}'}, {'{{serviceType}}'}, {'{{description}}'}, {'{{address}}'}
                       </p>
                     </div>
@@ -1647,47 +1539,40 @@ export function SettingsView() {
 
               <Separator />
 
-              {/* Customer Notification */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <Label className="text-sm font-medium flex items-center gap-2">
-                      <MessageSquare className="size-4 text-sky-600" />
-                      Auto-Reply to Customer
-                    </Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">Send a WhatsApp confirmation to the customer who submitted the form</p>
+              {/* Section 2: Auto-Reply to Customer */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="size-4 text-sky-600" />
+                    <div>
+                      <Label className="text-sm font-medium">Auto-Reply to Customer</Label>
+                      <p className="text-xs text-muted-foreground">Automatically send a WhatsApp reply to the customer who submitted the form</p>
+                    </div>
                   </div>
-                  <Switch
-                    checked={whatsappSettings.notifyCustomer}
-                    onCheckedChange={(v) => setWhatsappSettings({ ...whatsappSettings, notifyCustomer: v })}
-                  />
+                  <Switch checked={notifyCustomer} onCheckedChange={setNotifyCustomer} />
                 </div>
-                {whatsappSettings.notifyCustomer && (
-                  <div className="space-y-3 pl-6 border-l-2 border-sky-200 dark:border-sky-800">
-                    <div className="space-y-2">
+
+                {notifyCustomer && (
+                  <div className="ml-6 pl-4 border-l-2 border-sky-200 dark:border-sky-800 space-y-3">
+                    <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
                         <Label className="text-xs font-medium">Customer Message Template</Label>
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-6 gap-1 text-[11px] text-sky-600 hover:text-sky-700"
-                          onClick={() => handleGenerateAiTemplate('customer')}
-                          disabled={generatingAiTemplate === 'customer'}
+                          className="h-6 gap-1 text-xs text-sky-600 hover:text-sky-700"
+                          onClick={() => handleAiGenerate('customer')}
                         >
-                          {generatingAiTemplate === 'customer' ? (
-                            <Loader2 className="size-3 animate-spin" />
-                          ) : (
-                            <Sparkles className="size-3" />
-                          )}
-                          AI Generate
+                          <Sparkles className="size-3" /> AI Generate
                         </Button>
                       </div>
                       <Textarea
-                        className="min-h-[120px] text-sm font-mono"
-                        value={whatsappSettings.customerTemplate}
-                        onChange={(e) => setWhatsappSettings({ ...whatsappSettings, customerTemplate: e.target.value })}
+                        rows={6}
+                        value={customerTemplate}
+                        onChange={(e) => setCustomerTemplate(e.target.value)}
+                        className="text-xs font-mono"
                       />
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-[10px] text-muted-foreground">
                         Available variables: {'{{name}}'}, {'{{phone}}'}, {'{{serviceType}}'}, {'{{description}}'}, {'{{companyName}}'}
                       </p>
                     </div>
@@ -1695,13 +1580,14 @@ export function SettingsView() {
                 )}
               </div>
 
-              <div className="flex justify-end pt-2">
+              {/* Save button */}
+              <div className="flex justify-end">
                 <Button
-                  className="bg-emerald-600 hover:bg-emerald-700 gap-2 min-w-[160px]"
+                  className="bg-emerald-600 hover:bg-emerald-700 gap-1.5 min-w-[160px]"
                   onClick={handleSaveWhatsappSettings}
-                  disabled={savingWhatsappSettings}
+                  disabled={whatsappSettingsSaving}
                 >
-                  {savingWhatsappSettings ? (
+                  {whatsappSettingsSaving ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : (
                     <Save className="size-4" />
@@ -1712,7 +1598,7 @@ export function SettingsView() {
             </CardContent>
           </Card>
 
-          {/* Event Webhooks */}
+          {/* ─── Card 3: Event Webhooks ───────────────────────────────────────── */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -1725,11 +1611,16 @@ export function SettingsView() {
                     <CardDescription>Configure n8n / Zapier webhooks on job events</CardDescription>
                   </div>
                 </div>
-                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowAddWebhook(true)}>
-                  <Plus className="size-3.5 mr-1" /> Add Webhook
+                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 gap-1.5" onClick={() => setShowAddWebhook(true)}>
+                  <Plus className="size-3.5" /> Add Webhook
                 </Button>
               </div>
+
+              {/* Flow diagram */}
               <div className="mt-3 p-3 rounded-lg bg-muted/50 border text-xs text-muted-foreground">
+                <div className="flex items-center gap-1.5 font-medium text-foreground mb-1">
+                  <Zap className="size-3" /> How it works
+                </div>
                 <div className="flex items-center gap-1 flex-wrap">
                   <span className="px-1.5 py-0.5 bg-background rounded border text-[10px] font-medium">Job Event</span>
                   <ArrowRight className="size-3" />
@@ -1768,24 +1659,48 @@ export function SettingsView() {
                                 <CheckCircle2 className="size-2.5 mr-0.5" /> Active
                               </Badge>
                             ) : (
-                              <Badge className="bg-slate-100 text-slate-500 border-slate-200 text-[10px] shrink-0" variant="outline">Disabled</Badge>
+                              <Badge className="bg-slate-100 text-slate-500 border-slate-200 text-[10px] shrink-0" variant="outline">
+                                Disabled
+                              </Badge>
                             )}
                           </div>
                           <p className="text-xs text-muted-foreground font-mono truncate">{wh.url}</p>
                           {wh.lastTriggered && (
                             <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
-                              <Clock className="size-2.5" /> Last: {new Date(wh.lastTriggered).toLocaleString()}
+                              <Clock className="size-2.5" />
+                              Last: {new Date(wh.lastTriggered).toLocaleString()}
                               {wh.lastStatus === 'success' && <CheckCircle2 className="size-2.5 text-emerald-500" />}
                               {wh.lastStatus === 'failed' && <XCircle className="size-2.5 text-red-500" />}
+                              {wh.failCount > 0 && <span className="text-red-500">({wh.failCount} failures)</span>}
                             </div>
                           )}
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleTestWebhook(wh.event)} disabled={testingWebhook === wh.event}>
-                            {testingWebhook === wh.event ? <Loader2 className="size-3.5 animate-spin" /> : <TestTube2 className="size-3.5" />}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => handleTestWebhook(wh.event)}
+                            disabled={testingWebhook === wh.event}
+                            title="Test this webhook"
+                          >
+                            {testingWebhook === wh.event ? (
+                              <Loader2 className="size-3.5 animate-spin" />
+                            ) : (
+                              <TestTube2 className="size-3.5" />
+                            )}
                           </Button>
-                          <Switch checked={wh.active} onCheckedChange={(checked) => handleToggleWebhook(wh.id, checked)} className="scale-75" />
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-600" onClick={() => handleDeleteWebhook(wh.id)}>
+                          <Switch
+                            checked={wh.active}
+                            onCheckedChange={(checked) => handleToggleWebhook(wh.id, checked)}
+                            className="scale-75"
+                          />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-red-400 hover:text-red-600"
+                            onClick={() => handleDeleteWebhook(wh.id)}
+                          >
                             <Trash2 className="size-3.5" />
                           </Button>
                         </div>
@@ -1795,6 +1710,7 @@ export function SettingsView() {
                 </ScrollArea>
               )}
 
+              {/* Available Events */}
               {eventTypes.length > 0 && (
                 <div className="mt-4">
                   <Separator className="mb-3" />
@@ -1809,7 +1725,9 @@ export function SettingsView() {
                           setShowAddWebhook(true);
                         }}
                       >
-                        <Badge variant="outline" className={`${EVENT_COLORS[et.value] || ''} text-[9px] shrink-0`}>{et.value.replace('job.', '')}</Badge>
+                        <Badge variant="outline" className={`${EVENT_COLORS[et.value] || ''} text-[9px] shrink-0`}>
+                          {et.value.replace('job.', '')}
+                        </Badge>
                         <span className="truncate">{et.description}</span>
                       </button>
                     ))}
@@ -1819,51 +1737,18 @@ export function SettingsView() {
             </CardContent>
           </Card>
 
-          {/* API Keys */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                  <KeyRound className="size-4 text-emerald-600" />
-                </div>
-                <div>
-                  <CardTitle className="text-base">API Keys</CardTitle>
-                  <CardDescription>Manage API keys for external integrations</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-3 rounded-lg border">
-                <div className="flex items-center gap-3">
-                  <KeyRound className="size-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">Production API Key</p>
-                    <p className="text-xs text-muted-foreground font-mono">sos_prod_••••••••••••k8m2</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200">Active</Badge>
-                  <Button variant="ghost" size="sm" className="min-h-[36px]">Revoke</Button>
-                </div>
-              </div>
-              <Button variant="outline" className="gap-2 min-h-[44px]">
-                <KeyRound className="size-3.5" /> Generate New Key
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* ─── Add Webhook Dialog ──────────────────────────────────────────── */}
+          {/* Add Webhook Dialog */}
           <Dialog open={showAddWebhook} onOpenChange={setShowAddWebhook}>
             <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle>Add Event Webhook</DialogTitle>
-                <DialogDescription>Configure a webhook URL that fires when a job event occurs</DialogDescription>
+                <DialogDescription>Configure a webhook URL (e.g., n8n workflow) that fires when a job event occurs</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-2">
                 <div className="space-y-2">
                   <Label>Webhook Name</Label>
                   <Input
-                    placeholder="e.g., n8n - Job Created → WhatsApp"
+                    placeholder="e.g., n8n - Job Created → WhatsApp Employee"
                     value={webhookForm.name}
                     onChange={(e) => setWebhookForm({ ...webhookForm, name: e.target.value })}
                   />
@@ -1874,7 +1759,9 @@ export function SettingsView() {
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {eventTypes.map((et) => (
-                        <SelectItem key={et.value} value={et.value}>{et.label} — {et.description}</SelectItem>
+                        <SelectItem key={et.value} value={et.value}>
+                          {et.label} — {et.description}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -1886,20 +1773,40 @@ export function SettingsView() {
                     value={webhookForm.url}
                     onChange={(e) => setWebhookForm({ ...webhookForm, url: e.target.value })}
                   />
+                  <p className="text-[10px] text-muted-foreground">
+                    The URL from your n8n workflow webhook trigger. ServiceOS will POST job data here when the event fires.
+                  </p>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm">Active</Label>
+                    <p className="text-[10px] text-muted-foreground">Enable this webhook immediately</p>
+                  </div>
+                  <Switch
+                    checked={webhookForm.active}
+                    onCheckedChange={(checked) => setWebhookForm({ ...webhookForm, active: checked })}
+                  />
                 </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setShowAddWebhook(false)}>Cancel</Button>
-                <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleAddWebhook}>Create Webhook</Button>
+                <Button
+                  className="bg-emerald-600 hover:bg-emerald-700"
+                  onClick={handleAddWebhook}
+                  disabled={!webhookForm.name || !webhookForm.url}
+                >
+                  Create Webhook
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
         </TabsContent>
 
         {/* ═══════════════════════════════════════════════════════════════════
-            TAB: Billing
+            Billing Tab
             ═══════════════════════════════════════════════════════════════════ */}
         <TabsContent value="billing" className="space-y-6">
+          {/* Current Plan */}
           <Card>
             <CardHeader>
               <div className="flex items-center gap-3">
@@ -1907,49 +1814,111 @@ export function SettingsView() {
                   <CreditCard className="size-4 text-emerald-600" />
                 </div>
                 <div>
-                  <CardTitle className="text-base">Subscription & Billing</CardTitle>
-                  <CardDescription>Manage your plan, payment method, and billing history</CardDescription>
+                  <CardTitle className="text-base">Subscription Plan</CardTitle>
+                  <CardDescription>Manage your subscription and billing</CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Current Plan */}
-              <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                    <Zap className="size-5 text-emerald-600" />
+              {/* Current Plan Banner */}
+              <div className="p-4 rounded-lg border-2 border-emerald-300 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-950/20">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Crown className="size-5 text-emerald-600" />
+                    <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                      {billingPlan === 'pro' ? 'Pro' : billingPlan === 'growth' ? 'Growth' : billingPlan === 'enterprise' ? 'Enterprise' : 'Starter'} Plan
+                    </span>
                   </div>
-                  <div>
-                    <p className="font-semibold text-sm">
-                      {(auth.tenant?.plan || 'starter').charAt(0).toUpperCase() + (auth.tenant?.plan || 'starter').slice(1)} Plan
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {auth.tenant?.planStatus === 'trial' ? 'Free trial active' : 'Active subscription'}
-                    </p>
-                  </div>
+                  <Badge className={`${planStatus === 'active' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : planStatus === 'trial' ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-red-100 text-red-700 border-red-200'} text-[10px]`} variant="outline">
+                    {planStatus === 'active' ? 'Active' : planStatus === 'trial' ? 'Trial' : planStatus === 'past_due' ? 'Past Due' : planStatus}
+                  </Badge>
                 </div>
-                <Button
-                  variant="outline"
-                  className="hover:border-emerald-400 hover:text-emerald-700 dark:hover:border-emerald-600 dark:hover:text-emerald-400"
-                  onClick={() => {
-                    const { setCurrentView } = useAppStore.getState();
-                    setCurrentView('billing');
-                  }}
-                >
-                  <CreditCard className="size-4 mr-2" /> Manage Billing
-                </Button>
+                {trialEndsAt && planStatus === 'trial' && (
+                  <p className="text-xs text-muted-foreground">
+                    Trial ends on {new Date(trialEndsAt).toLocaleDateString()}
+                  </p>
+                )}
               </div>
 
-              {/* Quick plan info */}
-              <div className="grid grid-cols-3 gap-3">
+              {/* Plan Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {[
-                  { label: 'Plan', value: (auth.tenant?.plan || 'starter').charAt(0).toUpperCase() + (auth.tenant?.plan || 'starter').slice(1) },
-                  { label: 'Status', value: auth.tenant?.planStatus === 'trial' ? 'Trial' : 'Active' },
-                  { label: 'Users', value: String(users.length) },
-                ].map((item) => (
-                  <div key={item.label} className="text-center p-3 rounded-lg border">
-                    <p className="text-xs text-muted-foreground">{item.label}</p>
-                    <p className="font-semibold text-sm">{item.value}</p>
+                  { id: 'starter', name: 'Starter', price: 'Free', features: ['Up to 3 users', '50 leads/month', 'Basic reporting', 'Email support'], current: billingPlan === 'starter' },
+                  { id: 'growth', name: 'Growth', price: '$29/mo', features: ['Up to 15 users', '500 leads/month', 'Advanced reporting', 'Priority support', 'WhatsApp integration'], current: billingPlan === 'growth' },
+                  { id: 'pro', name: 'Pro', price: '$79/mo', features: ['Unlimited users', 'Unlimited leads', 'Custom workflows', 'API access', 'White-label', 'Dedicated support'], current: billingPlan === 'pro' },
+                  { id: 'enterprise', name: 'Enterprise', price: 'Custom', features: ['Everything in Pro', 'Custom integrations', 'SLA guarantee', 'On-premise option', 'Training sessions'], current: billingPlan === 'enterprise' },
+                ].map((plan) => (
+                  <div key={plan.id} className={`p-4 rounded-lg border-2 transition-colors ${plan.current ? 'border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20' : 'border-border hover:border-emerald-200'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-semibold text-sm">{plan.name}</span>
+                      {plan.current && (
+                        <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[9px]" variant="outline">
+                          Current
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-lg font-bold text-emerald-600 mb-3">{plan.price}</p>
+                    <ul className="space-y-1.5 mb-4">
+                      {plan.features.map((f) => (
+                        <li key={f} className="text-xs text-muted-foreground flex items-center gap-1.5">
+                          <Check className="size-3 text-emerald-500 shrink-0" />
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+                    <Button
+                      variant={plan.current ? 'outline' : 'default'}
+                      size="sm"
+                      className={`w-full ${plan.current ? '' : 'bg-emerald-600 hover:bg-emerald-700'}`}
+                      disabled={plan.current}
+                    >
+                      {plan.current ? 'Current Plan' : 'Upgrade'}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Billing History */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center size-9 rounded-lg bg-muted">
+                  <CreditCard className="size-4 text-emerald-500" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">Billing History</CardTitle>
+                  <CardDescription>Your recent transactions and invoices</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {[
+                  { date: '2025-03-01', description: 'Starter Plan — Monthly', amount: '$0.00', status: 'Paid' },
+                  { date: '2025-02-01', description: 'Starter Plan — Monthly', amount: '$0.00', status: 'Paid' },
+                  { date: '2025-01-01', description: 'Starter Plan — Monthly', amount: '$0.00', status: 'Paid' },
+                ].map((invoice, i) => (
+                  <div key={i} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/30 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center justify-center size-8 rounded-lg bg-muted shrink-0">
+                        <CreditCard className="size-3.5 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{invoice.description}</p>
+                        <p className="text-xs text-muted-foreground">{new Date(invoice.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium">{invoice.amount}</span>
+                      <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
+                        {invoice.status}
+                      </Badge>
+                      <Button variant="ghost" size="sm" className="text-xs gap-1">
+                        <Download className="size-3" /> PDF
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1958,11 +1927,10 @@ export function SettingsView() {
         </TabsContent>
 
         {/* ═══════════════════════════════════════════════════════════════════
-            TAB: Workspace URL
+            Workspace URL Tab
             ═══════════════════════════════════════════════════════════════════ */}
-        <TabsContent value="workspace-url" className="space-y-6">
-          {/* Workspace URL Card */}
-          <Card className="border-emerald-200 dark:border-emerald-800">
+        <TabsContent value="workspace" className="space-y-6">
+          <Card>
             <CardHeader>
               <div className="flex items-center gap-3">
                 <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
@@ -1970,234 +1938,129 @@ export function SettingsView() {
                 </div>
                 <div>
                   <CardTitle className="text-base">Workspace URL</CardTitle>
-                  <CardDescription>Your unique workspace address on the platform</CardDescription>
+                  <CardDescription>Configure your workspace URL and custom domain</CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Company Name (read-only reference) */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Company Name</Label>
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/30 border">
-                  <Building2 className="size-4 text-muted-foreground shrink-0" />
-                  <span className="font-medium text-sm">{auth.tenant?.name || companyForm.name}</span>
+              {/* Default Workspace URL */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">Workspace Slug</Label>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center bg-muted rounded-md border px-3 py-2 text-sm text-muted-foreground whitespace-nowrap">
+                    app.serviceos.io/
+                  </div>
+                  <Input
+                    placeholder="your-workspace"
+                    value={workspaceSlug}
+                    onChange={(e) => setWorkspaceSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                    className="flex-1"
+                  />
                 </div>
-                <p className="text-xs text-muted-foreground">This is the name entered during registration</p>
+                <p className="text-xs text-muted-foreground">
+                  This is your default workspace URL. Only lowercase letters, numbers, and hyphens are allowed.
+                </p>
+                <Button
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 gap-1.5"
+                  onClick={handleSaveWorkspace}
+                  disabled={savingWorkspace}
+                >
+                  {savingWorkspace ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="size-3.5" />
+                  )}
+                  Save Workspace URL
+                </Button>
               </div>
 
               <Separator />
 
-              {/* Workspace URL Display / Edit */}
+              {/* Custom Domain */}
               <div className="space-y-3">
-                <Label className="text-sm font-medium">Workspace URL</Label>
-
-                {!editingSubdomain ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 p-4 rounded-xl border-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20">
-                      <Globe className="size-5 text-emerald-600 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1 flex-wrap">
-                          <code className="text-lg font-bold text-emerald-700 dark:text-emerald-400">
-                            {subdomain}
-                          </code>
-                          <span className="text-lg text-muted-foreground">.{APP_DOMAIN}</span>
-                        </div>
-                      </div>
-                      <Button variant="outline" size="sm" className="shrink-0 gap-1.5" onClick={startEditSubdomain}>
-                        <RefreshCw className="size-3.5" /> Change
-                      </Button>
-                    </div>
-
-                    {/* Status */}
-                    <div className="flex items-center gap-2">
-                      <Label className="text-xs text-muted-foreground">Status:</Label>
-                      <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200" variant="outline">
-                        <CheckCircle2 className="size-2.5 mr-0.5" /> Active
-                      </Badge>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4 p-4 rounded-xl border-2 border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20">
-                    <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
-                      <AlertCircle className="size-4" />
-                      <span className="text-sm font-medium">Changing your workspace URL</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Your workspace URL will change from <code className="font-mono text-foreground">{subdomain}.{APP_DOMAIN}</code> to the new URL below. This affects how your team and customers access your workspace.
-                    </p>
-
-                    {/* New subdomain input */}
-                    <div className="space-y-2">
-                      <Label className="text-sm font-medium">New Subdomain</Label>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          className="flex-1 h-11 font-mono"
-                          value={newSubdomain}
-                          onChange={(e) => {
-                            const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '');
-                            setNewSubdomain(val);
-                            setAvailabilityResult(null);
-                          }}
-                          placeholder="my-workspace"
-                        />
-                        <span className="text-sm text-muted-foreground shrink-0">.{APP_DOMAIN}</span>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Lowercase letters, numbers, and hyphens only. Minimum 3 characters.
-                      </p>
-                    </div>
-
-                    {/* Preview */}
-                    {newSubdomain && (
-                      <div className="p-3 rounded-lg bg-muted/50 border">
-                        <p className="text-xs text-muted-foreground mb-1">Preview</p>
-                        <div className="flex items-center gap-1">
-                          <Globe className="size-4 text-emerald-600 shrink-0" />
-                          <code className="text-sm font-bold text-foreground">
-                            {newSubdomain}.{APP_DOMAIN}
-                          </code>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Availability check */}
-                    {newSubdomain && newSubdomain !== subdomain && newSubdomain.length >= 3 && (
-                      <div className="space-y-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="gap-1.5"
-                          onClick={() => checkSubdomainAvailability(newSubdomain)}
-                          disabled={checkingAvailability}
-                        >
-                          {checkingAvailability ? (
-                            <Loader2 className="size-3.5 animate-spin" />
-                          ) : (
-                            <Search className="size-3.5" />
-                          )}
-                          Check Availability
-                        </Button>
-
-                        {availabilityResult && (
-                          <div className={`flex items-center gap-2 p-3 rounded-lg border ${
-                            availabilityResult.available
-                              ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/20'
-                              : 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/20'
-                          }`}>
-                            {availabilityResult.available ? (
-                              <>
-                                <CheckCircle2 className="size-4 text-emerald-600 shrink-0" />
-                                <div>
-                                  <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-                                    {availabilityResult.subdomain}.{APP_DOMAIN} is available!
-                                  </p>
-                                </div>
-                              </>
-                            ) : (
-                              <>
-                                <XCircle className="size-4 text-red-600 shrink-0" />
-                                <div>
-                                  <p className="text-sm font-medium text-red-700 dark:text-red-400">
-                                    Not available: {availabilityResult.reason}
-                                  </p>
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-2 pt-2">
-                      <Button
-                        className="bg-emerald-600 hover:bg-emerald-700 gap-1.5"
-                        disabled={!availabilityResult?.available || savingSubdomain}
-                        onClick={handleSubdomainSave}
-                      >
-                        {savingSubdomain ? (
-                          <Loader2 className="size-4 animate-spin" />
-                        ) : (
-                          <Check className="size-4" />
-                        )}
-                        Save New URL
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setEditingSubdomain(false);
-                          setAvailabilityResult(null);
-                        }}
-                      >
-                        <X className="size-4 mr-1.5" /> Cancel
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm font-medium">Custom Domain</Label>
+                  <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200">
+                    Pro &amp; Enterprise
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="crm.yourcompany.com"
+                    value={customDomain}
+                    onChange={(e) => setCustomDomain(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button variant="outline" size="sm" className="shrink-0 gap-1.5">
+                    Verify Domain
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Point your custom domain to your ServiceOS workspace. Requires a CNAME record pointing to
+                  <code className="mx-1 px-1 py-0.5 bg-muted rounded text-[10px]">app.serviceos.io</code>
+                </p>
               </div>
 
-              {/* Slug generation explanation */}
+              <Separator />
+
+              {/* DNS Configuration Reference */}
               <div className="space-y-3">
-                <Separator />
+                <Label className="text-sm font-medium">DNS Configuration</Label>
                 <div className="p-4 rounded-lg border bg-muted/30 space-y-3">
-                  <p className="text-sm font-medium flex items-center gap-2">
-                    <ArrowRight className="size-4 text-emerald-600" /> How it works
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                    <div className="space-y-1.5">
-                      <p className="font-medium text-foreground">During Registration</p>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-muted-foreground">Company Name:</span>
-                          <span className="font-medium">ABC Plumbing</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <ArrowRight className="size-3 text-emerald-500" />
-                          <span className="text-muted-foreground">Auto-generated Slug:</span>
-                          <code className="font-mono bg-background px-1.5 py-0.5 rounded border">abc-plumbing</code>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <ArrowRight className="size-3 text-emerald-500" />
-                          <span className="text-muted-foreground">Result:</span>
-                          <code className="font-mono bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200">abc-plumbing.{APP_DOMAIN}</code>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <p className="font-medium text-foreground">Can I Change It?</p>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-muted-foreground">From:</span>
-                          <code className="font-mono bg-background px-1.5 py-0.5 rounded border">abc-plumbing.{APP_DOMAIN}</code>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <ArrowRight className="size-3 text-emerald-500" />
-                          <span className="text-muted-foreground">To:</span>
-                          <code className="font-mono bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200">abcplumbing.{APP_DOMAIN}</code>
-                        </div>
-                        <p className="text-muted-foreground mt-1">You can remove hyphens or simplify your subdomain, subject to availability.</p>
-                      </div>
-                    </div>
+                  <div className="grid grid-cols-4 gap-2 text-xs font-medium text-muted-foreground">
+                    <span>Type</span>
+                    <span>Name</span>
+                    <span className="col-span-2">Value</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2 text-xs">
+                    <span className="font-mono">CNAME</span>
+                    <span className="font-mono">crm</span>
+                    <span className="font-mono col-span-2">app.serviceos.io</span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2 text-xs">
+                    <span className="font-mono">TXT</span>
+                    <span className="font-mono">@</span>
+                    <span className="font-mono col-span-2">serviceos-verification=abc123</span>
                   </div>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Add these DNS records to your domain registrar. DNS changes can take up to 48 hours to propagate.
+                </p>
               </div>
+            </CardContent>
+          </Card>
 
-              {/* Custom Domain (info only) */}
-              {customDomain && (
-                <>
-                  <Separator />
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Custom Domain</Label>
-                    <div className="flex items-center gap-2 p-3 rounded-lg border bg-muted/30">
-                      <ExternalLink className="size-4 text-muted-foreground shrink-0" />
-                      <code className="text-sm font-mono">{customDomain}</code>
-                      <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 ml-auto">
-                        Custom
-                      </Badge>
-                    </div>
-                  </div>
-                </>
-              )}
+          {/* About */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center size-9 rounded-lg bg-muted">
+                  <Globe className="size-4 text-emerald-500" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">About ServiceOS</CardTitle>
+                  <CardDescription>Version and system information</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Version</span>
+                <span className="font-mono">0.3.0</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Build</span>
+                <span className="font-mono">2025.03.05</span>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+                  <ExternalLink className="size-3" /> Documentation
+                </Button>
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+                  <ExternalLink className="size-3" /> Changelog
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

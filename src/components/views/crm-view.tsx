@@ -28,7 +28,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAppStore } from '@/store/app-store';
-import { authFetch } from '@/lib/client-auth';
 import { toast } from 'sonner';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -55,18 +54,9 @@ interface Employee {
   whatsappId?: string;
   rating: number;
   completedJobs: number;
-  currentJobId?: string;
   location?: string;
   createdAt: string;
   updatedAt: string;
-}
-
-interface Job {
-  id: string;
-  title: string;
-  status: string;
-  customerName?: string;
-  scheduledAt: string;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -100,17 +90,6 @@ function getRoleBadgeColor(role: string) {
     delivery: 'bg-emerald-100 text-emerald-700 border-emerald-200',
   };
   return map[role] || 'bg-gray-100 text-gray-600 border-gray-200';
-}
-
-function getJobStatusColor(status: string) {
-  const map: Record<string, string> = {
-    pending: 'bg-amber-100 text-amber-700 border-amber-200',
-    assigned: 'bg-teal-100 text-teal-700 border-teal-200',
-    in_progress: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-    completed: 'bg-green-100 text-green-700 border-green-200',
-    cancelled: 'bg-red-100 text-red-700 border-red-200',
-  };
-  return map[status] || 'bg-gray-100 text-gray-600 border-gray-200';
 }
 
 function formatDate(dateStr: string) {
@@ -153,14 +132,12 @@ export function CrmView() {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [showEmployeeDetail, setShowEmployeeDetail] = useState(false);
   const [employeeViewMode, setEmployeeViewMode] = useState<'cards' | 'table'>('cards');
-  const [employeeJobs, setEmployeeJobs] = useState<Job[]>([]);
-  const [employeeJobsLoading, setEmployeeJobsLoading] = useState(false);
 
   // ─── Fetch Customers ────────────────────────────────────────────────────
   const fetchCustomers = useCallback(async () => {
     setCustomersLoading(true);
     try {
-      const res = await authFetch('/api/customers');
+      const res = await fetch('/api/customers');
       if (res.ok) {
         const data = await res.json();
         setCustomers(Array.isArray(data) ? data : data.customers || []);
@@ -176,7 +153,7 @@ export function CrmView() {
   const fetchEmployees = useCallback(async () => {
     setEmployeesLoading(true);
     try {
-      const res = await authFetch('/api/employees');
+      const res = await fetch('/api/employees');
       if (res.ok) {
         const data = await res.json();
         setEmployees(Array.isArray(data) ? data : data.employees || []);
@@ -203,7 +180,7 @@ export function CrmView() {
       const isEditing = !!editingCustomer;
       const url = isEditing ? `/api/customers?id=${editingCustomer.id}` : '/api/customers';
       const method = isEditing ? 'PUT' : 'POST';
-      const res = await authFetch(url, {
+      const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(customerForm),
@@ -224,7 +201,7 @@ export function CrmView() {
 
   const handleDeleteCustomer = async (id: string) => {
     try {
-      const res = await authFetch(`/api/customers?id=${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/customers?id=${id}`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('Customer deleted');
         fetchCustomers();
@@ -258,7 +235,7 @@ export function CrmView() {
       const isEditing = !!editingEmployee;
       const url = isEditing ? `/api/employees?id=${editingEmployee.id}` : '/api/employees';
       const method = isEditing ? 'PUT' : 'POST';
-      const res = await authFetch(url, {
+      const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -282,7 +259,7 @@ export function CrmView() {
 
   const handleDeleteEmployee = async (id: string) => {
     try {
-      const res = await authFetch(`/api/employees?id=${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/employees?id=${id}`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('Employee deleted');
         fetchEmployees();
@@ -307,33 +284,6 @@ export function CrmView() {
       skills,
     });
     setShowAddEmployee(true);
-  };
-
-  const openEmployeeDetail = async (employee: Employee) => {
-    setSelectedEmployee(employee);
-    setShowEmployeeDetail(true);
-    setEmployeeJobs([]);
-    setEmployeeJobsLoading(true);
-    try {
-      const res = await authFetch(`/api/employees/${employee.id}/jobs`);
-      if (res.ok) {
-        const data = await res.json();
-        const jobs = Array.isArray(data) ? data : data.jobs || [];
-        setEmployeeJobs(jobs.map((j: Record<string, unknown>) => ({
-          id: j.id as string,
-          title: (j.title as string) || 'Untitled Job',
-          status: (j.status as string) || 'pending',
-          customerName: (j.customer as Record<string, unknown>)?.name as string || undefined,
-          scheduledAt: (j.scheduledAt as string) || '',
-        })));
-      } else {
-        setEmployeeJobs([]);
-      }
-    } catch {
-      setEmployeeJobs([]);
-    } finally {
-      setEmployeeJobsLoading(false);
-    }
   };
 
   // ─── Filtered / Sorted Lists ────────────────────────────────────────────
@@ -826,7 +776,7 @@ export function CrmView() {
                   <Card
                     key={employee.id}
                     className="cursor-pointer hover:shadow-md transition-shadow"
-                    onClick={() => openEmployeeDetail(employee)}
+                    onClick={() => { setSelectedEmployee(employee); setShowEmployeeDetail(true); }}
                   >
                     <CardContent className="p-4 space-y-3">
                       <div className="flex items-center gap-3">
@@ -891,11 +841,6 @@ export function CrmView() {
                           <span className="font-medium">{employee.rating.toFixed(1)}</span>
                           <span className="text-muted-foreground">({employee.completedJobs} jobs)</span>
                         </div>
-                        {employee.currentJobId && (
-                          <Badge variant="outline" className="text-[9px] h-4 bg-teal-50 text-teal-600 border-teal-200">
-                            <Briefcase className="size-2.5 mr-0.5" /> Active
-                          </Badge>
-                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -928,7 +873,7 @@ export function CrmView() {
                         <TableRow
                           key={employee.id}
                           className="cursor-pointer"
-                          onClick={() => openEmployeeDetail(employee)}
+                          onClick={() => { setSelectedEmployee(employee); setShowEmployeeDetail(true); }}
                         >
                           <TableCell>
                             <div className="flex items-center gap-2">
@@ -980,7 +925,7 @@ export function CrmView() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => openEmployeeDetail(employee)}>
+                                <DropdownMenuItem onClick={() => { setSelectedEmployee(employee); setShowEmployeeDetail(true); }}>
                                   <Eye className="size-3.5 mr-2" /> View
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => openEditEmployee(employee)}>
@@ -1055,7 +1000,7 @@ export function CrmView() {
 
           {/* Employee Detail Dialog */}
           <Dialog open={showEmployeeDetail} onOpenChange={setShowEmployeeDetail}>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>Employee Details</DialogTitle>
               </DialogHeader>
@@ -1119,48 +1064,12 @@ export function CrmView() {
                         </div>
                       </div>
                     )}
-                    <Separator />
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-medium text-sm">Assigned Jobs</h4>
-                        {employeeJobs.length > 0 && (
-                          <Badge variant="secondary" className="text-[10px] h-4">{employeeJobs.length}</Badge>
-                        )}
-                      </div>
-                      {employeeJobsLoading ? (
-                        <div className="space-y-2">
-                          {[1, 2].map(i => (
-                            <div key={i} className="animate-pulse h-12 bg-muted rounded-lg" />
-                          ))}
-                        </div>
-                      ) : employeeJobs.length === 0 ? (
-                        <p className="text-xs text-muted-foreground">No assigned jobs</p>
-                      ) : (
-                        <ScrollArea className="max-h-48">
-                          <div className="space-y-2">
-                            {employeeJobs.map(job => (
-                              <div key={job.id} className="flex items-center justify-between p-2 rounded-lg border">
-                                <div className="min-w-0 flex-1">
-                                  <p className="font-medium text-sm truncate">{job.title}</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {job.customerName || 'No customer'} • {formatDate(job.scheduledAt)}
-                                  </p>
-                                </div>
-                                <Badge variant="outline" className={`ml-2 shrink-0 ${getJobStatusColor(job.status)}`}>
-                                  {job.status.replace('_', ' ')}
-                                </Badge>
-                              </div>
-                            ))}
-                          </div>
-                        </ScrollArea>
-                      )}
-                    </div>
                     <div className="flex gap-2 pt-2">
                       <Button variant="outline" size="sm" className="flex-1" onClick={() => { setShowEmployeeDetail(false); openEditEmployee(selectedEmployee); }}>
                         <Pencil className="size-3.5 mr-1" /> Edit
                       </Button>
-                      <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => { setShowEmployeeDetail(false); setActiveView('jobs'); }}>
-                        <Briefcase className="size-3.5 mr-1" /> View in Jobs
+                      <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => { setShowEmployeeDetail(false); setActiveView('whatsapp'); }}>
+                        <MessageCircle className="size-3.5 mr-1" /> WhatsApp
                       </Button>
                     </div>
                   </div>

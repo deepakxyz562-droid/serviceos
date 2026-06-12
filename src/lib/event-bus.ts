@@ -12,11 +12,8 @@
  *
  * Supported Events:
  *   - job.created, job.updated, job.assigned, job.accepted, job.started, job.completed, job.cancelled, job.rejected
- *   - lead.created, lead.updated, lead.converted, lead.assigned
- *   - quote.created, quote.sent, quote.accepted, quote.rejected
- *   - invoice.created, invoice.sent
+ *   - lead.created, lead.updated, lead.converted
  *   - payment.received, payment.failed
- *   - review.request, review.received
  *   - employee.status_changed, employee.heartbeat
  *   - conversation.message_received, conversation.message_sent
  *   - customer.journey_stage_changed
@@ -32,19 +29,14 @@
 import { db } from '@/lib/db'
 import { dispatchJobEvent } from '@/lib/event-webhook-dispatcher'
 import type { JobEventType } from '@/lib/event-webhook-dispatcher'
-import { orchestrateNotification, buildJobTemplateData, buildEmployeeTemplateData } from '@/lib/notification-orchestrator'
-import type { NotificationChannel } from '@/lib/notification-orchestrator'
 
 // ─── Event Types ──────────────────────────────────────────────────────────────
 
 export type ServiceEvent =
   | 'job.created' | 'job.updated' | 'job.assigned' | 'job.accepted'
   | 'job.started' | 'job.completed' | 'job.cancelled' | 'job.rejected'
-  | 'lead.created' | 'lead.updated' | 'lead.converted' | 'lead.assigned'
-  | 'quote.created' | 'quote.sent' | 'quote.accepted' | 'quote.rejected'
-  | 'invoice.created' | 'invoice.sent'
+  | 'lead.created' | 'lead.updated' | 'lead.converted'
   | 'payment.received' | 'payment.failed'
-  | 'review.request' | 'review.received'
   | 'employee.status_changed' | 'employee.heartbeat'
   | 'conversation.message_received' | 'conversation.message_sent'
   | 'conversation.state_changed'
@@ -79,17 +71,8 @@ export const SERVICE_EVENT_LABELS: Record<ServiceEvent, { label: string; descrip
   'lead.created':      { label: 'Lead Created',       description: 'A new lead was created',                    category: 'lead' },
   'lead.updated':      { label: 'Lead Updated',       description: 'Lead details were modified',                category: 'lead' },
   'lead.converted':    { label: 'Lead Converted',     description: 'A lead was converted to a customer/job',    category: 'lead' },
-  'lead.assigned':     { label: 'Lead Assigned',      description: 'A lead was assigned to an employee',        category: 'lead' },
-  'quote.created':     { label: 'Quote Created',      description: 'A new quote was created',                   category: 'quote' },
-  'quote.sent':        { label: 'Quote Sent',         description: 'A quote was sent to the customer',          category: 'quote' },
-  'quote.accepted':    { label: 'Quote Accepted',     description: 'A customer accepted a quote',               category: 'quote' },
-  'quote.rejected':    { label: 'Quote Rejected',     description: 'A customer rejected a quote',               category: 'quote' },
-  'invoice.created':   { label: 'Invoice Created',    description: 'A new invoice was created',                 category: 'invoice' },
-  'invoice.sent':      { label: 'Invoice Sent',       description: 'An invoice was sent to the customer',       category: 'invoice' },
   'payment.received':  { label: 'Payment Received',   description: 'A payment was received',                    category: 'payment' },
   'payment.failed':    { label: 'Payment Failed',     description: 'A payment attempt failed',                  category: 'payment' },
-  'review.request':    { label: 'Review Requested',   description: 'A review request was sent',                 category: 'review' },
-  'review.received':   { label: 'Review Received',    description: 'A new review was received',                 category: 'review' },
   'employee.status_changed': { label: 'Employee Status Changed', description: 'An employee status was updated',  category: 'employee' },
   'employee.heartbeat':      { label: 'Employee Heartbeat',     description: 'Employee heartbeat ping received', category: 'employee' },
   'conversation.message_received': { label: 'Message Received', description: 'A conversation message was received', category: 'conversation' },
@@ -127,323 +110,17 @@ const JOB_EVENT_MAP: Record<string, JobEventType> = {
   'job.rejected':  'job.rejected',
 }
 
-// ─── Auto-Notification Handlers ───────────────────────────────────────────────
-
-/**
- * Scenario 1: Lead Created → Auto WhatsApp to customer
- * When a new lead comes in (from WordPress, manual, etc.), automatically
- * send a WhatsApp welcome message to the customer.
- */
-async function handleLeadCreatedAutoWhatsApp(payload: EventPayload): Promise<void> {
-  const { phone, name, source, tenantId } = payload.data
-  if (!phone) return
-
-  try {
-    let tenantName = 'ServiceOS'
-    if (tenantId) {
-      try {
-        const tenant = await db.tenant.findUnique({ where: { id: tenantId } })
-        if (tenant?.name) tenantName = tenant.name
-      } catch {}
-    }
-
-    const message = [
-      `👋 Hello${name ? ` ${name}` : ''}!`,
-      '',
-      `Thank you for reaching out to ${tenantName}!`,
-      `We've received your inquiry${source === 'wordpress' ? ' from our website' : ''}.`,
-      '',
-      'Our team will get back to you shortly.',
-      '',
-      `— ${tenantName}`,
-    ].join('\n')
-
-    await orchestrateNotification({
-      channels: ['whatsapp', 'email'],
-      recipient: {
-        phone,
-        email: payload.data.email,
-        name,
-        role: 'customer',
-      },
-      template: 'custom',
-      templateData: {
-        subject: `Thank you for your inquiry - ${tenantName}`,
-        message,
-      },
-      context: {
-        tenantId,
-        workspaceId: payload.workspaceId,
-      },
-    })
-
-    console.log(`[EventBus] Auto WhatsApp sent to customer for lead: ${name || phone}`)
-  } catch (err) {
-    console.error('[EventBus] Failed to auto-send WhatsApp for lead.created:', err)
-  }
-}
-
-/**
- * Scenario 3: Lead Assigned → WhatsApp notification to assigned employee
- */
-async function handleLeadAssignedNotification(payload: EventPayload): Promise<void> {
-  const { assignedToId, name, phone, serviceType, tenantId } = payload.data
-  if (!assignedToId) return
-
-  try {
-    const employee = await db.employee.findUnique({ where: { id: assignedToId } })
-    if (!employee || !employee.phone) return
-
-    const message = [
-      '🎯 New Lead Assigned to You',
-      '',
-      `Customer: ${name || 'N/A'}`,
-      `Phone: ${phone || 'N/A'}`,
-      `Service: ${serviceType || 'N/A'}`,
-      '',
-      'Please follow up promptly!',
-    ].join('\n')
-
-    await orchestrateNotification({
-      channels: ['whatsapp', 'email'],
-      recipient: {
-        phone: employee.phone,
-        email: employee.email,
-        name: employee.name,
-        userId: employee.userId || undefined,
-        role: 'employee',
-        whatsappId: employee.whatsappId,
-      },
-      template: 'custom',
-      templateData: {
-        subject: `New Lead Assigned: ${name || 'N/A'}`,
-        message,
-      },
-      context: {
-        tenantId,
-        workspaceId: employee.workspaceId || payload.workspaceId,
-        employeeId: employee.id,
-      },
-    })
-
-    console.log(`[EventBus] Lead assigned WhatsApp sent to employee: ${employee.name}`)
-  } catch (err) {
-    console.error('[EventBus] Failed to send lead assigned notification:', err)
-  }
-}
-
-/**
- * Scenario 4: Quote Sent → WhatsApp to customer with quote link
- */
-async function handleQuoteSentNotification(payload: EventPayload): Promise<void> {
-  const { quoteId, quoteNumber, customerPhone, customerEmail, customerName, title, total, currency, approvalToken, tenantId } = payload.data
-  if (!customerPhone && !customerEmail) return
-
-  try {
-    let tenantName = 'ServiceOS'
-    if (tenantId) {
-      try {
-        const tenant = await db.tenant.findUnique({ where: { id: tenantId } })
-        if (tenant?.name) tenantName = tenant.name
-      } catch {}
-    }
-
-    const approvalLink = approvalToken
-      ? `${process.env.NEXT_PUBLIC_APP_URL || ''}/quote/approve/${approvalToken}`
-      : ''
-
-    const message = [
-      `📋 Your Quote from ${tenantName}`,
-      '',
-      `Quote #: ${quoteNumber || 'N/A'}`,
-      `Service: ${title || 'N/A'}`,
-      `Amount: ${currency || '$'}${total?.toFixed(2) || 'N/A'}`,
-      '',
-      approvalLink ? `View & Accept: ${approvalLink}` : 'Please review and let us know your decision.',
-      '',
-      `— ${tenantName}`,
-    ].join('\n')
-
-    await orchestrateNotification({
-      channels: ['whatsapp', 'email'],
-      recipient: {
-        phone: customerPhone,
-        email: customerEmail,
-        name: customerName,
-        role: 'customer',
-      },
-      template: 'custom',
-      templateData: {
-        subject: `Quote #${quoteNumber || 'N/A'} from ${tenantName}`,
-        message,
-        htmlBody: [
-          `<h2>📋 Your Quote from ${tenantName}</h2>`,
-          `<ul>`,
-          `<li><strong>Quote #:</strong> ${quoteNumber || 'N/A'}</li>`,
-          `<li><strong>Service:</strong> ${title || 'N/A'}</li>`,
-          `<li><strong>Amount:</strong> ${currency || '$'}${total?.toFixed(2) || 'N/A'}</li>`,
-          `</ul>`,
-          approvalLink ? `<p><a href="${approvalLink}" style="background:#10b981;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;">View & Accept Quote</a></p>` : '<p>Please review and let us know your decision.</p>',
-        ].join('\n'),
-      },
-      context: {
-        tenantId,
-        workspaceId: payload.workspaceId,
-      },
-    })
-
-    console.log(`[EventBus] Quote sent WhatsApp sent to customer: ${customerName || customerPhone}`)
-  } catch (err) {
-    console.error('[EventBus] Failed to send quote sent notification:', err)
-  }
-}
-
-/**
- * Scenario 5: Job Assigned → WhatsApp notification to employee with job details
- */
-async function handleJobAssignedAutoNotification(payload: EventPayload): Promise<void> {
-  const { job, employee } = payload.data
-  if (!employee?.phone && !employee?.whatsappId) return
-
-  try {
-    await orchestrateNotification({
-      channels: ['whatsapp', 'email', 'sms'] as NotificationChannel[],
-      recipient: {
-        phone: employee.phone || employee.whatsappId,
-        email: employee.email,
-        name: employee.name,
-        userId: employee.userId,
-        role: 'employee',
-        whatsappId: employee.whatsappId,
-      },
-      template: 'job_assigned',
-      templateData: {
-        ...buildJobTemplateData(job || payload.data),
-        ...buildEmployeeTemplateData(employee),
-      },
-      context: {
-        tenantId: payload.tenantId,
-        workspaceId: payload.workspaceId || employee.workspaceId,
-        jobId: job?.id || payload.data.jobId,
-        employeeId: employee.id,
-        customerId: job?.customerId,
-      },
-    })
-
-    console.log(`[EventBus] Job assigned WhatsApp sent to employee: ${employee.name}`)
-  } catch (err) {
-    console.error('[EventBus] Failed to send job assigned notification:', err)
-  }
-}
-
-/**
- * Job Completed → Send review request to customer
- */
-async function handleJobCompletedAutoReview(payload: EventPayload): Promise<void> {
-  const { job, employee } = payload.data
-  if (!job?.customerPhone && !job?.customerEmail) return
-
-  try {
-    await orchestrateNotification({
-      channels: ['whatsapp', 'email'] as NotificationChannel[],
-      recipient: {
-        phone: job.customerPhone,
-        email: job.customerEmail,
-        name: job.customerName,
-        userId: job.customerUserId,
-        role: 'customer',
-      },
-      template: 'review_request',
-      templateData: {
-        ...buildJobTemplateData(job),
-        ...buildEmployeeTemplateData(employee || {}),
-      },
-      context: {
-        tenantId: payload.tenantId,
-        workspaceId: payload.workspaceId,
-        jobId: job.id,
-        employeeId: employee?.id,
-        customerId: job.customerId,
-      },
-    })
-
-    console.log(`[EventBus] Review request sent for completed job: ${job.id}`)
-  } catch (err) {
-    console.error('[EventBus] Failed to send review request:', err)
-  }
-}
-
-/**
- * Quote Accepted → Auto-create job from accepted quote
- */
-async function handleQuoteAcceptedAutoJob(payload: EventPayload): Promise<void> {
-  const { quoteId, tenantId, workspaceId } = payload.data
-  if (!quoteId) return
-
-  try {
-    const quote = await db.quote.findUnique({ where: { id: quoteId } })
-    if (!quote || quote.status !== 'accepted') return
-
-    // Check if a job was already created from this quote
-    const existingJob = await db.job.findFirst({
-      where: {
-        customerPhone: quote.customerPhone || undefined,
-        title: quote.title,
-        workspaceId: workspaceId || undefined,
-      },
-      orderBy: { createdAt: 'desc' },
-    })
-
-    // Only auto-create if no recent job exists for this quote
-    if (existingJob && (Date.now() - new Date(existingJob.createdAt).getTime()) < 60000) {
-      console.log(`[EventBus] Job already exists for quote ${quoteId}, skipping auto-create`)
-      return
-    }
-
-    const job = await db.job.create({
-      data: {
-        title: quote.title,
-        description: quote.description,
-        status: 'pending',
-        customerId: quote.customerId,
-        customerName: quote.customerName,
-        customerPhone: quote.customerPhone,
-        workspaceId: workspaceId || null,
-      },
-    })
-
-    // Update quote status to won
-    await db.quote.update({
-      where: { id: quoteId },
-      data: { status: 'won' },
-    })
-
-    // Emit job.created event
-    await EventBus.emit('job.created', {
-      jobId: job.id,
-      title: job.title,
-      customerPhone: job.customerPhone,
-      customerName: job.customerName,
-      resourceType: 'job',
-      resourceId: job.id,
-      summary: `Job auto-created from accepted quote #${quote.quoteNumber}`,
-    }, { tenantId, workspaceId })
-
-    console.log(`[EventBus] Job auto-created from accepted quote: ${quoteId} → Job ${job.id}`)
-  } catch (err) {
-    console.error('[EventBus] Failed to auto-create job from quote:', err)
-  }
-}
-
 // ─── EventBus Singleton ───────────────────────────────────────────────────────
 
 class EventBusClass {
   private handlers: Map<ServiceEvent, EventHandler[]> = new Map()
-  private initialized = false
 
   /**
    * Register a handler for a specific event.
    * Multiple handlers can be registered for the same event.
+   *
+   * @param event   - The event to listen for
+   * @param handler - Async function called when the event is emitted
    */
   on(event: ServiceEvent, handler: EventHandler): void {
     const existing = this.handlers.get(event) || []
@@ -453,6 +130,9 @@ class EventBusClass {
 
   /**
    * Remove a previously registered handler for a specific event.
+   *
+   * @param event   - The event to stop listening for
+   * @param handler - The exact handler function reference to remove
    */
   off(event: ServiceEvent, handler: EventHandler): void {
     const existing = this.handlers.get(event)
@@ -466,52 +146,23 @@ class EventBusClass {
   }
 
   /**
-   * Initialize auto-notification handlers.
-   * Called once on first emit to register all workflow automation handlers.
-   */
-  private ensureInitialized(): void {
-    if (this.initialized) return
-    this.initialized = true
-
-    // Scenario 1: Lead Created → Auto WhatsApp to customer
-    this.on('lead.created', handleLeadCreatedAutoWhatsApp)
-
-    // Scenario 3: Lead Assigned → WhatsApp notification to assigned employee
-    this.on('lead.assigned', handleLeadAssignedNotification)
-
-    // Scenario 4: Quote Sent → WhatsApp to customer with quote link
-    this.on('quote.sent', handleQuoteSentNotification)
-
-    // Scenario 5: Job Assigned → WhatsApp notification to employee
-    this.on('job.assigned', handleJobAssignedAutoNotification)
-
-    // Job Completed → Send review request to customer
-    this.on('job.completed', handleJobCompletedAutoReview)
-
-    // Quote Accepted → Auto-create job
-    this.on('quote.accepted', handleQuoteAcceptedAutoJob)
-
-    console.log('[EventBus] Auto-notification handlers initialized')
-  }
-
-  /**
    * Emit an event, triggering all registered handlers in parallel.
    *
    * This method:
-   * 1. Initializes auto-notification handlers on first call
-   * 2. Builds the payload with ISO timestamp
-   * 3. Calls all registered handlers via Promise.allSettled (errors are logged, not thrown)
-   * 4. Dispatches to the event-webhook-dispatcher for external webhooks (job events)
-   * 5. Creates an AuditLog entry for the event
+   * 1. Builds the payload with ISO timestamp
+   * 2. Calls all registered handlers via Promise.allSettled (errors are logged, not thrown)
+   * 3. Dispatches to the event-webhook-dispatcher for external webhooks (job events)
+   * 4. Creates an AuditLog entry for the event
+   *
+   * @param event   - The event type to emit
+   * @param data    - Event-specific data payload
+   * @param context - Optional context (tenantId, workspaceId)
    */
   async emit(
     event: ServiceEvent,
     data: Record<string, any>,
     context?: { tenantId?: string; workspaceId?: string }
   ): Promise<void> {
-    // Initialize handlers on first emit
-    this.ensureInitialized()
-
     const payload: EventPayload = {
       event,
       timestamp: new Date().toISOString(),
@@ -571,7 +222,7 @@ class EventBusClass {
           userId: data.userId || data.actorId || null,
           action: event,
           resourceType: payload.data.resourceType || event.split('.')[0] || null,
-          resourceId: payload.data.resourceId || payload.data.id || payload.data.jobId || payload.data.leadId || payload.data.quoteId || null,
+          resourceId: payload.data.resourceId || payload.data.id || payload.data.jobId || null,
           metadataJson: JSON.stringify({
             event,
             timestamp: payload.timestamp,
@@ -594,6 +245,7 @@ class EventBusClass {
 
   /**
    * Get the number of registered handlers for a given event.
+   * Useful for debugging and testing.
    */
   handlerCount(event: ServiceEvent): number {
     return this.handlers.get(event)?.length || 0
@@ -601,14 +253,15 @@ class EventBusClass {
 
   /**
    * Remove all handlers for all events.
+   * Primarily useful for testing.
    */
   removeAllHandlers(): void {
     this.handlers.clear()
-    this.initialized = false
   }
 
   /**
    * Get all events that have at least one handler registered.
+   * Useful for debugging and introspection.
    */
   registeredEvents(): ServiceEvent[] {
     return Array.from(this.handlers.keys()).filter(

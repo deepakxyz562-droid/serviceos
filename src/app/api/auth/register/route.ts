@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { hashPassword, generateToken, generateSlug, getCookieOptions } from '@/lib/auth';
+import { hashPassword, generateToken, generateSlug, COOKIE_OPTIONS } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,13 +36,11 @@ export async function POST(request: NextRequest) {
     // Hash the password
     const passwordHash = await hashPassword(password);
 
-    // Create tenant first (with subdomain = slug for subdomain-based access)
+    // Create tenant first
     const tenant = await db.tenant.create({
       data: {
         name: businessName,
         slug,
-        subdomain: slug,  // Auto-set subdomain = slug for company access
-        subdomainVerified: true,
         industry: industry || null,
         phone: phone || null,
         email,
@@ -111,7 +109,6 @@ export async function POST(request: NextRequest) {
       email: user.email,
       name: user.name,
       role: user.role,
-      isSuperAdmin: user.isSuperAdmin || false,
       tenantId: user.tenantId,
       workspaceId: user.workspaceId,
       avatar: user.avatar,
@@ -136,7 +133,6 @@ export async function POST(request: NextRequest) {
           id: tenant.id,
           name: tenant.name,
           slug: tenant.slug,
-          subdomain: tenant.subdomain,
           industry: tenant.industry,
           phone: tenant.phone,
           email: tenant.email,
@@ -150,9 +146,9 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
 
-    // Set auth cookie (secure flag based on request protocol)
+    // Set auth cookie
     response.cookies.set({
-      ...getCookieOptions(request),
+      ...COOKIE_OPTIONS,
       value: token,
     });
 

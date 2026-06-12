@@ -4,8 +4,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ==========================================
@@ -21,9 +22,6 @@ model Tenant {
   phone             String?
   email             String?
   address           String?
-  city              String?
-  state             String?
-  pincode           String?
   country           String   @default("US")
   currency          String   @default("USD")
   whatsappPhone     String?
@@ -34,15 +32,8 @@ model Tenant {
   planStartedAt     DateTime?
   planEndsAt        DateTime?
   settingsJson      String   @default("{}")
-  featureFlagsJson  String   @default("{}")
-  subdomain         String?  @unique
-  customDomain      String?  @unique
-  subdomainVerified Boolean  @default(false)
-  customDomainVerified Boolean @default(false)
-  customDomainDnsJson String @default("{}")
   onboardingCompleted Boolean @default(false)
   onboardingStep    Int      @default(0)
-  suspendedAt       DateTime?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -57,13 +48,8 @@ model Tenant {
   quotes          Quote[]
   notificationLogs NotificationLog[]
   conversations   Conversation[]
-  invitations     Invitation[]
-  customDomains   CustomDomain[]
-  bookings        Booking[]
-  knowledgeArticles KnowledgeArticle[]
-  documents       Document[]
-  leadDiscoveries LeadDiscovery[]
-  discoverySearches LeadDiscoverySearch[]
+  forms           Form[]
+  workflowAutomations WorkflowAutomation[]
 
   @@index([slug])
   @@index([plan])
@@ -98,55 +84,6 @@ model Subscription {
   @@index([status])
 }
 
-model Invitation {
-  id              String    @id @default(cuid())
-  token           String    @unique
-  email           String
-  name            String?
-  role            String    @default("technician")
-  phone           String?
-  status          String    @default("pending")  // pending, accepted, expired, cancelled
-  message         String?
-  invitedById     String?
-  tenantId        String
-  workspaceId     String?
-  employeeId      String?   @unique
-  expiresAt       DateTime
-  acceptedAt      DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  tenant     Tenant?    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  workspace  Workspace? @relation(fields: [workspaceId], references: [id])
-  invitedBy  User?      @relation("SentInvitations", fields: [invitedById], references: [id])
-  employee   Employee?  @relation(fields: [employeeId], references: [id])
-
-  @@index([token])
-  @@index([email])
-  @@index([tenantId])
-  @@index([status])
-  @@index([expiresAt])
-}
-
-model CustomDomain {
-  id              String   @id @default(cuid())
-  domain          String   @unique
-  tenantId        String
-  verified        Boolean  @default(false)
-  verificationToken String?
-  dnsRecordsJson  String   @default("{}")
-  sslStatus       String   @default("pending")  // pending, active, error
-  active          Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@index([domain])
-  @@index([tenantId])
-  @@index([active])
-}
-
 model User {
   id              String   @id @default(cuid())
   email           String   @unique
@@ -154,7 +91,6 @@ model User {
   passwordHash    String?
   avatar          String?
   role            String   @default("owner")
-  isSuperAdmin    Boolean  @default(false)
   authProvider    String   @default("email")
   authProviderId  String?
   phone           String?
@@ -174,7 +110,6 @@ model User {
   notifications Notification[]
   employeeAccount Employee?
   employeeStatusLogs EmployeeStatusLog[]
-  sentInvitations Invitation[] @relation("SentInvitations")
 
   @@index([email])
   @@index([tenantId])
@@ -185,30 +120,22 @@ model User {
 // ==========================================
 
 model Service {
-  id              String   @id @default(cuid())
-  name            String
-  description     String?
-  category        String   @default("general")
-  basePrice       Float    @default(0)
-  duration        Int      @default(60)
-  icon            String?
-  isActive        Boolean  @default(true)
-  tenantId        String?
-  // ─── Service Catalog enhancements ───
-  assignedTeamJson String   @default("[]")  // employee IDs assigned to this service
-  addOnsJson       String   @default("[]")  // add-on service definitions
-  upsellServiceIdsJson String @default("[]")  // IDs of upsell services
-  imageUrl         String?
-  tagsJson         String   @default("[]")
-  sortOrder        Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  category    String   @default("general")
+  basePrice   Float    @default(0)
+  duration    Int      @default(60)
+  icon        String?
+  isActive    Boolean  @default(true)
+  tenantId    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   tenant Tenant? @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([category])
-  @@index([isActive])
 }
 
 // ==========================================
@@ -291,30 +218,21 @@ model Invoice {
 // ==========================================
 
 model Review {
-  id              String   @id @default(cuid())
-  rating          Int      @default(5)
-  comment         String?
-  jobId           String?  @unique
-  customerId      String?
-  employeeId      String?
-  tenantId        String?
-  // ─── Review & Reputation enhancements ───
-  source          String   @default("internal")  // internal, google, whatsapp, form
-  status          String   @default("published")  // published, pending, flagged
-  npsScore        Int?     // Net Promoter Score 0-10
-  responseJson    String   @default("{}")  // business response to review
-  googleReviewId  String?  // Google review ID if synced
-  reviewUrl       String?  // URL to the review
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id          String   @id @default(cuid())
+  rating      Int      @default(5)
+  comment     String?
+  jobId       String?  @unique
+  customerId  String?
+  employeeId  String?
+  tenantId    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   tenant      Tenant?  @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([employeeId])
   @@index([rating])
-  @@index([source])
-  @@index([status])
 }
 
 // ==========================================
@@ -344,47 +262,126 @@ model Notification {
 // ==========================================
 
 model Quote {
-  id              String    @id @default(cuid())
-  title           String
-  description     String?
-  itemsJson       String    @default("[]")
-  subtotal        Float     @default(0)
-  tax             Float     @default(0)
-  discount        Float     @default(0)
-  total           Float     @default(0)
-  status          String    @default("draft")  // draft, sent, accepted, rejected, expired, won
-  tenantId        String?
-  customerId      String?
-  leadId          String?
-  validUntil      DateTime?
-  // ─── Quotes & Estimates enhancements ───
-  quoteNumber     String?
-  templateName    String    @default("standard")  // standard, detailed, simple
-  approvalToken   String?   @unique  // token for customer approval link
-  approvedAt      DateTime?
-  rejectedAt      DateTime?
-  rejectedReason  String?
-  sentVia         String?   // email, whatsapp, link, manual
-  sentAt          DateTime?
-  version         Int       @default(1)
-  parentQuoteId   String?   // for version history
-  notesJson       String    @default("[]")  // internal notes
-  pdfUrl          String?   // generated PDF URL
-  currency        String    @default("USD")
-  customerName    String?
-  customerEmail   String?
-  customerPhone   String?
-  createdById     String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  title         String
+  description   String?
+  itemsJson     String    @default("[]")  // Service line items with serviceId, name, price, qty
+  addOnsJson    String    @default("[]")  // Add-on items with name, price
+  subtotal      Float     @default(0)
+  tax           Float     @default(0)
+  taxRate       Float     @default(0)     // Tax percentage
+  discount      Float     @default(0)
+  discountType  String    @default("fixed") // fixed, percentage
+  total         Float     @default(0)
+  status        String    @default("draft") // draft, sent, accepted, rejected, expired
+  tenantId      String?
+  customerId    String?
+  leadId        String?
+  validUntil    DateTime?
+  whatsappSent  Boolean   @default(false)
+  whatsappSentAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  tenant    Tenant? @relation(fields: [tenantId], references: [id])
+  tenant   Tenant?   @relation(fields: [tenantId], references: [id])
+  customer Customer? @relation(fields: [customerId], references: [id])
 
   @@index([tenantId])
   @@index([status])
-  @@index([leadId])
   @@index([customerId])
-  @@index([approvalToken])
+}
+
+// ==========================================
+// FORM BUILDER
+// ==========================================
+
+model Form {
+  id                  String   @id @default(cuid())
+  name                String
+  description         String?
+  type                String   @default("lead_capture") // lead_capture, booking, feedback, survey, quote_request, job_request, custom
+  status              String   @default("active") // active, inactive, archived
+  fieldsJson          String   @default("[]")     // Array of form field definitions
+  submissionActions   String   @default("[]")     // Array of actions: create_lead, create_customer, create_booking, create_job, create_quote, store_response, send_whatsapp, send_email, trigger_workflow, call_webhook
+  fieldMappingJson    String   @default("{}")     // Form field → CRM field mapping
+  welcomeMessage      String   @default("")
+  completionMessage   String   @default("")
+  whatsappOwnerTemplate String  @default("")     // WhatsApp template sent to owner on submission
+  whatsappUserTemplate  String  @default("")     // WhatsApp template sent to user on submission
+  whatsappAiGenerated  Boolean @default(false)   // AI-generate user WhatsApp confirmation
+  embedScriptEnabled  Boolean  @default(false)
+  embedIframeEnabled  Boolean  @default(false)
+  slug                String?  @unique           // For embed URLs
+  submissions         Int      @default(0)
+  conversionRate      Float    @default(0)
+  tenantId            String?
+  workspaceId         String?
+  createdById         String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+  responses FormResponse[]
+
+  @@index([tenantId])
+  @@index([type])
+  @@index([status])
+  @@index([slug])
+}
+
+model FormResponse {
+  id          String   @id @default(cuid())
+  formId      String
+  dataJson    String   @default("{}")  // Key-value pairs of form responses
+  respondent  String?  // Phone or email of submitter
+  respondentName String?
+  source      String   @default("direct") // direct, whatsapp, embed, wordpress, webhook
+  leadId      String?  // If a lead was created from this response
+  customerId  String?  // If a customer was created
+  jobId       String?  // If a job was created
+  quoteId     String?  // If a quote was created
+  bookingId   String?  // If a booking was created
+  actionsResultsJson String @default("{}") // Results of submission actions
+  tenantId    String?
+  createdAt   DateTime @default(now())
+
+  form Form @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@index([formId])
+  @@index([source])
+  @@index([tenantId])
+  @@index([createdAt])
+}
+
+// ==========================================
+// WORKFLOW AUTOMATION (Enhanced)
+// ==========================================
+
+model WorkflowAutomation {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  triggerType   String   // lead.created, lead.assigned, lead.status_changed, lead.converted, customer.created, quote.sent, quote.accepted, quote.rejected, booking.created, booking.confirmed, booking.cancelled, job.created, job.assigned, job.completed, job.cancelled, employee.assigned, whatsapp.message_received, form.submitted, invoice.created, invoice.paid, invoice.overdue, time.based
+  triggerConfigJson String @default("{}") // Trigger-specific config (e.g., time delays, field filters)
+  conditionsJson String  @default("[]")   // Array of condition objects { field, operator, value }
+  actionsJson   String   @default("[]")   // Array of action objects { type, config }
+  active        Boolean  @default(true)
+  executionCount Int     @default(0)
+  lastExecutedAt DateTime?
+  lastExecutionStatus String? // success, failed
+  tagsJson      String   @default("[]")
+  tenantId      String?
+  workspaceId   String?
+  createdById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+  executions TriggerExecution[]
+
+  @@index([tenantId])
+  @@index([triggerType])
+  @@index([active])
 }
 
 // ==========================================
@@ -417,7 +414,6 @@ model Workspace {
   contactLists  ContactList[]
   folders       Folder[]
   webhookSources WebhookSource[]
-  invitations    Invitation[]
 
   @@index([tenantId])
 }
@@ -618,14 +614,6 @@ model Employee {
   userId          String?   @unique
   lastLocationAt  DateTime?
   onLeaveUntil    DateTime?
-  // ─── Workforce Management enhancements ───
-  serviceAreas    String    @default("[]")  // JSON array of service area names/coords
-  commissionRate  Float     @default(0)     // percentage commission
-  commissionJson  String    @default("{}")  // commission tracking data
-  attendanceJson  String    @default("{}")  // clock in/out records
-  performanceScore Float    @default(0)     // computed performance metric
-  employeeCode    String?   // short code for scheduling
-  branchId        String?   // branch assignment
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -637,9 +625,6 @@ model Employee {
   userAccount     User?                   @relation(fields: [userId], references: [id])
   statusLogs      EmployeeStatusLog[]
   notificationLogs NotificationLog[]
-  invitation      Invitation?
-  collectedPayments Job[] @relation("JobPaymentCollector")
-  bookings        Booking[]
 
   @@index([role])
   @@index([status])
@@ -712,6 +697,7 @@ model Customer {
   jobs      Job[]
   invoices  Invoice[]
   leads     Lead[]
+  quotes    Quote[]
   notificationLogs NotificationLog[]
   conversations        Conversation[]
   journeys             CustomerJourney[]
@@ -783,17 +769,6 @@ model Job {
   assignmentStatus   String?
   notificationLogJson String @default("[]")
   workspaceId        String?
-  // ─── Payment & COD fields ───
-  paymentMethod      String?   // cod, online, card, bank_transfer, upi, null
-  paymentStatus      String    @default("pending") // pending, collected, waived, failed
-  amountCollected    Float?
-  collectedAt        DateTime?
-  collectedById      String?
-  // ─── Completion proof fields ───
-  completionNotes    String?   // Employee notes at job completion
-  completionPhotosJson String @default("[]") // Array of photo URLs/base64
-  completionSignatureData String? // Base64 signature image
-  completedAt        DateTime? // When the employee marked the job complete with proof
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
@@ -807,15 +782,12 @@ model Job {
   notificationLogs NotificationLog[]
   conversation      Conversation?
   journey           CustomerJourney?
-  collectedBy       Employee? @relation("JobPaymentCollector", fields: [collectedById], references: [id])
 
   @@index([status])
   @@index([assigneeId])
   @@index([customerId])
   @@index([scheduledAt])
   @@index([workspaceId])
-  @@index([paymentStatus])
-  @@index([paymentMethod])
 }
 
 model ContactList {
@@ -888,6 +860,10 @@ model WebhookEndpoint {
   fieldMapping  String   @default("{}")        // JSON: source field → lead field mapping
   autoCreateCustomer Boolean @default(true)
   sendWhatsApp  Boolean  @default(true)
+  whatsappOwnerPhone String @default("")    // Owner WhatsApp number for notifications
+  whatsappOwnerTemplate String @default("") // WhatsApp template sent to owner on lead
+  whatsappUserTemplate  String @default("") // WhatsApp template sent to user/form submitter
+  whatsappAiGenerated  Boolean @default(false) // AI-generate user WhatsApp message
   whatsappTemplate String @default("new_lead")
   tenantId      String?
   workspaceId   String?
@@ -1012,13 +988,14 @@ model EventWebhookLog {
 
 model Conversation {
   id              String   @id @default(cuid())
-  conversationId  String   @unique  // WhatsApp conversation ID
+  conversationId  String   @unique  // Conversation ID
   customerPhone   String
   customerName    String?
   customerWhatsappId String?
   customerId      String?
   leadId          String?  @unique
   jobId           String?  @unique
+  channel         String   @default("whatsapp") // whatsapp, website, facebook, instagram, google_ads, justdial, email, sms, phone, manual
   status          String   @default("active")  // active, completed, archived
   currentStage    String   @default("greeting") // greeting, intent_detected, booking, assigned, in_progress, completed, review
   intentDetected  String?  // e.g., "cleaning_service", "plumbing", "booking"
@@ -1043,6 +1020,37 @@ model Conversation {
   @@index([status])
   @@index([tenantId])
   @@index([lastMessageAt])
+  @@index([channel])
+}
+
+// ==========================================
+// OMNICHANNEL CONFIGURATION
+// ==========================================
+
+model ChannelConfig {
+  id              String   @id @default(cuid())
+  channel         String   // whatsapp, website, facebook, instagram, google_ads, justdial, email, sms
+  name            String   // Display name
+  configJson      String   @default("{}")  // Channel-specific configuration (API keys, tokens, etc.)
+  status          String   @default("active")  // active, inactive, error
+  isDefault       Boolean  @default(false)
+  autoCreateLead  Boolean  @default(true)  // Auto-create lead from this channel
+  autoReply       Boolean  @default(false) // Auto-reply on this channel
+  autoReplyMessage String  @default("")    // Auto-reply message template
+  webhookUrl      String?  // Incoming webhook URL for this channel
+  leadSourceTag   String   @default("")    // Tag to add to leads from this channel
+  totalLeads      Int      @default(0)     // Total leads from this channel
+  totalMessages   Int      @default(0)     // Total messages on this channel
+  lastActivityAt  DateTime?
+  lastError       String?
+  tenantId        String?
+  workspaceId     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([channel])
+  @@index([status])
+  @@index([tenantId])
 }
 
 model CustomerJourney {
@@ -1250,7 +1258,9 @@ model Campaign {
   clickedCount    Int       @default(0)
   repliedCount    Int       @default(0)
   convertedCount  Int       @default(0)
+  failedCount     Int       @default(0)
   revenueGenerated Float    @default(0)
+  channel         String    @default("whatsapp")  // whatsapp, email, sms, multi
   followUpSequenceJson String @default("[]")
   cloneFromId     String?
   approvedBy      String?
@@ -1640,25 +1650,7 @@ model DealStageHistory {
 }
 
 // --- Module 15: Omnichannel Communication ---
-
-model ChannelConfig {
-  id              String   @id @default(cuid())
-  channel         String   // whatsapp, email, sms, instagram, facebook, telegram
-  name            String
-  configJson      String   @default("{}")
-  status          String   @default("active")  // active, disconnected, error
-  lastSyncAt      DateTime?
-  lastError       String?
-  isDefault       Boolean  @default(false)
-  tenantId        String?
-  workspaceId     String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@index([channel])
-  @@index([status])
-  @@index([tenantId])
-}
+// ChannelConfig model is defined above in the OMNICHANNEL CONFIGURATION section
 
 model UnifiedMessage {
   id              String   @id @default(cuid())
@@ -1791,235 +1783,82 @@ model ConversationExport {
 }
 
 // ==========================================
-// BOOKING MANAGEMENT MODULE
+// COMMUNICATION PROVIDERS
 // ==========================================
 
-model Booking {
-  id              String    @id @default(cuid())
-  title           String
-  description     String?
-  status          String    @default("pending")  // pending, confirmed, assigned, in_progress, completed, cancelled
-  source          String    @default("manual")   // website, whatsapp, phone, manual
-  customerId      String?
-  customerName    String?
-  customerPhone   String?
-  customerEmail   String?
-  employeeId      String?
-  serviceId       String?
-  branchId        String?
-  address         String?
-  scheduledAt     DateTime?
-  scheduledEndTime DateTime?
-  duration        Int       @default(60)  // minutes
-  notes           String?
-  cancellationReason String?
-  confirmedAt     DateTime?
-  completedAt     DateTime?
-  cancelledAt     DateTime?
-  rescheduledFrom String?   // previous booking ID if rescheduled
-  reminderSentAt  DateTime?
+model CommunicationProvider {
+  id              String   @id @default(cuid())
+  name            String   // e.g., "Twilio SMS", "Amazon SES"
+  type            String   // whatsapp, email, sms
+  provider        String   // twilio, msg91, plivo, textlocal, exotel, amazon_ses, resend, sendgrid, mailgun, postmark, meta_cloud_api, 360dialog, wati, interakt, gupshup
+  status          String   @default("active") // active, inactive, error
+  configJson      String   @default("{}")  // Provider-specific config (API keys, tokens, SMTP settings)
+  isDefault       Boolean  @default(false)
+  sendingEnabled  Boolean  @default(true)
+  dailyLimit      Int      @default(1000)
+  monthlyLimit    Int      @default(30000)
+  sentToday       Int      @default(0)
+  sentThisMonth   Int      @default(0)
+  totalSent       Int      @default(0)
+  totalDelivered  Int      @default(0)
+  totalFailed     Int      @default(0)
+  lastUsedAt      DateTime?
+  lastError       String?
   tenantId        String?
   workspaceId     String?
-  metadataJson    String    @default("{}")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  tenant    Tenant?   @relation(fields: [tenantId], references: [id])
-  employee  Employee? @relation(fields: [employeeId], references: [id])
-
-  @@index([tenantId])
-  @@index([status])
-  @@index([employeeId])
-  @@index([customerId])
-  @@index([scheduledAt])
-  @@index([source])
-}
-
-// ==========================================
-// KNOWLEDGE BASE MODULE
-// ==========================================
-
-model KnowledgeArticle {
-  id              String   @id @default(cuid())
-  title           String
-  content         String   // markdown content
-  category        String   @default("general")  // faq, document, sop, service_guide, pricing, internal, public
-  tagsJson        String   @default("[]")
-  isPublic        Boolean  @default(false)  // visible in customer portal
-  isActive        Boolean  @default(true)
-  sortOrder       Int      @default(0)
-  authorId        String?
-  viewCount       Int      @default(0)
-  helpfulCount    Int      @default(0)
-  notHelpfulCount Int      @default(0)
-  tenantId        String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  tenant Tenant? @relation(fields: [tenantId], references: [id])
-
-  @@index([tenantId])
-  @@index([category])
-  @@index([isPublic])
-  @@index([isActive])
-}
-
-// ==========================================
-// DOCUMENT CENTER MODULE
-// ==========================================
-
-model Document {
-  id              String   @id @default(cuid())
-  name            String
-  description     String?
-  type            String   @default("general")  // contract, quote, invoice, photo, job_attachment, other
-  category        String   @default("general")  // customer, employee, legal, financial, operational
-  fileUrl         String
-  fileType        String?  // pdf, jpg, png, docx, etc.
-  fileSize        Int?     // bytes
-  accessLevel     String   @default("admin")  // admin, manager, employee, customer
-  customerId      String?
-  jobId           String?
-  employeeId      String?
-  uploadedById    String?
-  isShared        Boolean  @default(false)
-  sharedWithJson  String   @default("[]")  // user IDs with access
-  tagsJson        String   @default("[]")
-  tenantId        String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  tenant Tenant? @relation(fields: [tenantId], references: [id])
-
-  @@index([tenantId])
   @@index([type])
-  @@index([category])
-  @@index([customerId])
-  @@index([jobId])
-  @@index([accessLevel])
+  @@index([provider])
+  @@index([status])
+  @@index([tenantId])
 }
 
 // ==========================================
-// REVIEW REQUEST MODULE (Reputation Management)
+// CONTACTS
 // ==========================================
 
-model ReviewRequest {
-  id              String    @id @default(cuid())
-  jobId           String?
-  customerId      String?
-  employeeId      String?
-  customerName    String?
-  customerPhone   String?
-  customerEmail   String?
-  status          String    @default("pending")  // pending, sent, opened, reviewed, expired
-  channel         String    @default("whatsapp")  // whatsapp, email, sms
-  sentAt          DateTime?
-  openedAt        DateTime?
-  reviewedAt      DateTime?
-  reviewId        String?   // linked review if submitted
-  reminderCount   Int       @default(0)
-  lastReminderAt  DateTime?
-  tenantId        String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+model Contact {
+  id          String   @id @default(cuid())
+  name        String
+  email       String?
+  phone       String?
+  company     String?
+  tags        String?   // comma separated
+  tenantId    String
+  workspaceId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([tenantId])
-  @@index([status])
-  @@index([jobId])
-  @@index([customerId])
-  @@index([sentAt])
-}
-
-// ==========================================
-// LEAD DISCOVERY MODULE
-// ==========================================
-// Find Local Businesses → Import to CRM → Launch Outreach → Track Conversions
-// Sources: Google Places, Facebook Pages, Website Import, CSV Import, Manual Entry
-
-model LeadDiscovery {
-  id              String   @id @default(cuid())
-  name            String
-  phone           String?
-  email           String?
-  website         String?
-  address         String?
-  city            String?
-  state           String?
-  country         String   @default("US")
-  postalCode      String?
-  latitude        Float?
-  longitude       Float?
-  // ─── Source tracking ───
-  source          String   @default("manual")  // google_places, facebook, website, csv, manual
-  externalId      String?  // Google Place ID, Facebook Page ID, etc.
-  sourceUrl       String?  // URL of the source listing
-  sourceDataJson  String   @default("{}")  // Raw data from the source (ratings, reviews, etc.)
-  // ─── Business details ───
-  businessType    String?  // restaurant, salon, plumbing, etc.
-  category        String?  // Google Places type / Facebook category
-  rating          Float    @default(0)  // External rating (Google/Facebook)
-  reviewCount     Int      @default(0)  // Number of external reviews
-  description     String?  // Business description from source
-  // ─── Discovery pipeline status ───
-  status          String   @default("discovered")  // discovered, contacted, imported, qualified, converted, dismissed
-  priority        String   @default("medium")  // low, medium, high, hot
-  // ─── Import tracking ───
-  leadId          String?  // Once imported to CRM, links to the Lead
-  campaignId      String?  // If added to an outreach campaign
-  importedAt      DateTime?
-  contactedAt     DateTime?
-  convertedAt     DateTime?
-  // ─── Tags & notes ───
-  tagsJson        String   @default("[]")
-  notesJson       String   @default("[]")
-  // ─── Search context ───
-  searchQueryId   String?  // Links to LeadDiscoverySearch for context
-  tenantId        String?
-  createdById     String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  tenant  Tenant? @relation(fields: [tenantId], references: [id])
-  search  LeadDiscoverySearch? @relation(fields: [searchQueryId], references: [id])
-
-  @@index([tenantId])
-  @@index([source])
-  @@index([status])
-  @@index([businessType])
-  @@index([priority])
+  @@index([email])
+  @@index([phone])
   @@index([createdAt])
-  @@index([leadId])
 }
 
-model LeadDiscoverySearch {
+// ==========================================
+// TRIGGER EXECUTION LOG
+// ==========================================
+
+model TriggerExecution {
   id              String   @id @default(cuid())
-  query           String   // e.g., "plumbers in Mumbai", "restaurants near downtown"
-  source          String   @default("google_places")  // google_places, facebook, website, csv, manual
-  location        String?  // e.g., "Mumbai, India", "New York, NY"
-  latitude        Float?
-  longitude       Float?
-  radius          Int      @default(5000)  // Search radius in meters
-  businessType    String?  // Filter by business type
-  // ─── Results tracking ───
-  resultsCount    Int      @default(0)
-  importedCount   Int      @default(0)
-  contactedCount  Int      @default(0)
-  convertedCount  Int      @default(0)
-  // ─── API config ───
-  apiConfigJson   String   @default("{}")  // Store API-specific params (Google Places types, etc.)
-  // ─── Status ───
-  status          String   @default("completed")  // searching, completed, failed
-  lastSearchedAt  DateTime?
+  automationId    String   // FK to WorkflowAutomation
+  triggerEvent    String   // The event that fired (e.g., lead.created)
+  triggerPayload  String   @default("{}") // JSON payload of the trigger event
+  conditionsMet   Boolean  @default(true) // Were conditions satisfied?
+  actionsResultsJson String @default("[]") // Results of each action execution
+  status          String   @default("success") // success, failed, partial
+  error           String?
+  durationMs      Int?
   tenantId        String?
-  createdById     String?
   createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
 
-  tenant      Tenant? @relation(fields: [tenantId], references: [id])
-  discoveries LeadDiscovery[]
+  automation WorkflowAutomation? @relation(fields: [automationId], references: [id], onDelete: Cascade)
 
-  @@index([tenantId])
-  @@index([source])
+  @@index([automationId])
+  @@index([triggerEvent])
   @@index([status])
+  @@index([tenantId])
   @@index([createdAt])
 }
