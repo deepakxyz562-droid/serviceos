@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { toISOString } from '@/lib/utils'
 
 // GET /api/omnichannel/conversations - List all conversations in the format the frontend expects
 export async function GET(request: NextRequest) {
@@ -125,7 +126,7 @@ export async function GET(request: NextRequest) {
           : msg.senderType === 'bot' || msg.direction === 'outbound' ? 'agent' as const
           : 'customer' as const,
         senderName: msg.senderName || undefined,
-        timestamp: msg.createdAt.toISOString(),
+        timestamp: toISOString(msg.createdAt as Date | string),
         channel: conv.channel as string,
       }))
 
@@ -136,7 +137,7 @@ export async function GET(request: NextRequest) {
         customerEmail: conv.lead?.source ? undefined : undefined,
         channel: conv.channel,
         lastMessage: conv.lastMessageBody || '',
-        lastMessageTime: conv.lastMessageAt?.toISOString() || conv.createdAt.toISOString(),
+        lastMessageTime: toISOString(conv.lastMessageAt as Date | string | null) || toISOString(conv.createdAt as Date | string) || '',
         unreadCount: unreadMap.get(conv.conversationId) || 0,
         status: conv.status === 'completed' || conv.status === 'archived' ? 'closed' as const : conv.status as 'active' | 'closed' | 'pending',
         leadId: conv.leadId || undefined,
@@ -146,7 +147,7 @@ export async function GET(request: NextRequest) {
           status: conv.lead.status,
           value: conv.lead.value || undefined,
           source: conv.lead.source,
-          createdAt: conv.lead.createdAt.toISOString(),
+          createdAt: toISOString(conv.lead.createdAt as Date | string),
         } : undefined,
         messages: transformedMessages,
         autoLeadCreated: !!autoLeadMsg,

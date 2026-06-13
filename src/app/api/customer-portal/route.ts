@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import crypto from 'crypto'
+import { toISOString } from '@/lib/utils'
 
 // POST /api/customer-portal - Generate customer portal session
 export async function POST(request: NextRequest) {
@@ -100,7 +101,7 @@ export async function GET(request: NextRequest) {
     // Check if session has expired
     if (session.expiresAt < new Date()) {
       return NextResponse.json(
-        { error: 'Session has expired', expiredAt: session.expiresAt.toISOString() },
+        { error: 'Session has expired', expiredAt: toISOString(session.expiresAt as Date | string) },
         { status: 410 }
       )
     }
@@ -117,7 +118,7 @@ export async function GET(request: NextRequest) {
         id: session.id,
         customerId: session.customerId,
         customer: session.customer,
-        expiresAt: session.expiresAt.toISOString(),
+        expiresAt: toISOString(session.expiresAt as Date | string),
       },
     })
   } catch (error) {

@@ -10,6 +10,7 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { nanoid } from 'nanoid';
 
 // ── Configuration ──────────────────────────────────────────────────────────
 
@@ -118,6 +119,8 @@ const TABLE_MAP: Record<string, string> = {
   conversationAssignment: 'ConversationAssignment',
   conversationExport: 'ConversationExport',
   conversationLabel: 'ConversationLabel',
+  menuItemConfig: 'MenuItemConfig',
+  featureFlag: 'FeatureFlag',
 };
 
 // Known missing tables in Supabase (return empty results gracefully)
@@ -227,6 +230,12 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
   TriggerExecution: {
     automation: { targetTable: 'WorkflowAutomation', fkColumn: 'automationId' },
   },
+  MenuItemConfig: {
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+  },
+  FeatureFlag: {
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+  },
 };
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -325,6 +334,85 @@ function applyWhereFilters(
       continue;
     }
     if (field === 'OR' && Array.isArray(value)) {
+      // PostgREST supports OR filters with parenthesized syntax:
+      // .or('name.ilike.%search%,phone.ilike.%search%')
+      // We build this from the Prisma OR array
+      const orConditions = value as WhereInput[];
+      const orParts: string[] = [];
+      for (const cond of orConditions) {
+        for (const [orField, orValue] of Object.entries(cond)) {
+          if (orValue === undefined) continue;
+          if (orValue !== null && typeof orValue === 'object' && !Array.isArray(orValue) && !(orValue instanceof Date)) {
+            const op = orValue as WhereOperator;
+            if (op.contains !== undefined) {
+              orParts.push(`${orField}.ilike.%${op.contains}%`);
+            } else if (op.startsWith !== undefined) {
+              orParts.push(`${orField}.ilike.${op.startsWith}%`);
+            } else if (op.endsWith !== undefined) {
+              orParts.push(`${orField}.ilike.%${op.endsWith}`);
+            } else if (op.equals !== undefined) {
+              if (op.equals === null) {
+                orParts.push(`${orField}.is.null`);
+              } else {
+                orParts.push(`${orField}.eq.${op.equals}`);
+              }
+            } else if (op.gt !== undefined) {
+              orParts.push(`${orField}.gt.${op.gt}`);
+            } else if (op.gte !== undefined) {
+              orParts.push(`${orField}.gte.${op.gte}`);
+            } else if (op.lt !== undefined) {
+              orParts.push(`${orField}.lt.${op.lt}`);
+            } else if (op.lte !== undefined) {
+              orParts.push(`${orField}.lte.${op.lte}`);
+            } else if (op.in !== undefined) {
+              orParts.push(`${orField}.in.(${(op.in as (string | number | boolean)[]).join(',')})`);
+            }
+          } else if (orValue === null) {
+            orParts.push(`${orField}.is.null`);
+          } else if (Array.isArray(orValue)) {
+            orParts.push(`${orField}.in.(${orValue.join(',')})`);
+          } else {
+            orParts.push(`${orField}.eq.${orValue}`);
+          }
+        }
+      }
+      if (orParts.length > 0) {
+        query.or(orParts.join(','));
+      }
+      continue;
+    }
+    if (field === 'NOT' && value !== null && typeof value === 'object' && !Array.isArray(value)) {
+      // Apply NOT filter by negating each condition in the object
+      const notConditions = value as WhereInput;
+      for (const [notField, notValue] of Object.entries(notConditions)) {
+        if (notValue === undefined) continue;
+        if (notValue !== null && typeof notValue === 'object' && !Array.isArray(notValue) && !(notValue instanceof Date)) {
+          // Negate operator conditions
+          const op = notValue as WhereOperator;
+          if (op.equals !== undefined) {
+            if (op.equals === null) { query.not(notField, 'is', null); }
+            else { query.neq(notField, op.equals as string | number | boolean); }
+          } else if (op.in !== undefined) {
+            // NOT IN: apply each as neq individually (PostgREST has no direct notIn)
+            // Using .not('in', ...) with parentheses syntax
+            for (const v of op.in as (string | number | boolean)[]) {
+              query.neq(notField, v);
+            }
+          } else if (op.contains !== undefined) {
+            query.not(notField, 'ilike', `%${op.contains}%`);
+          } else {
+            // Fallback: treat as a simple not-equals
+            query.neq(notField, notValue as string | number | boolean);
+          }
+        } else {
+          // Simple value: NOT equals
+          if (notValue === null) {
+            query.not(notField, 'is', null);
+          } else {
+            query.neq(notField, notValue as string | number | boolean);
+          }
+        }
+      }
       continue;
     }
 
@@ -346,13 +434,17 @@ function applyWhereFilters(
       } else if (op.endsWith !== undefined) {
         query.ilike(field, `%${op.endsWith}`);
       } else if (op.gt !== undefined) {
-        query.gt(field, op.gt as string | number);
+        const val = op.gt instanceof Date ? op.gt.toISOString() : op.gt;
+        query.gt(field, val as string | number);
       } else if (op.gte !== undefined) {
-        query.gte(field, op.gte as string | number);
+        const val = op.gte instanceof Date ? op.gte.toISOString() : op.gte;
+        query.gte(field, val as string | number);
       } else if (op.lt !== undefined) {
-        query.lt(field, op.lt as string | number);
+        const val = op.lt instanceof Date ? op.lt.toISOString() : op.lt;
+        query.lt(field, val as string | number);
       } else if (op.lte !== undefined) {
-        query.lte(field, op.lte as string | number);
+        const val = op.lte instanceof Date ? op.lte.toISOString() : op.lte;
+        query.lte(field, val as string | number);
       } else if (op.isSet === true) {
         query.not(field, 'is', null);
       } else if (op.isSet === false) {
@@ -678,6 +770,23 @@ class SupabaseModel {
     const { data, include } = options;
     const serialized = serializeData(data);
 
+    // Auto-generate an 'id' if not provided — Prisma uses @default(cuid()) which
+    // generates IDs client-side, but PostgREST won't do this for tables created
+    // by Prisma migrations (those columns have NOT NULL with no DEFAULT).
+    if (!('id' in serialized) || serialized.id === undefined || serialized.id === null) {
+      serialized.id = nanoid(25);
+    }
+
+    // Auto-set createdAt if not provided — some tables need this
+    if (!('createdAt' in serialized) && !('created_at' in serialized)) {
+      serialized.createdAt = new Date().toISOString();
+    }
+
+    // Auto-set updatedAt if not provided
+    if (!('updatedAt' in serialized) && !('updated_at' in serialized)) {
+      serialized.updatedAt = new Date().toISOString();
+    }
+
     const { data: result, error } = await this.client
       .from(this.tableName)
       .insert(serialized)
@@ -704,6 +813,12 @@ class SupabaseModel {
 
     const { where, data, include } = options;
     const serialized = serializeData(data);
+
+    // Auto-set updatedAt — Prisma does this with @updatedAt at the application layer,
+    // but PostgREST has no such feature. Without this, updatedAt stays stale.
+    if (!('updatedAt' in serialized)) {
+      serialized.updatedAt = new Date().toISOString();
+    }
 
     let query = this.client.from(this.tableName).update(serialized).select('*');
 
@@ -828,9 +943,79 @@ class SupabaseModel {
   }
 
   async aggregate(options: Record<string, unknown>): Promise<unknown> {
-    const { where } = options as { where?: WhereInput };
-    const count = await this.count({ where });
-    return { _count: count };
+    const { where, _sum, _count, _avg, _min, _max } = options as {
+      where?: WhereInput;
+      _sum?: Record<string, boolean>;
+      _count?: boolean | Record<string, boolean>;
+      _avg?: Record<string, boolean>;
+      _min?: Record<string, boolean>;
+      _max?: Record<string, boolean>;
+    };
+
+    if (this.isMissingTable) {
+      const emptyResult: Record<string, unknown> = {};
+      if (_sum) emptyResult._sum = {};
+      if (_count) emptyResult._count = typeof _count === 'boolean' ? 0 : {};
+      return emptyResult;
+    }
+
+    let query = this.client.from(this.tableName).select('*');
+    if (where) applyWhereFilters(query, where);
+
+    const { data, error } = await query;
+    if (error) {
+      console.error(`[SupabaseDB] aggregate error on ${this.tableName}:`, error.message);
+      return { _count: 0, _sum: {} };
+    }
+
+    const records = data || [];
+    const result: Record<string, unknown> = {};
+
+    // _count
+    if (_count === true) {
+      result._count = records.length;
+    } else if (typeof _count === 'object') {
+      result._count = records.length;
+    }
+
+    // _sum - compute sums client-side
+    if (_sum) {
+      const sumResult: Record<string, number> = {};
+      for (const field of Object.keys(_sum)) {
+        sumResult[field] = records.reduce((acc, r) => acc + (Number(r[field]) || 0), 0);
+      }
+      result._sum = sumResult;
+    }
+
+    // _avg - compute averages client-side
+    if (_avg) {
+      const avgResult: Record<string, number> = {};
+      for (const field of Object.keys(_avg)) {
+        const values = records.map(r => Number(r[field])).filter(v => !isNaN(v));
+        avgResult[field] = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+      }
+      result._avg = avgResult;
+    }
+
+    // _min / _max
+    if (_min) {
+      const minResult: Record<string, unknown> = {};
+      for (const field of Object.keys(_min)) {
+        const values = records.map(r => r[field]).filter(v => v !== null && v !== undefined);
+        minResult[field] = values.length > 0 ? values.reduce((a, b) => a < b ? a : b) : null;
+      }
+      result._min = minResult;
+    }
+    if (_max) {
+      const maxResult: Record<string, unknown> = {};
+      for (const field of Object.keys(_max)) {
+        const values = records.map(r => r[field]).filter(v => v !== null && v !== undefined);
+        maxResult[field] = values.length > 0 ? values.reduce((a, b) => a > b ? a : b) : null;
+      }
+      result._max = maxResult;
+    }
+
+    return result;
   }
 
   async groupBy(_options: Record<string, unknown>): Promise<unknown[]> {

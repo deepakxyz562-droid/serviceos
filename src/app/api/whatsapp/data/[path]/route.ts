@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { toISOString } from '@/lib/utils'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -106,7 +107,7 @@ async function fetchData(
         user_id: emp.id,
         phone: emp.phone || '',
         status: emp.status || '',
-        created_at: emp.createdAt?.toISOString() ?? new Date().toISOString(),
+        created_at: toISOString(emp.createdAt as Date | string | null) ?? new Date().toISOString(),
       }))
     }
 
@@ -126,7 +127,7 @@ async function fetchData(
         user_id: emp.id,
         phone: emp.phone || '',
         status: emp.status || '',
-        created_at: emp.createdAt?.toISOString() ?? new Date().toISOString(),
+        created_at: toISOString(emp.createdAt as Date | string | null) ?? new Date().toISOString(),
       }))
     }
 
@@ -147,7 +148,7 @@ async function fetchData(
         user_id: res.id,
         phone: res.phone || '',
         status: res.status || '',
-        created_at: res.createdAt?.toISOString() ?? new Date().toISOString(),
+        created_at: toISOString(res.createdAt as Date | string | null) ?? new Date().toISOString(),
       }))
     }
 

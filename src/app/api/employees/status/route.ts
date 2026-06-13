@@ -1,6 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 import { EventBus } from '@/lib/event-bus'
+import { toISOString } from '@/lib/utils'
 
 const VALID_STATUSES = ['available', 'busy', 'offline', 'leave', 'traveling'] as const
 type EmployeeStatus = (typeof VALID_STATUSES)[number]
@@ -228,7 +229,7 @@ export async function POST(request: NextRequest) {
             previousCurrentJobId: employee.currentJobId,
             newCurrentJobId: updateData.currentJobId ?? employee.currentJobId,
             onLeaveUntil: updateData.onLeaveUntil
-              ? (updateData.onLeaveUntil as Date).toISOString()
+              ? toISOString(updateData.onLeaveUntil as Date | string | null)
               : null,
           }),
         },

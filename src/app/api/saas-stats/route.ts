@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { toISOString } from '@/lib/utils';
 
 // GET /api/saas-stats - Comprehensive SaaS dashboard stats for FlowForge
 export async function GET() {
@@ -186,7 +187,7 @@ export async function GET() {
       source: lead.source,
       status: lead.status,
       value: lead.value || 0,
-      date: lead.createdAt.toISOString(),
+      date: toISOString(lead.createdAt as Date | string),
     }));
 
     // Format recent jobs
@@ -195,7 +196,7 @@ export async function GET() {
       title: job.title,
       assignee: job.assigneeName || 'Unassigned',
       status: job.status,
-      scheduledDate: job.scheduledAt ? job.scheduledAt.toISOString() : new Date().toISOString(),
+      scheduledDate: job.scheduledAt ? toISOString(job.scheduledAt as Date | string | null) : new Date().toISOString(),
     }));
 
     // Format revenue trend (last 6 months)

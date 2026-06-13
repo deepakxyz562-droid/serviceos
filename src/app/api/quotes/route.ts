@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { toISOString } from '@/lib/utils';
 
 export async function GET(req: NextRequest) {
   try {
@@ -27,9 +28,9 @@ export async function GET(req: NextRequest) {
       tax: q.tax,
       total: q.total,
       status: q.status,
-      validUntil: q.validUntil ? q.validUntil.toISOString().split('T')[0] : null,
+      validUntil: q.validUntil ? toISOString(q.validUntil as Date | string | null)?.split('T')[0] ?? null : null,
       whatsappSent: q.whatsappSent,
-      createdAt: q.createdAt.toISOString().split('T')[0],
+      createdAt: toISOString(q.createdAt as Date | string)?.split('T')[0] ?? '',
     }));
 
     return NextResponse.json(formatted);

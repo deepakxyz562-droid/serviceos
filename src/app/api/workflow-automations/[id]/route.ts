@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { toISOString } from '@/lib/utils';
 
 export async function GET(
   req: NextRequest,
@@ -26,9 +27,9 @@ export async function GET(
       actions: JSON.parse(automation.actionsJson || '[]'),
       active: automation.active,
       executionCount: automation.executionCount,
-      lastExecutedAt: automation.lastExecutedAt?.toISOString(),
+      lastExecutedAt: toISOString(automation.lastExecutedAt as Date | string | null),
       lastExecutionStatus: automation.lastExecutionStatus,
-      createdAt: automation.createdAt.toISOString().split('T')[0],
+      createdAt: toISOString(automation.createdAt as Date | string)?.split('T')[0] ?? '',
     };
 
     return NextResponse.json(formatted);

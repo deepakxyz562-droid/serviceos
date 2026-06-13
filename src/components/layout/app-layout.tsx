@@ -72,6 +72,9 @@ const KnowledgeBaseView = lazy(() => import('@/components/views/knowledge-base-v
 const DocumentCenterView = lazy(() => import('@/components/views/document-center-view').then(m => ({ default: m.DocumentCenterView })));
 const TriggersView = lazy(() => import('@/components/views/triggers-view').then(m => ({ default: m.TriggersView })));
 
+// SuperAdmin View
+const SuperAdminView = lazy(() => import('@/components/views/superadmin-view').then(m => ({ default: m.SuperAdminView })));
+
 // ─── View mapping ───────────────────────────────────────────────────────────
 
 const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentType>> = {
@@ -132,6 +135,7 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   knowledgeBase: KnowledgeBaseView,
   documentCenter: DocumentCenterView,
   triggers: TriggersView,
+  superadmin: SuperAdminView,
 };
 
 // ─── Loading fallback ────────────────────────────────────────────────────────

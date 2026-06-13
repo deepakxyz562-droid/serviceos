@@ -34,6 +34,8 @@ model Tenant {
   settingsJson      String   @default("{}")
   onboardingCompleted Boolean @default(false)
   onboardingStep    Int      @default(0)
+  suspendedAt       DateTime?
+  suspensionReason  String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -50,16 +52,19 @@ model Tenant {
   conversations   Conversation[]
   forms           Form[]
   workflowAutomations WorkflowAutomation[]
+  menuItemConfigs   MenuItemConfig[]
+  featureFlags      FeatureFlag[]
 
   @@index([slug])
   @@index([plan])
+  @@index([planStatus])
 }
 
 model Subscription {
   id                      String   @id @default(cuid())
   tenantId                String
   plan                    String
-  status                  String   @default("trial")
+  status                  String   @default("trial")  // trial, active, paused, cancelled, expired
   amount                  Float    @default(0)
   currency                String   @default("USD")
   billingCycle            String   @default("monthly")
@@ -75,6 +80,9 @@ model Subscription {
   maxJobs                 Int      @default(100)
   maxWorkflows            Int      @default(10)
   featuresJson            String   @default("{}")
+  pausedAt                DateTime?
+  pauseReason             String?
+  pausedById              String?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
@@ -1861,4 +1869,48 @@ model TriggerExecution {
   @@index([status])
   @@index([tenantId])
   @@index([createdAt])
+}
+
+// ==========================================
+// SUPERADMIN MANAGEMENT
+// ==========================================
+
+// Controls which menu items are visible per tenant
+model MenuItemConfig {
+  id          String   @id @default(cuid())
+  tenantId    String
+  menuKey     String   // ViewType key e.g., "dashboard", "leads", "inbox", "campaigns"
+  enabled     Boolean  @default(true)
+  label       String?  // Custom label override (optional)
+  icon        String?  // Custom icon override (optional)
+  sortOrder   Int      @default(0)
+  section     String?  // Section grouping: "Operations", "People", "Marketing", etc.
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, menuKey])
+  @@index([tenantId])
+  @@index([menuKey])
+  @@index([enabled])
+}
+
+// Feature flags for granular feature control per tenant
+model FeatureFlag {
+  id          String   @id @default(cuid())
+  tenantId    String
+  featureKey  String   // e.g., "whatsapp_crm", "ai_assistant", "campaigns", "workflows"
+  enabled     Boolean  @default(true)
+  configJson  String   @default("{}")  // Feature-specific configuration
+  description String?  // Human-readable description of the feature
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, featureKey])
+  @@index([tenantId])
+  @@index([featureKey])
+  @@index([enabled])
 }

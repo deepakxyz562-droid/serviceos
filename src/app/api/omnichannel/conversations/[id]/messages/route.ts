@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { toISOString } from '@/lib/utils'
 
 // GET /api/omnichannel/conversations/[id]/messages - Load messages for a conversation
 export async function GET(
@@ -44,7 +45,7 @@ export async function GET(
         : msg.senderType === 'bot' || msg.direction === 'outbound' ? 'agent' as const
         : 'customer' as const,
       senderName: msg.senderName || undefined,
-      timestamp: msg.createdAt.toISOString(),
+      timestamp: toISOString(msg.createdAt as Date | string),
       channel: conversation.channel,
     }))
 
@@ -120,7 +121,7 @@ export async function POST(
       content: message.content,
       sender: 'agent' as const,
       senderName: message.senderName || undefined,
-      timestamp: message.createdAt.toISOString(),
+      timestamp: toISOString(message.createdAt as Date | string),
       channel: conversation.channel,
     }, { status: 201 })
   } catch (error) {

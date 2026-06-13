@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Settings, Plus, Send, Mail, Smartphone, MessageSquare,
   Wifi, WifiOff, AlertCircle, CheckCircle2, Loader2,
-  Trash2, Shield, Key, Globe,
+  Trash2, Shield, Key, Globe, Pencil,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -213,11 +213,13 @@ export function CommunicationProvidersView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingProvider, setEditingProvider] = useState<CommunicationProvider | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  // Add form state
+  // Form state (shared for add/edit)
   const [formName, setFormName] = useState('');
   const [formType, setFormType] = useState<'email' | 'sms' | 'whatsapp'>('email');
   const [formProvider, setFormProvider] = useState('amazon_ses');
@@ -275,6 +277,30 @@ export function CommunicationProvidersView() {
     setFormConfig({});
   }, [formType]);
 
+  // ─── Form helpers ───────────────────────────────────────────────────────
+
+  const resetForm = () => {
+    setFormName('');
+    setFormType('email');
+    setFormProvider('amazon_ses');
+    setFormConfig({});
+    setFormIsDefault(false);
+    setFormSendingEnabled(true);
+    setFormDailyLimit('1000');
+    setFormMonthlyLimit('30000');
+  };
+
+  const populateFormForEdit = (provider: CommunicationProvider) => {
+    setFormName(provider.name);
+    setFormType(provider.type);
+    setFormProvider(provider.provider);
+    setFormConfig(provider.config || {});
+    setFormIsDefault(provider.isDefault);
+    setFormSendingEnabled(provider.sendingEnabled);
+    setFormDailyLimit(String(provider.dailyLimit));
+    setFormMonthlyLimit(String(provider.monthlyLimit));
+  };
+
   // ─── Actions ────────────────────────────────────────────────────────────
 
   const handleAdd = async () => {
@@ -316,6 +342,51 @@ export function CommunicationProvidersView() {
     }
   };
 
+  const handleEdit = async () => {
+    if (!editingProvider || !formName.trim()) {
+      toast.error('Provider name is required');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/communication-providers/${editingProvider.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: formName.trim(),
+          provider: formProvider,
+          config: formConfig,
+          isDefault: formIsDefault,
+          sendingEnabled: formSendingEnabled,
+          dailyLimit: parseInt(formDailyLimit) || 1000,
+          monthlyLimit: parseInt(formMonthlyLimit) || 30000,
+        }),
+      });
+
+      if (res.ok) {
+        toast.success('Provider updated successfully');
+        setShowEditDialog(false);
+        setEditingProvider(null);
+        resetForm();
+        fetchProviders();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Failed to update provider');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openEditDialog = (provider: CommunicationProvider) => {
+    setEditingProvider(provider);
+    populateFormForEdit(provider);
+    setShowEditDialog(true);
+  };
+
   const handleToggleSending = async (provider: CommunicationProvider) => {
     setTogglingId(provider.id);
     try {
@@ -352,17 +423,6 @@ export function CommunicationProvidersView() {
     } catch {
       toast.error('Network error');
     }
-  };
-
-  const resetForm = () => {
-    setFormName('');
-    setFormType('email');
-    setFormProvider('amazon_ses');
-    setFormConfig({});
-    setFormIsDefault(false);
-    setFormSendingEnabled(true);
-    setFormDailyLimit('1000');
-    setFormMonthlyLimit('30000');
   };
 
   // ─── Provider Card ─────────────────────────────────────────────────────
@@ -471,8 +531,16 @@ export function CommunicationProvidersView() {
             )}
           </div>
 
-          {/* Delete */}
-          <div className="flex justify-end pt-1 border-t">
+          {/* Edit / Delete */}
+          <div className="flex justify-end gap-2 pt-1 border-t">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-7 text-xs"
+              onClick={() => openEditDialog(provider)}
+            >
+              <Pencil className="size-3 mr-1" /> Edit
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -519,9 +587,134 @@ export function CommunicationProvidersView() {
     </div>
   );
 
-  // ─── Dynamic config fields for add dialog ───────────────────────────────
+  // ─── Dynamic config fields for add/edit dialog ───────────────────────────
 
   const currentConfigFields = CONFIG_FIELDS[formProvider] || [];
+
+  // ─── Shared form content for add/edit ──────────────────────────────────
+
+  const formContent = (
+    <div className="space-y-4 py-2">
+      {/* Name */}
+      <div className="space-y-2">
+        <Label>Provider Name *</Label>
+        <Input placeholder="e.g., Twilio SMS, Amazon SES" value={formName} onChange={e => setFormName(e.target.value)} />
+      </div>
+
+      {/* Type - only editable in Add mode */}
+      {!editingProvider && (
+        <div className="space-y-2">
+          <Label>Type</Label>
+          <Select value={formType} onValueChange={(v: 'email' | 'sms' | 'whatsapp') => setFormType(v)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="email">
+                <span className="flex items-center gap-2"><Mail className="size-3.5 text-emerald-600" /> Email</span>
+              </SelectItem>
+              <SelectItem value="sms">
+                <span className="flex items-center gap-2"><Smartphone className="size-3.5 text-emerald-600" /> SMS</span>
+              </SelectItem>
+              <SelectItem value="whatsapp">
+                <span className="flex items-center gap-2"><MessageSquare className="size-3.5 text-emerald-600" /> WhatsApp</span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {/* Type indicator in edit mode */}
+      {editingProvider && (
+        <div className="space-y-2">
+          <Label>Type</Label>
+          <div className="flex items-center gap-2 h-9 px-3 rounded-md border bg-muted/50 text-sm text-muted-foreground">
+            {(() => {
+              const typeConf = TYPE_CONFIG[editingProvider.type];
+              const TypeIcon = typeConf.icon;
+              return <><TypeIcon className={cn('size-4', typeConf.color)} /> {typeConf.label}</>;
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* Provider */}
+      <div className="space-y-2">
+        <Label>Provider</Label>
+        <Select value={formProvider} onValueChange={v => { setFormProvider(v); setFormConfig({}); }}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {(formType === 'email' ? EMAIL_PROVIDERS : formType === 'sms' ? SMS_PROVIDERS : WHATSAPP_PROVIDERS).map(key => (
+              <SelectItem key={key} value={key}>
+                {PROVIDER_OPTIONS[key]?.label || key}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <Separator />
+
+      {/* Dynamic Config Fields */}
+      {currentConfigFields.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Key className="size-4 text-emerald-600" />
+            <Label className="text-sm font-semibold">Configuration</Label>
+          </div>
+          {currentConfigFields.map(field => (
+            <div key={field.key} className="space-y-1.5">
+              <Label className="text-xs">{field.label}</Label>
+              <Input
+                type={field.type}
+                placeholder={field.placeholder}
+                value={formConfig[field.key] || ''}
+                onChange={e => setFormConfig(prev => ({ ...prev, [field.key]: e.target.value }))}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Separator />
+
+      {/* Limits */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label className="text-xs">Daily Limit</Label>
+          <Input
+            type="number"
+            placeholder="1000"
+            value={formDailyLimit}
+            onChange={e => setFormDailyLimit(e.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label className="text-xs">Monthly Limit</Label>
+          <Input
+            type="number"
+            placeholder="30000"
+            value={formMonthlyLimit}
+            onChange={e => setFormMonthlyLimit(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* Toggles */}
+      <div className="flex items-center justify-between">
+        <div className="space-y-0.5">
+          <Label className="text-sm">Enable Sending</Label>
+          <p className="text-xs text-muted-foreground">Allow this provider to send messages</p>
+        </div>
+        <Switch checked={formSendingEnabled} onCheckedChange={setFormSendingEnabled} />
+      </div>
+      <div className="flex items-center justify-between">
+        <div className="space-y-0.5">
+          <Label className="text-sm">Set as Default</Label>
+          <p className="text-xs text-muted-foreground">Use as the default provider for this type</p>
+        </div>
+        <Switch checked={formIsDefault} onCheckedChange={setFormIsDefault} />
+      </div>
+    </div>
+  );
 
   // ─── Render ─────────────────────────────────────────────────────────────
 
@@ -632,120 +825,34 @@ export function CommunicationProvidersView() {
       )}
 
       {/* Add Provider Dialog */}
-      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+      <Dialog open={showAddDialog} onOpenChange={(open) => { if (!open) setShowAddDialog(false); }}>
         <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Communication Provider</DialogTitle>
             <DialogDescription>Configure a new email, SMS, or WhatsApp provider.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            {/* Name */}
-            <div className="space-y-2">
-              <Label>Provider Name *</Label>
-              <Input placeholder="e.g., Twilio SMS, Amazon SES" value={formName} onChange={e => setFormName(e.target.value)} />
-            </div>
-
-            {/* Type */}
-            <div className="space-y-2">
-              <Label>Type</Label>
-              <Select value={formType} onValueChange={(v: 'email' | 'sms' | 'whatsapp') => setFormType(v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="email">
-                    <span className="flex items-center gap-2"><Mail className="size-3.5 text-emerald-600" /> Email</span>
-                  </SelectItem>
-                  <SelectItem value="sms">
-                    <span className="flex items-center gap-2"><Smartphone className="size-3.5 text-emerald-600" /> SMS</span>
-                  </SelectItem>
-                  <SelectItem value="whatsapp">
-                    <span className="flex items-center gap-2"><MessageSquare className="size-3.5 text-emerald-600" /> WhatsApp</span>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Provider */}
-            <div className="space-y-2">
-              <Label>Provider</Label>
-              <Select value={formProvider} onValueChange={v => { setFormProvider(v); setFormConfig({}); }}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {(formType === 'email' ? EMAIL_PROVIDERS : formType === 'sms' ? SMS_PROVIDERS : WHATSAPP_PROVIDERS).map(key => (
-                    <SelectItem key={key} value={key}>
-                      {PROVIDER_OPTIONS[key]?.label || key}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <Separator />
-
-            {/* Dynamic Config Fields */}
-            {currentConfigFields.length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Key className="size-4 text-emerald-600" />
-                  <Label className="text-sm font-semibold">Configuration</Label>
-                </div>
-                {currentConfigFields.map(field => (
-                  <div key={field.key} className="space-y-1.5">
-                    <Label className="text-xs">{field.label}</Label>
-                    <Input
-                      type={field.type}
-                      placeholder={field.placeholder}
-                      value={formConfig[field.key] || ''}
-                      onChange={e => setFormConfig(prev => ({ ...prev, [field.key]: e.target.value }))}
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <Separator />
-
-            {/* Limits */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-xs">Daily Limit</Label>
-                <Input
-                  type="number"
-                  placeholder="1000"
-                  value={formDailyLimit}
-                  onChange={e => setFormDailyLimit(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs">Monthly Limit</Label>
-                <Input
-                  type="number"
-                  placeholder="30000"
-                  value={formMonthlyLimit}
-                  onChange={e => setFormMonthlyLimit(e.target.value)}
-                />
-              </div>
-            </div>
-
-            {/* Toggles */}
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-sm">Enable Sending</Label>
-                <p className="text-xs text-muted-foreground">Allow this provider to send messages</p>
-              </div>
-              <Switch checked={formSendingEnabled} onCheckedChange={setFormSendingEnabled} />
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-sm">Set as Default</Label>
-                <p className="text-xs text-muted-foreground">Use as the default provider for this type</p>
-              </div>
-              <Switch checked={formIsDefault} onCheckedChange={setFormIsDefault} />
-            </div>
-          </div>
+          {formContent}
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setShowAddDialog(false)}>Cancel</Button>
             <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleAdd} disabled={!formName.trim() || saving}>
               {saving ? <><Loader2 className="size-4 mr-1.5 animate-spin" /> Creating...</> : <><Plus className="size-4 mr-1.5" /> Create Provider</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Provider Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={(open) => { if (!open) { setShowEditDialog(false); setEditingProvider(null); } }}>
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Communication Provider</DialogTitle>
+            <DialogDescription>Update provider configuration and settings.</DialogDescription>
+          </DialogHeader>
+          {formContent}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => { setShowEditDialog(false); setEditingProvider(null); }}>Cancel</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleEdit} disabled={!formName.trim() || saving}>
+              {saving ? <><Loader2 className="size-4 mr-1.5 animate-spin" /> Saving...</> : <><Pencil className="size-4 mr-1.5" /> Save Changes</>}
             </Button>
           </DialogFooter>
         </DialogContent>

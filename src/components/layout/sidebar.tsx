@@ -57,6 +57,7 @@ import {
   BookMarked,
   FolderOpen,
   X,
+  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -224,6 +225,15 @@ const employeeNavSections: NavSection[] = [
   },
 ];
 
+const superadminNavSections: NavSection[] = [
+  {
+    title: 'SuperAdmin',
+    items: [
+      { view: 'superadmin', label: 'Admin Panel', icon: ShieldCheck, badge: 'SA' },
+    ],
+  },
+];
+
 // ─── Workspace interface ────────────────────────────────────────────────────
 
 interface Workspace {
@@ -344,8 +354,18 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
   const planBadge = getPlanBadge();
 
   // Role-based navigation
+  const isSuperAdmin = auth.user?.role === 'superadmin';
   const isEmployee = auth.user?.role === 'employee';
-  const navSections = isEmployee ? employeeNavSections : ownerNavSections;
+  
+  // Superadmin sees all owner nav + superadmin section
+  let navSections: NavSection[];
+  if (isSuperAdmin) {
+    navSections = [...superadminNavSections, ...ownerNavSections];
+  } else if (isEmployee) {
+    navSections = employeeNavSections;
+  } else {
+    navSections = ownerNavSections;
+  }
 
   const handleNavClick = (view: ViewType) => {
     setCurrentView(view);

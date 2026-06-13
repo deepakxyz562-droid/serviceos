@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { toISOString } from '@/lib/utils'
 
 // GET /api/communication-providers - List all communication providers
 export async function GET(request: NextRequest) {
@@ -46,10 +47,10 @@ export async function GET(request: NextRequest) {
         totalSent: p.totalSent,
         totalDelivered: p.totalDelivered,
         totalFailed: p.totalFailed,
-        lastUsedAt: p.lastUsedAt?.toISOString() || null,
+        lastUsedAt: toISOString(p.lastUsedAt as Date | string | null),
         lastError: p.lastError,
         config: maskedConfig,
-        createdAt: p.createdAt.toISOString(),
+        createdAt: toISOString(p.createdAt as Date | string),
       }
     })
 

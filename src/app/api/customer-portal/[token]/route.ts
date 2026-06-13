@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { toISOString } from '@/lib/utils'
 
 // GET /api/customer-portal/[token] - Get customer portal data
 export async function GET(
@@ -98,7 +99,7 @@ export async function GET(
       leads,
       session: {
         id: session.id,
-        expiresAt: session.expiresAt.toISOString(),
+        expiresAt: toISOString(session.expiresAt as Date | string),
       },
     })
   } catch (error) {
