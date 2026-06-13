@@ -13,6 +13,8 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '50')
 
+    const customerIdParam = searchParams.get('customerId')
+
     const where: Record<string, unknown> = {}
 
     // Scope to tenant if authenticated
@@ -24,6 +26,7 @@ export async function GET(request: NextRequest) {
 
     if (status) where.status = status
     if (phone) where.customerPhone = { contains: phone }
+    if (customerIdParam) where.customerId = customerIdParam
 
     const [conversations, total] = await Promise.all([
       db.conversation.findMany({

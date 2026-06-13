@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { nodeCategories, getNodesByCategory, searchNodes } from '@/lib/node-registry';
+import { NODE_CATEGORIES, getNodesByCategory, searchNodes, getCategoryColor } from '@/lib/node-registry';
 import type { NodeTypeDefinition } from '@/types/workflow';
 import * as LucideIcons from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -12,7 +12,7 @@ import { ChevronDown, ChevronRight, Search, GripVertical } from 'lucide-react';
 export function NodeSidebar() {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
-    new Set(['trigger', 'crmTrigger', 'logic', 'action', 'data', 'communication']),
+    new Set(['trigger', 'condition', 'action', 'flowControl']),
   );
 
   const toggleCategory = useCallback((categoryId: string) => {
@@ -38,7 +38,7 @@ export function NodeSidebar() {
 
   // Group filtered results by category
   const filteredByCategory = filteredNodes
-    ? nodeCategories.reduce<Record<string, NodeTypeDefinition[]>>((acc, cat) => {
+    ? NODE_CATEGORIES.reduce<Record<string, NodeTypeDefinition[]>>((acc, cat) => {
         const catNodes = filteredNodes.filter((n) => n.category === cat.id);
         if (catNodes.length > 0) acc[cat.id] = catNodes;
         return acc;
@@ -67,7 +67,7 @@ export function NodeSidebar() {
           {filteredByCategory
             ? // Show filtered results
               Object.entries(filteredByCategory).map(([categoryId, catNodes]) => {
-                const category = nodeCategories.find((c) => c.id === categoryId);
+                const category = NODE_CATEGORIES.find((c) => c.id === categoryId);
                 if (!category) return null;
                 const CategoryIcon = (LucideIcons as unknown as Record<string, LucideIcons.LucideIcon>)[category.icon] || LucideIcons.Circle;
                 return (
@@ -84,8 +84,9 @@ export function NodeSidebar() {
                 );
               })
             : // Show all categories
-              nodeCategories.map((category) => {
+              NODE_CATEGORIES.map((category) => {
                 const catNodes = getNodesByCategory(category.id);
+                if (catNodes.length === 0) return null;
                 const isExpanded = expandedCategories.has(category.id);
                 const CategoryIcon = (LucideIcons as unknown as Record<string, LucideIcons.LucideIcon>)[category.icon] || LucideIcons.Circle;
                 return (

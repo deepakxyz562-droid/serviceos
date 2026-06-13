@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useAppStore } from '@/store/app-store';
 import {
   Users, UserPlus, Shield, Clock, CheckCircle2, UserCheck,
   Search, Phone, MapPin, Star, Briefcase, Loader2,
@@ -92,6 +93,7 @@ const STATUS_OPTIONS = [
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export function EmployeesView() {
+  const { currentWorkspaceId, auth } = useAppStore();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -211,6 +213,7 @@ export function EmployeesView() {
           location: formLocation.trim() || undefined,
           whatsappId: formWhatsappId.trim() || undefined,
           skills,
+          workspaceId: currentWorkspaceId || auth?.user?.workspaceId || undefined,
         }),
       });
 

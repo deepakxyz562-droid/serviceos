@@ -84,6 +84,14 @@ export function getTokenName(): string {
   return TOKEN_NAME;
 }
 
+/**
+ * Get the application URL from environment variables.
+ * Used for generating invitation links and other absolute URLs.
+ */
+export function getAppUrl(): string {
+  return process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'http://localhost:3000';
+}
+
 // In HTTPS-through-proxy setups, Node sees HTTP internally,
 // so the secure flag would prevent cookies from being set.
 // Caddy handles HTTPS termination, so cookies are still secure in transit.

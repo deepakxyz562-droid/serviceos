@@ -47,54 +47,72 @@ export interface ActionDefinition {
 // ─── Trigger Catalog ─────────────────────────────────────────────────────────
 
 export const TRIGGER_CATALOG: TriggerDefinition[] = [
-  // CRM Triggers
-  { id: 'lead.created', label: 'Lead Created', description: 'When a new lead is created', category: 'CRM', icon: 'UserPlus', event: 'lead.created' },
-  { id: 'lead.updated', label: 'Lead Updated', description: 'When a lead is updated', category: 'CRM', icon: 'UserCog', event: 'lead.updated' },
-  { id: 'lead.assigned', label: 'Lead Assigned', description: 'When a lead is assigned to someone', category: 'CRM', icon: 'UserCheck', event: 'lead.updated', configurableFields: [{ key: 'assignedOnly', label: 'Only on assignment', type: 'boolean', defaultValue: true }] },
-  { id: 'lead.status_changed', label: 'Lead Status Changed', description: 'When lead status changes', category: 'CRM', icon: 'ArrowRightLeft', event: 'lead.updated', configurableFields: [{ key: 'fromStatus', label: 'From Status', type: 'select', options: [{ label: 'Any', value: 'any' }, { label: 'New', value: 'new' }, { label: 'Contacted', value: 'contacted' }, { label: 'Qualified', value: 'qualified' }, { label: 'Proposal', value: 'proposal' }, { label: 'Negotiation', value: 'negotiation' }] }, { key: 'toStatus', label: 'To Status', type: 'select', options: [{ label: 'Any', value: 'any' }, { label: 'New', value: 'new' }, { label: 'Contacted', value: 'contacted' }, { label: 'Qualified', value: 'qualified' }, { label: 'Proposal', value: 'proposal' }, { label: 'Won', value: 'won' }, { label: 'Lost', value: 'lost' }] }] },
-  { id: 'lead.converted', label: 'Lead Converted', description: 'When a lead is converted to customer/job', category: 'CRM', icon: 'CheckCircle', event: 'lead.converted' },
-  { id: 'customer.created', label: 'Customer Created', description: 'When a new customer is created', category: 'CRM', icon: 'Users', event: 'customer.journey_stage_changed', configurableFields: [{ key: 'stage', label: 'Stage', type: 'select', options: [{ label: 'Any', value: 'any' }, { label: 'Lead', value: 'lead' }], defaultValue: 'any' }] },
-  { id: 'customer.updated', label: 'Customer Updated', description: 'When customer details are updated', category: 'CRM', icon: 'UserCog', event: 'customer.journey_stage_changed' },
-  { id: 'quote.created', label: 'Quote Created', description: 'When a new quote is created', category: 'CRM', icon: 'FileText', event: 'payment.received' },
-  { id: 'quote.sent', label: 'Quote Sent', description: 'When a quote is sent to customer', category: 'CRM', icon: 'Send', event: 'payment.received' },
-  { id: 'quote.accepted', label: 'Quote Accepted', description: 'When a quote is accepted', category: 'CRM', icon: 'CheckCircle', event: 'payment.received' },
-  { id: 'quote.rejected', label: 'Quote Rejected', description: 'When a quote is rejected', category: 'CRM', icon: 'XCircle', event: 'payment.received' },
-  { id: 'invoice.created', label: 'Invoice Created', description: 'When a new invoice is created', category: 'CRM', icon: 'Receipt', event: 'payment.received' },
-  { id: 'invoice.paid', label: 'Invoice Paid', description: 'When an invoice is paid', category: 'CRM', icon: 'Banknote', event: 'payment.received' },
-  { id: 'invoice.overdue', label: 'Invoice Overdue', description: 'When an invoice becomes overdue', category: 'CRM', icon: 'AlertTriangle', event: 'payment.failed' },
-  // Booking Triggers
-  { id: 'booking.created', label: 'Booking Created', description: 'When a new booking is created', category: 'Booking', icon: 'CalendarPlus', event: 'job.created' },
-  { id: 'booking.confirmed', label: 'Booking Confirmed', description: 'When a booking is confirmed', category: 'Booking', icon: 'CalendarCheck', event: 'job.assigned' },
-  { id: 'booking.cancelled', label: 'Booking Cancelled', description: 'When a booking is cancelled', category: 'Booking', icon: 'CalendarX', event: 'job.cancelled' },
-  { id: 'booking.rescheduled', label: 'Booking Rescheduled', description: 'When a booking is rescheduled', category: 'Booking', icon: 'CalendarClock', event: 'job.updated' },
-  // Job Triggers
-  { id: 'job.created', label: 'Job Created', description: 'When a new job is created', category: 'Job', icon: 'Briefcase', event: 'job.created' },
-  { id: 'job.assigned', label: 'Job Assigned', description: 'When a job is assigned to employee', category: 'Job', icon: 'UserCheck', event: 'job.assigned' },
-  { id: 'job.started', label: 'Job Started', description: 'When a job is started', category: 'Job', icon: 'Play', event: 'job.started' },
-  { id: 'job.completed', label: 'Job Completed', description: 'When a job is completed', category: 'Job', icon: 'CheckCircle', event: 'job.completed' },
-  { id: 'job.cancelled', label: 'Job Cancelled', description: 'When a job is cancelled', category: 'Job', icon: 'XCircle', event: 'job.cancelled' },
-  // Employee Triggers
-  { id: 'employee.assigned', label: 'Employee Assigned', description: 'When an employee is assigned to a job', category: 'Employee', icon: 'UserCheck', event: 'employee.status_changed' },
-  { id: 'employee.available', label: 'Employee Available', description: 'When employee becomes available', category: 'Employee', icon: 'CircleCheck', event: 'employee.status_changed' },
-  { id: 'employee.busy', label: 'Employee Busy', description: 'When employee becomes busy', category: 'Employee', icon: 'Clock', event: 'employee.status_changed' },
-  { id: 'employee.offline', label: 'Employee Offline', description: 'When employee goes offline', category: 'Employee', icon: 'WifiOff', event: 'employee.heartbeat' },
-  // WhatsApp Triggers
-  { id: 'whatsapp.message_received', label: 'Message Received', description: 'When a WhatsApp message is received', category: 'WhatsApp', icon: 'MessageCircle', event: 'conversation.message_received' },
-  { id: 'whatsapp.conversation_started', label: 'Conversation Started', description: 'When a new WhatsApp conversation starts', category: 'WhatsApp', icon: 'MessageSquarePlus', event: 'conversation.state_changed' },
-  { id: 'whatsapp.template_delivered', label: 'Template Delivered', description: 'When a WhatsApp template is delivered', category: 'WhatsApp', icon: 'Check', event: 'conversation.message_sent' },
-  { id: 'whatsapp.template_failed', label: 'Template Failed', description: 'When a WhatsApp template fails', category: 'WhatsApp', icon: 'AlertCircle', event: 'conversation.message_sent' },
-  // Form Triggers
-  { id: 'form.submitted', label: 'Form Submitted', description: 'When a form is submitted', category: 'Form', icon: 'FileInput', event: 'customer.journey_stage_changed' },
-  { id: 'form.response_received', label: 'Response Received', description: 'When a form response is received', category: 'Form', icon: 'Inbox', event: 'customer.journey_stage_changed' },
-  // Website Triggers
-  { id: 'website.contact_form', label: 'Contact Form Submitted', description: 'When a contact form is submitted from website', category: 'Website', icon: 'Globe', event: 'lead.created', configurableFields: [{ key: 'source', label: 'Source', type: 'select', options: [{ label: 'Any', value: 'any' }, { label: 'Website', value: 'website' }, { label: 'WordPress', value: 'wordpress' }], defaultValue: 'website' }] },
-  { id: 'website.booking_form', label: 'Booking Form Submitted', description: 'When a booking form is submitted from website', category: 'Website', icon: 'CalendarPlus', event: 'job.created' },
-  { id: 'website.quote_request', label: 'Quote Request Submitted', description: 'When a quote request comes from website', category: 'Website', icon: 'FileText', event: 'lead.created' },
-  // Time-Based Triggers
-  { id: 'time.1h_after_lead', label: '1 Hour After Lead Created', description: '1 hour after a new lead is created', category: 'Time-Based', icon: 'Clock', event: 'lead.created', configurableFields: [{ key: 'delayMinutes', label: 'Delay (minutes)', type: 'number', defaultValue: 60 }] },
-  { id: 'time.1d_after_quote', label: '1 Day After Quote Sent', description: '1 day after quote is sent without acceptance', category: 'Time-Based', icon: 'Clock', event: 'payment.received', configurableFields: [{ key: 'delayMinutes', label: 'Delay (minutes)', type: 'number', defaultValue: 1440 }] },
-  { id: 'time.3d_after_job', label: '3 Days After Job Completed', description: '3 days after job completion for follow-up', category: 'Time-Based', icon: 'Clock', event: 'job.completed', configurableFields: [{ key: 'delayMinutes', label: 'Delay (minutes)', type: 'number', defaultValue: 4320 }] },
-  { id: 'time.7d_after_invoice', label: '7 Days After Invoice Due', description: '7 days after invoice due date (overdue reminder)', category: 'Time-Based', icon: 'Clock', event: 'payment.failed', configurableFields: [{ key: 'delayMinutes', label: 'Delay (minutes)', type: 'number', defaultValue: 10080 }] },
+  // ─── CRM Events (Lead-focused) ─────────────────────────────────────────
+  { id: 'lead.created', label: 'Lead Created', description: 'When a new lead is created', category: 'CRM Events', icon: 'UserPlus', event: 'lead.created' },
+  { id: 'lead.updated', label: 'Lead Updated', description: 'When a lead is updated', category: 'CRM Events', icon: 'UserCog', event: 'lead.updated' },
+  { id: 'lead.assigned', label: 'Lead Assigned', description: 'When a lead is assigned to someone', category: 'CRM Events', icon: 'UserCheck', event: 'lead.updated', configurableFields: [{ key: 'assignedOnly', label: 'Only on assignment', type: 'boolean', defaultValue: true }] },
+  { id: 'lead.status_changed', label: 'Lead Status Changed', description: 'When lead status changes', category: 'CRM Events', icon: 'ArrowRightLeft', event: 'lead.updated', configurableFields: [{ key: 'fromStatus', label: 'From Status', type: 'select', options: [{ label: 'Any', value: 'any' }, { label: 'New', value: 'new' }, { label: 'Contacted', value: 'contacted' }, { label: 'Qualified', value: 'qualified' }, { label: 'Proposal', value: 'proposal' }, { label: 'Negotiation', value: 'negotiation' }] }, { key: 'toStatus', label: 'To Status', type: 'select', options: [{ label: 'Any', value: 'any' }, { label: 'New', value: 'new' }, { label: 'Contacted', value: 'contacted' }, { label: 'Qualified', value: 'qualified' }, { label: 'Proposal', value: 'proposal' }, { label: 'Won', value: 'won' }, { label: 'Lost', value: 'lost' }] }] },
+  { id: 'lead.won', label: 'Lead Won', description: 'When a lead is won', category: 'CRM Events', icon: 'Trophy', event: 'lead.updated', configurableFields: [{ key: 'toStatus', label: 'Status', type: 'select', options: [{ label: 'Won', value: 'won' }], defaultValue: 'won' }] },
+  { id: 'lead.lost', label: 'Lead Lost', description: 'When a lead is lost', category: 'CRM Events', icon: 'Siren', event: 'lead.updated', configurableFields: [{ key: 'toStatus', label: 'Status', type: 'select', options: [{ label: 'Lost', value: 'lost' }], defaultValue: 'lost' }] },
+  { id: 'lead.converted', label: 'Lead Converted', description: 'When a lead is converted to customer/job', category: 'CRM Events', icon: 'CheckCircle', event: 'lead.converted' },
+  { id: 'time.1h_after_lead', label: '1 Hour After Lead Created', description: '1 hour after a new lead is created', category: 'CRM Events', icon: 'Clock', event: 'lead.created', configurableFields: [{ key: 'delayMinutes', label: 'Delay (minutes)', type: 'number', defaultValue: 60 }] },
+
+  // ─── Customer Events ───────────────────────────────────────────────────
+  { id: 'customer.created', label: 'Customer Created', description: 'When a new customer is created', category: 'Customer Events', icon: 'Users', event: 'customer.journey_stage_changed', configurableFields: [{ key: 'stage', label: 'Stage', type: 'select', options: [{ label: 'Any', value: 'any' }, { label: 'Lead', value: 'lead' }], defaultValue: 'any' }] },
+  { id: 'customer.updated', label: 'Customer Updated', description: 'When customer details are updated', category: 'Customer Events', icon: 'UserCog', event: 'customer.journey_stage_changed' },
+  { id: 'customer.tagged', label: 'Customer Tagged', description: 'When a tag is added to a customer', category: 'Customer Events', icon: 'Hash', event: 'customer.journey_stage_changed', configurableFields: [{ key: 'tag', label: 'Tag Name', type: 'text' }] },
+  { id: 'customer.journey_stage_changed', label: 'Customer Journey Stage Changed', description: 'When a customer moves to a new journey stage', category: 'Customer Events', icon: 'Route', event: 'customer.journey_stage_changed' },
+
+  // ─── Booking Events ────────────────────────────────────────────────────
+  { id: 'booking.created', label: 'Booking Created', description: 'When a new booking is created', category: 'Booking Events', icon: 'CalendarPlus', event: 'job.created' },
+  { id: 'booking.confirmed', label: 'Booking Confirmed', description: 'When a booking is confirmed', category: 'Booking Events', icon: 'CalendarCheck', event: 'job.assigned' },
+  { id: 'booking.cancelled', label: 'Booking Cancelled', description: 'When a booking is cancelled', category: 'Booking Events', icon: 'CalendarX', event: 'job.cancelled' },
+  { id: 'booking.completed', label: 'Booking Completed', description: 'When a booking is completed', category: 'Booking Events', icon: 'CheckCircle', event: 'job.completed' },
+  { id: 'booking.rescheduled', label: 'Booking Rescheduled', description: 'When a booking is rescheduled', category: 'Booking Events', icon: 'CalendarClock', event: 'job.updated' },
+
+  // ─── Job Events ────────────────────────────────────────────────────────
+  { id: 'job.created', label: 'Job Created', description: 'When a new job is created', category: 'Job Events', icon: 'Briefcase', event: 'job.created' },
+  { id: 'job.assigned', label: 'Job Assigned', description: 'When a job is assigned to employee', category: 'Job Events', icon: 'UserCheck', event: 'job.assigned' },
+  { id: 'job.started', label: 'Job Started', description: 'When a job is started', category: 'Job Events', icon: 'Play', event: 'job.started' },
+  { id: 'job.completed', label: 'Job Completed', description: 'When a job is completed', category: 'Job Events', icon: 'CheckCircle', event: 'job.completed' },
+  { id: 'job.cancelled', label: 'Job Cancelled', description: 'When a job is cancelled', category: 'Job Events', icon: 'XCircle', event: 'job.cancelled' },
+  { id: 'time.3d_after_job', label: '3 Days After Job Completed', description: '3 days after job completion for follow-up', category: 'Job Events', icon: 'Clock', event: 'job.completed', configurableFields: [{ key: 'delayMinutes', label: 'Delay (minutes)', type: 'number', defaultValue: 4320 }] },
+
+  // ─── Invoice Events (Renamed from Finance) ────────────────────────────
+  { id: 'quote.created', label: 'Quote Created', description: 'When a new quote is created', category: 'Invoice Events', icon: 'FileText', event: 'payment.received' },
+  { id: 'quote.sent', label: 'Quote Sent', description: 'When a quote is sent to customer', category: 'Invoice Events', icon: 'Send', event: 'payment.received' },
+  { id: 'quote.accepted', label: 'Quote Accepted', description: 'When a quote is accepted', category: 'Invoice Events', icon: 'CheckCircle', event: 'payment.received' },
+  { id: 'quote.rejected', label: 'Quote Rejected', description: 'When a quote is rejected', category: 'Invoice Events', icon: 'XCircle', event: 'payment.received' },
+  { id: 'invoice.created', label: 'Invoice Created', description: 'When a new invoice is created', category: 'Invoice Events', icon: 'Receipt', event: 'payment.received' },
+  { id: 'invoice.paid', label: 'Invoice Paid', description: 'When an invoice is paid', category: 'Invoice Events', icon: 'Banknote', event: 'payment.received' },
+  { id: 'invoice.overdue', label: 'Invoice Overdue', description: 'When an invoice becomes overdue', category: 'Invoice Events', icon: 'AlertTriangle', event: 'payment.failed' },
+  { id: 'time.1d_after_quote', label: '1 Day After Quote Sent', description: '1 day after quote is sent without acceptance', category: 'Invoice Events', icon: 'Clock', event: 'payment.received', configurableFields: [{ key: 'delayMinutes', label: 'Delay (minutes)', type: 'number', defaultValue: 1440 }] },
+  { id: 'time.7d_after_invoice', label: '7 Days After Invoice Due', description: '7 days after invoice due date (overdue reminder)', category: 'Invoice Events', icon: 'Clock', event: 'payment.failed', configurableFields: [{ key: 'delayMinutes', label: 'Delay (minutes)', type: 'number', defaultValue: 10080 }] },
+
+  // ─── WhatsApp Events ──────────────────────────────────────────────────
+  { id: 'whatsapp.message_received', label: 'Message Received', description: 'When a WhatsApp message is received', category: 'WhatsApp Events', icon: 'MessageCircle', event: 'conversation.message_received' },
+  { id: 'whatsapp.message_delivered', label: 'Message Delivered', description: 'When a WhatsApp message is delivered', category: 'WhatsApp Events', icon: 'CheckCircle', event: 'conversation.message_sent' },
+  { id: 'whatsapp.conversation_started', label: 'Conversation Started', description: 'When a new WhatsApp conversation starts', category: 'WhatsApp Events', icon: 'MessageSquarePlus', event: 'conversation.state_changed' },
+  { id: 'whatsapp.template_delivered', label: 'Template Delivered', description: 'When a WhatsApp template is delivered', category: 'WhatsApp Events', icon: 'Check', event: 'conversation.message_sent' },
+  { id: 'whatsapp.template_failed', label: 'Template Failed', description: 'When a WhatsApp template fails', category: 'WhatsApp Events', icon: 'AlertCircle', event: 'conversation.message_sent' },
+
+  // ─── Form Events (EXPANDED — includes Website) ────────────────────────
+  { id: 'form.submitted', label: 'Form Submitted', description: 'When a form is submitted', category: 'Form Events', icon: 'FileInput', event: 'customer.journey_stage_changed' },
+  { id: 'form.survey_submitted', label: 'Survey Submitted', description: 'When a survey is submitted', category: 'Form Events', icon: 'ClipboardList', event: 'customer.journey_stage_changed' },
+  { id: 'form.response_received', label: 'Response Received', description: 'When a form response is received', category: 'Form Events', icon: 'Inbox', event: 'customer.journey_stage_changed' },
+  { id: 'form.abandoned', label: 'Form Abandoned', description: 'When a form is started but not completed', category: 'Form Events', icon: 'Inbox', event: 'customer.journey_stage_changed' },
+  { id: 'website.contact_form', label: 'Contact Form Submitted', description: 'When a contact form is submitted from website', category: 'Form Events', icon: 'Globe', event: 'lead.created', configurableFields: [{ key: 'source', label: 'Source', type: 'select', options: [{ label: 'Any', value: 'any' }, { label: 'Website', value: 'website' }, { label: 'WordPress', value: 'wordpress' }], defaultValue: 'website' }] },
+  { id: 'website.booking_form', label: 'Booking Form Submitted', description: 'When a booking form is submitted from website', category: 'Form Events', icon: 'CalendarPlus', event: 'job.created' },
+  { id: 'website.quote_request', label: 'Quote Request Submitted', description: 'When a quote request comes from website', category: 'Form Events', icon: 'FileText', event: 'lead.created' },
+
+  // ─── System Events (EXPANDED — includes Employee) ─────────────────────
+  { id: 'user.registered', label: 'User Registered', description: 'When a new user registers on the platform', category: 'System Events', icon: 'ShieldCheck', event: 'lead.created' },
+  { id: 'employee.created', label: 'Employee Created', description: 'When a new employee is added', category: 'System Events', icon: 'UserRoundPlus', event: 'employee.status_changed' },
+  { id: 'employee.assigned', label: 'Employee Assigned', description: 'When an employee is assigned to a job', category: 'System Events', icon: 'UserCheck', event: 'employee.status_changed' },
+  { id: 'employee.available', label: 'Employee Available', description: 'When employee becomes available', category: 'System Events', icon: 'CircleCheck', event: 'employee.status_changed' },
+  { id: 'employee.offline', label: 'Employee Offline', description: 'When employee goes offline', category: 'System Events', icon: 'WifiOff', event: 'employee.heartbeat' },
+  { id: 'system.error', label: 'System Error', description: 'When a system error occurs', category: 'System Events', icon: 'AlertOctagon', event: 'system.error' },
+  { id: 'system.api_call_failed', label: 'API Call Failed', description: 'When an external API call fails', category: 'System Events', icon: 'Unplug', event: 'system.api_call_failed' },
 ]
 
 // ─── Action Catalog ──────────────────────────────────────────────────────────
@@ -263,6 +281,28 @@ async function executeAction(
         // In production, integrate with email service
         console.log(`[TriggerEngine] Sending email to ${action.config.to}: ${action.config.subject}`)
         return { success: true, result: { emailSent: true } }
+      }
+      case 'send_sms': {
+        // In production, integrate with SMS service (Twilio, etc.)
+        console.log(`[TriggerEngine] Sending SMS to ${action.config.to}: ${action.config.message}`)
+        return { success: true, result: { smsSent: true } }
+      }
+      case 'remove_tag': {
+        const leadId = payload.data.leadId
+        if (leadId) {
+          const lead = await db.lead.findUnique({ where: { id: leadId } })
+          if (lead) {
+            const tags = JSON.parse(lead.tagsJson || '[]')
+            const updatedTags = tags.filter((t: string) => t !== action.config.tag)
+            await db.lead.update({ where: { id: leadId }, data: { tagsJson: JSON.stringify(updatedTags) } })
+          }
+        }
+        return { success: true, result: { tagRemoved: action.config.tag } }
+      }
+      case 'create_broadcast': {
+        // In production, create a broadcast campaign
+        console.log(`[TriggerEngine] Creating broadcast: ${action.config.name || 'Auto Broadcast'}`)
+        return { success: true, result: { broadcastCreated: true } }
       }
       default:
         return { success: false, error: `Unknown action type: ${action.type}` }

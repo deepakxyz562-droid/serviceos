@@ -3,12 +3,11 @@
 import { useState, useMemo } from 'react';
 import {
   Zap, Plus, Search, MoreHorizontal, Play, Pause, Trash2,
-  Eye, Edit3, ArrowRight, Clock, Activity, Filter,
+  Edit3, ArrowRight, Clock, Activity, Filter,
   MessageCircle, Mail, UserPlus, ListChecks, RefreshCw,
-  Bell, Globe, Users, ChevronDown, ChevronRight, X,
+  Bell, Globe, ChevronDown, ChevronRight, X,
   PlusCircle, MinusCircle, Settings2, GitBranch,
-  Sparkles, AlertCircle, CheckCircle2, Timer,
-  Target, Briefcase, FileText, Phone, Send,
+  AlertCircle, Target, Briefcase, Send,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,6 +28,7 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { TRIGGER_CATEGORIES, TRIGGER_EVENTS } from '@/lib/trigger-catalog';
 
 // ============================================================
 // Types
@@ -67,122 +67,32 @@ interface WorkflowAutomation {
 // Constants
 // ============================================================
 
-const TRIGGER_CATEGORIES = [
-  {
-    name: 'CRM Triggers',
-    icon: Target,
-    color: 'text-blue-600 bg-blue-50',
-    triggers: [
-      { value: 'lead.created', label: 'Lead Created' },
-      { value: 'lead.updated', label: 'Lead Updated' },
-      { value: 'lead.assigned', label: 'Lead Assigned' },
-      { value: 'lead.status_changed', label: 'Lead Status Changed' },
-      { value: 'lead.converted', label: 'Lead Converted' },
-      { value: 'customer.created', label: 'Customer Created' },
-      { value: 'customer.updated', label: 'Customer Updated' },
-    ],
-  },
-  {
-    name: 'Quote Triggers',
-    icon: FileText,
-    color: 'text-emerald-600 bg-emerald-50',
-    triggers: [
-      { value: 'quote.created', label: 'Quote Created' },
-      { value: 'quote.sent', label: 'Quote Sent' },
-      { value: 'quote.accepted', label: 'Quote Accepted' },
-      { value: 'quote.rejected', label: 'Quote Rejected' },
-    ],
-  },
-  {
-    name: 'Invoice Triggers',
-    icon: FileText,
-    color: 'text-purple-600 bg-purple-50',
-    triggers: [
-      { value: 'invoice.created', label: 'Invoice Created' },
-      { value: 'invoice.paid', label: 'Invoice Paid' },
-      { value: 'invoice.overdue', label: 'Invoice Overdue' },
-    ],
-  },
-  {
-    name: 'Booking Triggers',
-    icon: Briefcase,
-    color: 'text-orange-600 bg-orange-50',
-    triggers: [
-      { value: 'booking.created', label: 'Booking Created' },
-      { value: 'booking.confirmed', label: 'Booking Confirmed' },
-      { value: 'booking.cancelled', label: 'Booking Cancelled' },
-      { value: 'booking.rescheduled', label: 'Booking Rescheduled' },
-    ],
-  },
-  {
-    name: 'Job Triggers',
-    icon: Briefcase,
-    color: 'text-amber-600 bg-amber-50',
-    triggers: [
-      { value: 'job.created', label: 'Job Created' },
-      { value: 'job.assigned', label: 'Job Assigned' },
-      { value: 'job.started', label: 'Job Started' },
-      { value: 'job.completed', label: 'Job Completed' },
-      { value: 'job.cancelled', label: 'Job Cancelled' },
-    ],
-  },
-  {
-    name: 'Employee Triggers',
-    icon: Users,
-    color: 'text-indigo-600 bg-indigo-50',
-    triggers: [
-      { value: 'employee.assigned', label: 'Employee Assigned' },
-      { value: 'employee.available', label: 'Employee Available' },
-      { value: 'employee.busy', label: 'Employee Busy' },
-      { value: 'employee.offline', label: 'Employee Offline' },
-    ],
-  },
-  {
-    name: 'WhatsApp Triggers',
-    icon: MessageCircle,
-    color: 'text-green-600 bg-green-50',
-    triggers: [
-      { value: 'whatsapp.message_received', label: 'Message Received' },
-      { value: 'whatsapp.conversation_started', label: 'Conversation Started' },
-      { value: 'whatsapp.template_delivered', label: 'Template Delivered' },
-      { value: 'whatsapp.template_failed', label: 'Template Failed' },
-    ],
-  },
-  {
-    name: 'Form Triggers',
-    icon: ListChecks,
-    color: 'text-pink-600 bg-pink-50',
-    triggers: [
-      { value: 'form.submitted', label: 'Form Submitted' },
-      { value: 'form.response_received', label: 'Response Received' },
-    ],
-  },
-  {
-    name: 'Website Triggers',
-    icon: Globe,
-    color: 'text-cyan-600 bg-cyan-50',
-    triggers: [
-      { value: 'website.contact_form_submitted', label: 'Contact Form Submitted' },
-      { value: 'website.booking_form_submitted', label: 'Booking Form Submitted' },
-      { value: 'website.quote_request_submitted', label: 'Quote Request Submitted' },
-    ],
-  },
-  {
-    name: 'Time-Based Triggers',
-    icon: Timer,
-    color: 'text-slate-600 bg-slate-50',
-    triggers: [
-      { value: 'time.1h_after_lead_created', label: '1 Hour After Lead Created' },
-      { value: 'time.1d_after_quote_sent', label: '1 Day After Quote Sent' },
-      { value: 'time.3d_after_job_completed', label: '3 Days After Job Completed' },
-      { value: 'time.7d_after_invoice_due', label: '7 Days After Invoice Due' },
-    ],
-  },
-];
+// Derive local trigger categories from shared trigger-catalog for the accordion UI
+const TRIGGER_CATEGORIES_LOCAL = TRIGGER_CATEGORIES
+  .filter(cat => cat.id !== 'all')
+  .map(cat => {
+    // Convert shared color (e.g. 'text-blue-500') to local format (e.g. 'text-blue-600 bg-blue-50')
+    const colorName = cat.color.replace('text-', '').replace('-500', '');
+    const localColor = `text-${colorName}-600 bg-${colorName}-50`;
+    return {
+      name: cat.label, // e.g. 'CRM Events'
+      icon: cat.icon,
+      color: localColor,
+      triggers: TRIGGER_EVENTS
+        .filter(e => e.category === cat.label)
+        .map(e => ({ value: e.value, label: e.label })),
+    };
+  });
 
-const ALL_TRIGGERS = TRIGGER_CATEGORIES.flatMap((cat) =>
-  cat.triggers.map((t) => ({ ...t, category: cat.name, categoryColor: cat.color }))
-);
+const ALL_TRIGGERS = TRIGGER_EVENTS.map(t => {
+  const cat = TRIGGER_CATEGORIES.find(c => c.label === t.category);
+  const colorName = cat ? cat.color.replace('text-', '').replace('-500', '') : 'gray';
+  return {
+    ...t,
+    category: t.category,
+    categoryColor: `text-${colorName}-600 bg-${colorName}-50`,
+  };
+});
 
 const CONDITION_OPERATORS = [
   { value: 'equals', label: 'Equals' },
@@ -224,7 +134,7 @@ const MOCK_EMPLOYEES = [
 const MOCK_AUTOMATIONS: WorkflowAutomation[] = [
   {
     id: 'wa1', name: 'New Lead WhatsApp Welcome', description: 'Send a WhatsApp welcome message when a new lead is created',
-    triggerType: 'lead.created', triggerCategory: 'CRM Triggers',
+    triggerType: 'lead.created', triggerCategory: 'CRM Events',
     conditions: [], conditionLogic: 'and',
     actions: [
       { id: 'a1', type: 'send_whatsapp', config: { template: 'Hello {{name}}, thank you for your interest! We will be in touch shortly.' } },
@@ -233,7 +143,7 @@ const MOCK_AUTOMATIONS: WorkflowAutomation[] = [
   },
   {
     id: 'wa2', name: 'High-Value Lead Alert', description: 'Alert sales team when a high-value lead is created',
-    triggerType: 'lead.created', triggerCategory: 'CRM Triggers',
+    triggerType: 'lead.created', triggerCategory: 'CRM Events',
     conditions: [
       { id: 'c1', field: 'Lead Value', operator: 'greater_than', value: '500' },
     ],
@@ -246,7 +156,7 @@ const MOCK_AUTOMATIONS: WorkflowAutomation[] = [
   },
   {
     id: 'wa3', name: 'Quote Follow-Up', description: 'Follow up on quotes sent more than 1 day ago',
-    triggerType: 'time.1d_after_quote_sent', triggerCategory: 'Time-Based Triggers',
+    triggerType: 'time.1d_after_quote', triggerCategory: 'Invoice Events',
     conditions: [
       { id: 'c2', field: 'Quote Status', operator: 'equals', value: 'sent' },
     ],
@@ -258,7 +168,7 @@ const MOCK_AUTOMATIONS: WorkflowAutomation[] = [
   },
   {
     id: 'wa4', name: 'Job Completion Feedback', description: 'Request feedback 3 days after job completion',
-    triggerType: 'time.3d_after_job_completed', triggerCategory: 'Time-Based Triggers',
+    triggerType: 'time.3d_after_job', triggerCategory: 'Job Events',
     conditions: [],
     conditionLogic: 'and',
     actions: [
@@ -269,7 +179,7 @@ const MOCK_AUTOMATIONS: WorkflowAutomation[] = [
   },
   {
     id: 'wa5', name: 'Invoice Overdue Reminder', description: 'Send WhatsApp reminder 7 days after invoice due',
-    triggerType: 'time.7d_after_invoice_due', triggerCategory: 'Time-Based Triggers',
+    triggerType: 'time.7d_after_invoice', triggerCategory: 'Invoice Events',
     conditions: [
       { id: 'c3', field: 'Invoice Status', operator: 'not_equals', value: 'paid' },
     ],
@@ -282,7 +192,7 @@ const MOCK_AUTOMATIONS: WorkflowAutomation[] = [
   },
   {
     id: 'wa6', name: 'WhatsApp Lead Auto-Respond', description: 'Auto-respond to WhatsApp messages from new leads',
-    triggerType: 'whatsapp.message_received', triggerCategory: 'WhatsApp Triggers',
+    triggerType: 'whatsapp.message_received', triggerCategory: 'WhatsApp Events',
     conditions: [],
     conditionLogic: 'and',
     actions: [
@@ -583,7 +493,7 @@ export function WorkflowAutomationsView() {
   const [formActions, setFormActions] = useState<Action[]>([]);
 
   // Expanded trigger category
-  const [expandedCategory, setExpandedCategory] = useState<string | null>('CRM Triggers');
+  const [expandedCategory, setExpandedCategory] = useState<string | null>('CRM Events');
 
   // ============================================================
   // Filtered automations
@@ -623,7 +533,7 @@ export function WorkflowAutomationsView() {
     setFormConditions([]);
     setFormConditionLogic('and');
     setFormActions([]);
-    setExpandedCategory('CRM Triggers');
+    setExpandedCategory('CRM Events');
     setShowCreateDialog(true);
   };
 
@@ -974,7 +884,7 @@ export function WorkflowAutomationsView() {
 
                 {!formTriggerType && (
                   <div className="border rounded-lg overflow-hidden">
-                    {TRIGGER_CATEGORIES.map((category) => {
+                    {TRIGGER_CATEGORIES_LOCAL.map((category) => {
                       const CatIcon = category.icon;
                       const isExpanded = expandedCategory === category.name;
                       return (

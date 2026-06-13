@@ -240,6 +240,10 @@ const TABLES_TO_CHECK = [
   'FormResponse',
   'WorkflowAutomation',
   'TriggerExecution',
+  'SubscriptionPlan',
+  'PlatformMetric',
+  'SecurityEvent',
+  'AuditLogEntry',
 ];
 
 async function checkTableExists(tableName: string): Promise<boolean> {
@@ -741,6 +745,171 @@ async function seedTriggerExecutions(automations: { id: string }[], tenantId: st
   return results;
 }
 
+async function seedSubscriptionPlans(): Promise<unknown[]> {
+  const client = getAdminClient();
+  const plans = [
+    {
+      id: crypto.randomUUID(),
+      name: 'starter',
+      displayName: 'Starter',
+      description: 'Perfect for small businesses getting started with service management',
+      price: 29,
+      currency: 'USD',
+      billingCycle: 'monthly',
+      featuresJson: JSON.stringify({ maxUsers: 3, maxJobs: 100, maxWorkflows: 5, whatsapp: true, email: true, sms: false, ai: false, customDomain: false, whiteLabel: false }),
+      limitsJson: JSON.stringify({ seats: 3, aiQuota: 50, whatsappQuota: 500, emailQuota: 2000, smsQuota: 0, storageMb: 512 }),
+      isActive: true,
+      sortOrder: 1,
+    },
+    {
+      id: crypto.randomUUID(),
+      name: 'professional',
+      displayName: 'Professional',
+      description: 'For growing businesses that need advanced automation and AI features',
+      price: 79,
+      currency: 'USD',
+      billingCycle: 'monthly',
+      featuresJson: JSON.stringify({ maxUsers: 15, maxJobs: 1000, maxWorkflows: 25, whatsapp: true, email: true, sms: true, ai: true, customDomain: true, whiteLabel: false }),
+      limitsJson: JSON.stringify({ seats: 15, aiQuota: 500, whatsappQuota: 2000, emailQuota: 10000, smsQuota: 500, storageMb: 5120 }),
+      isActive: true,
+      sortOrder: 2,
+    },
+    {
+      id: crypto.randomUUID(),
+      name: 'enterprise',
+      displayName: 'Enterprise',
+      description: 'For large organizations with custom branding and unlimited scale',
+      price: 199,
+      currency: 'USD',
+      billingCycle: 'monthly',
+      featuresJson: JSON.stringify({ maxUsers: -1, maxJobs: -1, maxWorkflows: -1, whatsapp: true, email: true, sms: true, ai: true, customDomain: true, whiteLabel: true, prioritySupport: true, sla: '99.9%' }),
+      limitsJson: JSON.stringify({ seats: -1, aiQuota: -1, whatsappQuota: -1, emailQuota: -1, smsQuota: -1, storageMb: -1 }),
+      isActive: true,
+      sortOrder: 3,
+    },
+    {
+      id: crypto.randomUUID(),
+      name: 'trial',
+      displayName: 'Free Trial',
+      description: '14-day free trial with full Professional features',
+      price: 0,
+      currency: 'USD',
+      billingCycle: 'monthly',
+      featuresJson: JSON.stringify({ maxUsers: 5, maxJobs: 50, maxWorkflows: 10, whatsapp: true, email: true, sms: false, ai: true, customDomain: false, whiteLabel: false, trialDays: 14 }),
+      limitsJson: JSON.stringify({ seats: 5, aiQuota: 100, whatsappQuota: 200, emailQuota: 500, smsQuota: 0, storageMb: 256, trialDays: 14 }),
+      isActive: true,
+      sortOrder: 0,
+    },
+  ];
+
+  const results: unknown[] = [];
+  for (const plan of plans) {
+    const { data, error } = await client
+      .from('SubscriptionPlan')
+      .insert(plan)
+      .select()
+      .single();
+    if (error) {
+      console.error(`[Seed] Error inserting SubscriptionPlan "${plan.name}":`, error.message);
+    } else {
+      results.push(data);
+    }
+  }
+  return results;
+}
+
+async function seedPlatformMetrics(): Promise<unknown[]> {
+  const client = getAdminClient();
+  const now = new Date();
+  const metrics = [
+    { id: crypto.randomUUID(), metric: 'total_tenants', value: 5, dimensionsJson: JSON.stringify({ tier: 'all' }), recordedAt: new Date(now.getTime() - 0 * 3600000).toISOString() },
+    { id: crypto.randomUUID(), metric: 'total_users', value: 21, dimensionsJson: JSON.stringify({ tier: 'all' }), recordedAt: new Date(now.getTime() - 0 * 3600000).toISOString() },
+    { id: crypto.randomUUID(), metric: 'total_leads', value: 10, dimensionsJson: JSON.stringify({ tier: 'all' }), recordedAt: new Date(now.getTime() - 0 * 3600000).toISOString() },
+    { id: crypto.randomUUID(), metric: 'active_subscriptions', value: 4, dimensionsJson: JSON.stringify({ status: 'active' }), recordedAt: new Date(now.getTime() - 0 * 3600000).toISOString() },
+    { id: crypto.randomUUID(), metric: 'mrr', value: 11325, dimensionsJson: JSON.stringify({ currency: 'USD' }), recordedAt: new Date(now.getTime() - 0 * 3600000).toISOString() },
+    { id: crypto.randomUUID(), metric: 'total_tenants', value: 4, dimensionsJson: JSON.stringify({ tier: 'all' }), recordedAt: new Date(now.getTime() - 24 * 3600000).toISOString() },
+    { id: crypto.randomUUID(), metric: 'total_users', value: 18, dimensionsJson: JSON.stringify({ tier: 'all' }), recordedAt: new Date(now.getTime() - 24 * 3600000).toISOString() },
+    { id: crypto.randomUUID(), metric: 'mrr', value: 9800, dimensionsJson: JSON.stringify({ currency: 'USD' }), recordedAt: new Date(now.getTime() - 24 * 3600000).toISOString() },
+    { id: crypto.randomUUID(), metric: 'churn_rate', value: 0.03, dimensionsJson: JSON.stringify({ period: 'monthly' }), recordedAt: new Date(now.getTime() - 0 * 3600000).toISOString() },
+    { id: crypto.randomUUID(), metric: 'ai_api_calls', value: 1250, dimensionsJson: JSON.stringify({ provider: 'openai' }), recordedAt: new Date(now.getTime() - 0 * 3600000).toISOString() },
+  ];
+
+  const results: unknown[] = [];
+  for (const m of metrics) {
+    const { data, error } = await client
+      .from('PlatformMetric')
+      .insert(m)
+      .select()
+      .single();
+    if (error) {
+      console.error(`[Seed] Error inserting PlatformMetric "${m.metric}":`, error.message);
+    } else {
+      results.push(data);
+    }
+  }
+  return results;
+}
+
+async function seedSecurityEvents(): Promise<unknown[]> {
+  const client = getAdminClient();
+  const now = new Date();
+  const events = [
+    { id: crypto.randomUUID(), eventType: 'login_success', severity: 'info', ip: '192.168.1.100', userAgent: 'Mozilla/5.0', metadataJson: JSON.stringify({ method: 'email' }), createdAt: new Date(now.getTime() - 2 * 3600000).toISOString() },
+    { id: crypto.randomUUID(), eventType: 'login_failed', severity: 'warning', ip: '10.0.0.55', userAgent: 'curl/7.81.0', metadataJson: JSON.stringify({ method: 'email', reason: 'invalid_password' }), createdAt: new Date(now.getTime() - 4 * 3600000).toISOString() },
+    { id: crypto.randomUUID(), eventType: 'permission_escalation_attempt', severity: 'critical', ip: '203.0.113.42', userAgent: 'Python-urllib/3.9', metadataJson: JSON.stringify({ fromRole: 'viewer', toRole: 'superadmin' }), createdAt: new Date(now.getTime() - 6 * 3600000).toISOString() },
+    { id: crypto.randomUUID(), eventType: 'api_key_created', severity: 'info', ip: '192.168.1.100', userAgent: 'Mozilla/5.0', metadataJson: JSON.stringify({ keyName: 'production-api' }), createdAt: new Date(now.getTime() - 12 * 3600000).toISOString() },
+    { id: crypto.randomUUID(), eventType: 'tenant_suspended', severity: 'warning', metadataJson: JSON.stringify({ reason: 'payment_overdue' }), createdAt: new Date(now.getTime() - 24 * 3600000).toISOString() },
+    { id: crypto.randomUUID(), eventType: 'brute_force_detected', severity: 'critical', ip: '198.51.100.77', metadataJson: JSON.stringify({ attempts: 50, window: '5min' }), createdAt: new Date(now.getTime() - 48 * 3600000).toISOString() },
+    { id: crypto.randomUUID(), eventType: 'data_export', severity: 'info', ip: '192.168.1.100', userAgent: 'Mozilla/5.0', metadataJson: JSON.stringify({ resourceType: 'leads', recordCount: 500 }), createdAt: new Date(now.getTime() - 72 * 3600000).toISOString() },
+    { id: crypto.randomUUID(), eventType: 'mfa_enabled', severity: 'info', ip: '192.168.1.101', userAgent: 'Mozilla/5.0', metadataJson: JSON.stringify({ method: 'totp' }), createdAt: new Date(now.getTime() - 96 * 3600000).toISOString() },
+  ];
+
+  const results: unknown[] = [];
+  for (const event of events) {
+    const { data, error } = await client
+      .from('SecurityEvent')
+      .insert(event)
+      .select()
+      .single();
+    if (error) {
+      console.error(`[Seed] Error inserting SecurityEvent "${event.eventType}":`, error.message);
+    } else {
+      results.push(data);
+    }
+  }
+  return results;
+}
+
+async function seedAuditLogEntries(): Promise<unknown[]> {
+  const client = getAdminClient();
+  const now = new Date();
+  const entries = [
+    { id: crypto.randomUUID(), action: 'tenant.create', resourceType: 'Tenant', ip: '192.168.1.100', userAgent: 'Mozilla/5.0', metadataJson: JSON.stringify({ tenantName: 'Acme Services' }), createdAt: new Date(now.getTime() - 1 * 3600000).toISOString() },
+    { id: crypto.randomUUID(), action: 'user.promote', resourceType: 'User', ip: '192.168.1.100', userAgent: 'Mozilla/5.0', metadataJson: JSON.stringify({ fromRole: 'viewer', toRole: 'admin' }), createdAt: new Date(now.getTime() - 3 * 3600000).toISOString() },
+    { id: crypto.randomUUID(), action: 'feature_flag.toggle', resourceType: 'FeatureFlag', ip: '192.168.1.100', userAgent: 'Mozilla/5.0', metadataJson: JSON.stringify({ flagKey: 'ai_assistant', enabled: true }), createdAt: new Date(now.getTime() - 5 * 3600000).toISOString() },
+    { id: crypto.randomUUID(), action: 'subscription.update', resourceType: 'Subscription', ip: '10.0.0.1', userAgent: 'Stripe-Webhook/1.0', metadataJson: JSON.stringify({ plan: 'enterprise', billingCycle: 'annual' }), createdAt: new Date(now.getTime() - 8 * 3600000).toISOString() },
+    { id: crypto.randomUUID(), action: 'tenant.suspend', resourceType: 'Tenant', ip: '10.0.0.1', userAgent: 'System/1.0', metadataJson: JSON.stringify({ reason: 'payment_overdue', daysOverdue: 30 }), createdAt: new Date(now.getTime() - 24 * 3600000).toISOString() },
+    { id: crypto.randomUUID(), action: 'menu_item.reorder', resourceType: 'MenuItemConfig', ip: '192.168.1.100', userAgent: 'Mozilla/5.0', metadataJson: JSON.stringify({ menuKey: 'sidebar', itemsCount: 12 }), createdAt: new Date(now.getTime() - 48 * 3600000).toISOString() },
+    { id: crypto.randomUUID(), action: 'settings.update', resourceType: 'Tenant', ip: '192.168.1.101', userAgent: 'Mozilla/5.0', metadataJson: JSON.stringify({ changedFields: ['whatsappConfig', 'currency'] }), createdAt: new Date(now.getTime() - 72 * 3600000).toISOString() },
+    { id: crypto.randomUUID(), action: 'api_key.rotate', resourceType: 'ApiKey', ip: '192.168.1.100', userAgent: 'Mozilla/5.0', metadataJson: JSON.stringify({ keyPrefix: 'sos_prod_' }), createdAt: new Date(now.getTime() - 96 * 3600000).toISOString() },
+  ];
+
+  const results: unknown[] = [];
+  for (const entry of entries) {
+    const { data, error } = await client
+      .from('AuditLogEntry')
+      .insert(entry)
+      .select()
+      .single();
+    if (error) {
+      console.error(`[Seed] Error inserting AuditLogEntry "${entry.action}":`, error.message);
+    } else {
+      results.push(data);
+    }
+  }
+  return results;
+}
+
 async function createUserAccounts(tenantId: string, workspaceId: string | null): Promise<unknown[]> {
   // Dynamic import for bcryptjs (server-side only)
   const bcrypt = await import('bcryptjs');
@@ -852,6 +1021,10 @@ export async function POST(request: NextRequest) {
       const formResponses = await seedFormResponses(forms, tenant.id);
       const automations = await seedWorkflowAutomations(tenant.id, workspaceId, userId);
       const triggerExecutions = await seedTriggerExecutions(automations, tenant.id);
+      const subscriptionPlans = await seedSubscriptionPlans();
+      const platformMetrics = await seedPlatformMetrics();
+      const securityEvents = await seedSecurityEvents();
+      const auditLogEntries = await seedAuditLogEntries();
 
       return NextResponse.json({
         success: true,
@@ -864,6 +1037,10 @@ export async function POST(request: NextRequest) {
           formResponses: formResponses.length,
           workflowAutomations: automations.length,
           triggerExecutions: triggerExecutions.length,
+          subscriptionPlans: subscriptionPlans.length,
+          platformMetrics: platformMetrics.length,
+          securityEvents: securityEvents.length,
+          auditLogEntries: auditLogEntries.length,
         },
       });
     }

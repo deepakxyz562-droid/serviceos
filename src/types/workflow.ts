@@ -7,7 +7,7 @@ export interface NodePort {
 }
 
 // Node categories
-export type NodeCategory = 'trigger' | 'crmTrigger' | 'logic' | 'action' | 'code' | 'data' | 'communication' | 'cloud' | 'ai' | 'utility';
+export type NodeCategory = 'trigger' | 'condition' | 'action' | 'flowControl' | 'template' | 'ai' | 'utility';
 
 // Node status for execution
 export type NodeStatus = 'idle' | 'running' | 'success' | 'error' | 'waiting';
@@ -24,6 +24,7 @@ export interface NodeTypeDefinition {
   outputs: NodePort[];
   credentialTypes?: string[];
   properties: NodeProperty[];
+  event?: string; // event source for trigger nodes (e.g. 'lead.created')
 }
 
 export interface NodeProperty {
@@ -160,5 +161,29 @@ export interface WorkflowTemplate {
   workflowJson: Workflow;
 }
 
-// View types
-export type ViewType = 'dashboard' | 'workflows' | 'canvas' | 'operations' | 'whatsapp' | 'crm' | 'leads' | 'jobs' | 'dispatch' | 'executions' | 'credentials' | 'invoices' | 'quotes' | 'reports' | 'billing' | 'variables' | 'templates' | 'settings' | 'versionHistory' | 'employeePortal' | 'saasDashboard' | 'customerPortal' | 'inbox' | 'customer360' | 'campaigns' | 'segments' | 'retargeting' | 'chatbotBuilder' | 'aiAssistant' | 'aiCampaignGenerator' | 'formBuilder' | 'webviewEngine' | 'adsIntegration' | 'journeyAutomation' | 'salesPipeline' | 'omnichannel' | 'marketplace' | 'enterprise' | 'broadcast' | 'workflowAutomations' | 'marketingTemplates' | 'marketingAnalytics' | 'communicationProviders' | 'contacts' | 'leadDiscovery' | 'booking' | 'calendar' | 'employees' | 'reviews' | 'serviceCatalog' | 'knowledgeBase' | 'documentCenter' | 'triggers' | 'superadmin';
+// View types — organized by module
+export type ViewType =
+  // Dashboard
+  | 'dashboard'
+  // CRM
+  | 'crm' | 'leads' | 'contacts' | 'customers' | 'customer360' | 'salesPipeline'
+  // Communication
+  | 'whatsapp' | 'inbox' | 'broadcast' | 'campaigns' | 'marketingTemplates' | 'omnichannel'
+  // Automation
+  | 'workflows' | 'canvas' | 'triggers' | 'variables' | 'executions' | 'formBuilder' | 'workflowAutomations'
+  // Operations
+  | 'operations' | 'booking' | 'calendar' | 'jobs' | 'dispatch' | 'employees'
+  // Finance
+  | 'quotes' | 'invoices' | 'billing'
+  // System
+  | 'credentials' | 'settings' | 'auditLogs' | 'reports'
+  // Portals
+  | 'customerPortal' | 'employeePortal'
+  // AI & Extras
+  | 'aiAssistant' | 'chatbotBuilder' | 'retargeting' | 'segments' | 'marketingAnalytics'
+  | 'serviceCatalog' | 'knowledgeBase' | 'communicationProviders'
+  | 'leadDiscovery' | 'reviews' | 'journeyAutomation'
+  | 'marketplace' | 'enterprise' | 'aiCampaignGenerator' | 'webviewEngine' | 'adsIntegration'
+  | 'versionHistory' | 'documentCenter' | 'saasDashboard'
+  // Super Admin
+  | 'superadmin';

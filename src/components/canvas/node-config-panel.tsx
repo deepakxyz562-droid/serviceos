@@ -128,7 +128,16 @@ function NodeConfigPanelInner({ node }: { node: import('@/types/workflow').Workf
           </div>
           <div>
             <h3 className="text-sm font-semibold text-gray-900 leading-tight">{nodeDef?.displayName}</h3>
-            <p className="text-[10px] text-gray-400">{nodeDef?.category}</p>
+            <p className="text-[10px] text-gray-400">
+              {nodeDef?.category === 'trigger' ? 'Trigger' :
+               nodeDef?.category === 'condition' ? 'Condition' :
+               nodeDef?.category === 'action' ? 'Action' :
+               nodeDef?.category === 'flowControl' ? 'Flow Control' :
+               nodeDef?.category === 'ai' ? 'AI' :
+               nodeDef?.category === 'utility' ? 'Utility' :
+               nodeDef?.category === 'template' ? 'Template' :
+               nodeDef?.category}
+            </p>
           </div>
         </div>
         <Button

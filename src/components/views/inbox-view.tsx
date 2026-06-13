@@ -726,7 +726,7 @@ export function InboxView() {
       </div>
 
       {/* Conversation List */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         {conversationsLoading ? (
           <ConversationListSkeleton />
         ) : conversationsError ? (

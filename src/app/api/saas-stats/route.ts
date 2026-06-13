@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { toISOString } from '@/lib/utils';
+import { cache } from '@/lib/cache';
+
+const CACHE_TTL = 30_000; // 30 seconds
 
 // GET /api/saas-stats - Comprehensive SaaS dashboard stats for FlowForge
 export async function GET() {
@@ -18,151 +21,132 @@ export async function GET() {
       return NextResponse.json(getDemoData());
     }
 
+    // Check cache first
+    const cacheKey = `saas-stats:${tenantId}`;
+    const cached = cache.get<Record<string, unknown>>(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
+
+    // ── Group 1: Tenant-scoped queries (Lead + Invoice) ──────────────────────
+    // These don't need workspaceIds, so run them first
+    const totalLeadsCount = await db.lead.count({ where: { tenantId } });
+
+    const leadsByStatus = await db.lead.groupBy({
+      by: ['status'],
+      where: { tenantId },
+      _count: { status: true },
+      _sum: { value: true },
+    });
+
+    const leadsBySource = await db.lead.groupBy({
+      by: ['source'],
+      where: { tenantId },
+      _count: { source: true },
+    });
+
+    const paidInvoices = await db.invoice.aggregate({
+      where: { tenantId, status: 'paid' },
+      _sum: { total: true },
+    });
+
+    const leadsWon = await db.lead.count({ where: { tenantId, status: 'won' } });
+
+    const lastMonthLeads = await getLastMonthLeadsCount(tenantId);
+
+    const lastMonthRevenue = await getLastMonthRevenue(tenantId);
+
+    const monthlyRevenueData = await getMonthlyRevenue(tenantId);
+
+    const recentLeads = await db.lead.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      select: {
+        id: true,
+        name: true,
+        source: true,
+        status: true,
+        value: true,
+        createdAt: true,
+      },
+    });
+
+    // ── Group 2: Workspace-scoped queries (Job + Employee) ──────────────────
     // Get workspace IDs for this tenant
     const tenantWorkspaces = await db.workspace.findMany({
       where: { tenantId },
       select: { id: true },
     });
-    const workspaceIds = tenantWorkspaces.map((w) => w.id);
+    const workspaceIds = tenantWorkspaces.map((w: { id: string }) => w.id);
+    const hasWorkspaces = workspaceIds.length > 0;
 
-    // Run all queries in parallel for performance
-    const [
-      totalLeadsCount,
-      leadsByStatus,
-      leadsBySource,
-      totalJobsCount,
-      jobsByStatus,
-      paidInvoices,
-      totalEmployees,
-      recentLeads,
-      recentJobs,
-      topEmployees,
-      leadsWon,
-      lastMonthLeads,
-      lastMonthRevenue,
-      monthlyRevenueData,
-    ] = await Promise.all([
-      // Total leads
-      db.lead.count({ where: { tenantId } }),
+    const totalJobsCount = await db.job.count({
+      where: hasWorkspaces ? { workspaceId: { in: workspaceIds } } : { id: 'none' },
+    });
 
-      // Leads by status
-      db.lead.groupBy({
-        by: ['status'],
-        where: { tenantId },
-        _count: { status: true },
-        _sum: { value: true },
-      }),
+    const jobsByStatus = await db.job.groupBy({
+      by: ['status'],
+      where: hasWorkspaces ? { workspaceId: { in: workspaceIds } } : { id: 'none' },
+      _count: { status: true },
+    });
 
-      // Leads by source
-      db.lead.groupBy({
-        by: ['source'],
-        where: { tenantId },
-        _count: { source: true },
-      }),
+    const totalEmployees = await db.employee.count({
+      where: hasWorkspaces ? { workspaceId: { in: workspaceIds } } : { id: 'none' },
+    });
 
-      // Total jobs
-      db.job.count({
-        where: workspaceIds.length > 0 ? { workspaceId: { in: workspaceIds } } : { id: 'none' },
-      }),
+    const recentJobs = await db.job.findMany({
+      where: hasWorkspaces ? { workspaceId: { in: workspaceIds } } : { id: 'none' },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      select: {
+        id: true,
+        title: true,
+        assigneeName: true,
+        status: true,
+        scheduledAt: true,
+      },
+    });
 
-      // Jobs by status
-      db.job.groupBy({
-        by: ['status'],
-        where: workspaceIds.length > 0 ? { workspaceId: { in: workspaceIds } } : { id: 'none' },
-        _count: { status: true },
-      }),
+    const topEmployees = await db.employee.findMany({
+      where: hasWorkspaces ? { workspaceId: { in: workspaceIds } } : { id: 'none' },
+      orderBy: { completedJobs: 'desc' },
+      take: 10,
+      select: {
+        id: true,
+        name: true,
+        rating: true,
+        completedJobs: true,
+      },
+    });
 
-      // Total revenue (sum of invoice totals where status=paid)
-      db.invoice.aggregate({
-        where: { tenantId, status: 'paid' },
-        _sum: { total: true },
-      }),
-
-      // Total employees
-      db.employee.count({
-        where: workspaceIds.length > 0 ? { workspaceId: { in: workspaceIds } } : { id: 'none' },
-      }),
-
-      // Recent leads
-      db.lead.findMany({
-        where: { tenantId },
-        orderBy: { createdAt: 'desc' },
-        take: 5,
-        select: {
-          id: true,
-          name: true,
-          source: true,
-          status: true,
-          value: true,
-          createdAt: true,
-        },
-      }),
-
-      // Recent jobs
-      db.job.findMany({
-        where: workspaceIds.length > 0 ? { workspaceId: { in: workspaceIds } } : { id: 'none' },
-        orderBy: { createdAt: 'desc' },
-        take: 5,
-        select: {
-          id: true,
-          title: true,
-          assigneeName: true,
-          status: true,
-          scheduledAt: true,
-        },
-      }),
-
-      // Employee performance
-      db.employee.findMany({
-        where: workspaceIds.length > 0 ? { workspaceId: { in: workspaceIds } } : { id: 'none' },
-        orderBy: { completedJobs: 'desc' },
-        take: 10,
-        select: {
-          id: true,
-          name: true,
-          rating: true,
-          completedJobs: true,
-        },
-      }),
-
-      // Leads won
-      db.lead.count({ where: { tenantId, status: 'won' } }),
-
-      // Last month leads count (for trend)
-      getLastMonthLeadsCount(tenantId),
-
-      // Last month revenue (for trend)
-      getLastMonthRevenue(tenantId),
-
-      // Monthly revenue data
-      getMonthlyRevenue(tenantId),
-    ]);
+    // ── Build response ──────────────────────────────────────────────────────
 
     // Build lead pipeline from status data
-    const leadPipeline = leadsByStatus.map((item) => ({
+    const leadPipeline = leadsByStatus.map((item: { status: string; _count: { status: number }; _sum: { value: number | null } }) => ({
       stage: item.status,
       count: item._count.status,
       value: item._sum.value || 0,
     }));
 
     // Build lead sources for pie chart
-    const leadSources = leadsBySource.map((item) => ({
+    const leadSources = leadsBySource.map((item: { source: string; _count: { source: number } }) => ({
       source: item.source,
       count: item._count.source,
     }));
 
     // Build jobs by status map
     const jobsByStatusMap: Record<string, number> = {};
-    jobsByStatus.forEach((item) => {
+    jobsByStatus.forEach((item: { status: string; _count: { status: number } }) => {
       jobsByStatusMap[item.status] = item._count.status;
     });
 
     // Calculate team performance
     const avgRating =
       topEmployees.length > 0
-        ? (topEmployees.reduce((sum, e) => sum + (e.rating || 0), 0) / topEmployees.length).toFixed(1)
+        ? (topEmployees.reduce((sum: number, e: { rating: number | null }) => sum + (e.rating || 0), 0) / topEmployees.length).toFixed(1)
         : '0';
-    const totalCompletedJobs = topEmployees.reduce((sum, e) => sum + (e.completedJobs || 0), 0);
+    const totalCompletedJobs = topEmployees.reduce((sum: number, e: { completedJobs: number | null }) => sum + (e.completedJobs || 0), 0);
 
     // Calculate trends
     const leadsTrend =
@@ -181,7 +165,7 @@ export async function GET() {
           : 0;
 
     // Format recent leads
-    const formattedRecentLeads = recentLeads.map((lead) => ({
+    const formattedRecentLeads = recentLeads.map((lead: { id: string; name: string; source: string; status: string; value: number | null; createdAt: Date | string }) => ({
       id: lead.id,
       name: lead.name,
       source: lead.source,
@@ -191,7 +175,7 @@ export async function GET() {
     }));
 
     // Format recent jobs
-    const formattedRecentJobs = recentJobs.map((job) => ({
+    const formattedRecentJobs = recentJobs.map((job: { id: string; title: string; assigneeName: string | null; status: string; scheduledAt: Date | string | null }) => ({
       id: job.id,
       title: job.title,
       assignee: job.assigneeName || 'Unassigned',
@@ -200,12 +184,12 @@ export async function GET() {
     }));
 
     // Format revenue trend (last 6 months)
-    const revenueTrendData = monthlyRevenueData.slice(-6).map((item) => ({
+    const revenueTrendData = monthlyRevenueData.slice(-6).map((item: { month: string; label: string; revenue: number }) => ({
       month: item.label,
       revenue: item.revenue,
     }));
 
-    return NextResponse.json({
+    const result = {
       totalLeads: { count: totalLeadsCount, trend: leadsTrend },
       activeJobs: { count: totalJobsCount, byStatus: jobsByStatusMap },
       monthlyRevenue: { amount: currentRevenue, trend: revenueTrend },
@@ -215,7 +199,12 @@ export async function GET() {
       leadSources,
       recentLeads: formattedRecentLeads,
       recentJobs: formattedRecentJobs,
-    });
+    };
+
+    // Cache the result
+    cache.set(cacheKey, result, CACHE_TTL);
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error('SaaS stats error:', error);
     // Return demo data on error so the dashboard still renders
@@ -269,9 +258,10 @@ async function getMonthlyRevenue(tenantId: string) {
   });
 
   const monthlyData: Record<string, number> = {};
-  paidInvoicesList.forEach((invoice) => {
+  paidInvoicesList.forEach((invoice: { total: number; paidAt: Date | string | null }) => {
     if (invoice.paidAt) {
-      const monthKey = `${invoice.paidAt.getFullYear()}-${String(invoice.paidAt.getMonth() + 1).padStart(2, '0')}`;
+      const date = invoice.paidAt instanceof Date ? invoice.paidAt : new Date(invoice.paidAt);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       monthlyData[monthKey] = (monthlyData[monthKey] || 0) + invoice.total;
     }
   });

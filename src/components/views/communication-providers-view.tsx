@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -270,8 +270,12 @@ export function CommunicationProvidersView() {
     return { total: providers.length, active, totalSent, deliveryRate };
   }, [providers]);
 
-  // Reset form provider when type changes
+  // Track whether we're populating for edit to avoid useEffect override
+  const isPopulatingForEdit = useRef(false);
+
+  // Reset form provider when type changes (skip during edit population)
   useEffect(() => {
+    if (isPopulatingForEdit.current) return;
     const providerList = formType === 'email' ? EMAIL_PROVIDERS : formType === 'sms' ? SMS_PROVIDERS : WHATSAPP_PROVIDERS;
     setFormProvider(providerList[0]);
     setFormConfig({});
@@ -291,6 +295,7 @@ export function CommunicationProvidersView() {
   };
 
   const populateFormForEdit = (provider: CommunicationProvider) => {
+    isPopulatingForEdit.current = true;
     setFormName(provider.name);
     setFormType(provider.type);
     setFormProvider(provider.provider);
@@ -299,6 +304,10 @@ export function CommunicationProvidersView() {
     setFormSendingEnabled(provider.sendingEnabled);
     setFormDailyLimit(String(provider.dailyLimit));
     setFormMonthlyLimit(String(provider.monthlyLimit));
+    // Reset flag after the next render cycle so useEffect doesn't override
+    requestAnimationFrame(() => {
+      isPopulatingForEdit.current = false;
+    });
   };
 
   // ─── Actions ────────────────────────────────────────────────────────────

@@ -1,190 +1,110 @@
--- ============================================
--- ServiceOS: Missing Tables Migration for Supabase
--- Run this in the Supabase SQL Editor:
--- https://supabase.com/dashboard/project/rmzaxqxzultxetlgsgic/sql
--- ============================================
+-- ==========================================
+-- Enterprise SuperAdmin Platform - Supabase Migration
+-- ==========================================
+-- This SQL creates the new tables and adds new columns to existing tables.
+-- Uses CREATE TABLE IF NOT EXISTS and ALTER TABLE ... ADD COLUMN IF NOT EXISTS
+-- for safe idempotent execution.
+-- ==========================================
 
--- 1. CommunicationProvider
-CREATE TABLE IF NOT EXISTS "CommunicationProvider" (
-  "id" TEXT PRIMARY KEY DEFAULT substring(replace(gen_random_uuid()::text, '-', ''), 1, 25),
-  "name" TEXT NOT NULL,
-  "type" TEXT NOT NULL,
-  "provider" TEXT NOT NULL,
-  "status" TEXT NOT NULL DEFAULT 'active',
-  "configJson" TEXT NOT NULL DEFAULT '{}',
-  "isDefault" BOOLEAN NOT NULL DEFAULT false,
-  "sendingEnabled" BOOLEAN NOT NULL DEFAULT true,
-  "dailyLimit" INTEGER NOT NULL DEFAULT 1000,
-  "monthlyLimit" INTEGER NOT NULL DEFAULT 30000,
-  "sentToday" INTEGER NOT NULL DEFAULT 0,
-  "sentThisMonth" INTEGER NOT NULL DEFAULT 0,
-  "totalSent" INTEGER NOT NULL DEFAULT 0,
-  "totalDelivered" INTEGER NOT NULL DEFAULT 0,
-  "totalFailed" INTEGER NOT NULL DEFAULT 0,
-  "lastUsedAt" TIMESTAMPTZ,
-  "lastError" TEXT,
-  "tenantId" TEXT,
-  "workspaceId" TEXT,
-  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS "CommunicationProvider_type_idx" ON "CommunicationProvider"("type");
-CREATE INDEX IF NOT EXISTS "CommunicationProvider_provider_idx" ON "CommunicationProvider"("provider");
-CREATE INDEX IF NOT EXISTS "CommunicationProvider_status_idx" ON "CommunicationProvider"("status");
-CREATE INDEX IF NOT EXISTS "CommunicationProvider_tenantId_idx" ON "CommunicationProvider"("tenantId");
+-- ==========================================
+-- NEW TABLES
+-- ==========================================
 
--- 2. Contact
-CREATE TABLE IF NOT EXISTS "Contact" (
-  "id" TEXT PRIMARY KEY DEFAULT substring(replace(gen_random_uuid()::text, '-', ''), 1, 25),
-  "name" TEXT NOT NULL,
-  "email" TEXT,
-  "phone" TEXT,
-  "company" TEXT,
-  "tags" TEXT,
-  "tenantId" TEXT NOT NULL,
-  "workspaceId" TEXT,
-  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS "Contact_tenantId_idx" ON "Contact"("tenantId");
-CREATE INDEX IF NOT EXISTS "Contact_email_idx" ON "Contact"("email");
-CREATE INDEX IF NOT EXISTS "Contact_phone_idx" ON "Contact"("phone");
-CREATE INDEX IF NOT EXISTS "Contact_createdAt_idx" ON "Contact"("createdAt");
-
--- 3. Form
-CREATE TABLE IF NOT EXISTS "Form" (
-  "id" TEXT PRIMARY KEY DEFAULT substring(replace(gen_random_uuid()::text, '-', ''), 1, 25),
-  "name" TEXT NOT NULL,
+-- SubscriptionPlan: Defines available subscription plans for tenants
+CREATE TABLE IF NOT EXISTS "SubscriptionPlan" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "name" TEXT NOT NULL UNIQUE,
+  "displayName" TEXT NOT NULL DEFAULT '',
   "description" TEXT,
-  "type" TEXT NOT NULL DEFAULT 'lead_capture',
-  "status" TEXT NOT NULL DEFAULT 'active',
-  "fieldsJson" TEXT NOT NULL DEFAULT '[]',
-  "submissionActions" TEXT NOT NULL DEFAULT '[]',
-  "fieldMappingJson" TEXT NOT NULL DEFAULT '{}',
-  "welcomeMessage" TEXT NOT NULL DEFAULT '',
-  "completionMessage" TEXT NOT NULL DEFAULT '',
-  "whatsappOwnerTemplate" TEXT NOT NULL DEFAULT '',
-  "whatsappUserTemplate" TEXT NOT NULL DEFAULT '',
-  "whatsappAiGenerated" BOOLEAN NOT NULL DEFAULT false,
-  "embedScriptEnabled" BOOLEAN NOT NULL DEFAULT false,
-  "embedIframeEnabled" BOOLEAN NOT NULL DEFAULT false,
-  "slug" TEXT UNIQUE,
-  "submissions" INTEGER NOT NULL DEFAULT 0,
-  "conversionRate" DOUBLE PRECISION NOT NULL DEFAULT 0,
-  "tenantId" TEXT,
-  "workspaceId" TEXT,
-  "createdById" TEXT,
-  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+  "price" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "currency" TEXT NOT NULL DEFAULT 'USD',
+  "billingCycle" TEXT NOT NULL DEFAULT 'monthly',
+  "featuresJson" TEXT NOT NULL DEFAULT '{}',
+  "limitsJson" TEXT NOT NULL DEFAULT '{}',
+  "isActive" BOOLEAN NOT NULL DEFAULT true,
+  "sortOrder" INTEGER NOT NULL DEFAULT 0,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS "Form_tenantId_idx" ON "Form"("tenantId");
-CREATE INDEX IF NOT EXISTS "Form_type_idx" ON "Form"("type");
-CREATE INDEX IF NOT EXISTS "Form_status_idx" ON "Form"("status");
-CREATE INDEX IF NOT EXISTS "Form_slug_idx" ON "Form"("slug");
 
--- 4. FormResponse
-CREATE TABLE IF NOT EXISTS "FormResponse" (
-  "id" TEXT PRIMARY KEY DEFAULT substring(replace(gen_random_uuid()::text, '-', ''), 1, 25),
-  "formId" TEXT NOT NULL REFERENCES "Form"("id") ON DELETE CASCADE,
-  "dataJson" TEXT NOT NULL DEFAULT '{}',
-  "respondent" TEXT,
-  "respondentName" TEXT,
-  "source" TEXT NOT NULL DEFAULT 'direct',
-  "leadId" TEXT,
-  "customerId" TEXT,
-  "jobId" TEXT,
-  "quoteId" TEXT,
-  "bookingId" TEXT,
-  "actionsResultsJson" TEXT NOT NULL DEFAULT '{}',
-  "tenantId" TEXT,
-  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+CREATE INDEX IF NOT EXISTS "SubscriptionPlan_name_idx" ON "SubscriptionPlan"("name");
+CREATE INDEX IF NOT EXISTS "SubscriptionPlan_isActive_idx" ON "SubscriptionPlan"("isActive");
+
+-- PlatformMetric: Stores time-series platform metrics for the superadmin dashboard
+CREATE TABLE IF NOT EXISTS "PlatformMetric" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "metric" TEXT NOT NULL,
+  "value" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "dimensionsJson" TEXT NOT NULL DEFAULT '{}',
+  "recordedAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS "FormResponse_formId_idx" ON "FormResponse"("formId");
-CREATE INDEX IF NOT EXISTS "FormResponse_source_idx" ON "FormResponse"("source");
-CREATE INDEX IF NOT EXISTS "FormResponse_tenantId_idx" ON "FormResponse"("tenantId");
-CREATE INDEX IF NOT EXISTS "FormResponse_createdAt_idx" ON "FormResponse"("createdAt");
 
--- 5. WorkflowAutomation
-CREATE TABLE IF NOT EXISTS "WorkflowAutomation" (
-  "id" TEXT PRIMARY KEY DEFAULT substring(replace(gen_random_uuid()::text, '-', ''), 1, 25),
-  "name" TEXT NOT NULL,
-  "description" TEXT,
-  "triggerType" TEXT NOT NULL,
-  "triggerConfigJson" TEXT NOT NULL DEFAULT '{}',
-  "conditionsJson" TEXT NOT NULL DEFAULT '[]',
-  "actionsJson" TEXT NOT NULL DEFAULT '[]',
-  "active" BOOLEAN NOT NULL DEFAULT true,
-  "executionCount" INTEGER NOT NULL DEFAULT 0,
-  "lastExecutedAt" TIMESTAMPTZ,
-  "lastExecutionStatus" TEXT,
-  "tagsJson" TEXT NOT NULL DEFAULT '[]',
+CREATE INDEX IF NOT EXISTS "PlatformMetric_metric_idx" ON "PlatformMetric"("metric");
+CREATE INDEX IF NOT EXISTS "PlatformMetric_recordedAt_idx" ON "PlatformMetric"("recordedAt");
+
+-- SecurityEvent: Logs security-related events for audit and monitoring
+CREATE TABLE IF NOT EXISTS "SecurityEvent" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "eventType" TEXT NOT NULL,
+  "severity" TEXT NOT NULL DEFAULT 'info',
+  "userId" TEXT,
   "tenantId" TEXT,
-  "workspaceId" TEXT,
-  "createdById" TEXT,
-  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
-  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+  "ip" TEXT,
+  "userAgent" TEXT,
+  "metadataJson" TEXT NOT NULL DEFAULT '{}',
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS "WorkflowAutomation_tenantId_idx" ON "WorkflowAutomation"("tenantId");
-CREATE INDEX IF NOT EXISTS "WorkflowAutomation_triggerType_idx" ON "WorkflowAutomation"("triggerType");
-CREATE INDEX IF NOT EXISTS "WorkflowAutomation_active_idx" ON "WorkflowAutomation"("active");
 
--- 6. TriggerExecution
-CREATE TABLE IF NOT EXISTS "TriggerExecution" (
-  "id" TEXT PRIMARY KEY DEFAULT substring(replace(gen_random_uuid()::text, '-', ''), 1, 25),
-  "automationId" TEXT NOT NULL REFERENCES "WorkflowAutomation"("id") ON DELETE CASCADE,
-  "triggerEvent" TEXT NOT NULL,
-  "triggerPayload" TEXT NOT NULL DEFAULT '{}',
-  "conditionsMet" BOOLEAN NOT NULL DEFAULT true,
-  "actionsResultsJson" TEXT NOT NULL DEFAULT '[]',
-  "status" TEXT NOT NULL DEFAULT 'success',
-  "error" TEXT,
-  "durationMs" INTEGER,
+CREATE INDEX IF NOT EXISTS "SecurityEvent_eventType_idx" ON "SecurityEvent"("eventType");
+CREATE INDEX IF NOT EXISTS "SecurityEvent_severity_idx" ON "SecurityEvent"("severity");
+CREATE INDEX IF NOT EXISTS "SecurityEvent_tenantId_idx" ON "SecurityEvent"("tenantId");
+CREATE INDEX IF NOT EXISTS "SecurityEvent_createdAt_idx" ON "SecurityEvent"("createdAt");
+
+-- AuditLogEntry: Detailed audit log entries for the superadmin
+CREATE TABLE IF NOT EXISTS "AuditLogEntry" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "userId" TEXT,
   "tenantId" TEXT,
-  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+  "action" TEXT NOT NULL,
+  "resourceType" TEXT,
+  "resourceId" TEXT,
+  "ip" TEXT,
+  "userAgent" TEXT,
+  "metadataJson" TEXT NOT NULL DEFAULT '{}',
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS "TriggerExecution_automationId_idx" ON "TriggerExecution"("automationId");
-CREATE INDEX IF NOT EXISTS "TriggerExecution_triggerEvent_idx" ON "TriggerExecution"("triggerEvent");
-CREATE INDEX IF NOT EXISTS "TriggerExecution_status_idx" ON "TriggerExecution"("status");
-CREATE INDEX IF NOT EXISTS "TriggerExecution_tenantId_idx" ON "TriggerExecution"("tenantId");
-CREATE INDEX IF NOT EXISTS "TriggerExecution_createdAt_idx" ON "TriggerExecution"("createdAt");
 
--- ============================================
--- RLS (Row Level Security)
--- ============================================
-ALTER TABLE "CommunicationProvider" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "Contact" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "Form" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "FormResponse" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "WorkflowAutomation" ENABLE ROW LEVEL SECURITY;
-ALTER TABLE "TriggerExecution" ENABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS "AuditLogEntry_userId_idx" ON "AuditLogEntry"("userId");
+CREATE INDEX IF NOT EXISTS "AuditLogEntry_action_idx" ON "AuditLogEntry"("action");
+CREATE INDEX IF NOT EXISTS "AuditLogEntry_tenantId_idx" ON "AuditLogEntry"("tenantId");
+CREATE INDEX IF NOT EXISTS "AuditLogEntry_createdAt_idx" ON "AuditLogEntry"("createdAt");
 
--- Allow full access via service role and anon
-CREATE POLICY "Allow all on CommunicationProvider" ON "CommunicationProvider" FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all on Contact" ON "Contact" FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all on Form" ON "Form" FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all on FormResponse" ON "FormResponse" FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all on WorkflowAutomation" ON "WorkflowAutomation" FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all on TriggerExecution" ON "TriggerExecution" FOR ALL USING (true) WITH CHECK (true);
+-- ==========================================
+-- ADD COLUMNS TO EXISTING TABLES
+-- ==========================================
 
--- ============================================
--- Auto-update updatedAt trigger
--- ============================================
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW."updatedAt" = now();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+-- Tenant: Add enterprise columns
+ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "whiteLabelJson" TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "region" TEXT NOT NULL DEFAULT 'us-east-1';
+ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "mrr" DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "arr" DOUBLE PRECISION NOT NULL DEFAULT 0;
+ALTER TABLE "Tenant" ADD COLUMN IF NOT EXISTS "churnRate" DOUBLE PRECISION NOT NULL DEFAULT 0;
 
-DROP TRIGGER IF EXISTS set_CommunicationProvider_updatedAt ON "CommunicationProvider";
-CREATE TRIGGER set_CommunicationProvider_updatedAt BEFORE UPDATE ON "CommunicationProvider" FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- Subscription: Add quota and usage columns
+ALTER TABLE "Subscription" ADD COLUMN IF NOT EXISTS "seatCount" INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE "Subscription" ADD COLUMN IF NOT EXISTS "aiQuota" INTEGER NOT NULL DEFAULT 100;
+ALTER TABLE "Subscription" ADD COLUMN IF NOT EXISTS "whatsappQuota" INTEGER NOT NULL DEFAULT 1000;
+ALTER TABLE "Subscription" ADD COLUMN IF NOT EXISTS "emailQuota" INTEGER NOT NULL DEFAULT 5000;
+ALTER TABLE "Subscription" ADD COLUMN IF NOT EXISTS "smsQuota" INTEGER NOT NULL DEFAULT 500;
+ALTER TABLE "Subscription" ADD COLUMN IF NOT EXISTS "storageQuotaMb" INTEGER NOT NULL DEFAULT 1024;
+ALTER TABLE "Subscription" ADD COLUMN IF NOT EXISTS "aiUsageCount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Subscription" ADD COLUMN IF NOT EXISTS "whatsappUsageCount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Subscription" ADD COLUMN IF NOT EXISTS "emailUsageCount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Subscription" ADD COLUMN IF NOT EXISTS "smsUsageCount" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Subscription" ADD COLUMN IF NOT EXISTS "storageUsageMb" DOUBLE PRECISION NOT NULL DEFAULT 0;
 
-DROP TRIGGER IF EXISTS set_Contact_updatedAt ON "Contact";
-CREATE TRIGGER set_Contact_updatedAt BEFORE UPDATE ON "Contact" FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS set_Form_updatedAt ON "Form";
-CREATE TRIGGER set_Form_updatedAt BEFORE UPDATE ON "Form" FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS set_WorkflowAutomation_updatedAt ON "WorkflowAutomation";
-CREATE TRIGGER set_WorkflowAutomation_updatedAt BEFORE UPDATE ON "WorkflowAutomation" FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- SubscriptionPlan: Add missing columns (for tables created before this migration)
+ALTER TABLE "SubscriptionPlan" ADD COLUMN IF NOT EXISTS "displayName" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "SubscriptionPlan" ADD COLUMN IF NOT EXISTS "description" TEXT;
+ALTER TABLE "SubscriptionPlan" ADD COLUMN IF NOT EXISTS "sortOrder" INTEGER NOT NULL DEFAULT 0;

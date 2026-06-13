@@ -50,6 +50,7 @@ const DEFAULT_MENU_ITEMS = [
   { key: 'integrations', label: 'Integrations', icon: 'Puzzle', section: 'platform', sortOrder: 34 },
 ];
 
+// GET: List menu items for a tenant or default definitions
 export async function GET(request: NextRequest) {
   try {
     const auth = await getAuthUser();
@@ -63,7 +64,15 @@ export async function GET(request: NextRequest) {
     const tenantId = searchParams.get('tenantId');
 
     if (!tenantId) {
-      return NextResponse.json({ items: DEFAULT_MENU_ITEMS.map((item) => ({ ...item, id: `default_${item.key}`, enabled: true })) });
+      // Return default menu definitions when no tenant specified
+      return NextResponse.json({
+        items: DEFAULT_MENU_ITEMS.map((item) => ({
+          ...item,
+          id: `default_${item.key}`,
+          enabled: true,
+          tenantId: null,
+        })),
+      });
     }
 
     let configs = await db.menuItemConfig.findMany({
@@ -91,7 +100,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const items = configs.map((c) => ({
+    const items = configs.map((c: Record<string, unknown>) => ({
       id: c.id,
       key: c.menuKey,
       label: c.label || c.menuKey,
@@ -99,15 +108,75 @@ export async function GET(request: NextRequest) {
       section: c.section || 'operations',
       enabled: c.enabled,
       sortOrder: c.sortOrder,
+      tenantId,
     }));
 
     return NextResponse.json({ items });
   } catch (error) {
     console.error('[SuperAdmin Menu Items GET] Error:', error);
-    return NextResponse.json({ items: DEFAULT_MENU_ITEMS.map((item) => ({ ...item, id: `default_${item.key}`, enabled: true })) });
+    return NextResponse.json({
+      items: DEFAULT_MENU_ITEMS.map((item) => ({
+        ...item,
+        id: `default_${item.key}`,
+        enabled: true,
+        tenantId: null,
+      })),
+    });
   }
 }
 
+// PUT: Toggle a single menu item
+export async function PUT(request: NextRequest) {
+  try {
+    const auth = await getAuthUser();
+    if (!auth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (auth.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Forbidden - SuperAdmin access required' }, { status: 403 });
+    }
+    const body = await request.json();
+    const { tenantId, menuKey, enabled } = body;
+
+    if (!tenantId) {
+      return NextResponse.json({ error: 'Tenant ID is required' }, { status: 400 });
+    }
+    if (!menuKey) {
+      return NextResponse.json({ error: 'Menu key is required' }, { status: 400 });
+    }
+    if (typeof enabled !== 'boolean') {
+      return NextResponse.json({ error: 'Enabled must be a boolean' }, { status: 400 });
+    }
+
+    // Find the default definition for this menu key
+    const defaultDef = DEFAULT_MENU_ITEMS.find((item) => item.key === menuKey);
+
+    const config = await db.menuItemConfig.upsert({
+      where: {
+        tenantId_menuKey: { tenantId, menuKey },
+      },
+      create: {
+        tenantId,
+        menuKey,
+        enabled,
+        label: defaultDef?.label || menuKey,
+        icon: defaultDef?.icon || 'Menu',
+        section: defaultDef?.section || 'operations',
+        sortOrder: defaultDef?.sortOrder || 0,
+      },
+      update: {
+        enabled,
+      },
+    });
+
+    return NextResponse.json({ success: true, config });
+  } catch (error) {
+    console.error('[SuperAdmin Menu Items PUT] Error:', error);
+    return NextResponse.json({ error: 'Failed to toggle menu item' }, { status: 500 });
+  }
+}
+
+// POST: Save menu item configuration for a tenant
 export async function POST(request: NextRequest) {
   try {
     const auth = await getAuthUser();
@@ -128,9 +197,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Items must be an array' }, { status: 400 });
     }
 
-    // Update each menu item's enabled state
-    const updates = items.map((item: { id: string; key: string; enabled: boolean }) =>
-      db.menuItemConfig.upsert({
+    // Upsert each menu item configuration
+    const updates = items.map((item: { key: string; enabled: boolean; label?: string; icon?: string; section?: string; sortOrder?: number }) => {
+      const updateData: Record<string, unknown> = { enabled: item.enabled };
+      if (item.label !== undefined) updateData.label = item.label;
+      if (item.icon !== undefined) updateData.icon = item.icon;
+      if (item.section !== undefined) updateData.section = item.section;
+      if (item.sortOrder !== undefined) updateData.sortOrder = item.sortOrder;
+
+      return db.menuItemConfig.upsert({
         where: {
           tenantId_menuKey: { tenantId, menuKey: item.key },
         },
@@ -138,12 +213,14 @@ export async function POST(request: NextRequest) {
           tenantId,
           menuKey: item.key,
           enabled: item.enabled,
+          label: item.label || item.key,
+          icon: item.icon || 'Menu',
+          section: item.section || 'operations',
+          sortOrder: item.sortOrder || 0,
         },
-        update: {
-          enabled: item.enabled,
-        },
-      }),
-    );
+        update: updateData,
+      });
+    });
 
     await Promise.all(updates);
 

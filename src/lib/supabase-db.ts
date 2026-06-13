@@ -121,6 +121,10 @@ const TABLE_MAP: Record<string, string> = {
   conversationLabel: 'ConversationLabel',
   menuItemConfig: 'MenuItemConfig',
   featureFlag: 'FeatureFlag',
+  subscriptionPlan: 'SubscriptionPlan',
+  platformMetric: 'PlatformMetric',
+  securityEvent: 'SecurityEvent',
+  auditLogEntry: 'AuditLogEntry',
 };
 
 // Known missing tables in Supabase (return empty results gracefully)

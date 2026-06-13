@@ -1,21 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser } from '@/lib/auth';
 
 // ─── GET /api/services ─────────────────────────────────────────────────────
 // List services for a tenant
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await getAuthUser(request);
+    if (!user || !user.tenantId) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
-    const tenantId = searchParams.get('tenantId');
     const category = searchParams.get('category');
     const active = searchParams.get('active');
     const search = searchParams.get('search');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
 
-    const where: Record<string, unknown> = {};
-    if (tenantId) where.tenantId = tenantId;
+    const where: Record<string, unknown> = {
+      tenantId: user.tenantId,
+    };
     if (category) where.category = category;
     if (active !== null && active !== undefined) {
       where.isActive = active === 'true';
@@ -52,6 +58,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const user = await getAuthUser(request);
+    if (!user || !user.tenantId) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
     const body = await request.json();
     const {
       name,
@@ -61,7 +72,6 @@ export async function POST(request: NextRequest) {
       duration,
       icon,
       isActive,
-      tenantId,
     } = body;
 
     if (!name) {
@@ -77,7 +87,7 @@ export async function POST(request: NextRequest) {
         duration: duration !== undefined ? Number(duration) : 60,
         icon: icon || null,
         isActive: isActive !== undefined ? isActive : true,
-        tenantId: tenantId || null,
+        tenantId: user.tenantId,
       },
     });
 

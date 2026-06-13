@@ -36,6 +36,11 @@ model Tenant {
   onboardingStep    Int      @default(0)
   suspendedAt       DateTime?
   suspensionReason  String?
+  whiteLabelJson    String   @default("{}")
+  region            String   @default("us-east-1")
+  mrr               Float    @default(0)
+  arr               Float    @default(0)
+  churnRate         Float    @default(0)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -83,6 +88,17 @@ model Subscription {
   pausedAt                DateTime?
   pauseReason             String?
   pausedById              String?
+  seatCount               Int      @default(1)
+  aiQuota                 Int      @default(100)
+  whatsappQuota           Int      @default(1000)
+  emailQuota              Int      @default(5000)
+  smsQuota                Int      @default(500)
+  storageQuotaMb          Int      @default(1024)
+  aiUsageCount            Int      @default(0)
+  whatsappUsageCount      Int      @default(0)
+  emailUsageCount         Int      @default(0)
+  smsUsageCount           Int      @default(0)
+  storageUsageMb          Float    @default(0)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
@@ -104,6 +120,9 @@ model User {
   phone           String?
   isActive        Boolean  @default(true)
   lastLoginAt     DateTime?
+  mfaEnabled      Boolean  @default(false)
+  lastActivityAt  DateTime?
+  loginCount      Int      @default(0)
   tenantId        String?
   workspaceId     String?
   createdAt       DateTime @default(now())
@@ -633,6 +652,8 @@ model Employee {
   userAccount     User?                   @relation(fields: [userId], references: [id])
   statusLogs      EmployeeStatusLog[]
   notificationLogs NotificationLog[]
+  bookings        Booking[]
+  documents       Document[]
 
   @@index([role])
   @@index([status])
@@ -710,6 +731,7 @@ model Customer {
   conversations        Conversation[]
   journeys             CustomerJourney[]
   portalSessions       CustomerPortalSession[]
+  documents            Document[]
 
   @@index([phone])
   @@index([workspaceId])
@@ -790,6 +812,7 @@ model Job {
   notificationLogs NotificationLog[]
   conversation      Conversation?
   journey           CustomerJourney?
+  documents         Document[]
 
   @@index([status])
   @@index([assigneeId])
@@ -1913,4 +1936,183 @@ model FeatureFlag {
   @@index([tenantId])
   @@index([featureKey])
   @@index([enabled])
+}
+
+// ==========================================
+// ENTERPRISE SUPERADMIN PLATFORM
+// ==========================================
+
+model SubscriptionPlan {
+  id            String   @id @default(cuid())
+  name          String   @unique
+  displayName   String
+  description   String?
+  price         Float    @default(0)
+  currency      String   @default("USD")
+  billingCycle  String   @default("monthly")
+  featuresJson  String   @default("{}")
+  limitsJson    String   @default("{}")
+  isActive      Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([name])
+  @@index([isActive])
+}
+
+model PlatformMetric {
+  id             String   @id @default(cuid())
+  metric         String
+  value          Float    @default(0)
+  dimensionsJson String   @default("{}")
+  recordedAt     DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  @@index([metric])
+  @@index([recordedAt])
+  @@index([createdAt])
+}
+
+model SecurityEvent {
+  id            String   @id @default(cuid())
+  eventType     String
+  severity      String   @default("info")
+  userId        String?
+  tenantId      String?
+  ip            String?
+  userAgent     String?
+  metadataJson  String   @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([eventType])
+  @@index([severity])
+  @@index([userId])
+  @@index([tenantId])
+  @@index([createdAt])
+}
+
+model AuditLogEntry {
+  id            String   @id @default(cuid())
+  userId        String?
+  tenantId      String?
+  action        String
+  resourceType  String?
+  resourceId    String?
+  ip            String?
+  userAgent     String?
+  metadataJson  String   @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([tenantId])
+  @@index([action])
+  @@index([resourceType])
+  @@index([createdAt])
+}
+
+// ==========================================
+// BOOKINGS
+// ==========================================
+
+model Booking {
+  id                String    @id @default(cuid())
+  title             String
+  description       String?
+  status            String    @default("pending")  // pending, confirmed, in_progress, completed, cancelled, no_show
+  source            String    @default("manual")   // manual, whatsapp, website, form, api
+  customerId        String?
+  customerName      String?
+  customerPhone     String?
+  customerEmail     String?
+  employeeId        String?
+  serviceId         String?
+  branchId          String?
+  address           String?
+  scheduledAt       DateTime?
+  scheduledEndTime  DateTime?
+  duration          Int       @default(60)
+  notes             String?
+  confirmedAt       DateTime?
+  completedAt       DateTime?
+  cancelledAt       DateTime?
+  cancellationReason String?
+  rescheduledFrom   String?
+  metadataJson      String    @default("{}")
+  tenantId          String?
+  workspaceId       String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  employee  Employee? @relation(fields: [employeeId], references: [id])
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([employeeId])
+  @@index([scheduledAt])
+  @@index([customerId])
+}
+
+// ==========================================
+// KNOWLEDGE BASE
+// ==========================================
+
+model KnowledgeArticle {
+  id              String   @id @default(cuid())
+  title           String
+  content         String
+  category        String   @default("general")
+  tagsJson        String   @default("[]")
+  isPublic        Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  viewCount       Int      @default(0)
+  helpfulCount    Int      @default(0)
+  notHelpfulCount Int      @default(0)
+  authorId        String?
+  tenantId        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([category])
+  @@index([isActive])
+  @@index([isPublic])
+}
+
+// ==========================================
+// DOCUMENT CENTER
+// ==========================================
+
+model Document {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  type            String   @default("general")  // general, contract, invoice, report, proposal, manual, other
+  category        String   @default("general")
+  fileUrl         String
+  fileType        String?  // pdf, doc, xls, png, etc.
+  fileSize        Int?     // Size in bytes
+  accessLevel     String   @default("admin")    // admin, employee, customer
+  customerId      String?
+  jobId           String?
+  employeeId      String?
+  uploadedById    String?
+  isShared        Boolean  @default(false)
+  sharedWithJson  String   @default("[]")
+  tagsJson        String   @default("[]")
+  tenantId        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  customer Customer? @relation(fields: [customerId], references: [id])
+  job      Job?      @relation(fields: [jobId], references: [id])
+  employee Employee? @relation(fields: [employeeId], references: [id])
+
+  @@index([tenantId])
+  @@index([type])
+  @@index([category])
+  @@index([accessLevel])
+  @@index([uploadedById])
+  @@index([createdAt])
 }

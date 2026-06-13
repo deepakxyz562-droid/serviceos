@@ -10,7 +10,6 @@ import {
   Briefcase,
   Radio,
   Users,
-  MessageCircle,
   Workflow,
   Activity,
   KeyRound,
@@ -18,7 +17,6 @@ import {
   BarChart3,
   CreditCard,
   Variable,
-  LayoutTemplate,
   Settings,
   Wrench,
   ChevronLeft,
@@ -29,7 +27,6 @@ import {
   Check,
   Plus,
   Crown,
-  HardHat,
   Globe,
   Inbox,
   UserCircle,
@@ -40,11 +37,9 @@ import {
   Sparkles,
   Wand2,
   ClipboardList,
-  LayoutGrid,
   GitBranch,
   Kanban,
   RadioTower,
-  Store,
   Shield,
   Receipt,
   Zap,
@@ -54,10 +49,14 @@ import {
   Contact,
   Star,
   BookOpen,
-  BookMarked,
   FolderOpen,
-  X,
   ShieldCheck,
+  ScrollText,
+  UserCog,
+  Eye,
+  MessageSquare,
+  Send,
+  LayoutTemplate,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -109,102 +108,91 @@ interface NavSection {
   items: NavItem[];
 }
 
-// ─── Navigation sections ────────────────────────────────────────────────────
+// ─── Navigation sections — organized by user's module structure ──────────────
 
 const ownerNavSections: NavSection[] = [
   {
-    title: 'Operations',
+    title: 'Overview',
     items: [
       { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    ],
+  },
+  {
+    title: 'CRM',
+    items: [
       { view: 'leads', label: 'Leads', icon: Target },
-      { view: 'leadDiscovery', label: 'Lead Discovery', icon: Search },
-      { view: 'jobs', label: 'Jobs', icon: Briefcase },
+      { view: 'contacts', label: 'Contacts', icon: Contact },
+      { view: 'customers', label: 'Customers', icon: Users },
+      { view: 'customer360', label: 'Customer 360', icon: UserCircle, badge: '360' },
+      { view: 'salesPipeline', label: 'Pipeline', icon: Kanban },
+    ],
+  },
+  {
+    title: 'Communication',
+    items: [
+      { view: 'inbox', label: 'WhatsApp Inbox', icon: Inbox, badge: 'New' },
+      { view: 'broadcast', label: 'Broadcast', icon: Send },
+      { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
+      { view: 'marketingTemplates', label: 'Templates', icon: MessageSquare },
+      { view: 'omnichannel', label: 'Omnichannel', icon: RadioTower },
+    ],
+  },
+  {
+    title: 'Automation',
+    items: [
+      { view: 'workflows', label: 'Workflow Editor', icon: Workflow },
+      { view: 'triggers', label: 'Triggers', icon: Zap },
+      { view: 'variables', label: 'Variables', icon: Variable },
+      { view: 'executions', label: 'Executions', icon: Activity },
+      { view: 'formBuilder', label: 'Form Builder', icon: ClipboardList },
+      { view: 'workflowAutomations', label: 'Automations', icon: GitBranch },
+    ],
+  },
+  {
+    title: 'Operations',
+    items: [
       { view: 'booking', label: 'Booking', icon: CalendarCheck },
       { view: 'calendar', label: 'Calendar', icon: Calendar },
+      { view: 'jobs', label: 'Jobs', icon: Briefcase },
       { view: 'dispatch', label: 'Dispatch', icon: Radio },
-    ],
-  },
-  {
-    title: 'People',
-    items: [
-      { view: 'contacts', label: 'Contacts', icon: Contact },
-      { view: 'customer360', label: 'Customer 360', icon: UserCircle },
-      { view: 'employees', label: 'Employees', icon: Users },
-      { view: 'customerPortal', label: 'Customer Portal', icon: Globe },
-    ],
-  },
-  {
-    title: 'Marketing',
-    items: [
-      { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
-      { view: 'broadcast', label: 'Broadcast', icon: Radio },
-      { view: 'marketingTemplates', label: 'Templates', icon: FileText },
-      { view: 'segments', label: 'Audiences', icon: Filter },
-      { view: 'marketingAnalytics', label: 'Analytics', icon: BarChart3 },
-      { view: 'communicationProviders', label: 'Providers', icon: KeyRound },
-    ],
-  },
-  {
-    title: 'Sales',
-    items: [
-      { view: 'salesPipeline', label: 'Sales Pipeline', icon: Kanban },
-      { view: 'quotes', label: 'Quotes', icon: Receipt },
-      { view: 'reviews', label: 'Reviews', icon: Star },
-    ],
-  },
-  {
-    title: 'WhatsApp CRM',
-    items: [
-      { view: 'inbox', label: 'Inbox', icon: Inbox, badge: 'New' },
-      { view: 'retargeting', label: 'Retargeting', icon: RefreshCw },
-      { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
-      { view: 'formBuilder', label: 'Form Builder', icon: ClipboardList },
-      { view: 'journeyAutomation', label: 'Journey Builder', icon: GitBranch },
-    ],
-  },
-  {
-    title: 'AI & Automation',
-    items: [
-      { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
-      { view: 'aiCampaignGenerator', label: 'AI Generator', icon: Wand2 },
-      { view: 'triggers', label: 'CRM Triggers', icon: Zap, badge: 'New' },
-      { view: 'workflows', label: 'Workflows', icon: Workflow },
-      { view: 'workflowAutomations', label: 'Automations', icon: Zap },
-      { view: 'executions', label: 'Executions', icon: Activity },
-    ],
-  },
-  {
-    title: 'Channels',
-    items: [
-      { view: 'omnichannel', label: 'Omnichannel', icon: RadioTower },
-      { view: 'webviewEngine', label: 'Webview Engine', icon: LayoutGrid },
+      { view: 'employees', label: 'Employees', icon: UserCog },
     ],
   },
   {
     title: 'Finance',
     items: [
+      { view: 'quotes', label: 'Quotes', icon: Receipt },
       { view: 'invoices', label: 'Invoices', icon: FileText },
-      { view: 'reports', label: 'Reports', icon: BarChart3 },
       { view: 'billing', label: 'Billing', icon: CreditCard },
     ],
   },
   {
-    title: 'Resources',
+    title: 'System',
     items: [
-      { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },
-      { view: 'knowledgeBase', label: 'Knowledge Base', icon: BookMarked },
-      { view: 'documentCenter', label: 'Document Center', icon: FolderOpen },
+      { view: 'credentials', label: 'Credentials', icon: KeyRound },
+      { view: 'settings', label: 'Settings', icon: Settings },
+      { view: 'auditLogs', label: 'Audit Logs', icon: ScrollText },
+      { view: 'reports', label: 'Reports', icon: BarChart3 },
     ],
   },
   {
-    title: 'Platform',
+    title: 'Portals',
     items: [
-      { view: 'marketplace', label: 'Marketplace', icon: Store },
-      { view: 'enterprise', label: 'Enterprise', icon: Shield },
-      { view: 'credentials', label: 'Credentials', icon: KeyRound },
-      { view: 'variables', label: 'Variables', icon: Variable },
-      { view: 'templates', label: 'Templates', icon: LayoutTemplate },
-      { view: 'settings', label: 'Settings', icon: Settings },
+      { view: 'customerPortal', label: 'Customer Portal', icon: Globe },
+      { view: 'employeePortal', label: 'Employee Portal', icon: HardHat },
+    ],
+  },
+  {
+    title: 'AI & More',
+    items: [
+      { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
+      { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
+      { view: 'retargeting', label: 'Retargeting', icon: RefreshCw },
+      { view: 'segments', label: 'Segments', icon: Filter },
+      { view: 'marketingAnalytics', label: 'Analytics', icon: BarChart3 },
+      { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },
+      { view: 'communicationProviders', label: 'Providers', icon: KeyRound },
+      { view: 'reviews', label: 'Reviews', icon: Star },
     ],
   },
 ];
@@ -227,7 +215,7 @@ const employeeNavSections: NavSection[] = [
 
 const superadminNavSections: NavSection[] = [
   {
-    title: 'SuperAdmin',
+    title: 'Super Admin',
     items: [
       { view: 'superadmin', label: 'Admin Panel', icon: ShieldCheck, badge: 'SA' },
     ],
@@ -241,6 +229,17 @@ interface Workspace {
   name: string;
   slug: string;
   industry?: string;
+}
+
+// ─── HardHat icon (not in lucide) ────────────────────────────────────────
+function HardHat(props: React.SVGProps<SVGSVGElement> & { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className}>
+      <path d="M2 18a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v2z"/>
+      <path d="M10 10V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v5"/>
+      <path d="M4 15v-3a8 8 0 0 1 16 0v3"/>
+    </svg>
+  );
 }
 
 // ─── Props ──────────────────────────────────────────────────────────────────
@@ -270,8 +269,6 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
   const [creating, setCreating] = useState(false);
 
-  // ─── Fetch workspaces on mount ──────────────────────────────────────────
-
   useEffect(() => {
     async function fetchWorkspaces() {
       try {
@@ -285,13 +282,11 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
           }
         }
       } catch {
-        // Silently fail — workspace switcher will just show default
+        // Silently fail
       }
     }
     fetchWorkspaces();
   }, []);
-
-  // ─── Create workspace handler ───────────────────────────────────────────
 
   const handleCreateWorkspace = async () => {
     if (!newWorkspaceName.trim()) return;
@@ -320,20 +315,11 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     }
   };
 
-  // ─── Helpers ────────────────────────────────────────────────────────────
-
   const getUserInitials = () => {
     if (auth.user?.name) {
-      return auth.user.name
-        .split(' ')
-        .map((n) => n[0])
-        .join('')
-        .slice(0, 2)
-        .toUpperCase();
+      return auth.user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
     }
-    if (auth.user?.email) {
-      return auth.user.email.slice(0, 2).toUpperCase();
-    }
+    if (auth.user?.email) return auth.user.email.slice(0, 2).toUpperCase();
     return 'U';
   };
 
@@ -352,12 +338,9 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
   };
 
   const planBadge = getPlanBadge();
-
-  // Role-based navigation
   const isSuperAdmin = auth.user?.role === 'superadmin';
   const isEmployee = auth.user?.role === 'employee';
-  
-  // Superadmin sees all owner nav + superadmin section
+
   let navSections: NavSection[];
   if (isSuperAdmin) {
     navSections = [...superadminNavSections, ...ownerNavSections];
@@ -369,12 +352,8 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
 
   const handleNavClick = (view: ViewType) => {
     setCurrentView(view);
-    if (isMobile) {
-      setMobileSidebarOpen(false);
-    }
+    if (isMobile) setMobileSidebarOpen(false);
   };
-
-  // ─── Render nav item ───────────────────────────────────────────────────
 
   const renderNavItem = (item: NavItem) => {
     const Icon = item.icon;
@@ -385,16 +364,16 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
         key={item.view}
         onClick={() => handleNavClick(item.view)}
         className={cn(
-          'flex items-center w-full rounded-lg text-sm font-medium transition-all duration-150 touch-target',
-          isMobile || leftSidebarOpen ? 'h-10 px-3 gap-3' : 'h-9 justify-center',
+          'flex items-center w-full rounded-lg text-sm font-medium transition-all duration-150',
+          isMobile || leftSidebarOpen ? 'h-9 px-3 gap-3' : 'h-9 justify-center',
           isActive
-            ? 'bg-emerald-500/20 text-emerald-400 shadow-sm shadow-emerald-500/10'
+            ? 'bg-emerald-500/15 text-emerald-400 shadow-sm'
             : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200'
         )}
       >
-        <Icon className={cn('shrink-0 transition-all', isActive ? 'size-5 text-emerald-400' : 'size-4')} />
+        <Icon className={cn('shrink-0', isActive ? 'size-[18px] text-emerald-400' : 'size-4')} />
         {(isMobile || leftSidebarOpen) && (
-          <span className="whitespace-nowrap flex-1 text-left">{item.label}</span>
+          <span className="whitespace-nowrap flex-1 text-left text-[13px]">{item.label}</span>
         )}
         {(isMobile || leftSidebarOpen) && item.badge && (
           <Badge variant="outline" className="text-[9px] h-4 px-1.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
@@ -410,7 +389,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
 
   return (
     <div className="flex flex-col h-full">
-      {/* ─── Logo / Branding ──────────────────────────────────────────── */}
+      {/* Logo / Branding */}
       <div
         className={cn(
           'flex items-center h-14 px-4 border-b border-slate-800/60 shrink-0',
@@ -432,7 +411,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
         )}
       </div>
 
-      {/* ─── Workspace Switcher ───────────────────────────────────────── */}
+      {/* Workspace Switcher */}
       {(isMobile || leftSidebarOpen) ? (
         <div className="px-3 py-2 border-b border-slate-800/60 shrink-0">
           <DropdownMenu>
@@ -459,9 +438,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
                 >
                   <Building2 className="size-4 text-muted-foreground" />
                   <span className="flex-1 truncate">{ws.name}</span>
-                  {currentWorkspaceId === ws.id && (
-                    <Check className="size-4 text-emerald-500" />
-                  )}
+                  {currentWorkspaceId === ws.id && <Check className="size-4 text-emerald-500" />}
                 </DropdownMenuItem>
               ))}
               {workspaces.length > 0 && <DropdownMenuSeparator />}
@@ -490,35 +467,26 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
         </div>
       )}
 
-      {/* ─── Navigation Sections ──────────────────────────────────────── */}
-      <ScrollArea className="flex-1 py-3 min-h-0">
-        <div className="flex flex-col gap-1">
+      {/* Navigation Sections */}
+      <ScrollArea className="flex-1 py-2 min-h-0">
+        <div className="flex flex-col gap-0.5">
           {navSections.map((section, sectionIdx) => (
             <div key={section.title}>
-              {/* Section label (visible when expanded) */}
               {(isMobile || leftSidebarOpen) && (
-                <div className="px-4 pt-3 pb-1">
+                <div className="px-4 pt-2.5 pb-1">
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                     {section.title}
                   </span>
                 </div>
               )}
-
-              {/* Section divider when collapsed (except first) */}
               {!isMobile && !leftSidebarOpen && sectionIdx > 0 && (
-                <div className="px-3 my-2">
+                <div className="px-3 my-1.5">
                   <Separator className="bg-slate-800/60" />
                 </div>
               )}
-
-              {/* Nav items */}
               <nav className="flex flex-col gap-0.5 px-2">
                 {section.items.map((item) => {
-                  // On mobile, no tooltips needed
-                  if (isMobile || leftSidebarOpen) {
-                    return renderNavItem(item);
-                  }
-                  // Collapsed desktop: wrap in tooltip
+                  if (isMobile || leftSidebarOpen) return renderNavItem(item);
                   return (
                     <Tooltip key={item.view}>
                       <TooltipTrigger asChild>
@@ -536,24 +504,20 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
         </div>
       </ScrollArea>
 
-      {/* ─── Collapse Toggle (desktop only) ──────────────────────────── */}
+      {/* Collapse Toggle (desktop only) */}
       {!isMobile && (
         <button
           onClick={toggleLeftSidebar}
           className="absolute -right-3 top-20 z-10 flex items-center justify-center w-6 h-6 rounded-full bg-slate-800 border border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors shadow-md"
           aria-label={leftSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
         >
-          {leftSidebarOpen ? (
-            <ChevronLeft className="size-3" />
-          ) : (
-            <ChevronRight className="size-3" />
-          )}
+          {leftSidebarOpen ? <ChevronLeft className="size-3" /> : <ChevronRight className="size-3" />}
         </button>
       )}
 
       <Separator className="bg-slate-800/60" />
 
-      {/* ─── User Section ─────────────────────────────────────────────── */}
+      {/* User Section */}
       <div
         className={cn(
           'flex items-center gap-3 p-3 shrink-0',
@@ -604,7 +568,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
         )}
       </div>
 
-      {/* ─── Create Workspace Dialog ──────────────────────────────────── */}
+      {/* Create Workspace Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -628,10 +592,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
             />
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setCreateDialogOpen(false)}
-            >
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
               Cancel
             </Button>
             <Button

@@ -7,19 +7,18 @@ import {
   Save,
   Play,
   Trash2,
-  ChevronLeft,
   X,
-  Clock3,
-  ArrowRightLeft,
   GripVertical,
   ZoomIn,
   ZoomOut,
   Maximize2,
   Loader2,
-  MousePointerClick,
   Zap,
   Workflow,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,14 +41,24 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
-  PREBUILT_TRIGGERS,
-  TRIGGER_CATEGORIES,
-  ACTION_TYPES,
-} from '@/lib/trigger-catalog';
+  NODE_CATEGORIES,
+  nodeRegistry,
+  getNodesByCategory,
+  getNodeTypeDefinition,
+  getCategoryColor,
+  triggerNodes,
+  conditionNodes,
+  actionNodes,
+  flowControlNodes,
+  aiNodes,
+  utilityNodes,
+  workflowTemplates,
+} from '@/lib/node-registry';
+import type { NodeCategory, NodeTypeDefinition } from '@/types/workflow';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
-type NodeType = 'trigger' | 'action' | 'condition' | 'delay';
+type NodeType = 'trigger' | 'action' | 'condition' | 'flowControl' | 'ai' | 'utility' | 'delay';
 
 interface CanvasNode {
   id: string;
@@ -58,12 +67,10 @@ interface CanvasNode {
   description?: string;
   position: { x: number; y: number };
   config: Record<string, any>;
-  category?: string;
-  categoryColor?: string;
+  category: NodeCategory;
   icon?: string;
-  triggerType?: string;
-  actionType?: string;
-  eventLabel?: string;
+  nodeType?: string; // the type string from node-registry (e.g. 'leadCreated')
+  event?: string; // event source for trigger nodes
 }
 
 interface CanvasEdge {
@@ -72,42 +79,26 @@ interface CanvasEdge {
   target: string;
 }
 
-// ─── Category border color mapping ──────────────────────────────────────
+// ─── Category color maps ────────────────────────────────────────────────
 
-const CATEGORY_BORDER: Record<string, string> = {
-  CRM: 'border-l-blue-500',
-  Booking: 'border-l-purple-500',
-  Job: 'border-l-amber-500',
-  WhatsApp: 'border-l-green-500',
-  Finance: 'border-l-rose-500',
-  Employee: 'border-l-cyan-500',
-  Website: 'border-l-orange-500',
-  'Time-Based': 'border-l-slate-500',
-};
-
-const NODE_TYPE_BORDER: Record<NodeType, string> = {
+const CATEGORY_BORDER_COLOR: Record<string, string> = {
   trigger: 'border-l-blue-500',
-  action: 'border-l-emerald-500',
   condition: 'border-l-orange-500',
-  delay: 'border-l-gray-400',
+  action: 'border-l-emerald-500',
+  flowControl: 'border-l-purple-500',
+  ai: 'border-l-pink-500',
+  utility: 'border-l-gray-500',
+  template: 'border-l-yellow-500',
 };
 
-const NODE_TYPE_BG: Record<NodeType, string> = {
-  trigger: 'bg-white',
-  action: 'bg-white',
-  condition: 'bg-white',
-  delay: 'bg-white',
-};
-
-const CATEGORY_DOT: Record<string, string> = {
-  CRM: 'bg-blue-500',
-  Booking: 'bg-purple-500',
-  Job: 'bg-amber-500',
-  WhatsApp: 'bg-green-500',
-  Finance: 'bg-rose-500',
-  Employee: 'bg-cyan-500',
-  Website: 'bg-orange-500',
-  'Time-Based': 'bg-slate-500',
+const CATEGORY_ICON_BG: Record<string, string> = {
+  trigger: 'bg-blue-500/15 text-blue-600',
+  condition: 'bg-orange-500/15 text-orange-600',
+  action: 'bg-emerald-500/15 text-emerald-600',
+  flowControl: 'bg-purple-500/15 text-purple-600',
+  ai: 'bg-pink-500/15 text-pink-600',
+  utility: 'bg-gray-500/15 text-gray-600',
+  template: 'bg-yellow-500/15 text-yellow-600',
 };
 
 // ─── Helper: generate unique id ────────────────────────────────────────
@@ -116,31 +107,13 @@ function uid() {
   return `n_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// ─── Helper: icon name → lucide component ──────────────────────────────
+// ─── Helper: stable icon component to avoid creating components during render ──
 
-import {
-  UserPlus, Clock3 as ClockIcon, ArrowRightLeft as AltIcon, CheckCircle,
-  Edit3, Users, CalendarCheck, CalendarX, CalendarClock, CalendarPlus,
-  AlertCircle, CircleCheck, UserCheck, XCircle, Briefcase, AlertTriangle,
-  MessageCircle, MessageSquarePlus, MailCheck, Banknote, CreditCard,
-  Receipt, FileCheck2, WifiOff, Globe, MousePointerClick as ClickIcon,
-  TimerReset, Tag, PlusCircle, Bell, Save as SaveIcon, Bot, Timer,
-  Mail,
-} from 'lucide-react';
-
-const ICON_MAP: Record<string, React.ElementType> = {
-  UserPlus, Clock3: ClockIcon, ArrowRightLeft: AltIcon, CheckCircle,
-  Edit3, Users, CalendarCheck, CalendarX, CalendarClock, CalendarPlus,
-  AlertCircle, CircleCheck, UserCheck, XCircle, Briefcase, AlertTriangle,
-  MessageCircle, MessageSquarePlus, MailCheck, Banknote, CreditCard,
-  Receipt, FileCheck2, WifiOff, Globe, MousePointerClick: ClickIcon,
-  TimerReset, Tag, PlusCircle, Bell, Save: SaveIcon, Bot, Timer, Mail,
-  Zap, Workflow,
-};
-
-function getIcon(name?: string): React.ElementType | null {
-  if (!name) return null;
-  return ICON_MAP[name] || null;
+function DynamicIcon({ name, className }: { name?: string; className?: string }) {
+  if (!name) return <Zap className={className} />;
+  const Icon = (LucideIcons as unknown as Record<string, React.ElementType>)[name];
+  if (!Icon) return <Zap className={className} />;
+  return <Icon className={className} />;
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────
@@ -159,7 +132,7 @@ export function WorkflowEditor() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [workflowName, setWorkflowName] = useState('Untitled Workflow');
   const [sidebarSearch, setSidebarSearch] = useState('');
-  const [sidebarCategory, setSidebarCategory] = useState('all');
+  const [sidebarCategory, setSidebarCategory] = useState<string>('all');
   const [connectingFrom, setConnectingFrom] = useState<string | null>(null);
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -169,6 +142,9 @@ export function WorkflowEditor() {
   const [canvasOffset, setCanvasOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
+    new Set(['trigger', 'condition', 'action', 'flowControl']),
+  );
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const [showAddMenu, setShowAddMenu] = useState<string | null>(null);
@@ -179,22 +155,49 @@ export function WorkflowEditor() {
     [nodes, selectedNodeId]
   );
 
-  const filteredTriggers = useMemo(() => {
-    let list = PREBUILT_TRIGGERS;
+  const toggleCategory = useCallback((categoryId: string) => {
+    setExpandedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(categoryId)) {
+        next.delete(categoryId);
+      } else {
+        next.add(categoryId);
+      }
+      return next;
+    });
+  }, []);
+
+  // Filtered nodes for sidebar — uses node-registry
+  const filteredNodes = useMemo(() => {
+    let list: NodeTypeDefinition[] = nodeRegistry;
     if (sidebarCategory !== 'all') {
-      list = list.filter((t) => t.category === sidebarCategory);
+      list = list.filter((n) => n.category === sidebarCategory);
     }
     if (sidebarSearch.trim()) {
       const q = sidebarSearch.toLowerCase();
       list = list.filter(
-        (t) =>
-          t.name.toLowerCase().includes(q) ||
-          t.description.toLowerCase().includes(q) ||
-          t.category.toLowerCase().includes(q)
+        (n) =>
+          n.displayName.toLowerCase().includes(q) ||
+          n.description.toLowerCase().includes(q) ||
+          n.type.toLowerCase().includes(q)
       );
     }
     return list;
   }, [sidebarCategory, sidebarSearch]);
+
+  // Group filtered nodes by category for sidebar display
+  const filteredGroupedByCategory = useMemo(() => {
+    const groups: Record<string, NodeTypeDefinition[]> = {};
+    for (const cat of NODE_CATEGORIES) {
+      const catNodes = filteredNodes.filter((n) => n.category === cat.id);
+      if (catNodes.length > 0) {
+        groups[cat.id] = catNodes;
+      }
+    }
+    return groups;
+  }, [filteredNodes]);
+
+  const totalFilteredCount = filteredNodes.length;
 
   // ─── Auto-position helper ──────────────────────────────────────────
   const getNextPosition = useCallback(
@@ -216,7 +219,6 @@ export function WorkflowEditor() {
         return { x: 300, y: 60 };
       }
       const maxY = Math.max(...nodes.map((n) => n.position.y));
-      const bottomNodes = nodes.filter((n) => n.position.y === maxY);
       return {
         x: 300,
         y: maxY + NODE_HEIGHT + VERTICAL_GAP,
@@ -225,65 +227,80 @@ export function WorkflowEditor() {
     [nodes, edges]
   );
 
-  // ─── Add trigger node from sidebar ─────────────────────────────────
-  const addTriggerNode = useCallback(
-    (triggerId: string, dropX?: number, dropY?: number) => {
-      const trigger = PREBUILT_TRIGGERS.find((t) => t.id === triggerId);
-      if (!trigger) return;
+  // ─── Add node from registry ────────────────────────────────────────
+  const addNodeFromRegistry = useCallback(
+    (nodeType: string, dropX?: number, dropY?: number) => {
+      const nodeDef = getNodeTypeDefinition(nodeType);
+      if (!nodeDef) return;
 
       const pos = dropX !== undefined && dropY !== undefined
         ? { x: dropX, y: dropY }
         : getNextPosition();
 
+      const mapCategoryToType = (cat: string): NodeType => {
+        switch (cat) {
+          case 'trigger': return 'trigger';
+          case 'condition': return 'condition';
+          case 'flowControl': return 'flowControl';
+          case 'ai': return 'ai';
+          case 'utility': return 'utility';
+          default: return 'action';
+        }
+      };
+
       const newNode: CanvasNode = {
         id: uid(),
-        type: 'trigger',
-        name: trigger.name,
-        description: trigger.description,
+        type: mapCategoryToType(nodeDef.category),
+        name: nodeDef.displayName,
+        description: nodeDef.description,
         position: pos,
-        config: JSON.parse(trigger.triggerConfigJson || '{}'),
-        category: trigger.category,
-        categoryColor: trigger.categoryColor,
-        icon: trigger.icon.displayName || trigger.icon.name,
-        triggerType: trigger.triggerType,
-        eventLabel: trigger.eventLabel,
+        config: {},
+        category: nodeDef.category,
+        icon: nodeDef.icon,
+        nodeType: nodeDef.type,
+        event: nodeDef.event,
       };
 
       setNodes((prev) => [...prev, newNode]);
       setSelectedNodeId(newNode.id);
-      toast.success(`Added trigger: ${trigger.name}`);
+      toast.success(`Added: ${nodeDef.displayName}`);
     },
     [getNextPosition]
   );
 
-  // ─── Add action/condition/delay node ───────────────────────────────
+  // ─── Add connected node (the "+" button popover) ───────────────────
   const addConnectedNode = useCallback(
-    (parentId: string, actionValue: string) => {
+    (parentId: string, nodeType: string) => {
       const parent = nodes.find((n) => n.id === parentId);
       if (!parent) return;
 
-      const actionDef = ACTION_TYPES.find((a) => a.value === actionValue);
-      if (!actionDef) return;
+      const nodeDef = getNodeTypeDefinition(nodeType);
+      if (!nodeDef) return;
 
-      const isCondition = actionValue === 'condition';
-      const isDelay = actionValue === 'delay';
+      const mapCategoryToType = (cat: string): NodeType => {
+        switch (cat) {
+          case 'trigger': return 'trigger';
+          case 'condition': return 'condition';
+          case 'flowControl': return 'flowControl';
+          case 'ai': return 'ai';
+          case 'utility': return 'utility';
+          default: return 'action';
+        }
+      };
 
       const pos = getNextPosition(parentId);
 
       const newNode: CanvasNode = {
         id: uid(),
-        type: isCondition ? 'condition' : isDelay ? 'delay' : 'action',
-        name: actionDef.label,
-        description: isCondition
-          ? 'Branch based on a condition'
-          : isDelay
-          ? 'Wait for a specified duration'
-          : `Action: ${actionDef.label}`,
+        type: mapCategoryToType(nodeDef.category),
+        name: nodeDef.displayName,
+        description: nodeDef.description,
         position: pos,
-        config: isDelay ? { delayMinutes: 5 } : isCondition ? { field: '', operator: 'equals', value: '' } : {},
-        category: parent.category,
-        icon: actionDef.icon.displayName || actionDef.icon.name,
-        actionType: actionValue,
+        config: {},
+        category: nodeDef.category,
+        icon: nodeDef.icon,
+        nodeType: nodeDef.type,
+        event: nodeDef.event,
       };
 
       const newEdge: CanvasEdge = {
@@ -296,7 +313,7 @@ export function WorkflowEditor() {
       setEdges((prev) => [...prev, newEdge]);
       setSelectedNodeId(newNode.id);
       setShowAddMenu(null);
-      toast.success(`Added: ${actionDef.label}`);
+      toast.success(`Added: ${nodeDef.displayName}`);
     },
     [nodes, getNextPosition]
   );
@@ -333,10 +350,10 @@ export function WorkflowEditor() {
   );
 
   // ─── Drag & Drop: sidebar → canvas ─────────────────────────────────
-  const handleDragStart = useCallback(
-    (e: React.DragEvent, triggerId: string) => {
-      e.dataTransfer.setData('triggerId', triggerId);
-      e.dataTransfer.effectAllowed = 'copy';
+  const handleSidebarDragStart = useCallback(
+    (e: React.DragEvent, nodeType: string) => {
+      e.dataTransfer.setData('application/reactflow', nodeType);
+      e.dataTransfer.effectAllowed = 'move';
     },
     []
   );
@@ -344,8 +361,8 @@ export function WorkflowEditor() {
   const handleCanvasDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
-      const triggerId = e.dataTransfer.getData('triggerId');
-      if (!triggerId) return;
+      const nodeType = e.dataTransfer.getData('application/reactflow');
+      if (!nodeType) return;
 
       // Calculate position relative to canvas
       if (!canvasRef.current) return;
@@ -353,14 +370,14 @@ export function WorkflowEditor() {
       const x = (e.clientX - rect.left - canvasOffset.x) / zoom;
       const y = (e.clientY - rect.top - canvasOffset.y) / zoom;
 
-      addTriggerNode(triggerId, Math.max(20, x - NODE_WIDTH / 2), Math.max(20, y - NODE_HEIGHT / 2));
+      addNodeFromRegistry(nodeType, Math.max(20, x - NODE_WIDTH / 2), Math.max(20, y - NODE_HEIGHT / 2));
     },
-    [addTriggerNode, canvasOffset, zoom]
+    [addNodeFromRegistry, canvasOffset, zoom]
   );
 
   const handleCanvasDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
+    e.dataTransfer.dropEffect = 'move';
   }, []);
 
   // ─── Canvas click (deselect) ───────────────────────────────────────
@@ -474,7 +491,7 @@ export function WorkflowEditor() {
   // ─── Canvas panning ────────────────────────────────────────────────
   const handleCanvasMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      // Middle button or holding space not needed — use right-click or shift+left for panning
+      // Middle button or holding shift+left for panning
       if (e.button === 1 || (e.button === 0 && e.shiftKey)) {
         e.preventDefault();
         setIsPanning(true);
@@ -517,7 +534,7 @@ export function WorkflowEditor() {
   // ─── Save workflow ─────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
     if (nodes.length === 0) {
-      toast.error('Add at least one trigger to save');
+      toast.error('Add at least one node to save');
       return;
     }
     setSaving(true);
@@ -530,10 +547,10 @@ export function WorkflowEditor() {
           name: n.name,
           position: n.position,
           data: {
-            nodeType: n.type === 'trigger' ? 'Trigger' : n.type === 'condition' ? 'ifElse' : n.type === 'delay' ? 'wait' : 'Action',
+            nodeType: n.nodeType || n.type,
             config: n.config,
-            ...(n.triggerType ? { triggerType: n.triggerType } : {}),
-            ...(n.actionType ? { actionType: n.actionType } : {}),
+            category: n.category,
+            ...(n.event ? { event: n.event } : {}),
           },
         })),
         edges: edges.map((e) => ({
@@ -566,7 +583,7 @@ export function WorkflowEditor() {
   // ─── Test workflow ─────────────────────────────────────────────────
   const handleTest = useCallback(async () => {
     if (nodes.length === 0) {
-      toast.error('Add at least one trigger to test');
+      toast.error('Add at least one node to test');
       return;
     }
     setTesting(true);
@@ -596,6 +613,15 @@ export function WorkflowEditor() {
     return `M ${sx} ${sy} C ${sx} ${midY}, ${tx} ${midY}, ${tx} ${ty}`;
   };
 
+  // ─── Nodes for the "+" popover (actions, conditions, flow control) ──
+  const addMenuNodes = useMemo(() => ({
+    actions: actionNodes,
+    conditions: conditionNodes,
+    flowControl: flowControlNodes,
+    ai: aiNodes,
+    utilities: utilityNodes,
+  }), []);
+
   // ─── Render ─────────────────────────────────────────────────────────
   return (
     <div className="flex h-full w-full overflow-hidden bg-gray-50 dark:bg-gray-950">
@@ -605,10 +631,10 @@ export function WorkflowEditor() {
         <div className="flex items-center gap-2 border-b border-gray-200 px-4 py-3 dark:border-gray-800">
           <Zap className="h-4 w-4 text-emerald-500" />
           <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-            Trigger Library
+            Node Library
           </h2>
           <Badge variant="secondary" className="ml-auto text-[10px]">
-            {filteredTriggers.length}
+            {totalFilteredCount}
           </Badge>
         </div>
 
@@ -617,7 +643,7 @@ export function WorkflowEditor() {
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-gray-400" />
             <Input
-              placeholder="Search triggers..."
+              placeholder="Search nodes..."
               value={sidebarSearch}
               onChange={(e) => setSidebarSearch(e.target.value)}
               className="h-8 pl-8 text-xs"
@@ -627,77 +653,127 @@ export function WorkflowEditor() {
 
         {/* Category pills */}
         <div className="flex flex-wrap gap-1 px-3 pt-2 pb-1">
-          {TRIGGER_CATEGORIES.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setSidebarCategory(cat.id)}
-              className={cn(
-                'rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors',
-                sidebarCategory === cat.id
-                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700'
-              )}
-            >
-              {cat.label}
-            </button>
-          ))}
+          <button
+            onClick={() => setSidebarCategory('all')}
+            className={cn(
+              'rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors',
+              sidebarCategory === 'all'
+                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700'
+            )}
+          >
+            All
+          </button>
+          {NODE_CATEGORIES.filter((c) => c.id !== 'template').map((cat) => {
+            const CatIcon = (LucideIcons as unknown as Record<string, React.ElementType>)[cat.icon] || LucideIcons.Circle;
+            const count = getNodesByCategory(cat.id).length;
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setSidebarCategory(cat.id)}
+                className={cn(
+                  'rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors flex items-center gap-0.5',
+                  sidebarCategory === cat.id
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700'
+                )}
+              >
+                <CatIcon className="h-2.5 w-2.5" />
+                {cat.label}
+                <span className="text-[9px] opacity-60">({count})</span>
+              </button>
+            );
+          })}
         </div>
 
         <Separator className="my-1" />
 
-        {/* Trigger list */}
+        {/* Node list — grouped by category */}
         <ScrollArea className="flex-1">
-          <div className="space-y-1 p-3">
-            {filteredTriggers.length === 0 && (
+          <div className="p-2">
+            {Object.keys(filteredGroupedByCategory).length === 0 && (
               <p className="py-8 text-center text-xs text-gray-400">
-                No triggers found
+                No nodes found
               </p>
             )}
-            {filteredTriggers.map((trigger) => {
-              const Icon = trigger.icon;
-              return (
-                <div
-                  key={trigger.id}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, trigger.id)}
-                  className={cn(
-                    'group flex cursor-grab items-start gap-2.5 rounded-lg border border-gray-150 bg-white p-2.5 transition-all hover:border-emerald-300 hover:shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:hover:border-emerald-700',
-                    'active:cursor-grabbing'
-                  )}
-                >
-                  <div
-                    className={cn(
-                      'flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
-                      trigger.categoryColor
-                    )}
-                  >
-                    <Icon className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-medium text-gray-900 dark:text-gray-100">
-                      {trigger.name}
-                    </p>
-                    <div className="mt-0.5 flex items-center gap-1">
-                      <span
-                        className={cn(
-                          'inline-block h-1.5 w-1.5 rounded-full',
-                          CATEGORY_DOT[trigger.category] || 'bg-gray-400'
+            {sidebarCategory !== 'all'
+              ? // Single category — show flat list
+                filteredGroupedByCategory[sidebarCategory]?.map((nodeDef) => (
+                  <SidebarNodeCard
+                    key={nodeDef.type}
+                    nodeDef={nodeDef}
+                    onDragStart={handleSidebarDragStart}
+                    onDoubleClick={() => addNodeFromRegistry(nodeDef.type)}
+                  />
+                ))
+              : // All categories — show grouped with expandable sections
+                NODE_CATEGORIES.filter((c) => c.id !== 'template').map((category) => {
+                  const catNodes = filteredGroupedByCategory[category.id];
+                  if (!catNodes) return null;
+                  const isExpanded = expandedCategories.has(category.id);
+                  const CatIcon = (LucideIcons as unknown as Record<string, React.ElementType>)[category.icon] || LucideIcons.Circle;
+                  return (
+                    <div key={category.id} className="mb-1">
+                      <button
+                        onClick={() => toggleCategory(category.id)}
+                        className="flex items-center gap-1.5 w-full px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:bg-muted/50 rounded"
+                      >
+                        {isExpanded ? (
+                          <ChevronDown className="h-3 w-3" />
+                        ) : (
+                          <ChevronRight className="h-3 w-3" />
                         )}
-                      />
-                      <span className="text-[10px] text-gray-500">
-                        {trigger.category}
-                      </span>
-                      {trigger.popular && (
-                        <Badge className="ml-1 h-3.5 px-1 text-[8px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-0">
-                          Popular
-                        </Badge>
-                      )}
+                        <CatIcon className="h-3 w-3" />
+                        {category.label}
+                        <span className="text-[9px] font-normal ml-auto opacity-50">{catNodes.length}</span>
+                      </button>
+                      {isExpanded &&
+                        catNodes.map((nodeDef) => (
+                          <SidebarNodeCard
+                            key={nodeDef.type}
+                            nodeDef={nodeDef}
+                            onDragStart={handleSidebarDragStart}
+                            onDoubleClick={() => addNodeFromRegistry(nodeDef.type)}
+                          />
+                        ))}
                     </div>
-                  </div>
-                  <GripVertical className="mt-1 h-3.5 w-3.5 text-gray-300 opacity-0 transition-opacity group-hover:opacity-100" />
+                  );
+                })
+            }
+
+            {/* Workflow Templates section */}
+            {sidebarCategory === 'all' && (
+              <>
+                <div className="my-2">
+                  <button
+                    onClick={() => toggleCategory('template')}
+                    className="flex items-center gap-1.5 w-full px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider hover:bg-muted/50 rounded"
+                  >
+                    {expandedCategories.has('template') ? (
+                      <ChevronDown className="h-3 w-3" />
+                    ) : (
+                      <ChevronRight className="h-3 w-3" />
+                    )}
+                    <LucideIcons.Sparkles className="h-3 w-3" />
+                    Templates
+                    <span className="text-[9px] font-normal ml-auto opacity-50">{workflowTemplates.length}</span>
+                  </button>
+                  {expandedCategories.has('template') &&
+                    workflowTemplates.map((tpl) => (
+                      <div
+                        key={tpl.id}
+                        className="flex items-center gap-2 px-2 py-1.5 mx-1 rounded-md hover:bg-muted/50 cursor-pointer transition-colors"
+                        onClick={() => toast.info(`Template: ${tpl.name} — coming soon`)}
+                      >
+                        <div className="flex items-center justify-center size-6 rounded bg-yellow-500/15 shrink-0">
+                          <LucideIcons.Sparkles className="size-3 text-yellow-600" />
+                        </div>
+                        <span className="text-xs text-foreground truncate">{tpl.name}</span>
+                      </div>
+                    ))}
                 </div>
-              );
-            })}
+              </>
+            )}
           </div>
         </ScrollArea>
       </div>
@@ -903,13 +979,12 @@ export function WorkflowEditor() {
 
             {/* Nodes layer */}
             {nodes.map((node) => {
-              const IconComp = getIcon(node.icon);
-              const borderClass =
-                node.type === 'trigger'
-                  ? CATEGORY_BORDER[node.category || ''] || 'border-l-blue-500'
-                  : NODE_TYPE_BORDER[node.type];
+              const borderClass = CATEGORY_BORDER_COLOR[node.category] || 'border-l-gray-400';
+              const iconBgClass = CATEGORY_ICON_BG[node.category] || 'bg-gray-500/15 text-gray-600';
 
               const hasOutgoingEdge = edges.some((e) => e.source === node.id);
+              // Only show input connector for non-trigger nodes
+              const hasIncomingEdge = edges.some((e) => e.target === node.id);
 
               return (
                 <div
@@ -946,16 +1021,10 @@ export function WorkflowEditor() {
                       <div
                         className={cn(
                           'flex h-9 w-9 shrink-0 items-center justify-center rounded-md',
-                          node.type === 'trigger'
-                            ? node.categoryColor || 'bg-blue-500/15 text-blue-600'
-                            : node.type === 'action'
-                            ? 'bg-emerald-500/15 text-emerald-600'
-                            : node.type === 'condition'
-                            ? 'bg-orange-500/15 text-orange-600'
-                            : 'bg-gray-500/15 text-gray-600'
+                          iconBgClass
                         )}
                       >
-                        {IconComp ? <IconComp className="h-4 w-4" /> : <Zap className="h-4 w-4" />}
+                        <DynamicIcon name={node.icon} className="h-4 w-4" />
                       </div>
 
                       {/* Content */}
@@ -964,57 +1033,51 @@ export function WorkflowEditor() {
                           {node.name}
                         </p>
                         <div className="mt-0.5 flex items-center gap-1.5">
-                          {node.type === 'trigger' && node.eventLabel && (
-                            <span className="text-[10px] text-gray-500">
-                              {node.eventLabel}
+                          {node.event && (
+                            <span className="text-[10px] text-gray-500 font-mono">
+                              {node.event}
                             </span>
                           )}
-                          {node.type === 'action' && node.actionType && (
+                          {!node.event && node.nodeType && node.category !== 'trigger' && (
                             <span className="text-[10px] text-gray-500">
-                              {node.actionType.replace(/_/g, ' ')}
-                            </span>
-                          )}
-                          {node.type === 'condition' && (
-                            <span className="text-[10px] text-orange-600">
-                              If/Else
-                            </span>
-                          )}
-                          {node.type === 'delay' && (
-                            <span className="text-[10px] text-gray-500">
-                              {node.config?.delayMinutes || 5} min
+                              {node.nodeType.replace(/([A-Z])/g, ' $1').trim()}
                             </span>
                           )}
                         </div>
                       </div>
                     </div>
 
-                    {/* Input connector (top) */}
-                    <button
-                      className={cn(
-                        'absolute -top-2 left-1/2 -translate-x-1/2 rounded-full border-2 border-white bg-gray-300 transition-colors dark:border-gray-900',
-                        'h-4 w-4 hover:bg-emerald-500 hover:scale-125',
-                        connectingFrom ? 'hover:bg-emerald-500' : ''
-                      )}
-                      onClick={(e) => handleInputClick(node.id, e)}
-                      title="Input connector"
-                    />
+                    {/* Input connector (top) — only for non-trigger nodes */}
+                    {node.category !== 'trigger' && (
+                      <button
+                        className={cn(
+                          'absolute -top-2 left-1/2 -translate-x-1/2 rounded-full border-2 border-white bg-gray-300 transition-colors dark:border-gray-900',
+                          'h-4 w-4 hover:bg-emerald-500 hover:scale-125',
+                          connectingFrom ? 'hover:bg-emerald-500' : ''
+                        )}
+                        onClick={(e) => handleInputClick(node.id, e)}
+                        title="Input connector"
+                      />
+                    )}
 
                     {/* Output connector (bottom) */}
-                    <button
-                      className={cn(
-                        'absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full border-2 border-white transition-colors dark:border-gray-900',
-                        'h-4 w-4',
-                        connectingFrom === node.id
-                          ? 'bg-emerald-500 scale-125'
-                          : 'bg-emerald-400 hover:bg-emerald-600 hover:scale-125'
-                      )}
-                      onClick={(e) => handleOutputClick(node.id, e)}
-                      title="Output connector — click to connect"
-                    />
+                    {!(node.category === 'flowControl' && node.nodeType === 'endWorkflow') && (
+                      <button
+                        className={cn(
+                          'absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full border-2 border-white transition-colors dark:border-gray-900',
+                          'h-4 w-4',
+                          connectingFrom === node.id
+                            ? 'bg-emerald-500 scale-125'
+                            : 'bg-emerald-400 hover:bg-emerald-600 hover:scale-125'
+                        )}
+                        onClick={(e) => handleOutputClick(node.id, e)}
+                        title="Output connector — click to connect"
+                      />
+                    )}
                   </div>
 
                   {/* Add button below node */}
-                  {!hasOutgoingEdge && (
+                  {!hasOutgoingEdge && !(node.category === 'flowControl' && node.nodeType === 'endWorkflow') && (
                     <div className="flex justify-center mt-2">
                       <Popover
                         open={showAddMenu === node.id}
@@ -1033,32 +1096,114 @@ export function WorkflowEditor() {
                           </button>
                         </PopoverTrigger>
                         <PopoverContent
-                          className="w-56 p-2"
+                          className="w-64 p-2 max-h-80 overflow-y-auto"
                           side="bottom"
                           align="center"
                           onOpenAutoFocus={(e) => e.preventDefault()}
                         >
-                          <p className="mb-1.5 px-1 text-xs font-medium text-gray-500">
+                          <p className="mb-2 px-1 text-xs font-medium text-gray-500">
                             Add next step
                           </p>
-                          <div className="space-y-0.5">
-                            {ACTION_TYPES.map((action) => {
-                              const ActionIcon = action.icon;
-                              return (
+
+                          {/* Actions group */}
+                          {addMenuNodes.actions.length > 0 && (
+                            <div className="mb-2">
+                              <p className="px-1 mb-1 text-[10px] font-semibold text-emerald-600 uppercase tracking-wider">Actions</p>
+                              {addMenuNodes.actions.map((nodeDef) => (
                                 <button
-                                  key={action.value}
+                                  key={nodeDef.type}
                                   className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    addConnectedNode(node.id, action.value);
+                                    addConnectedNode(node.id, nodeDef.type);
                                   }}
                                 >
-                                  <ActionIcon className="h-3.5 w-3.5" />
-                                  <span>{action.label}</span>
+                                  <DynamicIcon name={nodeDef.icon} className="h-3.5 w-3.5 text-emerald-500" />
+                                  <span>{nodeDef.displayName}</span>
                                 </button>
-                              );
-                            })}
-                          </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Conditions group */}
+                          {addMenuNodes.conditions.length > 0 && (
+                            <div className="mb-2">
+                              <p className="px-1 mb-1 text-[10px] font-semibold text-orange-600 uppercase tracking-wider">Conditions</p>
+                              {addMenuNodes.conditions.map((nodeDef) => (
+                                <button
+                                  key={nodeDef.type}
+                                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    addConnectedNode(node.id, nodeDef.type);
+                                  }}
+                                >
+                                  <DynamicIcon name={nodeDef.icon} className="h-3.5 w-3.5 text-orange-500" />
+                                  <span>{nodeDef.displayName}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Flow Control group */}
+                          {addMenuNodes.flowControl.length > 0 && (
+                            <div className="mb-2">
+                              <p className="px-1 mb-1 text-[10px] font-semibold text-purple-600 uppercase tracking-wider">Flow Control</p>
+                              {addMenuNodes.flowControl.map((nodeDef) => (
+                                <button
+                                  key={nodeDef.type}
+                                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    addConnectedNode(node.id, nodeDef.type);
+                                  }}
+                                >
+                                  <DynamicIcon name={nodeDef.icon} className="h-3.5 w-3.5 text-purple-500" />
+                                  <span>{nodeDef.displayName}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* AI group */}
+                          {addMenuNodes.ai.length > 0 && (
+                            <div className="mb-2">
+                              <p className="px-1 mb-1 text-[10px] font-semibold text-pink-600 uppercase tracking-wider">AI</p>
+                              {addMenuNodes.ai.map((nodeDef) => (
+                                <button
+                                  key={nodeDef.type}
+                                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    addConnectedNode(node.id, nodeDef.type);
+                                  }}
+                                >
+                                  <DynamicIcon name={nodeDef.icon} className="h-3.5 w-3.5 text-pink-500" />
+                                  <span>{nodeDef.displayName}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Utility group */}
+                          {addMenuNodes.utilities.length > 0 && (
+                            <div>
+                              <p className="px-1 mb-1 text-[10px] font-semibold text-gray-600 uppercase tracking-wider">Utilities</p>
+                              {addMenuNodes.utilities.map((nodeDef) => (
+                                <button
+                                  key={nodeDef.type}
+                                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    addConnectedNode(node.id, nodeDef.type);
+                                  }}
+                                >
+                                  <DynamicIcon name={nodeDef.icon} className="h-3.5 w-3.5 text-gray-500" />
+                                  <span>{nodeDef.displayName}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </PopoverContent>
                       </Popover>
                     </div>
@@ -1078,7 +1223,7 @@ export function WorkflowEditor() {
                     Build Your Workflow
                   </h3>
                   <p className="mt-1 text-sm text-gray-400 dark:text-gray-600 max-w-xs">
-                    Drag a trigger from the left sidebar and drop it here to get started
+                    Drag a node from the left sidebar and drop it here to get started
                   </p>
                   <div className="mt-4 flex items-center justify-center gap-2 text-xs text-gray-400">
                     <span className="rounded border border-dashed border-gray-300 px-1.5 py-0.5 dark:border-gray-600">
@@ -1124,20 +1269,15 @@ export function WorkflowEditor() {
                   <Badge
                     className={cn(
                       'text-[10px]',
-                      selectedNode.type === 'trigger'
-                        ? 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-400 dark:border-blue-800'
-                        : selectedNode.type === 'action'
-                        ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800'
-                        : selectedNode.type === 'condition'
-                        ? 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/40 dark:text-orange-400 dark:border-orange-800'
-                        : 'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700'
+                      CATEGORY_ICON_BG[selectedNode.category]?.replace(/\/15/, '-100').replace(/text-/, 'border-') ||
+                      'bg-gray-100 text-gray-700 border-gray-200'
                     )}
                   >
-                    {selectedNode.type.charAt(0).toUpperCase() + selectedNode.type.slice(1)}
+                    {selectedNode.category.charAt(0).toUpperCase() + selectedNode.category.slice(1)}
                   </Badge>
-                  {selectedNode.category && (
-                    <Badge variant="outline" className="text-[10px]">
-                      {selectedNode.category}
+                  {selectedNode.nodeType && (
+                    <Badge variant="outline" className="text-[10px] font-mono">
+                      {selectedNode.nodeType}
                     </Badge>
                   )}
                 </div>
@@ -1152,469 +1292,174 @@ export function WorkflowEditor() {
                   />
                 </div>
 
-                {/* Trigger-specific config */}
-                {selectedNode.type === 'trigger' && (
-                  <>
-                    {selectedNode.description && (
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Description</Label>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                          {selectedNode.description}
-                        </p>
-                      </div>
-                    )}
-                    {selectedNode.triggerType && (
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Event Source</Label>
-                        <div className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800">
-                          <div
-                            className={cn(
-                              'h-2 w-2 rounded-full',
-                              CATEGORY_DOT[selectedNode.category || ''] || 'bg-gray-400'
-                            )}
-                          />
-                          <span className="text-xs font-mono text-gray-700 dark:text-gray-300">
-                            {selectedNode.triggerType}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                    {selectedNode.eventLabel && (
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Event Label</Label>
-                        <Input
-                          value={selectedNode.eventLabel}
-                          readOnly
-                          className="h-8 text-xs bg-gray-50 dark:bg-gray-800"
-                        />
-                      </div>
-                    )}
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Conditions</Label>
-                      <Textarea
-                        placeholder="Add conditions in JSON format..."
-                        value={selectedNode.config?.conditions || ''}
-                        onChange={(e) =>
-                          updateNodeConfig(selectedNode.id, 'conditions', e.target.value)
-                        }
-                        className="min-h-[60px] text-xs"
-                      />
-                    </div>
-                  </>
+                {/* Description */}
+                {selectedNode.description && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Description</Label>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                      {selectedNode.description}
+                    </p>
+                  </div>
                 )}
 
-                {/* Action-specific config */}
-                {selectedNode.type === 'action' && (
-                  <>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Action Type</Label>
-                      <Select
-                        value={selectedNode.actionType || ''}
-                        onValueChange={(val) => {
-                          const actionDef = ACTION_TYPES.find((a) => a.value === val);
-                          if (actionDef) {
-                            setNodes((prev) =>
-                              prev.map((n) =>
-                                n.id === selectedNode.id
-                                  ? {
-                                      ...n,
-                                      actionType: val,
-                                      name: actionDef.label,
-                                      icon: actionDef.icon.displayName || actionDef.icon.name,
-                                    }
-                                  : n
-                              )
-                            );
-                          }
-                        }}
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {ACTION_TYPES.filter((a) => a.value !== 'condition' && a.value !== 'delay').map((action) => (
-                            <SelectItem key={action.value} value={action.value}>
-                              {action.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                {/* Event source for triggers */}
+                {selectedNode.category === 'trigger' && selectedNode.event && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Event Source</Label>
+                    <div className="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800">
+                      <div className={cn('h-2 w-2 rounded-full', getCategoryColor(selectedNode.category))} />
+                      <span className="text-xs font-mono text-gray-700 dark:text-gray-300">
+                        {selectedNode.event}
+                      </span>
                     </div>
+                  </div>
+                )}
 
-                    {/* WhatsApp-specific fields */}
-                    {(selectedNode.actionType === 'send_whatsapp') && (
-                      <>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Recipient</Label>
-                          <Select
-                            value={selectedNode.config?.recipient || 'customer'}
-                            onValueChange={(val) =>
-                              updateNodeConfig(selectedNode.id, 'recipient', val)
-                            }
-                          >
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="customer">Customer</SelectItem>
-                              <SelectItem value="employee">Employee</SelectItem>
-                              <SelectItem value="manager">Manager</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Template Message</Label>
-                          <Textarea
-                            value={selectedNode.config?.template || ''}
-                            onChange={(e) =>
-                              updateNodeConfig(selectedNode.id, 'template', e.target.value)
-                            }
-                            className="min-h-[80px] text-xs"
-                            placeholder="Enter WhatsApp message template..."
-                          />
-                        </div>
-                      </>
-                    )}
+                {/* Node properties from registry definition */}
+                {(() => {
+                  const nodeDef = selectedNode.nodeType ? getNodeTypeDefinition(selectedNode.nodeType) : null;
+                  if (!nodeDef || nodeDef.properties.length === 0) return null;
 
-                    {/* Notification-specific fields */}
-                    {(selectedNode.actionType === 'send_notification') && (
-                      <>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Title</Label>
-                          <Input
-                            value={selectedNode.config?.title || ''}
-                            onChange={(e) =>
-                              updateNodeConfig(selectedNode.id, 'title', e.target.value)
-                            }
-                            className="h-8 text-xs"
-                            placeholder="Notification title"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Message</Label>
-                          <Textarea
-                            value={selectedNode.config?.message || ''}
-                            onChange={(e) =>
-                              updateNodeConfig(selectedNode.id, 'message', e.target.value)
-                            }
-                            className="min-h-[60px] text-xs"
-                            placeholder="Notification message"
-                          />
-                        </div>
-                      </>
-                    )}
+                  return nodeDef.properties.map((prop) => (
+                    <div key={prop.name} className="space-y-1.5">
+                      <Label className="text-xs">
+                        {prop.displayName}
+                        {prop.required && <span className="text-red-500 ml-0.5">*</span>}
+                      </Label>
 
-                    {/* Create task fields */}
-                    {(selectedNode.actionType === 'create_task') && (
-                      <>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Task Title</Label>
-                          <Input
-                            value={selectedNode.config?.title || ''}
-                            onChange={(e) =>
-                              updateNodeConfig(selectedNode.id, 'title', e.target.value)
-                            }
-                            className="h-8 text-xs"
-                            placeholder="Task title"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Assign To</Label>
-                          <Select
-                            value={selectedNode.config?.assignTo || 'round_robin'}
-                            onValueChange={(val) =>
-                              updateNodeConfig(selectedNode.id, 'assignTo', val)
-                            }
-                          >
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="round_robin">Round Robin</SelectItem>
-                              <SelectItem value="manager">Manager</SelectItem>
-                              <SelectItem value="specific">Specific User</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </>
-                    )}
-
-                    {/* Create job fields */}
-                    {(selectedNode.actionType === 'create_job') && (
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Job Title</Label>
-                        <Input
-                          value={selectedNode.config?.title || ''}
-                          onChange={(e) =>
-                            updateNodeConfig(selectedNode.id, 'title', e.target.value)
-                          }
-                          className="h-8 text-xs"
-                          placeholder="Job title"
-                        />
-                      </div>
-                    )}
-
-                    {/* Assign user fields */}
-                    {(selectedNode.actionType === 'assign_user') && (
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Assign To</Label>
+                      {/* Select type */}
+                      {prop.type === 'select' && prop.options && (
                         <Select
-                          value={selectedNode.config?.assignTo || 'round_robin'}
-                          onValueChange={(val) =>
-                            updateNodeConfig(selectedNode.id, 'assignTo', val)
-                          }
+                          value={selectedNode.config?.[prop.name] ?? prop.default?.toString() ?? ''}
+                          onValueChange={(val) => updateNodeConfig(selectedNode.id, prop.name, val)}
                         >
                           <SelectTrigger className="h-8 text-xs">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="round_robin">Round Robin</SelectItem>
-                            <SelectItem value="nearest">Nearest Available</SelectItem>
-                            <SelectItem value="specific">Specific User</SelectItem>
+                            {prop.options.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.name}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
-                      </div>
-                    )}
+                      )}
 
-                    {/* Add tag fields */}
-                    {(selectedNode.actionType === 'add_tag') && (
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Tag</Label>
-                        <Input
-                          value={selectedNode.config?.tag || ''}
-                          onChange={(e) =>
-                            updateNodeConfig(selectedNode.id, 'tag', e.target.value)
-                          }
-                          className="h-8 text-xs"
-                          placeholder="Enter tag name"
-                        />
-                      </div>
-                    )}
-
-                    {/* Update record fields */}
-                    {(selectedNode.actionType === 'update_record') && (
-                      <>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Record Type</Label>
-                          <Select
-                            value={selectedNode.config?.recordType || 'lead'}
-                            onValueChange={(val) =>
-                              updateNodeConfig(selectedNode.id, 'recordType', val)
-                            }
-                          >
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="lead">Lead</SelectItem>
-                              <SelectItem value="customer">Customer</SelectItem>
-                              <SelectItem value="job">Job</SelectItem>
-                              <SelectItem value="booking">Booking</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Field</Label>
-                          <Input
-                            value={selectedNode.config?.field || ''}
-                            onChange={(e) =>
-                              updateNodeConfig(selectedNode.id, 'field', e.target.value)
-                            }
-                            className="h-8 text-xs"
-                            placeholder="Field name"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Value</Label>
-                          <Input
-                            value={selectedNode.config?.value || ''}
-                            onChange={(e) =>
-                              updateNodeConfig(selectedNode.id, 'value', e.target.value)
-                            }
-                            className="h-8 text-xs"
-                            placeholder="New value"
-                          />
-                        </div>
-                      </>
-                    )}
-
-                    {/* Move pipeline fields */}
-                    {(selectedNode.actionType === 'move_pipeline') && (
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Stage</Label>
-                        <Select
-                          value={selectedNode.config?.stage || 'contacted'}
-                          onValueChange={(val) =>
-                            updateNodeConfig(selectedNode.id, 'stage', val)
-                          }
-                        >
-                          <SelectTrigger className="h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="new">New</SelectItem>
-                            <SelectItem value="contacted">Contacted</SelectItem>
-                            <SelectItem value="qualified">Qualified</SelectItem>
-                            <SelectItem value="proposal">Proposal</SelectItem>
-                            <SelectItem value="won">Won</SelectItem>
-                            <SelectItem value="lost">Lost</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
-
-                    {/* Send email fields */}
-                    {(selectedNode.actionType === 'send_email') && (
-                      <>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">To</Label>
-                          <Input
-                            value={selectedNode.config?.to || ''}
-                            onChange={(e) =>
-                              updateNodeConfig(selectedNode.id, 'to', e.target.value)
-                            }
-                            className="h-8 text-xs"
-                            placeholder="Recipient email"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Subject</Label>
-                          <Input
-                            value={selectedNode.config?.subject || ''}
-                            onChange={(e) =>
-                              updateNodeConfig(selectedNode.id, 'subject', e.target.value)
-                            }
-                            className="h-8 text-xs"
-                            placeholder="Email subject"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Body</Label>
-                          <Textarea
-                            value={selectedNode.config?.body || ''}
-                            onChange={(e) =>
-                              updateNodeConfig(selectedNode.id, 'body', e.target.value)
-                            }
-                            className="min-h-[80px] text-xs"
-                            placeholder="Email body"
-                          />
-                        </div>
-                      </>
-                    )}
-                  </>
-                )}
-
-                {/* Condition-specific config */}
-                {selectedNode.type === 'condition' && (
-                  <>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Field</Label>
-                      <Input
-                        value={selectedNode.config?.field || ''}
-                        onChange={(e) =>
-                          updateNodeConfig(selectedNode.id, 'field', e.target.value)
-                        }
-                        className="h-8 text-xs"
-                        placeholder="e.g. status, amount, priority"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Operator</Label>
-                      <Select
-                        value={selectedNode.config?.operator || 'equals'}
-                        onValueChange={(val) =>
-                          updateNodeConfig(selectedNode.id, 'operator', val)
-                        }
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="equals">Equals</SelectItem>
-                          <SelectItem value="not_equals">Not Equals</SelectItem>
-                          <SelectItem value="contains">Contains</SelectItem>
-                          <SelectItem value="greater_than">Greater Than</SelectItem>
-                          <SelectItem value="less_than">Less Than</SelectItem>
-                          <SelectItem value="is_empty">Is Empty</SelectItem>
-                          <SelectItem value="is_not_empty">Is Not Empty</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Value</Label>
-                      <Input
-                        value={selectedNode.config?.value || ''}
-                        onChange={(e) =>
-                          updateNodeConfig(selectedNode.id, 'value', e.target.value)
-                        }
-                        className="h-8 text-xs"
-                        placeholder="Condition value"
-                      />
-                    </div>
-                    <div className="rounded-md border border-orange-200 bg-orange-50 p-3 dark:border-orange-800 dark:bg-orange-900/20">
-                      <p className="text-[10px] text-orange-700 dark:text-orange-400">
-                        <strong>If/Else:</strong> When the condition is met, the flow continues.
-                        Add separate paths for &quot;Yes&quot; and &quot;No&quot; branches by
-                        connecting actions below.
-                      </p>
-                    </div>
-                  </>
-                )}
-
-                {/* Delay-specific config */}
-                {selectedNode.type === 'delay' && (
-                  <>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs">Delay Duration</Label>
-                      <div className="flex items-center gap-2">
+                      {/* Number type */}
+                      {prop.type === 'number' && (
                         <Input
                           type="number"
-                          value={selectedNode.config?.delayMinutes || 5}
+                          value={selectedNode.config?.[prop.name] ?? prop.default ?? ''}
                           onChange={(e) =>
-                            updateNodeConfig(
-                              selectedNode.id,
-                              'delayMinutes',
-                              parseInt(e.target.value) || 0
-                            )
+                            updateNodeConfig(selectedNode.id, prop.name, parseFloat(e.target.value) || 0)
                           }
-                          className="h-8 w-20 text-xs"
-                          min={0}
+                          className="h-8 text-xs"
+                          placeholder={prop.placeholder}
                         />
-                        <Select
+                      )}
+
+                      {/* Text / String type */}
+                      {(prop.type === 'string' || prop.type === 'text' || prop.type === 'expression') && (
+                        prop.type === 'text' ? (
+                          <Textarea
+                            value={selectedNode.config?.[prop.name] ?? prop.default ?? ''}
+                            onChange={(e) => updateNodeConfig(selectedNode.id, prop.name, e.target.value)}
+                            className="min-h-[80px] text-xs"
+                            placeholder={prop.placeholder}
+                          />
+                        ) : (
+                          <Input
+                            value={selectedNode.config?.[prop.name] ?? prop.default ?? ''}
+                            onChange={(e) => updateNodeConfig(selectedNode.id, prop.name, e.target.value)}
+                            className="h-8 text-xs"
+                            placeholder={prop.placeholder}
+                          />
+                        )
+                      )}
+
+                      {/* JSON / Code type */}
+                      {(prop.type === 'json' || prop.type === 'code') && (
+                        <Textarea
                           value={
-                            selectedNode.config?.delayMinutes >= 1440
-                              ? 'days'
-                              : selectedNode.config?.delayMinutes >= 60
-                              ? 'hours'
-                              : 'minutes'
+                            typeof selectedNode.config?.[prop.name] === 'object'
+                              ? JSON.stringify(selectedNode.config[prop.name], null, 2)
+                              : selectedNode.config?.[prop.name] ?? (prop.default ? JSON.stringify(prop.default, null, 2) : '')
                           }
-                          onValueChange={(unit) => {
-                            const current = selectedNode.config?.delayMinutes || 5;
-                            let newVal = current;
-                            if (unit === 'minutes') newVal = Math.max(1, Math.round(current));
-                            if (unit === 'hours') newVal = Math.max(1, Math.round(current / 60)) * 60;
-                            if (unit === 'days') newVal = Math.max(1, Math.round(current / 1440)) * 1440;
-                            updateNodeConfig(selectedNode.id, 'delayMinutes', newVal);
+                          onChange={(e) => {
+                            try {
+                              const parsed = JSON.parse(e.target.value);
+                              updateNodeConfig(selectedNode.id, prop.name, parsed);
+                            } catch {
+                              updateNodeConfig(selectedNode.id, prop.name, e.target.value);
+                            }
                           }}
+                          className="min-h-[80px] text-xs font-mono"
+                          placeholder={prop.placeholder}
+                        />
+                      )}
+
+                      {/* Boolean type */}
+                      {prop.type === 'boolean' && (
+                        <Select
+                          value={(selectedNode.config?.[prop.name] ?? prop.default ?? false).toString()}
+                          onValueChange={(val) => updateNodeConfig(selectedNode.id, prop.name, val === 'true')}
                         >
-                          <SelectTrigger className="h-8 w-24 text-xs">
+                          <SelectTrigger className="h-8 text-xs">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="minutes">Minutes</SelectItem>
-                            <SelectItem value="hours">Hours</SelectItem>
-                            <SelectItem value="days">Days</SelectItem>
+                            <SelectItem value="true">Yes</SelectItem>
+                            <SelectItem value="false">No</SelectItem>
                           </SelectContent>
                         </Select>
-                      </div>
+                      )}
+
+                      {/* Property description */}
+                      {prop.description && (
+                        <p className="text-[10px] text-gray-400">{prop.description}</p>
+                      )}
                     </div>
-                    <div className="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-800">
-                      <p className="text-[10px] text-gray-600 dark:text-gray-400">
-                        The workflow will pause for the specified duration before continuing
-                        to the next step.
-                      </p>
-                    </div>
-                  </>
+                  ));
+                })()}
+
+                {/* Conditions textarea for triggers without specific properties */}
+                {selectedNode.category === 'trigger' && (() => {
+                  const nodeDef = selectedNode.nodeType ? getNodeTypeDefinition(selectedNode.nodeType) : null;
+                  return !nodeDef || nodeDef.properties.length === 0;
+                })() && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Conditions</Label>
+                    <Textarea
+                      placeholder="Add conditions in JSON format..."
+                      value={selectedNode.config?.conditions || ''}
+                      onChange={(e) =>
+                        updateNodeConfig(selectedNode.id, 'conditions', e.target.value)
+                      }
+                      className="min-h-[60px] text-xs"
+                    />
+                  </div>
+                )}
+
+                {/* Info box for conditions */}
+                {selectedNode.category === 'condition' && (
+                  <div className="rounded-md border border-orange-200 bg-orange-50 p-3 dark:border-orange-800 dark:bg-orange-900/20">
+                    <p className="text-[10px] text-orange-700 dark:text-orange-400">
+                      <strong>Condition:</strong> When the condition is met, the flow continues.
+                      Add separate paths for &quot;Yes&quot; and &quot;No&quot; branches by
+                      connecting actions below.
+                    </p>
+                  </div>
+                )}
+
+                {/* Info box for delay/flow control */}
+                {selectedNode.category === 'flowControl' && selectedNode.nodeType === 'delay' && (
+                  <div className="rounded-md border border-purple-200 bg-purple-50 p-3 dark:border-purple-800 dark:bg-purple-900/20">
+                    <p className="text-[10px] text-purple-700 dark:text-purple-400">
+                      The workflow will pause for the specified duration before continuing
+                      to the next step.
+                    </p>
+                  </div>
                 )}
 
                 <Separator />
@@ -1676,6 +1521,62 @@ export function WorkflowEditor() {
           animation: dashmove 1s linear infinite;
         }
       `}</style>
+    </div>
+  );
+}
+
+// ─── Sidebar Node Card ────────────────────────────────────────────────────
+
+function SidebarNodeCard({
+  nodeDef,
+  onDragStart,
+  onDoubleClick,
+}: {
+  nodeDef: NodeTypeDefinition;
+  onDragStart: (event: React.DragEvent, nodeType: string) => void;
+  onDoubleClick: () => void;
+}) {
+  return (
+    <div
+      draggable
+      onDragStart={(e) => onDragStart(e, nodeDef.type)}
+      onDoubleClick={onDoubleClick}
+      className={cn(
+        'group flex cursor-grab items-start gap-2.5 rounded-lg border border-gray-150 bg-white p-2.5 transition-all hover:border-emerald-300 hover:shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:hover:border-emerald-700',
+        'active:cursor-grabbing'
+      )}
+      title={nodeDef.description}
+    >
+      <div
+        className={cn(
+          'flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
+          CATEGORY_ICON_BG[nodeDef.category] || 'bg-gray-500/15 text-gray-600'
+        )}
+      >
+        <DynamicIcon name={nodeDef.icon} className="h-4 w-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-xs font-medium text-gray-900 dark:text-gray-100">
+          {nodeDef.displayName}
+        </p>
+        <div className="mt-0.5 flex items-center gap-1">
+          <span
+            className={cn(
+              'inline-block h-1.5 w-1.5 rounded-full',
+              getCategoryColor(nodeDef.category)
+            )}
+          />
+          <span className="text-[10px] text-gray-500">
+            {nodeDef.category}
+          </span>
+          {nodeDef.event && (
+            <span className="text-[9px] text-gray-400 font-mono ml-1">
+              {nodeDef.event}
+            </span>
+          )}
+        </div>
+      </div>
+      <GripVertical className="mt-1 h-3.5 w-3.5 text-gray-300 opacity-0 transition-opacity group-hover:opacity-100" />
     </div>
   );
 }

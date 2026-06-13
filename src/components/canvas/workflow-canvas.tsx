@@ -573,6 +573,7 @@ export function WorkflowCanvasInner() {
                 'bg-red-500': '#ef4444',
                 'bg-red-600': '#dc2626',
                 'bg-red-400': '#f87171',
+                'bg-rose-500': '#f43f5e',
                 'bg-teal-500': '#14b8a6',
                 'bg-teal-400': '#2dd4bf',
                 'bg-yellow-500': '#eab308',
@@ -589,6 +590,7 @@ export function WorkflowCanvasInner() {
                 'bg-slate-500': '#64748b',
                 'bg-neutral-700': '#404040',
                 'bg-amber-600': '#d97706',
+                'bg-gray-500': '#6b7280',
               };
               return colorMap[def.color] || '#94a3b8';
             }

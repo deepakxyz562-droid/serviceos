@@ -83,6 +83,50 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// PUT: Toggle a single feature flag
+export async function PUT(request: NextRequest) {
+  try {
+    const auth = await getAuthUser();
+    if (!auth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (auth.role !== 'superadmin') {
+      return NextResponse.json({ error: 'Forbidden - SuperAdmin access required' }, { status: 403 });
+    }
+    const body = await request.json();
+    const { tenantId, featureKey, enabled } = body;
+
+    if (!tenantId) {
+      return NextResponse.json({ error: 'Tenant ID is required' }, { status: 400 });
+    }
+    if (!featureKey) {
+      return NextResponse.json({ error: 'Feature key is required' }, { status: 400 });
+    }
+    if (typeof enabled !== 'boolean') {
+      return NextResponse.json({ error: 'Enabled must be a boolean' }, { status: 400 });
+    }
+
+    const flag = await db.featureFlag.upsert({
+      where: {
+        tenantId_featureKey: { tenantId, featureKey },
+      },
+      create: {
+        tenantId,
+        featureKey,
+        enabled,
+      },
+      update: {
+        enabled,
+      },
+    });
+
+    return NextResponse.json({ success: true, flag });
+  } catch (error) {
+    console.error('[SuperAdmin Feature Flags PUT] Error:', error);
+    return NextResponse.json({ error: 'Failed to toggle feature flag' }, { status: 500 });
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const auth = await getAuthUser();
