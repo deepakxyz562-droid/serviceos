@@ -86,6 +86,7 @@ const viewLabels: Record<ViewType, string> = {
   knowledgeBase: 'Knowledge Base',
   documentCenter: 'Document Center',
   triggers: 'CRM Triggers',
+  superadmin: 'Super Admin',
 };
 
 // ─── Component ──────────────────────────────────────────────────────────────

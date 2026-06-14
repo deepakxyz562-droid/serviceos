@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { isSuperAdminRequest } from '@/lib/admin-auth';
 import { cache } from '@/lib/cache';
 
 // Default subscription plans as fallback
@@ -80,7 +81,7 @@ export async function GET() {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (auth.role !== 'superadmin') {
+    if (!(await isSuperAdminRequest())) {
       return NextResponse.json({ error: 'Forbidden - SuperAdmin access required' }, { status: 403 });
     }
 
@@ -146,7 +147,7 @@ export async function POST(request: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (auth.role !== 'superadmin') {
+    if (!(await isSuperAdminRequest())) {
       return NextResponse.json({ error: 'Forbidden - SuperAdmin access required' }, { status: 403 });
     }
 
@@ -192,7 +193,7 @@ export async function PUT(request: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (auth.role !== 'superadmin') {
+    if (!(await isSuperAdminRequest())) {
       return NextResponse.json({ error: 'Forbidden - SuperAdmin access required' }, { status: 403 });
     }
 
@@ -243,7 +244,7 @@ export async function DELETE(request: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (auth.role !== 'superadmin') {
+    if (!(await isSuperAdminRequest())) {
       return NextResponse.json({ error: 'Forbidden - SuperAdmin access required' }, { status: 403 });
     }
 

@@ -1,0 +1,1595 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import { useState, useMemo } from 'react';
+     4→     4→import {
+     5→     5→  User, Search, Phone, Mail, MapPin, MessageSquare, Calendar, DollarSign,
+     6→     6→  Wrench, Activity, Clock, Star, Tag, Plus, Send, FileText, Zap,
+     7→     7→  ChevronRight, X, CheckCircle2, AlertCircle,
+     8→     8→  ArrowUpRight, Receipt, MessageCircle, FileStack,
+     9→     9→  Bot, Sparkles, Users, StickyNote,
+    10→    10→} from 'lucide-react';
+    11→    11→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    12→    12→import { Button } from '@/components/ui/button';
+    13→    13→import { Input } from '@/components/ui/input';
+    14→    14→import { Badge } from '@/components/ui/badge';
+    15→    15→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    16→    16→import { ScrollArea } from '@/components/ui/scroll-area';
+    17→    17→import { Separator } from '@/components/ui/separator';
+    18→    18→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    19→    19→import { Skeleton } from '@/components/ui/skeleton';
+    20→    20→import { cn } from '@/lib/utils';
+    21→    21→import { toast } from 'sonner';
+    22→    22→import { useAppStore } from '@/store/app-store';
+    23→    23→import {
+    24→    24→  useCustomers,
+    25→    25→  useCustomer360,
+    26→    26→  useBookings,
+    27→    27→} from '@/hooks/queries/use-supabase-queries';
+    28→    28→
+    29→    29→// ─── Helpers ─────────────────────────────────────────────────────────────────
+    30→    30→
+    31→    31→function getInitials(name: string): string {
+    32→    32→  return name
+    33→    33→    .split(' ')
+    34→    34→    .map(w => w[0])
+    35→    35→    .join('')
+    36→    36→    .toUpperCase()
+    37→    37→    .slice(0, 2);
+    38→    38→}
+    39→    39→
+    40→    40→function formatCurrency(amount: number): string {
+    41→    41→  return new Intl.NumberFormat('en-US', {
+    42→    42→    style: 'currency',
+    43→    43→    currency: 'USD',
+    44→    44→    minimumFractionDigits: 0,
+    45→    45→    maximumFractionDigits: 0,
+    46→    46→  }).format(amount);
+    47→    47→}
+    48→    48→
+    49→    49→function formatDate(iso: string): string {
+    50→    50→  try {
+    51→    51→    return new Date(iso).toLocaleDateString('en-US', {
+    52→    52→      month: 'short',
+    53→    53→      day: 'numeric',
+    54→    54→      year: 'numeric',
+    55→    55→    });
+    56→    56→  } catch {
+    57→    57→    return iso;
+    58→    58→  }
+    59→    59→}
+    60→    60→
+    61→    61→function formatDateTime(iso: string): string {
+    62→    62→  try {
+    63→    63→    return new Date(iso).toLocaleDateString('en-US', {
+    64→    64→      month: 'short',
+    65→    65→      day: 'numeric',
+    66→    66→      hour: 'numeric',
+    67→    67→      minute: '2-digit',
+    68→    68→    });
+    69→    69→  } catch {
+    70→    70→    return iso;
+    71→    71→  }
+    72→    72→}
+    73→    73→
+    74→    74→function timeAgo(iso: string): string {
+    75→    75→  try {
+    76→    76→    const diff = Date.now() - new Date(iso).getTime();
+    77→    77→    const mins = Math.floor(diff / 60000);
+    78→    78→    if (mins < 1) return 'just now';
+    79→    79→    if (mins < 60) return `${mins}m ago`;
+    80→    80→    const hrs = Math.floor(mins / 60);
+    81→    81→    if (hrs < 24) return `${hrs}h ago`;
+    82→    82→    const days = Math.floor(hrs / 24);
+    83→    83→    if (days < 30) return `${days}d ago`;
+    84→    84→    return `${Math.floor(days / 30)}mo ago`;
+    85→    85→  } catch {
+    86→    86→    return '';
+    87→    87→  }
+    88→    88→}
+    89→    89→
+    90→    90→function isToday(date: Date | string): boolean {
+    91→    91→  const d = new Date(date);
+    92→    92→  const now = new Date();
+    93→    93→  return d.toDateString() === now.toDateString();
+    94→    94→}
+    95→    95→
+    96→    96→function isYesterday(date: Date | string): boolean {
+    97→    97→  const d = new Date(date);
+    98→    98→  const yesterday = new Date();
+    99→    99→  yesterday.setDate(yesterday.getDate() - 1);
+   100→   100→  return d.toDateString() === yesterday.toDateString();
+   101→   101→}
+   102→   102→
+   103→   103→function isThisWeek(date: Date | string): boolean {
+   104→   104→  const d = new Date(date);
+   105→   105→  const now = new Date();
+   106→   106→  const weekStart = new Date(now);
+   107→   107→  weekStart.setDate(now.getDate() - now.getDay());
+   108→   108→  weekStart.setHours(0, 0, 0, 0);
+   109→   109→  return d >= weekStart;
+   110→   110→}
+   111→   111→
+   112→   112→// ─── Status Color Maps ──────────────────────────────────────────────────────
+   113→   113→
+   114→   114→const jobStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
+   115→   115→  pending: { label: 'Pending', color: 'text-slate-600', bg: 'bg-slate-100 border-slate-200' },
+   116→   116→  assigned: { label: 'Assigned', color: 'text-sky-700', bg: 'bg-sky-100 border-sky-200' },
+   117→   117→  in_progress: { label: 'In Progress', color: 'text-amber-700', bg: 'bg-amber-100 border-amber-200' },
+   118→   118→  completed: { label: 'Completed', color: 'text-emerald-700', bg: 'bg-emerald-100 border-emerald-200' },
+   119→   119→  cancelled: { label: 'Cancelled', color: 'text-red-700', bg: 'bg-red-100 border-red-200' },
+   120→   120→};
+   121→   121→
+   122→   122→const invoiceStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
+   123→   123→  draft: { label: 'Draft', color: 'text-slate-600', bg: 'bg-slate-100 border-slate-200' },
+   124→   124→  pending: { label: 'Pending', color: 'text-amber-700', bg: 'bg-amber-100 border-amber-200' },
+   125→   125→  paid: { label: 'Paid', color: 'text-emerald-700', bg: 'bg-emerald-100 border-emerald-200' },
+   126→   126→  overdue: { label: 'Overdue', color: 'text-red-700', bg: 'bg-red-100 border-red-200' },
+   127→   127→};
+   128→   128→
+   129→   129→const bookingStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
+   130→   130→  pending: { label: 'Pending', color: 'text-amber-700', bg: 'bg-amber-100 border-amber-200' },
+   131→   131→  confirmed: { label: 'Confirmed', color: 'text-sky-700', bg: 'bg-sky-100 border-sky-200' },
+   132→   132→  completed: { label: 'Completed', color: 'text-emerald-700', bg: 'bg-emerald-100 border-emerald-200' },
+   133→   133→  cancelled: { label: 'Cancelled', color: 'text-red-700', bg: 'bg-red-100 border-red-200' },
+   134→   134→  no_show: { label: 'No Show', color: 'text-slate-600', bg: 'bg-slate-100 border-slate-200' },
+   135→   135→};
+   136→   136→
+   137→   137→const tagColors: Record<string, string> = {
+   138→   138→  VIP: 'bg-amber-100 text-amber-700 border-amber-200',
+   139→   139→  'Repeat Customer': 'bg-emerald-100 text-emerald-700 border-emerald-200',
+   140→   140→  'High-Value': 'bg-teal-100 text-teal-700 border-teal-200',
+   141→   141→  'At-Risk': 'bg-red-100 text-red-700 border-red-200',
+   142→   142→  premium: 'bg-amber-100 text-amber-700 border-amber-200',
+   143→   143→  repeat: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+   144→   144→  'New Lead': 'bg-sky-100 text-sky-700 border-sky-200',
+   145→   145→  Commercial: 'bg-violet-100 text-violet-700 border-violet-200',
+   146→   146→};
+   147→   147→
+   148→   148→const timelineEventTypeConfig: Record<string, { icon: React.ElementType; color: string; bg: string }> = {
+   149→   149→  message: { icon: MessageSquare, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
+   150→   150→  booking: { icon: Calendar, color: 'text-sky-600', bg: 'bg-sky-500/10' },
+   151→   151→  job_update: { icon: Wrench, color: 'text-amber-600', bg: 'bg-amber-500/10' },
+   152→   152→  payment: { icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
+   153→   153→  campaign: { icon: Send, color: 'text-violet-600', bg: 'bg-violet-500/10' },
+   154→   154→  note: { icon: StickyNote, color: 'text-amber-600', bg: 'bg-amber-500/10' },
+   155→   155→  call: { icon: Phone, color: 'text-sky-600', bg: 'bg-sky-500/10' },
+   156→   156→  form_submission: { icon: FileText, color: 'text-violet-600', bg: 'bg-violet-500/10' },
+   157→   157→  lead: { icon: ArrowUpRight, color: 'text-sky-600', bg: 'bg-sky-500/10' },
+   158→   158→  job_created: { icon: Wrench, color: 'text-amber-600', bg: 'bg-amber-500/10' },
+   159→   159→  job_completed: { icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
+   160→   160→  invoice_paid: { icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
+   161→   161→  invoice_created: { icon: Receipt, color: 'text-amber-600', bg: 'bg-amber-500/10' },
+   162→   162→  review: { icon: Star, color: 'text-amber-600', bg: 'bg-amber-500/10' },
+   163→   163→  whatsapp_sent: { icon: MessageSquare, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
+   164→   164→  lead_converted: { icon: Sparkles, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
+   165→   165→};
+   166→   166→
+   167→   167→// ─── Loading Skeleton ────────────────────────────────────────────────────────
+   168→   168→
+   169→   169→function ProfileSkeleton() {
+   170→   170→  return (
+   171→   171→    <div className="p-6 space-y-5">
+   172→   172→      <div className="flex items-center gap-4">
+   173→   173→        <Skeleton className="size-16 rounded-full" />
+   174→   174→        <div className="space-y-2 flex-1">
+   175→   175→          <Skeleton className="h-6 w-40" />
+   176→   176→          <Skeleton className="h-4 w-56" />
+   177→   177→          <Skeleton className="h-4 w-32" />
+   178→   178→        </div>
+   179→   179→      </div>
+   180→   180→      <div className="space-y-2">
+   181→   181→        <Skeleton className="h-4 w-48" />
+   182→   182→        <Skeleton className="h-4 w-36" />
+   183→   183→        <Skeleton className="h-4 w-52" />
+   184→   184→      </div>
+   185→   185→      <div className="flex gap-2">
+   186→   186→        <Skeleton className="h-8 w-28" />
+   187→   187→        <Skeleton className="h-8 w-24" />
+   188→   188→        <Skeleton className="h-8 w-28" />
+   189→   189→      </div>
+   190→   190→    </div>
+   191→   191→  );
+   192→   192→}
+   193→   193→
+   194→   194→function KpiSkeleton() {
+   195→   195→  return (
+   196→   196→    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+   197→   197→      {Array.from({ length: 5 }).map((_, i) => (
+   198→   198→        <Card key={i} className="bg-card border-border">
+   199→   199→          <CardContent className="p-4">
+   200→   200→            <Skeleton className="h-4 w-16 mb-2" />
+   201→   201→            <Skeleton className="h-7 w-24" />
+   202→   202→          </CardContent>
+   203→   203→        </Card>
+   204→   204→      ))}
+   205→   205→    </div>
+   206→   206→  );
+   207→   207→}
+   208→   208→
+   209→   209→function TimelineSkeleton() {
+   210→   210→  return (
+   211→   211→    <div className="space-y-4">
+   212→   212→      {Array.from({ length: 5 }).map((_, i) => (
+   213→   213→        <div key={i} className="flex items-start gap-3">
+   214→   214→          <Skeleton className="size-9 rounded-full shrink-0" />
+   215→   215→          <div className="space-y-1.5 flex-1">
+   216→   216→            <Skeleton className="h-4 w-48" />
+   217→   217→            <Skeleton className="h-3 w-64" />
+   218→   218→          </div>
+   219→   219→        </div>
+   220→   220→      ))}
+   221→   221→    </div>
+   222→   222→  );
+   223→   223→}
+   224→   224→
+   225→   225→// ─── KPI Card ────────────────────────────────────────────────────────────────
+   226→   226→
+   227→   227→function KpiCard({
+   228→   228→  label,
+   229→   229→  value,
+   230→   230→  icon: Icon,
+   231→   231→  accent = 'text-emerald-400',
+   232→   232→}: {
+   233→   233→  label: string;
+   234→   234→  value: string | number;
+   235→   235→  icon: React.ElementType;
+   236→   236→  accent?: string;
+   237→   237→}) {
+   238→   238→  return (
+   239→   239→    <Card className="bg-card border-border hover:border-border transition-colors">
+   240→   240→      <CardContent className="p-4">
+   241→   241→        <div className="flex items-center justify-between mb-1">
+   242→   242→          <span className="text-xs text-muted-foreground font-medium">{label}</span>
+   243→   243→          <Icon className={cn('size-4', accent)} />
+   244→   244→        </div>
+   245→   245→        <p className="text-xl font-bold text-foreground">{value}</p>
+   246→   246→      </CardContent>
+   247→   247→    </Card>
+   248→   248→  );
+   249→   249→}
+   250→   250→
+   251→   251→// ─── Star Rating ─────────────────────────────────────────────────────────────
+   252→   252→
+   253→   253→function StarRating({ rating, max = 5 }: { rating: number; max?: number }) {
+   254→   254→  return (
+   255→   255→    <div className="flex items-center gap-0.5">
+   256→   256→      {Array.from({ length: max }).map((_, i) => (
+   257→   257→        <Star
+   258→   258→          key={i}
+   259→   259→          className={cn(
+   260→   260→            'size-3.5',
+   261→   261→            i < Math.round(rating)
+   262→   262→              ? 'text-amber-400 fill-amber-400'
+   263→   263→              : 'text-muted-foreground'
+   264→   264→          )}
+   265→   265→        />
+   266→   266→      ))}
+   267→   267→    </div>
+   268→   268→  );
+   269→   269→}
+   270→   270→
+   271→   271→// ─── Timeline Event Group ────────────────────────────────────────────────────
+   272→   272→
+   273→   273→function TimelineGroup({
+   274→   274→  label,
+   275→   275→  events,
+   276→   276→}: {
+   277→   277→  label: string;
+   278→   278→  events: any[];
+   279→   279→}) {
+   280→   280→  return (
+   281→   281→    <div className="space-y-3">
+   282→   282→      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{label}</h4>
+   283→   283→      <div className="space-y-1">
+   284→   284→        {events.map((event, i) => {
+   285→   285→          const config = timelineEventTypeConfig[event.eventType || event.type] ||
+   286→   286→            timelineEventTypeConfig.message;
+   287→   287→          const Icon = config.icon;
+   288→   288→          return (
+   289→   289→            <div
+   290→   290→              key={event.id || i}
+   291→   291→              className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-accent/50 transition-colors group"
+   292→   292→            >
+   293→   293→              <div className={cn('size-9 rounded-full flex items-center justify-center shrink-0', config.bg)}>
+   294→   294→                <Icon className={cn('size-4', config.color)} />
+   295→   295→              </div>
+   296→   296→              <div className="flex-1 min-w-0">
+   297→   297→                <div className="flex items-center justify-between gap-2">
+   298→   298→                  <p className="text-sm font-medium text-foreground truncate">
+   299→   299→                    {event.title || event.description || 'Event'}
+   300→   300→                  </p>
+   301→   301→                  <span className="text-[11px] text-muted-foreground shrink-0">
+   302→   302→                    {event.createdAt ? timeAgo(event.createdAt) : ''}
+   303→   303→                  </span>
+   304→   304→                </div>
+   305→   305→                {event.description && event.title && (
+   306→   306→                  <p className="text-xs text-muted-foreground mt-0.5 truncate">{event.description}</p>
+   307→   307→                )}
+   308→   308→                {event.actorName && (
+   309→   309→                  <p className="text-[11px] text-muted-foreground mt-0.5">by {event.actorName}</p>
+   310→   310→                )}
+   311→   311→              </div>
+   312→   312→            </div>
+   313→   313→          );
+   314→   314→        })}
+   315→   315→      </div>
+   316→   316→    </div>
+   317→   317→  );
+   318→   318→}
+   319→   319→
+   320→   320→// ─── Chat Bubble ─────────────────────────────────────────────────────────────
+   321→   321→
+   322→   322→function ChatBubble({
+   323→   323→  message,
+   324→   324→  isCustomer,
+   325→   325→}: {
+   326→   326→  message: any;
+   327→   327→  isCustomer: boolean;
+   328→   328→}) {
+   329→   329→  return (
+   330→   330→    <div className={cn('flex', isCustomer ? 'justify-start' : 'justify-end')}>
+   331→   331→      <div
+   332→   332→        className={cn(
+   333→   333→          'max-w-[75%] rounded-2xl px-4 py-2.5 text-sm',
+   334→   334→          isCustomer
+   335→   335→            ? 'bg-muted text-foreground rounded-bl-md'
+   336→   336→            : 'bg-emerald-600 text-foreground rounded-br-md'
+   337→   337→        )}
+   338→   338→      >
+   339→   339→        <p>{message.body || message.lastMessageBody || message.content || ''}</p>
+   340→   340→        <p className={cn('text-[10px] mt-1', isCustomer ? 'text-muted-foreground' : 'text-emerald-200')}>
+   341→   341→          {message.createdAt ? formatDateTime(message.createdAt) : ''}
+   342→   342→        </p>
+   343→   343→      </div>
+   344→   344→    </div>
+   345→   345→  );
+   346→   346→}
+   347→   347→
+   348→   348→// ─── Main Component ─────────────────────────────────────────────────────────
+   349→   349→
+   350→   350→export function Customer360View() {
+   351→   351→  const { auth } = useAppStore();
+   352→   352→  const tenantId = auth?.tenant?.id;
+   353→   353→
+   354→   354→  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+   355→   355→  const [searchQuery, setSearchQuery] = useState('');
+   356→   356→  const [activeTab, setActiveTab] = useState('overview');
+   357→   357→
+   358→   358→  // Fetch customer list
+   359→   359→  const { data: customers = [], isLoading: customersLoading } = useCustomers(tenantId);
+   360→   360→
+   361→   361→  // Fetch 360 data for selected customer
+   362→   362→  const { data: customer360, isLoading: customer360Loading } = useCustomer360(selectedCustomerId || '');
+   363→   363→
+   364→   364→  // Fetch bookings for selected customer
+   365→   365→  const { data: bookingsData, isLoading: bookingsLoading } = useBookings(selectedCustomerId || undefined);
+   366→   366→
+   367→   367→  // Filtered customer list
+   368→   368→  const filteredCustomers = useMemo(() => {
+   369→   369→    if (!customers) return [];
+   370→   370→    if (!searchQuery) return customers;
+   371→   371→    const q = searchQuery.toLowerCase();
+   372→   372→    return customers.filter(
+   373→   373→      (c: any) =>
+   374→   374→        c.name?.toLowerCase().includes(q) ||
+   375→   375→        c.phone?.toLowerCase().includes(q) ||
+   376→   376→        c.email?.toLowerCase().includes(q)
+   377→   377→    );
+   378→   378→  }, [customers, searchQuery]);
+   379→   379→
+   380→   380→  // Extract data
+   381→   381→  const customer = customer360?.customer;
+   382→   382→  const jobs: any[] = customer360?.jobs || [];
+   383→   383→  const invoices: any[] = customer360?.invoices || [];
+   384→   384→  const conversations: any[] = customer360?.conversations || [];
+   385→   385→  const timelineEvents: any[] = customer360?.timeline || [];
+   386→   386→  const bookings: any[] = bookingsData?.bookings || (Array.isArray(bookingsData) ? bookingsData : []);
+   387→   387→
+   388→   388→  // Computed stats
+   389→   389→  const stats = useMemo(() => {
+   390→   390→    const completedJobs = jobs.filter(j => j.status === 'completed');
+   391→   391→    const paidInvoices = invoices.filter(i => i.status === 'paid');
+   392→   392→    const pendingInvoices = invoices.filter(
+   393→   393→      i => i.status === 'pending' || i.status === 'overdue'
+   394→   394→    );
+   395→   395→    const totalRevenue = paidInvoices.reduce((s, i) => s + (i.total || 0), 0);
+   396→   396→    const outstandingBalance = pendingInvoices.reduce((s, i) => s + (i.total || 0), 0);
+   397→   397→    const avgRating =
+   398→   398→      completedJobs.length > 0
+   399→   399→        ? completedJobs.filter(j => j.customerRating).reduce((s, j) => s + (j.customerRating || 0), 0) /
+   400→   400→          Math.max(completedJobs.filter(j => j.customerRating).length, 1)
+   401→   401→        : 0;
+   402→   402→
+   403→   403→    return {
+   404→   404→      totalBookings: bookings.length,
+   405→   405→      totalRevenue,
+   406→   406→      completedJobs: completedJobs.length,
+   407→   407→      avgRating: Math.round(avgRating * 10) / 10,
+   408→   408→      outstandingBalance,
+   409→   409→      totalJobs: jobs.length,
+   410→   410→    };
+   411→   411→  }, [jobs, invoices, bookings]);
+   412→   412→
+   413→   413→  // Grouped timeline
+   414→   414→  const groupedTimeline = useMemo(() => {
+   415→   415→    const groups: { label: string; events: any[] }[] = [];
+   416→   416→    const today: any[] = [];
+   417→   417→    const yesterday: any[] = [];
+   418→   418→    const thisWeek: any[] = [];
+   419→   419→    const earlier: any[] = [];
+   420→   420→
+   421→   421→    timelineEvents.forEach(event => {
+   422→   422→      if (!event.createdAt) {
+   423→   423→        earlier.push(event);
+   424→   424→        return;
+   425→   425→      }
+   426→   426→      if (isToday(event.createdAt)) today.push(event);
+   427→   427→      else if (isYesterday(event.createdAt)) yesterday.push(event);
+   428→   428→      else if (isThisWeek(event.createdAt)) thisWeek.push(event);
+   429→   429→      else earlier.push(event);
+   430→   430→    });
+   431→   431→
+   432→   432→    if (today.length > 0) groups.push({ label: 'Today', events: today });
+   433→   433→    if (yesterday.length > 0) groups.push({ label: 'Yesterday', events: yesterday });
+   434→   434→    if (thisWeek.length > 0) groups.push({ label: 'This Week', events: thisWeek });
+   435→   435→    if (earlier.length > 0) groups.push({ label: 'Earlier', events: earlier });
+   436→   436→
+   437→   437→    return groups;
+   438→   438→  }, [timelineEvents]);
+   439→   439→
+   440→   440→  // Parse tags from customer data
+   441→   441→  const customerTags = useMemo(() => {
+   442→   442→    if (!customer) return [];
+   443→   443→    const raw = (customer as any).tags;
+   444→   444→    if (Array.isArray(raw)) return raw;
+   445→   445→    if (typeof raw === 'string') {
+   446→   446→      try {
+   447→   447→        const parsed = JSON.parse(raw);
+   448→   448→        return Array.isArray(parsed) ? parsed : raw ? [raw] : [];
+   449→   449→      } catch {
+   450→   450→        return raw ? [raw] : [];
+   451→   451→      }
+   452→   452→    }
+   453→   453→    return [];
+   454→   454→  }, [customer]);
+   455→   455→
+   456→   456→  // ─── No customer selected — show list ─────────────────────────────────────
+   457→   457→  if (!selectedCustomerId) {
+   458→   458→    return (
+   459→   459→      <div className="h-full flex flex-col bg-background">
+   460→   460→        {/* Header */}
+   461→   461→        <div className="flex items-center justify-between p-6 pb-4">
+   462→   462→          <div className="flex items-center gap-3">
+   463→   463→            <div className="flex items-center justify-center size-10 rounded-xl bg-emerald-600/10">
+   464→   464→              <User className="size-5 text-emerald-400" />
+   465→   465→            </div>
+   466→   466→            <div>
+   467→   467→              <h1 className="text-xl font-bold text-foreground">Customer 360&deg;</h1>
+   468→   468→              <p className="text-sm text-muted-foreground">Everything about a customer on a single screen</p>
+   469→   469→            </div>
+   470→   470→          </div>
+   471→   471→        </div>
+   472→   472→
+   473→   473→        {/* Search */}
+   474→   474→        <div className="px-6 pb-4">
+   475→   475→          <div className="relative max-w-md">
+   476→   476→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   477→   477→            <Input
+   478→   478→              placeholder="Search customers..."
+   479→   479→              value={searchQuery}
+   480→   480→              onChange={e => setSearchQuery(e.target.value)}
+   481→   481→              className="pl-9 bg-card border-border text-foreground placeholder:text-muted-foreground"
+   482→   482→            />
+   483→   483→          </div>
+   484→   484→        </div>
+   485→   485→
+   486→   486→        {/* Customer Grid */}
+   487→   487→        <div className="flex-1 min-h-0 px-6 pb-6">
+   488→   488→          {customersLoading ? (
+   489→   489→            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+   490→   490→              {Array.from({ length: 8 }).map((_, i) => (
+   491→   491→                <Card key={i} className="bg-card border-border">
+   492→   492→                  <CardContent className="p-4 flex items-center gap-3">
+   493→   493→                    <Skeleton className="size-12 rounded-full" />
+   494→   494→                    <div className="space-y-2 flex-1">
+   495→   495→                      <Skeleton className="h-4 w-28" />
+   496→   496→                      <Skeleton className="h-3 w-36" />
+   497→   497→                    </div>
+   498→   498→                  </CardContent>
+   499→   499→                </Card>
+   500→   500→              ))}
+   501→   501→            </div>
+   502→   502→          ) : filteredCustomers.length === 0 ? (
+   503→   503→            <div className="flex flex-col items-center justify-center py-20 text-center">
+   504→   504→              <Users className="size-12 text-muted-foreground mb-3" />
+   505→   505→              <h3 className="text-lg font-semibold text-muted-foreground">No customers found</h3>
+   506→   506→              <p className="text-sm text-muted-foreground max-w-md mt-1">
+   507→   507→                {searchQuery
+   508→   508→                  ? 'Try adjusting your search query'
+   509→   509→                  : 'Customers will appear here once they are added'}
+   510→   510→              </p>
+   511→   511→            </div>
+   512→   512→          ) : (
+   513→   513→            <ScrollArea className="h-full">
+   514→   514→              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+   515→   515→                {filteredCustomers.map((c: any) => (
+   516→   516→                  <Card
+   517→   517→                    key={c.id}
+   518→   518→                    className="bg-card border-border hover:border-emerald-600/50 cursor-pointer transition-all hover:bg-card"
+   519→   519→                    onClick={() => setSelectedCustomerId(c.id)}
+   520→   520→                  >
+   521→   521→                    <CardContent className="p-4">
+   522→   522→                      <div className="flex items-center gap-3">
+   523→   523→                        <Avatar className="size-12 border-2 border-border">
+   524→   524→                          <AvatarFallback className="bg-emerald-600/20 text-emerald-400 font-bold">
+   525→   525→                            {getInitials(c.name || '?')}
+   526→   526→                          </AvatarFallback>
+   527→   527→                        </Avatar>
+   528→   528→                        <div className="flex-1 min-w-0">
+   529→   529→                          <p className="font-semibold text-foreground truncate">{c.name}</p>
+   530→   530→                          <p className="text-xs text-muted-foreground truncate">{c.phone}</p>
+   531→   531→                          {c.email && (
+   532→   532→                            <p className="text-xs text-muted-foreground truncate">{c.email}</p>
+   533→   533→                          )}
+   534→   534→                        </div>
+   535→   535→                        <ChevronRight className="size-4 text-muted-foreground" />
+   536→   536→                      </div>
+   537→   537→                    </CardContent>
+   538→   538→                  </Card>
+   539→   539→                ))}
+   540→   540→              </div>
+   541→   541→            </ScrollArea>
+   542→   542→          )}
+   543→   543→        </div>
+   544→   544→      </div>
+   545→   545→    );
+   546→   546→  }
+   547→   547→
+   548→   548→  // ─── Customer Selected — show 360 view ─────────────────────────────────────
+   549→   549→  const c = customer;
+   550→   550→
+   551→   551→  return (
+   552→   552→    <div className="h-full flex flex-col bg-background">
+   553→   553→      {/* Top bar with back */}
+   554→   554→      <div className="flex items-center gap-3 p-4 border-b border-border shrink-0">
+   555→   555→        <Button
+   556→   556→          variant="ghost"
+   557→   557→          size="sm"
+   558→   558→          className="text-muted-foreground hover:text-foreground hover:bg-accent gap-1.5"
+   559→   559→          onClick={() => setSelectedCustomerId(null)}
+   560→   560→        >
+   561→   561→          <ChevronRight className="size-4 rotate-180" />
+   562→   562→          Back
+   563→   563→        </Button>
+   564→   564→        <div className="flex-1" />
+   565→   565→        <h1 className="text-sm font-semibold text-muted-foreground">
+   566→   566→          Customer 360&deg;
+   567→   567→        </h1>
+   568→   568→      </div>
+   569→   569→
+   570→   570→      <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
+   571→   571→        {/* ─── Left Sidebar — Profile Panel ─────────────────────────────────── */}
+   572→   572→        <div className="w-full lg:w-80 xl:w-96 border-b lg:border-b-0 lg:border-r border-border shrink-0">
+   573→   573→          <ScrollArea className="h-full max-h-[calc(100vh-8rem)]">
+   574→   574→            {customer360Loading ? (
+   575→   575→              <ProfileSkeleton />
+   576→   576→            ) : c ? (
+   577→   577→              <div className="p-5 space-y-5">
+   578→   578→                {/* Avatar & Name */}
+   579→   579→                <div className="flex items-start gap-4">
+   580→   580→                  <Avatar className="size-16 border-2 border-emerald-600/30">
+   581→   581→                    <AvatarFallback className="bg-emerald-600/20 text-emerald-400 text-xl font-bold">
+   582→   582→                      {getInitials(c.name || '?')}
+   583→   583→                    </AvatarFallback>
+   584→   584→                  </Avatar>
+   585→   585→                  <div className="flex-1 min-w-0">
+   586→   586→                    <h2 className="text-lg font-bold text-foreground truncate">{c.name}</h2>
+   587→   587→                    {c.email && (
+   588→   588→                      <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+   589→   589→                        <Mail className="size-3 shrink-0" /> {c.email}
+   590→   590→                      </p>
+   591→   591→                    )}
+   592→   592→                    <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+   593→   593→                      <Phone className="size-3 shrink-0" /> {c.phone}
+   594→   594→                    </p>
+   595→   595→                  </div>
+   596→   596→                </div>
+   597→   597→
+   598→   598→                {/* Tags */}
+   599→   599→                {customerTags.length > 0 && (
+   600→   600→                  <div className="flex flex-wrap gap-1.5">
+   601→   601→                    {customerTags.map((tag: string) => (
+   602→   602→                      <Badge
+   603→   603→                        key={tag}
+   604→   604→                        variant="outline"
+   605→   605→                        className={cn(
+   606→   606→                          'text-[10px] px-2 py-0.5',
+   607→   607→                          tagColors[tag] || 'bg-muted text-muted-foreground border-border'
+   608→   608→                        )}
+   609→   609→                      >
+   610→   610→                        <Tag className="size-2.5 mr-1" />
+   611→   611→                        {tag}
+   612→   612→                      </Badge>
+   613→   613→                    ))}
+   614→   614→                  </div>
+   615→   615→                )}
+   616→   616→
+   617→   617→                <Separator className="bg-muted" />
+   618→   618→
+   619→   619→                {/* Contact Details */}
+   620→   620→                <div className="space-y-2.5">
+   621→   621→                  {c.whatsappId && (
+   622→   622→                    <div className="flex items-center gap-2.5 text-sm">
+   623→   623→                      <MessageSquare className="size-4 text-emerald-500 shrink-0" />
+   624→   624→                      <span className="text-muted-foreground truncate">{c.whatsappId}</span>
+   625→   625→                    </div>
+   626→   626→                  )}
+   627→   627→                  {c.address && (
+   628→   628→                    <div className="flex items-start gap-2.5 text-sm">
+   629→   629→                      <MapPin className="size-4 text-muted-foreground shrink-0 mt-0.5" />
+   630→   630→                      <span className="text-muted-foreground">{c.address}</span>
+   631→   631→                    </div>
+   632→   632→                  )}
+   633→   633→                  <div className="flex items-center gap-2.5 text-sm">
+   634→   634→                    <Calendar className="size-4 text-muted-foreground shrink-0" />
+   635→   635→                    <span className="text-muted-foreground">
+   636→   636→                      Customer since{' '}
+   637→   637→                      <span className="text-muted-foreground">{formatDate(c.createdAt)}</span>
+   638→   638→                    </span>
+   639→   639→                  </div>
+   640→   640→                </div>
+   641→   641→
+   642→   642→                <Separator className="bg-muted" />
+   643→   643→
+   644→   644→                {/* Quick Actions */}
+   645→   645→                <div className="space-y-2">
+   646→   646→                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+   647→   647→                    Quick Actions
+   648→   648→                  </p>
+   649→   649→                  <div className="grid grid-cols-1 gap-2">
+   650→   650→                    <Button
+   651→   651→                      size="sm"
+   652→   652→                      className="bg-emerald-600 hover:bg-emerald-700 text-foreground gap-2 justify-start"
+   653→   653→                      onClick={() =>
+   654→   654→                        toast.info('WhatsApp integration coming soon', {
+   655→   655→                          description: c.whatsappId || c.phone,
+   656→   656→                        })
+   657→   657→                      }
+   658→   658→                    >
+   659→   659→                      <MessageSquare className="size-3.5" /> Send WhatsApp
+   660→   660→                    </Button>
+   661→   661→                    <div className="grid grid-cols-2 gap-2">
+   662→   662→                      <Button
+   663→   663→                        size="sm"
+   664→   664→                        variant="outline"
+   665→   665→                        className="border-border text-muted-foreground hover:bg-accent hover:text-foreground gap-1.5"
+   666→   666→                        onClick={() =>
+   667→   667→                          toast.info('Booking creation coming soon', {
+   668→   668→                            description: `Create booking for ${c.name}`,
+   669→   669→                          })
+   670→   670→                        }
+   671→   671→                      >
+   672→   672→                        <Calendar className="size-3.5" /> Book
+   673→   673→                      </Button>
+   674→   674→                      <Button
+   675→   675→                        size="sm"
+   676→   676→                        variant="outline"
+   677→   677→                        className="border-border text-muted-foreground hover:bg-accent hover:text-foreground gap-1.5"
+   678→   678→                        onClick={() =>
+   679→   679→                          toast.info('Invoice creation coming soon', {
+   680→   680→                            description: `Create invoice for ${c.name}`,
+   681→   681→                          })
+   682→   682→                        }
+   683→   683→                      >
+   684→   684→                        <Receipt className="size-3.5" /> Invoice
+   685→   685→                      </Button>
+   686→   686→                    </div>
+   687→   687→                  </div>
+   688→   688→                </div>
+   689→   689→
+   690→   690→                <Separator className="bg-muted" />
+   691→   691→
+   692→   692→                {/* Mini Stats */}
+   693→   693→                <div className="grid grid-cols-2 gap-3">
+   694→   694→                  <div className="bg-card rounded-lg p-3 text-center">
+   695→   695→                    <p className="text-lg font-bold text-foreground">{stats.totalJobs}</p>
+   696→   696→                    <p className="text-[10px] text-muted-foreground">Total Jobs</p>
+   697→   697→                  </div>
+   698→   698→                  <div className="bg-card rounded-lg p-3 text-center">
+   699→   699→                    <p className="text-lg font-bold text-emerald-400">
+   700→   700→                      {formatCurrency(stats.totalRevenue)}
+   701→   701→                    </p>
+   702→   702→                    <p className="text-[10px] text-muted-foreground">Revenue</p>
+   703→   703→                  </div>
+   704→   704→                  <div className="bg-card rounded-lg p-3 text-center">
+   705→   705→                    <p className="text-lg font-bold text-foreground">{stats.completedJobs}</p>
+   706→   706→                    <p className="text-[10px] text-muted-foreground">Completed</p>
+   707→   707→                  </div>
+   708→   708→                  <div className="bg-card rounded-lg p-3 text-center">
+   709→   709→                    <div className="flex items-center justify-center gap-1">
+   710→   710→                      <span className="text-lg font-bold text-amber-400">
+   711→   711→                        {stats.avgRating > 0 ? stats.avgRating : '—'}
+   712→   712→                      </span>
+   713→   713→                      {stats.avgRating > 0 && <StarRating rating={stats.avgRating} />}
+   714→   714→                    </div>
+   715→   715→                    <p className="text-[10px] text-muted-foreground">Avg Rating</p>
+   716→   716→                  </div>
+   717→   717→                </div>
+   718→   718→
+   719→   719→                {/* Outstanding Balance */}
+   720→   720→                {stats.outstandingBalance > 0 && (
+   721→   721→                  <div className="bg-destructive/10 border border-red-700/50 rounded-lg p-3">
+   722→   722→                    <div className="flex items-center justify-between">
+   723→   723→                      <div className="flex items-center gap-2">
+   724→   724→                        <AlertCircle className="size-4 text-red-400" />
+   725→   725→                        <span className="text-xs text-red-300 font-medium">Outstanding</span>
+   726→   726→                      </div>
+   727→   727→                      <span className="text-sm font-bold text-red-400">
+   728→   728→                        {formatCurrency(stats.outstandingBalance)}
+   729→   729→                      </span>
+   730→   730→                    </div>
+   731→   731→                  </div>
+   732→   732→                )}
+   733→   733→              </div>
+   734→   734→            ) : (
+   735→   735→              <div className="p-6 text-center">
+   736→   736→                <AlertCircle className="size-8 text-muted-foreground mx-auto mb-2" />
+   737→   737→                <p className="text-sm text-muted-foreground">Could not load customer details</p>
+   738→   738→              </div>
+   739→   739→            )}
+   740→   740→          </ScrollArea>
+   741→   741→        </div>
+   742→   742→
+   743→   743→        {/* ─── Main Content Area ─────────────────────────────────────────────── */}
+   744→   744→        <div className="flex-1 min-h-0 flex flex-col">
+   745→   745→          {/* KPI Cards Row */}
+   746→   746→          <div className="p-4 border-b border-border shrink-0">
+   747→   747→            {customer360Loading ? (
+   748→   748→              <KpiSkeleton />
+   749→   749→            ) : (
+   750→   750→              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+   751→   751→                <KpiCard
+   752→   752→                  label="Total Bookings"
+   753→   753→                  value={stats.totalBookings}
+   754→   754→                  icon={Calendar}
+   755→   755→                  accent="text-sky-400"
+   756→   756→                />
+   757→   757→                <KpiCard
+   758→   758→                  label="Total Revenue"
+   759→   759→                  value={formatCurrency(stats.totalRevenue)}
+   760→   760→                  icon={DollarSign}
+   761→   761→                  accent="text-emerald-400"
+   762→   762→                />
+   763→   763→                <KpiCard
+   764→   764→                  label="Completed Jobs"
+   765→   765→                  value={stats.completedJobs}
+   766→   766→                  icon={CheckCircle2}
+   767→   767→                  accent="text-emerald-400"
+   768→   768→                />
+   769→   769→                <KpiCard
+   770→   770→                  label="Avg Rating"
+   771→   771→                  value={stats.avgRating > 0 ? `${stats.avgRating} / 5` : '—'}
+   772→   772→                  icon={Star}
+   773→   773→                  accent="text-amber-400"
+   774→   774→                />
+   775→   775→                <KpiCard
+   776→   776→                  label="Outstanding"
+   777→   777→                  value={formatCurrency(stats.outstandingBalance)}
+   778→   778→                  icon={AlertCircle}
+   779→   779→                  accent={stats.outstandingBalance > 0 ? 'text-red-400' : 'text-muted-foreground'}
+   780→   780→                />
+   781→   781→              </div>
+   782→   782→            )}
+   783→   783→          </div>
+   784→   784→
+   785→   785→          {/* Tabs */}
+   786→   786→          <div className="flex-1 min-h-0">
+   787→   787→            <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+   788→   788→              <div className="border-b border-border px-4 shrink-0">
+   789→   789→                <TabsList className="bg-transparent h-11 gap-0.5 p-0 overflow-x-auto">
+   790→   790→                  <TabsTrigger
+   791→   791→                    value="overview"
+   792→   792→                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5"
+   793→   793→                  >
+   794→   794→                    <Activity className="size-3.5" /> Overview
+   795→   795→                  </TabsTrigger>
+   796→   796→                  <TabsTrigger
+   797→   797→                    value="conversations"
+   798→   798→                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5"
+   799→   799→                  >
+   800→   800→                    <MessageCircle className="size-3.5" /> Conversations
+   801→   801→                    {conversations.length > 0 && (
+   802→   802→                      <Badge className="size-4 rounded-full p-0 text-[9px] bg-emerald-600 text-foreground flex items-center justify-center">
+   803→   803→                        {conversations.length}
+   804→   804→                      </Badge>
+   805→   805→                    )}
+   806→   806→                  </TabsTrigger>
+   807→   807→                  <TabsTrigger
+   808→   808→                    value="bookings"
+   809→   809→                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5"
+   810→   810→                  >
+   811→   811→                    <Calendar className="size-3.5" /> Bookings
+   812→   812→                  </TabsTrigger>
+   813→   813→                  <TabsTrigger
+   814→   814→                    value="jobs"
+   815→   815→                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5"
+   816→   816→                  >
+   817→   817→                    <Wrench className="size-3.5" /> Jobs
+   818→   818→                    {jobs.length > 0 && (
+   819→   819→                      <Badge className="size-4 rounded-full p-0 text-[9px] bg-muted text-muted-foreground flex items-center justify-center">
+   820→   820→                        {jobs.length}
+   821→   821→                      </Badge>
+   822→   822→                    )}
+   823→   823→                  </TabsTrigger>
+   824→   824→                  <TabsTrigger
+   825→   825→                    value="invoices"
+   826→   826→                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5"
+   827→   827→                  >
+   828→   828→                    <Receipt className="size-3.5" /> Invoices
+   829→   829→                    {invoices.length > 0 && (
+   830→   830→                      <Badge className="size-4 rounded-full p-0 text-[9px] bg-muted text-muted-foreground flex items-center justify-center">
+   831→   831→                        {invoices.length}
+   832→   832→                      </Badge>
+   833→   833→                    )}
+   834→   834→                  </TabsTrigger>
+   835→   835→                  <TabsTrigger
+   836→   836→                    value="documents"
+   837→   837→                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5"
+   838→   838→                  >
+   839→   839→                    <FileStack className="size-3.5" /> Documents
+   840→   840→                  </TabsTrigger>
+   841→   841→                  <TabsTrigger
+   842→   842→                    value="automation"
+   843→   843→                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5"
+   844→   844→                  >
+   845→   845→                    <Zap className="size-3.5" /> Automation
+   846→   846→                  </TabsTrigger>
+   847→   847→                </TabsList>
+   848→   848→              </div>
+   849→   849→
+   850→   850→              <div className="flex-1 min-h-0">
+   851→   851→                {/* ─── Overview Tab ─────────────────────────────────────────── */}
+   852→   852→                <TabsContent value="overview" className="h-full m-0">
+   853→   853→                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
+   854→   854→                    <div className="p-5 space-y-6">
+   855→   855→                      {customer360Loading ? (
+   856→   856→                        <TimelineSkeleton />
+   857→   857→                      ) : groupedTimeline.length === 0 ? (
+   858→   858→                        <div className="flex flex-col items-center justify-center py-16 text-center">
+   859→   859→                          <Clock className="size-10 text-muted-foreground mb-3" />
+   860→   860→                          <h3 className="text-base font-semibold text-muted-foreground">
+   861→   861→                            No activity yet
+   862→   862→                          </h3>
+   863→   863→                          <p className="text-xs text-muted-foreground mt-1">
+   864→   864→                            Activity timeline will populate as the customer interacts
+   865→   865→                          </p>
+   866→   866→                        </div>
+   867→   867→                      ) : (
+   868→   868→                        groupedTimeline.map(group => (
+   869→   869→                          <TimelineGroup
+   870→   870→                            key={group.label}
+   871→   871→                            label={group.label}
+   872→   872→                            events={group.events}
+   873→   873→                          />
+   874→   874→                        ))
+   875→   875→                      )}
+   876→   876→
+   877→   877→                      {/* Recent Jobs Quick View */}
+   878→   878→                      {jobs.length > 0 && (
+   879→   879→                        <div className="space-y-3">
+   880→   880→                          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+   881→   881→                            Recent Jobs
+   882→   882→                          </h4>
+   883→   883→                          <div className="space-y-2">
+   884→   884→                            {jobs.slice(0, 3).map(job => {
+   885→   885→                              const statusCfg = jobStatusConfig[job.status] || jobStatusConfig.pending;
+   886→   886→                              return (
+   887→   887→                                <div
+   888→   888→                                  key={job.id}
+   889→   889→                                  className="flex items-center justify-between p-3 bg-card rounded-lg border border-border hover:border-border transition-colors"
+   890→   890→                                >
+   891→   891→                                  <div className="flex items-center gap-3 min-w-0">
+   892→   892→                                    <div className="size-8 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
+   893→   893→                                      <Wrench className="size-3.5 text-amber-500" />
+   894→   894→                                    </div>
+   895→   895→                                    <div className="min-w-0">
+   896→   896→                                      <p className="text-sm font-medium text-foreground truncate">
+   897→   897→                                        {job.title || job.service || 'Service'}
+   898→   898→                                      </p>
+   899→   899→                                      <p className="text-xs text-muted-foreground">
+   900→   900→                                        {job.assigneeName || 'Unassigned'} &middot;{' '}
+   901→   901→                                        {formatDate(job.createdAt)}
+   902→   902→                                      </p>
+   903→   903→                                    </div>
+   904→   904→                                  </div>
+   905→   905→                                  <Badge
+   906→   906→                                    variant="outline"
+   907→   907→                                    className={cn(
+   908→   908→                                      'text-[10px] shrink-0',
+   909→   909→                                      statusCfg.bg,
+   910→   910→                                      statusCfg.color
+   911→   911→                                    )}
+   912→   912→                                  >
+   913→   913→                                    {statusCfg.label}
+   914→   914→                                  </Badge>
+   915→   915→                                </div>
+   916→   916→                              );
+   917→   917→                            })}
+   918→   918→                          </div>
+   919→   919→                        </div>
+   920→   920→                      )}
+   921→   921→                    </div>
+   922→   922→                  </ScrollArea>
+   923→   923→                </TabsContent>
+   924→   924→
+   925→   925→                {/* ─── Conversations Tab ────────────────────────────────────── */}
+   926→   926→                <TabsContent value="conversations" className="h-full m-0">
+   927→   927→                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
+   928→   928→                    <div className="p-5">
+   929→   929→                      {customer360Loading ? (
+   930→   930→                        <div className="space-y-4">
+   931→   931→                          {Array.from({ length: 3 }).map((_, i) => (
+   932→   932→                            <div key={i} className="flex gap-3">
+   933→   933→                              <Skeleton className="size-8 rounded-full" />
+   934→   934→                              <Skeleton className="h-12 w-64 rounded-xl" />
+   935→   935→                            </div>
+   936→   936→                          ))}
+   937→   937→                        </div>
+   938→   938→                      ) : conversations.length === 0 ? (
+   939→   939→                        <div className="flex flex-col items-center justify-center py-16 text-center">
+   940→   940→                          <MessageCircle className="size-10 text-muted-foreground mb-3" />
+   941→   941→                          <h3 className="text-base font-semibold text-muted-foreground">
+   942→   942→                            No conversations
+   943→   943→                          </h3>
+   944→   944→                          <p className="text-xs text-muted-foreground mt-1">
+   945→   945→                            Conversations from WhatsApp, SMS, and Email will appear here
+   946→   946→                          </p>
+   947→   947→                        </div>
+   948→   948→                      ) : (
+   949→   949→                        <div className="space-y-4">
+   950→   950→                          {conversations.map((conv: any) => (
+   951→   951→                            <Card
+   952→   952→                              key={conv.id}
+   953→   953→                              className="bg-card border-border"
+   954→   954→                            >
+   955→   955→                              <CardHeader className="p-4 pb-2">
+   956→   956→                                <div className="flex items-center justify-between">
+   957→   957→                                  <div className="flex items-center gap-2">
+   958→   958→                                    <MessageSquare className="size-4 text-emerald-500" />
+   959→   959→                                    <CardTitle className="text-sm text-foreground">
+   960→   960→                                      {conv.customerName || conv.customerPhone || 'Conversation'}
+   961→   961→                                    </CardTitle>
+   962→   962→                                  </div>
+   963→   963→                                  <div className="flex items-center gap-2">
+   964→   964→                                    <Badge
+   965→   965→                                      variant="outline"
+   966→   966→                                      className={cn(
+   967→   967→                                        'text-[10px]',
+   968→   968→                                        conv.channel === 'whatsapp'
+   969→   969→                                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-700'
+   970→   970→                                          : 'bg-muted text-muted-foreground border-border'
+   971→   971→                                      )}
+   972→   972→                                    >
+   973→   973→                                      {conv.channel || 'chat'}
+   974→   974→                                    </Badge>
+   975→   975→                                    <Badge
+   976→   976→                                      variant="outline"
+   977→   977→                                      className={cn(
+   978→   978→                                        'text-[10px]',
+   979→   979→                                        conv.status === 'active'
+   980→   980→                                          ? 'bg-sky-500/10 text-sky-400 border-sky-800'
+   981→   981→                                          : 'bg-muted text-muted-foreground border-border'
+   982→   982→                                      )}
+   983→   983→                                    >
+   984→   984→                                      {conv.status}
+   985→   985→                                    </Badge>
+   986→   986→                                  </div>
+   987→   987→                                </div>
+   988→   988→                              </CardHeader>
+   989→   989→                              <CardContent className="p-4 pt-2">
+   990→   990→                                <div className="space-y-2">
+   991→   991→                                  {conv.lastMessageBody && (
+   992→   992→                                    <ChatBubble
+   993→   993→                                      message={conv}
+   994→   994→                                      isCustomer={conv.lastDirection !== 'outbound'}
+   995→   995→                                    />
+   996→   996→                                  )}
+   997→   997→                                  {conv.messagesJson && (() => {
+   998→   998→                                    try {
+   999→   999→                                      const msgs = JSON.parse(conv.messagesJson);
+  1000→  1000→                                      if (Array.isArray(msgs) && msgs.length > 0) {
+  1001→  1001→                                        return msgs.slice(-5).map((msg: any, idx: number) => (
+  1002→  1002→                                          <ChatBubble
+  1003→  1003→                                            key={idx}
+  1004→  1004→                                            message={msg}
+  1005→  1005→                                            isCustomer={msg.senderType === 'customer'}
+  1006→  1006→                                          />
+  1007→  1007→                                        ));
+  1008→  1008→                                      }
+  1009→  1009→                                    } catch { /* ignore parse errors */ }
+  1010→  1010→                                    return null;
+  1011→  1011→                                  })()}
+  1012→  1012→                                  <p className="text-[10px] text-muted-foreground text-right">
+  1013→  1013→                                    {conv.lastMessageAt
+  1014→  1014→                                      ? formatDateTime(conv.lastMessageAt)
+  1015→  1015→                                      : ''}
+  1016→  1016→                                  </p>
+  1017→  1017→                                </div>
+  1018→  1018→                              </CardContent>
+  1019→  1019→                            </Card>
+  1020→  1020→                          ))}
+  1021→  1021→                        </div>
+  1022→  1022→                      )}
+  1023→  1023→                    </div>
+  1024→  1024→                  </ScrollArea>
+  1025→  1025→                </TabsContent>
+  1026→  1026→
+  1027→  1027→                {/* ─── Bookings Tab ─────────────────────────────────────────── */}
+  1028→  1028→                <TabsContent value="bookings" className="h-full m-0">
+  1029→  1029→                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
+  1030→  1030→                    <div className="p-5 space-y-5">
+  1031→  1031→                      {bookingsLoading ? (
+  1032→  1032→                        <div className="space-y-3">
+  1033→  1033→                          {Array.from({ length: 3 }).map((_, i) => (
+  1034→  1034→                            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+  1035→  1035→                          ))}
+  1036→  1036→                        </div>
+  1037→  1037→                      ) : bookings.length === 0 ? (
+  1038→  1038→                        <div className="flex flex-col items-center justify-center py-16 text-center">
+  1039→  1039→                          <Calendar className="size-10 text-muted-foreground mb-3" />
+  1040→  1040→                          <h3 className="text-base font-semibold text-muted-foreground">
+  1041→  1041→                            No bookings
+  1042→  1042→                          </h3>
+  1043→  1043→                          <p className="text-xs text-muted-foreground mt-1">
+  1044→  1044→                            Bookings for this customer will appear here
+  1045→  1045→                          </p>
+  1046→  1046→                        </div>
+  1047→  1047→                      ) : (
+  1048→  1048→                        <>
+  1049→  1049→                          {/* Upcoming */}
+  1050→  1050→                          {bookings.filter(
+  1051→  1051→                            (b: any) =>
+  1052→  1052→                              b.status === 'confirmed' || b.status === 'pending'
+  1053→  1053→                          ).length > 0 && (
+  1054→  1054→                            <div className="space-y-2">
+  1055→  1055→                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+  1056→  1056→                                <Clock className="size-3.5" /> Upcoming
+  1057→  1057→                              </h4>
+  1058→  1058→                              {bookings
+  1059→  1059→                                .filter(
+  1060→  1060→                                  (b: any) =>
+  1061→  1061→                                    b.status === 'confirmed' || b.status === 'pending'
+  1062→  1062→                                )
+  1063→  1063→                                .map((booking: any) => {
+  1064→  1064→                                  const statusCfg =
+  1065→  1065→                                    bookingStatusConfig[booking.status] ||
+  1066→  1066→                                    bookingStatusConfig.pending;
+  1067→  1067→                                  return (
+  1068→  1068→                                    <div
+  1069→  1069→                                      key={booking.id}
+  1070→  1070→                                      className="flex items-center justify-between p-3 bg-card rounded-lg border border-border"
+  1071→  1071→                                    >
+  1072→  1072→                                      <div className="min-w-0">
+  1073→  1073→                                        <p className="text-sm font-medium text-foreground truncate">
+  1074→  1074→                                          {booking.title || 'Booking'}
+  1075→  1075→                                        </p>
+  1076→  1076→                                        <p className="text-xs text-muted-foreground">
+  1077→  1077→                                          {booking.scheduledAt
+  1078→  1078→                                            ? formatDateTime(booking.scheduledAt)
+  1079→  1079→                                            : 'No date set'}
+  1080→  1080→                                          {booking.employee?.name &&
+  1081→  1081→                                            ` · ${booking.employee.name}`}
+  1082→  1082→                                        </p>
+  1083→  1083→                                      </div>
+  1084→  1084→                                      <Badge
+  1085→  1085→                                        variant="outline"
+  1086→  1086→                                        className={cn(
+  1087→  1087→                                          'text-[10px] shrink-0',
+  1088→  1088→                                          statusCfg.bg,
+  1089→  1089→                                          statusCfg.color
+  1090→  1090→                                        )}
+  1091→  1091→                                      >
+  1092→  1092→                                        {statusCfg.label}
+  1093→  1093→                                      </Badge>
+  1094→  1094→                                    </div>
+  1095→  1095→                                  );
+  1096→  1096→                                })}
+  1097→  1097→                            </div>
+  1098→  1098→                          )}
+  1099→  1099→
+  1100→  1100→                          {/* Completed */}
+  1101→  1101→                          {bookings.filter((b: any) => b.status === 'completed').length >
+  1102→  1102→                            0 && (
+  1103→  1103→                            <div className="space-y-2">
+  1104→  1104→                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+  1105→  1105→                                <CheckCircle2 className="size-3.5" /> Completed
+  1106→  1106→                              </h4>
+  1107→  1107→                              {bookings
+  1108→  1108→                                .filter((b: any) => b.status === 'completed')
+  1109→  1109→                                .map((booking: any) => (
+  1110→  1110→                                  <div
+  1111→  1111→                                    key={booking.id}
+  1112→  1112→                                    className="flex items-center justify-between p-3 bg-card rounded-lg border border-border"
+  1113→  1113→                                  >
+  1114→  1114→                                    <div className="min-w-0">
+  1115→  1115→                                      <p className="text-sm font-medium text-foreground truncate">
+  1116→  1116→                                        {booking.title || 'Booking'}
+  1117→  1117→                                      </p>
+  1118→  1118→                                      <p className="text-xs text-muted-foreground">
+  1119→  1119→                                        {booking.scheduledAt
+  1120→  1120→                                          ? formatDate(booking.scheduledAt)
+  1121→  1121→                                          : ''}
+  1122→  1122→                                      </p>
+  1123→  1123→                                    </div>
+  1124→  1124→                                    <Badge
+  1125→  1125→                                      variant="outline"
+  1126→  1126→                                      className="text-[10px] shrink-0 bg-emerald-500/10 text-emerald-400 border-emerald-700"
+  1127→  1127→                                    >
+  1128→  1128→                                      Completed
+  1129→  1129→                                    </Badge>
+  1130→  1130→                                  </div>
+  1131→  1131→                                ))}
+  1132→  1132→                            </div>
+  1133→  1133→                          )}
+  1134→  1134→
+  1135→  1135→                          {/* Cancelled */}
+  1136→  1136→                          {bookings.filter((b: any) => b.status === 'cancelled').length >
+  1137→  1137→                            0 && (
+  1138→  1138→                            <div className="space-y-2">
+  1139→  1139→                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+  1140→  1140→                                <X className="size-3.5" /> Cancelled
+  1141→  1141→                              </h4>
+  1142→  1142→                              {bookings
+  1143→  1143→                                .filter((b: any) => b.status === 'cancelled')
+  1144→  1144→                                .map((booking: any) => (
+  1145→  1145→                                  <div
+  1146→  1146→                                    key={booking.id}
+  1147→  1147→                                    className="flex items-center justify-between p-3 bg-card rounded-lg border border-border opacity-60"
+  1148→  1148→                                  >
+  1149→  1149→                                    <div className="min-w-0">
+  1150→  1150→                                      <p className="text-sm font-medium text-muted-foreground line-through truncate">
+  1151→  1151→                                        {booking.title || 'Booking'}
+  1152→  1152→                                      </p>
+  1153→  1153→                                      <p className="text-xs text-muted-foreground">
+  1154→  1154→                                        {booking.scheduledAt
+  1155→  1155→                                          ? formatDate(booking.scheduledAt)
+  1156→  1156→                                          : ''}
+  1157→  1157→                                      </p>
+  1158→  1158→                                    </div>
+  1159→  1159→                                    <Badge
+  1160→  1160→                                      variant="outline"
+  1161→  1161→                                      className="text-[10px] shrink-0 bg-red-500/10 text-red-400 border-red-700"
+  1162→  1162→                                    >
+  1163→  1163→                                      Cancelled
+  1164→  1164→                                    </Badge>
+  1165→  1165→                                  </div>
+  1166→  1166→                                ))}
+  1167→  1167→                            </div>
+  1168→  1168→                          )}
+  1169→  1169→                        </>
+  1170→  1170→                      )}
+  1171→  1171→                    </div>
+  1172→  1172→                  </ScrollArea>
+  1173→  1173→                </TabsContent>
+  1174→  1174→
+  1175→  1175→                {/* ─── Jobs Tab ─────────────────────────────────────────────── */}
+  1176→  1176→                <TabsContent value="jobs" className="h-full m-0">
+  1177→  1177→                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
+  1178→  1178→                    <div className="p-5 space-y-3">
+  1179→  1179→                      {customer360Loading ? (
+  1180→  1180→                        Array.from({ length: 4 }).map((_, i) => (
+  1181→  1181→                          <Skeleton key={i} className="h-16 w-full rounded-lg" />
+  1182→  1182→                        ))
+  1183→  1183→                      ) : jobs.length === 0 ? (
+  1184→  1184→                        <div className="flex flex-col items-center justify-center py-16 text-center">
+  1185→  1185→                          <Wrench className="size-10 text-muted-foreground mb-3" />
+  1186→  1186→                          <h3 className="text-base font-semibold text-muted-foreground">
+  1187→  1187→                            No jobs yet
+  1188→  1188→                          </h3>
+  1189→  1189→                          <p className="text-xs text-muted-foreground mt-1">
+  1190→  1190→                            Jobs assigned to this customer will appear here
+  1191→  1191→                          </p>
+  1192→  1192→                        </div>
+  1193→  1193→                      ) : (
+  1194→  1194→                        jobs.map(job => {
+  1195→  1195→                          const statusCfg =
+  1196→  1196→                            jobStatusConfig[job.status] || jobStatusConfig.pending;
+  1197→  1197→                          return (
+  1198→  1198→                            <div
+  1199→  1199→                              key={job.id}
+  1200→  1200→                              className="flex items-center justify-between p-4 bg-card rounded-lg border border-border hover:border-border transition-colors"
+  1201→  1201→                            >
+  1202→  1202→                              <div className="flex items-center gap-3 min-w-0">
+  1203→  1203→                                <div
+  1204→  1204→                                  className={cn(
+  1205→  1205→                                    'size-10 rounded-full flex items-center justify-center shrink-0',
+  1206→  1206→                                    job.status === 'completed'
+  1207→  1207→                                      ? 'bg-emerald-500/10'
+  1208→  1208→                                      : job.status === 'in_progress'
+  1209→  1209→                                        ? 'bg-amber-500/10'
+  1210→  1210→                                        : job.status === 'cancelled'
+  1211→  1211→                                          ? 'bg-red-500/10'
+  1212→  1212→                                          : 'bg-muted/50'
+  1213→  1213→                                  )}
+  1214→  1214→                                >
+  1215→  1215→                                  <Wrench
+  1216→  1216→                                    className={cn(
+  1217→  1217→                                      'size-4',
+  1218→  1218→                                      job.status === 'completed'
+  1219→  1219→                                        ? 'text-emerald-500'
+  1220→  1220→                                        : job.status === 'in_progress'
+  1221→  1221→                                          ? 'text-amber-500'
+  1222→  1222→                                          : job.status === 'cancelled'
+  1223→  1223→                                            ? 'text-red-500'
+  1224→  1224→                                            : 'text-muted-foreground'
+  1225→  1225→                                    )}
+  1226→  1226→                                  />
+  1227→  1227→                                </div>
+  1228→  1228→                                <div className="min-w-0">
+  1229→  1229→                                  <p className="text-sm font-medium text-foreground truncate">
+  1230→  1230→                                    {job.title || job.service || 'Service'}
+  1231→  1231→                                  </p>
+  1232→  1232→                                  <p className="text-xs text-muted-foreground">
+  1233→  1233→                                    {job.assigneeName || 'Unassigned'} &middot;{' '}
+  1234→  1234→                                    {formatDate(job.createdAt)}
+  1235→  1235→                                  </p>
+  1236→  1236→                                  {job.address && (
+  1237→  1237→                                    <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
+  1238→  1238→                                      <MapPin className="size-2.5" /> {job.address}
+  1239→  1239→                                    </p>
+  1240→  1240→                                  )}
+  1241→  1241→                                </div>
+  1242→  1242→                              </div>
+  1243→  1243→                              <div className="flex items-center gap-2 shrink-0">
+  1244→  1244→                                {job.scheduledAt && (
+  1245→  1245→                                  <span className="text-[11px] text-muted-foreground hidden sm:block">
+  1246→  1246→                                    {formatDate(job.scheduledAt)}
+  1247→  1247→                                  </span>
+  1248→  1248→                                )}
+  1249→  1249→                                <Badge
+  1250→  1250→                                  variant="outline"
+  1251→  1251→                                  className={cn(
+  1252→  1252→                                    'text-[10px]',
+  1253→  1253→                                    statusCfg.bg,
+  1254→  1254→                                    statusCfg.color
+  1255→  1255→                                  )}
+  1256→  1256→                                >
+  1257→  1257→                                  {statusCfg.label}
+  1258→  1258→                                </Badge>
+  1259→  1259→                              </div>
+  1260→  1260→                            </div>
+  1261→  1261→                          );
+  1262→  1262→                        })
+  1263→  1263→                      )}
+  1264→  1264→                    </div>
+  1265→  1265→                  </ScrollArea>
+  1266→  1266→                </TabsContent>
+  1267→  1267→
+  1268→  1268→                {/* ─── Invoices Tab ─────────────────────────────────────────── */}
+  1269→  1269→                <TabsContent value="invoices" className="h-full m-0">
+  1270→  1270→                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
+  1271→  1271→                    <div className="p-5 space-y-5">
+  1272→  1272→                      {customer360Loading ? (
+  1273→  1273→                        Array.from({ length: 3 }).map((_, i) => (
+  1274→  1274→                          <Skeleton key={i} className="h-16 w-full rounded-lg" />
+  1275→  1275→                        ))
+  1276→  1276→                      ) : invoices.length === 0 ? (
+  1277→  1277→                        <div className="flex flex-col items-center justify-center py-16 text-center">
+  1278→  1278→                          <Receipt className="size-10 text-muted-foreground mb-3" />
+  1279→  1279→                          <h3 className="text-base font-semibold text-muted-foreground">
+  1280→  1280→                            No invoices
+  1281→  1281→                          </h3>
+  1282→  1282→                          <p className="text-xs text-muted-foreground mt-1">
+  1283→  1283→                            Invoices for this customer will appear here
+  1284→  1284→                          </p>
+  1285→  1285→                        </div>
+  1286→  1286→                      ) : (
+  1287→  1287→                        <>
+  1288→  1288→                          {/* Paid */}
+  1289→  1289→                          {invoices.filter((i: any) => i.status === 'paid').length > 0 && (
+  1290→  1290→                            <div className="space-y-2">
+  1291→  1291→                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+  1292→  1292→                                <CheckCircle2 className="size-3.5 text-emerald-500" /> Paid
+  1293→  1293→                              </h4>
+  1294→  1294→                              {invoices
+  1295→  1295→                                .filter((i: any) => i.status === 'paid')
+  1296→  1296→                                .map((inv: any) => (
+  1297→  1297→                                  <div
+  1298→  1298→                                    key={inv.id}
+  1299→  1299→                                    className="flex items-center justify-between p-3 bg-card rounded-lg border border-border"
+  1300→  1300→                                  >
+  1301→  1301→                                    <div className="min-w-0">
+  1302→  1302→                                      <p className="text-sm font-medium text-foreground">
+  1303→  1303→                                        {inv.number || inv.invoiceNumber || 'Invoice'}
+  1304→  1304→                                      </p>
+  1305→  1305→                                      <p className="text-xs text-muted-foreground">
+  1306→  1306→                                        {formatDate(inv.createdAt)}
+  1307→  1307→                                        {inv.paidAt ? ` · Paid ${formatDate(inv.paidAt)}` : ''}
+  1308→  1308→                                      </p>
+  1309→  1309→                                    </div>
+  1310→  1310→                                    <div className="flex items-center gap-2 shrink-0">
+  1311→  1311→                                      <span className="text-sm font-semibold text-emerald-400">
+  1312→  1312→                                        {formatCurrency(inv.total)}
+  1313→  1313→                                      </span>
+  1314→  1314→                                      <Badge
+  1315→  1315→                                        variant="outline"
+  1316→  1316→                                        className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-700"
+  1317→  1317→                                      >
+  1318→  1318→                                        Paid
+  1319→  1319→                                      </Badge>
+  1320→  1320→                                    </div>
+  1321→  1321→                                  </div>
+  1322→  1322→                                ))}
+  1323→  1323→                            </div>
+  1324→  1324→                          )}
+  1325→  1325→
+  1326→  1326→                          {/* Pending */}
+  1327→  1327→                          {invoices.filter((i: any) => i.status === 'pending').length > 0 && (
+  1328→  1328→                            <div className="space-y-2">
+  1329→  1329→                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+  1330→  1330→                                <Clock className="size-3.5 text-amber-500" /> Pending
+  1331→  1331→                              </h4>
+  1332→  1332→                              {invoices
+  1333→  1333→                                .filter((i: any) => i.status === 'pending')
+  1334→  1334→                                .map((inv: any) => (
+  1335→  1335→                                  <div
+  1336→  1336→                                    key={inv.id}
+  1337→  1337→                                    className="flex items-center justify-between p-3 bg-card rounded-lg border border-amber-700/30"
+  1338→  1338→                                  >
+  1339→  1339→                                    <div className="min-w-0">
+  1340→  1340→                                      <p className="text-sm font-medium text-foreground">
+  1341→  1341→                                        {inv.number || inv.invoiceNumber || 'Invoice'}
+  1342→  1342→                                      </p>
+  1343→  1343→                                      <p className="text-xs text-muted-foreground">
+  1344→  1344→                                        {formatDate(inv.createdAt)}
+  1345→  1345→                                        {inv.dueDate ? ` · Due ${formatDate(inv.dueDate)}` : ''}
+  1346→  1346→                                      </p>
+  1347→  1347→                                    </div>
+  1348→  1348→                                    <div className="flex items-center gap-2 shrink-0">
+  1349→  1349→                                      <span className="text-sm font-semibold text-amber-400">
+  1350→  1350→                                        {formatCurrency(inv.total)}
+  1351→  1351→                                      </span>
+  1352→  1352→                                      <Badge
+  1353→  1353→                                        variant="outline"
+  1354→  1354→                                        className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-700"
+  1355→  1355→                                      >
+  1356→  1356→                                        Pending
+  1357→  1357→                                      </Badge>
+  1358→  1358→                                    </div>
+  1359→  1359→                                  </div>
+  1360→  1360→                                ))}
+  1361→  1361→                            </div>
+  1362→  1362→                          )}
+  1363→  1363→
+  1364→  1364→                          {/* Overdue */}
+  1365→  1365→                          {invoices.filter((i: any) => i.status === 'overdue').length > 0 && (
+  1366→  1366→                            <div className="space-y-2">
+  1367→  1367→                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+  1368→  1368→                                <AlertCircle className="size-3.5 text-red-500" /> Overdue
+  1369→  1369→                              </h4>
+  1370→  1370→                              {invoices
+  1371→  1371→                                .filter((i: any) => i.status === 'overdue')
+  1372→  1372→                                .map((inv: any) => (
+  1373→  1373→                                  <div
+  1374→  1374→                                    key={inv.id}
+  1375→  1375→                                    className="flex items-center justify-between p-3 bg-destructive/10 rounded-lg border border-red-700/40"
+  1376→  1376→                                  >
+  1377→  1377→                                    <div className="min-w-0">
+  1378→  1378→                                      <p className="text-sm font-medium text-foreground">
+  1379→  1379→                                        {inv.number || inv.invoiceNumber || 'Invoice'}
+  1380→  1380→                                      </p>
+  1381→  1381→                                      <p className="text-xs text-red-400">
+  1382→  1382→                                        Due {inv.dueDate ? formatDate(inv.dueDate) : 'N/A'}
+  1383→  1383→                                      </p>
+  1384→  1384→                                    </div>
+  1385→  1385→                                    <div className="flex items-center gap-2 shrink-0">
+  1386→  1386→                                      <span className="text-sm font-semibold text-red-400">
+  1387→  1387→                                        {formatCurrency(inv.total)}
+  1388→  1388→                                      </span>
+  1389→  1389→                                      <Badge
+  1390→  1390→                                        variant="outline"
+  1391→  1391→                                        className="text-[10px] bg-red-500/10 text-red-400 border-red-700"
+  1392→  1392→                                      >
+  1393→  1393→                                        Overdue
+  1394→  1394→                                      </Badge>
+  1395→  1395→                                    </div>
+  1396→  1396→                                  </div>
+  1397→  1397→                                ))}
+  1398→  1398→                            </div>
+  1399→  1399→                          )}
+  1400→  1400→
+  1401→  1401→                          {/* Draft */}
+  1402→  1402→                          {invoices.filter((i: any) => i.status === 'draft').length > 0 && (
+  1403→  1403→                            <div className="space-y-2">
+  1404→  1404→                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+  1405→  1405→                                Draft
+  1406→  1406→                              </h4>
+  1407→  1407→                              {invoices
+  1408→  1408→                                .filter((i: any) => i.status === 'draft')
+  1409→  1409→                                .map((inv: any) => (
+  1410→  1410→                                  <div
+  1411→  1411→                                    key={inv.id}
+  1412→  1412→                                    className="flex items-center justify-between p-3 bg-card rounded-lg border border-border opacity-70"
+  1413→  1413→                                  >
+  1414→  1414→                                    <div className="min-w-0">
+  1415→  1415→                                      <p className="text-sm font-medium text-muted-foreground">
+  1416→  1416→                                        {inv.number || inv.invoiceNumber || 'Invoice'}
+  1417→  1417→                                      </p>
+  1418→  1418→                                      <p className="text-xs text-muted-foreground">
+  1419→  1419→                                        {formatDate(inv.createdAt)}
+  1420→  1420→                                      </p>
+  1421→  1421→                                    </div>
+  1422→  1422→                                    <div className="flex items-center gap-2 shrink-0">
+  1423→  1423→                                      <span className="text-sm font-semibold text-muted-foreground">
+  1424→  1424→                                        {formatCurrency(inv.total)}
+  1425→  1425→                                      </span>
+  1426→  1426→                                      <Badge
+  1427→  1427→                                        variant="outline"
+  1428→  1428→                                        className="text-[10px] bg-muted text-muted-foreground border-border"
+  1429→  1429→                                      >
+  1430→  1430→                                        Draft
+  1431→  1431→                                      </Badge>
+  1432→  1432→                                    </div>
+  1433→  1433→                                  </div>
+  1434→  1434→                                ))}
+  1435→  1435→                            </div>
+  1436→  1436→                          )}
+  1437→  1437→                        </>
+  1438→  1438→                      )}
+  1439→  1439→                    </div>
+  1440→  1440→                  </ScrollArea>
+  1441→  1441→                </TabsContent>
+  1442→  1442→
+  1443→  1443→                {/* ─── Documents Tab ────────────────────────────────────────── */}
+  1444→  1444→                <TabsContent value="documents" className="h-full m-0">
+  1445→  1445→                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
+  1446→  1446→                    <div className="p-5">
+  1447→  1447→                      <div className="flex flex-col items-center justify-center py-16 text-center">
+  1448→  1448→                        <FileStack className="size-10 text-muted-foreground mb-3" />
+  1449→  1449→                        <h3 className="text-base font-semibold text-muted-foreground">
+  1450→  1450→                          Documents
+  1451→  1451→                        </h3>
+  1452→  1452→                        <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+  1453→  1453→                          Upload and manage documents for this customer. Contracts, proposals, and other files will appear here.
+  1454→  1454→                        </p>
+  1455→  1455→                        <Button
+  1456→  1456→                          variant="outline"
+  1457→  1457→                          size="sm"
+  1458→  1458→                          className="mt-4 border-border text-muted-foreground hover:bg-accent hover:text-foreground gap-1.5"
+  1459→  1459→                          onClick={() => toast.info('Document upload coming soon')}
+  1460→  1460→                        >
+  1461→  1461→                          <Plus className="size-3.5" /> Upload Document
+  1462→  1462→                        </Button>
+  1463→  1463→                      </div>
+  1464→  1464→                    </div>
+  1465→  1465→                  </ScrollArea>
+  1466→  1466→                </TabsContent>
+  1467→  1467→
+  1468→  1468→                {/* ─── Automation Tab ───────────────────────────────────────── */}
+  1469→  1469→                <TabsContent value="automation" className="h-full m-0">
+  1470→  1470→                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
+  1471→  1471→                    <div className="p-5 space-y-5">
+  1472→  1472→                      {/* Automation Stats */}
+  1473→  1473→                      <div className="grid grid-cols-3 gap-3">
+  1474→  1474→                        <Card className="bg-card border-border">
+  1475→  1475→                          <CardContent className="p-3 text-center">
+  1476→  1476→                            <Bot className="size-5 text-emerald-400 mx-auto mb-1" />
+  1477→  1477→                            <p className="text-lg font-bold text-foreground">
+  1478→  1478→                              {timelineEvents.filter(
+  1479→  1479→                                (e: any) =>
+  1480→  1480→                                  e.actorType === 'system' || e.actorType === 'bot'
+  1481→  1481→                              ).length}
+  1482→  1482→                            </p>
+  1483→  1483→                            <p className="text-[10px] text-muted-foreground">Triggers Fired</p>
+  1484→  1484→                          </CardContent>
+  1485→  1485→                        </Card>
+  1486→  1486→                        <Card className="bg-card border-border">
+  1487→  1487→                          <CardContent className="p-3 text-center">
+  1488→  1488→                            <Send className="size-5 text-sky-400 mx-auto mb-1" />
+  1489→  1489→                            <p className="text-lg font-bold text-foreground">
+  1490→  1490→                              {timelineEvents.filter(
+  1491→  1491→                                (e: any) =>
+  1492→  1492→                                  e.eventType === 'message' ||
+  1493→  1493→                                  e.eventType === 'whatsapp_sent'
+  1494→  1494→                              ).length}
+  1495→  1495→                            </p>
+  1496→  1496→                            <p className="text-[10px] text-muted-foreground">Messages Sent</p>
+  1497→  1497→                          </CardContent>
+  1498→  1498→                        </Card>
+  1499→  1499→                        <Card className="bg-card border-border">
+  1500→  1500→                          <CardContent className="p-3 text-center">
+  1501→  1501→                            <Zap className="size-5 text-amber-400 mx-auto mb-1" />
+  1502→  1502→                            <p className="text-lg font-bold text-foreground">
+  1503→  1503→                              {timelineEvents.filter((e: any) =>
+  1504→  1504→                                e.eventType?.includes('lead') ||
+  1505→  1505→                                e.eventType?.includes('booking') ||
+  1506→  1506→                                e.eventType?.includes('invoice')
+  1507→  1507→                              ).length}
+  1508→  1508→                            </p>
+  1509→  1509→                            <p className="text-[10px] text-muted-foreground">Workflows Run</p>
+  1510→  1510→                          </CardContent>
+  1511→  1511→                        </Card>
+  1512→  1512→                      </div>
+  1513→  1513→
+  1514→  1514→                      {/* Automation History */}
+  1515→  1515→                      <div className="space-y-3">
+  1516→  1516→                        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+  1517→  1517→                          Workflow History
+  1518→  1518→                        </h4>
+  1519→  1519→                        {timelineEvents
+  1520→  1520→                          .filter(
+  1521→  1521→                            (e: any) =>
+  1522→  1522→                              e.actorType === 'system' ||
+  1523→  1523→                              e.actorType === 'bot' ||
+  1524→  1524→                              e.eventType === 'whatsapp_sent' ||
+  1525→  1525→                              e.eventType === 'campaign' ||
+  1526→  1526→                              e.eventType === 'lead_converted'
+  1527→  1527→                          )
+  1528→  1528→                          .length === 0 ? (
+  1529→  1529→                          <div className="text-center py-8">
+  1530→  1530→                            <Zap className="size-8 text-muted-foreground mx-auto mb-2" />
+  1531→  1531→                            <p className="text-sm text-muted-foreground">
+  1532→  1532→                              No automation events yet
+  1533→  1533→                            </p>
+  1534→  1534→                            <p className="text-xs text-muted-foreground mt-1">
+  1535→  1535→                              Automated workflows will be recorded here
+  1536→  1536→                            </p>
+  1537→  1537→                          </div>
+  1538→  1538→                        ) : (
+  1539→  1539→                          timelineEvents
+  1540→  1540→                            .filter(
+  1541→  1541→                              (e: any) =>
+  1542→  1542→                                e.actorType === 'system' ||
+  1543→  1543→                                e.actorType === 'bot' ||
+  1544→  1544→                                e.eventType === 'whatsapp_sent' ||
+  1545→  1545→                                e.eventType === 'campaign' ||
+  1546→  1546→                                e.eventType === 'lead_converted'
+  1547→  1547→                            )
+  1548→  1548→                            .map((event: any, i: number) => {
+  1549→  1549→                              const config =
+  1550→  1550→                                timelineEventTypeConfig[event.eventType] ||
+  1551→  1551→                                timelineEventTypeConfig.message;
+  1552→  1552→                              const Icon = config.icon;
+  1553→  1553→                              return (
+  1554→  1554→                                <div
+  1555→  1555→                                  key={event.id || i}
+  1556→  1556→                                  className="flex items-start gap-3 p-3 bg-card rounded-lg border border-border"
+  1557→  1557→                                >
+  1558→  1558→                                  <div
+  1559→  1559→                                    className={cn(
+  1560→  1560→                                      'size-8 rounded-full flex items-center justify-center shrink-0',
+  1561→  1561→                                      config.bg
+  1562→  1562→                                    )}
+  1563→  1563→                                  >
+  1564→  1564→                                    <Icon className={cn('size-3.5', config.color)} />
+  1565→  1565→                                  </div>
+  1566→  1566→                                  <div className="min-w-0">
+  1567→  1567→                                    <p className="text-sm font-medium text-foreground">
+  1568→  1568→                                      {event.title}
+  1569→  1569→                                    </p>
+  1570→  1570→                                    {event.description && (
+  1571→  1571→                                      <p className="text-xs text-muted-foreground mt-0.5">
+  1572→  1572→                                        {event.description}
+  1573→  1573→                                      </p>
+  1574→  1574→                                    )}
+  1575→  1575→                                    <p className="text-[11px] text-muted-foreground mt-0.5">
+  1576→  1576→                                      {event.createdAt ? formatDateTime(event.createdAt) : ''}
+  1577→  1577→                                    </p>
+  1578→  1578→                                  </div>
+  1579→  1579→                                </div>
+  1580→  1580→                              );
+  1581→  1581→                            })
+  1582→  1582→                        )}
+  1583→  1583→                      </div>
+  1584→  1584→                    </div>
+  1585→  1585→                  </ScrollArea>
+  1586→  1586→                </TabsContent>
+  1587→  1587→              </div>
+  1588→  1588→            </Tabs>
+  1589→  1589→          </div>
+  1590→  1590→        </div>
+  1591→  1591→      </div>
+  1592→  1592→    </div>
+  1593→  1593→  );
+  1594→  1594→}
+  1595→  1595→

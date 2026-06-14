@@ -1,0 +1,1440 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import { useState, useEffect, useCallback } from 'react';
+     4→     4→import {
+     5→     5→  Calendar, Clock, MapPin, Star, MessageCircle, Phone,
+     6→     6→  CheckCircle2, ArrowRight, ExternalLink, FileText,
+     7→     7→  RefreshCw, Loader2, AlertCircle, ChevronRight,
+     8→     8→  Building2, User, CreditCard, Zap, Send,
+     9→     9→  Globe, Copy, Plus, Search, QrCode, Link2, Eye,
+    10→    10→} from 'lucide-react';
+    11→    11→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    12→    12→import { Button } from '@/components/ui/button';
+    13→    13→import { Badge } from '@/components/ui/badge';
+    14→    14→import { Separator } from '@/components/ui/separator';
+    15→    15→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    16→    16→import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+    17→    17→import { Textarea } from '@/components/ui/textarea';
+    18→    18→import { Input } from '@/components/ui/input';
+    19→    19→import { Label } from '@/components/ui/label';
+    20→    20→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    21→    21→import { Progress } from '@/components/ui/progress';
+    22→    22→import { ScrollArea } from '@/components/ui/scroll-area';
+    23→    23→import {
+    24→    24→  Select,
+    25→    25→  SelectContent,
+    26→    26→  SelectItem,
+    27→    27→  SelectTrigger,
+    28→    28→  SelectValue,
+    29→    29→} from '@/components/ui/select';
+    30→    30→import { toast } from 'sonner';
+    31→    31→import { useAppStore } from '@/store/app-store';
+    32→    32→
+    33→    33→// ─── Types ──────────────────────────────────────────────────────────────────
+    34→    34→
+    35→    35→interface CustomerPortalProps {
+    36→    36→  token?: string;
+    37→    37→}
+    38→    38→
+    39→    39→interface Booking {
+    40→    40→  id: string;
+    41→    41→  title: string;
+    42→    42→  status: string;
+    43→    43→  priority: string;
+    44→    44→  address: string | null;
+    45→    45→  scheduledAt: string | null;
+    46→    46→  assigneeName: string | null;
+    47→    47→  assignee?: { id: string; name: string; phone: string; avatar: string | null; rating: number } | null;
+    48→    48→  createdAt: string;
+    49→    49→  updatedAt: string;
+    50→    50→}
+    51→    51→
+    52→    52→interface Invoice {
+    53→    53→  id: string;
+    54→    54→  number: string | null;
+    55→    55→  amount: number;
+    56→    56→  tax: number;
+    57→    57→  total: number;
+    58→    58→  status: string;
+    59→    59→  dueDate: string | null;
+    60→    60→  paidAt: string | null;
+    61→    61→  createdAt: string;
+    62→    62→}
+    63→    63→
+    64→    64→interface Customer {
+    65→    65→  id: string;
+    66→    66→  name: string;
+    67→    67→  email?: string | null;
+    68→    68→  phone?: string | null;
+    69→    69→  company?: string | null;
+    70→    70→  address?: string | null;
+    71→    71→}
+    72→    72→
+    73→    73→interface PortalData {
+    74→    74→  customer: Customer;
+    75→    75→  bookings: Booking[];
+    76→    76→  invoices: Invoice[];
+    77→    77→  session: { id: string; expiresAt: string };
+    78→    78→}
+    79→    79→
+    80→    80→interface PortalSession {
+    81→    81→  id: string;
+    82→    82→  token: string;
+    83→    83→  customerId: string;
+    84→    84→  customerName: string;
+    85→    85→  expiresAt: string;
+    86→    86→  portalUrl: string;
+    87→    87→}
+    88→    88→
+    89→    89→// ─── Helpers ────────────────────────────────────────────────────────────────
+    90→    90→
+    91→    91→const JOB_STEPS = [
+    92→    92→  { key: 'pending', label: 'Booked', icon: Calendar },
+    93→    93→  { key: 'assigned', label: 'Assigned', icon: User },
+    94→    94→  { key: 'en_route', label: 'En Route', icon: ArrowRight },
+    95→    95→  { key: 'in_progress', label: 'In Progress', icon: Zap },
+    96→    96→  { key: 'completed', label: 'Completed', icon: CheckCircle2 },
+    97→    97→];
+    98→    98→
+    99→    99→function getStepIndex(status: string): number {
+   100→   100→  const idx = JOB_STEPS.findIndex(s => s.key === status);
+   101→   101→  return idx >= 0 ? idx : 0;
+   102→   102→}
+   103→   103→
+   104→   104→function getStatusColor(status: string) {
+   105→   105→  const map: Record<string, string> = {
+   106→   106→    pending: 'bg-amber-100 text-amber-700 border-amber-200',
+   107→   107→    assigned: 'bg-blue-100 text-blue-700 border-blue-200',
+   108→   108→    in_progress: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+   109→   109→    en_route: 'bg-sky-100 text-sky-700 border-sky-200',
+   110→   110→    completed: 'bg-green-100 text-green-700 border-green-200',
+   111→   111→    cancelled: 'bg-red-100 text-red-700 border-red-200',
+   112→   112→  };
+   113→   113→  return map[status] || 'bg-gray-100 text-gray-600 border-gray-200';
+   114→   114→}
+   115→   115→
+   116→   116→function getInvoiceStatusColor(status: string) {
+   117→   117→  const map: Record<string, string> = {
+   118→   118→    draft: 'bg-gray-100 text-gray-600 border-gray-200',
+   119→   119→    sent: 'bg-blue-100 text-blue-700 border-blue-200',
+   120→   120→    paid: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+   121→   121→    overdue: 'bg-red-100 text-red-700 border-red-200',
+   122→   122→    cancelled: 'bg-gray-100 text-gray-600 border-gray-200',
+   123→   123→  };
+   124→   124→  return map[status] || 'bg-gray-100 text-gray-600 border-gray-200';
+   125→   125→}
+   126→   126→
+   127→   127→function formatCurrency(amount: number): string {
+   128→   128→  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+   129→   129→}
+   130→   130→
+   131→   131→function formatDate(dateStr?: string | null): string {
+   132→   132→  if (!dateStr) return '--';
+   133→   133→  try {
+   134→   134→    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+   135→   135→  } catch { return '--'; }
+   136→   136→}
+   137→   137→
+   138→   138→function formatTime(dateStr?: string | null): string {
+   139→   139→  if (!dateStr) return '--';
+   140→   140→  try {
+   141→   141→    return new Date(dateStr).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+   142→   142→  } catch { return '--'; }
+   143→   143→}
+   144→   144→
+   145→   145→function timeAgo(dateStr: string): string {
+   146→   146→  const now = new Date();
+   147→   147→  const date = new Date(dateStr);
+   148→   148→  const diffMs = now.getTime() - date.getTime();
+   149→   149→  const diffMins = Math.floor(diffMs / 60000);
+   150→   150→  if (diffMins < 1) return 'just now';
+   151→   151→  if (diffMins < 60) return `${diffMins}m ago`;
+   152→   152→  const diffHours = Math.floor(diffMins / 60);
+   153→   153→  if (diffHours < 24) return `${diffHours}h ago`;
+   154→   154→  const diffDays = Math.floor(diffHours / 24);
+   155→   155→  if (diffDays < 7) return `${diffDays}d ago`;
+   156→   156→  return formatDate(dateStr);
+   157→   157→}
+   158→   158→
+   159→   159→function isExpired(dateStr: string): boolean {
+   160→   160→  return new Date(dateStr) < new Date();
+   161→   161→}
+   162→   162→
+   163→   163→// ─── Star Rating Component ──────────────────────────────────────────────────
+   164→   164→
+   165→   165→function StarRating({ value, onChange, readonly = false, size = 'md' }: {
+   166→   166→  value: number;
+   167→   167→  onChange?: (val: number) => void;
+   168→   168→  readonly?: boolean;
+   169→   169→  size?: 'sm' | 'md' | 'lg';
+   170→   170→}) {
+   171→   171→  const [hovered, setHovered] = useState(0);
+   172→   172→  const sizeClasses = { sm: 'size-4', md: 'size-6', lg: 'size-8' };
+   173→   173→  const sizeClass = sizeClasses[size];
+   174→   174→
+   175→   175→  return (
+   176→   176→    <div className="flex items-center gap-0.5">
+   177→   177→      {[1, 2, 3, 4, 5].map((star) => (
+   178→   178→        <button
+   179→   179→          key={star}
+   180→   180→          type="button"
+   181→   181→          disabled={readonly}
+   182→   182→          className={`${readonly ? 'cursor-default' : 'cursor-pointer hover:scale-110'} transition-transform`}
+   183→   183→          onMouseEnter={() => !readonly && setHovered(star)}
+   184→   184→          onMouseLeave={() => !readonly && setHovered(0)}
+   185→   185→          onClick={() => onChange?.(star)}
+   186→   186→        >
+   187→   187→          <Star
+   188→   188→            className={`${sizeClass} transition-colors ${
+   189→   189→              star <= (hovered || value)
+   190→   190→                ? 'text-amber-400 fill-amber-400'
+   191→   191→                : 'text-gray-200 fill-gray-200'
+   192→   192→            }`}
+   193→   193→          />
+   194→   194→        </button>
+   195→   195→      ))}
+   196→   196→    </div>
+   197→   197→  );
+   198→   198→}
+   199→   199→
+   200→   200→// ─── Progress Stepper Component ─────────────────────────────────────────────
+   201→   201→
+   202→   202→function JobProgressStepper({ status }: { status: string }) {
+   203→   203→  const currentIndex = getStepIndex(status);
+   204→   204→  const progressPercent = (currentIndex / (JOB_STEPS.length - 1)) * 100;
+   205→   205→
+   206→   206→  return (
+   207→   207→    <div className="space-y-3">
+   208→   208→      <Progress value={progressPercent} className="h-2" />
+   209→   209→      <div className="flex items-start justify-between">
+   210→   210→        {JOB_STEPS.map((step, index) => {
+   211→   211→          const isCompleted = index < currentIndex;
+   212→   212→          const isCurrent = index === currentIndex;
+   213→   213→          const Icon = step.icon;
+   214→   214→
+   215→   215→          return (
+   216→   216→            <div key={step.key} className="flex flex-col items-center gap-1 flex-1">
+   217→   217→              <div
+   218→   218→                className={`flex items-center justify-center size-8 rounded-full border-2 transition-all ${
+   219→   219→                  isCompleted
+   220→   220→                    ? 'bg-emerald-500 border-emerald-500 text-white'
+   221→   221→                    : isCurrent
+   222→   222→                    ? 'bg-emerald-100 border-emerald-500 text-emerald-600'
+   223→   223→                    : 'bg-gray-50 border-gray-200 text-gray-300'
+   224→   224→                }`}
+   225→   225→              >
+   226→   226→                <Icon className="size-4" />
+   227→   227→              </div>
+   228→   228→              <span className={`text-[10px] font-medium text-center ${
+   229→   229→                isCompleted || isCurrent ? 'text-emerald-700' : 'text-gray-300'
+   230→   230→              }`}>
+   231→   231→                {step.label}
+   232→   232→              </span>
+   233→   233→            </div>
+   234→   234→          );
+   235→   235→        })}
+   236→   236→      </div>
+   237→   237→    </div>
+   238→   238→  );
+   239→   239→}
+   240→   240→
+   241→   241→// ─── Portal Experience Component (reused for both direct access & preview) ──
+   242→   242→
+   243→   243→function PortalExperience({ portalData, onRefresh }: {
+   244→   244→  portalData: PortalData;
+   245→   245→  onRefresh?: () => void;
+   246→   246→}) {
+   247→   247→  const [showReviewDialog, setShowReviewDialog] = useState(false);
+   248→   248→  const [reviewJob, setReviewJob] = useState<Booking | null>(null);
+   249→   249→  const [reviewRating, setReviewRating] = useState(5);
+   250→   250→  const [reviewComment, setReviewComment] = useState('');
+   251→   251→  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+   252→   252→  const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
+   253→   253→
+   254→   254→  const customer = portalData.customer;
+   255→   255→  const bookings = portalData.bookings || [];
+   256→   256→  const invoices = portalData.invoices || [];
+   257→   257→
+   258→   258→  const activeBookings = bookings.filter(b => !['completed', 'cancelled'].includes(b.status));
+   259→   259→  const completedBookings = bookings.filter(b => b.status === 'completed');
+   260→   260→  const pastBookings = bookings.filter(b => ['completed', 'cancelled'].includes(b.status));
+   261→   261→
+   262→   262→  const activeBooking = activeBookings.find(b => b.id === activeBookingId) || activeBookings[0] || null;
+   263→   263→
+   264→   264→  useEffect(() => {
+   265→   265→    if (activeBookings.length > 0 && !activeBookingId) {
+   266→   266→      setActiveBookingId(activeBookings[0].id);
+   267→   267→    }
+   268→   268→  }, [activeBookings, activeBookingId]);
+   269→   269→
+   270→   270→  const handleReschedule = (booking: Booking) => {
+   271→   271→    const message = `Hi, I'd like to reschedule my booking "${booking.title}" (scheduled for ${formatDate(booking.scheduledAt)}). Please let me know available times.`;
+   272→   272→    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+   273→   273→    window.open(whatsappUrl, '_blank');
+   274→   274→    toast.success('Opening WhatsApp to request reschedule');
+   275→   275→  };
+   276→   276→
+   277→   277→  const handleWhatsAppContact = () => {
+   278→   278→    const message = `Hi, I have a question about my service.`;
+   279→   279→    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+   280→   280→    window.open(whatsappUrl, '_blank');
+   281→   281→  };
+   282→   282→
+   283→   283→  const handleSubmitReview = async () => {
+   284→   284→    if (!reviewJob) return;
+   285→   285→    setReviewSubmitting(true);
+   286→   286→    try {
+   287→   287→      const res = await fetch(`/api/jobs/${reviewJob.id}?XTransformPort=3000`, {
+   288→   288→        method: 'PUT',
+   289→   289→        headers: { 'Content-Type': 'application/json' },
+   290→   290→        body: JSON.stringify({ id: reviewJob.id, reviewRating, reviewComment }),
+   291→   291→      });
+   292→   292→      if (res.ok) {
+   293→   293→        toast.success('Review submitted! Thank you for your feedback.');
+   294→   294→        setShowReviewDialog(false);
+   295→   295→        setReviewJob(null);
+   296→   296→        setReviewComment('');
+   297→   297→        setReviewRating(5);
+   298→   298→        onRefresh?.();
+   299→   299→      } else {
+   300→   300→        toast.error('Failed to submit review');
+   301→   301→      }
+   302→   302→    } catch {
+   303→   303→      toast.error('Network error');
+   304→   304→    } finally {
+   305→   305→      setReviewSubmitting(false);
+   306→   306→    }
+   307→   307→  };
+   308→   308→
+   309→   309→  const handlePayInvoice = (invoice: Invoice) => {
+   310→   310→    toast.info(`Payment for invoice ${invoice.number || invoice.id} — ${formatCurrency(invoice.total)}`);
+   311→   311→  };
+   312→   312→
+   313→   313→  return (
+   314→   314→    <div className="space-y-4">
+   315→   315→      {/* Job Tracker */}
+   316→   316→      {activeBooking && (
+   317→   317→        <Card className="border-emerald-200 bg-white shadow-md">
+   318→   318→          <CardHeader className="pb-3">
+   319→   319→            <CardTitle className="text-lg font-semibold flex items-center gap-2 text-emerald-900">
+   320→   320→              <Zap className="size-5 text-emerald-600" />
+   321→   321→              Job Tracker
+   322→   322→            </CardTitle>
+   323→   323→            <CardDescription>Real-time status of the active service</CardDescription>
+   324→   324→          </CardHeader>
+   325→   325→          <CardContent className="space-y-4">
+   326→   326→            <div className="flex items-center justify-between">
+   327→   327→              <div>
+   328→   328→                <h3 className="font-medium text-gray-900">{activeBooking.title}</h3>
+   329→   329→                <div className="flex items-center gap-2 mt-1 text-sm text-gray-500">
+   330→   330→                  {activeBooking.address && (
+   331→   331→                    <span className="flex items-center gap-1">
+   332→   332→                      <MapPin className="size-3.5" /> {activeBooking.address}
+   333→   333→                    </span>
+   334→   334→                  )}
+   335→   335→                  {activeBooking.scheduledAt && (
+   336→   336→                    <span className="flex items-center gap-1">
+   337→   337→                      <Calendar className="size-3.5" /> {formatDate(activeBooking.scheduledAt)} {formatTime(activeBooking.scheduledAt)}
+   338→   338→                    </span>
+   339→   339→                  )}
+   340→   340→                </div>
+   341→   341→              </div>
+   342→   342→              <Badge variant="outline" className={`${getStatusColor(activeBooking.status)} text-xs`}>
+   343→   343→                {activeBooking.status.replace('_', ' ')}
+   344→   344→              </Badge>
+   345→   345→            </div>
+   346→   346→
+   347→   347→            <JobProgressStepper status={activeBooking.status} />
+   348→   348→
+   349→   349→            {activeBooking.assigneeName && (
+   350→   350→              <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-lg">
+   351→   351→                <Avatar className="size-9">
+   352→   352→                  <AvatarFallback className="bg-emerald-200 text-emerald-800 text-sm font-medium">
+   353→   353→                    {activeBooking.assigneeName[0]}
+   354→   354→                  </AvatarFallback>
+   355→   355→                </Avatar>
+   356→   356→                <div>
+   357→   357→                  <p className="text-sm font-medium text-gray-900">{activeBooking.assigneeName}</p>
+   358→   358→                  <p className="text-xs text-gray-500">Technician</p>
+   359→   359→                </div>
+   360→   360→                {activeBooking.assignee?.phone && (
+   361→   361→                  <Button
+   362→   362→                    variant="outline"
+   363→   363→                    size="sm"
+   364→   364→                    className="ml-auto h-7 text-xs"
+   365→   365→                    onClick={() => window.open(`tel:${activeBooking.assignee!.phone}`)}
+   366→   366→                  >
+   367→   367→                    <Phone className="size-3 mr-1" /> Call
+   368→   368→                  </Button>
+   369→   369→                )}
+   370→   370→              </div>
+   371→   371→            )}
+   372→   372→
+   373→   373→            {activeBookings.length > 1 && (
+   374→   374→              <div className="flex items-center gap-2 flex-wrap">
+   375→   375→                <span className="text-xs text-gray-500">Track another:</span>
+   376→   376→                {activeBookings.filter(b => b.id !== activeBooking.id).map(b => (
+   377→   377→                  <Button
+   378→   378→                    key={b.id}
+   379→   379→                    variant="outline"
+   380→   380→                    size="sm"
+   381→   381→                    className="h-6 text-[10px] px-2"
+   382→   382→                    onClick={() => setActiveBookingId(b.id)}
+   383→   383→                  >
+   384→   384→                    {b.title}
+   385→   385→                  </Button>
+   386→   386→                ))}
+   387→   387→              </div>
+   388→   388→            )}
+   389→   389→          </CardContent>
+   390→   390→        </Card>
+   391→   391→      )}
+   392→   392→
+   393→   393→      {/* Tabs */}
+   394→   394→      <Tabs defaultValue="bookings" className="space-y-4">
+   395→   395→        <TabsList className="w-full h-10 bg-white border shadow-sm">
+   396→   396→          <TabsTrigger value="bookings" className="text-xs flex-1">
+   397→   397→            <Calendar className="size-3.5 mr-1" /> Bookings
+   398→   398→          </TabsTrigger>
+   399→   399→          <TabsTrigger value="invoices" className="text-xs flex-1">
+   400→   400→            <FileText className="size-3.5 mr-1" /> Invoices
+   401→   401→          </TabsTrigger>
+   402→   402→          <TabsTrigger value="reviews" className="text-xs flex-1">
+   403→   403→            <Star className="size-3.5 mr-1" /> Reviews
+   404→   404→          </TabsTrigger>
+   405→   405→          <TabsTrigger value="contact" className="text-xs flex-1">
+   406→   406→            <MessageCircle className="size-3.5 mr-1" /> Contact
+   407→   407→          </TabsTrigger>
+   408→   408→        </TabsList>
+   409→   409→
+   410→   410→        {/* Bookings Tab */}
+   411→   411→        <TabsContent value="bookings" className="space-y-3">
+   412→   412→          {bookings.length === 0 ? (
+   413→   413→            <Card className="border-0 shadow-sm">
+   414→   414→              <CardContent className="p-8 text-center">
+   415→   415→                <Calendar className="size-10 text-gray-200 mx-auto mb-3" />
+   416→   416→                <p className="text-sm text-gray-500">No bookings yet</p>
+   417→   417→              </CardContent>
+   418→   418→            </Card>
+   419→   419→          ) : (
+   420→   420→            <>
+   421→   421→              {activeBookings.length > 0 && (
+   422→   422→                <div className="space-y-2">
+   423→   423→                  <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+   424→   424→                    <Clock className="size-3.5 text-emerald-600" /> Upcoming
+   425→   425→                  </h3>
+   426→   426→                  {activeBookings.map(booking => (
+   427→   427→                    <Card key={booking.id} className="border-0 shadow-sm bg-white">
+   428→   428→                      <CardContent className="p-4">
+   429→   429→                        <div className="flex items-start justify-between gap-3">
+   430→   430→                          <div className="flex-1 min-w-0">
+   431→   431→                            <h4 className="font-medium text-sm text-gray-900">{booking.title}</h4>
+   432→   432→                            {booking.address && (
+   433→   433→                              <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
+   434→   434→                                <MapPin className="size-3" /> {booking.address}
+   435→   435→                              </div>
+   436→   436→                            )}
+   437→   437→                            {booking.scheduledAt && (
+   438→   438→                              <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
+   439→   439→                                <Calendar className="size-3" /> {formatDate(booking.scheduledAt)} at {formatTime(booking.scheduledAt)}
+   440→   440→                              </div>
+   441→   441→                            )}
+   442→   442→                            {booking.assigneeName && (
+   443→   443→                              <div className="flex items-center gap-1.5 mt-1.5">
+   444→   444→                                <Avatar className="size-5">
+   445→   445→                                  <AvatarFallback className="bg-emerald-100 text-emerald-700 text-[8px]">
+   446→   446→                                    {booking.assigneeName[0]}
+   447→   447→                                  </AvatarFallback>
+   448→   448→                                </Avatar>
+   449→   449→                                <span className="text-xs text-gray-600">{booking.assigneeName}</span>
+   450→   450→                              </div>
+   451→   451→                            )}
+   452→   452→                          </div>
+   453→   453→                          <div className="flex flex-col items-end gap-1.5">
+   454→   454→                            <Badge variant="outline" className={`${getStatusColor(booking.status)} text-[10px]`}>
+   455→   455→                              {booking.status.replace('_', ' ')}
+   456→   456→                            </Badge>
+   457→   457→                            <Button
+   458→   458→                              variant="outline"
+   459→   459→                              size="sm"
+   460→   460→                              className="h-6 text-[10px] px-2"
+   461→   461→                              onClick={() => handleReschedule(booking)}
+   462→   462→                            >
+   463→   463→                              <RefreshCw className="size-2.5 mr-1" /> Reschedule
+   464→   464→                            </Button>
+   465→   465→                          </div>
+   466→   466→                        </div>
+   467→   467→                      </CardContent>
+   468→   468→                    </Card>
+   469→   469→                  ))}
+   470→   470→                </div>
+   471→   471→              )}
+   472→   472→
+   473→   473→              {pastBookings.length > 0 && (
+   474→   474→                <div className="space-y-2">
+   475→   475→                  <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+   476→   476→                    <CheckCircle2 className="size-3.5 text-gray-400" /> Past
+   477→   477→                  </h3>
+   478→   478→                  {pastBookings.map(booking => (
+   479→   479→                    <Card key={booking.id} className="border-0 shadow-sm bg-white/70">
+   480→   480→                      <CardContent className="p-4">
+   481→   481→                        <div className="flex items-start justify-between gap-3">
+   482→   482→                          <div className="flex-1 min-w-0">
+   483→   483→                            <h4 className="font-medium text-sm text-gray-700">{booking.title}</h4>
+   484→   484→                            {booking.scheduledAt && (
+   485→   485→                              <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
+   486→   486→                                <Calendar className="size-3" /> {formatDate(booking.scheduledAt)}
+   487→   487→                              </div>
+   488→   488→                            )}
+   489→   489→                          </div>
+   490→   490→                          <Badge variant="outline" className={`${getStatusColor(booking.status)} text-[10px]`}>
+   491→   491→                            {booking.status.replace('_', ' ')}
+   492→   492→                          </Badge>
+   493→   493→                        </div>
+   494→   494→                      </CardContent>
+   495→   495→                    </Card>
+   496→   496→                  ))}
+   497→   497→                </div>
+   498→   498→              )}
+   499→   499→            </>
+   500→   500→          )}
+   501→   501→        </TabsContent>
+   502→   502→
+   503→   503→        {/* Invoices Tab */}
+   504→   504→        <TabsContent value="invoices" className="space-y-3">
+   505→   505→          {invoices.length === 0 ? (
+   506→   506→            <Card className="border-0 shadow-sm">
+   507→   507→              <CardContent className="p-8 text-center">
+   508→   508→                <FileText className="size-10 text-gray-200 mx-auto mb-3" />
+   509→   509→                <p className="text-sm text-gray-500">No invoices yet</p>
+   510→   510→              </CardContent>
+   511→   511→            </Card>
+   512→   512→          ) : (
+   513→   513→            invoices.map(invoice => (
+   514→   514→              <Card key={invoice.id} className="border-0 shadow-sm bg-white">
+   515→   515→                <CardContent className="p-4">
+   516→   516→                  <div className="flex items-center justify-between">
+   517→   517→                    <div>
+   518→   518→                      <h4 className="font-medium text-sm text-gray-900">
+   519→   519→                        Invoice {invoice.number || invoice.id.slice(0, 8)}
+   520→   520→                      </h4>
+   521→   521→                      <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500">
+   522→   522→                        <span>Issued: {formatDate(invoice.createdAt)}</span>
+   523→   523→                        {invoice.dueDate && <span>Due: {formatDate(invoice.dueDate)}</span>}
+   524→   524→                      </div>
+   525→   525→                    </div>
+   526→   526→                    <div className="flex flex-col items-end gap-1.5">
+   527→   527→                      <span className="text-lg font-bold text-gray-900">{formatCurrency(invoice.total)}</span>
+   528→   528→                      <div className="flex items-center gap-2">
+   529→   529→                        <Badge variant="outline" className={`${getInvoiceStatusColor(invoice.status)} text-[10px]`}>
+   530→   530→                          {invoice.status}
+   531→   531→                        </Badge>
+   532→   532→                        {invoice.status !== 'paid' && invoice.status !== 'cancelled' && (
+   533→   533→                          <Button
+   534→   534→                            size="sm"
+   535→   535→                            className="h-6 text-[10px] px-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+   536→   536→                            onClick={() => handlePayInvoice(invoice)}
+   537→   537→                          >
+   538→   538→                            <CreditCard className="size-2.5 mr-1" /> Pay
+   539→   539→                          </Button>
+   540→   540→                        )}
+   541→   541→                      </div>
+   542→   542→                    </div>
+   543→   543→                  </div>
+   544→   544→                  {invoice.paidAt && (
+   545→   545→                    <p className="text-xs text-emerald-600 mt-1">Paid on {formatDate(invoice.paidAt)}</p>
+   546→   546→                  )}
+   547→   547→                </CardContent>
+   548→   548→              </Card>
+   549→   549→            ))
+   550→   550→          )}
+   551→   551→        </TabsContent>
+   552→   552→
+   553→   553→        {/* Reviews Tab */}
+   554→   554→        <TabsContent value="reviews" className="space-y-3">
+   555→   555→          {completedBookings.length === 0 ? (
+   556→   556→            <Card className="border-0 shadow-sm">
+   557→   557→              <CardContent className="p-8 text-center">
+   558→   558→                <Star className="size-10 text-gray-200 mx-auto mb-3" />
+   559→   559→                <p className="text-sm text-gray-500">No completed jobs to review yet</p>
+   560→   560→              </CardContent>
+   561→   561→            </Card>
+   562→   562→          ) : (
+   563→   563→            completedBookings.map(booking => (
+   564→   564→              <Card key={booking.id} className="border-0 shadow-sm bg-white">
+   565→   565→                <CardContent className="p-4">
+   566→   566→                  <div className="flex items-center justify-between">
+   567→   567→                    <div>
+   568→   568→                      <h4 className="font-medium text-sm text-gray-900">{booking.title}</h4>
+   569→   569→                      <p className="text-xs text-gray-500 mt-0.5">Completed {formatDate(booking.updatedAt)}</p>
+   570→   570→                      {booking.assigneeName && (
+   571→   571→                        <p className="text-xs text-gray-500 mt-0.5">Technician: {booking.assigneeName}</p>
+   572→   572→                      )}
+   573→   573→                    </div>
+   574→   574→                    <Button
+   575→   575→                      size="sm"
+   576→   576→                      variant="outline"
+   577→   577→                      className="h-7 text-xs"
+   578→   578→                      onClick={() => {
+   579→   579→                        setReviewJob(booking);
+   580→   580→                        setReviewRating(5);
+   581→   581→                        setReviewComment('');
+   582→   582→                        setShowReviewDialog(true);
+   583→   583→                      }}
+   584→   584→                    >
+   585→   585→                      <Star className="size-3 mr-1" /> Leave Review
+   586→   586→                    </Button>
+   587→   587→                  </div>
+   588→   588→                </CardContent>
+   589→   589→              </Card>
+   590→   590→            ))
+   591→   591→          )}
+   592→   592→        </TabsContent>
+   593→   593→
+   594→   594→        {/* Contact Tab */}
+   595→   595→        <TabsContent value="contact">
+   596→   596→          <Card className="border-0 shadow-sm bg-white">
+   597→   597→            <CardContent className="p-6 space-y-4">
+   598→   598→              <div className="text-center">
+   599→   599→                <MessageCircle className="size-10 text-emerald-500 mx-auto mb-3" />
+   600→   600→                <h3 className="font-semibold text-gray-900">Need Help?</h3>
+   601→   601→                <p className="text-sm text-gray-500 mt-1">
+   602→   602→                  Reach out via WhatsApp for quick support
+   603→   603→                </p>
+   604→   604→              </div>
+   605→   605→
+   606→   606→              <Button
+   607→   607→                className="w-full h-12 text-sm bg-green-600 hover:bg-green-700 text-white shadow-md"
+   608→   608→                onClick={handleWhatsAppContact}
+   609→   609→              >
+   610→   610→                <MessageCircle className="size-5 mr-2" />
+   611→   611→                Message on WhatsApp
+   612→   612→              </Button>
+   613→   613→
+   614→   614→              <Separator />
+   615→   615→
+   616→   616→              <div className="space-y-2">
+   617→   617→                <h4 className="text-sm font-medium text-gray-700">Common Questions</h4>
+   618→   618→                <div className="space-y-1.5">
+   619→   619→                  {[
+   620→   620→                    'How do I reschedule my appointment?',
+   621→   621→                    'What are your business hours?',
+   622→   622→                    'How can I get a quote for a new service?',
+   623→   623→                    'I have an issue with my recent service',
+   624→   624→                  ].map((question, i) => (
+   625→   625→                    <button
+   626→   626→                      key={i}
+   627→   627→                      className="w-full text-left p-2.5 rounded-lg border border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/50 transition-colors text-sm text-gray-600 flex items-center justify-between group"
+   628→   628→                      onClick={() => {
+   629→   629→                        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(question)}`;
+   630→   630→                        window.open(whatsappUrl, '_blank');
+   631→   631→                      }}
+   632→   632→                    >
+   633→   633→                      <span>{question}</span>
+   634→   634→                      <ChevronRight className="size-3.5 text-gray-300 group-hover:text-emerald-500 transition-colors" />
+   635→   635→                    </button>
+   636→   636→                  ))}
+   637→   637→                </div>
+   638→   638→              </div>
+   639→   639→            </CardContent>
+   640→   640→          </Card>
+   641→   641→        </TabsContent>
+   642→   642→      </Tabs>
+   643→   643→
+   644→   644→      {/* Review Dialog */}
+   645→   645→      <Dialog open={showReviewDialog} onOpenChange={setShowReviewDialog}>
+   646→   646→        <DialogContent className="sm:max-w-md">
+   647→   647→          <DialogHeader>
+   648→   648→            <DialogTitle className="flex items-center gap-2">
+   649→   649→              <Star className="size-5 text-amber-500" />
+   650→   650→              Leave a Review
+   651→   651→            </DialogTitle>
+   652→   652→            <DialogDescription>
+   653→   653→              {reviewJob ? `How was the experience with "${reviewJob.title}"?` : ''}
+   654→   654→            </DialogDescription>
+   655→   655→          </DialogHeader>
+   656→   656→
+   657→   657→          <div className="space-y-4 py-2">
+   658→   658→            <div className="space-y-2">
+   659→   659→              <label className="text-sm font-medium text-gray-700">Rating</label>
+   660→   660→              <div className="flex items-center gap-3">
+   661→   661→                <StarRating value={reviewRating} onChange={setReviewRating} size="lg" />
+   662→   662→                <span className="text-sm text-gray-500">{reviewRating}/5</span>
+   663→   663→              </div>
+   664→   664→            </div>
+   665→   665→
+   666→   666→            <div className="space-y-2">
+   667→   667→              <label className="text-sm font-medium text-gray-700">Your feedback</label>
+   668→   668→              <Textarea
+   669→   669→                placeholder="Tell us about the experience..."
+   670→   670→                value={reviewComment}
+   671→   671→                onChange={(e) => setReviewComment(e.target.value)}
+   672→   672→                rows={4}
+   673→   673→                className="resize-none"
+   674→   674→              />
+   675→   675→            </div>
+   676→   676→          </div>
+   677→   677→
+   678→   678→          <DialogFooter>
+   679→   679→            <Button variant="outline" onClick={() => setShowReviewDialog(false)}>
+   680→   680→              Cancel
+   681→   681→            </Button>
+   682→   682→            <Button
+   683→   683→              onClick={handleSubmitReview}
+   684→   684→              disabled={reviewSubmitting}
+   685→   685→              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   686→   686→            >
+   687→   687→              {reviewSubmitting ? (
+   688→   688→                <Loader2 className="size-4 mr-1 animate-spin" />
+   689→   689→              ) : (
+   690→   690→                <Send className="size-4 mr-1" />
+   691→   691→              )}
+   692→   692→              Submit Review
+   693→   693→            </Button>
+   694→   694→          </DialogFooter>
+   695→   695→        </DialogContent>
+   696→   696→      </Dialog>
+   697→   697→    </div>
+   698→   698→  );
+   699→   699→}
+   700→   700→
+   701→   701→// ─── Management View (no token) ─────────────────────────────────────────────
+   702→   702→
+   703→   703→function PortalManagementView() {
+   704→   704→  const { auth } = useAppStore();
+   705→   705→  const tenantId = auth.user?.tenantId || null;
+   706→   706→
+   707→   707→  // Customers
+   708→   708→  const [customers, setCustomers] = useState<Customer[]>([]);
+   709→   709→  const [customersLoading, setCustomersLoading] = useState(true);
+   710→   710→  const [customerSearch, setCustomerSearch] = useState('');
+   711→   711→
+   712→   712→  // Portal sessions
+   713→   713→  const [sessions, setSessions] = useState<PortalSession[]>([]);
+   714→   714→  const [sessionsLoading, setSessionsLoading] = useState(true);
+   715→   715→
+   716→   716→  // Generate link
+   717→   717→  const [generatingFor, setGeneratingFor] = useState<string | null>(null);
+   718→   718→
+   719→   719→  // Preview
+   720→   720→  const [previewCustomerId, setPreviewCustomerId] = useState<string>('');
+   721→   721→  const [previewData, setPreviewData] = useState<PortalData | null>(null);
+   722→   722→  const [previewLoading, setPreviewLoading] = useState(false);
+   723→   723→  const [previewToken, setPreviewToken] = useState<string | null>(null);
+   724→   724→
+   725→   725→  // Active tab
+   726→   726→  const [activeTab, setActiveTab] = useState('links');
+   727→   727→
+   728→   728→  // ─── Fetch customers ──────────────────────────────────────────────────
+   729→   729→  const fetchCustomers = useCallback(async () => {
+   730→   730→    setCustomersLoading(true);
+   731→   731→    try {
+   732→   732→      const res = await fetch(`/api/customers${customerSearch ? `?search=${encodeURIComponent(customerSearch)}&XTransformPort=3000` : '?XTransformPort=3000'}`);
+   733→   733→      if (res.ok) {
+   734→   734→        const data = await res.json();
+   735→   735→        setCustomers(Array.isArray(data) ? data : []);
+   736→   736→      }
+   737→   737→    } catch {
+   738→   738→      toast.error('Failed to load customers');
+   739→   739→    } finally {
+   740→   740→      setCustomersLoading(false);
+   741→   741→    }
+   742→   742→  }, [customerSearch]);
+   743→   743→
+   744→   744→  // ─── Fetch portal sessions ────────────────────────────────────────────
+   745→   745→  const fetchSessions = useCallback(async () => {
+   746→   746→    setSessionsLoading(true);
+   747→   747→    try {
+   748→   748→      const res = await fetch(`/api/customer-portal?list=true&tenantId=${tenantId || ''}&XTransformPort=3000`);
+   749→   749→      if (res.ok) {
+   750→   750→        const data = await res.json();
+   751→   751→        setSessions(Array.isArray(data) ? data : []);
+   752→   752→      } else {
+   753→   753→        // If list endpoint not available, try alternative approach
+   754→   754→        setSessions([]);
+   755→   755→      }
+   756→   756→    } catch {
+   757→   757→      setSessions([]);
+   758→   758→    } finally {
+   759→   759→      setSessionsLoading(false);
+   760→   760→    }
+   761→   761→  }, [tenantId]);
+   762→   762→
+   763→   763→  useEffect(() => {
+   764→   764→    fetchCustomers();
+   765→   765→    fetchSessions();
+   766→   766→  }, [fetchCustomers, fetchSessions]);
+   767→   767→
+   768→   768→  // ─── Generate portal link ─────────────────────────────────────────────
+   769→   769→  const handleGenerateLink = async (customerId: string) => {
+   770→   770→    setGeneratingFor(customerId);
+   771→   771→    try {
+   772→   772→      const res = await fetch('/api/customer-portal?XTransformPort=3000', {
+   773→   773→        method: 'POST',
+   774→   774→        headers: { 'Content-Type': 'application/json' },
+   775→   775→        body: JSON.stringify({
+   776→   776→          customerId,
+   777→   777→          expiresInHours: 72,
+   778→   778→          tenantId,
+   779→   779→        }),
+   780→   780→      });
+   781→   781→
+   782→   782→      if (res.ok) {
+   783→   783→        const data = await res.json();
+   784→   784→        const newSession: PortalSession = {
+   785→   785→          id: data.session.id,
+   786→   786→          token: data.session.token,
+   787→   787→          customerId: data.session.customerId,
+   788→   788→          customerName: data.session.customerName,
+   789→   789→          expiresAt: data.session.expiresAt,
+   790→   790→          portalUrl: data.session.portalUrl,
+   791→   791→        };
+   792→   792→        setSessions(prev => [newSession, ...prev]);
+   793→   793→        toast.success(`Portal link generated for ${data.session.customerName}`);
+   794→   794→      } else {
+   795→   795→        const errData = await res.json().catch(() => ({}));
+   796→   796→        toast.error(errData.error || 'Failed to generate portal link');
+   797→   797→      }
+   798→   798→    } catch {
+   799→   799→      toast.error('Network error');
+   800→   800→    } finally {
+   801→   801→      setGeneratingFor(null);
+   802→   802→    }
+   803→   803→  };
+   804→   804→
+   805→   805→  // ─── Copy link to clipboard ───────────────────────────────────────────
+   806→   806→  const handleCopyLink = async (url: string) => {
+   807→   807→    try {
+   808→   808→      await navigator.clipboard.writeText(url);
+   809→   809→      toast.success('Portal link copied to clipboard');
+   810→   810→    } catch {
+   811→   811→      toast.error('Failed to copy link');
+   812→   812→    }
+   813→   813→  };
+   814→   814→
+   815→   815→  // ─── Open portal in new tab ───────────────────────────────────────────
+   816→   816→  const handleOpenPortal = (token: string) => {
+   817→   817→    window.open(`/portal/${token}`, '_blank');
+   818→   818→  };
+   819→   819→
+   820→   820→  // ─── Preview portal ──────────────────────────────────────────────────
+   821→   821→  const handleStartPreview = async () => {
+   822→   822→    if (!previewCustomerId) {
+   823→   823→      toast.error('Please select a customer first');
+   824→   824→      return;
+   825→   825→    }
+   826→   826→
+   827→   827→    setPreviewLoading(true);
+   828→   828→    setPreviewData(null);
+   829→   829→    setPreviewToken(null);
+   830→   830→
+   831→   831→    try {
+   832→   832→      // Generate a temporary portal session
+   833→   833→      const genRes = await fetch('/api/customer-portal?XTransformPort=3000', {
+   834→   834→        method: 'POST',
+   835→   835→        headers: { 'Content-Type': 'application/json' },
+   836→   836→        body: JSON.stringify({
+   837→   837→          customerId: previewCustomerId,
+   838→   838→          expiresInHours: 1,
+   839→   839→          tenantId,
+   840→   840→        }),
+   841→   841→      });
+   842→   842→
+   843→   843→      if (!genRes.ok) {
+   844→   844→        const errData = await genRes.json().catch(() => ({}));
+   845→   845→        toast.error(errData.error || 'Failed to generate preview session');
+   846→   846→        setPreviewLoading(false);
+   847→   847→        return;
+   848→   848→      }
+   849→   849→
+   850→   850→      const genData = await genRes.json();
+   851→   851→      const token = genData.session.token;
+   852→   852→      setPreviewToken(token);
+   853→   853→
+   854→   854→      // Fetch portal data using the token
+   855→   855→      const dataRes = await fetch(`/api/customer-portal/${token}?XTransformPort=3000`);
+   856→   856→      if (dataRes.ok) {
+   857→   857→        const portalData = await dataRes.json();
+   858→   858→        setPreviewData(portalData);
+   859→   859→      } else {
+   860→   860→        toast.error('Failed to load portal preview data');
+   861→   861→      }
+   862→   862→    } catch {
+   863→   863→      toast.error('Network error');
+   864→   864→    } finally {
+   865→   865→      setPreviewLoading(false);
+   866→   866→    }
+   867→   867→  };
+   868→   868→
+   869→   869→  const handleRefreshPreview = async () => {
+   870→   870→    if (!previewToken) return;
+   871→   871→    try {
+   872→   872→      const dataRes = await fetch(`/api/customer-portal/${previewToken}?XTransformPort=3000`);
+   873→   873→      if (dataRes.ok) {
+   874→   874→        const portalData = await dataRes.json();
+   875→   875→        setPreviewData(portalData);
+   876→   876→      }
+   877→   877→    } catch {
+   878→   878→      toast.error('Failed to refresh preview');
+   879→   879→    }
+   880→   880→  };
+   881→   881→
+   882→   882→  // ─── Computed ─────────────────────────────────────────────────────────
+   883→   883→  const filteredCustomers = customers.filter(c =>
+   884→   884→    !customerSearch ||
+   885→   885→    c.name?.toLowerCase().includes(customerSearch.toLowerCase()) ||
+   886→   886→    c.phone?.includes(customerSearch) ||
+   887→   887→    c.email?.toLowerCase().includes(customerSearch.toLowerCase())
+   888→   888→  );
+   889→   889→
+   890→   890→  const selectedCustomer = customers.find(c => c.id === previewCustomerId);
+   891→   891→
+   892→   892→  return (
+   893→   893→    <div className="min-h-screen flex flex-col">
+   894→   894→      {/* Header */}
+   895→   895→      <header className="bg-white border-b border-gray-100 sticky top-0 z-20">
+   896→   896→        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4">
+   897→   897→          <div className="flex items-center justify-between">
+   898→   898→            <div className="flex items-center gap-3">
+   899→   899→              <div className="flex items-center justify-center size-10 rounded-xl bg-emerald-600 shadow-md shadow-emerald-600/20">
+   900→   900→                <Globe className="size-5 text-white" />
+   901→   901→              </div>
+   902→   902→              <div>
+   903→   903→                <h1 className="text-lg font-bold text-gray-900">Customer Portal</h1>
+   904→   904→                <p className="text-xs text-gray-500">Manage portal access & preview customer experience</p>
+   905→   905→              </div>
+   906→   906→            </div>
+   907→   907→            <div className="flex items-center gap-2">
+   908→   908→              <Button
+   909→   909→                variant="outline"
+   910→   910→                size="sm"
+   911→   911→                className="h-8 text-xs"
+   912→   912→                onClick={() => { fetchCustomers(); fetchSessions(); }}
+   913→   913→              >
+   914→   914→                <RefreshCw className="size-3.5 mr-1" /> Refresh
+   915→   915→              </Button>
+   916→   916→            </div>
+   917→   917→          </div>
+   918→   918→        </div>
+   919→   919→      </header>
+   920→   920→
+   921→   921→      {/* Main Content */}
+   922→   922→      <main className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 py-6">
+   923→   923→        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+   924→   924→          <TabsList className="bg-white border shadow-sm h-10">
+   925→   925→            <TabsTrigger value="links" className="text-sm px-4">
+   926→   926→              <Link2 className="size-4 mr-1.5" /> Portal Links
+   927→   927→            </TabsTrigger>
+   928→   928→            <TabsTrigger value="preview" className="text-sm px-4">
+   929→   929→              <Eye className="size-4 mr-1.5" /> Preview
+   930→   930→            </TabsTrigger>
+   931→   931→          </TabsList>
+   932→   932→
+   933→   933→          {/* ─── Portal Links Tab ───────────────────────────────────────── */}
+   934→   934→          <TabsContent value="links" className="space-y-6">
+   935→   935→            {/* Customer List & Generate */}
+   936→   936→            <Card className="border-0 shadow-sm">
+   937→   937→              <CardHeader className="pb-3">
+   938→   938→                <div className="flex items-center justify-between">
+   939→   939→                  <div>
+   940→   940→                    <CardTitle className="text-base font-semibold flex items-center gap-2">
+   941→   941→                      <Building2 className="size-4 text-emerald-600" />
+   942→   942→                      Customers
+   943→   943→                    </CardTitle>
+   944→   944→                    <CardDescription className="mt-1">Generate portal links for customers to self-serve</CardDescription>
+   945→   945→                  </div>
+   946→   946→                </div>
+   947→   947→                <div className="relative mt-3">
+   948→   948→                  <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+   949→   949→                  <Input
+   950→   950→                    placeholder="Search customers by name, phone, or email..."
+   951→   951→                    className="pl-9 h-9 text-sm"
+   952→   952→                    value={customerSearch}
+   953→   953→                    onChange={(e) => setCustomerSearch(e.target.value)}
+   954→   954→                  />
+   955→   955→                </div>
+   956→   956→              </CardHeader>
+   957→   957→              <CardContent>
+   958→   958→                {customersLoading ? (
+   959→   959→                  <div className="flex items-center justify-center py-12">
+   960→   960→                    <Loader2 className="size-6 animate-spin text-emerald-600" />
+   961→   961→                    <span className="ml-2 text-sm text-gray-500">Loading customers...</span>
+   962→   962→                  </div>
+   963→   963→                ) : filteredCustomers.length === 0 ? (
+   964→   964→                  <div className="text-center py-12">
+   965→   965→                    <User className="size-10 text-gray-200 mx-auto mb-3" />
+   966→   966→                    <p className="text-sm text-gray-500">
+   967→   967→                      {customerSearch ? 'No customers match your search' : 'No customers found'}
+   968→   968→                    </p>
+   969→   969→                  </div>
+   970→   970→                ) : (
+   971→   971→                  <ScrollArea className="max-h-96">
+   972→   972→                    <div className="space-y-1">
+   973→   973→                      {filteredCustomers.map(customer => {
+   974→   974→                        const existingSession = sessions.find(s => s.customerId === customer.id && !isExpired(s.expiresAt));
+   975→   975→                        const isGenerating = generatingFor === customer.id;
+   976→   976→
+   977→   977→                        return (
+   978→   978→                          <div
+   979→   979→                            key={customer.id}
+   980→   980→                            className="flex items-center justify-between gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors group"
+   981→   981→                          >
+   982→   982→                            <div className="flex items-center gap-3 min-w-0">
+   983→   983→                              <Avatar className="size-9 shrink-0">
+   984→   984→                                <AvatarFallback className="bg-emerald-100 text-emerald-700 text-xs font-medium">
+   985→   985→                                  {customer.name?.[0] || '?'}
+   986→   986→                                </AvatarFallback>
+   987→   987→                              </Avatar>
+   988→   988→                              <div className="min-w-0">
+   989→   989→                                <p className="text-sm font-medium text-gray-900 truncate">{customer.name || 'Unnamed'}</p>
+   990→   990→                                <div className="flex items-center gap-3 text-xs text-gray-500">
+   991→   991→                                  {customer.phone && <span>{customer.phone}</span>}
+   992→   992→                                  {customer.email && <span className="truncate">{customer.email}</span>}
+   993→   993→                                </div>
+   994→   994→                              </div>
+   995→   995→                            </div>
+   996→   996→                            <div className="flex items-center gap-2 shrink-0">
+   997→   997→                              {existingSession ? (
+   998→   998→                                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
+   999→   999→                                  <CheckCircle2 className="size-3 mr-1" /> Active Link
+  1000→  1000→                                </Badge>
+  1001→  1001→                              ) : null}
+  1002→  1002→                              <Button
+  1003→  1003→                                size="sm"
+  1004→  1004→                                className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+  1005→  1005→                                disabled={isGenerating}
+  1006→  1006→                                onClick={() => handleGenerateLink(customer.id)}
+  1007→  1007→                              >
+  1008→  1008→                                {isGenerating ? (
+  1009→  1009→                                  <Loader2 className="size-3 mr-1 animate-spin" />
+  1010→  1010→                                ) : (
+  1011→  1011→                                  <Plus className="size-3 mr-1" />
+  1012→  1012→                                )}
+  1013→  1013→                                Generate Link
+  1014→  1014→                              </Button>
+  1015→  1015→                            </div>
+  1016→  1016→                          </div>
+  1017→  1017→                        );
+  1018→  1018→                      })}
+  1019→  1019→                    </div>
+  1020→  1020→                  </ScrollArea>
+  1021→  1021→                )}
+  1022→  1022→              </CardContent>
+  1023→  1023→            </Card>
+  1024→  1024→
+  1025→  1025→            {/* Active Portal Sessions */}
+  1026→  1026→            <Card className="border-0 shadow-sm">
+  1027→  1027→              <CardHeader className="pb-3">
+  1028→  1028→                <CardTitle className="text-base font-semibold flex items-center gap-2">
+  1029→  1029→                  <QrCode className="size-4 text-emerald-600" />
+  1030→  1030→                  Portal Sessions
+  1031→  1031→                </CardTitle>
+  1032→  1032→                <CardDescription>Active and recent portal access links</CardDescription>
+  1033→  1033→              </CardHeader>
+  1034→  1034→              <CardContent>
+  1035→  1035→                {sessionsLoading ? (
+  1036→  1036→                  <div className="flex items-center justify-center py-8">
+  1037→  1037→                    <Loader2 className="size-5 animate-spin text-emerald-600" />
+  1038→  1038→                    <span className="ml-2 text-sm text-gray-500">Loading sessions...</span>
+  1039→  1039→                  </div>
+  1040→  1040→                ) : sessions.length === 0 ? (
+  1041→  1041→                  <div className="text-center py-8">
+  1042→  1042→                    <Link2 className="size-10 text-gray-200 mx-auto mb-3" />
+  1043→  1043→                    <p className="text-sm text-gray-500">No portal sessions yet</p>
+  1044→  1044→                    <p className="text-xs text-gray-400 mt-1">Generate a link above to create a session</p>
+  1045→  1045→                  </div>
+  1046→  1046→                ) : (
+  1047→  1047→                  <ScrollArea className="max-h-96">
+  1048→  1048→                    <div className="space-y-2">
+  1049→  1049→                      {sessions.map(session => {
+  1050→  1050→                        const expired = isExpired(session.expiresAt);
+  1051→  1051→                        return (
+  1052→  1052→                          <div
+  1053→  1053→                            key={session.id}
+  1054→  1054→                            className={`p-4 rounded-lg border transition-colors ${
+  1055→  1055→                              expired
+  1056→  1056→                                ? 'bg-gray-50/50 border-gray-100'
+  1057→  1057→                                : 'bg-white border-emerald-100 hover:border-emerald-200'
+  1058→  1058→                            }`}
+  1059→  1059→                          >
+  1060→  1060→                            <div className="flex items-start justify-between gap-3">
+  1061→  1061→                              <div className="flex items-start gap-3 min-w-0">
+  1062→  1062→                                <Avatar className="size-9 shrink-0 mt-0.5">
+  1063→  1063→                                  <AvatarFallback className={`text-xs font-medium ${
+  1064→  1064→                                    expired
+  1065→  1065→                                      ? 'bg-gray-100 text-gray-500'
+  1066→  1066→                                      : 'bg-emerald-100 text-emerald-700'
+  1067→  1067→                                  }`}>
+  1068→  1068→                                    {session.customerName?.[0] || '?'}
+  1069→  1069→                                  </AvatarFallback>
+  1070→  1070→                                </Avatar>
+  1071→  1071→                                <div className="min-w-0">
+  1072→  1072→                                  <p className={`text-sm font-medium ${expired ? 'text-gray-500' : 'text-gray-900'}`}>
+  1073→  1073→                                    {session.customerName || 'Unknown Customer'}
+  1074→  1074→                                  </p>
+  1075→  1075→                                  <div className="flex items-center gap-1.5 mt-1">
+  1076→  1076→                                    <Link2 className="size-3 text-gray-400" />
+  1077→  1077→                                    <span className="text-xs text-gray-400 font-mono truncate max-w-[200px] sm:max-w-[320px]">
+  1078→  1078→                                      {session.portalUrl || `/portal/${session.token.slice(0, 12)}...`}
+  1079→  1079→                                    </span>
+  1080→  1080→                                  </div>
+  1081→  1081→                                  <div className="flex items-center gap-3 mt-1 text-xs">
+  1082→  1082→                                    <span className={`flex items-center gap-1 ${expired ? 'text-red-500' : 'text-gray-500'}`}>
+  1083→  1083→                                      <Clock className="size-3" />
+  1084→  1084→                                      {expired ? `Expired ${timeAgo(session.expiresAt)}` : `Expires ${formatDate(session.expiresAt)}`}
+  1085→  1085→                                    </span>
+  1086→  1086→                                  </div>
+  1087→  1087→                                </div>
+  1088→  1088→                              </div>
+  1089→  1089→                              <div className="flex items-center gap-1.5 shrink-0">
+  1090→  1090→                                <Badge
+  1091→  1091→                                  variant="outline"
+  1092→  1092→                                  className={`text-[10px] ${
+  1093→  1093→                                    expired
+  1094→  1094→                                      ? 'bg-red-50 text-red-600 border-red-200'
+  1095→  1095→                                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+  1096→  1096→                                  }`}
+  1097→  1097→                                >
+  1098→  1098→                                  {expired ? 'Expired' : 'Active'}
+  1099→  1099→                                </Badge>
+  1100→  1100→                                {!expired && (
+  1101→  1101→                                  <>
+  1102→  1102→                                    <Button
+  1103→  1103→                                      variant="outline"
+  1104→  1104→                                      size="sm"
+  1105→  1105→                                      className="h-7 w-7 p-0"
+  1106→  1106→                                      onClick={() => handleCopyLink(session.portalUrl || `${window.location.origin}/portal/${session.token}`)}
+  1107→  1107→                                      title="Copy link"
+  1108→  1108→                                    >
+  1109→  1109→                                      <Copy className="size-3" />
+  1110→  1110→                                    </Button>
+  1111→  1111→                                    <Button
+  1112→  1112→                                      variant="outline"
+  1113→  1113→                                      size="sm"
+  1114→  1114→                                      className="h-7 w-7 p-0"
+  1115→  1115→                                      onClick={() => handleOpenPortal(session.token)}
+  1116→  1116→                                      title="Open portal"
+  1117→  1117→                                    >
+  1118→  1118→                                      <ExternalLink className="size-3" />
+  1119→  1119→                                    </Button>
+  1120→  1120→                                  </>
+  1121→  1121→                                )}
+  1122→  1122→                              </div>
+  1123→  1123→                            </div>
+  1124→  1124→                          </div>
+  1125→  1125→                        );
+  1126→  1126→                      })}
+  1127→  1127→                    </div>
+  1128→  1128→                  </ScrollArea>
+  1129→  1129→                )}
+  1130→  1130→              </CardContent>
+  1131→  1131→            </Card>
+  1132→  1132→          </TabsContent>
+  1133→  1133→
+  1134→  1134→          {/* ─── Preview Tab ────────────────────────────────────────────── */}
+  1135→  1135→          <TabsContent value="preview" className="space-y-6">
+  1136→  1136→            <Card className="border-0 shadow-sm">
+  1137→  1137→              <CardHeader className="pb-3">
+  1138→  1138→                <CardTitle className="text-base font-semibold flex items-center gap-2">
+  1139→  1139→                  <Eye className="size-4 text-emerald-600" />
+  1140→  1140→                  Portal Preview
+  1141→  1141→                </CardTitle>
+  1142→  1142→                <CardDescription>
+  1143→  1143→                  Preview the portal experience as a specific customer
+  1144→  1144→                </CardDescription>
+  1145→  1145→              </CardHeader>
+  1146→  1146→              <CardContent>
+  1147→  1147→                <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3">
+  1148→  1148→                  <div className="flex-1 w-full space-y-2">
+  1149→  1149→                    <Label className="text-sm font-medium text-gray-700">Select Customer</Label>
+  1150→  1150→                    <Select value={previewCustomerId} onValueChange={setPreviewCustomerId}>
+  1151→  1151→                      <SelectTrigger className="w-full">
+  1152→  1152→                        <SelectValue placeholder="Choose a customer to preview..." />
+  1153→  1153→                      </SelectTrigger>
+  1154→  1154→                      <SelectContent>
+  1155→  1155→                        {customersLoading ? (
+  1156→  1156→                          <div className="flex items-center justify-center py-4">
+  1157→  1157→                            <Loader2 className="size-4 animate-spin text-emerald-600" />
+  1158→  1158→                            <span className="ml-2 text-xs text-gray-500">Loading...</span>
+  1159→  1159→                          </div>
+  1160→  1160→                        ) : customers.length === 0 ? (
+  1161→  1161→                          <div className="p-4 text-center text-xs text-gray-500">No customers available</div>
+  1162→  1162→                        ) : (
+  1163→  1163→                          customers.map(customer => (
+  1164→  1164→                            <SelectItem key={customer.id} value={customer.id}>
+  1165→  1165→                              <div className="flex items-center gap-2">
+  1166→  1166→                                <Avatar className="size-6">
+  1167→  1167→                                  <AvatarFallback className="bg-emerald-100 text-emerald-700 text-[8px]">
+  1168→  1168→                                    {customer.name?.[0] || '?'}
+  1169→  1169→                                  </AvatarFallback>
+  1170→  1170→                                </Avatar>
+  1171→  1171→                                <span>{customer.name || 'Unnamed'}</span>
+  1172→  1172→                                {customer.phone && <span className="text-gray-400 text-xs">({customer.phone})</span>}
+  1173→  1173→                              </div>
+  1174→  1174→                            </SelectItem>
+  1175→  1175→                          ))
+  1176→  1176→                        )}
+  1177→  1177→                      </SelectContent>
+  1178→  1178→                    </Select>
+  1179→  1179→                  </div>
+  1180→  1180→                  <Button
+  1181→  1181→                    className="bg-emerald-600 hover:bg-emerald-700 text-white h-10 w-full sm:w-auto"
+  1182→  1182→                    disabled={!previewCustomerId || previewLoading}
+  1183→  1183→                    onClick={handleStartPreview}
+  1184→  1184→                  >
+  1185→  1185→                    {previewLoading ? (
+  1186→  1186→                      <Loader2 className="size-4 mr-1.5 animate-spin" />
+  1187→  1187→                    ) : (
+  1188→  1188→                      <Eye className="size-4 mr-1.5" />
+  1189→  1189→                    )}
+  1190→  1190→                    {previewLoading ? 'Loading Preview...' : 'Preview Portal'}
+  1191→  1191→                  </Button>
+  1192→  1192→                </div>
+  1193→  1193→              </CardContent>
+  1194→  1194→            </Card>
+  1195→  1195→
+  1196→  1196→            {/* Preview Content */}
+  1197→  1197→            {previewLoading && !previewData && (
+  1198→  1198→              <div className="flex items-center justify-center py-16">
+  1199→  1199→                <div className="text-center">
+  1200→  1200→                  <Loader2 className="size-8 animate-spin text-emerald-600 mx-auto" />
+  1201→  1201→                  <p className="mt-3 text-sm text-gray-500">Generating preview session...</p>
+  1202→  1202→                </div>
+  1203→  1203→              </div>
+  1204→  1204→            )}
+  1205→  1205→
+  1206→  1206→            {previewData && selectedCustomer && (
+  1207→  1207→              <div className="space-y-4">
+  1208→  1208→                {/* Preview Banner */}
+  1209→  1209→                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex items-center justify-between">
+  1210→  1210→                  <div className="flex items-center gap-2">
+  1211→  1211→                    <Eye className="size-4 text-emerald-600" />
+  1212→  1212→                    <span className="text-sm font-medium text-emerald-800">
+  1213→  1213→                      Previewing portal for <strong>{selectedCustomer.name}</strong>
+  1214→  1214→                    </span>
+  1215→  1215→                  </div>
+  1216→  1216→                  <div className="flex items-center gap-2">
+  1217→  1217→                    <Button
+  1218→  1218→                      variant="outline"
+  1219→  1219→                      size="sm"
+  1220→  1220→                      className="h-7 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+  1221→  1221→                      onClick={handleRefreshPreview}
+  1222→  1222→                    >
+  1223→  1223→                      <RefreshCw className="size-3 mr-1" /> Refresh
+  1224→  1224→                    </Button>
+  1225→  1225→                    {previewToken && (
+  1226→  1226→                      <Button
+  1227→  1227→                        variant="outline"
+  1228→  1228→                        size="sm"
+  1229→  1229→                        className="h-7 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+  1230→  1230→                        onClick={() => handleOpenPortal(previewToken)}
+  1231→  1231→                      >
+  1232→  1232→                        <ExternalLink className="size-3 mr-1" /> Open in New Tab
+  1233→  1233→                      </Button>
+  1234→  1234→                    )}
+  1235→  1235→                  </div>
+  1236→  1236→                </div>
+  1237→  1237→
+  1238→  1238→                {/* Embedded Portal Experience */}
+  1239→  1239→                <div className="bg-gradient-to-br from-emerald-50 via-white to-teal-50 rounded-lg border border-emerald-100 p-4 sm:p-6">
+  1240→  1240→                  {/* Mini header for context */}
+  1241→  1241→                  <div className="flex items-center justify-between mb-4 pb-3 border-b border-emerald-100">
+  1242→  1242→                    <div className="flex items-center gap-3">
+  1243→  1243→                      <div className="flex items-center justify-center size-8 rounded-lg bg-emerald-600 shadow-md shadow-emerald-600/20">
+  1244→  1244→                        <Building2 className="size-4 text-white" />
+  1245→  1245→                      </div>
+  1246→  1246→                      <div>
+  1247→  1247→                        <h2 className="text-sm font-bold text-gray-900">ServiceOS</h2>
+  1248→  1248→                        <p className="text-[10px] text-gray-500">Customer Portal</p>
+  1249→  1249→                      </div>
+  1250→  1250→                    </div>
+  1251→  1251→                    <span className="text-xs text-gray-500">Hi, {selectedCustomer.name}</span>
+  1252→  1252→                  </div>
+  1253→  1253→
+  1254→  1254→                  <PortalExperience portalData={previewData} onRefresh={handleRefreshPreview} />
+  1255→  1255→
+  1256→  1256→                  {/* Mini footer */}
+  1257→  1257→                  <div className="mt-4 pt-3 border-t border-emerald-100 flex items-center justify-between text-[10px] text-gray-400">
+  1258→  1258→                    <span>Powered by ServiceOS</span>
+  1259→  1259→                    {previewData.session?.expiresAt && (
+  1260→  1260→                      <span>Session expires {formatDate(previewData.session.expiresAt)}</span>
+  1261→  1261→                    )}
+  1262→  1262→                  </div>
+  1263→  1263→                </div>
+  1264→  1264→              </div>
+  1265→  1265→            )}
+  1266→  1266→
+  1267→  1267→            {!previewData && !previewLoading && (
+  1268→  1268→              <Card className="border-0 shadow-sm">
+  1269→  1269→                <CardContent className="p-12 text-center">
+  1270→  1270→                  <div className="flex items-center justify-center size-16 rounded-2xl bg-emerald-50 mx-auto mb-4">
+  1271→  1271→                    <Eye className="size-8 text-emerald-300" />
+  1272→  1272→                  </div>
+  1273→  1273→                  <h3 className="text-base font-semibold text-gray-900 mb-1">Select a Customer to Preview</h3>
+  1274→  1274→                  <p className="text-sm text-gray-500 max-w-sm mx-auto">
+  1275→  1275→                    Choose a customer above and click &quot;Preview Portal&quot; to see their portal experience inline
+  1276→  1276→                  </p>
+  1277→  1277→                </CardContent>
+  1278→  1278→              </Card>
+  1279→  1279→            )}
+  1280→  1280→          </TabsContent>
+  1281→  1281→        </Tabs>
+  1282→  1282→      </main>
+  1283→  1283→
+  1284→  1284→      {/* Footer */}
+  1285→  1285→      <footer className="mt-auto border-t border-gray-100 bg-white/50">
+  1286→  1286→        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between text-xs text-gray-400">
+  1287→  1287→          <span>Customer Portal Management</span>
+  1288→  1288→          <span>{sessions.filter(s => !isExpired(s.expiresAt)).length} active session(s)</span>
+  1289→  1289→        </div>
+  1290→  1290→      </footer>
+  1291→  1291→    </div>
+  1292→  1292→  );
+  1293→  1293→}
+  1294→  1294→
+  1295→  1295→// ─── Direct Portal Access View (with token) ─────────────────────────────────
+  1296→  1296→
+  1297→  1297→function DirectPortalView({ token }: { token: string }) {
+  1298→  1298→  const [portalData, setPortalData] = useState<PortalData | null>(null);
+  1299→  1299→  const [loading, setLoading] = useState(true);
+  1300→  1300→  const [error, setError] = useState<string | null>(null);
+  1301→  1301→
+  1302→  1302→  const fetchPortalData = useCallback(async () => {
+  1303→  1303→    try {
+  1304→  1304→      const res = await fetch(`/api/customer-portal/${token}?XTransformPort=3000`);
+  1305→  1305→      if (res.ok) {
+  1306→  1306→        const data = await res.json();
+  1307→  1307→        setPortalData(data);
+  1308→  1308→        setError(null);
+  1309→  1309→      } else if (res.status === 404) {
+  1310→  1310→        setError('Invalid portal link');
+  1311→  1311→      } else if (res.status === 410) {
+  1312→  1312→        setError('This portal link has expired');
+  1313→  1313→      } else {
+  1314→  1314→        setError('Failed to load portal data');
+  1315→  1315→      }
+  1316→  1316→    } catch {
+  1317→  1317→      setError('Unable to connect');
+  1318→  1318→    } finally {
+  1319→  1319→      setLoading(false);
+  1320→  1320→    }
+  1321→  1321→  }, [token]);
+  1322→  1322→
+  1323→  1323→  useEffect(() => {
+  1324→  1324→    fetchPortalData();
+  1325→  1325→  }, [fetchPortalData]);
+  1326→  1326→
+  1327→  1327→  if (loading) {
+  1328→  1328→    return (
+  1329→  1329→      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-teal-50">
+  1330→  1330→        <div className="text-center">
+  1331→  1331→          <Loader2 className="size-8 animate-spin text-emerald-600 mx-auto" />
+  1332→  1332→          <p className="mt-3 text-sm text-emerald-700">Loading your portal...</p>
+  1333→  1333→        </div>
+  1334→  1334→      </div>
+  1335→  1335→    );
+  1336→  1336→  }
+  1337→  1337→
+  1338→  1338→  if (error || !portalData) {
+  1339→  1339→    return (
+  1340→  1340→      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-teal-50">
+  1341→  1341→        <Card className="w-full max-w-md mx-4 border-0 shadow-lg">
+  1342→  1342→          <CardContent className="p-8 text-center">
+  1343→  1343→            <AlertCircle className="size-12 text-red-400 mx-auto mb-3" />
+  1344→  1344→            <h2 className="text-lg font-semibold text-gray-900 mb-1">Unable to Access Portal</h2>
+  1345→  1345→            <p className="text-sm text-gray-500">{error || 'Unknown error'}</p>
+  1346→  1346→            <p className="text-xs text-gray-400 mt-3">Please contact the business for a new link.</p>
+  1347→  1347→          </CardContent>
+  1348→  1348→        </Card>
+  1349→  1349→      </div>
+  1350→  1350→    );
+  1351→  1351→  }
+  1352→  1352→
+  1353→  1353→  return (
+  1354→  1354→    <div className="min-h-screen flex flex-col bg-gradient-to-br from-emerald-50 via-white to-teal-50">
+  1355→  1355→      {/* Header */}
+  1356→  1356→      <header className="bg-white/80 backdrop-blur-sm border-b border-emerald-100 sticky top-0 z-10">
+  1357→  1357→        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+  1358→  1358→          <div className="flex items-center gap-3">
+  1359→  1359→            <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-600 shadow-md shadow-emerald-600/20">
+  1360→  1360→              <Building2 className="size-5 text-white" />
+  1361→  1361→            </div>
+  1362→  1362→            <div>
+  1363→  1363→              <h1 className="text-base font-bold text-gray-900">ServiceOS</h1>
+  1364→  1364→              <p className="text-xs text-gray-500">Customer Portal</p>
+  1365→  1365→            </div>
+  1366→  1366→          </div>
+  1367→  1367→          <div className="flex items-center gap-2">
+  1368→  1368→            <span className="text-sm text-gray-600">Hi, {portalData.customer?.name || 'there'}</span>
+  1369→  1369→          </div>
+  1370→  1370→        </div>
+  1371→  1371→      </header>
+  1372→  1372→
+  1373→  1373→      <main className="flex-1 max-w-4xl mx-auto px-4 py-6 w-full">
+  1374→  1374→        <PortalExperience portalData={portalData} onRefresh={fetchPortalData} />
+  1375→  1375→      </main>
+  1376→  1376→
+  1377→  1377→      <footer className="mt-auto border-t border-emerald-100 bg-white/50">
+  1378→  1378→        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between text-xs text-gray-400">
+  1379→  1379→          <span>Powered by ServiceOS</span>
+  1380→  1380→          {portalData.session?.expiresAt && (
+  1381→  1381→            <span>Session expires {formatDate(portalData.session.expiresAt)}</span>
+  1382→  1382→          )}
+  1383→  1383→        </div>
+  1384→  1384→      </footer>
+  1385→  1385→    </div>
+  1386→  1386→  );
+  1387→  1387→}
+  1388→  1388→
+  1389→  1389→// ─── Main Component ─────────────────────────────────────────────────────────
+  1390→  1390→
+  1391→  1391→export function CustomerPortalView({ token: tokenProp }: CustomerPortalProps) {
+  1392→  1392→  const { auth } = useAppStore();
+  1393→  1393→
+  1394→  1394→  // Get token from prop, URL params, or localStorage (for OTP-authenticated customers)
+  1395→  1395→  const getToken = (): string => {
+  1396→  1396→    if (tokenProp) return tokenProp;
+  1397→  1397→    if (typeof window !== 'undefined') {
+  1398→  1398→      // Check URL params first
+  1399→  1399→      const params = new URLSearchParams(window.location.search);
+  1400→  1400→      const urlToken = params.get('token');
+  1401→  1401→      if (urlToken) return urlToken;
+  1402→  1402→
+  1403→  1403→      // Check localStorage for OTP-authenticated customer token
+  1404→  1404→      try {
+  1405→  1405→        const stored = localStorage.getItem('serviceos_auth');
+  1406→  1406→        if (stored) {
+  1407→  1407→          const parsed = JSON.parse(stored);
+  1408→  1408→          if (parsed.portalToken && (parsed.isCustomer || parsed.user?.role === 'customer')) {
+  1409→  1409→            return parsed.portalToken;
+  1410→  1410→          }
+  1411→  1411→        }
+  1412→  1412→      } catch {
+  1413→  1413→        // localStorage read failed
+  1414→  1414→      }
+  1415→  1415→    }
+  1416→  1416→    return '';
+  1417→  1417→  };
+  1418→  1418→
+  1419→  1419→  const token = getToken();
+  1420→  1420→  const isCustomer = auth.user?.role === 'customer' ||
+  1421→  1421→    (typeof window !== 'undefined' && (() => {
+  1422→  1422→      try {
+  1423→  1423→        const stored = localStorage.getItem('serviceos_auth');
+  1424→  1424→        if (stored) {
+  1425→  1425→          const parsed = JSON.parse(stored);
+  1426→  1426→          return parsed.isCustomer === true;
+  1427→  1427→        }
+  1428→  1428→      } catch { /* ignore */ }
+  1429→  1429→      return false;
+  1430→  1430→    })());
+  1431→  1431→
+  1432→  1432→  // If token is provided or user is a customer, show the direct portal access view
+  1433→  1433→  if (token || isCustomer) {
+  1434→  1434→    return <DirectPortalView token={token} />;
+  1435→  1435→  }
+  1436→  1436→
+  1437→  1437→  // Otherwise, show the management view (for business users)
+  1438→  1438→  return <PortalManagementView />;
+  1439→  1439→}
+  1440→  1440→

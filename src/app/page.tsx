@@ -26,6 +26,14 @@ const AppLayout = dynamic(
   () => import('@/components/layout/app-layout').then(m => ({ default: m.AppLayout })),
   { ssr: false, loading: () => <ViewLoader /> }
 );
+const EmployeePortalLayout = dynamic(
+  () => import('@/components/portals/employee-portal-layout').then(m => ({ default: m.EmployeePortalLayout })),
+  { ssr: false, loading: () => <ViewLoader /> }
+);
+const CustomerPortalLayout = dynamic(
+  () => import('@/components/portals/customer-portal-layout').then(m => ({ default: m.CustomerPortalLayout })),
+  { ssr: false, loading: () => <ViewLoader /> }
+);
 const PWAInstallBanner = dynamic(
   () => import('@/components/pwa/pwa-install-banner').then(m => ({ default: m.PWAInstallBanner })),
   { ssr: false, loading: () => null }
@@ -119,17 +127,25 @@ export default function HomePage() {
             user: data.user,
             tenant: data.tenant || null,
           });
+          // Auto-redirect based on role (for admin/superadmin in AppLayout)
+          if (data.user.role === 'customer') {
+            // Customer portal layout handled by page.tsx based on role
+          } else if (data.user.isSuperAdmin || (data.user.role === 'admin' && !data.user.tenantId)) {
+            useAppStore.getState().setCurrentView('superadmin');
+          }
           if (typeof window !== 'undefined') {
             // Preserve existing token if available, or update with new one
             const existingAuth = localStorage.getItem('serviceos_auth');
-            const existingToken = existingAuth ? JSON.parse(existingAuth).token : null;
+            const existingData = existingAuth ? JSON.parse(existingAuth) : {};
             localStorage.setItem(
               'serviceos_auth',
               JSON.stringify({
                 isAuthenticated: true,
                 user: data.user,
                 tenant: data.tenant || null,
-                token: existingToken,
+                token: existingData.token,
+                portalToken: existingData.portalToken,
+                isCustomer: existingData.isCustomer || data.user.role === 'customer',
               })
             );
           }
@@ -151,6 +167,12 @@ export default function HomePage() {
               user: parsed.user,
               tenant: parsed.tenant || null,
             });
+            // Auto-redirect based on role (for admin/superadmin in AppLayout)
+            if (parsed.user.role === 'customer' || parsed.isCustomer) {
+              // Customer portal layout handled by page.tsx based on role
+            } else if (parsed.user.isSuperAdmin || (parsed.user.role === 'admin' && !parsed.user.tenantId)) {
+              useAppStore.getState().setCurrentView('superadmin');
+            }
             return;
           }
         }
@@ -219,6 +241,7 @@ export default function HomePage() {
     }
 
     clearAuth();
+    useAppStore.getState().setCurrentView('dashboard'); // Reset view
     setUnauthView('landing');
     toast.success('You have been signed out');
   }, [clearAuth]);
@@ -243,16 +266,25 @@ export default function HomePage() {
       if (typeof window !== 'undefined') {
         // Preserve the token that was already stored by the login/register handler
         const existingAuth = localStorage.getItem('serviceos_auth');
-        const existingToken = existingAuth ? JSON.parse(existingAuth).token : null;
+        const existingData = existingAuth ? JSON.parse(existingAuth) : {};
         localStorage.setItem('serviceos_auth', JSON.stringify({
           ...authData,
-          token: existingToken,
+          token: existingData.token,
+          portalToken: existingData.portalToken,
+          isCustomer: existingData.isCustomer || user?.role === 'customer',
         }));
       }
 
-      if (user?.role === 'employee') {
-        useAppStore.getState().setCurrentView('employeePortal');
+      if (user?.role === 'customer') {
+        // Customer logged in via WhatsApp OTP — layout is handled by page.tsx
+        toast.success('Welcome to your customer portal!');
+      } else if (user?.role === 'employee') {
+        // Employee logged in — layout is handled by page.tsx
         toast.success('Welcome to your portal!');
+      } else if (user?.isSuperAdmin || (user?.role === 'admin' && !user?.tenantId)) {
+        // SuperAdmin user — redirect to superadmin dashboard
+        useAppStore.getState().setCurrentView('superadmin');
+        toast.success('Welcome, Super Admin!');
       } else if (!tenant) {
         // New user without a tenant — show onboarding
         setShowOnboarding(true);
@@ -329,6 +361,31 @@ export default function HomePage() {
   }
 
   if (auth.isAuthenticated) {
+    // Role-based layout rendering
+    const userRole = auth.user?.role;
+    const isCustomer = userRole === 'customer' || (auth.user as any)?.isCustomer;
+
+    if (isCustomer) {
+      return (
+        <>
+          <CustomerPortalLayout onLogout={handleLogout} />
+          <PWAInstallBanner />
+          <IOSInstallBanner />
+        </>
+      );
+    }
+
+    if (userRole === 'employee') {
+      return (
+        <>
+          <EmployeePortalLayout onLogout={handleLogout} />
+          <PWAInstallBanner />
+          <IOSInstallBanner />
+        </>
+      );
+    }
+
+    // Default: Admin/Owner/SuperAdmin — use main AppLayout
     return (
       <>
         <AppLayout onLogout={handleLogout} />

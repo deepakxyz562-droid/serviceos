@@ -1,70 +1,168 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { isSuperAdminRequest } from '@/lib/admin-auth';
+
+const GLOBAL_CONFIG_KEY = 'globalMenuConfig';
 
 const DEFAULT_MENU_ITEMS = [
+  // CRM
+  { key: 'leads', label: 'Leads', icon: 'Target', section: 'CRM', sortOrder: 0 },
+  { key: 'contacts', label: 'Contacts', icon: 'Contact', section: 'CRM', sortOrder: 1 },
+  { key: 'customers', label: 'Customers', icon: 'Users', section: 'CRM', sortOrder: 2 },
+  { key: 'customer360', label: 'Customer 360', icon: 'UserCircle', section: 'CRM', sortOrder: 3 },
+  { key: 'salesPipeline', label: 'Sales Pipeline', icon: 'Kanban', section: 'CRM', sortOrder: 4 },
+  // Communication
+  { key: 'inbox', label: 'Inbox', icon: 'Inbox', section: 'Communication', sortOrder: 5 },
+  { key: 'broadcast', label: 'Broadcast', icon: 'Send', section: 'Communication', sortOrder: 6 },
+  { key: 'campaigns', label: 'Campaigns', icon: 'Megaphone', section: 'Communication', sortOrder: 7 },
+  { key: 'marketingTemplates', label: 'Marketing Templates', icon: 'MessageSquare', section: 'Communication', sortOrder: 8 },
+  { key: 'omnichannel', label: 'Omnichannel', icon: 'RadioTower', section: 'Communication', sortOrder: 9 },
+  // Automation
+  { key: 'workflows', label: 'Workflows', icon: 'Workflow', section: 'Automation', sortOrder: 10 },
+  { key: 'triggers', label: 'Triggers', icon: 'Zap', section: 'Automation', sortOrder: 11 },
+  { key: 'variables', label: 'Variables', icon: 'Variable', section: 'Automation', sortOrder: 12 },
+  { key: 'executions', label: 'Executions', icon: 'Activity', section: 'Automation', sortOrder: 13 },
+  { key: 'formBuilder', label: 'Form Builder', icon: 'ClipboardList', section: 'Automation', sortOrder: 14 },
+  { key: 'workflowAutomations', label: 'Workflow Automations', icon: 'GitBranch', section: 'Automation', sortOrder: 15 },
   // Operations
-  { key: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard', section: 'operations', sortOrder: 0 },
-  { key: 'operations', label: 'Operations', icon: 'LayoutDashboard', section: 'operations', sortOrder: 1 },
-  { key: 'jobs', label: 'Jobs', icon: 'Briefcase', section: 'operations', sortOrder: 2 },
-  { key: 'calendar', label: 'Calendar', icon: 'Calendar', section: 'operations', sortOrder: 3 },
-  { key: 'dispatch', label: 'Dispatch', icon: 'Radio', section: 'operations', sortOrder: 4 },
-  // People
-  { key: 'contacts', label: 'Contacts', icon: 'Users', section: 'people', sortOrder: 5 },
-  { key: 'leads', label: 'Leads', icon: 'Target', section: 'people', sortOrder: 6 },
-  { key: 'employees', label: 'Employees', icon: 'Users', section: 'people', sortOrder: 7 },
-  { key: 'customers', label: 'Customers', icon: 'Users', section: 'people', sortOrder: 8 },
-  // Marketing
-  { key: 'campaigns', label: 'Campaigns', icon: 'Megaphone', section: 'marketing', sortOrder: 9 },
-  { key: 'segments', label: 'Segments', icon: 'Filter', section: 'marketing', sortOrder: 10 },
-  { key: 'marketing_templates', label: 'Templates', icon: 'FileText', section: 'marketing', sortOrder: 11 },
-  { key: 'marketing_analytics', label: 'Analytics', icon: 'BarChart3', section: 'marketing', sortOrder: 12 },
-  // Sales
-  { key: 'sales_pipeline', label: 'Pipeline', icon: 'ShoppingCart', section: 'sales', sortOrder: 13 },
-  { key: 'quotes', label: 'Quotes', icon: 'FileText', section: 'sales', sortOrder: 14 },
-  { key: 'invoices', label: 'Invoices', icon: 'Receipt', section: 'sales', sortOrder: 15 },
-  // WhatsApp CRM
-  { key: 'inbox', label: 'Inbox', icon: 'MessageSquare', section: 'whatsapp_crm', sortOrder: 16 },
-  { key: 'broadcast', label: 'Broadcast', icon: 'Radio', section: 'whatsapp_crm', sortOrder: 17 },
-  { key: 'chatbot_builder', label: 'Chatbot Builder', icon: 'Bot', section: 'whatsapp_crm', sortOrder: 18 },
-  { key: 'whatsapp', label: 'WhatsApp', icon: 'MessageSquare', section: 'whatsapp_crm', sortOrder: 19 },
-  // AI & Automation
-  { key: 'ai_assistant', label: 'AI Assistant', icon: 'Bot', section: 'ai_automation', sortOrder: 20 },
-  { key: 'workflows', label: 'Workflows', icon: 'Workflow', section: 'ai_automation', sortOrder: 21 },
-  { key: 'workflow_automations', label: 'Automations', icon: 'Zap', section: 'ai_automation', sortOrder: 22 },
-  { key: 'triggers', label: 'Triggers', icon: 'Zap', section: 'ai_automation', sortOrder: 23 },
-  // Channels
-  { key: 'omnichannel', label: 'Omnichannel', icon: 'Radio', section: 'channels', sortOrder: 24 },
-  { key: 'communication_providers', label: 'Providers', icon: 'Settings', section: 'channels', sortOrder: 25 },
-  { key: 'forms', label: 'Forms', icon: 'FileInput', section: 'channels', sortOrder: 26 },
+  { key: 'booking', label: 'Booking', icon: 'CalendarCheck', section: 'Operations', sortOrder: 16 },
+  { key: 'calendar', label: 'Calendar', icon: 'Calendar', section: 'Operations', sortOrder: 17 },
+  { key: 'jobs', label: 'Jobs', icon: 'Briefcase', section: 'Operations', sortOrder: 18 },
+  { key: 'dispatch', label: 'Dispatch', icon: 'Radio', section: 'Operations', sortOrder: 19 },
+  { key: 'employees', label: 'Employees', icon: 'UserCog', section: 'Operations', sortOrder: 20 },
   // Finance
-  { key: 'billing', label: 'Billing', icon: 'CreditCard', section: 'finance', sortOrder: 27 },
-  { key: 'reports', label: 'Reports', icon: 'BarChart3', section: 'finance', sortOrder: 28 },
-  // Resources
-  { key: 'knowledge_base', label: 'Knowledge Base', icon: 'BookOpen', section: 'resources', sortOrder: 29 },
-  { key: 'document_center', label: 'Documents', icon: 'FileText', section: 'resources', sortOrder: 30 },
-  { key: 'marketplace', label: 'Marketplace', icon: 'Store', section: 'resources', sortOrder: 31 },
-  // Platform
-  { key: 'settings', label: 'Settings', icon: 'Settings', section: 'platform', sortOrder: 32 },
-  { key: 'credentials', label: 'Credentials', icon: 'Key', section: 'platform', sortOrder: 33 },
-  { key: 'integrations', label: 'Integrations', icon: 'Puzzle', section: 'platform', sortOrder: 34 },
+  { key: 'quotes', label: 'Quotes', icon: 'Receipt', section: 'Finance', sortOrder: 21 },
+  { key: 'invoices', label: 'Invoices', icon: 'FileText', section: 'Finance', sortOrder: 22 },
+  { key: 'billing', label: 'Billing', icon: 'CreditCard', section: 'Finance', sortOrder: 23 },
+  // System
+  { key: 'credentials', label: 'Credentials', icon: 'KeyRound', section: 'System', sortOrder: 24 },
+  { key: 'settings', label: 'Settings', icon: 'Settings', section: 'System', sortOrder: 25 },
+  { key: 'auditLogs', label: 'Audit Logs', icon: 'ScrollText', section: 'System', sortOrder: 26 },
+  { key: 'reports', label: 'Reports', icon: 'BarChart3', section: 'System', sortOrder: 27 },
+  // Portals
+  { key: 'customerPortal', label: 'Customer Portal', icon: 'Globe', section: 'Portals', sortOrder: 28 },
+  { key: 'employeePortal', label: 'Employee Portal', icon: 'HardHat', section: 'Portals', sortOrder: 29 },
+  // AI & More
+  { key: 'aiAssistant', label: 'AI Assistant', icon: 'Sparkles', section: 'AI & More', sortOrder: 30 },
+  { key: 'chatbotBuilder', label: 'Chatbot Builder', icon: 'Bot', section: 'AI & More', sortOrder: 31 },
+  { key: 'retargeting', label: 'Retargeting', icon: 'RefreshCw', section: 'AI & More', sortOrder: 32 },
+  { key: 'segments', label: 'Segments', icon: 'Filter', section: 'AI & More', sortOrder: 33 },
+  { key: 'marketingAnalytics', label: 'Analytics', icon: 'BarChart3', section: 'AI & More', sortOrder: 34 },
+  { key: 'serviceCatalog', label: 'Service Catalog', icon: 'BookOpen', section: 'AI & More', sortOrder: 35 },
+  { key: 'communicationProviders', label: 'Providers', icon: 'KeyRound', section: 'AI & More', sortOrder: 36 },
+  { key: 'reviews', label: 'Reviews', icon: 'Star', section: 'AI & More', sortOrder: 37 },
 ];
 
-// GET: List menu items for a tenant or default definitions
+interface MenuItemEntry {
+  key: string;
+  label: string;
+  icon: string;
+  section: string;
+  sortOrder: number;
+  enabled: boolean;
+}
+
+// Helper: safely parse settingsJson from a tenant record
+function parseSettings(raw: unknown): Record<string, unknown> {
+  if (!raw) return {};
+  if (typeof raw === 'string') {
+    try { return JSON.parse(raw); } catch { return {}; }
+  }
+  return raw as Record<string, unknown>;
+}
+
+// Get global menu config from the first tenant's settingsJson
+async function getGlobalMenuConfig(): Promise<MenuItemEntry[]> {
+  try {
+    const tenants = await db.tenant.findMany({ take: 1 });
+    if (!tenants || tenants.length === 0) return getDefaultItems();
+
+    const settings = parseSettings(tenants[0].settingsJson);
+    const config = settings[GLOBAL_CONFIG_KEY] as MenuItemEntry[] | undefined;
+
+    if (!config || config.length === 0) {
+      // Initialize with defaults
+      const defaults = getDefaultItems();
+      await saveGlobalMenuConfig(defaults);
+      return defaults;
+    }
+    return config;
+  } catch (error) {
+    console.error('[getGlobalMenuConfig] Error:', error);
+    return getDefaultItems();
+  }
+}
+
+// Save global menu config to the first tenant's settingsJson
+async function saveGlobalMenuConfig(items: MenuItemEntry[]): Promise<void> {
+  const tenants = await db.tenant.findMany({ take: 1 });
+  if (!tenants || tenants.length === 0) {
+    throw new Error('No tenants found — cannot save global menu config');
+  }
+
+  const tenantId = (tenants[0] as Record<string, unknown>).id as string;
+  const settings = parseSettings(tenants[0].settingsJson);
+  settings[GLOBAL_CONFIG_KEY] = items;
+
+  await db.tenant.update({
+    where: { id: tenantId },
+    data: { settingsJson: JSON.stringify(settings) },
+  });
+}
+
+// Get tenant-specific menu config from the tenant's settingsJson
+async function getTenantMenuConfig(tenantId: string): Promise<MenuItemEntry[]> {
+  const tenant = await db.tenant.findUnique({ where: { id: tenantId } });
+  if (!tenant) return getDefaultItems();
+
+  const settings = parseSettings(tenant.settingsJson);
+  const config = settings.menuConfig as MenuItemEntry[] | undefined;
+  if (!config || config.length === 0) return getDefaultItems();
+  return config;
+}
+
+// Save tenant-specific menu config to the tenant's settingsJson
+async function saveTenantMenuConfig(tenantId: string, items: MenuItemEntry[]): Promise<void> {
+  const tenant = await db.tenant.findUnique({ where: { id: tenantId } });
+  if (!tenant) {
+    throw new Error(`Tenant ${tenantId} not found`);
+  }
+
+  const settings = parseSettings(tenant.settingsJson);
+  settings.menuConfig = items;
+
+  await db.tenant.update({
+    where: { id: tenantId },
+    data: { settingsJson: JSON.stringify(settings) },
+  });
+}
+
+function getDefaultItems(): MenuItemEntry[] {
+  return DEFAULT_MENU_ITEMS.map((item) => ({ ...item, enabled: true }));
+}
+
+// GET: List menu items for a tenant, or global defaults
 export async function GET(request: NextRequest) {
   try {
     const auth = await getAuthUser();
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (auth.role !== 'superadmin') {
+    if (!(await isSuperAdminRequest())) {
       return NextResponse.json({ error: 'Forbidden - SuperAdmin access required' }, { status: 403 });
     }
     const { searchParams } = new URL(request.url);
     const tenantId = searchParams.get('tenantId');
+    const scope = searchParams.get('scope');
+
+    // If scope=global, fetch from settingsJson
+    if (scope === 'global') {
+      const items = await getGlobalMenuConfig();
+      return NextResponse.json({ items: items.map((item) => ({ ...item, id: `global_${item.key}`, tenantId: null })) });
+    }
 
     if (!tenantId) {
-      // Return default menu definitions when no tenant specified
       return NextResponse.json({
         items: DEFAULT_MENU_ITEMS.map((item) => ({
           ...item,
@@ -75,43 +173,9 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    let configs = await db.menuItemConfig.findMany({
-      where: { tenantId },
-      orderBy: { sortOrder: 'asc' },
-    });
-
-    // If no configs exist for this tenant, seed them from defaults
-    if (configs.length === 0) {
-      const createData = DEFAULT_MENU_ITEMS.map((item) => ({
-        tenantId,
-        menuKey: item.key,
-        enabled: true,
-        label: item.label,
-        icon: item.icon,
-        sortOrder: item.sortOrder,
-        section: item.section,
-      }));
-
-      await db.menuItemConfig.createMany({ data: createData, skipDuplicates: true });
-
-      configs = await db.menuItemConfig.findMany({
-        where: { tenantId },
-        orderBy: { sortOrder: 'asc' },
-      });
-    }
-
-    const items = configs.map((c: Record<string, unknown>) => ({
-      id: c.id,
-      key: c.menuKey,
-      label: c.label || c.menuKey,
-      icon: c.icon || 'Menu',
-      section: c.section || 'operations',
-      enabled: c.enabled,
-      sortOrder: c.sortOrder,
-      tenantId,
-    }));
-
-    return NextResponse.json({ items });
+    // For tenant-specific, read from tenant settingsJson
+    const items = await getTenantMenuConfig(tenantId);
+    return NextResponse.json({ items: items.map((item) => ({ ...item, id: `tenant_${item.key}`, tenantId })) });
   } catch (error) {
     console.error('[SuperAdmin Menu Items GET] Error:', error);
     return NextResponse.json({
@@ -132,15 +196,12 @@ export async function PUT(request: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (auth.role !== 'superadmin') {
+    if (!(await isSuperAdminRequest())) {
       return NextResponse.json({ error: 'Forbidden - SuperAdmin access required' }, { status: 403 });
     }
     const body = await request.json();
-    const { tenantId, menuKey, enabled } = body;
+    const { tenantId, menuKey, enabled, scope } = body;
 
-    if (!tenantId) {
-      return NextResponse.json({ error: 'Tenant ID is required' }, { status: 400 });
-    }
     if (!menuKey) {
       return NextResponse.json({ error: 'Menu key is required' }, { status: 400 });
     }
@@ -148,85 +209,69 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Enabled must be a boolean' }, { status: 400 });
     }
 
-    // Find the default definition for this menu key
-    const defaultDef = DEFAULT_MENU_ITEMS.find((item) => item.key === menuKey);
+    // For global scope (or no tenantId), update the global config in settingsJson
+    if (scope === 'global' || !tenantId) {
+      const items = await getGlobalMenuConfig();
+      const updatedItems = items.map((item) =>
+        item.key === menuKey ? { ...item, enabled } : item
+      );
+      await saveGlobalMenuConfig(updatedItems);
+      return NextResponse.json({ success: true, scope: 'global' });
+    }
 
-    const config = await db.menuItemConfig.upsert({
-      where: {
-        tenantId_menuKey: { tenantId, menuKey },
-      },
-      create: {
-        tenantId,
-        menuKey,
-        enabled,
-        label: defaultDef?.label || menuKey,
-        icon: defaultDef?.icon || 'Menu',
-        section: defaultDef?.section || 'operations',
-        sortOrder: defaultDef?.sortOrder || 0,
-      },
-      update: {
-        enabled,
-      },
-    });
-
-    return NextResponse.json({ success: true, config });
+    // For tenant-specific, update the tenant's menuConfig in settingsJson
+    const items = await getTenantMenuConfig(tenantId);
+    const updatedItems = items.map((item) =>
+      item.key === menuKey ? { ...item, enabled } : item
+    );
+    await saveTenantMenuConfig(tenantId, updatedItems);
+    return NextResponse.json({ success: true, scope: 'tenant' });
   } catch (error) {
     console.error('[SuperAdmin Menu Items PUT] Error:', error);
-    return NextResponse.json({ error: 'Failed to toggle menu item' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Failed to toggle menu item';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
-// POST: Save menu item configuration for a tenant
+// POST: Save menu item configuration (bulk)
 export async function POST(request: NextRequest) {
   try {
     const auth = await getAuthUser();
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (auth.role !== 'superadmin') {
+    if (!(await isSuperAdminRequest())) {
       return NextResponse.json({ error: 'Forbidden - SuperAdmin access required' }, { status: 403 });
     }
     const body = await request.json();
-    const { tenantId, items } = body;
-
-    if (!tenantId) {
-      return NextResponse.json({ error: 'Tenant ID is required' }, { status: 400 });
-    }
+    const { tenantId, items, scope } = body;
 
     if (!Array.isArray(items)) {
       return NextResponse.json({ error: 'Items must be an array' }, { status: 400 });
     }
 
-    // Upsert each menu item configuration
-    const updates = items.map((item: { key: string; enabled: boolean; label?: string; icon?: string; section?: string; sortOrder?: number }) => {
-      const updateData: Record<string, unknown> = { enabled: item.enabled };
-      if (item.label !== undefined) updateData.label = item.label;
-      if (item.icon !== undefined) updateData.icon = item.icon;
-      if (item.section !== undefined) updateData.section = item.section;
-      if (item.sortOrder !== undefined) updateData.sortOrder = item.sortOrder;
-
-      return db.menuItemConfig.upsert({
-        where: {
-          tenantId_menuKey: { tenantId, menuKey: item.key },
-        },
-        create: {
-          tenantId,
-          menuKey: item.key,
-          enabled: item.enabled,
-          label: item.label || item.key,
-          icon: item.icon || 'Menu',
-          section: item.section || 'operations',
-          sortOrder: item.sortOrder || 0,
-        },
-        update: updateData,
+    // For global scope, update the global config
+    if (scope === 'global' || !tenantId) {
+      const currentItems = await getGlobalMenuConfig();
+      const updatedItems = currentItems.map((item) => {
+        const update = items.find((i: { key: string }) => i.key === item.key);
+        return update ? { ...item, enabled: update.enabled } : item;
       });
+      await saveGlobalMenuConfig(updatedItems);
+      return NextResponse.json({ success: true, updated: items.length, scope: 'global' });
+    }
+
+    // For tenant-specific, update tenant settingsJson
+    const currentItems = await getTenantMenuConfig(tenantId);
+    const updatedItems = currentItems.map((item) => {
+      const update = items.find((i: { key: string }) => i.key === item.key);
+      return update ? { ...item, enabled: update.enabled } : item;
     });
-
-    await Promise.all(updates);
-
-    return NextResponse.json({ success: true, updated: items.length });
+    await saveTenantMenuConfig(tenantId, updatedItems);
+    return NextResponse.json({ success: true, updated: items.length, scope: 'tenant' });
   } catch (error) {
     console.error('[SuperAdmin Menu Items POST] Error:', error);
-    return NextResponse.json({ error: 'Failed to save menu items' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Failed to save menu items';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

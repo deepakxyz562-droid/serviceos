@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
       tenantId: user.tenantId,
       workspaceId: user.workspaceId,
       avatar: user.avatar,
+      isSuperAdmin: user.isSuperAdmin || false,
     };
     const token = generateToken(authUser);
 
@@ -75,6 +76,7 @@ export async function POST(request: NextRequest) {
           tenantId: user.tenantId,
           workspaceId: user.workspaceId,
           avatar: user.avatar,
+          isSuperAdmin: user.isSuperAdmin || false,
           lastLoginAt: new Date(),
         },
         token,

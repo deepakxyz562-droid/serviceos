@@ -1,0 +1,891 @@
+     1→import type { NodeTypeDefinition } from '@/types/workflow';
+     2→
+     3→// ═══════════════════════════════════════════════════════════════════════════════
+     4→// NODE CATEGORIES — Sidebar configuration
+     5→// ═══════════════════════════════════════════════════════════════════════════════
+     6→
+     7→export const NODE_CATEGORIES = [
+     8→  { id: 'template', label: 'Templates', icon: 'Sparkles', color: 'yellow' },
+     9→  { id: 'trigger', label: 'Triggers', icon: 'PlayCircle', color: 'blue' },
+    10→  { id: 'condition', label: 'Conditions', icon: 'GitBranch', color: 'orange' },
+    11→  { id: 'action', label: 'Actions', icon: 'Zap', color: 'green' },
+    12→  { id: 'flowControl', label: 'Flow Control', icon: 'Workflow', color: 'purple' },
+    13→  { id: 'ai', label: 'AI', icon: 'Bot', color: 'pink' },
+    14→  { id: 'utility', label: 'Utilities', icon: 'Settings', color: 'gray' },
+    15→] as const;
+    16→
+    17→// Backward-compatible alias for node-sidebar
+    18→export const nodeCategories = NODE_CATEGORIES;
+    19→
+    20→// ═══════════════════════════════════════════════════════════════════════════════
+    21→// CATEGORY COLOR MAP — Consistent color mapping for each category
+    22→// ═══════════════════════════════════════════════════════════════════════════════
+    23→
+    24→const CATEGORY_COLORS: Record<string, string> = {
+    25→  template: 'bg-yellow-500',
+    26→  trigger: 'bg-blue-500',
+    27→  condition: 'bg-orange-500',
+    28→  action: 'bg-emerald-500',
+    29→  flowControl: 'bg-purple-500',
+    30→  ai: 'bg-pink-500',
+    31→  utility: 'bg-gray-500',
+    32→};
+    33→
+    34→// ═══════════════════════════════════════════════════════════════════════════════
+    35→// TRIGGER NODES — Enterprise events (HubSpot / Salesforce / GoHighLevel pattern)
+    36→// ═══════════════════════════════════════════════════════════════════════════════
+    37→
+    38→export const triggerNodes: NodeTypeDefinition[] = [
+    39→  // ─── CRM ────────────────────────────────────────────────────────────────────
+    40→  {
+    41→    type: 'leadCreated',
+    42→    displayName: 'Lead Created',
+    43→    category: 'trigger',
+    44→    description: 'When a new lead is created in the CRM',
+    45→    icon: 'UserPlus',
+    46→    color: 'bg-blue-500',
+    47→    inputs: [],
+    48→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+    49→    event: 'lead.created',
+    50→    properties: [],
+    51→  },
+    52→  {
+    53→    type: 'leadUpdated',
+    54→    displayName: 'Lead Updated',
+    55→    category: 'trigger',
+    56→    description: 'When a lead record is updated',
+    57→    icon: 'Edit3',
+    58→    color: 'bg-blue-500',
+    59→    inputs: [],
+    60→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+    61→    event: 'lead.updated',
+    62→    properties: [],
+    63→  },
+    64→  {
+    65→    type: 'leadAssigned',
+    66→    displayName: 'Lead Assigned',
+    67→    category: 'trigger',
+    68→    description: 'When a lead is assigned to a sales rep',
+    69→    icon: 'UserCheck',
+    70→    color: 'bg-blue-500',
+    71→    inputs: [],
+    72→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+    73→    event: 'lead.assigned',
+    74→    properties: [],
+    75→  },
+    76→  {
+    77→    type: 'leadConverted',
+    78→    displayName: 'Lead Converted',
+    79→    category: 'trigger',
+    80→    description: 'When a lead is converted to a customer',
+    81→    icon: 'CheckCircle',
+    82→    color: 'bg-blue-500',
+    83→    inputs: [],
+    84→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+    85→    event: 'lead.converted',
+    86→    properties: [],
+    87→  },
+    88→
+    89→  // ─── Customer ───────────────────────────────────────────────────────────────
+    90→  {
+    91→    type: 'customerCreated',
+    92→    displayName: 'Customer Created',
+    93→    category: 'trigger',
+    94→    description: 'When a new customer is added to the system',
+    95→    icon: 'Users',
+    96→    color: 'bg-emerald-500',
+    97→    inputs: [],
+    98→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+    99→    event: 'customer.created',
+   100→    properties: [],
+   101→  },
+   102→  {
+   103→    type: 'customerUpdated',
+   104→    displayName: 'Customer Updated',
+   105→    category: 'trigger',
+   106→    description: 'When customer details are updated',
+   107→    icon: 'UserCog',
+   108→    color: 'bg-emerald-500',
+   109→    inputs: [],
+   110→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   111→    event: 'customer.updated',
+   112→    properties: [],
+   113→  },
+   114→
+   115→  // ─── Booking ────────────────────────────────────────────────────────────────
+   116→  {
+   117→    type: 'bookingCreated',
+   118→    displayName: 'Booking Created',
+   119→    category: 'trigger',
+   120→    description: 'When a new booking is created',
+   121→    icon: 'CalendarPlus',
+   122→    color: 'bg-purple-500',
+   123→    inputs: [],
+   124→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   125→    event: 'booking.created',
+   126→    properties: [],
+   127→  },
+   128→  {
+   129→    type: 'bookingConfirmed',
+   130→    displayName: 'Booking Confirmed',
+   131→    category: 'trigger',
+   132→    description: 'When a booking is confirmed',
+   133→    icon: 'CalendarCheck',
+   134→    color: 'bg-purple-500',
+   135→    inputs: [],
+   136→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   137→    event: 'booking.confirmed',
+   138→    properties: [],
+   139→  },
+   140→  {
+   141→    type: 'bookingCancelled',
+   142→    displayName: 'Booking Cancelled',
+   143→    category: 'trigger',
+   144→    description: 'When a booking is cancelled',
+   145→    icon: 'CalendarX',
+   146→    color: 'bg-purple-500',
+   147→    inputs: [],
+   148→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   149→    event: 'booking.cancelled',
+   150→    properties: [],
+   151→  },
+   152→  {
+   153→    type: 'bookingCompleted',
+   154→    displayName: 'Booking Completed',
+   155→    category: 'trigger',
+   156→    description: 'When a booking is completed',
+   157→    icon: 'CircleCheck',
+   158→    color: 'bg-purple-500',
+   159→    inputs: [],
+   160→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   161→    event: 'booking.completed',
+   162→    properties: [],
+   163→  },
+   164→
+   165→  // ─── Jobs ───────────────────────────────────────────────────────────────────
+   166→  {
+   167→    type: 'jobCreated',
+   168→    displayName: 'Job Created',
+   169→    category: 'trigger',
+   170→    description: 'When a new job is created',
+   171→    icon: 'Briefcase',
+   172→    color: 'bg-amber-500',
+   173→    inputs: [],
+   174→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   175→    event: 'job.created',
+   176→    properties: [],
+   177→  },
+   178→  {
+   179→    type: 'jobAssigned',
+   180→    displayName: 'Job Assigned',
+   181→    category: 'trigger',
+   182→    description: 'When a job is assigned to an employee',
+   183→    icon: 'UserCheck',
+   184→    color: 'bg-amber-500',
+   185→    inputs: [],
+   186→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   187→    event: 'job.assigned',
+   188→    properties: [],
+   189→  },
+   190→  {
+   191→    type: 'jobCompleted',
+   192→    displayName: 'Job Completed',
+   193→    category: 'trigger',
+   194→    description: 'When a job is marked as completed',
+   195→    icon: 'CircleCheck',
+   196→    color: 'bg-amber-500',
+   197→    inputs: [],
+   198→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   199→    event: 'job.completed',
+   200→    properties: [],
+   201→  },
+   202→
+   203→  // ─── Invoice ────────────────────────────────────────────────────────────────
+   204→  {
+   205→    type: 'invoiceCreated',
+   206→    displayName: 'Invoice Created',
+   207→    category: 'trigger',
+   208→    description: 'When a new invoice is created',
+   209→    icon: 'Receipt',
+   210→    color: 'bg-rose-500',
+   211→    inputs: [],
+   212→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   213→    event: 'invoice.created',
+   214→    properties: [],
+   215→  },
+   216→  {
+   217→    type: 'invoicePaid',
+   218→    displayName: 'Invoice Paid',
+   219→    category: 'trigger',
+   220→    description: 'When an invoice is paid by the customer',
+   221→    icon: 'Banknote',
+   222→    color: 'bg-rose-500',
+   223→    inputs: [],
+   224→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   225→    event: 'invoice.paid',
+   226→    properties: [],
+   227→  },
+   228→  {
+   229→    type: 'invoiceOverdue',
+   230→    displayName: 'Invoice Overdue',
+   231→    category: 'trigger',
+   232→    description: 'When an invoice becomes overdue',
+   233→    icon: 'CreditCard',
+   234→    color: 'bg-rose-500',
+   235→    inputs: [],
+   236→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   237→    event: 'invoice.overdue',
+   238→    properties: [],
+   239→  },
+   240→
+   241→  // ─── WhatsApp ───────────────────────────────────────────────────────────────
+   242→  {
+   243→    type: 'whatsappMessageReceived',
+   244→    displayName: 'WhatsApp Message Received',
+   245→    category: 'trigger',
+   246→    description: 'When a new WhatsApp message is received',
+   247→    icon: 'MessageCircle',
+   248→    color: 'bg-green-500',
+   249→    inputs: [],
+   250→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   251→    event: 'whatsapp.message.received',
+   252→    properties: [],
+   253→  },
+   254→
+   255→  // ─── Forms ──────────────────────────────────────────────────────────────────
+   256→  {
+   257→    type: 'formSubmitted',
+   258→    displayName: 'Form Submitted',
+   259→    category: 'trigger',
+   260→    description: 'When a form is submitted on your website',
+   261→    icon: 'MousePointerClick',
+   262→    color: 'bg-orange-500',
+   263→    inputs: [],
+   264→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   265→    event: 'form.submitted',
+   266→    properties: [],
+   267→  },
+   268→];
+   269→
+   270→// ═══════════════════════════════════════════════════════════════════════════════
+   271→// CONDITION NODES — Domain-specific business conditions
+   272→// ═══════════════════════════════════════════════════════════════════════════════
+   273→
+   274→export const conditionNodes: NodeTypeDefinition[] = [
+   275→  {
+   276→    type: 'leadSourceCondition',
+   277→    displayName: 'Lead Source',
+   278→    category: 'condition',
+   279→    description: 'Branch based on where the lead came from',
+   280→    icon: 'GitBranch',
+   281→    color: 'bg-orange-500',
+   282→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   283→    outputs: [
+   284→      { id: 'true', name: 'true', type: 'output', displayName: 'Match' },
+   285→      { id: 'false', name: 'false', type: 'output', displayName: 'No Match' },
+   286→    ],
+   287→    properties: [
+   288→      { name: 'source', displayName: 'Lead Source', type: 'select', default: 'website', options: [
+   289→        { name: 'Website', value: 'website' },
+   290→        { name: 'Facebook', value: 'facebook' },
+   291→        { name: 'Google Ads', value: 'google_ads' },
+   292→        { name: 'WhatsApp', value: 'whatsapp' },
+   293→        { name: 'Referral', value: 'referral' },
+   294→        { name: 'Manual', value: 'manual' },
+   295→      ]},
+   296→    ],
+   297→  },
+   298→  {
+   299→    type: 'customerTypeCondition',
+   300→    displayName: 'Customer Type',
+   301→    category: 'condition',
+   302→    description: 'Branch based on customer type',
+   303→    icon: 'GitBranch',
+   304→    color: 'bg-orange-500',
+   305→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   306→    outputs: [
+   307→      { id: 'true', name: 'true', type: 'output', displayName: 'Match' },
+   308→      { id: 'false', name: 'false', type: 'output', displayName: 'No Match' },
+   309→    ],
+   310→    properties: [
+   311→      { name: 'customerType', displayName: 'Customer Type', type: 'select', default: 'residential', options: [
+   312→        { name: 'Residential', value: 'residential' },
+   313→        { name: 'Commercial', value: 'commercial' },
+   314→        { name: 'Enterprise', value: 'enterprise' },
+   315→        { name: 'VIP', value: 'vip' },
+   316→      ]},
+   317→    ],
+   318→  },
+   319→  {
+   320→    type: 'bookingValueCondition',
+   321→    displayName: 'Booking Value',
+   322→    category: 'condition',
+   323→    description: 'Branch based on the booking value amount',
+   324→    icon: 'GitBranch',
+   325→    color: 'bg-orange-500',
+   326→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   327→    outputs: [
+   328→      { id: 'true', name: 'true', type: 'output', displayName: 'Above' },
+   329→      { id: 'false', name: 'false', type: 'output', displayName: 'Below' },
+   330→    ],
+   331→    properties: [
+   332→      { name: 'operator', displayName: 'Condition', type: 'select', default: 'greater_than', options: [
+   333→        { name: 'Greater Than', value: 'greater_than' },
+   334→        { name: 'Less Than', value: 'less_than' },
+   335→        { name: 'Equals', value: 'equals' },
+   336→        { name: 'Between', value: 'between' },
+   337→      ]},
+   338→      { name: 'value', displayName: 'Amount', type: 'number', default: 500, required: true },
+   339→    ],
+   340→  },
+   341→  {
+   342→    type: 'invoiceAmountCondition',
+   343→    displayName: 'Invoice Amount',
+   344→    category: 'condition',
+   345→    description: 'Branch based on the invoice amount',
+   346→    icon: 'GitBranch',
+   347→    color: 'bg-orange-500',
+   348→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   349→    outputs: [
+   350→      { id: 'true', name: 'true', type: 'output', displayName: 'Above' },
+   351→      { id: 'false', name: 'false', type: 'output', displayName: 'Below' },
+   352→    ],
+   353→    properties: [
+   354→      { name: 'operator', displayName: 'Condition', type: 'select', default: 'greater_than', options: [
+   355→        { name: 'Greater Than', value: 'greater_than' },
+   356→        { name: 'Less Than', value: 'less_than' },
+   357→        { name: 'Equals', value: 'equals' },
+   358→      ]},
+   359→      { name: 'value', displayName: 'Amount', type: 'number', default: 1000, required: true },
+   360→    ],
+   361→  },
+   362→  {
+   363→    type: 'customerTagCondition',
+   364→    displayName: 'Customer Has Tag',
+   365→    category: 'condition',
+   366→    description: 'Branch based on whether the customer has a specific tag',
+   367→    icon: 'GitBranch',
+   368→    color: 'bg-orange-500',
+   369→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   370→    outputs: [
+   371→      { id: 'true', name: 'true', type: 'output', displayName: 'Has Tag' },
+   372→      { id: 'false', name: 'false', type: 'output', displayName: 'No Tag' },
+   373→    ],
+   374→    properties: [
+   375→      { name: 'tag', displayName: 'Tag Name', type: 'string', required: true, placeholder: 'e.g. vip, repeat-customer' },
+   376→    ],
+   377→  },
+   378→];
+   379→
+   380→// ═══════════════════════════════════════════════════════════════════════════════
+   381→// ACTION NODES — Business actions
+   382→// ═══════════════════════════════════════════════════════════════════════════════
+   383→
+   384→export const actionNodes: NodeTypeDefinition[] = [
+   385→  {
+   386→    type: 'assignOwner',
+   387→    displayName: 'Assign Owner',
+   388→    category: 'action',
+   389→    description: 'Assign the record to a team member',
+   390→    icon: 'UserPlus',
+   391→    color: 'bg-emerald-500',
+   392→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   393→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   394→    properties: [
+   395→      { name: 'assignTo', displayName: 'Assign To', type: 'select', default: 'round_robin', options: [
+   396→        { name: 'Round Robin', value: 'round_robin' },
+   397→        { name: 'Least Busy', value: 'least_busy' },
+   398→        { name: 'Specific User', value: 'specific' },
+   399→      ]},
+   400→      { name: 'userId', displayName: 'User ID', type: 'string', placeholder: 'Required if "Specific User" selected' },
+   401→    ],
+   402→  },
+   403→  {
+   404→    type: 'sendWhatsApp',
+   405→    displayName: 'Send WhatsApp',
+   406→    category: 'action',
+   407→    description: 'Send a WhatsApp message to the customer or team',
+   408→    icon: 'MessageCircle',
+   409→    color: 'bg-emerald-500',
+   410→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   411→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   412→    properties: [
+   413→      { name: 'recipient', displayName: 'Recipient', type: 'select', default: 'customer', options: [
+   414→        { name: 'Customer', value: 'customer' },
+   415→        { name: 'Employee', value: 'employee' },
+   416→        { name: 'Manager', value: 'manager' },
+   417→      ]},
+   418→      { name: 'template', displayName: 'Message Template', type: 'text', required: true, placeholder: 'Hi {{name}}, ...' },
+   419→    ],
+   420→  },
+   421→  {
+   422→    type: 'sendEmail',
+   423→    displayName: 'Send Email',
+   424→    category: 'action',
+   425→    description: 'Send an email to the customer or team',
+   426→    icon: 'Mail',
+   427→    color: 'bg-emerald-500',
+   428→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   429→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   430→    properties: [
+   431→      { name: 'recipient', displayName: 'Recipient', type: 'select', default: 'customer', options: [
+   432→        { name: 'Customer', value: 'customer' },
+   433→        { name: 'Employee', value: 'employee' },
+   434→        { name: 'Manager', value: 'manager' },
+   435→      ]},
+   436→      { name: 'subject', displayName: 'Subject', type: 'string', required: true, placeholder: 'Email subject' },
+   437→      { name: 'body', displayName: 'Body', type: 'text', required: true, placeholder: 'Email content...' },
+   438→    ],
+   439→  },
+   440→  {
+   441→    type: 'sendSMS',
+   442→    displayName: 'Send SMS',
+   443→    category: 'action',
+   444→    description: 'Send an SMS message',
+   445→    icon: 'Smartphone',
+   446→    color: 'bg-emerald-500',
+   447→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   448→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   449→    properties: [
+   450→      { name: 'recipient', displayName: 'Recipient', type: 'select', default: 'customer', options: [
+   451→        { name: 'Customer', value: 'customer' },
+   452→        { name: 'Employee', value: 'employee' },
+   453→      ]},
+   454→      { name: 'message', displayName: 'Message', type: 'text', required: true, placeholder: 'SMS content...' },
+   455→    ],
+   456→  },
+   457→  {
+   458→    type: 'createTask',
+   459→    displayName: 'Create Task',
+   460→    category: 'action',
+   461→    description: 'Create a follow-up task for the team',
+   462→    icon: 'PlusCircle',
+   463→    color: 'bg-emerald-500',
+   464→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   465→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   466→    properties: [
+   467→      { name: 'title', displayName: 'Task Title', type: 'string', required: true, placeholder: 'Follow up with customer' },
+   468→      { name: 'assignTo', displayName: 'Assign To', type: 'select', default: 'round_robin', options: [
+   469→        { name: 'Round Robin', value: 'round_robin' },
+   470→        { name: 'Record Owner', value: 'owner' },
+   471→      ]},
+   472→      { name: 'dueIn', displayName: 'Due In (hours)', type: 'number', default: 24 },
+   473→    ],
+   474→  },
+   475→  {
+   476→    type: 'createBooking',
+   477→    displayName: 'Create Booking',
+   478→    category: 'action',
+   479→    description: 'Create a new booking from the workflow',
+   480→    icon: 'CalendarPlus',
+   481→    color: 'bg-emerald-500',
+   482→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   483→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   484→    properties: [
+   485→      { name: 'serviceId', displayName: 'Service', type: 'string', required: true, placeholder: 'Service ID' },
+   486→      { name: 'date', displayName: 'Date', type: 'string', required: true, placeholder: 'YYYY-MM-DD' },
+   487→    ],
+   488→  },
+   489→  {
+   490→    type: 'createJob',
+   491→    displayName: 'Create Job',
+   492→    category: 'action',
+   493→    description: 'Create a new job from the workflow',
+   494→    icon: 'Briefcase',
+   495→    color: 'bg-emerald-500',
+   496→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   497→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   498→    properties: [
+   499→      { name: 'title', displayName: 'Job Title', type: 'string', required: true, placeholder: 'Job title' },
+   500→      { name: 'assignTo', displayName: 'Assign To', type: 'select', default: 'auto', options: [
+   501→        { name: 'Auto Dispatch', value: 'auto' },
+   502→        { name: 'Round Robin', value: 'round_robin' },
+   503→        { name: 'Specific Employee', value: 'specific' },
+   504→      ]},
+   505→    ],
+   506→  },
+   507→  {
+   508→    type: 'assignEmployee',
+   509→    displayName: 'Assign Employee',
+   510→    category: 'action',
+   511→    description: 'Assign an employee to a job or task',
+   512→    icon: 'UserCheck',
+   513→    color: 'bg-emerald-500',
+   514→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   515→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   516→    properties: [
+   517→      { name: 'assignTo', displayName: 'Assign To', type: 'select', default: 'nearest', options: [
+   518→        { name: 'Nearest Available', value: 'nearest' },
+   519→        { name: 'Round Robin', value: 'round_robin' },
+   520→        { name: 'Specific Employee', value: 'specific' },
+   521→      ]},
+   522→      { name: 'employeeId', displayName: 'Employee ID', type: 'string', placeholder: 'Required if "Specific" selected' },
+   523→    ],
+   524→  },
+   525→  {
+   526→    type: 'createInvoice',
+   527→    displayName: 'Create Invoice',
+   528→    category: 'action',
+   529→    description: 'Create a new invoice from the workflow',
+   530→    icon: 'Receipt',
+   531→    color: 'bg-emerald-500',
+   532→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   533→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   534→    properties: [
+   535→      { name: 'amount', displayName: 'Amount', type: 'number', required: true },
+   536→      { name: 'description', displayName: 'Description', type: 'string', placeholder: 'Service description' },
+   537→      { name: 'dueIn', displayName: 'Due In (days)', type: 'number', default: 30 },
+   538→    ],
+   539→  },
+   540→  {
+   541→    type: 'createQuote',
+   542→    displayName: 'Create Quote',
+   543→    category: 'action',
+   544→    description: 'Create a new quote from the workflow',
+   545→    icon: 'FileText',
+   546→    color: 'bg-emerald-500',
+   547→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   548→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   549→    properties: [
+   550→      { name: 'amount', displayName: 'Amount', type: 'number', required: true },
+   551→      { name: 'description', displayName: 'Description', type: 'string', placeholder: 'Quote description' },
+   552→    ],
+   553→  },
+   554→  {
+   555→    type: 'addTag',
+   556→    displayName: 'Add Tag',
+   557→    category: 'action',
+   558→    description: 'Add a tag to the customer or record',
+   559→    icon: 'Tag',
+   560→    color: 'bg-emerald-500',
+   561→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   562→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   563→    properties: [
+   564→      { name: 'tag', displayName: 'Tag', type: 'string', required: true, placeholder: 'e.g. vip, follow-up, retention' },
+   565→    ],
+   566→  },
+   567→  {
+   568→    type: 'removeTag',
+   569→    displayName: 'Remove Tag',
+   570→    category: 'action',
+   571→    description: 'Remove a tag from the customer or record',
+   572→    icon: 'X',
+   573→    color: 'bg-emerald-500',
+   574→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   575→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   576→    properties: [
+   577→      { name: 'tag', displayName: 'Tag', type: 'string', required: true, placeholder: 'Tag to remove' },
+   578→    ],
+   579→  },
+   580→];
+   581→
+   582→// ═══════════════════════════════════════════════════════════════════════════════
+   583→// FLOW CONTROL NODES
+   584→// ═══════════════════════════════════════════════════════════════════════════════
+   585→
+   586→export const flowControlNodes: NodeTypeDefinition[] = [
+   587→  {
+   588→    type: 'delay',
+   589→    displayName: 'Delay',
+   590→    category: 'flowControl',
+   591→    description: 'Wait for a specified duration before continuing',
+   592→    icon: 'Clock',
+   593→    color: 'bg-purple-500',
+   594→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   595→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   596→    properties: [
+   597→      { name: 'delayMinutes', displayName: 'Delay (minutes)', type: 'number', default: 5, required: true },
+   598→    ],
+   599→  },
+   600→  {
+   601→    type: 'waitUntil',
+   602→    displayName: 'Wait Until',
+   603→    category: 'flowControl',
+   604→    description: 'Wait until a specific date/time before continuing',
+   605→    icon: 'Calendar',
+   606→    color: 'bg-purple-500',
+   607→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   608→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   609→    properties: [
+   610→      { name: 'waitUntil', displayName: 'Wait Until', type: 'string', required: true, placeholder: 'YYYY-MM-DD HH:mm or expression' },
+   611→    ],
+   612→  },
+   613→  {
+   614→    type: 'ifElse',
+   615→    displayName: 'If / Else',
+   616→    category: 'flowControl',
+   617→    description: 'Branch workflow based on a condition',
+   618→    icon: 'GitBranch',
+   619→    color: 'bg-purple-500',
+   620→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   621→    outputs: [
+   622→      { id: 'true', name: 'true', type: 'output', displayName: 'True' },
+   623→      { id: 'false', name: 'false', type: 'output', displayName: 'False' },
+   624→    ],
+   625→    properties: [
+   626→      { name: 'condition', displayName: 'Condition', type: 'select', default: 'equals', options: [
+   627→        { name: 'Equals', value: 'equals' },
+   628→        { name: 'Not Equals', value: 'notEquals' },
+   629→        { name: 'Greater Than', value: 'greaterThan' },
+   630→        { name: 'Less Than', value: 'lessThan' },
+   631→        { name: 'Contains', value: 'contains' },
+   632→        { name: 'Is Empty', value: 'isEmpty' },
+   633→      ]},
+   634→      { name: 'value1', displayName: 'Value 1', type: 'expression', required: true },
+   635→      { name: 'value2', displayName: 'Value 2', type: 'expression' },
+   636→    ],
+   637→  },
+   638→  {
+   639→    type: 'switch',
+   640→    displayName: 'Switch',
+   641→    category: 'flowControl',
+   642→    description: 'Route to different outputs based on value matching',
+   643→    icon: 'Route',
+   644→    color: 'bg-purple-500',
+   645→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   646→    outputs: [
+   647→      { id: 'output0', name: 'Output 0', type: 'output' },
+   648→      { id: 'output1', name: 'Output 1', type: 'output' },
+   649→      { id: 'fallback', name: 'Fallback', type: 'output', displayName: 'Fallback' },
+   650→    ],
+   651→    properties: [
+   652→      { name: 'valueToMatch', displayName: 'Value to Match', type: 'expression', required: true },
+   653→      { name: 'rules', displayName: 'Rules', type: 'collection', description: 'Define routing rules' },
+   654→    ],
+   655→  },
+   656→  {
+   657→    type: 'loop',
+   658→    displayName: 'Loop',
+   659→    category: 'flowControl',
+   660→    description: 'Loop through items and process each one',
+   661→    icon: 'Repeat',
+   662→    color: 'bg-purple-500',
+   663→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   664→    outputs: [
+   665→      { id: 'each', name: 'each', type: 'output', displayName: 'Each Item' },
+   666→      { id: 'done', name: 'done', type: 'output', displayName: 'Done' },
+   667→    ],
+   668→    properties: [
+   669→      { name: 'batchSize', displayName: 'Batch Size', type: 'number', default: 1 },
+   670→    ],
+   671→  },
+   672→  {
+   673→    type: 'endWorkflow',
+   674→    displayName: 'End Workflow',
+   675→    category: 'flowControl',
+   676→    description: 'Stop the workflow execution',
+   677→    icon: 'Square',
+   678→    color: 'bg-purple-500',
+   679→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   680→    outputs: [],
+   681→    properties: [],
+   682→  },
+   683→];
+   684→
+   685→// ═══════════════════════════════════════════════════════════════════════════════
+   686→// AI NODES
+   687→// ═══════════════════════════════════════════════════════════════════════════════
+   688→
+   689→export const aiNodes: NodeTypeDefinition[] = [
+   690→  {
+   691→    type: 'aiClassify',
+   692→    displayName: 'AI Classify',
+   693→    category: 'ai',
+   694→    description: 'Classify text using AI (e.g. lead intent, sentiment)',
+   695→    icon: 'Brain',
+   696→    color: 'bg-pink-500',
+   697→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   698→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   699→    properties: [
+   700→      { name: 'input', displayName: 'Input Text', type: 'expression', required: true },
+   701→      { name: 'categories', displayName: 'Categories', type: 'string', required: true, placeholder: 'urgent, normal, low' },
+   702→    ],
+   703→  },
+   704→  {
+   705→    type: 'aiReply',
+   706→    displayName: 'AI Reply',
+   707→    category: 'ai',
+   708→    description: 'Generate an AI-powered reply to a message',
+   709→    icon: 'Bot',
+   710→    color: 'bg-pink-500',
+   711→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   712→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   713→    properties: [
+   714→      { name: 'context', displayName: 'Context', type: 'text', placeholder: 'Provide context for the reply...' },
+   715→      { name: 'tone', displayName: 'Tone', type: 'select', default: 'professional', options: [
+   716→        { name: 'Professional', value: 'professional' },
+   717→        { name: 'Friendly', value: 'friendly' },
+   718→        { name: 'Casual', value: 'casual' },
+   719→      ]},
+   720→    ],
+   721→  },
+   722→  {
+   723→    type: 'aiSummarize',
+   724→    displayName: 'AI Summarize',
+   725→    category: 'ai',
+   726→    description: 'Summarize long text or conversation history',
+   727→    icon: 'FileText',
+   728→    color: 'bg-pink-500',
+   729→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   730→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   731→    properties: [
+   732→      { name: 'input', displayName: 'Text to Summarize', type: 'expression', required: true },
+   733→      { name: 'maxLength', displayName: 'Max Length (words)', type: 'number', default: 100 },
+   734→    ],
+   735→  },
+   736→];
+   737→
+   738→// ═══════════════════════════════════════════════════════════════════════════════
+   739→// UTILITY NODES
+   740→// ═══════════════════════════════════════════════════════════════════════════════
+   741→
+   742→export const utilityNodes: NodeTypeDefinition[] = [
+   743→  {
+   744→    type: 'webhookTrigger',
+   745→    displayName: 'Webhook',
+   746→    category: 'utility',
+   747→    description: 'Receive HTTP requests to trigger workflow',
+   748→    icon: 'Globe',
+   749→    color: 'bg-gray-500',
+   750→    inputs: [],
+   751→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   752→    properties: [
+   753→      { name: 'httpMethod', displayName: 'HTTP Method', type: 'select', default: 'POST', options: [
+   754→        { name: 'GET', value: 'GET' }, { name: 'POST', value: 'POST' }, { name: 'PUT', value: 'PUT' },
+   755→        { name: 'PATCH', value: 'PATCH' }, { name: 'DELETE', value: 'DELETE' },
+   756→      ]},
+   757→      { name: 'path', displayName: 'Path', type: 'string', placeholder: 'Auto-generated UUID' },
+   758→    ],
+   759→  },
+   760→  {
+   761→    type: 'httpRequest',
+   762→    displayName: 'HTTP Request',
+   763→    category: 'utility',
+   764→    description: 'Make an HTTP request to an external API',
+   765→    icon: 'Webhook',
+   766→    color: 'bg-gray-500',
+   767→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   768→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   769→    properties: [
+   770→      { name: 'method', displayName: 'Method', type: 'select', default: 'GET', options: [
+   771→        { name: 'GET', value: 'GET' }, { name: 'POST', value: 'POST' }, { name: 'PUT', value: 'PUT' },
+   772→        { name: 'PATCH', value: 'PATCH' }, { name: 'DELETE', value: 'DELETE' },
+   773→      ]},
+   774→      { name: 'url', displayName: 'URL', type: 'string', required: true, placeholder: 'https://api.example.com/data' },
+   775→      { name: 'headers', displayName: 'Headers', type: 'json', default: {} },
+   776→      { name: 'body', displayName: 'Body', type: 'json', default: {} },
+   777→    ],
+   778→  },
+   779→  {
+   780→    type: 'scheduleTrigger',
+   781→    displayName: 'Schedule Trigger',
+   782→    category: 'utility',
+   783→    description: 'Run workflow on a schedule using cron expressions',
+   784→    icon: 'Clock',
+   785→    color: 'bg-gray-500',
+   786→    inputs: [],
+   787→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   788→    properties: [
+   789→      { name: 'mode', displayName: 'Mode', type: 'select', default: 'interval', options: [
+   790→        { name: 'Every X minutes', value: 'interval' },
+   791→        { name: 'Cron Expression', value: 'cron' },
+   792→      ]},
+   793→      { name: 'interval', displayName: 'Interval (minutes)', type: 'number', default: 5 },
+   794→      { name: 'cronExpression', displayName: 'Cron Expression', type: 'string', placeholder: '0 * * * *' },
+   795→    ],
+   796→  },
+   797→  {
+   798→    type: 'databaseNode',
+   799→    displayName: 'Database Query',
+   800→    category: 'utility',
+   801→    description: 'Query or update a database',
+   802→    icon: 'Database',
+   803→    color: 'bg-gray-500',
+   804→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   805→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   806→    credentialTypes: ['dbConnection'],
+   807→    properties: [
+   808→      { name: 'operation', displayName: 'Operation', type: 'select', default: 'select', options: [
+   809→        { name: 'Select', value: 'select' }, { name: 'Insert', value: 'insert' },
+   810→        { name: 'Update', value: 'update' }, { name: 'Delete', value: 'delete' },
+   811→      ]},
+   812→      { name: 'table', displayName: 'Table', type: 'string', required: true },
+   813→      { name: 'query', displayName: 'Query / Conditions', type: 'json', default: {} },
+   814→    ],
+   815→  },
+   816→  {
+   817→    type: 'codeNode',
+   818→    displayName: 'Code',
+   819→    category: 'utility',
+   820→    description: 'Run custom JavaScript or Python code',
+   821→    icon: 'Code',
+   822→    color: 'bg-gray-500',
+   823→    inputs: [{ id: 'main', name: 'main', type: 'input' }],
+   824→    outputs: [{ id: 'main', name: 'main', type: 'output' }],
+   825→    properties: [
+   826→      { name: 'language', displayName: 'Language', type: 'select', default: 'javascript', options: [
+   827→        { name: 'JavaScript', value: 'javascript' },
+   828→        { name: 'Python', value: 'python' },
+   829→      ]},
+   830→      { name: 'code', displayName: 'Code', type: 'code', required: true },
+   831→    ],
+   832→  },
+   833→];
+   834→
+   835→// ═══════════════════════════════════════════════════════════════════════════════
+   836→// WORKFLOW TEMPLATES
+   837→// ═══════════════════════════════════════════════════════════════════════════════
+   838→
+   839→export const workflowTemplates = [
+   840→  { id: 'autoAssignLead', name: 'Auto Assign New Lead' },
+   841→  { id: 'welcomeCustomer', name: 'Welcome New Customer' },
+   842→  { id: 'bookingConfirmation', name: 'Booking Confirmation' },
+   843→  { id: 'jobCompletionReview', name: 'Job Completion Review Request' },
+   844→  { id: 'invoiceReminder', name: 'Invoice Reminder' },
+   845→  { id: 'autoDispatch', name: 'Auto Dispatch' },
+   846→  { id: 'customerRetention', name: 'Customer Retention Campaign' },
+   847→];
+   848→
+   849→// ═══════════════════════════════════════════════════════════════════════════════
+   850→// FLAT REGISTRY — All nodes combined (backward compatibility)
+   851→// ═══════════════════════════════════════════════════════════════════════════════
+   852→
+   853→export const nodeRegistry: NodeTypeDefinition[] = [
+   854→  ...triggerNodes,
+   855→  ...conditionNodes,
+   856→  ...actionNodes,
+   857→  ...flowControlNodes,
+   858→  ...aiNodes,
+   859→  ...utilityNodes,
+   860→];
+   861→
+   862→// ═══════════════════════════════════════════════════════════════════════════════
+   863→// HELPER FUNCTIONS
+   864→// ═══════════════════════════════════════════════════════════════════════════════
+   865→
+   866→/** Look up a node type definition by its type string */
+   867→export function getNodeTypeDefinition(type: string): NodeTypeDefinition | undefined {
+   868→  return nodeRegistry.find((n) => n.type === type);
+   869→}
+   870→
+   871→/** Get all nodes belonging to a category */
+   872→export function getNodesByCategory(categoryId: string): NodeTypeDefinition[] {
+   873→  return nodeRegistry.filter((n) => n.category === categoryId);
+   874→}
+   875→
+   876→/** Search nodes by display name or description */
+   877→export function searchNodes(query: string): NodeTypeDefinition[] {
+   878→  const q = query.toLowerCase();
+   879→  return nodeRegistry.filter(
+   880→    (n) =>
+   881→      n.displayName.toLowerCase().includes(q) ||
+   882→      n.description.toLowerCase().includes(q) ||
+   883→      n.type.toLowerCase().includes(q),
+   884→  );
+   885→}
+   886→
+   887→/** Get the color for a given category */
+   888→export function getCategoryColor(categoryId: string): string {
+   889→  return CATEGORY_COLORS[categoryId] || 'bg-gray-500';
+   890→}
+   891→

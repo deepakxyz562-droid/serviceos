@@ -1,0 +1,504 @@
+     1→'use client';
+     2→
+     3→import { useState } from 'react';
+     4→import {
+     5→  User, Search, Phone, Mail, MapPin, MessageSquare, Briefcase, FileText,
+     6→  DollarSign, Star, Tag, Plus, Send, Calendar, Clock, ArrowRight,
+     7→  Hash, Shield, ChevronRight, X, Edit2, CheckCircle2,
+     8→} from 'lucide-react';
+     9→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    10→import { Input } from '@/components/ui/input';
+    11→import { Button } from '@/components/ui/button';
+    12→import { Badge } from '@/components/ui/badge';
+    13→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    14→import { ScrollArea } from '@/components/ui/scroll-area';
+    15→import { Separator } from '@/components/ui/separator';
+    16→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    17→import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+    18→import { Label } from '@/components/ui/label';
+    19→import { Textarea } from '@/components/ui/textarea';
+    20→import { Progress } from '@/components/ui/progress';
+    21→import {
+    22→  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+    23→} from '@/components/ui/table';
+    24→import { toast } from 'sonner';
+    25→import { cn } from '@/lib/utils';
+    26→
+    27→// ─── Types ──────────────────────────────────────────────────────────────────
+    28→
+    29→interface Customer360 {
+    30→  id: string;
+    31→  name: string;
+    32→  phone: string;
+    33→  email: string;
+    34→  whatsappId: string;
+    35→  address: string;
+    36→  tags: string[];
+    37→  customerValue: number;
+    38→  valueScore: number;
+    39→  totalSpent: number;
+    40→  totalJobs: number;
+    41→  totalConversations: number;
+    42→  lastActivity: string;
+    43→  createdAt: string;
+    44→}
+    45→
+    46→interface TimelineEvent {
+    47→  id: string;
+    48→  type: 'message' | 'booking' | 'job_update' | 'payment' | 'campaign' | 'note';
+    49→  title: string;
+    50→  description: string;
+    51→  timestamp: string;
+    52→  icon: React.ReactNode;
+    53→  color: string;
+    54→}
+    55→
+    56→interface Conversation {
+    57→  id: string;
+    58→  subject: string;
+    59→  status: string;
+    60→  lastMessage: string;
+    61→  date: string;
+    62→}
+    63→
+    64→interface Lead360 {
+    65→  id: string;
+    66→  title: string;
+    67→  status: string;
+    68→  value: number;
+    69→  date: string;
+    70→}
+    71→
+    72→interface Job360 {
+    73→  id: string;
+    74→  title: string;
+    75→  status: string;
+    76→  scheduledAt: string;
+    77→  value: number;
+    78→}
+    79→
+    80→interface Quote360 {
+    81→  id: string;
+    82→  title: string;
+    83→  status: string;
+    84→  amount: number;
+    85→  date: string;
+    86→}
+    87→
+    88→interface Invoice360 {
+    89→  id: string;
+    90→  number: string;
+    91→  amount: number;
+    92→  status: string;
+    93→  date: string;
+    94→}
+    95→
+    96→interface Payment360 {
+    97→  id: string;
+    98→  amount: number;
+    99→  method: string;
+   100→  date: string;
+   101→  status: string;
+   102→}
+   103→
+   104→interface Review360 {
+   105→  id: string;
+   106→  rating: number;
+   107→  comment: string;
+   108→  date: string;
+   109→}
+   110→
+   111→// ─── Mock Data ──────────────────────────────────────────────────────────────
+   112→
+   113→const MOCK_CUSTOMERS: Customer360[] = [
+   114→  { id: 'cu1', name: 'Alex Rivera', phone: '+1 555-0101', email: 'alex@email.com', whatsappId: '+15550101', address: '123 Oak Street, Springfield, IL', tags: ['VIP', 'repeat-customer'], customerValue: 4500, valueScore: 85, totalSpent: 4500, totalJobs: 8, totalConversations: 12, lastActivity: '2 hours ago', createdAt: '2024-01-15' },
+   115→  { id: 'cu2', name: 'Maria Santos', phone: '+1 555-0102', email: 'maria@email.com', whatsappId: '+15550102', address: '456 Elm Ave, Chicago, IL', tags: ['cleaning', 'monthly'], customerValue: 2800, valueScore: 72, totalSpent: 2800, totalJobs: 5, totalConversations: 8, lastActivity: '5 min ago', createdAt: '2024-03-22' },
+   116→  { id: 'cu3', name: 'James Wilson', phone: '+1 555-0103', email: 'james@email.com', whatsappId: '+15550103', address: '789 Pine Rd, Naperville, IL', tags: ['plumbing', 'new'], customerValue: 800, valueScore: 45, totalSpent: 800, totalJobs: 2, totalConversations: 3, lastActivity: '1 day ago', createdAt: '2025-01-10' },
+   117→  { id: 'cu4', name: 'Sophie Chen', phone: '+1 555-0104', email: 'sophie@email.com', whatsappId: '+15550104', address: '321 Maple Dr, Evanston, IL', tags: ['packing', 'one-time'], customerValue: 1200, valueScore: 55, totalSpent: 1200, totalJobs: 1, totalConversations: 4, lastActivity: '3 days ago', createdAt: '2024-11-05' },
+   118→  { id: 'cu5', name: 'Robert Kim', phone: '+1 555-0105', email: 'robert@email.com', whatsappId: '+15550105', address: '654 Cedar Ln, Oak Park, IL', tags: ['cleaning', 'commercial'], customerValue: 6200, valueScore: 92, totalSpent: 6200, totalJobs: 15, totalConversations: 20, lastActivity: '1 hr ago', createdAt: '2023-06-20' },
+   119→];
+   120→
+   121→const MOCK_TIMELINE: Record<string, TimelineEvent[]> = {
+   122→  cu1: [
+   123→    { id: 't1', type: 'message', title: 'WhatsApp Message', description: 'Sent inquiry about deep cleaning', timestamp: '2 hours ago', icon: <MessageSquare className="size-4" />, color: 'text-emerald-600 bg-emerald-100' },
+   124→    { id: 't2', type: 'payment', title: 'Payment Received', description: '$450 for Cleaning Job #1234', timestamp: '1 day ago', icon: <DollarSign className="size-4" />, color: 'text-green-600 bg-green-100' },
+   125→    { id: 't3', type: 'job_update', title: 'Job Completed', description: 'Deep Cleaning completed successfully', timestamp: '2 days ago', icon: <CheckCircle2 className="size-4" />, color: 'text-blue-600 bg-blue-100' },
+   126→    { id: 't4', type: 'booking', title: 'Booking Created', description: 'Scheduled deep cleaning for Mar 5', timestamp: '5 days ago', icon: <Calendar className="size-4" />, color: 'text-purple-600 bg-purple-100' },
+   127→    { id: 't5', type: 'campaign', title: 'Campaign Interaction', description: 'Opened "Spring Cleaning Promo" email', timestamp: '1 week ago', icon: <Send className="size-4" />, color: 'text-orange-600 bg-orange-100' },
+   128→    { id: 't6', type: 'note', title: 'Internal Note', description: 'Customer prefers morning appointments', timestamp: '2 weeks ago', icon: <FileText className="size-4" />, color: 'text-amber-600 bg-amber-100' },
+   129→  ],
+   130→  cu5: [
+   131→    { id: 't10', type: 'message', title: 'WhatsApp Message', description: 'Requested commercial cleaning quote', timestamp: '1 hr ago', icon: <MessageSquare className="size-4" />, color: 'text-emerald-600 bg-emerald-100' },
+   132→    { id: 't11', type: 'payment', title: 'Payment Received', description: '$800 for Office Cleaning', timestamp: '3 days ago', icon: <DollarSign className="size-4" />, color: 'text-green-600 bg-green-100' },
+   133→  ],
+   134→};
+   135→
+   136→// ─── Component ──────────────────────────────────────────────────────────────
+   137→
+   138→export function Customer360View() {
+   139→  const [customers] = useState<Customer360[]>(MOCK_CUSTOMERS);
+   140→  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('cu1');
+   141→  const [search, setSearch] = useState('');
+   142→  const [showAddNote, setShowAddNote] = useState(false);
+   143→  const [noteText, setNoteText] = useState('');
+   144→  const [newTag, setNewTag] = useState('');
+   145→  const [showAddTag, setShowAddTag] = useState(false);
+   146→
+   147→  const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
+   148→  const timeline = MOCK_TIMELINE[selectedCustomerId] || [];
+   149→
+   150→  const filteredCustomers = customers.filter(c =>
+   151→    c.name.toLowerCase().includes(search.toLowerCase()) ||
+   152→    c.phone.includes(search) ||
+   153→    c.email.toLowerCase().includes(search.toLowerCase())
+   154→  );
+   155→
+   156→  const handleAddNote = () => {
+   157→    if (!noteText.trim()) return;
+   158→    toast.success('Note added successfully');
+   159→    setNoteText('');
+   160→    setShowAddNote(false);
+   161→  };
+   162→
+   163→  const handleAddTag = () => {
+   164→    if (!newTag.trim()) return;
+   165→    toast.success(`Tag "${newTag}" added`);
+   166→    setNewTag('');
+   167→    setShowAddTag(false);
+   168→  };
+   169→
+   170→  const handleRemoveTag = (tag: string) => {
+   171→    toast.success(`Tag "${tag}" removed`);
+   172→  };
+   173→
+   174→  const getValueScoreColor = (score: number) => {
+   175→    if (score >= 80) return 'text-emerald-600';
+   176→    if (score >= 60) return 'text-amber-600';
+   177→    return 'text-slate-500';
+   178→  };
+   179→
+   180→  const getValueScoreLabel = (score: number) => {
+   181→    if (score >= 80) return 'High Value';
+   182→    if (score >= 60) return 'Medium Value';
+   183→    return 'Low Value';
+   184→  };
+   185→
+   186→  return (
+   187→    <div className="space-y-6 max-w-7xl mx-auto">
+   188→      {/* Header */}
+   189→      <div className="flex items-center justify-between flex-wrap gap-4">
+   190→        <div className="flex items-center gap-3">
+   191→          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600">
+   192→            <User className="size-5 text-white" />
+   193→          </div>
+   194→          <div>
+   195→            <h2 className="text-xl font-bold">Customer 360</h2>
+   196→            <p className="text-sm text-muted-foreground">Complete customer profile & timeline</p>
+   197→          </div>
+   198→        </div>
+   199→      </div>
+   200→
+   201→      {/* Search */}
+   202→      <div className="relative max-w-md">
+   203→        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   204→        <Input
+   205→          placeholder="Search customers by name, phone, email..."
+   206→          value={search}
+   207→          onChange={e => setSearch(e.target.value)}
+   208→          className="pl-9"
+   209→        />
+   210→      </div>
+   211→
+   212→      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+   213→        {/* Customer List */}
+   214→        <Card className="lg:col-span-1">
+   215→          <CardHeader className="p-4 pb-2">
+   216→            <CardTitle className="text-sm font-medium">Customers</CardTitle>
+   217→          </CardHeader>
+   218→          <CardContent className="p-0">
+   219→            <ScrollArea className="max-h-[600px]">
+   220→              <div className="divide-y">
+   221→                {filteredCustomers.map(customer => (
+   222→                  <button
+   223→                    key={customer.id}
+   224→                    className={cn(
+   225→                      'w-full p-3 text-left hover:bg-muted/50 transition-colors',
+   226→                      selectedCustomerId === customer.id && 'bg-emerald-50 border-l-2 border-l-emerald-600'
+   227→                    )}
+   228→                    onClick={() => setSelectedCustomerId(customer.id)}
+   229→                  >
+   230→                    <div className="flex items-center gap-2">
+   231→                      <Avatar className="size-8">
+   232→                        <AvatarFallback className="bg-emerald-100 text-emerald-700 text-xs font-medium">
+   233→                          {customer.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+   234→                        </AvatarFallback>
+   235→                      </Avatar>
+   236→                      <div className="flex-1 min-w-0">
+   237→                        <p className="font-medium text-sm truncate">{customer.name}</p>
+   238→                        <p className="text-xs text-muted-foreground">{customer.phone}</p>
+   239→                        <div className="flex items-center gap-1 mt-0.5">
+   240→                          {customer.tags.slice(0, 2).map(tag => (
+   241→                            <Badge key={tag} variant="secondary" className="text-[9px] h-4">{tag}</Badge>
+   242→                          ))}
+   243→                        </div>
+   244→                      </div>
+   245→                    </div>
+   246→                  </button>
+   247→                ))}
+   248→              </div>
+   249→            </ScrollArea>
+   250→          </CardContent>
+   251→        </Card>
+   252→
+   253→        {/* Customer Detail */}
+   254→        {selectedCustomer && (
+   255→          <div className="lg:col-span-3 space-y-4">
+   256→            {/* Profile Card */}
+   257→            <Card>
+   258→              <CardContent className="p-6">
+   259→                <div className="flex items-start gap-4 flex-wrap">
+   260→                  <Avatar className="size-16">
+   261→                    <AvatarFallback className="bg-emerald-100 text-emerald-700 text-xl font-medium">
+   262→                      {selectedCustomer.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+   263→                    </AvatarFallback>
+   264→                  </Avatar>
+   265→                  <div className="flex-1 min-w-0">
+   266→                    <div className="flex items-center gap-2 flex-wrap">
+   267→                      <h3 className="text-lg font-bold">{selectedCustomer.name}</h3>
+   268→                      <Badge className={cn(
+   269→                        'text-xs',
+   270→                        selectedCustomer.valueScore >= 80 ? 'bg-emerald-100 text-emerald-700' :
+   271→                        selectedCustomer.valueScore >= 60 ? 'bg-amber-100 text-amber-700' :
+   272→                        'bg-slate-100 text-slate-600'
+   273→                      )}>
+   274→                        {getValueScoreLabel(selectedCustomer.valueScore)}
+   275→                      </Badge>
+   276→                    </div>
+   277→                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 mt-2 text-sm text-muted-foreground">
+   278→                      <div className="flex items-center gap-2"><Phone className="size-3.5" /> {selectedCustomer.phone}</div>
+   279→                      <div className="flex items-center gap-2"><Mail className="size-3.5" /> {selectedCustomer.email}</div>
+   280→                      <div className="flex items-center gap-2"><MessageSquare className="size-3.5" /> WhatsApp: {selectedCustomer.whatsappId}</div>
+   281→                      <div className="flex items-center gap-2"><MapPin className="size-3.5" /> {selectedCustomer.address}</div>
+   282→                    </div>
+   283→                    {/* Tags */}
+   284→                    <div className="flex items-center gap-1 mt-3 flex-wrap">
+   285→                      <Tag className="size-3.5 text-muted-foreground" />
+   286→                      {selectedCustomer.tags.map(tag => (
+   287→                        <Badge key={tag} variant="outline" className="text-xs h-6 gap-1">
+   288→                          {tag}
+   289→                          <button onClick={() => handleRemoveTag(tag)} className="hover:text-red-500"><X className="size-3" /></button>
+   290→                        </Badge>
+   291→                      ))}
+   292→                      {showAddTag ? (
+   293→                        <div className="flex items-center gap-1">
+   294→                          <Input className="h-6 w-24 text-xs" placeholder="Tag name" value={newTag} onChange={e => setNewTag(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddTag()} autoFocus />
+   295→                          <Button size="sm" className="h-6 text-xs bg-emerald-600 hover:bg-emerald-700" onClick={handleAddTag}>Add</Button>
+   296→                        </div>
+   297→                      ) : (
+   298→                        <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setShowAddTag(true)}>
+   299→                          <Plus className="size-3" /> Add
+   300→                        </Button>
+   301→                      )}
+   302→                    </div>
+   303→                  </div>
+   304→
+   305→                  {/* Value Score */}
+   306→                  <div className="text-center shrink-0">
+   307→                    <p className="text-xs text-muted-foreground mb-1">Value Score</p>
+   308→                    <div className={cn('text-3xl font-bold', getValueScoreColor(selectedCustomer.valueScore))}>
+   309→                      {selectedCustomer.valueScore}
+   310→                    </div>
+   311→                    <Progress value={selectedCustomer.valueScore} className="h-2 w-20 mt-1" />
+   312→                  </div>
+   313→                </div>
+   314→
+   315→                {/* Quick Actions */}
+   316→                <div className="flex gap-2 mt-4 pt-4 border-t flex-wrap">
+   317→                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700"><MessageSquare className="size-3.5 mr-1" /> Send WhatsApp</Button>
+   318→                  <Button size="sm" variant="outline"><Briefcase className="size-3.5 mr-1" /> Create Job</Button>
+   319→                  <Button size="sm" variant="outline"><FileText className="size-3.5 mr-1" /> Create Quote</Button>
+   320→                  <Button size="sm" variant="outline" onClick={() => setShowAddNote(true)}><Edit2 className="size-3.5 mr-1" /> Add Note</Button>
+   321→                </div>
+   322→
+   323→                {/* Stats Row */}
+   324→                <div className="grid grid-cols-4 gap-4 mt-4 pt-4 border-t">
+   325→                  <div className="text-center">
+   326→                    <p className="text-2xl font-bold text-emerald-600">${selectedCustomer.totalSpent.toLocaleString()}</p>
+   327→                    <p className="text-xs text-muted-foreground">Total Spent</p>
+   328→                  </div>
+   329→                  <div className="text-center">
+   330→                    <p className="text-2xl font-bold">{selectedCustomer.totalJobs}</p>
+   331→                    <p className="text-xs text-muted-foreground">Total Jobs</p>
+   332→                  </div>
+   333→                  <div className="text-center">
+   334→                    <p className="text-2xl font-bold">{selectedCustomer.totalConversations}</p>
+   335→                    <p className="text-xs text-muted-foreground">Conversations</p>
+   336→                  </div>
+   337→                  <div className="text-center">
+   338→                    <p className="text-sm font-medium text-muted-foreground">{selectedCustomer.lastActivity}</p>
+   339→                    <p className="text-xs text-muted-foreground">Last Activity</p>
+   340→                  </div>
+   341→                </div>
+   342→              </CardContent>
+   343→            </Card>
+   344→
+   345→            {/* Tabs */}
+   346→            <Tabs defaultValue="timeline">
+   347→              <TabsList className="flex-wrap h-auto">
+   348→                <TabsTrigger value="timeline" className="text-xs">Timeline</TabsTrigger>
+   349→                <TabsTrigger value="conversations" className="text-xs">Conversations</TabsTrigger>
+   350→                <TabsTrigger value="leads" className="text-xs">Leads</TabsTrigger>
+   351→                <TabsTrigger value="jobs" className="text-xs">Jobs</TabsTrigger>
+   352→                <TabsTrigger value="quotes" className="text-xs">Quotes</TabsTrigger>
+   353→                <TabsTrigger value="invoices" className="text-xs">Invoices</TabsTrigger>
+   354→                <TabsTrigger value="payments" className="text-xs">Payments</TabsTrigger>
+   355→                <TabsTrigger value="reviews" className="text-xs">Reviews</TabsTrigger>
+   356→              </TabsList>
+   357→
+   358→              <TabsContent value="timeline">
+   359→                <Card>
+   360→                  <CardContent className="p-4">
+   361→                    {timeline.length === 0 ? (
+   362→                      <div className="text-center py-8 text-muted-foreground">
+   363→                        <Clock className="size-8 mx-auto mb-2 opacity-20" />
+   364→                        <p className="text-sm">No timeline events</p>
+   365→                      </div>
+   366→                    ) : (
+   367→                      <div className="space-y-0">
+   368→                        {timeline.map((event, i) => (
+   369→                          <div key={event.id} className="flex gap-3 pb-4">
+   370→                            <div className="flex flex-col items-center">
+   371→                              <div className={cn('size-8 rounded-full flex items-center justify-center shrink-0', event.color)}>
+   372→                                {event.icon}
+   373→                              </div>
+   374→                              {i < timeline.length - 1 && <div className="w-px flex-1 bg-border mt-1" />}
+   375→                            </div>
+   376→                            <div className="flex-1 min-w-0 pt-1">
+   377→                              <div className="flex items-center justify-between">
+   378→                                <p className="font-medium text-sm">{event.title}</p>
+   379→                                <span className="text-xs text-muted-foreground shrink-0">{event.timestamp}</span>
+   380→                              </div>
+   381→                              <p className="text-xs text-muted-foreground mt-0.5">{event.description}</p>
+   382→                            </div>
+   383→                          </div>
+   384→                        ))}
+   385→                      </div>
+   386→                    )}
+   387→                  </CardContent>
+   388→                </Card>
+   389→              </TabsContent>
+   390→
+   391→              <TabsContent value="conversations">
+   392→                <Card>
+   393→                  <CardContent className="p-4">
+   394→                    <Table>
+   395→                      <TableHeader>
+   396→                        <TableRow>
+   397→                          <TableHead>Subject</TableHead>
+   398→                          <TableHead>Status</TableHead>
+   399→                          <TableHead>Last Message</TableHead>
+   400→                          <TableHead>Date</TableHead>
+   401→                        </TableRow>
+   402→                      </TableHeader>
+   403→                      <TableBody>
+   404→                        <TableRow>
+   405→                          <TableCell className="font-medium text-sm">Deep cleaning inquiry</TableCell>
+   406→                          <TableCell><Badge variant="outline" className="text-[10px] bg-emerald-100 text-emerald-700">Resolved</Badge></TableCell>
+   407→                          <TableCell className="text-xs text-muted-foreground">Thanks for choosing us!</TableCell>
+   408→                          <TableCell className="text-xs text-muted-foreground">2 hrs ago</TableCell>
+   409→                        </TableRow>
+   410→                        <TableRow>
+   411→                          <TableCell className="font-medium text-sm">Reschedule request</TableCell>
+   412→                          <TableCell><Badge variant="outline" className="text-[10px] bg-amber-100 text-amber-700">Open</Badge></TableCell>
+   413→                          <TableCell className="text-xs text-muted-foreground">Can we move it to Friday?</TableCell>
+   414→                          <TableCell className="text-xs text-muted-foreground">1 day ago</TableCell>
+   415→                        </TableRow>
+   416→                      </TableBody>
+   417→                    </Table>
+   418→                  </CardContent>
+   419→                </Card>
+   420→              </TabsContent>
+   421→
+   422→              <TabsContent value="leads">
+   423→                <Card>
+   424→                  <CardContent className="p-4">
+   425→                    <Table>
+   426→                      <TableHeader><TableRow><TableHead>Lead</TableHead><TableHead>Status</TableHead><TableHead>Value</TableHead><TableHead>Date</TableHead></TableRow></TableHeader>
+   427→                      <TableBody>
+   428→                        <TableRow>
+   429→                          <TableCell className="font-medium text-sm">Commercial Cleaning</TableCell>
+   430→                          <TableCell><Badge variant="outline" className="text-[10px] bg-emerald-100 text-emerald-700">Won</Badge></TableCell>
+   431→                          <TableCell className="text-sm">$2,400</TableCell>
+   432→                          <TableCell className="text-xs text-muted-foreground">Feb 15, 2025</TableCell>
+   433→                        </TableRow>
+   434→                        <TableRow>
+   435→                          <TableCell className="font-medium text-sm">Window Cleaning</TableCell>
+   436→                          <TableCell><Badge variant="outline" className="text-[10px] bg-blue-100 text-blue-700">Qualified</Badge></TableCell>
+   437→                          <TableCell className="text-sm">$800</TableCell>
+   438→                          <TableCell className="text-xs text-muted-foreground">Mar 1, 2025</TableCell>
+   439→                        </TableRow>
+   440→                      </TableBody>
+   441→                    </Table>
+   442→                  </CardContent>
+   443→                </Card>
+   444→              </TabsContent>
+   445→
+   446→              <TabsContent value="jobs">
+   447→                <Card>
+   448→                  <CardContent className="p-4">
+   449→                    <Table>
+   450→                      <TableHeader><TableRow><TableHead>Job</TableHead><TableHead>Status</TableHead><TableHead>Scheduled</TableHead><TableHead>Value</TableHead></TableRow></TableHeader>
+   451→                      <TableBody>
+   452→                        <TableRow>
+   453→                          <TableCell className="font-medium text-sm">Deep Cleaning #1234</TableCell>
+   454→                          <TableCell><Badge variant="outline" className="text-[10px] bg-green-100 text-green-700">Completed</Badge></TableCell>
+   455→                          <TableCell className="text-xs text-muted-foreground">Mar 5, 2025</TableCell>
+   456→                          <TableCell className="text-sm">$450</TableCell>
+   457→                        </TableRow>
+   458→                        <TableRow>
+   459→                          <TableCell className="font-medium text-sm">Office Cleaning #1256</TableCell>
+   460→                          <TableCell><Badge variant="outline" className="text-[10px] bg-amber-100 text-amber-700">Scheduled</Badge></TableCell>
+   461→                          <TableCell className="text-xs text-muted-foreground">Mar 15, 2025</TableCell>
+   462→                          <TableCell className="text-sm">$350</TableCell>
+   463→                        </TableRow>
+   464→                      </TableBody>
+   465→                    </Table>
+   466→                  </CardContent>
+   467→                </Card>
+   468→              </TabsContent>
+   469→
+   470→              <TabsContent value="quotes">
+   471→                <Card><CardContent className="p-4"><div className="text-center py-8 text-muted-foreground"><FileText className="size-8 mx-auto mb-2 opacity-20" /><p className="text-sm">No quotes yet</p></div></CardContent></Card>
+   472→              </TabsContent>
+   473→              <TabsContent value="invoices">
+   474→                <Card><CardContent className="p-4"><Table><TableHeader><TableRow><TableHead>Invoice</TableHead><TableHead>Amount</TableHead><TableHead>Status</TableHead><TableHead>Date</TableHead></TableRow></TableHeader><TableBody><TableRow><TableCell className="font-medium text-sm">INV-001</TableCell><TableCell className="text-sm">$450</TableCell><TableCell><Badge variant="outline" className="text-[10px] bg-green-100 text-green-700">Paid</Badge></TableCell><TableCell className="text-xs text-muted-foreground">Mar 5, 2025</TableCell></TableRow></TableBody></Table></CardContent></Card>
+   475→              </TabsContent>
+   476→              <TabsContent value="payments">
+   477→                <Card><CardContent className="p-4"><Table><TableHeader><TableRow><TableHead>Amount</TableHead><TableHead>Method</TableHead><TableHead>Status</TableHead><TableHead>Date</TableHead></TableRow></TableHeader><TableBody><TableRow><TableCell className="text-sm font-medium">$450</TableCell><TableCell className="text-sm">Credit Card</TableCell><TableCell><Badge variant="outline" className="text-[10px] bg-green-100 text-green-700">Completed</Badge></TableCell><TableCell className="text-xs text-muted-foreground">Mar 5, 2025</TableCell></TableRow><TableRow><TableCell className="text-sm font-medium">$350</TableCell><TableCell className="text-sm">Bank Transfer</TableCell><TableCell><Badge variant="outline" className="text-[10px] bg-amber-100 text-amber-700">Pending</Badge></TableCell><TableCell className="text-xs text-muted-foreground">Mar 10, 2025</TableCell></TableRow></TableBody></Table></CardContent></Card>
+   478→              </TabsContent>
+   479→              <TabsContent value="reviews">
+   480→                <Card><CardContent className="p-4"><div className="space-y-3"><div className="p-3 rounded-lg border"><div className="flex items-center gap-1 mb-1">{[1,2,3,4,5].map(s=><Star key={s} className="size-4 text-amber-400 fill-amber-400" />)}</div><p className="text-sm">"Excellent service! The team was very professional."</p><p className="text-xs text-muted-foreground mt-1">2 weeks ago</p></div></div></CardContent></Card>
+   481→              </TabsContent>
+   482→            </Tabs>
+   483→          </div>
+   484→        )}
+   485→      </div>
+   486→
+   487→      {/* Add Note Dialog */}
+   488→      <Dialog open={showAddNote} onOpenChange={setShowAddNote}>
+   489→        <DialogContent className="max-w-sm">
+   490→          <DialogHeader>
+   491→            <DialogTitle>Add Note</DialogTitle>
+   492→            <DialogDescription>Add an internal note for this customer</DialogDescription>
+   493→          </DialogHeader>
+   494→          <Textarea placeholder="Enter note..." value={noteText} onChange={e => setNoteText(e.target.value)} rows={4} />
+   495→          <DialogFooter>
+   496→            <Button variant="outline" onClick={() => setShowAddNote(false)}>Cancel</Button>
+   497→            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleAddNote}>Save Note</Button>
+   498→          </DialogFooter>
+   499→        </DialogContent>
+   500→      </Dialog>
+   501→    </div>
+   502→  );
+   503→}
+   504→

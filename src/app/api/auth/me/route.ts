@@ -43,6 +43,7 @@ export async function GET() {
         tenantId: user.tenantId,
         workspaceId: user.workspaceId,
         avatar: user.avatar,
+        isSuperAdmin: user.isSuperAdmin || false,
         isActive: user.isActive,
         lastLoginAt: user.lastLoginAt,
         createdAt: user.createdAt,

@@ -150,6 +150,8 @@ export function CampaignsView() {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.set('status', statusFilter);
       params.set('limit', '50');
+      // Exclude broadcasts from campaigns view
+      params.set('type', 'promotional,reminder,seasonal,re_engagement,follow_up');
 
       const res = await fetch(`/api/campaigns?${params.toString()}`);
       if (res.ok) {

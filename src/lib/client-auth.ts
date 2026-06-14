@@ -21,7 +21,17 @@ export function setToken(token: string): void {
  */
 export function getToken(): string | null {
   if (typeof window !== 'undefined') {
-    return localStorage.getItem(TOKEN_KEY);
+    // First try the dedicated token key
+    const directToken = localStorage.getItem(TOKEN_KEY);
+    if (directToken) return directToken;
+    // Fallback: extract token from the auth data object
+    try {
+      const authData = localStorage.getItem('serviceos_auth');
+      if (authData) {
+        const parsed = JSON.parse(authData);
+        if (parsed?.token) return parsed.token;
+      }
+    } catch {}
   }
   return null;
 }

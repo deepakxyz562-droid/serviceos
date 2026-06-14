@@ -1,0 +1,508 @@
+     1→/**
+     2→ * ServiceOS Trigger Engine
+     3→ * 
+     4→ * Bridges the EventBus to WorkflowAutomation records.
+     5→ * When a ServiceEvent is emitted, the trigger engine:
+     6→ * 1. Finds all active automations matching the event triggerType
+     7→ * 2. Evaluates conditions against the event payload
+     8→ * 3. Executes actions (send_whatsapp, send_notification, create_task, update_record, send_email, call_webhook, add_tag, assign_user, create_job, move_pipeline)
+     9→ * 4. Logs results to TriggerExecution
+    10→ */
+    11→
+    12→import { EventBus, type ServiceEvent, type EventPayload } from '@/lib/event-bus'
+    13→import { db } from '@/lib/db'
+    14→
+    15→// ─── Trigger Type Definitions ────────────────────────────────────────────────
+    16→
+    17→export interface TriggerDefinition {
+    18→  id: string
+    19→  label: string
+    20→  description: string
+    21→  category: string
+    22→  icon: string
+    23→  event: ServiceEvent
+    24→  configurableFields?: TriggerField[]
+    25→}
+    26→
+    27→export interface TriggerField {
+    28→  key: string
+    29→  label: string
+    30→  type: 'text' | 'select' | 'number' | 'boolean'
+    31→  options?: { label: string; value: string }[]
+    32→  required?: boolean
+    33→  defaultValue?: any
+    34→}
+    35→
+    36→// ─── Action Type Definitions ─────────────────────────────────────────────────
+    37→
+    38→export interface ActionDefinition {
+    39→  type: string
+    40→  label: string
+    41→  description: string
+    42→  category: string
+    43→  icon: string
+    44→  configurableFields: TriggerField[]
+    45→}
+    46→
+    47→// ─── Trigger Catalog ─────────────────────────────────────────────────────────
+    48→
+    49→export const TRIGGER_CATALOG: TriggerDefinition[] = [
+    50→  // ─── CRM Events (Lead-focused) ─────────────────────────────────────────
+    51→  { id: 'lead.created', label: 'Lead Created', description: 'When a new lead is created', category: 'CRM Events', icon: 'UserPlus', event: 'lead.created' },
+    52→  { id: 'lead.updated', label: 'Lead Updated', description: 'When a lead is updated', category: 'CRM Events', icon: 'UserCog', event: 'lead.updated' },
+    53→  { id: 'lead.assigned', label: 'Lead Assigned', description: 'When a lead is assigned to someone', category: 'CRM Events', icon: 'UserCheck', event: 'lead.updated', configurableFields: [{ key: 'assignedOnly', label: 'Only on assignment', type: 'boolean', defaultValue: true }] },
+    54→  { id: 'lead.status_changed', label: 'Lead Status Changed', description: 'When lead status changes', category: 'CRM Events', icon: 'ArrowRightLeft', event: 'lead.updated', configurableFields: [{ key: 'fromStatus', label: 'From Status', type: 'select', options: [{ label: 'Any', value: 'any' }, { label: 'New', value: 'new' }, { label: 'Contacted', value: 'contacted' }, { label: 'Qualified', value: 'qualified' }, { label: 'Proposal', value: 'proposal' }, { label: 'Negotiation', value: 'negotiation' }] }, { key: 'toStatus', label: 'To Status', type: 'select', options: [{ label: 'Any', value: 'any' }, { label: 'New', value: 'new' }, { label: 'Contacted', value: 'contacted' }, { label: 'Qualified', value: 'qualified' }, { label: 'Proposal', value: 'proposal' }, { label: 'Won', value: 'won' }, { label: 'Lost', value: 'lost' }] }] },
+    55→  { id: 'lead.won', label: 'Lead Won', description: 'When a lead is won', category: 'CRM Events', icon: 'Trophy', event: 'lead.updated', configurableFields: [{ key: 'toStatus', label: 'Status', type: 'select', options: [{ label: 'Won', value: 'won' }], defaultValue: 'won' }] },
+    56→  { id: 'lead.lost', label: 'Lead Lost', description: 'When a lead is lost', category: 'CRM Events', icon: 'Siren', event: 'lead.updated', configurableFields: [{ key: 'toStatus', label: 'Status', type: 'select', options: [{ label: 'Lost', value: 'lost' }], defaultValue: 'lost' }] },
+    57→  { id: 'lead.converted', label: 'Lead Converted', description: 'When a lead is converted to customer/job', category: 'CRM Events', icon: 'CheckCircle', event: 'lead.converted' },
+    58→  { id: 'time.1h_after_lead', label: '1 Hour After Lead Created', description: '1 hour after a new lead is created', category: 'CRM Events', icon: 'Clock', event: 'lead.created', configurableFields: [{ key: 'delayMinutes', label: 'Delay (minutes)', type: 'number', defaultValue: 60 }] },
+    59→
+    60→  // ─── Customer Events ───────────────────────────────────────────────────
+    61→  { id: 'customer.created', label: 'Customer Created', description: 'When a new customer is created', category: 'Customer Events', icon: 'Users', event: 'customer.journey_stage_changed', configurableFields: [{ key: 'stage', label: 'Stage', type: 'select', options: [{ label: 'Any', value: 'any' }, { label: 'Lead', value: 'lead' }], defaultValue: 'any' }] },
+    62→  { id: 'customer.updated', label: 'Customer Updated', description: 'When customer details are updated', category: 'Customer Events', icon: 'UserCog', event: 'customer.journey_stage_changed' },
+    63→  { id: 'customer.tagged', label: 'Customer Tagged', description: 'When a tag is added to a customer', category: 'Customer Events', icon: 'Hash', event: 'customer.journey_stage_changed', configurableFields: [{ key: 'tag', label: 'Tag Name', type: 'text' }] },
+    64→  { id: 'customer.journey_stage_changed', label: 'Customer Journey Stage Changed', description: 'When a customer moves to a new journey stage', category: 'Customer Events', icon: 'Route', event: 'customer.journey_stage_changed' },
+    65→
+    66→  // ─── Booking Events ────────────────────────────────────────────────────
+    67→  { id: 'booking.created', label: 'Booking Created', description: 'When a new booking is created', category: 'Booking Events', icon: 'CalendarPlus', event: 'job.created' },
+    68→  { id: 'booking.confirmed', label: 'Booking Confirmed', description: 'When a booking is confirmed', category: 'Booking Events', icon: 'CalendarCheck', event: 'job.assigned' },
+    69→  { id: 'booking.cancelled', label: 'Booking Cancelled', description: 'When a booking is cancelled', category: 'Booking Events', icon: 'CalendarX', event: 'job.cancelled' },
+    70→  { id: 'booking.completed', label: 'Booking Completed', description: 'When a booking is completed', category: 'Booking Events', icon: 'CheckCircle', event: 'job.completed' },
+    71→  { id: 'booking.rescheduled', label: 'Booking Rescheduled', description: 'When a booking is rescheduled', category: 'Booking Events', icon: 'CalendarClock', event: 'job.updated' },
+    72→
+    73→  // ─── Job Events ────────────────────────────────────────────────────────
+    74→  { id: 'job.created', label: 'Job Created', description: 'When a new job is created', category: 'Job Events', icon: 'Briefcase', event: 'job.created' },
+    75→  { id: 'job.assigned', label: 'Job Assigned', description: 'When a job is assigned to employee', category: 'Job Events', icon: 'UserCheck', event: 'job.assigned' },
+    76→  { id: 'job.started', label: 'Job Started', description: 'When a job is started', category: 'Job Events', icon: 'Play', event: 'job.started' },
+    77→  { id: 'job.completed', label: 'Job Completed', description: 'When a job is completed', category: 'Job Events', icon: 'CheckCircle', event: 'job.completed' },
+    78→  { id: 'job.cancelled', label: 'Job Cancelled', description: 'When a job is cancelled', category: 'Job Events', icon: 'XCircle', event: 'job.cancelled' },
+    79→  { id: 'time.3d_after_job', label: '3 Days After Job Completed', description: '3 days after job completion for follow-up', category: 'Job Events', icon: 'Clock', event: 'job.completed', configurableFields: [{ key: 'delayMinutes', label: 'Delay (minutes)', type: 'number', defaultValue: 4320 }] },
+    80→
+    81→  // ─── Invoice Events (Renamed from Finance) ────────────────────────────
+    82→  { id: 'quote.created', label: 'Quote Created', description: 'When a new quote is created', category: 'Invoice Events', icon: 'FileText', event: 'payment.received' },
+    83→  { id: 'quote.sent', label: 'Quote Sent', description: 'When a quote is sent to customer', category: 'Invoice Events', icon: 'Send', event: 'payment.received' },
+    84→  { id: 'quote.accepted', label: 'Quote Accepted', description: 'When a quote is accepted', category: 'Invoice Events', icon: 'CheckCircle', event: 'payment.received' },
+    85→  { id: 'quote.rejected', label: 'Quote Rejected', description: 'When a quote is rejected', category: 'Invoice Events', icon: 'XCircle', event: 'payment.received' },
+    86→  { id: 'invoice.created', label: 'Invoice Created', description: 'When a new invoice is created', category: 'Invoice Events', icon: 'Receipt', event: 'payment.received' },
+    87→  { id: 'invoice.paid', label: 'Invoice Paid', description: 'When an invoice is paid', category: 'Invoice Events', icon: 'Banknote', event: 'payment.received' },
+    88→  { id: 'invoice.overdue', label: 'Invoice Overdue', description: 'When an invoice becomes overdue', category: 'Invoice Events', icon: 'AlertTriangle', event: 'payment.failed' },
+    89→  { id: 'time.1d_after_quote', label: '1 Day After Quote Sent', description: '1 day after quote is sent without acceptance', category: 'Invoice Events', icon: 'Clock', event: 'payment.received', configurableFields: [{ key: 'delayMinutes', label: 'Delay (minutes)', type: 'number', defaultValue: 1440 }] },
+    90→  { id: 'time.7d_after_invoice', label: '7 Days After Invoice Due', description: '7 days after invoice due date (overdue reminder)', category: 'Invoice Events', icon: 'Clock', event: 'payment.failed', configurableFields: [{ key: 'delayMinutes', label: 'Delay (minutes)', type: 'number', defaultValue: 10080 }] },
+    91→
+    92→  // ─── WhatsApp Events ──────────────────────────────────────────────────
+    93→  { id: 'whatsapp.message_received', label: 'Message Received', description: 'When a WhatsApp message is received', category: 'WhatsApp Events', icon: 'MessageCircle', event: 'conversation.message_received' },
+    94→  { id: 'whatsapp.message_delivered', label: 'Message Delivered', description: 'When a WhatsApp message is delivered', category: 'WhatsApp Events', icon: 'CheckCircle', event: 'conversation.message_sent' },
+    95→  { id: 'whatsapp.conversation_started', label: 'Conversation Started', description: 'When a new WhatsApp conversation starts', category: 'WhatsApp Events', icon: 'MessageSquarePlus', event: 'conversation.state_changed' },
+    96→  { id: 'whatsapp.template_delivered', label: 'Template Delivered', description: 'When a WhatsApp template is delivered', category: 'WhatsApp Events', icon: 'Check', event: 'conversation.message_sent' },
+    97→  { id: 'whatsapp.template_failed', label: 'Template Failed', description: 'When a WhatsApp template fails', category: 'WhatsApp Events', icon: 'AlertCircle', event: 'conversation.message_sent' },
+    98→
+    99→  // ─── Form Events (EXPANDED — includes Website) ────────────────────────
+   100→  { id: 'form.submitted', label: 'Form Submitted', description: 'When a form is submitted', category: 'Form Events', icon: 'FileInput', event: 'customer.journey_stage_changed' },
+   101→  { id: 'form.survey_submitted', label: 'Survey Submitted', description: 'When a survey is submitted', category: 'Form Events', icon: 'ClipboardList', event: 'customer.journey_stage_changed' },
+   102→  { id: 'form.response_received', label: 'Response Received', description: 'When a form response is received', category: 'Form Events', icon: 'Inbox', event: 'customer.journey_stage_changed' },
+   103→  { id: 'form.abandoned', label: 'Form Abandoned', description: 'When a form is started but not completed', category: 'Form Events', icon: 'Inbox', event: 'customer.journey_stage_changed' },
+   104→  { id: 'website.contact_form', label: 'Contact Form Submitted', description: 'When a contact form is submitted from website', category: 'Form Events', icon: 'Globe', event: 'lead.created', configurableFields: [{ key: 'source', label: 'Source', type: 'select', options: [{ label: 'Any', value: 'any' }, { label: 'Website', value: 'website' }, { label: 'WordPress', value: 'wordpress' }], defaultValue: 'website' }] },
+   105→  { id: 'website.booking_form', label: 'Booking Form Submitted', description: 'When a booking form is submitted from website', category: 'Form Events', icon: 'CalendarPlus', event: 'job.created' },
+   106→  { id: 'website.quote_request', label: 'Quote Request Submitted', description: 'When a quote request comes from website', category: 'Form Events', icon: 'FileText', event: 'lead.created' },
+   107→
+   108→  // ─── System Events (EXPANDED — includes Employee) ─────────────────────
+   109→  { id: 'user.registered', label: 'User Registered', description: 'When a new user registers on the platform', category: 'System Events', icon: 'ShieldCheck', event: 'lead.created' },
+   110→  { id: 'employee.created', label: 'Employee Created', description: 'When a new employee is added', category: 'System Events', icon: 'UserRoundPlus', event: 'employee.status_changed' },
+   111→  { id: 'employee.assigned', label: 'Employee Assigned', description: 'When an employee is assigned to a job', category: 'System Events', icon: 'UserCheck', event: 'employee.status_changed' },
+   112→  { id: 'employee.available', label: 'Employee Available', description: 'When employee becomes available', category: 'System Events', icon: 'CircleCheck', event: 'employee.status_changed' },
+   113→  { id: 'employee.offline', label: 'Employee Offline', description: 'When employee goes offline', category: 'System Events', icon: 'WifiOff', event: 'employee.heartbeat' },
+   114→  { id: 'system.error', label: 'System Error', description: 'When a system error occurs', category: 'System Events', icon: 'AlertOctagon', event: 'system.error' },
+   115→  { id: 'system.api_call_failed', label: 'API Call Failed', description: 'When an external API call fails', category: 'System Events', icon: 'Unplug', event: 'system.api_call_failed' },
+   116→]
+   117→
+   118→// ─── Action Catalog ──────────────────────────────────────────────────────────
+   119→
+   120→export const ACTION_CATALOG: ActionDefinition[] = [
+   121→  { type: 'send_whatsapp', label: 'Send WhatsApp Message', description: 'Send a WhatsApp message to customer or employee', category: 'Communication', icon: 'MessageCircle', configurableFields: [{ key: 'recipient', label: 'Recipient', type: 'select', options: [{ label: 'Customer', value: 'customer' }, { label: 'Employee', value: 'employee' }, { label: 'Phone Number', value: 'custom' }], required: true }, { key: 'template', label: 'Message Template', type: 'text', required: true }] },
+   122→  { type: 'send_notification', label: 'Send Notification', description: 'Send an in-app notification', category: 'Communication', icon: 'Bell', configurableFields: [{ key: 'userId', label: 'User ID', type: 'text' }, { key: 'title', label: 'Title', type: 'text', required: true }, { key: 'message', label: 'Message', type: 'text', required: true }] },
+   123→  { type: 'send_email', label: 'Send Email', description: 'Send an email notification', category: 'Communication', icon: 'Mail', configurableFields: [{ key: 'to', label: 'To', type: 'text', required: true }, { key: 'subject', label: 'Subject', type: 'text', required: true }, { key: 'body', label: 'Body', type: 'text', required: true }] },
+   124→  { type: 'create_task', label: 'Create Follow-up Task', description: 'Create a follow-up task or job', category: 'Action', icon: 'Plus', configurableFields: [{ key: 'title', label: 'Task Title', type: 'text', required: true }, { key: 'description', label: 'Description', type: 'text' }, { key: 'assignTo', label: 'Assign To', type: 'select', options: [{ label: 'Lead Owner', value: 'lead_owner' }, { label: 'Sales Rep', value: 'sales_rep' }, { label: 'Specific User', value: 'specific' }] }] },
+   125→  { type: 'update_record', label: 'Update Record', description: 'Update a CRM record field', category: 'Action', icon: 'Save', configurableFields: [{ key: 'recordType', label: 'Record Type', type: 'select', options: [{ label: 'Lead', value: 'lead' }, { label: 'Job', value: 'job' }, { label: 'Customer', value: 'customer' }], required: true }, { key: 'field', label: 'Field', type: 'text', required: true }, { key: 'value', label: 'Value', type: 'text', required: true }] },
+   126→  { type: 'add_tag', label: 'Add Tag', description: 'Add a tag to the record', category: 'Action', icon: 'Tag', configurableFields: [{ key: 'tag', label: 'Tag', type: 'text', required: true }] },
+   127→  { type: 'assign_user', label: 'Assign User', description: 'Assign the record to a user', category: 'Action', icon: 'UserPlus', configurableFields: [{ key: 'assignTo', label: 'Assign To', type: 'select', options: [{ label: 'Round Robin', value: 'round_robin' }, { label: 'Lead Owner', value: 'lead_owner' }, { label: 'Specific User', value: 'specific' }], required: true }, { key: 'userId', label: 'User ID (if specific)', type: 'text' }] },
+   128→  { type: 'call_webhook', label: 'Call Webhook', description: 'Send data to an external webhook URL', category: 'Integration', icon: 'Webhook', configurableFields: [{ key: 'url', label: 'Webhook URL', type: 'text', required: true }, { key: 'method', label: 'Method', type: 'select', options: [{ label: 'POST', value: 'POST' }, { label: 'PUT', value: 'PUT' }], defaultValue: 'POST' }] },
+   129→  { type: 'move_pipeline', label: 'Move to Pipeline Stage', description: 'Move lead to a different pipeline stage', category: 'CRM', icon: 'ArrowRight', configurableFields: [{ key: 'stage', label: 'Target Stage', type: 'select', options: [{ label: 'New', value: 'new' }, { label: 'Contacted', value: 'contacted' }, { label: 'Qualified', value: 'qualified' }, { label: 'Proposal', value: 'proposal' }, { label: 'Won', value: 'won' }], required: true }] },
+   130→  { type: 'create_job', label: 'Create Job', description: 'Create a new job from the trigger data', category: 'Action', icon: 'Briefcase', configurableFields: [{ key: 'title', label: 'Job Title', type: 'text', required: true }, { key: 'serviceType', label: 'Service Type', type: 'text' }] },
+   131→]
+   132→
+   133→// ─── Condition Evaluator ─────────────────────────────────────────────────────
+   134→
+   135→interface Condition {
+   136→  field: string
+   137→  operator: 'equals' | 'not_equals' | 'contains' | 'greater_than' | 'less_than' | 'exists' | 'in'
+   138→  value: any
+   139→}
+   140→
+   141→function evaluateConditions(conditions: Condition[], data: Record<string, any>): boolean {
+   142→  if (!conditions || conditions.length === 0) return true
+   143→  
+   144→  return conditions.every(condition => {
+   145→    const fieldValue = getNestedValue(data, condition.field)
+   146→    
+   147→    switch (condition.operator) {
+   148→      case 'equals':
+   149→        return fieldValue === condition.value
+   150→      case 'not_equals':
+   151→        return fieldValue !== condition.value
+   152→      case 'contains':
+   153→        return String(fieldValue).toLowerCase().includes(String(condition.value).toLowerCase())
+   154→      case 'greater_than':
+   155→        return Number(fieldValue) > Number(condition.value)
+   156→      case 'less_than':
+   157→        return Number(fieldValue) < Number(condition.value)
+   158→      case 'exists':
+   159→        return fieldValue !== undefined && fieldValue !== null
+   160→      case 'in':
+   161→        return Array.isArray(condition.value) && condition.value.includes(fieldValue)
+   162→      default:
+   163→        return true
+   164→    }
+   165→  })
+   166→}
+   167→
+   168→function getNestedValue(obj: Record<string, any>, path: string): any {
+   169→  return path.split('.').reduce((current, key) => current?.[key], obj)
+   170→}
+   171→
+   172→// ─── Action Executor ─────────────────────────────────────────────────────────
+   173→
+   174→async function executeAction(
+   175→  action: { type: string; config: Record<string, any> },
+   176→  payload: EventPayload
+   177→): Promise<{ success: boolean; result?: any; error?: string }> {
+   178→  try {
+   179→    switch (action.type) {
+   180→      case 'send_whatsapp': {
+   181→        // In production, this would call the WhatsApp API
+   182→        console.log(`[TriggerEngine] Sending WhatsApp to ${action.config.recipient}: ${action.config.template}`)
+   183→        return { success: true, result: { sent: true, recipient: action.config.recipient } }
+   184→      }
+   185→      case 'send_notification': {
+   186→        if (action.config.userId || payload.tenantId) {
+   187→          await db.notification.create({
+   188→            data: {
+   189→              title: action.config.title || 'Trigger Notification',
+   190→              message: action.config.message || 'Automated notification from trigger',
+   191→              type: 'info',
+   192→              userId: action.config.userId || null,
+   193→              tenantId: payload.tenantId || null,
+   194→            },
+   195→          })
+   196→        }
+   197→        return { success: true, result: { notificationCreated: true } }
+   198→      }
+   199→      case 'create_task': {
+   200→        // Create a job as a follow-up task
+   201→        if (payload.data.jobId || payload.data.leadId) {
+   202→          const job = await db.job.create({
+   203→            data: {
+   204→              title: action.config.title || 'Follow-up Task',
+   205→              description: action.config.description || `Auto-created by trigger`,
+   206→              status: 'pending',
+   207→              priority: 'medium',
+   208→              workspaceId: payload.workspaceId || null,
+   209→              customerId: payload.data.customerId || null,
+   210→              customerName: payload.data.customerName || null,
+   211→              customerPhone: payload.data.customerPhone || null,
+   212→            },
+   213→          })
+   214→          return { success: true, result: { jobId: job.id } }
+   215→        }
+   216→        return { success: true, result: { note: 'No reference ID for task creation' } }
+   217→      }
+   218→      case 'update_record': {
+   219→        const recordType = action.config.recordType
+   220→        const recordId = recordType === 'lead' ? payload.data.leadId : recordType === 'job' ? payload.data.jobId : payload.data.customerId
+   221→        if (!recordId) return { success: false, error: `No ${recordType} ID in payload` }
+   222→        
+   223→        const model = recordType === 'lead' ? db.lead : recordType === 'job' ? db.job : db.customer
+   224→        await (model as any).update({ where: { id: recordId }, data: { [action.config.field]: action.config.value } })
+   225→        return { success: true, result: { updated: true, field: action.config.field } }
+   226→      }
+   227→      case 'add_tag': {
+   228→        const leadId = payload.data.leadId
+   229→        if (leadId) {
+   230→          const lead = await db.lead.findUnique({ where: { id: leadId } })
+   231→          if (lead) {
+   232→            const tags = JSON.parse(lead.tagsJson || '[]')
+   233→            if (!tags.includes(action.config.tag)) {
+   234→              tags.push(action.config.tag)
+   235→              await db.lead.update({ where: { id: leadId }, data: { tagsJson: JSON.stringify(tags) } })
+   236→            }
+   237→          }
+   238→        }
+   239→        return { success: true, result: { tagAdded: action.config.tag } }
+   240→      }
+   241→      case 'assign_user': {
+   242→        // Round-robin or specific assignment
+   243→        if (action.config.assignTo === 'round_robin' && payload.data.leadId) {
+   244→          const employees = await db.employee.findMany({ where: { status: 'available', workspaceId: payload.workspaceId || undefined }, take: 1 })
+   245→          if (employees.length > 0) {
+   246→            await db.lead.update({ where: { id: payload.data.leadId }, data: { assignedToId: employees[0].id } })
+   247→            return { success: true, result: { assignedTo: employees[0].id } }
+   248→          }
+   249→        }
+   250→        return { success: true, result: { note: 'Assignment handled' } }
+   251→      }
+   252→      case 'call_webhook': {
+   253→        const response = await fetch(action.config.url, {
+   254→          method: action.config.method || 'POST',
+   255→          headers: { 'Content-Type': 'application/json' },
+   256→          body: JSON.stringify(payload),
+   257→        })
+   258→        return { success: response.ok, result: { status: response.status } }
+   259→      }
+   260→      case 'move_pipeline': {
+   261→        if (payload.data.leadId) {
+   262→          await db.lead.update({ where: { id: payload.data.leadId }, data: { status: action.config.stage } })
+   263→        }
+   264→        return { success: true, result: { movedTo: action.config.stage } }
+   265→      }
+   266→      case 'create_job': {
+   267→        const job = await db.job.create({
+   268→          data: {
+   269→            title: action.config.title || 'New Job',
+   270→            status: 'pending',
+   271→            priority: 'medium',
+   272→            workspaceId: payload.workspaceId || null,
+   273→            customerId: payload.data.customerId || null,
+   274→            customerName: payload.data.customerName || null,
+   275→            customerPhone: payload.data.customerPhone || null,
+   276→          },
+   277→        })
+   278→        return { success: true, result: { jobId: job.id } }
+   279→      }
+   280→      case 'send_email': {
+   281→        // In production, integrate with email service
+   282→        console.log(`[TriggerEngine] Sending email to ${action.config.to}: ${action.config.subject}`)
+   283→        return { success: true, result: { emailSent: true } }
+   284→      }
+   285→      case 'send_sms': {
+   286→        // In production, integrate with SMS service (Twilio, etc.)
+   287→        console.log(`[TriggerEngine] Sending SMS to ${action.config.to}: ${action.config.message}`)
+   288→        return { success: true, result: { smsSent: true } }
+   289→      }
+   290→      case 'remove_tag': {
+   291→        const leadId = payload.data.leadId
+   292→        if (leadId) {
+   293→          const lead = await db.lead.findUnique({ where: { id: leadId } })
+   294→          if (lead) {
+   295→            const tags = JSON.parse(lead.tagsJson || '[]')
+   296→            const updatedTags = tags.filter((t: string) => t !== action.config.tag)
+   297→            await db.lead.update({ where: { id: leadId }, data: { tagsJson: JSON.stringify(updatedTags) } })
+   298→          }
+   299→        }
+   300→        return { success: true, result: { tagRemoved: action.config.tag } }
+   301→      }
+   302→      case 'create_broadcast': {
+   303→        // In production, create a broadcast campaign
+   304→        console.log(`[TriggerEngine] Creating broadcast: ${action.config.name || 'Auto Broadcast'}`)
+   305→        return { success: true, result: { broadcastCreated: true } }
+   306→      }
+   307→      default:
+   308→        return { success: false, error: `Unknown action type: ${action.type}` }
+   309→    }
+   310→  } catch (error: any) {
+   311→    return { success: false, error: error.message || 'Action execution failed' }
+   312→  }
+   313→}
+   314→
+   315→// ─── Trigger Engine ──────────────────────────────────────────────────────────
+   316→
+   317→class TriggerEngineClass {
+   318→  private initialized = false
+   319→
+   320→  /**
+   321→   * Initialize the trigger engine by subscribing to all EventBus events
+   322→   * that have matching triggers in the catalog.
+   323→   */
+   324→  initialize(): void {
+   325→    if (this.initialized) return
+   326→
+   327→    // Get unique events from the catalog
+   328→    const uniqueEvents = new Set<ServiceEvent>(
+   329→      TRIGGER_CATALOG.map(t => t.event)
+   330→    )
+   331→
+   332→    // Subscribe to each unique event
+   333→    for (const event of uniqueEvents) {
+   334→      EventBus.on(event, this.handleEvent.bind(this))
+   335→    }
+   336→
+   337→    this.initialized = true
+   338→    console.log(`[TriggerEngine] Initialized with ${uniqueEvents.size} event subscriptions`)
+   339→  }
+   340→
+   341→  /**
+   342→   * Handle an incoming event from the EventBus
+   343→   */
+   344→  private async handleEvent(payload: EventPayload): Promise<void> {
+   345→    const { event, data, tenantId, workspaceId } = payload
+   346→
+   347→    try {
+   348→      // Find all active automations matching this event
+   349→      const automations = await db.workflowAutomation.findMany({
+   350→        where: {
+   351→          active: true,
+   352→          triggerType: event,
+   353→          ...(tenantId ? { tenantId } : {}),
+   354→        },
+   355→      })
+   356→
+   357→      // Also find automations by catalog trigger ID (e.g., lead.assigned → lead.updated)
+   358→      const catalogMatches = TRIGGER_CATALOG.filter(
+   359→        t => t.event === event && t.id !== event
+   360→      )
+   361→      
+   362→      if (catalogMatches.length > 0) {
+   363→        const additionalAutomations = await db.workflowAutomation.findMany({
+   364→          where: {
+   365→            active: true,
+   366→            triggerType: { in: catalogMatches.map(t => t.id) },
+   367→            ...(tenantId ? { tenantId } : {}),
+   368→          },
+   369→        })
+   370→        automations.push(...additionalAutomations)
+   371→      }
+   372→
+   373→      if (automations.length === 0) return
+   374→
+   375→      console.log(`[TriggerEngine] Found ${automations.length} matching automations for "${event}"`)
+   376→
+   377→      // Execute each matching automation
+   378→      for (const automation of automations) {
+   379→        await this.executeAutomation(automation, payload)
+   380→      }
+   381→    } catch (error) {
+   382→      console.error(`[TriggerEngine] Error handling event "${event}":`, error)
+   383→    }
+   384→  }
+   385→
+   386→  /**
+   387→   * Execute a single automation
+   388→   */
+   389→  private async executeAutomation(
+   390→    automation: any,
+   391→    payload: EventPayload
+   392→  ): Promise<void> {
+   393→    const startTime = Date.now()
+   394→    let conditionsMet = true
+   395→    let executionStatus = 'success'
+   396→    let executionError: string | undefined
+   397→    const actionResults: any[] = []
+   398→
+   399→    try {
+   400→      // 1. Evaluate conditions
+   401→      const conditions: Condition[] = JSON.parse(automation.conditionsJson || '[]')
+   402→      conditionsMet = evaluateConditions(conditions, payload.data)
+   403→
+   404→      if (!conditionsMet) {
+   405→        console.log(`[TriggerEngine] Conditions not met for "${automation.name}"`)
+   406→        executionStatus = 'skipped'
+   407→      } else {
+   408→        // 2. Check trigger config for delays (time-based triggers)
+   409→        const triggerConfig = JSON.parse(automation.triggerConfigJson || '{}')
+   410→        if (triggerConfig.delayMinutes && triggerConfig.delayMinutes > 0) {
+   411→          // Schedule delayed execution
+   412→          console.log(`[TriggerEngine] Scheduling delayed execution for "${automation.name}" in ${triggerConfig.delayMinutes} minutes`)
+   413→          setTimeout(async () => {
+   414→            try {
+   415→              const actions = JSON.parse(automation.actionsJson || '[]')
+   416→              const results: { success: boolean; result?: any; error?: string }[] = []
+   417→              for (const action of actions) {
+   418→                const result = await executeAction(action, payload)
+   419→                results.push(result)
+   420→              }
+   421→              
+   422→              await db.triggerExecution.create({
+   423→                data: {
+   424→                  automationId: automation.id,
+   425→                  triggerEvent: payload.event,
+   426→                  triggerPayload: JSON.stringify(payload.data),
+   427→                  conditionsMet: true,
+   428→                  actionsResultsJson: JSON.stringify(results),
+   429→                  status: results.every(r => r.success) ? 'success' : 'partial',
+   430→                  durationMs: Date.now() - startTime,
+   431→                  tenantId: payload.tenantId || null,
+   432→                },
+   433→              })
+   434→            } catch (err: any) {
+   435→              console.error(`[TriggerEngine] Delayed execution failed for "${automation.name}":`, err)
+   436→            }
+   437→          }, triggerConfig.delayMinutes * 60 * 1000)
+   438→          
+   439→          // Don't log as a full execution yet - it's scheduled
+   440→          return
+   441→        }
+   442→
+   443→        // 3. Execute actions
+   444→        const actions = JSON.parse(automation.actionsJson || '[]')
+   445→        for (const action of actions) {
+   446→          const result = await executeAction(action, payload)
+   447→          actionResults.push(result)
+   448→          if (!result.success) {
+   449→            executionStatus = 'partial'
+   450→          }
+   451→        }
+   452→
+   453→        if (actionResults.every(r => !r.success)) {
+   454→          executionStatus = 'failed'
+   455→        }
+   456→      }
+   457→    } catch (error: any) {
+   458→      executionStatus = 'failed'
+   459→      executionError = error.message
+   460→      console.error(`[TriggerEngine] Automation "${automation.name}" failed:`, error)
+   461→    }
+   462→
+   463→    const durationMs = Date.now() - startTime
+   464→
+   465→    // 4. Update automation stats
+   466→    try {
+   467→      await db.workflowAutomation.update({
+   468→        where: { id: automation.id },
+   469→        data: {
+   470→          executionCount: { increment: 1 },
+   471→          lastExecutedAt: new Date(),
+   472→          lastExecutionStatus: executionStatus,
+   473→        },
+   474→      })
+   475→    } catch {
+   476→      // Ignore stats update failure
+   477→    }
+   478→
+   479→    // 5. Log execution
+   480→    try {
+   481→      await db.triggerExecution.create({
+   482→        data: {
+   483→          automationId: automation.id,
+   484→          triggerEvent: payload.event,
+   485→          triggerPayload: JSON.stringify(payload.data),
+   486→          conditionsMet,
+   487→          actionsResultsJson: JSON.stringify(actionResults),
+   488→          status: executionStatus,
+   489→          error: executionError,
+   490→          durationMs,
+   491→          tenantId: payload.tenantId || null,
+   492→        },
+   493→      })
+   494→    } catch {
+   495→      // Ignore logging failure
+   496→    }
+   497→  }
+   498→}
+   499→
+   500→// ─── Export Singleton ────────────────────────────────────────────────────────
+   501→
+   502→export const TriggerEngine = new TriggerEngineClass()
+   503→
+   504→// Auto-initialize when imported on server side
+   505→if (typeof window === 'undefined') {
+   506→  TriggerEngine.initialize()
+   507→}
+   508→

@@ -1,0 +1,1129 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import { useState, useEffect, useCallback } from 'react';
+     4→     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→     5→import { toast } from 'sonner';
+     6→     6→import {
+     7→     7→  Zap,
+     8→     8→  Mail,
+     9→     9→  Lock,
+    10→    10→  User,
+    11→    11→  Building2,
+    12→    12→  Phone,
+    13→    13→  ChevronRight,
+    14→    14→  Loader2,
+    15→    15→  Wrench,
+    16→    16→  Sparkles,
+    17→    17→  Truck,
+    18→    18→  Scissors,
+    19→    19→  Bug,
+    20→    20→  Flame,
+    21→    21→  Wind,
+    22→    22→  Package,
+    23→    23→  Droplets,
+    24→    24→  Hammer,
+    25→    25→  Leaf,
+    26→    26→  MessageSquare,
+    27→    27→  ArrowLeft,
+    28→    28→  ShieldCheck,
+    29→    29→  RefreshCw,
+    30→    30→} from 'lucide-react';
+    31→    31→
+    32→    32→import { Card, CardContent } from '@/components/ui/card';
+    33→    33→import { Input } from '@/components/ui/input';
+    34→    34→import { Button } from '@/components/ui/button';
+    35→    35→import { Label } from '@/components/ui/label';
+    36→    36→import {
+    37→    37→  Select,
+    38→    38→  SelectContent,
+    39→    39→  SelectItem,
+    40→    40→  SelectTrigger,
+    41→    41→  SelectValue,
+    42→    42→} from '@/components/ui/select';
+    43→    43→import { Separator } from '@/components/ui/separator';
+    44→    44→import {
+    45→    45→  InputOTP,
+    46→    46→  InputOTPGroup,
+    47→    47→  InputOTPSlot,
+    48→    48→  InputOTPSeparator,
+    49→    49→} from '@/components/ui/input-otp';
+    50→    50→
+    51→    51→interface AuthPageProps {
+    52→    52→  onAuthSuccess: (user: any, tenant: any) => void;
+    53→    53→  onBackToLanding?: () => void;
+    54→    54→  initialTab?: string;
+    55→    55→}
+    56→    56→
+    57→    57→// Top-level auth mode
+    58→    58→type AuthMode = 'choose' | 'business' | 'customer';
+    59→    59→type BusinessTab = 'login' | 'register';
+    60→    60→type CustomerStep = 'phone' | 'otp';
+    61→    61→
+    62→    62→const INDUSTRIES = [
+    63→    63→  { value: 'plumbing', label: 'Plumbing' },
+    64→    64→  { value: 'cleaning', label: 'Cleaning' },
+    65→    65→  { value: 'packers-movers', label: 'Packers & Movers' },
+    66→    66→  { value: 'window-cleaning', label: 'Window Cleaning' },
+    67→    67→  { value: 'pest-control', label: 'Pest Control' },
+    68→    68→  { value: 'hvac', label: 'HVAC' },
+    69→    69→  { value: 'electrical', label: 'Electrical' },
+    70→    70→  { value: 'landscaping', label: 'Landscaping' },
+    71→    71→  { value: 'courier', label: 'Courier' },
+    72→    72→  { value: 'home-repair', label: 'Home Repair' },
+    73→    73→  { value: 'salon-beauty', label: 'Salon & Beauty' },
+    74→    74→];
+    75→    75→
+    76→    76→const INDUSTRY_ICONS = [
+    77→    77→  { icon: Wrench, label: 'Plumbing', color: 'text-emerald-300' },
+    78→    78→  { icon: Sparkles, label: 'Cleaning', color: 'text-teal-300' },
+    79→    79→  { icon: Truck, label: 'Movers', color: 'text-amber-300' },
+    80→    80→  { icon: Droplets, label: 'Windows', color: 'text-cyan-300' },
+    81→    81→  { icon: Bug, label: 'Pest Ctrl', color: 'text-red-300' },
+    82→    82→  { icon: Wind, label: 'HVAC', color: 'text-sky-300' },
+    83→    83→  { icon: Flame, label: 'Electrical', color: 'text-yellow-300' },
+    84→    84→  { icon: Leaf, label: 'Landscape', color: 'text-green-300' },
+    85→    85→  { icon: Package, label: 'Courier', color: 'text-orange-300' },
+    86→    86→  { icon: Hammer, label: 'Repair', color: 'text-lime-300' },
+    87→    87→  { icon: Scissors, label: 'Salon', color: 'text-pink-300' },
+    88→    88→];
+    89→    89→
+    90→    90→const GoogleIcon = () => (
+    91→    91→  <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    92→    92→    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
+    93→    93→    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+    94→    94→    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
+    95→    95→    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+    96→    96→  </svg>
+    97→    97→);
+    98→    98→
+    99→    99→const fadeUp = {
+   100→   100→  hidden: { opacity: 0, y: 12 },
+   101→   101→  visible: (i: number) => ({
+   102→   102→    opacity: 1,
+   103→   103→    y: 0,
+   104→   104→    transition: { delay: i * 0.06, duration: 0.4, ease: 'easeOut' as const },
+   105→   105→  }),
+   106→   106→};
+   107→   107→
+   108→   108→const formVariants = {
+   109→   109→  enter: { opacity: 0, x: 20 },
+   110→   110→  center: { opacity: 1, x: 0, transition: { duration: 0.3, ease: 'easeOut' as const } },
+   111→   111→  exit: { opacity: 0, x: -20, transition: { duration: 0.2 } },
+   112→   112→};
+   113→   113→
+   114→   114→const slideVariants = {
+   115→   115→  enter: (direction: number) => ({ opacity: 0, x: direction > 0 ? 60 : -60 }),
+   116→   116→  center: { opacity: 1, x: 0, transition: { duration: 0.35, ease: 'easeOut' as const } },
+   117→   117→  exit: (direction: number) => ({ opacity: 0, x: direction > 0 ? -60 : 60, transition: { duration: 0.25 } }),
+   118→   118→};
+   119→   119→
+   120→   120→export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
+   121→   121→  const [authMode, setAuthMode] = useState<AuthMode>('choose');
+   122→   122→  const [isLoading, setIsLoading] = useState(false);
+   123→   123→
+   124→   124→  // Business Login state
+   125→   125→  const [businessTab, setBusinessTab] = useState<BusinessTab>('login');
+   126→   126→  const [loginEmail, setLoginEmail] = useState('');
+   127→   127→  const [loginPassword, setLoginPassword] = useState('');
+   128→   128→
+   129→   129→  // Business Register state
+   130→   130→  const [regName, setRegName] = useState('');
+   131→   131→  const [regEmail, setRegEmail] = useState('');
+   132→   132→  const [regPassword, setRegPassword] = useState('');
+   133→   133→  const [regBusinessName, setRegBusinessName] = useState('');
+   134→   134→  const [regIndustry, setRegIndustry] = useState('');
+   135→   135→  const [regPhone, setRegPhone] = useState('');
+   136→   136→
+   137→   137→  // Customer Login state
+   138→   138→  const [customerStep, setCustomerStep] = useState<CustomerStep>('phone');
+   139→   139→  const [customerPhone, setCustomerPhone] = useState('');
+   140→   140→  const [otpValue, setOtpValue] = useState('');
+   141→   141→  const [otpSent, setOtpSent] = useState(false);
+   142→   142→  const [resendTimer, setResendTimer] = useState(0);
+   143→   143→  const [simulatedOtp, setSimulatedOtp] = useState<string | null>(null);
+   144→   144→  const [slideDirection, setSlideDirection] = useState(1);
+   145→   145→
+   146→   146→  // Resend timer countdown
+   147→   147→  useEffect(() => {
+   148→   148→    if (resendTimer <= 0) return;
+   149→   149→    const timer = setTimeout(() => setResendTimer(prev => prev - 1), 1000);
+   150→   150→    return () => clearTimeout(timer);
+   151→   151→  }, [resendTimer]);
+   152→   152→
+   153→   153→  // ─── Business Login Handler ───
+   154→   154→  const handleBusinessLogin = async (e: React.FormEvent) => {
+   155→   155→    e.preventDefault();
+   156→   156→    if (!loginEmail || !loginPassword) {
+   157→   157→      toast.error('Please fill in all fields');
+   158→   158→      return;
+   159→   159→    }
+   160→   160→    setIsLoading(true);
+   161→   161→    try {
+   162→   162→      const res = await fetch('/api/auth/login?XTransformPort=3000', {
+   163→   163→        method: 'POST',
+   164→   164→        headers: { 'Content-Type': 'application/json' },
+   165→   165→        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+   166→   166→      });
+   167→   167→      const data = await res.json();
+   168→   168→      if (!res.ok) {
+   169→   169→        toast.error(data.error || 'Login failed');
+   170→   170→        return;
+   171→   171→      }
+   172→   172→      localStorage.setItem('serviceos_auth', JSON.stringify({
+   173→   173→        isAuthenticated: true,
+   174→   174→        user: data.user,
+   175→   175→        tenant: data.tenant || null,
+   176→   176→        token: data.token,
+   177→   177→      }));
+   178→   178→      toast.success('Welcome back!');
+   179→   179→      onAuthSuccess(data.user, data.tenant);
+   180→   180→    } catch {
+   181→   181→      toast.error('Something went wrong. Please try again.');
+   182→   182→    } finally {
+   183→   183→      setIsLoading(false);
+   184→   184→    }
+   185→   185→  };
+   186→   186→
+   187→   187→  // ─── Business Register Handler ───
+   188→   188→  const handleBusinessRegister = async (e: React.FormEvent) => {
+   189→   189→    e.preventDefault();
+   190→   190→    if (!regName || !regEmail || !regPassword || !regBusinessName || !regIndustry || !regPhone) {
+   191→   191→      toast.error('Please fill in all fields');
+   192→   192→      return;
+   193→   193→    }
+   194→   194→    if (regPassword.length < 8) {
+   195→   195→      toast.error('Password must be at least 8 characters');
+   196→   196→      return;
+   197→   197→    }
+   198→   198→    setIsLoading(true);
+   199→   199→    try {
+   200→   200→      const res = await fetch('/api/auth/register?XTransformPort=3000', {
+   201→   201→        method: 'POST',
+   202→   202→        headers: { 'Content-Type': 'application/json' },
+   203→   203→        body: JSON.stringify({
+   204→   204→          name: regName,
+   205→   205→          email: regEmail,
+   206→   206→          password: regPassword,
+   207→   207→          businessName: regBusinessName,
+   208→   208→          industry: regIndustry,
+   209→   209→          phone: regPhone,
+   210→   210→        }),
+   211→   211→      });
+   212→   212→      const data = await res.json();
+   213→   213→      if (!res.ok) {
+   214→   214→        toast.error(data.error || 'Registration failed');
+   215→   215→        return;
+   216→   216→      }
+   217→   217→      localStorage.setItem('serviceos_auth', JSON.stringify({
+   218→   218→        isAuthenticated: true,
+   219→   219→        user: data.user,
+   220→   220→        tenant: data.tenant || null,
+   221→   221→        token: data.token,
+   222→   222→      }));
+   223→   223→      toast.success('Account created successfully!');
+   224→   224→      onAuthSuccess(data.user, data.tenant);
+   225→   225→    } catch {
+   226→   226→      toast.error('Something went wrong. Please try again.');
+   227→   227→    } finally {
+   228→   228→      setIsLoading(false);
+   229→   229→    }
+   230→   230→  };
+   231→   231→
+   232→   232→  // ─── Send OTP Handler ───
+   233→   233→  const handleSendOtp = async () => {
+   234→   234→    if (!customerPhone || customerPhone.replace(/\D/g, '').length < 10) {
+   235→   235→      toast.error('Please enter a valid 10-digit mobile number');
+   236→   236→      return;
+   237→   237→    }
+   238→   238→    setIsLoading(true);
+   239→   239→    try {
+   240→   240→      const res = await fetch('/api/auth/customer/send-otp?XTransformPort=3000', {
+   241→   241→        method: 'POST',
+   242→   242→        headers: { 'Content-Type': 'application/json' },
+   243→   243→        body: JSON.stringify({ phone: customerPhone }),
+   244→   244→      });
+   245→   245→      const data = await res.json();
+   246→   246→      if (!res.ok) {
+   247→   247→        toast.error(data.error || 'Failed to send OTP');
+   248→   248→        return;
+   249→   249→      }
+   250→   250→      setOtpSent(true);
+   251→   251→      setResendTimer(30);
+   252→   252→      setSlideDirection(1);
+   253→   253→      setCustomerStep('otp');
+   254→   254→
+   255→   255→      if (data.simulated && data.otpCode) {
+   256→   256→        setSimulatedOtp(data.otpCode);
+   257→   257→        toast.success(`Demo Mode: Your OTP is ${data.otpCode}`, { duration: 8000 });
+   258→   258→      } else {
+   259→   259→        toast.success('OTP sent to your WhatsApp!', { description: `Check WhatsApp on ${data.phone}` });
+   260→   260→      }
+   261→   261→    } catch {
+   262→   262→      toast.error('Failed to send OTP. Please try again.');
+   263→   263→    } finally {
+   264→   264→      setIsLoading(false);
+   265→   265→    }
+   266→   266→  };
+   267→   267→
+   268→   268→  // ─── Verify OTP Handler ───
+   269→   269→  const handleVerifyOtp = async () => {
+   270→   270→    if (otpValue.length !== 6) {
+   271→   271→      toast.error('Please enter the 6-digit OTP');
+   272→   272→      return;
+   273→   273→    }
+   274→   274→    setIsLoading(true);
+   275→   275→    try {
+   276→   276→      const res = await fetch('/api/auth/customer/verify-otp?XTransformPort=3000', {
+   277→   277→        method: 'POST',
+   278→   278→        headers: { 'Content-Type': 'application/json' },
+   279→   279→        body: JSON.stringify({ phone: customerPhone, otpCode: otpValue }),
+   280→   280→      });
+   281→   281→      const data = await res.json();
+   282→   282→      if (!res.ok) {
+   283→   283→        toast.error(data.error || 'Verification failed');
+   284→   284→        return;
+   285→   285→      }
+   286→   286→
+   287→   287→      // Store auth data
+   288→   288→      localStorage.setItem('serviceos_auth', JSON.stringify({
+   289→   289→        isAuthenticated: true,
+   290→   290→        user: data.user,
+   291→   291→        tenant: data.tenant || null,
+   292→   292→        token: data.token,
+   293→   293→        portalToken: data.portalToken,
+   294→   294→        isCustomer: true,
+   295→   295→      }));
+   296→   296→
+   297→   297→      if (data.isNewCustomer) {
+   298→   298→        toast.success('Welcome! Your customer portal is ready.');
+   299→   299→      } else {
+   300→   300→        toast.success('Welcome back!');
+   301→   301→      }
+   302→   302→      onAuthSuccess(data.user, data.tenant);
+   303→   303→    } catch {
+   304→   304→      toast.error('Verification failed. Please try again.');
+   305→   305→    } finally {
+   306→   306→      setIsLoading(false);
+   307→   307→    }
+   308→   308→  };
+   309→   309→
+   310→   310→  // ─── Resend OTP Handler ───
+   311→   311→  const handleResendOtp = async () => {
+   312→   312→    if (resendTimer > 0) return;
+   313→   313→    setIsLoading(true);
+   314→   314→    try {
+   315→   315→      const res = await fetch('/api/auth/customer/send-otp?XTransformPort=3000', {
+   316→   316→        method: 'POST',
+   317→   317→        headers: { 'Content-Type': 'application/json' },
+   318→   318→        body: JSON.stringify({ phone: customerPhone }),
+   319→   319→      });
+   320→   320→      const data = await res.json();
+   321→   321→      if (!res.ok) {
+   322→   322→        toast.error(data.error || 'Failed to resend OTP');
+   323→   323→        return;
+   324→   324→      }
+   325→   325→      setResendTimer(30);
+   326→   326→      setOtpValue('');
+   327→   327→
+   328→   328→      if (data.simulated && data.otpCode) {
+   329→   329→        setSimulatedOtp(data.otpCode);
+   330→   330→        toast.success(`Demo Mode: Your OTP is ${data.otpCode}`, { duration: 8000 });
+   331→   331→      } else {
+   332→   332→        toast.success('New OTP sent to your WhatsApp!');
+   333→   333→      }
+   334→   334→    } catch {
+   335→   335→      toast.error('Failed to resend OTP.');
+   336→   336→    } finally {
+   337→   337→      setIsLoading(false);
+   338→   338→    }
+   339→   339→  };
+   340→   340→
+   341→   341→  // ─── Navigation helpers ───
+   342→   342→  const goToChoose = () => {
+   343→   343→    setSlideDirection(-1);
+   344→   344→    setAuthMode('choose');
+   345→   345→    setCustomerStep('phone');
+   346→   346→    setOtpValue('');
+   347→   347→    setOtpSent(false);
+   348→   348→    setSimulatedOtp(null);
+   349→   349→  };
+   350→   350→
+   351→   351→  const goToBusiness = () => {
+   352→   352→    setSlideDirection(1);
+   353→   353→    setAuthMode('business');
+   354→   354→  };
+   355→   355→
+   356→   356→  const goToCustomer = () => {
+   357→   357→    setSlideDirection(1);
+   358→   358→    setAuthMode('customer');
+   359→   359→  };
+   360→   360→
+   361→   361→  const goBackToPhone = () => {
+   362→   362→    setSlideDirection(-1);
+   363→   363→    setCustomerStep('phone');
+   364→   364→    setOtpValue('');
+   365→   365→  };
+   366→   366→
+   367→   367→  // ─── Render: Choose Mode ───
+   368→   368→  const renderChooseMode = () => (
+   369→   369→    <motion.div
+   370→   370→      key="choose"
+   371→   371→      custom={slideDirection}
+   372→   372→      variants={slideVariants}
+   373→   373→      initial="enter"
+   374→   374→      animate="center"
+   375→   375→      exit="exit"
+   376→   376→      className="w-full max-w-sm mx-auto"
+   377→   377→    >
+   378→   378→      <motion.div
+   379→   379→        initial={{ opacity: 0, y: 10 }}
+   380→   380→        animate={{ opacity: 1, y: 0 }}
+   381→   381→        transition={{ delay: 0.1, duration: 0.4 }}
+   382→   382→        className="text-center mb-8"
+   383→   383→      >
+   384→   384→        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+   385→   385→          Welcome Back
+   386→   386→        </h2>
+   387→   387→        <p className="text-slate-500 text-sm mt-1.5">
+   388→   388→          Choose how you want to sign in
+   389→   389→        </p>
+   390→   390→      </motion.div>
+   391→   391→
+   392→   392→      <div className="space-y-3">
+   393→   393→        <motion.button
+   394→   394→          initial={{ opacity: 0, y: 12 }}
+   395→   395→          animate={{ opacity: 1, y: 0 }}
+   396→   396→          transition={{ delay: 0.2, duration: 0.4 }}
+   397→   397→          onClick={goToBusiness}
+   398→   398→          className="w-full group relative overflow-hidden rounded-xl border-2 border-slate-200 bg-white p-5 text-left hover:border-emerald-300 hover:shadow-md hover:shadow-emerald-50 transition-all duration-200 cursor-pointer"
+   399→   399→        >
+   400→   400→          <div className="flex items-center gap-4">
+   401→   401→            <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center">
+   402→   402→              <Building2 className="w-6 h-6 text-emerald-600" />
+   403→   403→            </div>
+   404→   404→            <div className="flex-1 min-w-0">
+   405→   405→              <h3 className="font-semibold text-slate-900 text-base">
+   406→   406→                Business Login
+   407→   407→              </h3>
+   408→   408→              <p className="text-slate-500 text-sm mt-0.5">
+   409→   409→                Admin & Employee access
+   410→   410→              </p>
+   411→   411→            </div>
+   412→   412→            <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-emerald-500 transition-colors" />
+   413→   413→          </div>
+   414→   414→        </motion.button>
+   415→   415→
+   416→   416→        <motion.button
+   417→   417→          initial={{ opacity: 0, y: 12 }}
+   418→   418→          animate={{ opacity: 1, y: 0 }}
+   419→   419→          transition={{ delay: 0.3, duration: 0.4 }}
+   420→   420→          onClick={goToCustomer}
+   421→   421→          className="w-full group relative overflow-hidden rounded-xl border-2 border-slate-200 bg-white p-5 text-left hover:border-teal-300 hover:shadow-md hover:shadow-teal-50 transition-all duration-200 cursor-pointer"
+   422→   422→        >
+   423→   423→          <div className="flex items-center gap-4">
+   424→   424→            <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-teal-50 border border-teal-200 flex items-center justify-center">
+   425→   425→              <MessageSquare className="w-6 h-6 text-teal-600" />
+   426→   426→            </div>
+   427→   427→            <div className="flex-1 min-w-0">
+   428→   428→              <h3 className="font-semibold text-slate-900 text-base">
+   429→   429→                Customer Login
+   430→   430→              </h3>
+   431→   431→              <p className="text-slate-500 text-sm mt-0.5">
+   432→   432→                WhatsApp OTP verification
+   433→   433→              </p>
+   434→   434→            </div>
+   435→   435→            <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-teal-500 transition-colors" />
+   436→   436→          </div>
+   437→   437→        </motion.button>
+   438→   438→      </div>
+   439→   439→
+   440→   440→      <motion.p
+   441→   441→        initial={{ opacity: 0 }}
+   442→   442→        animate={{ opacity: 1 }}
+   443→   443→        transition={{ delay: 0.5, duration: 0.4 }}
+   444→   444→        className="text-center text-xs text-slate-400 mt-8"
+   445→   445→      >
+   446→   446→        By continuing, you agree to ServiceOS&apos;s{' '}
+   447→   447→        <span className="underline cursor-pointer hover:text-slate-500">Terms of Service</span>
+   448→   448→        {' '}and{' '}
+   449→   449→        <span className="underline cursor-pointer hover:text-slate-500">Privacy Policy</span>
+   450→   450→      </motion.p>
+   451→   451→    </motion.div>
+   452→   452→  );
+   453→   453→
+   454→   454→  // ─── Render: Business Mode ───
+   455→   455→  const renderBusinessMode = () => (
+   456→   456→    <motion.div
+   457→   457→      key="business"
+   458→   458→      custom={slideDirection}
+   459→   459→      variants={slideVariants}
+   460→   460→      initial="enter"
+   461→   461→      animate="center"
+   462→   462→      exit="exit"
+   463→   463→      className="w-full"
+   464→   464→    >
+   465→   465→      {/* Back button + Welcome */}
+   466→   466→      <motion.div
+   467→   467→        initial={{ opacity: 0, y: -10 }}
+   468→   468→        animate={{ opacity: 1, y: 0 }}
+   469→   469→        transition={{ duration: 0.3 }}
+   470→   470→        className="mb-6"
+   471→   471→      >
+   472→   472→        <button
+   473→   473→          onClick={goToChoose}
+   474→   474→          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors mb-4"
+   475→   475→        >
+   476→   476→          <ArrowLeft className="w-4 h-4" />
+   477→   477→          Back
+   478→   478→        </button>
+   479→   479→        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+   480→   480→          {businessTab === 'login' ? 'Business Login' : 'Create Account'}
+   481→   481→        </h2>
+   482→   482→        <p className="text-slate-500 text-sm mt-1.5">
+   483→   483→          {businessTab === 'login'
+   484→   484→            ? 'Sign in to your workspace'
+   485→   485→            : 'Get started with ServiceOS'}
+   486→   486→        </p>
+   487→   487→      </motion.div>
+   488→   488→
+   489→   489→      {/* Business Tabs */}
+   490→   490→      <div className="flex mb-6 bg-slate-100 rounded-lg p-[3px] h-10">
+   491→   491→        <button
+   492→   492→          onClick={() => setBusinessTab('login')}
+   493→   493→          className={`flex-1 h-[34px] text-sm rounded-md font-medium transition-all cursor-pointer ${
+   494→   494→            businessTab === 'login'
+   495→   495→              ? 'bg-white shadow-sm text-slate-900'
+   496→   496→              : 'text-slate-500 hover:text-slate-700'
+   497→   497→          }`}
+   498→   498→        >
+   499→   499→          Sign In
+   500→   500→        </button>
+   501→   501→        <button
+   502→   502→          onClick={() => setBusinessTab('register')}
+   503→   503→          className={`flex-1 h-[34px] text-sm rounded-md font-medium transition-all cursor-pointer ${
+   504→   504→            businessTab === 'register'
+   505→   505→              ? 'bg-white shadow-sm text-slate-900'
+   506→   506→              : 'text-slate-500 hover:text-slate-700'
+   507→   507→          }`}
+   508→   508→        >
+   509→   509→          Create Account
+   510→   510→        </button>
+   511→   511→      </div>
+   512→   512→
+   513→   513→      <AnimatePresence mode="wait">
+   514→   514→        {businessTab === 'login' ? (
+   515→   515→          <motion.div
+   516→   516→            key="biz-login"
+   517→   517→            variants={formVariants}
+   518→   518→            initial="enter"
+   519→   519→            animate="center"
+   520→   520→            exit="exit"
+   521→   521→          >
+   522→   522→            <form onSubmit={handleBusinessLogin} className="space-y-4">
+   523→   523→              <motion.div custom={0} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
+   524→   524→                <Label htmlFor="login-email" className="text-slate-700">Email</Label>
+   525→   525→                <div className="relative">
+   526→   526→                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+   527→   527→                  <Input
+   528→   528→                    id="login-email"
+   529→   529→                    type="email"
+   530→   530→                    placeholder="you@company.com"
+   531→   531→                    value={loginEmail}
+   532→   532→                    onChange={(e) => setLoginEmail(e.target.value)}
+   533→   533→                    className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
+   534→   534→                    autoComplete="email"
+   535→   535→                  />
+   536→   536→                </div>
+   537→   537→              </motion.div>
+   538→   538→
+   539→   539→              <motion.div custom={1} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
+   540→   540→                <div className="flex items-center justify-between">
+   541→   541→                  <Label htmlFor="login-password" className="text-slate-700">Password</Label>
+   542→   542→                  <button type="button" className="text-xs text-emerald-600 hover:text-emerald-700 font-medium hover:underline transition-colors">
+   543→   543→                    Forgot Password?
+   544→   544→                  </button>
+   545→   545→                </div>
+   546→   546→                <div className="relative">
+   547→   547→                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+   548→   548→                  <Input
+   549→   549→                    id="login-password"
+   550→   550→                    type="password"
+   551→   551→                    placeholder="Enter your password"
+   552→   552→                    value={loginPassword}
+   553→   553→                    onChange={(e) => setLoginPassword(e.target.value)}
+   554→   554→                    className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
+   555→   555→                    autoComplete="current-password"
+   556→   556→                  />
+   557→   557→                </div>
+   558→   558→              </motion.div>
+   559→   559→
+   560→   560→              <motion.div custom={2} variants={fadeUp} initial="hidden" animate="visible">
+   561→   561→                <Button
+   562→   562→                  type="submit"
+   563→   563→                  disabled={isLoading}
+   564→   564→                  className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-medium cursor-pointer"
+   565→   565→                >
+   566→   566→                  {isLoading ? (
+   567→   567→                    <><Loader2 className="w-4 h-4 animate-spin" /> Signing in...</>
+   568→   568→                  ) : 'Sign In'}
+   569→   569→                </Button>
+   570→   570→              </motion.div>
+   571→   571→
+   572→   572→              <motion.div custom={3} variants={fadeUp} initial="hidden" animate="visible" className="relative">
+   573→   573→                <div className="absolute inset-0 flex items-center"><Separator className="w-full" /></div>
+   574→   574→                <div className="relative flex justify-center text-xs uppercase">
+   575→   575→                  <span className="bg-white px-3 text-slate-400 font-medium">or</span>
+   576→   576→                </div>
+   577→   577→              </motion.div>
+   578→   578→
+   579→   579→              <motion.div custom={4} variants={fadeUp} initial="hidden" animate="visible">
+   580→   580→                <Button
+   581→   581→                  type="button"
+   582→   582→                  variant="outline"
+   583→   583→                  className="w-full h-10 border-slate-200 hover:bg-slate-50 cursor-pointer"
+   584→   584→                  onClick={() => {
+   585→   585→                    const origin = encodeURIComponent(window.location.origin);
+   586→   586→                    window.location.href = `/api/auth/google?mode=login&XTransformPort=3000&origin=${origin}`;
+   587→   587→                  }}
+   588→   588→                >
+   589→   589→                  <GoogleIcon />
+   590→   590→                  Continue with Google
+   591→   591→                </Button>
+   592→   592→              </motion.div>
+   593→   593→
+   594→   594→              <motion.div custom={5} variants={fadeUp} initial="hidden" animate="visible" className="text-center pt-1">
+   595→   595→                <p className="text-sm text-slate-500">
+   596→   596→                  Don&apos;t have an account?{' '}
+   597→   597→                  <button type="button" onClick={() => setBusinessTab('register')} className="text-emerald-600 hover:text-emerald-700 font-semibold hover:underline transition-colors">
+   598→   598→                    Create one
+   599→   599→                  </button>
+   600→   600→                </p>
+   601→   601→              </motion.div>
+   602→   602→            </form>
+   603→   603→          </motion.div>
+   604→   604→        ) : (
+   605→   605→          <motion.div
+   606→   606→            key="biz-register"
+   607→   607→            variants={formVariants}
+   608→   608→            initial="enter"
+   609→   609→            animate="center"
+   610→   610→            exit="exit"
+   611→   611→          >
+   612→   612→            <form onSubmit={handleBusinessRegister} className="space-y-4">
+   613→   613→              <motion.div custom={0} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
+   614→   614→                <Label htmlFor="reg-name" className="text-slate-700">Full Name</Label>
+   615→   615→                <div className="relative">
+   616→   616→                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+   617→   617→                  <Input id="reg-name" type="text" placeholder="John Doe" value={regName} onChange={(e) => setRegName(e.target.value)} className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20" autoComplete="name" />
+   618→   618→                </div>
+   619→   619→              </motion.div>
+   620→   620→
+   621→   621→              <motion.div custom={1} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
+   622→   622→                <Label htmlFor="reg-email" className="text-slate-700">Email</Label>
+   623→   623→                <div className="relative">
+   624→   624→                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+   625→   625→                  <Input id="reg-email" type="email" placeholder="you@company.com" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20" autoComplete="email" />
+   626→   626→                </div>
+   627→   627→              </motion.div>
+   628→   628→
+   629→   629→              <motion.div custom={2} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
+   630→   630→                <Label htmlFor="reg-password" className="text-slate-700">Password</Label>
+   631→   631→                <div className="relative">
+   632→   632→                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+   633→   633→                  <Input id="reg-password" type="password" placeholder="Min 8 characters" value={regPassword} onChange={(e) => setRegPassword(e.target.value)} className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20" autoComplete="new-password" />
+   634→   634→                </div>
+   635→   635→                {regPassword && regPassword.length < 8 && (
+   636→   636→                  <p className="text-xs text-amber-600 mt-1">Password must be at least 8 characters</p>
+   637→   637→                )}
+   638→   638→              </motion.div>
+   639→   639→
+   640→   640→              <motion.div custom={3} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
+   641→   641→                <Label htmlFor="reg-business" className="text-slate-700">Business Name</Label>
+   642→   642→                <div className="relative">
+   643→   643→                  <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+   644→   644→                  <Input id="reg-business" type="text" placeholder="Acme Services Inc." value={regBusinessName} onChange={(e) => setRegBusinessName(e.target.value)} className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20" autoComplete="organization" />
+   645→   645→                </div>
+   646→   646→              </motion.div>
+   647→   647→
+   648→   648→              <motion.div custom={4} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
+   649→   649→                <Label className="text-slate-700">Industry</Label>
+   650→   650→                <Select value={regIndustry} onValueChange={setRegIndustry}>
+   651→   651→                  <SelectTrigger className="w-full h-10 bg-white border-slate-200 focus:ring-emerald-500/20 focus:border-emerald-500">
+   652→   652→                    <SelectValue placeholder="Select your industry" />
+   653→   653→                  </SelectTrigger>
+   654→   654→                  <SelectContent>
+   655→   655→                    {INDUSTRIES.map((industry) => (
+   656→   656→                      <SelectItem key={industry.value} value={industry.value}>{industry.label}</SelectItem>
+   657→   657→                    ))}
+   658→   658→                  </SelectContent>
+   659→   659→                </Select>
+   660→   660→              </motion.div>
+   661→   661→
+   662→   662→              <motion.div custom={5} variants={fadeUp} initial="hidden" animate="visible" className="space-y-2">
+   663→   663→                <Label htmlFor="reg-phone" className="text-slate-700">Phone Number</Label>
+   664→   664→                <div className="relative">
+   665→   665→                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+   666→   666→                  <Input id="reg-phone" type="tel" placeholder="+1 (555) 000-0000" value={regPhone} onChange={(e) => setRegPhone(e.target.value)} className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20" autoComplete="tel" />
+   667→   667→                </div>
+   668→   668→              </motion.div>
+   669→   669→
+   670→   670→              <motion.div custom={6} variants={fadeUp} initial="hidden" animate="visible" className="pt-1">
+   671→   671→                <Button type="submit" disabled={isLoading} className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-medium cursor-pointer">
+   672→   672→                  {isLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating account...</> : 'Create Account'}
+   673→   673→                </Button>
+   674→   674→              </motion.div>
+   675→   675→
+   676→   676→              <motion.div custom={7} variants={fadeUp} initial="hidden" animate="visible" className="relative">
+   677→   677→                <div className="absolute inset-0 flex items-center"><Separator className="w-full" /></div>
+   678→   678→                <div className="relative flex justify-center text-xs uppercase">
+   679→   679→                  <span className="bg-white px-3 text-slate-400 font-medium">or</span>
+   680→   680→                </div>
+   681→   681→              </motion.div>
+   682→   682→
+   683→   683→              <motion.div custom={8} variants={fadeUp} initial="hidden" animate="visible">
+   684→   684→                <Button
+   685→   685→                  type="button"
+   686→   686→                  variant="outline"
+   687→   687→                  className="w-full h-10 border-slate-200 hover:bg-slate-50 cursor-pointer"
+   688→   688→                  onClick={() => {
+   689→   689→                    const origin = encodeURIComponent(window.location.origin);
+   690→   690→                    window.location.href = `/api/auth/google?mode=register&XTransformPort=3000&origin=${origin}`;
+   691→   691→                  }}
+   692→   692→                >
+   693→   693→                  <GoogleIcon />
+   694→   694→                  Continue with Google
+   695→   695→                </Button>
+   696→   696→              </motion.div>
+   697→   697→
+   698→   698→              <motion.div custom={9} variants={fadeUp} initial="hidden" animate="visible" className="text-center pt-1">
+   699→   699→                <p className="text-sm text-slate-500">
+   700→   700→                  Already have an account?{' '}
+   701→   701→                  <button type="button" onClick={() => setBusinessTab('login')} className="text-emerald-600 hover:text-emerald-700 font-semibold hover:underline transition-colors">
+   702→   702→                    Sign In
+   703→   703→                  </button>
+   704→   704→                </p>
+   705→   705→              </motion.div>
+   706→   706→            </form>
+   707→   707→          </motion.div>
+   708→   708→        )}
+   709→   709→      </AnimatePresence>
+   710→   710→    </motion.div>
+   711→   711→  );
+   712→   712→
+   713→   713→  // ─── Render: Customer Mode (Phone Step) ───
+   714→   714→  const renderCustomerPhoneStep = () => (
+   715→   715→    <motion.div
+   716→   716→      key="customer-phone"
+   717→   717→      custom={slideDirection}
+   718→   718→      variants={slideVariants}
+   719→   719→      initial="enter"
+   720→   720→      animate="center"
+   721→   721→      exit="exit"
+   722→   722→      className="w-full max-w-sm mx-auto"
+   723→   723→    >
+   724→   724→      <motion.div
+   725→   725→        initial={{ opacity: 0, y: -10 }}
+   726→   726→        animate={{ opacity: 1, y: 0 }}
+   727→   727→        transition={{ duration: 0.3 }}
+   728→   728→        className="mb-6"
+   729→   729→      >
+   730→   730→        <button
+   731→   731→          onClick={goToChoose}
+   732→   732→          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors mb-4"
+   733→   733→        >
+   734→   734→          <ArrowLeft className="w-4 h-4" />
+   735→   735→          Back
+   736→   736→        </button>
+   737→   737→        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+   738→   738→          Customer Login
+   739→   739→        </h2>
+   740→   740→        <p className="text-slate-500 text-sm mt-1.5">
+   741→   741→          We&apos;ll send a verification code to your WhatsApp
+   742→   742→        </p>
+   743→   743→      </motion.div>
+   744→   744→
+   745→   745→      {/* WhatsApp icon */}
+   746→   746→      <motion.div
+   747→   747→        initial={{ opacity: 0, scale: 0.9 }}
+   748→   748→        animate={{ opacity: 1, scale: 1 }}
+   749→   749→        transition={{ delay: 0.1, duration: 0.4 }}
+   750→   750→        className="flex justify-center mb-6"
+   751→   751→      >
+   752→   752→        <div className="w-16 h-16 rounded-2xl bg-green-50 border-2 border-green-200 flex items-center justify-center">
+   753→   753→          <svg className="w-8 h-8 text-green-600" viewBox="0 0 24 24" fill="currentColor">
+   754→   754→            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+   755→   755→          </svg>
+   756→   756→        </div>
+   757→   757→      </motion.div>
+   758→   758→
+   759→   759→      <motion.div
+   760→   760→        initial={{ opacity: 0, y: 12 }}
+   761→   761→        animate={{ opacity: 1, y: 0 }}
+   762→   762→        transition={{ delay: 0.2, duration: 0.4 }}
+   763→   763→        className="space-y-4"
+   764→   764→      >
+   765→   765→        <div className="space-y-2">
+   766→   766→          <Label htmlFor="customer-phone" className="text-slate-700">
+   767→   767→            Mobile Number
+   768→   768→          </Label>
+   769→   769→          <div className="flex gap-2">
+   770→   770→            <div className="flex-shrink-0 w-[88px] h-10 rounded-md border border-slate-200 bg-white flex items-center justify-center gap-1.5 px-3 text-sm font-medium text-slate-600">
+   771→   771→              🇮🇳 +91
+   772→   772→            </div>
+   773→   773→            <Input
+   774→   774→              id="customer-phone"
+   775→   775→              type="tel"
+   776→   776→              placeholder="98765 43210"
+   777→   777→              value={customerPhone}
+   778→   778→              onChange={(e) => {
+   779→   779→                // Only allow digits and spaces
+   780→   780→                const val = e.target.value.replace(/[^\d\s]/g, '');
+   781→   781→                if (val.replace(/\s/g, '').length <= 10) {
+   782→   782→                  setCustomerPhone(val);
+   783→   783→                }
+   784→   784→              }}
+   785→   785→              className="flex-1 h-10 bg-white border-slate-200 focus-visible:border-teal-500 focus-visible:ring-teal-500/20 text-base tracking-wider"
+   786→   786→              maxLength={12}
+   787→   787→              autoFocus
+   788→   788→            />
+   789→   789→          </div>
+   790→   790→          <p className="text-xs text-slate-400">
+   791→   791→            Enter your 10-digit mobile number
+   792→   792→          </p>
+   793→   793→        </div>
+   794→   794→
+   795→   795→        <Button
+   796→   796→          type="button"
+   797→   797→          onClick={handleSendOtp}
+   798→   798→          disabled={isLoading || customerPhone.replace(/\s/g, '').length < 10}
+   799→   799→          className="w-full h-11 bg-teal-600 hover:bg-teal-700 text-white font-medium cursor-pointer text-base"
+   800→   800→        >
+   801→   801→          {isLoading ? (
+   802→   802→            <><Loader2 className="w-4 h-4 animate-spin" /> Sending OTP...</>
+   803→   803→          ) : (
+   804→   804→            <>
+   805→   805→              <MessageSquare className="w-4 h-4 mr-1.5" />
+   806→   806→              Send OTP via WhatsApp
+   807→   807→            </>
+   808→   808→          )}
+   809→   809→        </Button>
+   810→   810→      </motion.div>
+   811→   811→
+   812→   812→      <motion.p
+   813→   813→        initial={{ opacity: 0 }}
+   814→   814→        animate={{ opacity: 1 }}
+   815→   815→        transition={{ delay: 0.5, duration: 0.4 }}
+   816→   816→        className="text-center text-xs text-slate-400 mt-6"
+   817→   817→      >
+   818→   818→        We&apos;ll send a 6-digit code to your WhatsApp number
+   819→   819→      </motion.p>
+   820→   820→    </motion.div>
+   821→   821→  );
+   822→   822→
+   823→   823→  // ─── Render: Customer Mode (OTP Step) ───
+   824→   824→  const renderCustomerOtpStep = () => (
+   825→   825→    <motion.div
+   826→   826→      key="customer-otp"
+   827→   827→      custom={slideDirection}
+   828→   828→      variants={slideVariants}
+   829→   829→      initial="enter"
+   830→   830→      animate="center"
+   831→   831→      exit="exit"
+   832→   832→      className="w-full max-w-sm mx-auto"
+   833→   833→    >
+   834→   834→      <motion.div
+   835→   835→        initial={{ opacity: 0, y: -10 }}
+   836→   836→        animate={{ opacity: 1, y: 0 }}
+   837→   837→        transition={{ duration: 0.3 }}
+   838→   838→        className="mb-6"
+   839→   839→      >
+   840→   840→        <button
+   841→   841→          onClick={goBackToPhone}
+   842→   842→          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors mb-4"
+   843→   843→        >
+   844→   844→          <ArrowLeft className="w-4 h-4" />
+   845→   845→          Back
+   846→   846→        </button>
+   847→   847→        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+   848→   848→          Verify OTP
+   849→   849→        </h2>
+   850→   850→        <p className="text-slate-500 text-sm mt-1.5">
+   851→   851→          Enter the 6-digit code sent to{' '}
+   852→   852→          <span className="font-semibold text-slate-700">
+   853→   853→            +91 {customerPhone}
+   854→   854→          </span>
+   855→   855→        </p>
+   856→   856→      </motion.div>
+   857→   857→
+   858→   858→      {/* Shield icon */}
+   859→   859→      <motion.div
+   860→   860→        initial={{ opacity: 0, scale: 0.9 }}
+   861→   861→        animate={{ opacity: 1, scale: 1 }}
+   862→   862→        transition={{ delay: 0.1, duration: 0.4 }}
+   863→   863→        className="flex justify-center mb-6"
+   864→   864→      >
+   865→   865→        <div className="w-14 h-14 rounded-2xl bg-teal-50 border-2 border-teal-200 flex items-center justify-center">
+   866→   866→          <ShieldCheck className="w-7 h-7 text-teal-600" />
+   867→   867→        </div>
+   868→   868→      </motion.div>
+   869→   869→
+   870→   870→      <motion.div
+   871→   871→        initial={{ opacity: 0, y: 12 }}
+   872→   872→        animate={{ opacity: 1, y: 0 }}
+   873→   873→        transition={{ delay: 0.2, duration: 0.4 }}
+   874→   874→        className="space-y-6"
+   875→   875→      >
+   876→   876→        {/* OTP Input */}
+   877→   877→        <div className="flex flex-col items-center gap-2">
+   878→   878→          <InputOTP
+   879→   879→            maxLength={6}
+   880→   880→            value={otpValue}
+   881→   881→            onChange={setOtpValue}
+   882→   882→          >
+   883→   883→            <InputOTPGroup>
+   884→   884→              <InputOTPSlot index={0} className="h-14 w-12 text-xl font-semibold border-2 border-slate-200 data-[active=true]:border-teal-500 data-[active=true]:ring-teal-500/20" />
+   885→   885→              <InputOTPSlot index={1} className="h-14 w-12 text-xl font-semibold border-2 border-slate-200 data-[active=true]:border-teal-500 data-[active=true]:ring-teal-500/20" />
+   886→   886→              <InputOTPSlot index={2} className="h-14 w-12 text-xl font-semibold border-2 border-slate-200 data-[active=true]:border-teal-500 data-[active=true]:ring-teal-500/20" />
+   887→   887→            </InputOTPGroup>
+   888→   888→            <InputOTPSeparator />
+   889→   889→            <InputOTPGroup>
+   890→   890→              <InputOTPSlot index={3} className="h-14 w-12 text-xl font-semibold border-2 border-slate-200 data-[active=true]:border-teal-500 data-[active=true]:ring-teal-500/20" />
+   891→   891→              <InputOTPSlot index={4} className="h-14 w-12 text-xl font-semibold border-2 border-slate-200 data-[active=true]:border-teal-500 data-[active=true]:ring-teal-500/20" />
+   892→   892→              <InputOTPSlot index={5} className="h-14 w-12 text-xl font-semibold border-2 border-slate-200 data-[active=true]:border-teal-500 data-[active=true]:ring-teal-500/20" />
+   893→   893→            </InputOTPGroup>
+   894→   894→          </InputOTP>
+   895→   895→
+   896→   896→          {/* Simulated OTP hint */}
+   897→   897→          {simulatedOtp && (
+   898→   898→            <motion.div
+   899→   899→              initial={{ opacity: 0, y: 4 }}
+   900→   900→              animate={{ opacity: 1, y: 0 }}
+   901→   901→              className="mt-2 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700 font-medium"
+   902→   902→            >
+   903→   903→              Demo Mode — OTP: <span className="font-bold text-amber-900">{simulatedOtp}</span>
+   904→   904→            </motion.div>
+   905→   905→          )}
+   906→   906→        </div>
+   907→   907→
+   908→   908→        {/* Verify Button */}
+   909→   909→        <Button
+   910→   910→          type="button"
+   911→   911→          onClick={handleVerifyOtp}
+   912→   912→          disabled={isLoading || otpValue.length !== 6}
+   913→   913→          className="w-full h-11 bg-teal-600 hover:bg-teal-700 text-white font-medium cursor-pointer text-base"
+   914→   914→        >
+   915→   915→          {isLoading ? (
+   916→   916→            <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>
+   917→   917→          ) : (
+   918→   918→            <>
+   919→   919→              <ShieldCheck className="w-4 h-4 mr-1.5" />
+   920→   920→              Verify & Login
+   921→   921→            </>
+   922→   922→          )}
+   923→   923→        </Button>
+   924→   924→
+   925→   925→        {/* Resend OTP */}
+   926→   926→        <div className="text-center">
+   927→   927→          {resendTimer > 0 ? (
+   928→   928→            <p className="text-sm text-slate-500">
+   929→   929→              Resend OTP in{' '}
+   930→   930→              <span className="font-semibold text-slate-700">{resendTimer}s</span>
+   931→   931→            </p>
+   932→   932→          ) : (
+   933→   933→            <button
+   934→   934→              type="button"
+   935→   935→              onClick={handleResendOtp}
+   936→   936→              disabled={isLoading}
+   937→   937→              className="inline-flex items-center gap-1.5 text-sm text-teal-600 hover:text-teal-700 font-semibold hover:underline transition-colors cursor-pointer"
+   938→   938→            >
+   939→   939→              <RefreshCw className="w-3.5 h-3.5" />
+   940→   940→              Resend OTP
+   941→   941→            </button>
+   942→   942→          )}
+   943→   943→        </div>
+   944→   944→      </motion.div>
+   945→   945→    </motion.div>
+   946→   946→  );
+   947→   947→
+   948→   948→  // ─── Main Render ───
+   949→   949→  return (
+   950→   950→    <div className="min-h-screen flex flex-col lg:flex-row">
+   951→   951→      {/* Left Panel — Branding (desktop only) */}
+   952→   952→      <motion.div
+   953→   953→        initial={{ opacity: 0 }}
+   954→   954→        animate={{ opacity: 1 }}
+   955→   955→        transition={{ duration: 0.6 }}
+   956→   956→        className="hidden lg:flex lg:w-[52%] relative overflow-hidden flex-col justify-between p-10 xl:p-14"
+   957→   957→        style={{
+   958→   958→          background:
+   959→   959→            'linear-gradient(135deg, #0f2027 0%, #1a3a2a 40%, #1e4d3a 70%, #0d1f17 100%)',
+   960→   960→        }}
+   961→   961→      >
+   962→   962→        {/* Subtle pattern overlay */}
+   963→   963→        <div
+   964→   964→          className="absolute inset-0 opacity-[0.04]"
+   965→   965→          style={{
+   966→   966→            backgroundImage:
+   967→   967→              'radial-gradient(circle at 25% 25%, rgba(255,255,255,0.15) 1px, transparent 1px), radial-gradient(circle at 75% 75%, rgba(255,255,255,0.1) 1px, transparent 1px)',
+   968→   968→            backgroundSize: '40px 40px',
+   969→   969→          }}
+   970→   970→        />
+   971→   971→
+   972→   972→        {/* Top — Logo & Brand */}
+   973→   973→        <div className="relative z-10">
+   974→   974→          <motion.div
+   975→   975→            initial={{ opacity: 0, y: -20 }}
+   976→   976→            animate={{ opacity: 1, y: 0 }}
+   977→   977→            transition={{ delay: 0.2, duration: 0.5 }}
+   978→   978→            className="flex items-center gap-3 mb-2"
+   979→   979→          >
+   980→   980→            {onBackToLanding && (
+   981→   981→              <button
+   982→   982→                onClick={onBackToLanding}
+   983→   983→                className="flex items-center gap-1 text-sm text-slate-400 hover:text-white transition-colors mr-2"
+   984→   984→              >
+   985→   985→                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+   986→   986→                Back
+   987→   987→              </button>
+   988→   988→            )}
+   989→   989→            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-500/20 border border-emerald-400/30">
+   990→   990→              <Zap className="w-5 h-5 text-emerald-400" />
+   991→   991→            </div>
+   992→   992→            <span className="text-white text-xl font-bold tracking-tight">
+   993→   993→              ServiceOS
+   994→   994→            </span>
+   995→   995→          </motion.div>
+   996→   996→        </div>
+   997→   997→
+   998→   998→        {/* Middle — Tagline */}
+   999→   999→        <div className="relative z-10 max-w-lg">
+  1000→  1000→          <motion.h1
+  1001→  1001→            initial={{ opacity: 0, y: 20 }}
+  1002→  1002→            animate={{ opacity: 1, y: 0 }}
+  1003→  1003→            transition={{ delay: 0.3, duration: 0.6 }}
+  1004→  1004→            className="text-4xl xl:text-5xl font-bold text-white leading-tight mb-4"
+  1005→  1005→          >
+  1006→  1006→            Operations OS for{' '}
+  1007→  1007→            <span className="bg-gradient-to-r from-emerald-300 to-teal-200 bg-clip-text text-transparent">
+  1008→  1008→              Service Businesses
+  1009→  1009→            </span>
+  1010→  1010→          </motion.h1>
+  1011→  1011→          <motion.p
+  1012→  1012→            initial={{ opacity: 0, y: 20 }}
+  1013→  1013→            animate={{ opacity: 1, y: 0 }}
+  1014→  1014→            transition={{ delay: 0.4, duration: 0.6 }}
+  1015→  1015→            className="text-slate-300 text-base xl:text-lg leading-relaxed"
+  1016→  1016→          >
+  1017→  1017→            Streamline your operations, manage your team, and delight your
+  1018→  1018→            customers — all from one powerful platform built for service
+  1019→  1019→            businesses.
+  1020→  1020→          </motion.p>
+  1021→  1021→
+  1022→  1022→          {/* Feature bullets */}
+  1023→  1023→          <motion.div
+  1024→  1024→            initial={{ opacity: 0 }}
+  1025→  1025→            animate={{ opacity: 1 }}
+  1026→  1026→            transition={{ delay: 0.6, duration: 0.5 }}
+  1027→  1027→            className="mt-8 space-y-3"
+  1028→  1028→          >
+  1029→  1029→            {[
+  1030→  1030→              'Automated scheduling & dispatch',
+  1031→  1031→              'Real-time job tracking & updates',
+  1032→  1032→              'Customer management & invoicing',
+  1033→  1033→            ].map((feature, i) => (
+  1034→  1034→              <div key={i} className="flex items-center gap-3">
+  1035→  1035→                <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+  1036→  1036→                  <ChevronRight className="w-3 h-3 text-emerald-400" />
+  1037→  1037→                </div>
+  1038→  1038→                <span className="text-slate-300 text-sm">{feature}</span>
+  1039→  1039→              </div>
+  1040→  1040→            ))}
+  1041→  1041→          </motion.div>
+  1042→  1042→        </div>
+  1043→  1043→
+  1044→  1044→        {/* Bottom — Industry Icons */}
+  1045→  1045→        <motion.div
+  1046→  1046→          initial={{ opacity: 0, y: 20 }}
+  1047→  1047→          animate={{ opacity: 1, y: 0 }}
+  1048→  1048→          transition={{ delay: 0.7, duration: 0.5 }}
+  1049→  1049→          className="relative z-10"
+  1050→  1050→        >
+  1051→  1051→          <p className="text-slate-400 text-xs uppercase tracking-widest mb-4 font-medium">
+  1052→  1052→            Trusted across industries
+  1053→  1053→          </p>
+  1054→  1054→          <div className="grid grid-cols-6 gap-3">
+  1055→  1055→            {INDUSTRY_ICONS.map((item, i) => (
+  1056→  1056→              <motion.div
+  1057→  1057→                key={i}
+  1058→  1058→                initial={{ opacity: 0, scale: 0.8 }}
+  1059→  1059→                animate={{ opacity: 1, scale: 1 }}
+  1060→  1060→                transition={{ delay: 0.8 + i * 0.05, duration: 0.3 }}
+  1061→  1061→                className="flex flex-col items-center gap-1.5 p-2.5 rounded-lg bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.07] transition-colors"
+  1062→  1062→              >
+  1063→  1063→                <item.icon className={`w-4 h-4 ${item.color}`} />
+  1064→  1064→                <span className="text-slate-400 text-[10px] leading-tight text-center">
+  1065→  1065→                  {item.label}
+  1066→  1066→                </span>
+  1067→  1067→              </motion.div>
+  1068→  1068→            ))}
+  1069→  1069→          </div>
+  1070→  1070→        </motion.div>
+  1071→  1071→
+  1072→  1072→        {/* Decorative glow */}
+  1073→  1073→        <div className="absolute top-1/3 -left-32 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl" />
+  1074→  1074→        <div className="absolute bottom-1/4 right-0 w-48 h-48 bg-teal-500/8 rounded-full blur-3xl" />
+  1075→  1075→      </motion.div>
+  1076→  1076→
+  1077→  1077→      {/* Right Panel — Auth Form */}
+  1078→  1078→      <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 sm:px-6 lg:px-10 bg-white min-h-screen lg:min-h-0">
+  1079→  1079→        <div className="w-full max-w-md">
+  1080→  1080→          {/* Mobile branding + Back button */}
+  1081→  1081→          <motion.div
+  1082→  1082→            initial={{ opacity: 0, y: -10 }}
+  1083→  1083→            animate={{ opacity: 1, y: 0 }}
+  1084→  1084→            transition={{ duration: 0.4 }}
+  1085→  1085→            className="flex items-center gap-2.5 mb-8"
+  1086→  1086→          >
+  1087→  1087→            {onBackToLanding && (
+  1088→  1088→              <button
+  1089→  1089→                onClick={onBackToLanding}
+  1090→  1090→                className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 transition-colors mr-3"
+  1091→  1091→              >
+  1092→  1092→                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+  1093→  1093→                Back
+  1094→  1094→              </button>
+  1095→  1095→            )}
+  1096→  1096→            <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-emerald-50 border border-emerald-200">
+  1097→  1097→              <Zap className="w-4 h-4 text-emerald-600" />
+  1098→  1098→            </div>
+  1099→  1099→            <span className="text-lg font-bold text-slate-900 tracking-tight">
+  1100→  1100→              ServiceOS
+  1101→  1101→            </span>
+  1102→  1102→          </motion.div>
+  1103→  1103→
+  1104→  1104→          {/* Dynamic Content */}
+  1105→  1105→          <AnimatePresence mode="wait" custom={slideDirection}>
+  1106→  1106→            {authMode === 'choose' && renderChooseMode()}
+  1107→  1107→            {authMode === 'business' && renderBusinessMode()}
+  1108→  1108→            {authMode === 'customer' && customerStep === 'phone' && renderCustomerPhoneStep()}
+  1109→  1109→            {authMode === 'customer' && customerStep === 'otp' && renderCustomerOtpStep()}
+  1110→  1110→          </AnimatePresence>
+  1111→  1111→
+  1112→  1112→          {/* Footer */}
+  1113→  1113→          <motion.p
+  1114→  1114→            initial={{ opacity: 0 }}
+  1115→  1115→            animate={{ opacity: 1 }}
+  1116→  1116→            transition={{ delay: 0.8, duration: 0.5 }}
+  1117→  1117→            className="text-center text-xs text-slate-400 mt-8"
+  1118→  1118→          >
+  1119→  1119→            By continuing, you agree to ServiceOS&apos;s{' '}
+  1120→  1120→            <span className="underline cursor-pointer hover:text-slate-500">Terms of Service</span>
+  1121→  1121→            {' '}and{' '}
+  1122→  1122→            <span className="underline cursor-pointer hover:text-slate-500">Privacy Policy</span>
+  1123→  1123→          </motion.p>
+  1124→  1124→        </div>
+  1125→  1125→      </div>
+  1126→  1126→    </div>
+  1127→  1127→  );
+  1128→  1128→}
+  1129→  1129→

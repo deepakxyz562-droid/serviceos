@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { isSuperAdminRequest } from '@/lib/admin-auth';
 
 // Helper to safely query tables that might not exist
 async function safeQuery<T>(queryFn: () => Promise<T>, fallback: T): Promise<T> {
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (auth.role !== 'superadmin') {
+    if (!(await isSuperAdminRequest())) {
       return NextResponse.json({ error: 'Forbidden - SuperAdmin access required' }, { status: 403 });
     }
 

@@ -1,0 +1,826 @@
+     1→'use client';
+     2→
+     3→import { useState } from 'react';
+     4→import { motion, AnimatePresence } from 'framer-motion';
+     5→import { toast } from 'sonner';
+     6→import {
+     7→  Zap,
+     8→  Mail,
+     9→  Lock,
+    10→  User,
+    11→  Building2,
+    12→  Phone,
+    13→  ChevronRight,
+    14→  Loader2,
+    15→  Wrench,
+    16→  Sparkles,
+    17→  Truck,
+    18→  Scissors,
+    19→  Bug,
+    20→  Flame,
+    21→  Wind,
+    22→  Package,
+    23→  Droplets,
+    24→  Hammer,
+    25→  Leaf,
+    26→} from 'lucide-react';
+    27→
+    28→import { Card, CardContent } from '@/components/ui/card';
+    29→import { Input } from '@/components/ui/input';
+    30→import { Button } from '@/components/ui/button';
+    31→import { Label } from '@/components/ui/label';
+    32→import {
+    33→  Tabs,
+    34→  TabsContent,
+    35→  TabsList,
+    36→  TabsTrigger,
+    37→} from '@/components/ui/tabs';
+    38→import {
+    39→  Select,
+    40→  SelectContent,
+    41→  SelectItem,
+    42→  SelectTrigger,
+    43→  SelectValue,
+    44→} from '@/components/ui/select';
+    45→import { Separator } from '@/components/ui/separator';
+    46→
+    47→interface AuthPageProps {
+    48→  onAuthSuccess: (user: any, tenant: any) => void;
+    49→  onBackToLanding?: () => void;
+    50→  initialTab?: string;
+    51→}
+    52→
+    53→const INDUSTRIES = [
+    54→  { value: 'plumbing', label: 'Plumbing' },
+    55→  { value: 'cleaning', label: 'Cleaning' },
+    56→  { value: 'packers-movers', label: 'Packers & Movers' },
+    57→  { value: 'window-cleaning', label: 'Window Cleaning' },
+    58→  { value: 'pest-control', label: 'Pest Control' },
+    59→  { value: 'hvac', label: 'HVAC' },
+    60→  { value: 'electrical', label: 'Electrical' },
+    61→  { value: 'landscaping', label: 'Landscaping' },
+    62→  { value: 'courier', label: 'Courier' },
+    63→  { value: 'home-repair', label: 'Home Repair' },
+    64→  { value: 'salon-beauty', label: 'Salon & Beauty' },
+    65→];
+    66→
+    67→const INDUSTRY_ICONS = [
+    68→  { icon: Wrench, label: 'Plumbing', color: 'text-emerald-300' },
+    69→  { icon: Sparkles, label: 'Cleaning', color: 'text-teal-300' },
+    70→  { icon: Truck, label: 'Movers', color: 'text-amber-300' },
+    71→  { icon: Droplets, label: 'Windows', color: 'text-cyan-300' },
+    72→  { icon: Bug, label: 'Pest Ctrl', color: 'text-red-300' },
+    73→  { icon: Wind, label: 'HVAC', color: 'text-sky-300' },
+    74→  { icon: Flame, label: 'Electrical', color: 'text-yellow-300' },
+    75→  { icon: Leaf, label: 'Landscape', color: 'text-green-300' },
+    76→  { icon: Package, label: 'Courier', color: 'text-orange-300' },
+    77→  { icon: Hammer, label: 'Repair', color: 'text-lime-300' },
+    78→  { icon: Scissors, label: 'Salon', color: 'text-pink-300' },
+    79→];
+    80→
+    81→const GoogleIcon = () => (
+    82→  <svg width="18" height="18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    83→    <path
+    84→      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+    85→      fill="#4285F4"
+    86→    />
+    87→    <path
+    88→      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+    89→      fill="#34A853"
+    90→    />
+    91→    <path
+    92→      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+    93→      fill="#FBBC05"
+    94→    />
+    95→    <path
+    96→      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+    97→      fill="#EA4335"
+    98→    />
+    99→  </svg>
+   100→);
+   101→
+   102→const fadeUp = {
+   103→  hidden: { opacity: 0, y: 12 },
+   104→  visible: (i: number) => ({
+   105→    opacity: 1,
+   106→    y: 0,
+   107→    transition: { delay: i * 0.06, duration: 0.4, ease: 'easeOut' as const },
+   108→  }),
+   109→};
+   110→
+   111→const formVariants = {
+   112→  enter: { opacity: 0, x: 20 },
+   113→  center: { opacity: 1, x: 0, transition: { duration: 0.3, ease: 'easeOut' as const } },
+   114→  exit: { opacity: 0, x: -20, transition: { duration: 0.2 } },
+   115→};
+   116→
+   117→export function AuthPage({ onAuthSuccess, onBackToLanding, initialTab }: AuthPageProps) {
+   118→  const [activeTab, setActiveTab] = useState<string>(initialTab || 'login');
+   119→  const [isLoading, setIsLoading] = useState(false);
+   120→
+   121→  // Login state
+   122→  const [loginEmail, setLoginEmail] = useState('');
+   123→  const [loginPassword, setLoginPassword] = useState('');
+   124→
+   125→  // Register state
+   126→  const [regName, setRegName] = useState('');
+   127→  const [regEmail, setRegEmail] = useState('');
+   128→  const [regPassword, setRegPassword] = useState('');
+   129→  const [regBusinessName, setRegBusinessName] = useState('');
+   130→  const [regIndustry, setRegIndustry] = useState('');
+   131→  const [regPhone, setRegPhone] = useState('');
+   132→
+   133→  const handleLogin = async (e: React.FormEvent) => {
+   134→    e.preventDefault();
+   135→    if (!loginEmail || !loginPassword) {
+   136→      toast.error('Please fill in all fields');
+   137→      return;
+   138→    }
+   139→    setIsLoading(true);
+   140→    try {
+   141→      const res = await fetch('/api/auth/login?XTransformPort=3000', {
+   142→        method: 'POST',
+   143→        headers: { 'Content-Type': 'application/json' },
+   144→        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+   145→      });
+   146→      const data = await res.json();
+   147→      if (!res.ok) {
+   148→        toast.error(data.error || 'Login failed');
+   149→        return;
+   150→      }
+   151→      // Store auth data including JWT token for API auth fallback
+   152→      localStorage.setItem('serviceos_auth', JSON.stringify({
+   153→        isAuthenticated: true,
+   154→        user: data.user,
+   155→        tenant: data.tenant || null,
+   156→        token: data.token,
+   157→      }));
+   158→      toast.success('Welcome back!');
+   159→      onAuthSuccess(data.user, data.tenant);
+   160→    } catch {
+   161→      toast.error('Something went wrong. Please try again.');
+   162→    } finally {
+   163→      setIsLoading(false);
+   164→    }
+   165→  };
+   166→
+   167→  const handleRegister = async (e: React.FormEvent) => {
+   168→    e.preventDefault();
+   169→    if (!regName || !regEmail || !regPassword || !regBusinessName || !regIndustry || !regPhone) {
+   170→      toast.error('Please fill in all fields');
+   171→      return;
+   172→    }
+   173→    if (regPassword.length < 8) {
+   174→      toast.error('Password must be at least 8 characters');
+   175→      return;
+   176→    }
+   177→    setIsLoading(true);
+   178→    try {
+   179→      const res = await fetch('/api/auth/register?XTransformPort=3000', {
+   180→        method: 'POST',
+   181→        headers: { 'Content-Type': 'application/json' },
+   182→        body: JSON.stringify({
+   183→          name: regName,
+   184→          email: regEmail,
+   185→          password: regPassword,
+   186→          businessName: regBusinessName,
+   187→          industry: regIndustry,
+   188→          phone: regPhone,
+   189→        }),
+   190→      });
+   191→      const data = await res.json();
+   192→      if (!res.ok) {
+   193→        toast.error(data.error || 'Registration failed');
+   194→        return;
+   195→      }
+   196→      // Store auth data including JWT token for API auth fallback
+   197→      localStorage.setItem('serviceos_auth', JSON.stringify({
+   198→        isAuthenticated: true,
+   199→        user: data.user,
+   200→        tenant: data.tenant || null,
+   201→        token: data.token,
+   202→      }));
+   203→      toast.success('Account created successfully!');
+   204→      onAuthSuccess(data.user, data.tenant);
+   205→    } catch {
+   206→      toast.error('Something went wrong. Please try again.');
+   207→    } finally {
+   208→      setIsLoading(false);
+   209→    }
+   210→  };
+   211→
+   212→  return (
+   213→    <div className="min-h-screen flex flex-col lg:flex-row">
+   214→      {/* Left Panel — Branding (desktop only, full-screen on lg) */}
+   215→      <motion.div
+   216→        initial={{ opacity: 0 }}
+   217→        animate={{ opacity: 1 }}
+   218→        transition={{ duration: 0.6 }}
+   219→        className="hidden lg:flex lg:w-[52%] relative overflow-hidden flex-col justify-between p-10 xl:p-14"
+   220→        style={{
+   221→          background:
+   222→            'linear-gradient(135deg, #0f2027 0%, #1a3a2a 40%, #1e4d3a 70%, #0d1f17 100%)',
+   223→        }}
+   224→      >
+   225→        {/* Subtle pattern overlay */}
+   226→        <div
+   227→          className="absolute inset-0 opacity-[0.04]"
+   228→          style={{
+   229→            backgroundImage:
+   230→              'radial-gradient(circle at 25% 25%, rgba(255,255,255,0.15) 1px, transparent 1px), radial-gradient(circle at 75% 75%, rgba(255,255,255,0.1) 1px, transparent 1px)',
+   231→            backgroundSize: '40px 40px',
+   232→          }}
+   233→        />
+   234→
+   235→        {/* Top — Logo & Brand */}
+   236→        <div className="relative z-10">
+   237→          <motion.div
+   238→            initial={{ opacity: 0, y: -20 }}
+   239→            animate={{ opacity: 1, y: 0 }}
+   240→            transition={{ delay: 0.2, duration: 0.5 }}
+   241→            className="flex items-center gap-3 mb-2"
+   242→          >
+   243→            {onBackToLanding && (
+   244→              <button
+   245→                onClick={onBackToLanding}
+   246→                className="flex items-center gap-1 text-sm text-slate-400 hover:text-white transition-colors mr-2"
+   247→              >
+   248→                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+   249→                Back
+   250→              </button>
+   251→            )}
+   252→            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-500/20 border border-emerald-400/30">
+   253→              <Zap className="w-5 h-5 text-emerald-400" />
+   254→            </div>
+   255→            <span className="text-white text-xl font-bold tracking-tight">
+   256→              ServiceOS
+   257→            </span>
+   258→          </motion.div>
+   259→        </div>
+   260→
+   261→        {/* Middle — Tagline */}
+   262→        <div className="relative z-10 max-w-lg">
+   263→          <motion.h1
+   264→            initial={{ opacity: 0, y: 20 }}
+   265→            animate={{ opacity: 1, y: 0 }}
+   266→            transition={{ delay: 0.3, duration: 0.6 }}
+   267→            className="text-4xl xl:text-5xl font-bold text-white leading-tight mb-4"
+   268→          >
+   269→            Operations OS for{' '}
+   270→            <span className="bg-gradient-to-r from-emerald-300 to-teal-200 bg-clip-text text-transparent">
+   271→              Service Businesses
+   272→            </span>
+   273→          </motion.h1>
+   274→          <motion.p
+   275→            initial={{ opacity: 0, y: 20 }}
+   276→            animate={{ opacity: 1, y: 0 }}
+   277→            transition={{ delay: 0.4, duration: 0.6 }}
+   278→            className="text-slate-300 text-base xl:text-lg leading-relaxed"
+   279→          >
+   280→            Streamline your operations, manage your team, and delight your
+   281→            customers — all from one powerful platform built for service
+   282→            businesses.
+   283→          </motion.p>
+   284→
+   285→          {/* Feature bullets */}
+   286→          <motion.div
+   287→            initial={{ opacity: 0 }}
+   288→            animate={{ opacity: 1 }}
+   289→            transition={{ delay: 0.6, duration: 0.5 }}
+   290→            className="mt-8 space-y-3"
+   291→          >
+   292→            {[
+   293→              'Automated scheduling & dispatch',
+   294→              'Real-time job tracking & updates',
+   295→              'Customer management & invoicing',
+   296→            ].map((feature, i) => (
+   297→              <div key={i} className="flex items-center gap-3">
+   298→                <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+   299→                  <ChevronRight className="w-3 h-3 text-emerald-400" />
+   300→                </div>
+   301→                <span className="text-slate-300 text-sm">{feature}</span>
+   302→              </div>
+   303→            ))}
+   304→          </motion.div>
+   305→        </div>
+   306→
+   307→        {/* Bottom — Industry Icons */}
+   308→        <motion.div
+   309→          initial={{ opacity: 0, y: 20 }}
+   310→          animate={{ opacity: 1, y: 0 }}
+   311→          transition={{ delay: 0.7, duration: 0.5 }}
+   312→          className="relative z-10"
+   313→        >
+   314→          <p className="text-slate-400 text-xs uppercase tracking-widest mb-4 font-medium">
+   315→            Trusted across industries
+   316→          </p>
+   317→          <div className="grid grid-cols-6 gap-3">
+   318→            {INDUSTRY_ICONS.map((item, i) => (
+   319→              <motion.div
+   320→                key={i}
+   321→                initial={{ opacity: 0, scale: 0.8 }}
+   322→                animate={{ opacity: 1, scale: 1 }}
+   323→                transition={{ delay: 0.8 + i * 0.05, duration: 0.3 }}
+   324→                className="flex flex-col items-center gap-1.5 p-2.5 rounded-lg bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.07] transition-colors"
+   325→              >
+   326→                <item.icon className={`w-4 h-4 ${item.color}`} />
+   327→                <span className="text-slate-400 text-[10px] leading-tight text-center">
+   328→                  {item.label}
+   329→                </span>
+   330→              </motion.div>
+   331→            ))}
+   332→          </div>
+   333→        </motion.div>
+   334→
+   335→        {/* Decorative glow */}
+   336→        <div className="absolute top-1/3 -left-32 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl" />
+   337→        <div className="absolute bottom-1/4 right-0 w-48 h-48 bg-teal-500/8 rounded-full blur-3xl" />
+   338→      </motion.div>
+   339→
+   340→      {/* Right Panel — Auth Form */}
+   341→      <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 sm:px-6 lg:px-10 bg-white min-h-screen lg:min-h-0">
+   342→        <div className="w-full max-w-md">
+   343→          {/* Mobile branding + Back button */}
+   344→          <motion.div
+   345→            initial={{ opacity: 0, y: -10 }}
+   346→            animate={{ opacity: 1, y: 0 }}
+   347→            transition={{ duration: 0.4 }}
+   348→            className="flex items-center gap-2.5 mb-8"
+   349→          >
+   350→            {onBackToLanding && (
+   351→              <button
+   352→                onClick={onBackToLanding}
+   353→                className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 transition-colors mr-3"
+   354→              >
+   355→                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+   356→                Back
+   357→              </button>
+   358→            )}
+   359→            <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-emerald-50 border border-emerald-200">
+   360→              <Zap className="w-4 h-4 text-emerald-600" />
+   361→            </div>
+   362→            <span className="text-lg font-bold text-slate-900 tracking-tight">
+   363→              ServiceOS
+   364→            </span>
+   365→          </motion.div>
+   366→
+   367→          {/* Welcome text */}
+   368→          <motion.div
+   369→            initial={{ opacity: 0, y: 10 }}
+   370→            animate={{ opacity: 1, y: 0 }}
+   371→            transition={{ delay: 0.1, duration: 0.4 }}
+   372→            className="mb-6"
+   373→          >
+   374→            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+   375→              {activeTab === 'login' ? 'Welcome back' : 'Create your account'}
+   376→            </h2>
+   377→            <p className="text-slate-500 text-sm mt-1.5">
+   378→              {activeTab === 'login'
+   379→                ? 'Sign in to your ServiceOS workspace'
+   380→                : 'Get started with ServiceOS for free'}
+   381→            </p>
+   382→          </motion.div>
+   383→
+   384→          <Tabs
+   385→            value={activeTab}
+   386→            onValueChange={setActiveTab}
+   387→            className="w-full"
+   388→          >
+   389→            <TabsList className="w-full mb-6 bg-slate-100 h-10 p-[3px]">
+   390→              <TabsTrigger
+   391→                value="login"
+   392→                className="flex-1 h-[34px] text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-slate-900 text-slate-500"
+   393→              >
+   394→                Sign In
+   395→              </TabsTrigger>
+   396→              <TabsTrigger
+   397→                value="register"
+   398→                className="flex-1 h-[34px] text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-slate-900 text-slate-500"
+   399→              >
+   400→                Create Account
+   401→              </TabsTrigger>
+   402→            </TabsList>
+   403→
+   404→            {/* ─── LOGIN TAB ─── */}
+   405→            <TabsContent value="login">
+   406→              <AnimatePresence mode="wait">
+   407→                <motion.div
+   408→                  key="login-form"
+   409→                  variants={formVariants}
+   410→                  initial="enter"
+   411→                  animate="center"
+   412→                  exit="exit"
+   413→                >
+   414→                  <form onSubmit={handleLogin} className="space-y-4">
+   415→                    <motion.div
+   416→                      custom={0}
+   417→                      variants={fadeUp}
+   418→                      initial="hidden"
+   419→                      animate="visible"
+   420→                      className="space-y-2"
+   421→                    >
+   422→                      <Label htmlFor="login-email" className="text-slate-700">
+   423→                        Email
+   424→                      </Label>
+   425→                      <div className="relative">
+   426→                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+   427→                        <Input
+   428→                          id="login-email"
+   429→                          type="email"
+   430→                          placeholder="you@company.com"
+   431→                          value={loginEmail}
+   432→                          onChange={(e) => setLoginEmail(e.target.value)}
+   433→                          className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
+   434→                          autoComplete="email"
+   435→                        />
+   436→                      </div>
+   437→                    </motion.div>
+   438→
+   439→                    <motion.div
+   440→                      custom={1}
+   441→                      variants={fadeUp}
+   442→                      initial="hidden"
+   443→                      animate="visible"
+   444→                      className="space-y-2"
+   445→                    >
+   446→                      <div className="flex items-center justify-between">
+   447→                        <Label htmlFor="login-password" className="text-slate-700">
+   448→                          Password
+   449→                        </Label>
+   450→                        <button
+   451→                          type="button"
+   452→                          className="text-xs text-emerald-600 hover:text-emerald-700 font-medium hover:underline transition-colors"
+   453→                        >
+   454→                          Forgot Password?
+   455→                        </button>
+   456→                      </div>
+   457→                      <div className="relative">
+   458→                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+   459→                        <Input
+   460→                          id="login-password"
+   461→                          type="password"
+   462→                          placeholder="Enter your password"
+   463→                          value={loginPassword}
+   464→                          onChange={(e) => setLoginPassword(e.target.value)}
+   465→                          className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
+   466→                          autoComplete="current-password"
+   467→                        />
+   468→                      </div>
+   469→                    </motion.div>
+   470→
+   471→                    <motion.div
+   472→                      custom={2}
+   473→                      variants={fadeUp}
+   474→                      initial="hidden"
+   475→                      animate="visible"
+   476→                    >
+   477→                      <Button
+   478→                        type="submit"
+   479→                        disabled={isLoading}
+   480→                        className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-medium cursor-pointer"
+   481→                      >
+   482→                        {isLoading ? (
+   483→                          <>
+   484→                            <Loader2 className="w-4 h-4 animate-spin" />
+   485→                            Signing in...
+   486→                          </>
+   487→                        ) : (
+   488→                          'Sign In'
+   489→                        )}
+   490→                      </Button>
+   491→                    </motion.div>
+   492→
+   493→                    <motion.div
+   494→                      custom={3}
+   495→                      variants={fadeUp}
+   496→                      initial="hidden"
+   497→                      animate="visible"
+   498→                      className="relative"
+   499→                    >
+   500→                      <div className="absolute inset-0 flex items-center">
+   501→                        <Separator className="w-full" />
+   502→                      </div>
+   503→                      <div className="relative flex justify-center text-xs uppercase">
+   504→                        <span className="bg-white px-3 text-slate-400 font-medium">
+   505→                          or
+   506→                        </span>
+   507→                      </div>
+   508→                    </motion.div>
+   509→
+   510→                    <motion.div
+   511→                      custom={4}
+   512→                      variants={fadeUp}
+   513→                      initial="hidden"
+   514→                      animate="visible"
+   515→                    >
+   516→                      <Button
+   517→                        type="button"
+   518→                        variant="outline"
+   519→                        className="w-full h-10 border-slate-200 hover:bg-slate-50 cursor-pointer"
+   520→                        onClick={() => {
+   521→                          const origin = encodeURIComponent(window.location.origin);
+   522→                          window.location.href = `/api/auth/google?mode=login&XTransformPort=3000&origin=${origin}`;
+   523→                        }}
+   524→                      >
+   525→                        <GoogleIcon />
+   526→                        Continue with Google
+   527→                      </Button>
+   528→                    </motion.div>
+   529→
+   530→                    <motion.div
+   531→                      custom={5}
+   532→                      variants={fadeUp}
+   533→                      initial="hidden"
+   534→                      animate="visible"
+   535→                      className="text-center pt-1"
+   536→                    >
+   537→                      <p className="text-sm text-slate-500">
+   538→                        Don&apos;t have an account?{' '}
+   539→                        <button
+   540→                          type="button"
+   541→                          onClick={() => setActiveTab('register')}
+   542→                          className="text-emerald-600 hover:text-emerald-700 font-semibold hover:underline transition-colors"
+   543→                        >
+   544→                          Create one
+   545→                        </button>
+   546→                      </p>
+   547→                    </motion.div>
+   548→                  </form>
+   549→                </motion.div>
+   550→              </AnimatePresence>
+   551→            </TabsContent>
+   552→
+   553→            {/* ─── REGISTER TAB ─── */}
+   554→            <TabsContent value="register">
+   555→              <AnimatePresence mode="wait">
+   556→                <motion.div
+   557→                  key="register-form"
+   558→                  variants={formVariants}
+   559→                  initial="enter"
+   560→                  animate="center"
+   561→                  exit="exit"
+   562→                >
+   563→                  <form onSubmit={handleRegister} className="space-y-4">
+   564→                    {/* Full Name */}
+   565→                    <motion.div
+   566→                      custom={0}
+   567→                      variants={fadeUp}
+   568→                      initial="hidden"
+   569→                      animate="visible"
+   570→                      className="space-y-2"
+   571→                    >
+   572→                      <Label htmlFor="reg-name" className="text-slate-700">
+   573→                        Full Name
+   574→                      </Label>
+   575→                      <div className="relative">
+   576→                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+   577→                        <Input
+   578→                          id="reg-name"
+   579→                          type="text"
+   580→                          placeholder="John Doe"
+   581→                          value={regName}
+   582→                          onChange={(e) => setRegName(e.target.value)}
+   583→                          className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
+   584→                          autoComplete="name"
+   585→                        />
+   586→                      </div>
+   587→                    </motion.div>
+   588→
+   589→                    {/* Email */}
+   590→                    <motion.div
+   591→                      custom={1}
+   592→                      variants={fadeUp}
+   593→                      initial="hidden"
+   594→                      animate="visible"
+   595→                      className="space-y-2"
+   596→                    >
+   597→                      <Label htmlFor="reg-email" className="text-slate-700">
+   598→                        Email
+   599→                      </Label>
+   600→                      <div className="relative">
+   601→                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+   602→                        <Input
+   603→                          id="reg-email"
+   604→                          type="email"
+   605→                          placeholder="you@company.com"
+   606→                          value={regEmail}
+   607→                          onChange={(e) => setRegEmail(e.target.value)}
+   608→                          className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
+   609→                          autoComplete="email"
+   610→                        />
+   611→                      </div>
+   612→                    </motion.div>
+   613→
+   614→                    {/* Password */}
+   615→                    <motion.div
+   616→                      custom={2}
+   617→                      variants={fadeUp}
+   618→                      initial="hidden"
+   619→                      animate="visible"
+   620→                      className="space-y-2"
+   621→                    >
+   622→                      <Label htmlFor="reg-password" className="text-slate-700">
+   623→                        Password
+   624→                      </Label>
+   625→                      <div className="relative">
+   626→                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+   627→                        <Input
+   628→                          id="reg-password"
+   629→                          type="password"
+   630→                          placeholder="Min 8 characters"
+   631→                          value={regPassword}
+   632→                          onChange={(e) => setRegPassword(e.target.value)}
+   633→                          className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
+   634→                          autoComplete="new-password"
+   635→                        />
+   636→                      </div>
+   637→                      {regPassword && regPassword.length < 8 && (
+   638→                        <p className="text-xs text-amber-600 mt-1">
+   639→                          Password must be at least 8 characters
+   640→                        </p>
+   641→                      )}
+   642→                    </motion.div>
+   643→
+   644→                    {/* Business Name */}
+   645→                    <motion.div
+   646→                      custom={3}
+   647→                      variants={fadeUp}
+   648→                      initial="hidden"
+   649→                      animate="visible"
+   650→                      className="space-y-2"
+   651→                    >
+   652→                      <Label htmlFor="reg-business" className="text-slate-700">
+   653→                        Business Name
+   654→                      </Label>
+   655→                      <div className="relative">
+   656→                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+   657→                        <Input
+   658→                          id="reg-business"
+   659→                          type="text"
+   660→                          placeholder="Acme Services Inc."
+   661→                          value={regBusinessName}
+   662→                          onChange={(e) => setRegBusinessName(e.target.value)}
+   663→                          className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
+   664→                          autoComplete="organization"
+   665→                        />
+   666→                      </div>
+   667→                    </motion.div>
+   668→
+   669→                    {/* Industry */}
+   670→                    <motion.div
+   671→                      custom={4}
+   672→                      variants={fadeUp}
+   673→                      initial="hidden"
+   674→                      animate="visible"
+   675→                      className="space-y-2"
+   676→                    >
+   677→                      <Label className="text-slate-700">Industry</Label>
+   678→                      <Select value={regIndustry} onValueChange={setRegIndustry}>
+   679→                        <SelectTrigger className="w-full h-10 bg-white border-slate-200 focus:ring-emerald-500/20 focus:border-emerald-500">
+   680→                          <SelectValue placeholder="Select your industry" />
+   681→                        </SelectTrigger>
+   682→                        <SelectContent>
+   683→                          {INDUSTRIES.map((industry) => (
+   684→                            <SelectItem key={industry.value} value={industry.value}>
+   685→                              {industry.label}
+   686→                            </SelectItem>
+   687→                          ))}
+   688→                        </SelectContent>
+   689→                      </Select>
+   690→                    </motion.div>
+   691→
+   692→                    {/* Phone Number */}
+   693→                    <motion.div
+   694→                      custom={5}
+   695→                      variants={fadeUp}
+   696→                      initial="hidden"
+   697→                      animate="visible"
+   698→                      className="space-y-2"
+   699→                    >
+   700→                      <Label htmlFor="reg-phone" className="text-slate-700">
+   701→                        Phone Number
+   702→                      </Label>
+   703→                      <div className="relative">
+   704→                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+   705→                        <Input
+   706→                          id="reg-phone"
+   707→                          type="tel"
+   708→                          placeholder="+1 (555) 000-0000"
+   709→                          value={regPhone}
+   710→                          onChange={(e) => setRegPhone(e.target.value)}
+   711→                          className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-emerald-500 focus-visible:ring-emerald-500/20"
+   712→                          autoComplete="tel"
+   713→                        />
+   714→                      </div>
+   715→                    </motion.div>
+   716→
+   717→                    {/* Create Account Button */}
+   718→                    <motion.div
+   719→                      custom={6}
+   720→                      variants={fadeUp}
+   721→                      initial="hidden"
+   722→                      animate="visible"
+   723→                      className="pt-1"
+   724→                    >
+   725→                      <Button
+   726→                        type="submit"
+   727→                        disabled={isLoading}
+   728→                        className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white font-medium cursor-pointer"
+   729→                      >
+   730→                        {isLoading ? (
+   731→                          <>
+   732→                            <Loader2 className="w-4 h-4 animate-spin" />
+   733→                            Creating account...
+   734→                          </>
+   735→                        ) : (
+   736→                          'Create Account'
+   737→                        )}
+   738→                      </Button>
+   739→                    </motion.div>
+   740→
+   741→                    {/* Divider */}
+   742→                    <motion.div
+   743→                      custom={7}
+   744→                      variants={fadeUp}
+   745→                      initial="hidden"
+   746→                      animate="visible"
+   747→                      className="relative"
+   748→                    >
+   749→                      <div className="absolute inset-0 flex items-center">
+   750→                        <Separator className="w-full" />
+   751→                      </div>
+   752→                      <div className="relative flex justify-center text-xs uppercase">
+   753→                        <span className="bg-white px-3 text-slate-400 font-medium">
+   754→                          or
+   755→                        </span>
+   756→                      </div>
+   757→                    </motion.div>
+   758→
+   759→                    {/* Google */}
+   760→                    <motion.div
+   761→                      custom={8}
+   762→                      variants={fadeUp}
+   763→                      initial="hidden"
+   764→                      animate="visible"
+   765→                    >
+   766→                      <Button
+   767→                        type="button"
+   768→                        variant="outline"
+   769→                        className="w-full h-10 border-slate-200 hover:bg-slate-50 cursor-pointer"
+   770→                        onClick={() => {
+   771→                          const origin = encodeURIComponent(window.location.origin);
+   772→                          window.location.href = `/api/auth/google?mode=register&XTransformPort=3000&origin=${origin}`;
+   773→                        }}
+   774→                      >
+   775→                        <GoogleIcon />
+   776→                        Continue with Google
+   777→                      </Button>
+   778→                    </motion.div>
+   779→
+   780→                    {/* Already have account */}
+   781→                    <motion.div
+   782→                      custom={9}
+   783→                      variants={fadeUp}
+   784→                      initial="hidden"
+   785→                      animate="visible"
+   786→                      className="text-center pt-1"
+   787→                    >
+   788→                      <p className="text-sm text-slate-500">
+   789→                        Already have an account?{' '}
+   790→                        <button
+   791→                          type="button"
+   792→                          onClick={() => setActiveTab('login')}
+   793→                          className="text-emerald-600 hover:text-emerald-700 font-semibold hover:underline transition-colors"
+   794→                        >
+   795→                          Sign In
+   796→                        </button>
+   797→                      </p>
+   798→                    </motion.div>
+   799→                  </form>
+   800→                </motion.div>
+   801→              </AnimatePresence>
+   802→            </TabsContent>
+   803→          </Tabs>
+   804→
+   805→          {/* Footer */}
+   806→          <motion.p
+   807→            initial={{ opacity: 0 }}
+   808→            animate={{ opacity: 1 }}
+   809→            transition={{ delay: 0.8, duration: 0.5 }}
+   810→            className="text-center text-xs text-slate-400 mt-8"
+   811→          >
+   812→            By continuing, you agree to ServiceOS&apos;s{' '}
+   813→            <span className="underline cursor-pointer hover:text-slate-500">
+   814→              Terms of Service
+   815→            </span>{' '}
+   816→            and{' '}
+   817→            <span className="underline cursor-pointer hover:text-slate-500">
+   818→              Privacy Policy
+   819→            </span>
+   820→          </motion.p>
+   821→        </div>
+   822→      </div>
+   823→    </div>
+   824→  );
+   825→}
+   826→

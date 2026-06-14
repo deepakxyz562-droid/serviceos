@@ -71,15 +71,51 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET /api/customer-portal - Validate portal session
+// GET /api/customer-portal - Validate portal session or list sessions
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const token = searchParams.get('token')
+    const list = searchParams.get('list')
+    const tenantId = searchParams.get('tenantId')
 
+    // List mode: return all portal sessions (optionally filtered by tenantId)
+    if (list === 'true') {
+      const where: Record<string, unknown> = {}
+      if (tenantId) {
+        where.tenantId = tenantId
+      }
+
+      const sessions = await db.customerPortalSession.findMany({
+        where,
+        include: {
+          customer: { select: { id: true, name: true, phone: true, email: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || ''
+
+      return NextResponse.json(
+        sessions.map(session => ({
+          id: session.id,
+          token: session.token,
+          customerId: session.customerId,
+          customerName: session.customer.name,
+          customerPhone: session.customerPhone,
+          expiresAt: toISOString(session.expiresAt as Date | string),
+          lastAccessedAt: toISOString(session.lastAccessedAt as Date | string),
+          portalUrl: baseUrl
+            ? `${baseUrl}/portal/${session.token}`
+            : `/portal/${session.token}`,
+        }))
+      )
+    }
+
+    // Validate mode: validate a specific token
     if (!token) {
       return NextResponse.json(
-        { error: 'token query parameter is required' },
+        { error: 'token query parameter is required (or use list=true)' },
         { status: 400 }
       )
     }

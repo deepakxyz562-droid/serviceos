@@ -14,6 +14,7 @@ export interface AuthUser {
   tenantId: string | null;
   workspaceId: string | null;
   avatar: string | null;
+  isSuperAdmin?: boolean;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -34,6 +35,7 @@ export function generateToken(user: AuthUser): string {
       tenantId: user.tenantId,
       workspaceId: user.workspaceId,
       avatar: user.avatar,
+      isSuperAdmin: user.isSuperAdmin || false,
     },
     JWT_SECRET,
     { expiresIn: TOKEN_EXPIRY }

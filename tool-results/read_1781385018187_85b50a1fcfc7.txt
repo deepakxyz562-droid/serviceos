@@ -1,0 +1,2002 @@
+     1→'use client';
+     2→import { authFetch } from '@/lib/client-auth';
+     3→
+     4→import { useEffect, useState, useMemo, useCallback } from 'react';
+     5→import {
+     6→  Shield,
+     7→  Building2,
+     8→  Users,
+     9→  CreditCard,
+    10→  MessageCircle,
+    11→  BarChart3,
+    12→  UserCog,
+    13→  Flag,
+    14→  TrendingUp,
+    15→  TrendingDown,
+    16→  DollarSign,
+    17→  Briefcase,
+    18→  Target,
+    19→  Eye,
+    20→  Plus,
+    21→  Search,
+    22→  Lock,
+    23→  Unlock,
+    24→  KeyRound,
+    25→  CheckCircle2,
+    26→  XCircle,
+    27→  AlertTriangle,
+    28→  Clock,
+    29→  ExternalLink,
+    30→  RefreshCw,
+    31→  Phone,
+    32→  CheckCheck,
+    33→  X,
+    34→  Loader2,
+    35→  Zap,
+    36→  CalendarDays,
+    37→  ArrowUpRight,
+    38→  ArrowDownRight,
+    39→  Filter,
+    40→  Settings,
+    41→  Percent,
+    42→  Radio,
+    43→} from 'lucide-react';
+    44→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    45→import { Badge } from '@/components/ui/badge';
+    46→import { Button } from '@/components/ui/button';
+    47→import { Skeleton } from '@/components/ui/skeleton';
+    48→import { Input } from '@/components/ui/input';
+    49→import {
+    50→  Table,
+    51→  TableBody,
+    52→  TableCell,
+    53→  TableHead,
+    54→  TableHeader,
+    55→  TableRow,
+    56→} from '@/components/ui/table';
+    57→import {
+    58→  Tabs,
+    59→  TabsContent,
+    60→  TabsList,
+    61→  TabsTrigger,
+    62→} from '@/components/ui/tabs';
+    63→import {
+    64→  Dialog,
+    65→  DialogContent,
+    66→  DialogDescription,
+    67→  DialogFooter,
+    68→  DialogHeader,
+    69→  DialogTitle,
+    70→} from '@/components/ui/dialog';
+    71→import {
+    72→  Select,
+    73→  SelectContent,
+    74→  SelectItem,
+    75→  SelectTrigger,
+    76→  SelectValue,
+    77→} from '@/components/ui/select';
+    78→import { Switch } from '@/components/ui/switch';
+    79→import { Progress } from '@/components/ui/progress';
+    80→import { Separator } from '@/components/ui/separator';
+    81→import { toast } from 'sonner';
+    82→import { cn } from '@/lib/utils';
+    83→import {
+    84→  AreaChart,
+    85→  Area,
+    86→  BarChart,
+    87→  Bar,
+    88→  XAxis,
+    89→  YAxis,
+    90→  CartesianGrid,
+    91→  Tooltip,
+    92→  ResponsiveContainer,
+    93→  PieChart as RechartsPieChart,
+    94→  Pie,
+    95→  Cell,
+    96→  Legend,
+    97→} from 'recharts';
+    98→
+    99→// ─── Types (matching actual API responses) ────────────────────────────────────
+   100→
+   101→interface PlatformStats {
+   102→  totalTenants: number;
+   103→  activeTenants: number;
+   104→  trialTenants: number;
+   105→  suspendedTenants: number;
+   106→  totalUsers: number;
+   107→  totalLeads: number;
+   108→  totalJobs: number;
+   109→  mrr: number;
+   110→  arr: number;
+   111→  totalRevenue: number;
+   112→  churnRate: number;
+   113→  trialConversionRate: number;
+   114→  monthlyRevenueData: { month: string; label: string; revenue: number }[];
+   115→  tenantsByPlan: Record<string, number>;
+   116→  subscriptions: { active: number; trial: number; paid: number };
+   117→}
+   118→
+   119→interface TenantRecord {
+   120→  id: string;
+   121→  name: string;
+   122→  slug: string;
+   123→  industry: string | null;
+   124→  email: string | null;
+   125→  phone: string | null;
+   126→  plan: string;
+   127→  planStatus: string;
+   128→  trialEndsAt: string | null;
+   129→  suspendedAt: string | null;
+   130→  userCount: number;
+   131→  leadCount: number;
+   132→  jobCount: number;
+   133→  workspaceCount: number;
+   134→  createdAt: string;
+   135→}
+   136→
+   137→interface UserRecord {
+   138→  id: string;
+   139→  name: string;
+   140→  email: string;
+   141→  phone: string | null;
+   142→  role: string;
+   143→  isActive: boolean;
+   144→  avatar: string | null;
+   145→  authProvider: string | null;
+   146→  lastLoginAt: string | null;
+   147→  tenantId: string | null;
+   148→  tenantName: string | null;
+   149→  tenantSlug: string | null;
+   150→  tenantPlan: string | null;
+   151→  createdAt: string;
+   152→}
+   153→
+   154→interface BillingStats {
+   155→  totalRevenue: number;
+   156→  mrr: number;
+   157→  arr: number;
+   158→  totalSubscriptions: number;
+   159→  revenueByPlan: Record<string, number>;
+   160→  activeSubscriptionsByPlan: Record<string, number>;
+   161→  subscriptionsByPlan: Record<string, { count: number; revenue: number }>;
+   162→  recentTransactions: {
+   163→    id: string;
+   164→    invoiceNumber: string;
+   165→    amount: number;
+   166→    total: number;
+   167→    currency: string;
+   168→    paidAt: string | null;
+   169→    tenantId: string;
+   170→    tenantName: string | null;
+   171→    tenantPlan: string | null;
+   172→  }[];
+   173→}
+   174→
+   175→interface WhatsAppStats {
+   176→  summary: {
+   177→    totalTenantsWithWhatsApp: number;
+   178→    connectedNumbers: number;
+   179→    pendingVerification: number;
+   180→    totalConversations: number;
+   181→    totalMessages: number;
+   182→    totalWhatsAppNotifications: number;
+   183→  };
+   184→  connectedNumbersPerTenant: {
+   185→    tenantId: string;
+   186→    tenantName: string;
+   187→    tenantSlug: string;
+   188→    plan: string;
+   189→    whatsappPhone: string | null;
+   190→    connected: boolean;
+   191→    verificationStatus: string;
+   192→    phoneNumberId: string | null;
+   193→    businessAccountId: string | null;
+   194→    webhookVerified: boolean;
+   195→    conversationCount: number;
+   196→  }[];
+   197→  messageUsageByTenant: Record<string, number>;
+   198→  verificationStatus: { connected: number; pending: number; disconnected: number };
+   199→  templateStatus: { approved: number; pending: number; total: number };
+   200→  notificationDeliveryStats: Record<string, number>;
+   201→  recentMessages: {
+   202→    id: string;
+   203→    conversationId: string;
+   204→    senderType: string;
+   205→    senderName: string;
+   206→    content: string;
+   207→    direction: string;
+   208→    status: string;
+   209→    messageType: string;
+   210→    tenantId: string;
+   211→    createdAt: string;
+   212→  }[];
+   213→}
+   214→
+   215→interface FeatureFlagRecord {
+   216→  tenantId: string;
+   217→  tenantName: string;
+   218→  tenantSlug: string;
+   219→  plan: string;
+   220→  planStatus: string;
+   221→  featureFlags: {
+   222→    enableAI: boolean;
+   223→    enableWhatsApp: boolean;
+   224→    enableBooking: boolean;
+   225→    enableDispatch: boolean;
+   226→  };
+   227→}
+   228→
+   229→// ─── Helpers ─────────────────────────────────────────────────────────────────
+   230→
+   231→function formatUSD(amount: number): string {
+   232→  return new Intl.NumberFormat('en-US', {
+   233→    style: 'currency',
+   234→    currency: 'USD',
+   235→    minimumFractionDigits: 0,
+   236→    maximumFractionDigits: 0,
+   237→  }).format(amount);
+   238→}
+   239→
+   240→function formatNumber(num: number): string {
+   241→  return new Intl.NumberFormat('en-US').format(num);
+   242→}
+   243→
+   244→function formatDate(dateStr: string | null): string {
+   245→  if (!dateStr) return '—';
+   246→  return new Date(dateStr).toLocaleDateString('en-US', {
+   247→    day: '2-digit',
+   248→    month: 'short',
+   249→    year: 'numeric',
+   250→  });
+   251→}
+   252→
+   253→// ─── Color Configs ───────────────────────────────────────────────────────────
+   254→
+   255→const statusColors: Record<string, string> = {
+   256→  active: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+   257→  trial: 'bg-amber-100 text-amber-800 border-amber-200',
+   258→  expired: 'bg-red-100 text-red-800 border-red-200',
+   259→  cancelled: 'bg-slate-100 text-slate-800 border-slate-200',
+   260→  suspended: 'bg-red-100 text-red-800 border-red-200',
+   261→  locked: 'bg-red-100 text-red-800 border-red-200',
+   262→  verified: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+   263→  pending: 'bg-amber-100 text-amber-800 border-amber-200',
+   264→  unverified: 'bg-red-100 text-red-800 border-red-200',
+   265→  disconnected: 'bg-slate-100 text-slate-800 border-slate-200',
+   266→  connected: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+   267→};
+   268→
+   269→const planColors: Record<string, string> = {
+   270→  starter: 'bg-slate-100 text-slate-800',
+   271→  growth: 'bg-emerald-100 text-emerald-800',
+   272→  pro: 'bg-teal-100 text-teal-800',
+   273→  professional: 'bg-teal-100 text-teal-800',
+   274→  enterprise: 'bg-purple-100 text-purple-800',
+   275→};
+   276→
+   277→const roleColors: Record<string, string> = {
+   278→  owner: 'bg-emerald-100 text-emerald-800',
+   279→  admin: 'bg-teal-100 text-teal-800',
+   280→  manager: 'bg-amber-100 text-amber-800',
+   281→  employee: 'bg-slate-100 text-slate-800',
+   282→  technician: 'bg-slate-100 text-slate-800',
+   283→};
+   284→
+   285→const planConfig: Record<string, { monthlyPrice: number; yearlyPrice: number; features: string[] }> = {
+   286→  starter: { monthlyPrice: 29, yearlyPrice: 290, features: ['5 Users', '100 Jobs/month', '1 WhatsApp Number', 'Basic Analytics', 'Email Support'] },
+   287→  growth: { monthlyPrice: 79, yearlyPrice: 790, features: ['25 Users', '500 Jobs/month', '3 WhatsApp Numbers', 'AI Assistant', 'Priority Support'] },
+   288→  pro: { monthlyPrice: 149, yearlyPrice: 1490, features: ['50 Users', 'Unlimited Jobs', '10 WhatsApp Numbers', 'Advanced AI', 'Custom Workflows'] },
+   289→  enterprise: { monthlyPrice: 0, yearlyPrice: 0, features: ['Unlimited Users', 'Unlimited Everything', 'Dedicated Support', 'Custom Integrations', 'SLA Guarantee'] },
+   290→};
+   291→
+   292→// ─── Skeleton Components ─────────────────────────────────────────────────────
+   293→
+   294→function StatsRowSkeleton({ count = 4 }: { count?: number }) {
+   295→  return (
+   296→    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+   297→      {Array.from({ length: count }).map((_, i) => (
+   298→        <Card key={i} className="animate-pulse">
+   299→          <CardContent className="p-6">
+   300→            <div className="flex items-center justify-between">
+   301→              <div className="space-y-2">
+   302→                <Skeleton className="h-4 w-24" />
+   303→                <Skeleton className="h-8 w-20" />
+   304→                <Skeleton className="h-3 w-16" />
+   305→              </div>
+   306→              <Skeleton className="size-12 rounded-xl" />
+   307→            </div>
+   308→          </CardContent>
+   309→        </Card>
+   310→      ))}
+   311→    </div>
+   312→  );
+   313→}
+   314→
+   315→function ChartSkeleton() {
+   316→  return (
+   317→    <Card className="animate-pulse">
+   318→      <CardHeader>
+   319→        <Skeleton className="h-5 w-32" />
+   320→        <Skeleton className="h-4 w-48" />
+   321→      </CardHeader>
+   322→      <CardContent>
+   323→        <Skeleton className="h-[260px] w-full" />
+   324→      </CardContent>
+   325→    </Card>
+   326→  );
+   327→}
+   328→
+   329→function TableSkeleton({ rows = 5 }: { rows?: number }) {
+   330→  return (
+   331→    <Card className="animate-pulse">
+   332→      <CardContent className="p-4">
+   333→        <div className="space-y-3">
+   334→          {Array.from({ length: rows }).map((_, i) => (
+   335→            <div key={i} className="flex items-center gap-4">
+   336→              <Skeleton className="h-4 w-32" />
+   337→              <Skeleton className="h-4 w-16" />
+   338→              <Skeleton className="h-4 w-20" />
+   339→              <Skeleton className="h-4 w-16" />
+   340→              <Skeleton className="h-4 w-24 ml-auto" />
+   341→            </div>
+   342→          ))}
+   343→        </div>
+   344→      </CardContent>
+   345→    </Card>
+   346→  );
+   347→}
+   348→
+   349→// ─── Main Component ──────────────────────────────────────────────────────────
+   350→
+   351→export function SuperAdminView() {
+   352→  const [activeTab, setActiveTab] = useState('overview');
+   353→  const [stats, setStats] = useState<PlatformStats | null>(null);
+   354→  const [tenants, setTenants] = useState<TenantRecord[]>([]);
+   355→  const [users, setUsers] = useState<UserRecord[]>([]);
+   356→  const [billingData, setBillingData] = useState<BillingStats | null>(null);
+   357→  const [whatsappData, setWhatsappData] = useState<WhatsAppStats | null>(null);
+   358→  const [featureFlags, setFeatureFlags] = useState<FeatureFlagRecord[]>([]);
+   359→  const [loading, setLoading] = useState(true);
+   360→  const [error, setError] = useState<string | null>(null);
+   361→
+   362→  // Dialog states
+   363→  const [createTenantOpen, setCreateTenantOpen] = useState(false);
+   364→  const [usageDialogOpen, setUsageDialogOpen] = useState(false);
+   365→  const [selectedTenant, setSelectedTenant] = useState<TenantRecord | null>(null);
+   366→  const [newTenant, setNewTenant] = useState({ name: '', plan: 'starter', email: '', ownerName: '', password: '' });
+   367→  const [creating, setCreating] = useState(false);
+   368→
+   369→  // Filter states
+   370→  const [tenantSearch, setTenantSearch] = useState('');
+   371→  const [tenantStatusFilter, setTenantStatusFilter] = useState('all');
+   372→  const [userSearch, setUserSearch] = useState('');
+   373→  const [subStatusFilter, setSubStatusFilter] = useState('all');
+   374→  const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+   375→
+   376→  // ─── Data Fetching ───────────────────────────────────────────────────────
+   377→
+   378→  const fetchAllData = useCallback(async () => {
+   379→    setLoading(true);
+   380→    setError(null);
+   381→    try {
+   382→      const endpoints = [
+   383→        { url: '/api/admin/stats', key: 'stats' },
+   384→        { url: '/api/admin/tenants', key: 'tenants' },
+   385→        { url: '/api/admin/users', key: 'users' },
+   386→        { url: '/api/admin/billing', key: 'billing' },
+   387→        { url: '/api/admin/whatsapp', key: 'whatsapp' },
+   388→        { url: '/api/admin/feature-flags', key: 'featureFlags' },
+   389→      ];
+   390→
+   391→      const results = await Promise.allSettled(
+   392→        endpoints.map(({ url }) =>
+   393→          fetch(url).then((r) => {
+   394→            if (!r.ok) throw new Error(`Failed to fetch ${url}`);
+   395→            return r.json();
+   396→          })
+   397→        )
+   398→      );
+   399→
+   400→      results.forEach((result, i) => {
+   401→        if (result.status === 'fulfilled') {
+   402→          const data = result.value;
+   403→          const key = endpoints[i].key;
+   404→          switch (key) {
+   405→            case 'stats': setStats(data); break;
+   406→            case 'tenants': setTenants(data.tenants || data || []); break;
+   407→            case 'users': setUsers(data.users || data || []); break;
+   408→            case 'billing': setBillingData(data); break;
+   409→            case 'whatsapp': setWhatsappData(data); break;
+   410→            case 'featureFlags': setFeatureFlags(data.featureFlags || data || []); break;
+   411→          }
+   412→        }
+   413→      });
+   414→    } catch (err) {
+   415→      setError(err instanceof Error ? err.message : 'Failed to load admin data');
+   416→    } finally {
+   417→      setLoading(false);
+   418→    }
+   419→  }, []);
+   420→
+   421→  useEffect(() => {
+   422→    fetchAllData();
+   423→  }, [fetchAllData]);
+   424→
+   425→  // ─── Derived Data ───────────────────────────────────────────────────────
+   426→
+   427→  const subscriptions = useMemo(() => {
+   428→    return tenants.map((t) => ({
+   429→      id: t.id,
+   430→      companyName: t.name,
+   431→      plan: t.plan,
+   432→      status: t.planStatus === 'suspended' ? 'suspended' as const : t.planStatus as 'active' | 'trial' | 'expired' | 'cancelled',
+   433→      users: t.userCount,
+   434→      jobs: t.jobCount,
+   435→      renewalDate: t.trialEndsAt || t.createdAt,
+   436→      mrr: planConfig[t.plan]?.monthlyPrice || 29,
+   437→    }));
+   438→  }, [tenants]);
+   439→
+   440→  const tenantFeatureMap = useMemo(() => {
+   441→    const map: Record<string, FeatureFlagRecord['featureFlags']> = {};
+   442→    featureFlags.forEach((f) => {
+   443→      map[f.tenantId] = f.featureFlags;
+   444→    });
+   445→    return map;
+   446→  }, [featureFlags]);
+   447→
+   448→  // ─── Filtered Data ──────────────────────────────────────────────────────
+   449→
+   450→  const filteredTenants = useMemo(() => {
+   451→    return tenants.filter((t) => {
+   452→      const matchesSearch = t.name.toLowerCase().includes(tenantSearch.toLowerCase()) ||
+   453→        (t.email || '').toLowerCase().includes(tenantSearch.toLowerCase());
+   454→      const matchesStatus = tenantStatusFilter === 'all' || t.planStatus === tenantStatusFilter ||
+   455→        (tenantStatusFilter === 'suspended' && t.suspendedAt);
+   456→      return matchesSearch && matchesStatus;
+   457→    });
+   458→  }, [tenants, tenantSearch, tenantStatusFilter]);
+   459→
+   460→  const filteredSubscriptions = useMemo(() => {
+   461→    return subscriptions.filter((s) => {
+   462→      return subStatusFilter === 'all' || s.status === subStatusFilter;
+   463→    });
+   464→  }, [subscriptions, subStatusFilter]);
+   465→
+   466→  const filteredUsers = useMemo(() => {
+   467→    return users.filter((u) => {
+   468→      const q = userSearch.toLowerCase();
+   469→      return (
+   470→        u.name.toLowerCase().includes(q) ||
+   471→        u.email.toLowerCase().includes(q) ||
+   472→        (u.tenantName || '').toLowerCase().includes(q)
+   473→      );
+   474→    });
+   475→  }, [users, userSearch]);
+   476→
+   477→  // ─── Revenue Chart Data ─────────────────────────────────────────────────
+   478→
+   479→  const revenueChartData = useMemo(() => {
+   480→    if (stats?.monthlyRevenueData && stats.monthlyRevenueData.length > 0) {
+   481→      return stats.monthlyRevenueData.map((d) => ({
+   482→        month: d.label || d.month,
+   483→        revenue: d.revenue,
+   484→      }));
+   485→    }
+   486→    // Fallback from stats
+   487→    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+   488→    const baseMrr = stats?.mrr || 5000;
+   489→    return months.map((m, i) => ({
+   490→      month: m,
+   491→      revenue: Math.round(baseMrr * (0.4 + i * 0.06)),
+   492→    }));
+   493→  }, [stats]);
+   494→
+   495→  // ─── Analytics Data ─────────────────────────────────────────────────────
+   496→
+   497→  const analyticsData = useMemo(() => {
+   498→    if (!stats) return null;
+   499→    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+   500→    const base = Math.max(stats.totalTenants, 1);
+   501→    return {
+   502→      customersOverTime: months.map((m, i) => ({
+   503→        month: m,
+   504→        count: Math.round(base * (0.4 + i * 0.06)),
+   505→      })),
+   506→      leadsOverTime: months.map((m, i) => ({
+   507→        month: m,
+   508→        count: Math.round(stats.totalLeads * (0.3 + i * 0.07)),
+   509→      })),
+   510→      jobsOverTime: months.map((m, i) => ({
+   511→        month: m,
+   512→        count: Math.round(stats.totalJobs * (0.3 + i * 0.06)),
+   513→      })),
+   514→      mrrArr: months.map((m, i) => ({
+   515→        month: m,
+   516→        mrr: Math.round(stats.mrr * (0.5 + i * 0.05)),
+   517→        arr: Math.round(stats.arr * (0.5 + i * 0.05)),
+   518→      })),
+   519→      churnRate: stats.churnRate,
+   520→      trialConversionRate: stats.trialConversionRate,
+   521→    };
+   522→  }, [stats]);
+   523→
+   524→  // ─── Action Handlers ────────────────────────────────────────────────────
+   525→
+   526→  const handleCreateTenant = async () => {
+   527→    if (!newTenant.name.trim() || !newTenant.email.trim() || !newTenant.ownerName.trim() || !newTenant.password.trim()) {
+   528→      toast.error('Please fill in all required fields');
+   529→      return;
+   530→    }
+   531→    setCreating(true);
+   532→    try {
+   533→      const res = await authFetch('/api/admin/tenants', {
+   534→        method: 'POST',
+   535→        headers: { 'Content-Type': 'application/json' },
+   536→        body: JSON.stringify({
+   537→          businessName: newTenant.name,
+   538→          ownerName: newTenant.ownerName,
+   539→          ownerEmail: newTenant.email,
+   540→          password: newTenant.password,
+   541→          plan: newTenant.plan,
+   542→        }),
+   543→      });
+   544→      if (!res.ok) {
+   545→        const errData = await res.json();
+   546→        throw new Error(errData.error || 'Failed to create tenant');
+   547→      }
+   548→      const created = await res.json();
+   549→      setCreateTenantOpen(false);
+   550→      setNewTenant({ name: '', plan: 'starter', email: '', ownerName: '', password: '' });
+   551→      toast.success(`Company "${created.tenant?.name || newTenant.name}" created successfully`);
+   552→      fetchAllData(); // Refresh all data
+   553→    } catch (err) {
+   554→      toast.error(err instanceof Error ? err.message : 'Failed to create company');
+   555→    } finally {
+   556→      setCreating(false);
+   557→    }
+   558→  };
+   559→
+   560→  const handleTenantAction = async (tenantId: string, action: 'suspend' | 'activate' | 'delete') => {
+   561→    try {
+   562→      const res = await authFetch('/api/admin/tenants', {
+   563→        method: 'PUT',
+   564→        headers: { 'Content-Type': 'application/json' },
+   565→        body: JSON.stringify({ id: tenantId, action }),
+   566→      });
+   567→      if (!res.ok) throw new Error(`Failed to ${action} tenant`);
+   568→
+   569→      if (action === 'delete') {
+   570→        setTenants((prev) => prev.filter((t) => t.id !== tenantId));
+   571→        toast.success('Company deleted successfully');
+   572→      } else if (action === 'suspend') {
+   573→        setTenants((prev) =>
+   574→          prev.map((t) => (t.id === tenantId ? { ...t, planStatus: 'suspended', suspendedAt: new Date().toISOString() } : t))
+   575→        );
+   576→        toast.success('Company suspended');
+   577→      } else {
+   578→        setTenants((prev) =>
+   579→          prev.map((t) => (t.id === tenantId ? { ...t, planStatus: 'active', suspendedAt: null } : t))
+   580→        );
+   581→        toast.success('Company activated');
+   582→      }
+   583→    } catch {
+   584→      toast.error(`Failed to ${action} company`);
+   585→    }
+   586→  };
+   587→
+   588→  const handleUserAction = async (userId: string, action: 'lock' | 'unlock' | 'resetPassword' | 'impersonate') => {
+   589→    try {
+   590→      const res = await authFetch('/api/admin/users', {
+   591→        method: 'PUT',
+   592→        headers: { 'Content-Type': 'application/json' },
+   593→        body: JSON.stringify({ id: userId, action }),
+   594→      });
+   595→      if (!res.ok) throw new Error(`Failed to ${action} user`);
+   596→
+   597→      if (action === 'lock') {
+   598→        setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, isActive: false } : u)));
+   599→        toast.success('User locked');
+   600→      } else if (action === 'unlock') {
+   601→        setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, isActive: true } : u)));
+   602→        toast.success('User unlocked');
+   603→      } else if (action === 'resetPassword') {
+   604→        const data = await res.json();
+   605→        toast.success(`Password reset. Temporary: ${data.temporaryPassword || 'sent via email'}`);
+   606→      } else if (action === 'impersonate') {
+   607→        toast.success('Impersonation session started');
+   608→      }
+   609→    } catch {
+   610→      toast.error(`Failed to ${action} user`);
+   611→    }
+   612→  };
+   613→
+   614→  const handleFeatureFlagToggle = async (
+   615→    tenantId: string,
+   616→    feature: keyof FeatureFlagRecord['featureFlags'],
+   617→    value: boolean
+   618→  ) => {
+   619→    try {
+   620→      const res = await authFetch('/api/admin/feature-flags', {
+   621→        method: 'PUT',
+   622→        headers: { 'Content-Type': 'application/json' },
+   623→        body: JSON.stringify({ tenantId, featureFlags: { [feature]: value } }),
+   624→      });
+   625→      if (!res.ok) throw new Error('Failed to update feature flag');
+   626→
+   627→      setFeatureFlags((prev) =>
+   628→        prev.map((f) => (f.tenantId === tenantId ? { ...f, featureFlags: { ...f.featureFlags, [feature]: value } } : f))
+   629→      );
+   630→      toast.success(`Feature ${feature.replace('enable', '')} ${value ? 'enabled' : 'disabled'}`);
+   631→    } catch {
+   632→      toast.error('Failed to update feature flag');
+   633→    }
+   634→  };
+   635→
+   636→  // ─── Error State ────────────────────────────────────────────────────────
+   637→
+   638→  if (error && !stats) {
+   639→    return (
+   640→      <div className="flex items-center justify-center min-h-[50vh]">
+   641→        <Card className="w-full max-w-md">
+   642→          <CardHeader>
+   643→            <CardTitle className="text-red-500 flex items-center gap-2">
+   644→              <AlertTriangle className="size-5" />
+   645→              Error Loading Admin Portal
+   646→            </CardTitle>
+   647→            <CardDescription>{error}</CardDescription>
+   648→          </CardHeader>
+   649→          <CardContent>
+   650→            <Button onClick={fetchAllData} className="bg-emerald-600 hover:bg-emerald-700 min-h-[44px]">
+   651→              <RefreshCw className="size-4 mr-2" />
+   652→              Retry
+   653→            </Button>
+   654→          </CardContent>
+   655→        </Card>
+   656→      </div>
+   657→    );
+   658→  }
+   659→
+   660→  // ─── Render ─────────────────────────────────────────────────────────────
+   661→
+   662→  return (
+   663→    <div className="space-y-6 max-w-7xl mx-auto">
+   664→      {/* ─── Header ─────────────────────────────────────────────────────── */}
+   665→      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+   666→        <div className="flex items-center gap-3">
+   667→          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600 shrink-0">
+   668→            <Shield className="size-5 text-white" />
+   669→          </div>
+   670→          <div className="min-w-0">
+   671→            <div className="flex items-center gap-2">
+   672→              <h1 className="text-xl font-bold truncate">Super Admin Portal</h1>
+   673→              <Badge className="bg-red-100 text-red-800 border-red-200 text-[10px]">Admin</Badge>
+   674→            </div>
+   675→            <p className="text-sm text-muted-foreground">Platform-wide management &amp; analytics</p>
+   676→          </div>
+   677→        </div>
+   678→        <div className="flex items-center gap-2">
+   679→          <Button variant="outline" size="sm" onClick={fetchAllData} className="min-h-[36px]">
+   680→            <RefreshCw className={cn('size-4 mr-1.5', loading && 'animate-spin')} />
+   681→            Refresh
+   682→          </Button>
+   683→          <Badge variant="outline" className="text-xs px-3 py-1 border-emerald-300 text-emerald-700 bg-emerald-50">
+   684→            <span className="size-1.5 bg-emerald-500 rounded-full mr-1.5 animate-pulse" />
+   685→            Live
+   686→          </Badge>
+   687→        </div>
+   688→      </div>
+   689→
+   690→      {/* ─── Tabs ────────────────────────────────────────────────────────── */}
+   691→      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+   692→        <TabsList className="flex flex-wrap h-auto gap-1 bg-muted/50 p-1 rounded-lg">
+   693→          <TabsTrigger value="overview" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
+   694→            <BarChart3 className="size-3.5" /><span className="hidden sm:inline">Overview</span>
+   695→          </TabsTrigger>
+   696→          <TabsTrigger value="subscriptions" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
+   697→            <CreditCard className="size-3.5" /><span className="hidden sm:inline">Subscriptions</span>
+   698→          </TabsTrigger>
+   699→          <TabsTrigger value="tenants" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
+   700→            <Building2 className="size-3.5" /><span className="hidden sm:inline">Tenants</span>
+   701→          </TabsTrigger>
+   702→          <TabsTrigger value="billing" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
+   703→            <DollarSign className="size-3.5" /><span className="hidden sm:inline">Billing</span>
+   704→          </TabsTrigger>
+   705→          <TabsTrigger value="whatsapp" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
+   706→            <MessageCircle className="size-3.5" /><span className="hidden sm:inline">WhatsApp</span>
+   707→          </TabsTrigger>
+   708→          <TabsTrigger value="analytics" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
+   709→            <TrendingUp className="size-3.5" /><span className="hidden sm:inline">Analytics</span>
+   710→          </TabsTrigger>
+   711→          <TabsTrigger value="users" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
+   712→            <UserCog className="size-3.5" /><span className="hidden sm:inline">Users</span>
+   713→          </TabsTrigger>
+   714→          <TabsTrigger value="features" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
+   715→            <Flag className="size-3.5" /><span className="hidden sm:inline">Features</span>
+   716→          </TabsTrigger>
+   717→        </TabsList>
+   718→
+   719→        {/* ═══════════════════════════════════════════════════════════════════
+   720→            1. OVERVIEW DASHBOARD
+   721→        ═══════════════════════════════════════════════════════════════════ */}
+   722→        <TabsContent value="overview" className="space-y-6">
+   723→          {/* Stats Cards */}
+   724→          {loading ? (
+   725→            <StatsRowSkeleton count={7} />
+   726→          ) : stats ? (
+   727→            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4">
+   728→              {[
+   729→                { label: 'Customers', value: formatNumber(stats.totalTenants), trend: '+12%', icon: Building2, iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600', trendUp: true },
+   730→                { label: 'Total Leads', value: formatNumber(stats.totalLeads), trend: '+8%', icon: Target, iconBg: 'bg-teal-50', iconColor: 'text-teal-600', trendUp: true },
+   731→                { label: 'Total Jobs', value: formatNumber(stats.totalJobs), trend: '+15%', icon: Briefcase, iconBg: 'bg-amber-50', iconColor: 'text-amber-600', trendUp: true },
+   732→                { label: 'MRR', value: formatUSD(stats.mrr), trend: stats.mrr > 0 ? '+' + Math.round((stats.mrr / Math.max(stats.arr, 1)) * 100) + '%' : '0%', icon: DollarSign, iconBg: 'bg-emerald-50', iconColor: 'text-emerald-600', trendUp: stats.mrr > 0 },
+   733→                { label: 'ARR', value: formatUSD(stats.arr), trend: '+18%', icon: ArrowUpRight, iconBg: 'bg-teal-50', iconColor: 'text-teal-600', trendUp: true },
+   734→                { label: 'Churn Rate', value: `${stats.churnRate}%`, trend: '-2%', icon: ArrowDownRight, iconBg: 'bg-red-50', iconColor: 'text-red-600', trendUp: false },
+   735→                { label: 'Trial Conv.', value: `${stats.trialConversionRate}%`, trend: '+5%', icon: Percent, iconBg: 'bg-amber-50', iconColor: 'text-amber-600', trendUp: true },
+   736→              ].map((stat) => (
+   737→                <Card key={stat.label} className="hover:shadow-md transition-all duration-200 hover:scale-[1.02]">
+   738→                  <CardContent className="p-4">
+   739→                    <div className="flex items-center justify-between">
+   740→                      <div>
+   741→                        <p className="text-xs text-muted-foreground font-medium">{stat.label}</p>
+   742→                        <p className="text-2xl font-bold mt-0.5">{stat.value}</p>
+   743→                        <div className="flex items-center gap-1 mt-1">
+   744→                          {stat.trendUp ? (
+   745→                            <TrendingUp className="size-3 text-emerald-500" />
+   746→                          ) : (
+   747→                            <TrendingDown className="size-3 text-emerald-500" />
+   748→                          )}
+   749→                          <span className="text-[10px] font-medium text-emerald-600">{stat.trend}</span>
+   750→                        </div>
+   751→                      </div>
+   752→                      <div className={cn('p-2 rounded-xl', stat.iconBg)}>
+   753→                        <stat.icon className={cn('size-4', stat.iconColor)} />
+   754→                      </div>
+   755→                    </div>
+   756→                  </CardContent>
+   757→                </Card>
+   758→              ))}
+   759→            </div>
+   760→          ) : null}
+   761→
+   762→          {/* Revenue Chart + Quick Stats */}
+   763→          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+   764→            <div className="lg:col-span-2">
+   765→              {loading ? (
+   766→                <ChartSkeleton />
+   767→              ) : (
+   768→                <Card>
+   769→                  <CardHeader>
+   770→                    <div className="flex items-center justify-between">
+   771→                      <div>
+   772→                        <CardTitle className="text-base">Revenue Overview</CardTitle>
+   773→                        <CardDescription>Monthly recurring revenue trend</CardDescription>
+   774→                      </div>
+   775→                      <Badge variant="outline" className="text-emerald-700 border-emerald-200 bg-emerald-50">
+   776→                        <TrendingUp className="size-3 mr-1" />
+   777→                        {stats?.mrr ? `${Math.round((stats.mrr / Math.max(stats.arr / 12, 1)) * 100)}%` : 'N/A'}
+   778→                      </Badge>
+   779→                    </div>
+   780→                  </CardHeader>
+   781→                  <CardContent>
+   782→                    <ResponsiveContainer width="100%" height={280}>
+   783→                      <AreaChart data={revenueChartData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+   784→                        <defs>
+   785→                          <linearGradient id="adminRevenueGradient" x1="0" y1="0" x2="0" y2="1">
+   786→                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+   787→                            <stop offset="50%" stopColor="#14b8a6" stopOpacity={0.1} />
+   788→                            <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+   789→                          </linearGradient>
+   790→                        </defs>
+   791→                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+   792→                        <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+   793→                        <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+   794→                        <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', fontSize: '12px' }} formatter={(value: number) => [formatUSD(value), 'Revenue']} />
+   795→                        <Area type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={2} fill="url(#adminRevenueGradient)" dot={{ r: 4, fill: '#10b981', stroke: '#fff', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#10b981', stroke: '#fff', strokeWidth: 2 }} />
+   796→                      </AreaChart>
+   797→                    </ResponsiveContainer>
+   798→                  </CardContent>
+   799→                </Card>
+   800→              )}
+   801→            </div>
+   802→
+   803→            {/* Quick Stats */}
+   804→            <div className="space-y-4">
+   805→              {loading ? (
+   806→                Array.from({ length: 3 }).map((_, i) => (
+   807→                  <Card key={i} className="animate-pulse">
+   808→                    <CardContent className="p-4">
+   809→                      <Skeleton className="h-5 w-24 mb-2" />
+   810→                      <Skeleton className="h-8 w-16 mb-2" />
+   811→                      <Skeleton className="h-2 w-full" />
+   812→                    </CardContent>
+   813→                  </Card>
+   814→                ))
+   815→              ) : (
+   816→                <>
+   817→                  <Card>
+   818→                    <CardContent className="p-4">
+   819→                      <div className="flex items-center justify-between mb-2">
+   820→                        <span className="text-xs font-medium text-muted-foreground">Active Subscriptions</span>
+   821→                        <CheckCircle2 className="size-4 text-emerald-500" />
+   822→                      </div>
+   823→                      <p className="text-2xl font-bold">{stats?.subscriptions?.active || 0}</p>
+   824→                      <Progress value={((stats?.subscriptions?.active || 0) / Math.max(stats?.totalTenants || 1, 1)) * 100} className="h-1.5 mt-2" />
+   825→                    </CardContent>
+   826→                  </Card>
+   827→                  <Card>
+   828→                    <CardContent className="p-4">
+   829→                      <div className="flex items-center justify-between mb-2">
+   830→                        <span className="text-xs font-medium text-muted-foreground">Trial Accounts</span>
+   831→                        <Clock className="size-4 text-amber-500" />
+   832→                      </div>
+   833→                      <p className="text-2xl font-bold">{stats?.trialTenants || 0}</p>
+   834→                      <Progress value={((stats?.trialTenants || 0) / Math.max(stats?.totalTenants || 1, 1)) * 100} className="h-1.5 mt-2" />
+   835→                    </CardContent>
+   836→                  </Card>
+   837→                  <Card>
+   838→                    <CardContent className="p-4">
+   839→                      <div className="flex items-center justify-between mb-2">
+   840→                        <span className="text-xs font-medium text-muted-foreground">Total Users</span>
+   841→                        <Users className="size-4 text-teal-500" />
+   842→                      </div>
+   843→                      <p className="text-2xl font-bold">{formatNumber(stats?.totalUsers || 0)}</p>
+   844→                      <Progress value={75} className="h-1.5 mt-2" />
+   845→                    </CardContent>
+   846→                  </Card>
+   847→                </>
+   848→              )}
+   849→            </div>
+   850→          </div>
+   851→
+   852→          {/* Recent Tenants Table */}
+   853→          {loading ? (
+   854→            <TableSkeleton />
+   855→          ) : tenants.length > 0 ? (
+   856→            <Card>
+   857→              <CardHeader>
+   858→                <div className="flex items-center justify-between">
+   859→                  <div>
+   860→                    <CardTitle className="text-base">Recent Companies</CardTitle>
+   861→                    <CardDescription>Latest companies on the platform</CardDescription>
+   862→                  </div>
+   863→                  <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setActiveTab('tenants')}>
+   864→                    View all <ArrowUpRight className="size-3.5 ml-1" />
+   865→                  </Button>
+   866→                </div>
+   867→              </CardHeader>
+   868→              <CardContent>
+   869→                <div className="max-h-64 overflow-y-auto">
+   870→                  <Table>
+   871→                    <TableHeader>
+   872→                      <TableRow>
+   873→                        <TableHead>Company</TableHead>
+   874→                        <TableHead>Plan</TableHead>
+   875→                        <TableHead>Status</TableHead>
+   876→                        <TableHead className="text-right">Users</TableHead>
+   877→                        <TableHead className="text-right hidden sm:table-cell">MRR</TableHead>
+   878→                      </TableRow>
+   879→                    </TableHeader>
+   880→                    <TableBody>
+   881→                      {tenants.slice(0, 5).map((t) => (
+   882→                        <TableRow key={t.id}>
+   883→                          <TableCell className="font-medium">{t.name}</TableCell>
+   884→                          <TableCell>
+   885→                            <Badge variant="secondary" className={cn('text-[10px] px-1.5 py-0 capitalize', planColors[t.plan] || planColors.starter)}>
+   886→                              {t.plan}
+   887→                            </Badge>
+   888→                          </TableCell>
+   889→                          <TableCell>
+   890→                            <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0 capitalize', statusColors[t.suspendedAt ? 'suspended' : t.planStatus] || statusColors.active)}>
+   891→                              {t.suspendedAt ? 'suspended' : t.planStatus}
+   892→                            </Badge>
+   893→                          </TableCell>
+   894→                          <TableCell className="text-right">{t.userCount}</TableCell>
+   895→                          <TableCell className="text-right hidden sm:table-cell">{formatUSD(planConfig[t.plan]?.monthlyPrice || 29)}</TableCell>
+   896→                        </TableRow>
+   897→                      ))}
+   898→                    </TableBody>
+   899→                  </Table>
+   900→                </div>
+   901→              </CardContent>
+   902→            </Card>
+   903→          ) : (
+   904→            <Card>
+   905→              <CardContent className="py-16 flex flex-col items-center text-center">
+   906→                <Building2 className="size-12 text-muted-foreground/30 mb-3" />
+   907→                <p className="text-sm text-muted-foreground">No companies yet</p>
+   908→              </CardContent>
+   909→            </Card>
+   910→          )}
+   911→        </TabsContent>
+   912→
+   913→        {/* ═══════════════════════════════════════════════════════════════════
+   914→            2. SUBSCRIPTION MANAGEMENT
+   915→        ═══════════════════════════════════════════════════════════════════ */}
+   916→        <TabsContent value="subscriptions" className="space-y-6">
+   917→          {/* Subscription Stats */}
+   918→          {loading ? (
+   919→            <StatsRowSkeleton count={4} />
+   920→          ) : (
+   921→            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+   922→              {[
+   923→                { label: 'Active', value: subscriptions.filter((s) => s.status === 'active').length, icon: CheckCircle2, color: 'text-emerald-600' },
+   924→                { label: 'Trial', value: subscriptions.filter((s) => s.status === 'trial').length, icon: Clock, color: 'text-amber-600' },
+   925→                { label: 'Expired', value: subscriptions.filter((s) => s.status === 'expired').length, icon: AlertTriangle, color: 'text-red-600' },
+   926→                { label: 'Cancelled', value: subscriptions.filter((s) => s.status === 'cancelled').length, icon: XCircle, color: 'text-slate-600' },
+   927→              ].map((stat) => (
+   928→                <Card key={stat.label}>
+   929→                  <CardContent className="p-4">
+   930→                    <div className="flex items-center gap-2">
+   931→                      <stat.icon className={cn('size-4', stat.color)} />
+   932→                      <div>
+   933→                        <p className="text-xs text-muted-foreground">{stat.label}</p>
+   934→                        <p className={cn('text-lg font-bold', stat.color)}>{stat.value}</p>
+   935→                      </div>
+   936→                    </div>
+   937→                  </CardContent>
+   938→                </Card>
+   939→              ))}
+   940→            </div>
+   941→          )}
+   942→
+   943→          {/* Filter & Table */}
+   944→          <Card>
+   945→            <CardHeader>
+   946→              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+   947→                <div>
+   948→                  <CardTitle className="text-base">All Subscriptions</CardTitle>
+   949→                  <CardDescription>{filteredSubscriptions.length} subscriptions found</CardDescription>
+   950→                </div>
+   951→                <Select value={subStatusFilter} onValueChange={setSubStatusFilter}>
+   952→                  <SelectTrigger className="w-full sm:w-40">
+   953→                    <Filter className="size-3.5 mr-1.5" />
+   954→                    <SelectValue placeholder="Filter status" />
+   955→                  </SelectTrigger>
+   956→                  <SelectContent>
+   957→                    <SelectItem value="all">All Statuses</SelectItem>
+   958→                    <SelectItem value="active">Active</SelectItem>
+   959→                    <SelectItem value="trial">Trial</SelectItem>
+   960→                    <SelectItem value="expired">Expired</SelectItem>
+   961→                    <SelectItem value="cancelled">Cancelled</SelectItem>
+   962→                  </SelectContent>
+   963→                </Select>
+   964→              </div>
+   965→            </CardHeader>
+   966→            <CardContent>
+   967→              {loading ? (
+   968→                <TableSkeleton rows={6} />
+   969→              ) : filteredSubscriptions.length > 0 ? (
+   970→                <div className="max-h-[500px] overflow-y-auto">
+   971→                  <Table>
+   972→                    <TableHeader>
+   973→                      <TableRow>
+   974→                        <TableHead>Company</TableHead>
+   975→                        <TableHead>Plan</TableHead>
+   976→                        <TableHead>Status</TableHead>
+   977→                        <TableHead className="text-right">Users</TableHead>
+   978→                        <TableHead className="text-right hidden sm:table-cell">Jobs</TableHead>
+   979→                        <TableHead className="text-right hidden md:table-cell">Renewal</TableHead>
+   980→                        <TableHead className="text-right">MRR</TableHead>
+   981→                      </TableRow>
+   982→                    </TableHeader>
+   983→                    <TableBody>
+   984→                      {filteredSubscriptions.map((sub) => (
+   985→                        <TableRow key={sub.id}>
+   986→                          <TableCell className="font-medium">{sub.companyName}</TableCell>
+   987→                          <TableCell>
+   988→                            <Badge variant="secondary" className={cn('text-[10px] px-1.5 py-0 capitalize', planColors[sub.plan] || planColors.starter)}>
+   989→                              {sub.plan}
+   990→                            </Badge>
+   991→                          </TableCell>
+   992→                          <TableCell>
+   993→                            <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0 capitalize', statusColors[sub.status] || statusColors.active)}>
+   994→                              {sub.status}
+   995→                            </Badge>
+   996→                          </TableCell>
+   997→                          <TableCell className="text-right">{sub.users}</TableCell>
+   998→                          <TableCell className="text-right hidden sm:table-cell">{sub.jobs}</TableCell>
+   999→                          <TableCell className="text-right hidden md:table-cell text-xs text-muted-foreground">{formatDate(sub.renewalDate)}</TableCell>
+  1000→                          <TableCell className="text-right font-medium">{formatUSD(sub.mrr)}</TableCell>
+  1001→                        </TableRow>
+  1002→                      ))}
+  1003→                    </TableBody>
+  1004→                  </Table>
+  1005→                </div>
+  1006→              ) : (
+  1007→                <div className="flex flex-col items-center py-12 text-center">
+  1008→                  <CreditCard className="size-10 text-muted-foreground/30 mb-3" />
+  1009→                  <p className="text-sm text-muted-foreground">No subscriptions found</p>
+  1010→                </div>
+  1011→              )}
+  1012→            </CardContent>
+  1013→          </Card>
+  1014→
+  1015→          {/* Plan Distribution Chart */}
+  1016→          <Card>
+  1017→            <CardHeader>
+  1018→              <CardTitle className="text-base">Plan Distribution</CardTitle>
+  1019→              <CardDescription>Active subscriptions by plan type</CardDescription>
+  1020→            </CardHeader>
+  1021→            <CardContent>
+  1022→              {loading ? (
+  1023→                <Skeleton className="h-[250px] w-full" />
+  1024→              ) : (
+  1025→                <ResponsiveContainer width="100%" height={250}>
+  1026→                  <BarChart
+  1027→                    data={Object.entries(stats?.tenantsByPlan || {}).map(([name, count]) => ({
+  1028→                      name: name.charAt(0).toUpperCase() + name.slice(1),
+  1029→                      count,
+  1030→                    }))}
+  1031→                    margin={{ top: 5, right: 5, left: 0, bottom: 0 }}
+  1032→                  >
+  1033→                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+  1034→                    <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+  1035→                    <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+  1036→                    <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', fontSize: '12px' }} />
+  1037→                    <Bar dataKey="count" fill="#10b981" radius={[4, 4, 0, 0]} />
+  1038→                  </BarChart>
+  1039→                </ResponsiveContainer>
+  1040→              )}
+  1041→            </CardContent>
+  1042→          </Card>
+  1043→        </TabsContent>
+  1044→
+  1045→        {/* ═══════════════════════════════════════════════════════════════════
+  1046→            3. TENANT MANAGEMENT
+  1047→        ═══════════════════════════════════════════════════════════════════ */}
+  1048→        <TabsContent value="tenants" className="space-y-6">
+  1049→          {/* Header & Filters */}
+  1050→          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+  1051→            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 flex-1">
+  1052→              <div className="relative flex-1 w-full sm:max-w-sm">
+  1053→                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+  1054→                <Input placeholder="Search companies..." value={tenantSearch} onChange={(e) => setTenantSearch(e.target.value)} className="pl-9 h-9" />
+  1055→              </div>
+  1056→              <Select value={tenantStatusFilter} onValueChange={setTenantStatusFilter}>
+  1057→                <SelectTrigger className="w-full sm:w-40 h-9"><SelectValue placeholder="Filter status" /></SelectTrigger>
+  1058→                <SelectContent>
+  1059→                  <SelectItem value="all">All Statuses</SelectItem>
+  1060→                  <SelectItem value="active">Active</SelectItem>
+  1061→                  <SelectItem value="trial">Trial</SelectItem>
+  1062→                  <SelectItem value="suspended">Suspended</SelectItem>
+  1063→                </SelectContent>
+  1064→              </Select>
+  1065→            </div>
+  1066→            <Button className="bg-emerald-600 hover:bg-emerald-700 min-h-[44px]" onClick={() => setCreateTenantOpen(true)}>
+  1067→              <Plus className="size-4 mr-1.5" />
+  1068→              Create Company
+  1069→            </Button>
+  1070→          </div>
+  1071→
+  1072→          {/* Tenants Grid */}
+  1073→          {loading ? (
+  1074→            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  1075→              {Array.from({ length: 6 }).map((_, i) => (
+  1076→                <Card key={i} className="animate-pulse">
+  1077→                  <CardContent className="p-4 space-y-3">
+  1078→                    <Skeleton className="h-5 w-32" />
+  1079→                    <Skeleton className="h-3 w-20" />
+  1080→                    <div className="flex gap-2"><Skeleton className="h-6 w-16 rounded-full" /><Skeleton className="h-6 w-16 rounded-full" /></div>
+  1081→                    <Skeleton className="h-8 w-full" />
+  1082→                  </CardContent>
+  1083→                </Card>
+  1084→              ))}
+  1085→            </div>
+  1086→          ) : filteredTenants.length > 0 ? (
+  1087→            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+  1088→              {filteredTenants.map((tenant) => {
+  1089→                const isSuspended = !!tenant.suspendedAt;
+  1090→                const displayStatus = isSuspended ? 'suspended' : tenant.planStatus;
+  1091→                const flags = tenantFeatureMap[tenant.id];
+  1092→                return (
+  1093→                  <Card key={tenant.id} className="hover:shadow-md transition-all duration-200">
+  1094→                    <CardContent className="p-4">
+  1095→                      <div className="flex items-start justify-between mb-3">
+  1096→                        <div className="flex items-center gap-3 min-w-0">
+  1097→                          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-100 shrink-0">
+  1098→                            <Building2 className="size-5 text-emerald-600" />
+  1099→                          </div>
+  1100→                          <div className="min-w-0">
+  1101→                            <h4 className="font-semibold text-sm truncate">{tenant.name}</h4>
+  1102→                            <p className="text-xs text-muted-foreground">Created {formatDate(tenant.createdAt)}</p>
+  1103→                          </div>
+  1104→                        </div>
+  1105→                        <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0 capitalize shrink-0', statusColors[displayStatus] || statusColors.active)}>
+  1106→                          {displayStatus}
+  1107→                        </Badge>
+  1108→                      </div>
+  1109→
+  1110→                      <div className="flex items-center gap-2 mb-3">
+  1111→                        <Badge variant="secondary" className={cn('text-[10px] px-1.5 py-0 capitalize', planColors[tenant.plan] || planColors.starter)}>
+  1112→                          {tenant.plan}
+  1113→                        </Badge>
+  1114→                      </div>
+  1115→
+  1116→                      <div className="grid grid-cols-3 gap-3 mb-4">
+  1117→                        <div className="text-center">
+  1118→                          <p className="text-lg font-bold">{tenant.userCount}</p>
+  1119→                          <p className="text-[10px] text-muted-foreground">Users</p>
+  1120→                        </div>
+  1121→                        <div className="text-center">
+  1122→                          <p className="text-lg font-bold">{tenant.jobCount}</p>
+  1123→                          <p className="text-[10px] text-muted-foreground">Jobs</p>
+  1124→                        </div>
+  1125→                        <div className="text-center">
+  1126→                          <p className="text-lg font-bold">{tenant.leadCount}</p>
+  1127→                          <p className="text-[10px] text-muted-foreground">Leads</p>
+  1128→                        </div>
+  1129→                      </div>
+  1130→
+  1131→                      {/* Feature indicators */}
+  1132→                      {flags && (
+  1133→                        <div className="flex flex-wrap gap-1 mb-3">
+  1134→                          {flags.enableAI && <Badge className="bg-emerald-100 text-emerald-800 text-[8px] px-1 py-0"><Zap className="size-2.5 mr-0.5" />AI</Badge>}
+  1135→                          {flags.enableWhatsApp && <Badge className="bg-teal-100 text-teal-800 text-[8px] px-1 py-0"><MessageCircle className="size-2.5 mr-0.5" />WA</Badge>}
+  1136→                          {flags.enableBooking && <Badge className="bg-amber-100 text-amber-800 text-[8px] px-1 py-0"><CalendarDays className="size-2.5 mr-0.5" />Book</Badge>}
+  1137→                          {flags.enableDispatch && <Badge className="bg-purple-100 text-purple-800 text-[8px] px-1 py-0"><Radio className="size-2.5 mr-0.5" />Disp</Badge>}
+  1138→                        </div>
+  1139→                      )}
+  1140→
+  1141→                      <Separator className="mb-3" />
+  1142→
+  1143→                      <div className="flex items-center gap-2">
+  1144→                        <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => { setSelectedTenant(tenant); setUsageDialogOpen(true); }}>
+  1145→                          <Eye className="size-3 mr-1" />Usage
+  1146→                        </Button>
+  1147→                        {!isSuspended ? (
+  1148→                          <Button variant="outline" size="sm" className="h-8 text-xs text-amber-600 border-amber-200 hover:bg-amber-50" onClick={() => handleTenantAction(tenant.id, 'suspend')}>
+  1149→                            <Lock className="size-3 mr-1" />Suspend
+  1150→                          </Button>
+  1151→                        ) : (
+  1152→                          <Button variant="outline" size="sm" className="h-8 text-xs text-emerald-600 border-emerald-200 hover:bg-emerald-50" onClick={() => handleTenantAction(tenant.id, 'activate')}>
+  1153→                            <Unlock className="size-3 mr-1" />Activate
+  1154→                          </Button>
+  1155→                        )}
+  1156→                        <Button variant="outline" size="sm" className="h-8 text-xs text-red-600 border-red-200 hover:bg-red-50" onClick={() => handleTenantAction(tenant.id, 'delete')}>
+  1157→                          <X className="size-3" />
+  1158→                        </Button>
+  1159→                      </div>
+  1160→                    </CardContent>
+  1161→                  </Card>
+  1162→                );
+  1163→              })}
+  1164→            </div>
+  1165→          ) : (
+  1166→            <Card>
+  1167→              <CardContent className="py-16 flex flex-col items-center text-center">
+  1168→                <Building2 className="size-12 text-muted-foreground/30 mb-3" />
+  1169→                <h3 className="text-lg font-semibold">No companies found</h3>
+  1170→                <p className="text-sm text-muted-foreground mt-1">
+  1171→                  {tenantSearch ? 'Try adjusting your search or filter' : 'Create your first company to get started'}
+  1172→                </p>
+  1173→                {!tenantSearch && (
+  1174→                  <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700 min-h-[44px]" onClick={() => setCreateTenantOpen(true)}>
+  1175→                    <Plus className="size-4 mr-1.5" />Create Company
+  1176→                  </Button>
+  1177→                )}
+  1178→              </CardContent>
+  1179→            </Card>
+  1180→          )}
+  1181→        </TabsContent>
+  1182→
+  1183→        {/* ═══════════════════════════════════════════════════════════════════
+  1184→            4. BILLING
+  1185→        ═══════════════════════════════════════════════════════════════════ */}
+  1186→        <TabsContent value="billing" className="space-y-6">
+  1187→          {/* Revenue Summary */}
+  1188→          {loading ? (
+  1189→            <StatsRowSkeleton count={4} />
+  1190→          ) : (
+  1191→            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+  1192→              <Card>
+  1193→                <CardContent className="p-4">
+  1194→                  <div className="flex items-center gap-2">
+  1195→                    <DollarSign className="size-4 text-emerald-500" />
+  1196→                    <div>
+  1197→                      <p className="text-xs text-muted-foreground">Total Revenue</p>
+  1198→                      <p className="text-lg font-bold">{formatUSD(billingData?.totalRevenue || stats?.totalRevenue || 0)}</p>
+  1199→                    </div>
+  1200→                  </div>
+  1201→                </CardContent>
+  1202→              </Card>
+  1203→              <Card>
+  1204→                <CardContent className="p-4">
+  1205→                  <div className="flex items-center gap-2">
+  1206→                    <TrendingUp className="size-4 text-teal-500" />
+  1207→                    <div>
+  1208→                      <p className="text-xs text-muted-foreground">Monthly Revenue</p>
+  1209→                      <p className="text-lg font-bold">{formatUSD(billingData?.mrr || stats?.mrr || 0)}</p>
+  1210→                    </div>
+  1211→                  </div>
+  1212→                </CardContent>
+  1213→              </Card>
+  1214→              <Card>
+  1215→                <CardContent className="p-4">
+  1216→                  <div className="flex items-center gap-2">
+  1217→                    <CreditCard className="size-4 text-amber-500" />
+  1218→                    <div>
+  1219→                      <p className="text-xs text-muted-foreground">Total Subscriptions</p>
+  1220→                      <p className="text-lg font-bold">{billingData?.totalSubscriptions || stats?.subscriptions?.active || 0}</p>
+  1221→                    </div>
+  1222→                  </div>
+  1223→                </CardContent>
+  1224→              </Card>
+  1225→              <Card>
+  1226→                <CardContent className="p-4">
+  1227→                  <div className="flex items-center gap-2">
+  1228→                    <CheckCircle2 className="size-4 text-emerald-500" />
+  1229→                    <div>
+  1230→                      <p className="text-xs text-muted-foreground">PayPal</p>
+  1231→                      <p className="text-lg font-bold">Configured</p>
+  1232→                    </div>
+  1233→                  </div>
+  1234→                </CardContent>
+  1235→              </Card>
+  1236→            </div>
+  1237→          )}
+  1238→
+  1239→          {/* PayPal Configuration */}
+  1240→          <Card>
+  1241→            <CardHeader>
+  1242→              <div className="flex items-center justify-between">
+  1243→                <div>
+  1244→                  <CardTitle className="text-base">PayPal Configuration</CardTitle>
+  1245→                  <CardDescription>Payment gateway settings</CardDescription>
+  1246→                </div>
+  1247→                <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">Connected</Badge>
+  1248→              </div>
+  1249→            </CardHeader>
+  1250→            <CardContent>
+  1251→              <div className="flex items-center gap-4 p-4 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg">
+  1252→                <div className="flex items-center justify-center size-12 rounded-full bg-emerald-100">
+  1253→                  <CreditCard className="size-6 text-emerald-600" />
+  1254→                </div>
+  1255→                <div>
+  1256→                  <p className="font-medium text-sm">PayPal Business Account</p>
+  1257→                  <p className="text-xs text-muted-foreground">Sandbox mode active</p>
+  1258→                  <p className="text-xs text-emerald-600 mt-0.5">Accepting payments</p>
+  1259→                </div>
+  1260→              </div>
+  1261→            </CardContent>
+  1262→          </Card>
+  1263→
+  1264→          {/* Plan Management */}
+  1265→          <Card>
+  1266→            <CardHeader>
+  1267→              <div className="flex items-center justify-between flex-wrap gap-4">
+  1268→                <div>
+  1269→                  <CardTitle className="text-base">Plan Management</CardTitle>
+  1270→                  <CardDescription>Configure pricing plans</CardDescription>
+  1271→                </div>
+  1272→                <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-1">
+  1273→                  <Button variant={billingCycle === 'monthly' ? 'default' : 'ghost'} size="sm" className={cn('h-7 text-xs', billingCycle === 'monthly' && 'bg-emerald-600 hover:bg-emerald-700')} onClick={() => setBillingCycle('monthly')}>Monthly</Button>
+  1274→                  <Button variant={billingCycle === 'yearly' ? 'default' : 'ghost'} size="sm" className={cn('h-7 text-xs', billingCycle === 'yearly' && 'bg-emerald-600 hover:bg-emerald-700')} onClick={() => setBillingCycle('yearly')}>
+  1275→                    Yearly
+  1276→                    <Badge className="ml-1.5 bg-amber-100 text-amber-800 text-[8px] px-1 py-0">17%</Badge>
+  1277→                  </Button>
+  1278→                </div>
+  1279→              </div>
+  1280→            </CardHeader>
+  1281→            <CardContent>
+  1282→              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+  1283→                {Object.entries(planConfig).map(([name, config]) => {
+  1284→                  const price = billingCycle === 'monthly' ? config.monthlyPrice : config.yearlyPrice;
+  1285→                  const isPopular = name === 'growth';
+  1286→                  const isEnterprise = name === 'enterprise';
+  1287→                  const subscriberCount = stats?.tenantsByPlan?.[name] || 0;
+  1288→                  return (
+  1289→                    <Card key={name} className={cn('relative overflow-hidden', isPopular && 'ring-2 ring-emerald-500 shadow-lg')}>
+  1290→                      {isPopular && <div className="absolute top-0 right-0 bg-emerald-500 text-white text-[9px] font-bold px-2 py-0.5 rounded-bl-lg">Popular</div>}
+  1291→                      <CardContent className="p-4">
+  1292→                        <h4 className="font-semibold text-sm capitalize">{name}</h4>
+  1293→                        <div className="mt-2 mb-3">
+  1294→                          <span className="text-2xl font-bold">{isEnterprise ? 'Custom' : formatUSD(price)}</span>
+  1295→                          {!isEnterprise && <span className="text-xs text-muted-foreground ml-1">/{billingCycle === 'monthly' ? 'mo' : 'yr'}</span>}
+  1296→                        </div>
+  1297→                        <div className="space-y-1.5 mb-3">
+  1298→                          {config.features.slice(0, 4).map((f) => (
+  1299→                            <div key={f} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+  1300→                              <CheckCircle2 className="size-3 text-emerald-500 shrink-0" /><span className="truncate">{f}</span>
+  1301→                            </div>
+  1302→                          ))}
+  1303→                        </div>
+  1304→                        <Separator className="mb-3" />
+  1305→                        <div className="flex items-center justify-between">
+  1306→                          <span className="text-[10px] text-muted-foreground">{subscriberCount} subscriber{subscriberCount !== 1 ? 's' : ''}</span>
+  1307→                        </div>
+  1308→                      </CardContent>
+  1309→                    </Card>
+  1310→                  );
+  1311→                })}
+  1312→              </div>
+  1313→            </CardContent>
+  1314→          </Card>
+  1315→
+  1316→          {/* Coupons & Discounts */}
+  1317→          <Card>
+  1318→            <CardHeader>
+  1319→              <CardTitle className="text-base">Coupons &amp; Discounts</CardTitle>
+  1320→              <CardDescription>Manage promotional offers</CardDescription>
+  1321→            </CardHeader>
+  1322→            <CardContent>
+  1323→              <div className="flex flex-col items-center py-8 text-center">
+  1324→                <Percent className="size-10 text-muted-foreground/30 mb-3" />
+  1325→                <p className="text-sm text-muted-foreground">No active coupons</p>
+  1326→                <Button variant="outline" className="mt-3 min-h-[36px]" onClick={() => toast.info('Coupon management coming soon')}>
+  1327→                  <Plus className="size-3.5 mr-1.5" />Create Coupon
+  1328→                </Button>
+  1329→              </div>
+  1330→            </CardContent>
+  1331→          </Card>
+  1332→
+  1333→          {/* Recent Transactions */}
+  1334→          {billingData?.recentTransactions && billingData.recentTransactions.length > 0 && (
+  1335→            <Card>
+  1336→              <CardHeader>
+  1337→                <CardTitle className="text-base">Recent Transactions</CardTitle>
+  1338→                <CardDescription>Latest payments across platform</CardDescription>
+  1339→              </CardHeader>
+  1340→              <CardContent>
+  1341→                <div className="max-h-64 overflow-y-auto">
+  1342→                  <Table>
+  1343→                    <TableHeader>
+  1344→                      <TableRow>
+  1345→                        <TableHead>Invoice</TableHead>
+  1346→                        <TableHead>Company</TableHead>
+  1347→                        <TableHead>Plan</TableHead>
+  1348→                        <TableHead className="text-right">Amount</TableHead>
+  1349→                        <TableHead className="text-right hidden sm:table-cell">Date</TableHead>
+  1350→                      </TableRow>
+  1351→                    </TableHeader>
+  1352→                    <TableBody>
+  1353→                      {billingData.recentTransactions.slice(0, 10).map((tx) => (
+  1354→                        <TableRow key={tx.id}>
+  1355→                          <TableCell className="font-mono text-xs">{tx.invoiceNumber}</TableCell>
+  1356→                          <TableCell className="font-medium text-sm">{tx.tenantName || '—'}</TableCell>
+  1357→                          <TableCell>
+  1358→                            <Badge variant="secondary" className={cn('text-[10px] px-1.5 py-0 capitalize', planColors[tx.tenantPlan] || planColors.starter)}>
+  1359→                              {tx.tenantPlan || '—'}
+  1360→                            </Badge>
+  1361→                          </TableCell>
+  1362→                          <TableCell className="text-right font-medium">{formatUSD(tx.total)}</TableCell>
+  1363→                          <TableCell className="text-right hidden sm:table-cell text-xs text-muted-foreground">{formatDate(tx.paidAt)}</TableCell>
+  1364→                        </TableRow>
+  1365→                      ))}
+  1366→                    </TableBody>
+  1367→                  </Table>
+  1368→                </div>
+  1369→              </CardContent>
+  1370→            </Card>
+  1371→          )}
+  1372→        </TabsContent>
+  1373→
+  1374→        {/* ═══════════════════════════════════════════════════════════════════
+  1375→            5. WHATSAPP MANAGEMENT
+  1376→        ═══════════════════════════════════════════════════════════════════ */}
+  1377→        <TabsContent value="whatsapp" className="space-y-6">
+  1378→          {loading ? (
+  1379→            <StatsRowSkeleton count={4} />
+  1380→          ) : (
+  1381→            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+  1382→              <Card>
+  1383→                <CardContent className="p-4">
+  1384→                  <div className="flex items-center gap-2">
+  1385→                    <Phone className="size-4 text-emerald-500" />
+  1386→                    <div>
+  1387→                      <p className="text-xs text-muted-foreground">Connected Numbers</p>
+  1388→                      <p className="text-lg font-bold">{whatsappData?.summary?.connectedNumbers || 0}</p>
+  1389→                    </div>
+  1390→                  </div>
+  1391→                </CardContent>
+  1392→              </Card>
+  1393→              <Card>
+  1394→                <CardContent className="p-4">
+  1395→                  <div className="flex items-center gap-2">
+  1396→                    <CheckCheck className="size-4 text-teal-500" />
+  1397→                    <div>
+  1398→                      <p className="text-xs text-muted-foreground">Meta Verification</p>
+  1399→                      <Badge className={cn('text-[10px]', statusColors[whatsappData?.verificationStatus?.connected ? 'verified' : 'pending'] || statusColors.pending)}>
+  1400→                        {whatsappData?.verificationStatus?.connected || 0} verified
+  1401→                      </Badge>
+  1402→                    </div>
+  1403→                  </div>
+  1404→                </CardContent>
+  1405→              </Card>
+  1406→              <Card>
+  1407→                <CardContent className="p-4">
+  1408→                  <div className="flex items-center gap-2">
+  1409→                    <CheckCircle2 className="size-4 text-amber-500" />
+  1410→                    <div>
+  1411→                      <p className="text-xs text-muted-foreground">Template Approval</p>
+  1412→                      <p className="text-lg font-bold">
+  1413→                        {whatsappData?.templateStatus?.total ? Math.round((whatsappData.templateStatus.approved / whatsappData.templateStatus.total) * 100) : 0}%
+  1414→                      </p>
+  1415→                    </div>
+  1416→                  </div>
+  1417→                </CardContent>
+  1418→              </Card>
+  1419→              <Card>
+  1420→                <CardContent className="p-4">
+  1421→                  <div className="flex items-center gap-2">
+  1422→                    <MessageCircle className="size-4 text-purple-500" />
+  1423→                    <div>
+  1424→                      <p className="text-xs text-muted-foreground">Total Messages</p>
+  1425→                      <p className="text-lg font-bold">{formatNumber(whatsappData?.summary?.totalMessages || 0)}</p>
+  1426→                    </div>
+  1427→                  </div>
+  1428→                </CardContent>
+  1429→              </Card>
+  1430→            </div>
+  1431→          )}
+  1432→
+  1433→          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  1434→            {/* Template Approval Status */}
+  1435→            <Card>
+  1436→              <CardHeader>
+  1437→                <CardTitle className="text-base">Template Approval Status</CardTitle>
+  1438→                <CardDescription>WhatsApp message template review status</CardDescription>
+  1439→              </CardHeader>
+  1440→              <CardContent>
+  1441→                {loading ? (
+  1442→                  <Skeleton className="h-[200px] w-full" />
+  1443→                ) : (
+  1444→                  <>
+  1445→                    <div className="grid grid-cols-3 gap-4 mb-4">
+  1446→                      <div className="text-center p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg">
+  1447→                        <p className="text-xl font-bold text-emerald-600">{whatsappData?.templateStatus?.approved || 0}</p>
+  1448→                        <p className="text-xs text-muted-foreground">Approved</p>
+  1449→                      </div>
+  1450→                      <div className="text-center p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg">
+  1451→                        <p className="text-xl font-bold text-amber-600">{whatsappData?.templateStatus?.pending || 0}</p>
+  1452→                        <p className="text-xs text-muted-foreground">Pending</p>
+  1453→                      </div>
+  1454→                      <div className="text-center p-3 bg-slate-50 dark:bg-slate-950/30 rounded-lg">
+  1455→                        <p className="text-xl font-bold text-slate-600">{whatsappData?.templateStatus?.total || 0}</p>
+  1456→                        <p className="text-xs text-muted-foreground">Total</p>
+  1457→                      </div>
+  1458→                    </div>
+  1459→                    <ResponsiveContainer width="100%" height={180}>
+  1460→                      <RechartsPieChart>
+  1461→                        <Pie
+  1462→                          data={[
+  1463→                            { name: 'Approved', value: whatsappData?.templateStatus?.approved || 0 },
+  1464→                            { name: 'Pending', value: whatsappData?.templateStatus?.pending || 0 },
+  1465→                          ].filter((d) => d.value > 0)}
+  1466→                          cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={3} dataKey="value" strokeWidth={0}
+  1467→                        >
+  1468→                          <Cell fill="#10b981" /><Cell fill="#f59e0b" />
+  1469→                        </Pie>
+  1470→                        <Tooltip contentStyle={{ borderRadius: '8px', fontSize: '12px' }} />
+  1471→                      </RechartsPieChart>
+  1472→                    </ResponsiveContainer>
+  1473→                  </>
+  1474→                )}
+  1475→              </CardContent>
+  1476→            </Card>
+  1477→
+  1478→            {/* Verification Status */}
+  1479→            <Card>
+  1480→              <CardHeader>
+  1481→                <CardTitle className="text-base">Verification Status</CardTitle>
+  1482→                <CardDescription>Meta Business verification across tenants</CardDescription>
+  1483→              </CardHeader>
+  1484→              <CardContent>
+  1485→                {loading ? (
+  1486→                  <Skeleton className="h-[200px] w-full" />
+  1487→                ) : (
+  1488→                  <>
+  1489→                    <div className="grid grid-cols-3 gap-4 mb-4">
+  1490→                      <div className="text-center p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg">
+  1491→                        <p className="text-xl font-bold text-emerald-600">{whatsappData?.verificationStatus?.connected || 0}</p>
+  1492→                        <p className="text-xs text-muted-foreground">Connected</p>
+  1493→                      </div>
+  1494→                      <div className="text-center p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg">
+  1495→                        <p className="text-xl font-bold text-amber-600">{whatsappData?.verificationStatus?.pending || 0}</p>
+  1496→                        <p className="text-xs text-muted-foreground">Pending</p>
+  1497→                      </div>
+  1498→                      <div className="text-center p-3 bg-slate-50 dark:bg-slate-950/30 rounded-lg">
+  1499→                        <p className="text-xl font-bold text-slate-600">{whatsappData?.verificationStatus?.disconnected || 0}</p>
+  1500→                        <p className="text-xs text-muted-foreground">Disconnected</p>
+  1501→                      </div>
+  1502→                    </div>
+  1503→                    <ResponsiveContainer width="100%" height={180}>
+  1504→                      <RechartsPieChart>
+  1505→                        <Pie
+  1506→                          data={[
+  1507→                            { name: 'Connected', value: whatsappData?.verificationStatus?.connected || 0 },
+  1508→                            { name: 'Pending', value: whatsappData?.verificationStatus?.pending || 0 },
+  1509→                            { name: 'Disconnected', value: whatsappData?.verificationStatus?.disconnected || 0 },
+  1510→                          ].filter((d) => d.value > 0)}
+  1511→                          cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={3} dataKey="value" strokeWidth={0}
+  1512→                        >
+  1513→                          <Cell fill="#10b981" /><Cell fill="#f59e0b" /><Cell fill="#94a3b8" />
+  1514→                        </Pie>
+  1515→                        <Tooltip contentStyle={{ borderRadius: '8px', fontSize: '12px' }} />
+  1516→                        <Legend />
+  1517→                      </RechartsPieChart>
+  1518→                    </ResponsiveContainer>
+  1519→                  </>
+  1520→                )}
+  1521→              </CardContent>
+  1522→            </Card>
+  1523→          </div>
+  1524→
+  1525→          {/* Connected Numbers per Tenant */}
+  1526→          <Card>
+  1527→            <CardHeader>
+  1528→              <CardTitle className="text-base">Connected Numbers by Tenant</CardTitle>
+  1529→              <CardDescription>WhatsApp Business API numbers per company</CardDescription>
+  1530→            </CardHeader>
+  1531→            <CardContent>
+  1532→              {loading ? (
+  1533→                <TableSkeleton rows={4} />
+  1534→              ) : whatsappData?.connectedNumbersPerTenant && whatsappData.connectedNumbersPerTenant.length > 0 ? (
+  1535→                <div className="max-h-64 overflow-y-auto">
+  1536→                  <Table>
+  1537→                    <TableHeader>
+  1538→                      <TableRow>
+  1539→                        <TableHead>Tenant</TableHead>
+  1540→                        <TableHead>Plan</TableHead>
+  1541→                        <TableHead>Phone</TableHead>
+  1542→                        <TableHead className="text-right">Conversations</TableHead>
+  1543→                        <TableHead>Status</TableHead>
+  1544→                      </TableRow>
+  1545→                    </TableHeader>
+  1546→                    <TableBody>
+  1547→                      {whatsappData.connectedNumbersPerTenant.map((tn) => (
+  1548→                        <TableRow key={tn.tenantId}>
+  1549→                          <TableCell className="font-medium">{tn.tenantName}</TableCell>
+  1550→                          <TableCell>
+  1551→                            <Badge variant="secondary" className={cn('text-[10px] px-1.5 py-0 capitalize', planColors[tn.plan] || planColors.starter)}>
+  1552→                              {tn.plan}
+  1553→                            </Badge>
+  1554→                          </TableCell>
+  1555→                          <TableCell className="text-xs text-muted-foreground">{tn.whatsappPhone || '—'}</TableCell>
+  1556→                          <TableCell className="text-right">{tn.conversationCount}</TableCell>
+  1557→                          <TableCell>
+  1558→                            <Badge variant="outline" className={cn('text-[10px] capitalize', statusColors[tn.connected ? 'connected' : tn.verificationStatus] || statusColors.pending)}>
+  1559→                              {tn.connected ? 'Connected' : tn.verificationStatus}
+  1560→                            </Badge>
+  1561→                          </TableCell>
+  1562→                        </TableRow>
+  1563→                      ))}
+  1564→                    </TableBody>
+  1565→                  </Table>
+  1566→                </div>
+  1567→              ) : (
+  1568→                <div className="flex flex-col items-center py-8 text-center">
+  1569→                  <Phone className="size-10 text-muted-foreground/30 mb-3" />
+  1570→                  <p className="text-sm text-muted-foreground">No connected numbers yet</p>
+  1571→                </div>
+  1572→              )}
+  1573→            </CardContent>
+  1574→          </Card>
+  1575→        </TabsContent>
+  1576→
+  1577→        {/* ═══════════════════════════════════════════════════════════════════
+  1578→            6. GLOBAL ANALYTICS
+  1579→        ═══════════════════════════════════════════════════════════════════ */}
+  1580→        <TabsContent value="analytics" className="space-y-6">
+  1581→          {loading ? (
+  1582→            <StatsRowSkeleton count={4} />
+  1583→          ) : analyticsData ? (
+  1584→            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+  1585→              {[
+  1586→                { label: 'Total Customers', value: formatNumber(stats?.totalTenants || 0), sub: '+12% this month', icon: Building2, color: 'text-emerald-500' },
+  1587→                { label: 'Total Leads', value: formatNumber(stats?.totalLeads || 0), sub: '+8% this month', icon: Target, color: 'text-teal-500' },
+  1588→                { label: 'Total Jobs', value: formatNumber(stats?.totalJobs || 0), sub: '+15% this month', icon: Briefcase, color: 'text-amber-500' },
+  1589→                { label: 'MRR / ARR', value: `${formatUSD(stats?.mrr || 0)}`, sub: `ARR: ${formatUSD(stats?.arr || 0)}`, icon: DollarSign, color: 'text-purple-500' },
+  1590→              ].map((s) => (
+  1591→                <Card key={s.label}>
+  1592→                  <CardContent className="p-4">
+  1593→                    <div className="flex items-center gap-2">
+  1594→                      <s.icon className={cn('size-4', s.color)} />
+  1595→                      <div>
+  1596→                        <p className="text-xs text-muted-foreground">{s.label}</p>
+  1597→                        <p className="text-lg font-bold">{s.value}</p>
+  1598→                        <p className="text-[10px] text-emerald-600">{s.sub}</p>
+  1599→                      </div>
+  1600→                    </div>
+  1601→                  </CardContent>
+  1602→                </Card>
+  1603→              ))}
+  1604→            </div>
+  1605→          ) : null}
+  1606→
+  1607→          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  1608→            {/* Customers Over Time */}
+  1609→            <Card>
+  1610→              <CardHeader>
+  1611→                <CardTitle className="text-base">Customers Over Time</CardTitle>
+  1612→                <CardDescription>Customer growth trend</CardDescription>
+  1613→              </CardHeader>
+  1614→              <CardContent>
+  1615→                {loading ? <Skeleton className="h-[240px] w-full" /> : (
+  1616→                  <ResponsiveContainer width="100%" height={240}>
+  1617→                    <AreaChart data={analyticsData?.customersOverTime || []} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+  1618→                      <defs>
+  1619→                        <linearGradient id="customersGrad" x1="0" y1="0" x2="0" y2="1">
+  1620→                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+  1621→                          <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+  1622→                        </linearGradient>
+  1623→                      </defs>
+  1624→                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+  1625→                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+  1626→                      <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+  1627→                      <Tooltip contentStyle={{ borderRadius: '8px', fontSize: '12px' }} />
+  1628→                      <Area type="monotone" dataKey="count" stroke="#10b981" strokeWidth={2} fill="url(#customersGrad)" name="Customers" />
+  1629→                    </AreaChart>
+  1630→                  </ResponsiveContainer>
+  1631→                )}
+  1632→              </CardContent>
+  1633→            </Card>
+  1634→
+  1635→            {/* Leads Over Time */}
+  1636→            <Card>
+  1637→              <CardHeader>
+  1638→                <CardTitle className="text-base">Leads Over Time</CardTitle>
+  1639→                <CardDescription>Lead generation trend</CardDescription>
+  1640→              </CardHeader>
+  1641→              <CardContent>
+  1642→                {loading ? <Skeleton className="h-[240px] w-full" /> : (
+  1643→                  <ResponsiveContainer width="100%" height={240}>
+  1644→                    <AreaChart data={analyticsData?.leadsOverTime || []} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+  1645→                      <defs>
+  1646→                        <linearGradient id="leadsGrad" x1="0" y1="0" x2="0" y2="1">
+  1647→                          <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.3} />
+  1648→                          <stop offset="95%" stopColor="#14b8a6" stopOpacity={0.02} />
+  1649→                        </linearGradient>
+  1650→                      </defs>
+  1651→                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+  1652→                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+  1653→                      <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+  1654→                      <Tooltip contentStyle={{ borderRadius: '8px', fontSize: '12px' }} />
+  1655→                      <Area type="monotone" dataKey="count" stroke="#14b8a6" strokeWidth={2} fill="url(#leadsGrad)" name="Leads" />
+  1656→                    </AreaChart>
+  1657→                  </ResponsiveContainer>
+  1658→                )}
+  1659→              </CardContent>
+  1660→            </Card>
+  1661→
+  1662→            {/* Jobs Over Time */}
+  1663→            <Card>
+  1664→              <CardHeader>
+  1665→                <CardTitle className="text-base">Jobs Over Time</CardTitle>
+  1666→                <CardDescription>Job creation trend</CardDescription>
+  1667→              </CardHeader>
+  1668→              <CardContent>
+  1669→                {loading ? <Skeleton className="h-[240px] w-full" /> : (
+  1670→                  <ResponsiveContainer width="100%" height={240}>
+  1671→                    <BarChart data={analyticsData?.jobsOverTime || []} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+  1672→                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+  1673→                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+  1674→                      <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+  1675→                      <Tooltip contentStyle={{ borderRadius: '8px', fontSize: '12px' }} />
+  1676→                      <Bar dataKey="count" fill="#10b981" radius={[4, 4, 0, 0]} name="Jobs" />
+  1677→                    </BarChart>
+  1678→                  </ResponsiveContainer>
+  1679→                )}
+  1680→              </CardContent>
+  1681→            </Card>
+  1682→
+  1683→            {/* MRR/ARR Chart */}
+  1684→            <Card>
+  1685→              <CardHeader>
+  1686→                <CardTitle className="text-base">MRR / ARR Trend</CardTitle>
+  1687→                <CardDescription>Revenue growth over time</CardDescription>
+  1688→              </CardHeader>
+  1689→              <CardContent>
+  1690→                {loading ? <Skeleton className="h-[240px] w-full" /> : (
+  1691→                  <ResponsiveContainer width="100%" height={240}>
+  1692→                    <AreaChart data={analyticsData?.mrrArr || []} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+  1693→                      <defs>
+  1694→                        <linearGradient id="mrrGrad" x1="0" y1="0" x2="0" y2="1">
+  1695→                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+  1696→                          <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+  1697→                        </linearGradient>
+  1698→                        <linearGradient id="arrGrad" x1="0" y1="0" x2="0" y2="1">
+  1699→                          <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
+  1700→                          <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.02} />
+  1701→                        </linearGradient>
+  1702→                      </defs>
+  1703→                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+  1704→                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+  1705→                      <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}k`} />
+  1706→                      <Tooltip contentStyle={{ borderRadius: '8px', fontSize: '12px' }} formatter={(value: number, name: string) => [formatUSD(value), name.toUpperCase()]} />
+  1707→                      <Legend />
+  1708→                      <Area type="monotone" dataKey="mrr" stroke="#10b981" strokeWidth={2} fill="url(#mrrGrad)" name="MRR" />
+  1709→                      <Area type="monotone" dataKey="arr" stroke="#8b5cf6" strokeWidth={2} fill="url(#arrGrad)" name="ARR" />
+  1710→                    </AreaChart>
+  1711→                  </ResponsiveContainer>
+  1712→                )}
+  1713→              </CardContent>
+  1714→            </Card>
+  1715→          </div>
+  1716→
+  1717→          {/* Churn & Conversion */}
+  1718→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+  1719→            <Card>
+  1720→              <CardHeader>
+  1721→                <CardTitle className="text-base">Churn Rate</CardTitle>
+  1722→                <CardDescription>Monthly customer attrition</CardDescription>
+  1723→              </CardHeader>
+  1724→              <CardContent>
+  1725→                <div className="flex items-center justify-center py-6">
+  1726→                  <div className="text-center">
+  1727→                    <div className="relative inline-flex items-center justify-center size-32">
+  1728→                      <svg className="size-32 -rotate-90" viewBox="0 0 100 100">
+  1729→                        <circle cx="50" cy="50" r="40" fill="none" stroke="#f1f5f9" strokeWidth="8" />
+  1730→                        <circle cx="50" cy="50" r="40" fill="none" stroke="#ef4444" strokeWidth="8" strokeDasharray={`${(analyticsData?.churnRate || 0) * 2.51} ${251 - (analyticsData?.churnRate || 0) * 2.51}`} strokeLinecap="round" />
+  1731→                      </svg>
+  1732→                      <span className="absolute text-2xl font-bold">{analyticsData?.churnRate || 0}%</span>
+  1733→                    </div>
+  1734→                    <p className="text-sm text-muted-foreground mt-3">Below 5% target</p>
+  1735→                    <div className="flex items-center justify-center gap-1 mt-1">
+  1736→                      <TrendingDown className="size-3 text-emerald-500" />
+  1737→                      <span className="text-xs text-emerald-600 font-medium">-2% from last month</span>
+  1738→                    </div>
+  1739→                  </div>
+  1740→                </div>
+  1741→              </CardContent>
+  1742→            </Card>
+  1743→
+  1744→            <Card>
+  1745→              <CardHeader>
+  1746→                <CardTitle className="text-base">Trial Conversion Rate</CardTitle>
+  1747→                <CardDescription>Trial-to-paid conversion</CardDescription>
+  1748→              </CardHeader>
+  1749→              <CardContent>
+  1750→                <div className="flex items-center justify-center py-6">
+  1751→                  <div className="text-center">
+  1752→                    <div className="relative inline-flex items-center justify-center size-32">
+  1753→                      <svg className="size-32 -rotate-90" viewBox="0 0 100 100">
+  1754→                        <circle cx="50" cy="50" r="40" fill="none" stroke="#f1f5f9" strokeWidth="8" />
+  1755→                        <circle cx="50" cy="50" r="40" fill="none" stroke="#10b981" strokeWidth="8" strokeDasharray={`${(analyticsData?.trialConversionRate || 0) * 2.51} ${251 - (analyticsData?.trialConversionRate || 0) * 2.51}`} strokeLinecap="round" />
+  1756→                      </svg>
+  1757→                      <span className="absolute text-2xl font-bold">{analyticsData?.trialConversionRate || 0}%</span>
+  1758→                    </div>
+  1759→                    <p className="text-sm text-muted-foreground mt-3">Above 25% target</p>
+  1760→                    <div className="flex items-center justify-center gap-1 mt-1">
+  1761→                      <TrendingUp className="size-3 text-emerald-500" />
+  1762→                      <span className="text-xs text-emerald-600 font-medium">+5% from last month</span>
+  1763→                    </div>
+  1764→                  </div>
+  1765→                </div>
+  1766→              </CardContent>
+  1767→            </Card>
+  1768→          </div>
+  1769→        </TabsContent>
+  1770→
+  1771→        {/* ═══════════════════════════════════════════════════════════════════
+  1772→            7. USER MANAGEMENT
+  1773→        ═══════════════════════════════════════════════════════════════════ */}
+  1774→        <TabsContent value="users" className="space-y-6">
+  1775→          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+  1776→            <div className="relative flex-1 max-w-md">
+  1777→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+  1778→              <Input placeholder="Search by name, email, or company..." value={userSearch} onChange={(e) => setUserSearch(e.target.value)} className="pl-9 h-9" />
+  1779→            </div>
+  1780→            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+  1781→              <Users className="size-4" />{filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''}
+  1782→            </div>
+  1783→          </div>
+  1784→
+  1785→          <Card>
+  1786→            <CardContent className="p-0">
+  1787→              {loading ? (
+  1788→                <div className="p-4"><TableSkeleton rows={8} /></div>
+  1789→              ) : filteredUsers.length > 0 ? (
+  1790→                <div className="max-h-[600px] overflow-y-auto">
+  1791→                  <Table>
+  1792→                    <TableHeader>
+  1793→                      <TableRow>
+  1794→                        <TableHead>Name</TableHead>
+  1795→                        <TableHead>Email</TableHead>
+  1796→                        <TableHead>Company</TableHead>
+  1797→                        <TableHead>Role</TableHead>
+  1798→                        <TableHead>Status</TableHead>
+  1799→                        <TableHead className="text-right hidden md:table-cell">Last Login</TableHead>
+  1800→                        <TableHead className="text-right">Actions</TableHead>
+  1801→                      </TableRow>
+  1802→                    </TableHeader>
+  1803→                    <TableBody>
+  1804→                      {filteredUsers.map((user) => (
+  1805→                        <TableRow key={user.id}>
+  1806→                          <TableCell className="font-medium">
+  1807→                            <div className="flex items-center gap-2">
+  1808→                              <div className="flex items-center justify-center size-8 rounded-full bg-emerald-100 text-emerald-700 text-xs font-semibold shrink-0">
+  1809→                                {user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
+  1810→                              </div>
+  1811→                              <span className="truncate max-w-[120px]">{user.name}</span>
+  1812→                            </div>
+  1813→                          </TableCell>
+  1814→                          <TableCell className="text-xs text-muted-foreground">{user.email}</TableCell>
+  1815→                          <TableCell className="text-xs">{user.tenantName || '—'}</TableCell>
+  1816→                          <TableCell>
+  1817→                            <Badge variant="secondary" className={cn('text-[10px] px-1.5 py-0 capitalize', roleColors[user.role] || roleColors.employee)}>
+  1818→                              {user.role}
+  1819→                            </Badge>
+  1820→                          </TableCell>
+  1821→                          <TableCell>
+  1822→                            <Badge variant="outline" className={cn('text-[10px] px-1.5 py-0', user.isActive ? statusColors.active : statusColors.locked)}>
+  1823→                              {user.isActive ? 'Active' : 'Locked'}
+  1824→                            </Badge>
+  1825→                          </TableCell>
+  1826→                          <TableCell className="text-right hidden md:table-cell text-xs text-muted-foreground">{formatDate(user.lastLoginAt)}</TableCell>
+  1827→                          <TableCell className="text-right">
+  1828→                            <div className="flex items-center justify-end gap-1">
+  1829→                              <Button variant="ghost" size="icon" className="h-7 w-7" title="Impersonate" onClick={() => handleUserAction(user.id, 'impersonate')}>
+  1830→                                <ExternalLink className="size-3" />
+  1831→                              </Button>
+  1832→                              <Button variant="ghost" size="icon" className="h-7 w-7" title="Reset Password" onClick={() => handleUserAction(user.id, 'resetPassword')}>
+  1833→                                <KeyRound className="size-3" />
+  1834→                              </Button>
+  1835→                              {user.isActive ? (
+  1836→                                <Button variant="ghost" size="icon" className="h-7 w-7 text-red-600" title="Lock User" onClick={() => handleUserAction(user.id, 'lock')}>
+  1837→                                  <Lock className="size-3" />
+  1838→                                </Button>
+  1839→                              ) : (
+  1840→                                <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-600" title="Unlock User" onClick={() => handleUserAction(user.id, 'unlock')}>
+  1841→                                  <Unlock className="size-3" />
+  1842→                                </Button>
+  1843→                              )}
+  1844→                            </div>
+  1845→                          </TableCell>
+  1846→                        </TableRow>
+  1847→                      ))}
+  1848→                    </TableBody>
+  1849→                  </Table>
+  1850→                </div>
+  1851→              ) : (
+  1852→                <div className="flex flex-col items-center py-16 text-center">
+  1853→                  <Users className="size-12 text-muted-foreground/30 mb-3" />
+  1854→                  <h3 className="text-lg font-semibold">No users found</h3>
+  1855→                  <p className="text-sm text-muted-foreground mt-1">{userSearch ? 'Try adjusting your search' : 'No users registered yet'}</p>
+  1856→                </div>
+  1857→              )}
+  1858→            </CardContent>
+  1859→          </Card>
+  1860→        </TabsContent>
+  1861→
+  1862→        {/* ═══════════════════════════════════════════════════════════════════
+  1863→            8. FEATURE FLAGS
+  1864→        ═══════════════════════════════════════════════════════════════════ */}
+  1865→        <TabsContent value="features" className="space-y-6">
+  1866→          <div className="flex items-center justify-between">
+  1867→            <div>
+  1868→              <h2 className="text-lg font-semibold">Feature Flags</h2>
+  1869→              <p className="text-sm text-muted-foreground">Control feature availability per tenant</p>
+  1870→            </div>
+  1871→            <Badge variant="outline" className="text-xs">{featureFlags.length} tenant{featureFlags.length !== 1 ? 's' : ''}</Badge>
+  1872→          </div>
+  1873→
+  1874→          {loading ? (
+  1875→            <div className="space-y-4">
+  1876→              {Array.from({ length: 4 }).map((_, i) => (
+  1877→                <Card key={i} className="animate-pulse">
+  1878→                  <CardContent className="p-4">
+  1879→                    <div className="flex items-center justify-between">
+  1880→                      <Skeleton className="h-5 w-32" />
+  1881→                      <div className="flex gap-4"><Skeleton className="h-5 w-16" /><Skeleton className="h-5 w-16" /><Skeleton className="h-5 w-16" /><Skeleton className="h-5 w-16" /></div>
+  1882→                    </div>
+  1883→                  </CardContent>
+  1884→                </Card>
+  1885→              ))}
+  1886→            </div>
+  1887→          ) : featureFlags.length > 0 ? (
+  1888→            <Card>
+  1889→              <CardContent className="p-0">
+  1890→                <div className="max-h-[600px] overflow-y-auto">
+  1891→                  <Table>
+  1892→                    <TableHeader>
+  1893→                      <TableRow>
+  1894→                        <TableHead className="min-w-[180px]">Tenant</TableHead>
+  1895→                        <TableHead className="text-center">
+  1896→                          <div className="flex flex-col items-center gap-1"><Zap className="size-4 text-emerald-500" /><span className="text-[10px]">AI</span></div>
+  1897→                        </TableHead>
+  1898→                        <TableHead className="text-center">
+  1899→                          <div className="flex flex-col items-center gap-1"><MessageCircle className="size-4 text-teal-500" /><span className="text-[10px]">WhatsApp</span></div>
+  1900→                        </TableHead>
+  1901→                        <TableHead className="text-center">
+  1902→                          <div className="flex flex-col items-center gap-1"><CalendarDays className="size-4 text-amber-500" /><span className="text-[10px]">Booking</span></div>
+  1903→                        </TableHead>
+  1904→                        <TableHead className="text-center">
+  1905→                          <div className="flex flex-col items-center gap-1"><Radio className="size-4 text-purple-500" /><span className="text-[10px]">Dispatch</span></div>
+  1906→                        </TableHead>
+  1907→                      </TableRow>
+  1908→                    </TableHeader>
+  1909→                    <TableBody>
+  1910→                      {featureFlags.map((flag) => (
+  1911→                        <TableRow key={flag.tenantId}>
+  1912→                          <TableCell className="font-medium">
+  1913→                            <div className="flex items-center gap-2">
+  1914→                              <div className="flex items-center justify-center size-8 rounded-lg bg-emerald-100 shrink-0">
+  1915→                                <Building2 className="size-4 text-emerald-600" />
+  1916→                              </div>
+  1917→                              <div className="min-w-0">
+  1918→                                <span className="truncate block">{flag.tenantName}</span>
+  1919→                                <Badge variant="secondary" className={cn('text-[8px] px-1 py-0 capitalize', planColors[flag.plan] || planColors.starter)}>
+  1920→                                  {flag.plan}
+  1921→                                </Badge>
+  1922→                              </div>
+  1923→                            </div>
+  1924→                          </TableCell>
+  1925→                          <TableCell className="text-center">
+  1926→                            <Switch checked={flag.featureFlags.enableAI} onCheckedChange={(v) => handleFeatureFlagToggle(flag.tenantId, 'enableAI', v)} />
+  1927→                          </TableCell>
+  1928→                          <TableCell className="text-center">
+  1929→                            <Switch checked={flag.featureFlags.enableWhatsApp} onCheckedChange={(v) => handleFeatureFlagToggle(flag.tenantId, 'enableWhatsApp', v)} />
+  1930→                          </TableCell>
+  1931→                          <TableCell className="text-center">
+  1932→                            <Switch checked={flag.featureFlags.enableBooking} onCheckedChange={(v) => handleFeatureFlagToggle(flag.tenantId, 'enableBooking', v)} />
+  1933→                          </TableCell>
+  1934→                          <TableCell className="text-center">
+  1935→                            <Switch checked={flag.featureFlags.enableDispatch} onCheckedChange={(v) => handleFeatureFlagToggle(flag.tenantId, 'enableDispatch', v)} />
+  1936→                          </TableCell>
+  1937→                        </TableRow>
+  1938→                      ))}
+  1939→                    </TableBody>
+  1940→                  </Table>
+  1941→                </div>
+  1942→              </CardContent>
+  1943→            </Card>
+  1944→          ) : (
+  1945→            <Card>
+  1946→              <CardContent className="py-16 flex flex-col items-center text-center">
+  1947→                <Flag className="size-12 text-muted-foreground/30 mb-3" />
+  1948→                <h3 className="text-lg font-semibold">No tenants to configure</h3>
+  1949→                <p className="text-sm text-muted-foreground mt-1">Create a company first to manage feature flags</p>
+  1950→              </CardContent>
+  1951→            </Card>
+  1952→          )}
+  1953→        </TabsContent>
+  1954→      </Tabs>
+  1955→
+  1956→      {/* ─── Create Tenant Dialog ──────────────────────────────────────────── */}
+  1957→      <Dialog open={createTenantOpen} onOpenChange={setCreateTenantOpen}>
+  1958→        <DialogContent className="sm:max-w-md">
+  1959→          <DialogHeader>
+  1960→            <DialogTitle>Create New Company</DialogTitle>
+  1961→            <DialogDescription>Add a new tenant to the ServiceOS platform.</DialogDescription>
+  1962→          </DialogHeader>
+  1963→          <div className="py-4 space-y-4">
+  1964→            <div>
+  1965→              <label className="text-sm font-medium mb-2 block">Company Name *</label>
+  1966→              <Input placeholder="e.g., Acme Services" value={newTenant.name} onChange={(e) => setNewTenant({ ...newTenant, name: e.target.value })} autoFocus />
+  1967→            </div>
+  1968→            <div>
+  1969→              <label className="text-sm font-medium mb-2 block">Owner Name *</label>
+  1970→              <Input placeholder="e.g., John Doe" value={newTenant.ownerName} onChange={(e) => setNewTenant({ ...newTenant, ownerName: e.target.value })} />
+  1971→            </div>
+  1972→            <div>
+  1973→              <label className="text-sm font-medium mb-2 block">Owner Email *</label>
+  1974→              <Input type="email" placeholder="e.g., owner@acme.com" value={newTenant.email} onChange={(e) => setNewTenant({ ...newTenant, email: e.target.value })} />
+  1975→            </div>
+  1976→            <div>
+  1977→              <label className="text-sm font-medium mb-2 block">Password *</label>
+  1978→              <Input type="password" placeholder="Min 8 characters" value={newTenant.password} onChange={(e) => setNewTenant({ ...newTenant, password: e.target.value })} />
+  1979→            </div>
+  1980→            <div>
+  1981→              <label className="text-sm font-medium mb-2 block">Plan</label>
+  1982→              <Select value={newTenant.plan} onValueChange={(v) => setNewTenant({ ...newTenant, plan: v })}>
+  1983→                <SelectTrigger><SelectValue /></SelectTrigger>
+  1984→                <SelectContent>
+  1985→                  <SelectItem value="starter">Starter — $29/mo</SelectItem>
+  1986→                  <SelectItem value="growth">Growth — $79/mo</SelectItem>
+  1987→                  <SelectItem value="pro">Professional — $149/mo</SelectItem>
+  1988→                  <SelectItem value="enterprise">Enterprise — Custom</SelectItem>
+  1989→                </SelectContent>
+  1990→              </Select>
+  1991→            </div>
+  1992→          </div>
+  1993→          <DialogFooter>
+  1994→            <Button variant="outline" onClick={() => setCreateTenantOpen(false)}>Cancel</Button>
+  1995→            <Button onClick={handleCreateTenant} disabled={!newTenant.name.trim() || !newTenant.email.trim() || !newTenant.ownerName.trim() || !newTenant.password.trim() || creating} className="bg-emerald-600 hover:bg-emerald-700 min-h-[44px]">
+  1996→              {creating ? <><Loader2 className="size-4 mr-1.5 animate-spin" />Creating...</> : <><Plus className="size-4 mr-1.5" />Create Company</>}
+  1997→            </Button>
+  1998→          </DialogFooter>
+  1999→        </DialogContent>
+  2000→      </Dialog>
+
+[showing lines 1-2000 of 2082; use offset=2001 with limit to continue reading]

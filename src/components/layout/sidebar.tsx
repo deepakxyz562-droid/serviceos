@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAppStore } from '@/store/app-store';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { ViewType } from '@/types/workflow';
@@ -35,28 +35,26 @@ import {
   RefreshCw,
   Bot,
   Sparkles,
-  Wand2,
   ClipboardList,
   GitBranch,
   Kanban,
   RadioTower,
-  Shield,
-  Receipt,
-  Zap,
-  Search,
-  CalendarCheck,
-  Calendar,
-  Contact,
-  Star,
-  BookOpen,
-  FolderOpen,
   ShieldCheck,
   ScrollText,
   UserCog,
   Eye,
   MessageSquare,
   Send,
-  LayoutTemplate,
+  CalendarCheck,
+  Calendar,
+  Contact,
+  Star,
+  BookOpen,
+  Receipt,
+  Zap,
+  Search,
+  Shield,
+  CreditCard as CreditCardIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -128,6 +126,16 @@ const ownerNavSections: NavSection[] = [
     ],
   },
   {
+    title: 'Operations',
+    items: [
+      { view: 'booking', label: 'Booking', icon: CalendarCheck },
+      { view: 'calendar', label: 'Calendar', icon: Calendar },
+      { view: 'jobs', label: 'Jobs', icon: Briefcase },
+      { view: 'dispatch', label: 'Dispatch', icon: Radio },
+      { view: 'employees', label: 'Employees', icon: UserCog },
+    ],
+  },
+  {
     title: 'Communication',
     items: [
       { view: 'inbox', label: 'WhatsApp Inbox', icon: Inbox, badge: 'New' },
@@ -135,6 +143,7 @@ const ownerNavSections: NavSection[] = [
       { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
       { view: 'marketingTemplates', label: 'Templates', icon: MessageSquare },
       { view: 'omnichannel', label: 'Omnichannel', icon: RadioTower },
+      { view: 'communicationProviders', label: 'Providers', icon: KeyRound },
     ],
   },
   {
@@ -149,21 +158,12 @@ const ownerNavSections: NavSection[] = [
     ],
   },
   {
-    title: 'Operations',
-    items: [
-      { view: 'booking', label: 'Booking', icon: CalendarCheck },
-      { view: 'calendar', label: 'Calendar', icon: Calendar },
-      { view: 'jobs', label: 'Jobs', icon: Briefcase },
-      { view: 'dispatch', label: 'Dispatch', icon: Radio },
-      { view: 'employees', label: 'Employees', icon: UserCog },
-    ],
-  },
-  {
     title: 'Finance',
     items: [
       { view: 'quotes', label: 'Quotes', icon: Receipt },
       { view: 'invoices', label: 'Invoices', icon: FileText },
       { view: 'billing', label: 'Billing', icon: CreditCard },
+      { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },
     ],
   },
   {
@@ -190,8 +190,6 @@ const ownerNavSections: NavSection[] = [
       { view: 'retargeting', label: 'Retargeting', icon: RefreshCw },
       { view: 'segments', label: 'Segments', icon: Filter },
       { view: 'marketingAnalytics', label: 'Analytics', icon: BarChart3 },
-      { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },
-      { view: 'communicationProviders', label: 'Providers', icon: KeyRound },
       { view: 'reviews', label: 'Reviews', icon: Star },
     ],
   },
@@ -213,11 +211,67 @@ const employeeNavSections: NavSection[] = [
   },
 ];
 
+// ─── Dedicated Superadmin Navigation ────────────────────────────────────────
+// Superadmin has a completely different sidebar focused on platform management
+
 const superadminNavSections: NavSection[] = [
   {
-    title: 'Super Admin',
+    title: 'Admin Panel',
     items: [
-      { view: 'superadmin', label: 'Admin Panel', icon: ShieldCheck, badge: 'SA' },
+      { view: 'superadmin', label: 'Dashboard', icon: ShieldCheck, badge: 'SA' },
+    ],
+  },
+  {
+    title: 'Platform',
+    items: [
+      { view: 'dashboard', label: 'App Dashboard', icon: LayoutDashboard },
+    ],
+  },
+  {
+    title: 'CRM',
+    items: [
+      { view: 'leads', label: 'Leads', icon: Target },
+      { view: 'contacts', label: 'Contacts', icon: Users },
+      { view: 'customers', label: 'Customers', icon: Users },
+      { view: 'salesPipeline', label: 'Sales Pipeline', icon: Kanban },
+    ],
+  },
+  {
+    title: 'Operations',
+    items: [
+      { view: 'booking', label: 'Booking', icon: Calendar },
+      { view: 'jobs', label: 'Jobs', icon: Briefcase },
+      { view: 'employees', label: 'Employees', icon: UserCog },
+    ],
+  },
+  {
+    title: 'Communication',
+    items: [
+      { view: 'inbox', label: 'Inbox', icon: Inbox },
+      { view: 'broadcast', label: 'Broadcast', icon: Radio },
+      { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
+    ],
+  },
+  {
+    title: 'Automation',
+    items: [
+      { view: 'workflows', label: 'Workflows', icon: Workflow },
+      { view: 'triggers', label: 'Triggers', icon: Zap },
+    ],
+  },
+  {
+    title: 'Finance',
+    items: [
+      { view: 'invoices', label: 'Invoices', icon: FileText },
+      { view: 'quotes', label: 'Quotes', icon: Receipt },
+      { view: 'billing', label: 'Billing', icon: CreditCard },
+    ],
+  },
+  {
+    title: 'System',
+    items: [
+      { view: 'settings', label: 'Settings', icon: Settings },
+      { view: 'reports', label: 'Reports', icon: BarChart3 },
     ],
   },
 ];
@@ -268,6 +322,11 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [disabledMenus, setDisabledMenus] = useState<string[]>([]);
+
+  // Compute isSuperAdmin early (needed in effects and rendering)
+  const isSuperAdmin = !!(auth.user?.isSuperAdmin || auth.user?.role === 'superadmin' || auth.user?.role === 'super_admin' || (auth.user?.role === 'admin' && !auth.user?.tenantId));
+  const isEmployee = auth.user?.role === 'employee';
 
   useEffect(() => {
     async function fetchWorkspaces() {
@@ -287,6 +346,26 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     }
     fetchWorkspaces();
   }, []);
+
+  // Fetch menu visibility for non-superadmin users
+  useEffect(() => {
+    if (isSuperAdmin) {
+      setDisabledMenus([]);
+      return;
+    }
+    async function fetchMenuVisibility() {
+      try {
+        const res = await fetch('/api/menu-visibility');
+        if (res.ok) {
+          const data = await res.json();
+          setDisabledMenus(data.disabledMenus || []);
+        }
+      } catch {
+        // Silently fail - all menus remain visible
+      }
+    }
+    fetchMenuVisibility();
+  }, [auth.user?.role, auth.user?.tenantId, auth.user?.isSuperAdmin]);
 
   const handleCreateWorkspace = async () => {
     if (!newWorkspaceName.trim()) return;
@@ -338,17 +417,32 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
   };
 
   const planBadge = getPlanBadge();
-  const isSuperAdmin = auth.user?.role === 'superadmin';
-  const isEmployee = auth.user?.role === 'employee';
 
-  let navSections: NavSection[];
-  if (isSuperAdmin) {
-    navSections = [...superadminNavSections, ...ownerNavSections];
-  } else if (isEmployee) {
-    navSections = employeeNavSections;
-  } else {
-    navSections = ownerNavSections;
-  }
+  // Filter nav sections based on disabled menus
+  const filteredNavSections = useMemo(() => {
+    let sections: NavSection[];
+
+    if (isSuperAdmin) {
+      sections = superadminNavSections;
+    } else if (isEmployee) {
+      sections = employeeNavSections;
+    } else {
+      sections = ownerNavSections;
+    }
+
+    // Filter out disabled menus for non-superadmin users
+    if (!isSuperAdmin && disabledMenus.length > 0) {
+      const disabledSet = new Set(disabledMenus);
+      sections = sections
+        .map((section) => ({
+          ...section,
+          items: section.items.filter((item) => !disabledSet.has(item.view)),
+        }))
+        .filter((section) => section.items.length > 0);
+    }
+
+    return sections;
+  }, [isSuperAdmin, isEmployee, disabledMenus]);
 
   const handleNavClick = (view: ViewType) => {
     setCurrentView(view);
@@ -396,81 +490,102 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
           isMobile || leftSidebarOpen ? 'justify-start gap-3' : 'justify-center'
         )}
       >
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500 shrink-0 shadow-lg shadow-emerald-500/20">
-          <Wrench className="size-5 text-white" />
+        <div className={cn(
+          'flex items-center justify-center w-8 h-8 rounded-lg shrink-0 shadow-lg',
+          isSuperAdmin
+            ? 'bg-red-600 shadow-red-500/20'
+            : 'bg-emerald-500 shadow-emerald-500/20'
+        )}>
+          {isSuperAdmin ? (
+            <ShieldCheck className="size-5 text-white" />
+          ) : (
+            <Wrench className="size-5 text-white" />
+          )}
         </div>
         {(isMobile || leftSidebarOpen) && (
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-lg font-bold tracking-tight whitespace-nowrap text-white">
-              ServiceOS
+              {isSuperAdmin ? 'ServiceOS' : 'ServiceOS'}
             </span>
-            <Badge variant="outline" className={cn('text-[9px] h-4 px-1.5 border shrink-0', planBadge.className)}>
-              {planBadge.label}
+            <Badge variant="outline" className={cn('text-[9px] h-4 px-1.5 border shrink-0', isSuperAdmin ? 'bg-red-500/10 text-red-400 border-red-500/30' : planBadge.className)}>
+              {isSuperAdmin ? 'Admin' : planBadge.label}
             </Badge>
           </div>
         )}
       </div>
 
-      {/* Workspace Switcher */}
-      {(isMobile || leftSidebarOpen) ? (
-        <div className="px-3 py-2 border-b border-slate-800/60 shrink-0">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center w-full gap-2 rounded-lg px-2 py-2 text-sm text-slate-300 hover:bg-slate-800/70 transition-colors">
-                <Building2 className="size-4 text-emerald-400 shrink-0" />
-                <span className="flex-1 truncate text-left">
-                  {auth.tenant?.name || currentWorkspaceName}
-                </span>
-                <ChevronDown className="size-3 text-slate-500 shrink-0" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="right" align="start" className="w-56">
-              <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {workspaces.map((ws) => (
+      {/* Workspace Switcher - only for non-superadmin */}
+      {!isSuperAdmin && (
+        (isMobile || leftSidebarOpen) ? (
+          <div className="px-3 py-2 border-b border-slate-800/60 shrink-0">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center w-full gap-2 rounded-lg px-2 py-2 text-sm text-slate-300 hover:bg-slate-800/70 transition-colors">
+                  <Building2 className="size-4 text-emerald-400 shrink-0" />
+                  <span className="flex-1 truncate text-left">
+                    {auth.tenant?.name || currentWorkspaceName}
+                  </span>
+                  <ChevronDown className="size-3 text-slate-500 shrink-0" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="right" align="start" className="w-56">
+                <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {workspaces.map((ws) => (
+                  <DropdownMenuItem
+                    key={ws.id}
+                    onClick={() => {
+                      setCurrentWorkspaceId(ws.id);
+                      setCurrentWorkspaceName(ws.name);
+                    }}
+                    className="flex items-center gap-2 cursor-pointer"
+                  >
+                    <Building2 className="size-4 text-muted-foreground" />
+                    <span className="flex-1 truncate">{ws.name}</span>
+                    {currentWorkspaceId === ws.id && <Check className="size-4 text-emerald-500" />}
+                  </DropdownMenuItem>
+                ))}
+                {workspaces.length > 0 && <DropdownMenuSeparator />}
                 <DropdownMenuItem
-                  key={ws.id}
-                  onClick={() => {
-                    setCurrentWorkspaceId(ws.id);
-                    setCurrentWorkspaceName(ws.name);
-                  }}
-                  className="flex items-center gap-2 cursor-pointer"
+                  onClick={() => setCreateDialogOpen(true)}
+                  className="flex items-center gap-2 cursor-pointer text-emerald-600 dark:text-emerald-400"
                 >
-                  <Building2 className="size-4 text-muted-foreground" />
-                  <span className="flex-1 truncate">{ws.name}</span>
-                  {currentWorkspaceId === ws.id && <Check className="size-4 text-emerald-500" />}
+                  <Plus className="size-4" />
+                  <span>Create Workspace</span>
                 </DropdownMenuItem>
-              ))}
-              {workspaces.length > 0 && <DropdownMenuSeparator />}
-              <DropdownMenuItem
-                onClick={() => setCreateDialogOpen(true)}
-                className="flex items-center gap-2 cursor-pointer text-emerald-600 dark:text-emerald-400"
-              >
-                <Plus className="size-4" />
-                <span>Create Workspace</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      ) : (
-        <div className="flex justify-center py-2 border-b border-slate-800/60 shrink-0">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button className="flex items-center justify-center w-8 h-8 rounded-lg text-slate-300 hover:bg-slate-800/70 transition-colors">
-                <Building2 className="size-4 text-emerald-400" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={8}>
-              {auth.tenant?.name || currentWorkspaceName}
-            </TooltipContent>
-          </Tooltip>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ) : (
+          <div className="flex justify-center py-2 border-b border-slate-800/60 shrink-0">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button className="flex items-center justify-center w-8 h-8 rounded-lg text-slate-300 hover:bg-slate-800/70 transition-colors">
+                  <Building2 className="size-4 text-emerald-400" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>
+                {auth.tenant?.name || currentWorkspaceName}
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        )
+      )}
+
+      {/* Superadmin tenant indicator */}
+      {isSuperAdmin && (isMobile || leftSidebarOpen) && (
+        <div className="px-3 py-2 border-b border-slate-800/60 shrink-0">
+          <div className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-red-400/80 bg-red-500/5">
+            <Shield className="size-4 shrink-0" />
+            <span className="text-xs font-medium">Platform Administration</span>
+          </div>
         </div>
       )}
 
       {/* Navigation Sections */}
       <ScrollArea className="flex-1 py-2 min-h-0">
         <div className="flex flex-col gap-0.5">
-          {navSections.map((section, sectionIdx) => (
+          {filteredNavSections.map((section, sectionIdx) => (
             <div key={section.title}>
               {(isMobile || leftSidebarOpen) && (
                 <div className="px-4 pt-2.5 pb-1">
@@ -525,7 +640,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
         )}
       >
         <Avatar className="size-8 shrink-0">
-          <AvatarFallback className="bg-emerald-600 text-white text-xs">
+          <AvatarFallback className={cn('text-white text-xs', isSuperAdmin ? 'bg-red-600' : 'bg-emerald-600')}>
             {getUserInitials()}
           </AvatarFallback>
         </Avatar>

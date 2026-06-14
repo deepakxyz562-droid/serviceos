@@ -14,8 +14,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
     ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
   });
   if (!res.ok) {
     const error = await res.json().catch(() => ({ error: res.statusText }));
@@ -362,14 +366,14 @@ export function useAuditLogs(tenantId?: string) {
 export function useTenants() {
   return useQuery({
     queryKey: queryKeys.tenants(),
-    queryFn: () => apiFetch<any[]>('/api/tenants'),
+    queryFn: () => apiFetch<any>('/api/superadmin/tenants'),
   });
 }
 
 export function useTenant(id: string) {
   return useQuery({
     queryKey: queryKeys.tenant(id),
-    queryFn: () => apiFetch<any>(`/api/tenants/${id}`),
+    queryFn: () => apiFetch<any>(`/api/superadmin/tenants/${id}`),
     enabled: !!id,
   });
 }
@@ -377,7 +381,7 @@ export function useTenant(id: string) {
 export function useUpdateTenant() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: any) => apiFetch(`/api/tenants/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    mutationFn: ({ id, ...data }: any) => apiFetch(`/api/superadmin/tenants/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     onSuccess: (_: any, vars: any) => { qc.invalidateQueries({ queryKey: ['tenants'] }); qc.invalidateQueries({ queryKey: queryKeys.tenant(vars.id) }); },
   });
 }
@@ -385,7 +389,15 @@ export function useUpdateTenant() {
 export function useCreateTenant() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: any) => apiFetch('/api/tenants', { method: 'POST', body: JSON.stringify(data) }),
+    mutationFn: (data: any) => apiFetch('/api/superadmin/tenants', { method: 'POST', body: JSON.stringify(data) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tenants'] }); },
+  });
+}
+
+export function useDeleteTenant() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch(`/api/superadmin/tenants/${id}`, { method: 'DELETE' }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['tenants'] }); },
   });
 }
@@ -393,14 +405,14 @@ export function useCreateTenant() {
 export function useSubscriptions() {
   return useQuery({
     queryKey: queryKeys.subscriptions(),
-    queryFn: () => apiFetch<any[]>('/api/subscriptions'),
+    queryFn: () => apiFetch<any>('/api/superadmin/subscriptions'),
   });
 }
 
 export function useUpdateSubscription() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: any) => apiFetch(`/api/subscriptions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    mutationFn: ({ id, ...data }: any) => apiFetch('/api/superadmin/subscriptions', { method: 'PUT', body: JSON.stringify({ subscriptionId: id, ...data }) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['subscriptions'] }); },
   });
 }
@@ -409,7 +421,7 @@ export function usePauseSubscription() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) =>
-      apiFetch(`/api/subscriptions/${id}`, { method: 'PUT', body: JSON.stringify({ status: 'paused', pauseReason: reason, pausedAt: new Date().toISOString() }) }),
+      apiFetch('/api/superadmin/subscriptions', { method: 'PATCH', body: JSON.stringify({ action: 'pause', subscriptionId: id, reason }) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['subscriptions'] }); },
   });
 }
@@ -429,11 +441,18 @@ export function useToggleFeatureFlag() {
   });
 }
 
-export function useMenuItems(tenantId: string) {
+export function useMenuItems(tenantId?: string) {
   return useQuery({
-    queryKey: queryKeys.menuItems(tenantId),
-    queryFn: () => apiFetch<any[]>(`/api/superadmin/menu-items?tenantId=${tenantId}`),
-    enabled: !!tenantId,
+    queryKey: tenantId ? queryKeys.menuItems(tenantId) : ['menuItems', 'all'],
+    queryFn: () => apiFetch<any>(`/api/superadmin/menu-items${tenantId ? `?tenantId=${tenantId}` : '?scope=global'}`),
+    enabled: true,
+  });
+}
+
+export function useGlobalMenuItems() {
+  return useQuery({
+    queryKey: ['globalMenuItems'] as const,
+    queryFn: () => apiFetch<any>(`/api/superadmin/menu-items?scope=global`),
   });
 }
 
@@ -441,14 +460,17 @@ export function useToggleMenuItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (data: any) => apiFetch('/api/superadmin/menu-items', { method: 'PUT', body: JSON.stringify(data) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['menuItems'] }); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['menuItems'] });
+      qc.invalidateQueries({ queryKey: ['globalMenuItems'] });
+    },
   });
 }
 
 export function useUsers() {
   return useQuery({
     queryKey: queryKeys.users(),
-    queryFn: () => apiFetch<any[]>('/api/users'),
+    queryFn: () => apiFetch<any>('/api/admin/users'),
   });
 }
 
@@ -462,6 +484,6 @@ export function useDashboardStats(tenantId?: string) {
 export function useSaasStats() {
   return useQuery({
     queryKey: queryKeys.saasStats(),
-    queryFn: () => apiFetch<any>('/api/saas-stats'),
+    queryFn: () => apiFetch<any>('/api/superadmin/stats'),
   });
 }

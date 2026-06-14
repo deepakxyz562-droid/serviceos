@@ -119,6 +119,7 @@ model User {
   authProviderId  String?
   phone           String?
   isActive        Boolean  @default(true)
+  isSuperAdmin    Boolean  @default(false)
   lastLoginAt     DateTime?
   mfaEnabled      Boolean  @default(false)
   lastActivityAt  DateTime?
@@ -1129,6 +1130,23 @@ model CustomerPortalSession {
   @@index([expiresAt])
 }
 
+model OtpVerification {
+  id          String   @id @default(cuid())
+  phone       String
+  otpCode     String
+  channel     String   @default("whatsapp")  // whatsapp, sms
+  verified    Boolean  @default(false)
+  expiresAt   DateTime
+  verifiedAt  DateTime?
+  attempts    Int      @default(0)
+  tenantId    String?
+  createdAt   DateTime @default(now())
+
+  @@index([phone])
+  @@index([otpCode])
+  @@index([expiresAt])
+}
+
 model IntegrationConfig {
   id              String   @id @default(cuid())
   name            String   // e.g., "n8n", "Zapier", "Custom Webhook"
@@ -1901,7 +1919,7 @@ model TriggerExecution {
 // Controls which menu items are visible per tenant
 model MenuItemConfig {
   id          String   @id @default(cuid())
-  tenantId    String
+  tenantId    String   // Use GLOBAL_TENANT_ID constant for global configs
   menuKey     String   // ViewType key e.g., "dashboard", "leads", "inbox", "campaigns"
   enabled     Boolean  @default(true)
   label       String?  // Custom label override (optional)

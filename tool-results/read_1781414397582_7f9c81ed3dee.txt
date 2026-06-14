@@ -1,0 +1,760 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useMemo } from 'react';
+     4→import { useAppStore } from '@/store/app-store';
+     5→import { useIsMobile } from '@/hooks/use-mobile';
+     6→import type { ViewType } from '@/types/workflow';
+     7→import {
+     8→  LayoutDashboard,
+     9→  Target,
+    10→  Briefcase,
+    11→  Radio,
+    12→  Users,
+    13→  Workflow,
+    14→  Activity,
+    15→  KeyRound,
+    16→  FileText,
+    17→  BarChart3,
+    18→  CreditCard,
+    19→  Variable,
+    20→  Settings,
+    21→  Wrench,
+    22→  ChevronLeft,
+    23→  ChevronRight,
+    24→  LogOut,
+    25→  Building2,
+    26→  ChevronDown,
+    27→  Check,
+    28→  Plus,
+    29→  Crown,
+    30→  Globe,
+    31→  Inbox,
+    32→  UserCircle,
+    33→  Megaphone,
+    34→  Filter,
+    35→  RefreshCw,
+    36→  Bot,
+    37→  Sparkles,
+    38→  ClipboardList,
+    39→  GitBranch,
+    40→  Kanban,
+    41→  RadioTower,
+    42→  ShieldCheck,
+    43→  ScrollText,
+    44→  UserCog,
+    45→  Eye,
+    46→  MessageSquare,
+    47→  Send,
+    48→  CalendarCheck,
+    49→  Calendar,
+    50→  Contact,
+    51→  Star,
+    52→  BookOpen,
+    53→  Receipt,
+    54→  Zap,
+    55→  Search,
+    56→  Shield,
+    57→  CreditCard as CreditCardIcon,
+    58→} from 'lucide-react';
+    59→import { cn } from '@/lib/utils';
+    60→import { Button } from '@/components/ui/button';
+    61→import { Separator } from '@/components/ui/separator';
+    62→import { ScrollArea } from '@/components/ui/scroll-area';
+    63→import {
+    64→  Tooltip,
+    65→  TooltipContent,
+    66→  TooltipTrigger,
+    67→} from '@/components/ui/tooltip';
+    68→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    69→import { Badge } from '@/components/ui/badge';
+    70→import {
+    71→  DropdownMenu,
+    72→  DropdownMenuContent,
+    73→  DropdownMenuItem,
+    74→  DropdownMenuLabel,
+    75→  DropdownMenuSeparator,
+    76→  DropdownMenuTrigger,
+    77→} from '@/components/ui/dropdown-menu';
+    78→import {
+    79→  Dialog,
+    80→  DialogContent,
+    81→  DialogHeader,
+    82→  DialogTitle,
+    83→  DialogDescription,
+    84→  DialogFooter,
+    85→} from '@/components/ui/dialog';
+    86→import {
+    87→  Sheet,
+    88→  SheetContent,
+    89→  SheetHeader,
+    90→  SheetTitle,
+    91→} from '@/components/ui/sheet';
+    92→import { Input } from '@/components/ui/input';
+    93→import { toast } from 'sonner';
+    94→
+    95→// ─── Nav item definition ────────────────────────────────────────────────────
+    96→
+    97→interface NavItem {
+    98→  view: ViewType;
+    99→  label: string;
+   100→  icon: React.ElementType;
+   101→  badge?: string;
+   102→}
+   103→
+   104→interface NavSection {
+   105→  title: string;
+   106→  items: NavItem[];
+   107→}
+   108→
+   109→// ─── Navigation sections — organized by user's module structure ──────────────
+   110→
+   111→const ownerNavSections: NavSection[] = [
+   112→  {
+   113→    title: 'Overview',
+   114→    items: [
+   115→      { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+   116→    ],
+   117→  },
+   118→  {
+   119→    title: 'CRM',
+   120→    items: [
+   121→      { view: 'leads', label: 'Leads', icon: Target },
+   122→      { view: 'contacts', label: 'Contacts', icon: Contact },
+   123→      { view: 'customers', label: 'Customers', icon: Users },
+   124→      { view: 'customer360', label: 'Customer 360', icon: UserCircle, badge: '360' },
+   125→      { view: 'salesPipeline', label: 'Pipeline', icon: Kanban },
+   126→    ],
+   127→  },
+   128→  {
+   129→    title: 'Communication',
+   130→    items: [
+   131→      { view: 'inbox', label: 'WhatsApp Inbox', icon: Inbox, badge: 'New' },
+   132→      { view: 'broadcast', label: 'Broadcast', icon: Send },
+   133→      { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
+   134→      { view: 'marketingTemplates', label: 'Templates', icon: MessageSquare },
+   135→      { view: 'omnichannel', label: 'Omnichannel', icon: RadioTower },
+   136→    ],
+   137→  },
+   138→  {
+   139→    title: 'Automation',
+   140→    items: [
+   141→      { view: 'workflows', label: 'Workflow Editor', icon: Workflow },
+   142→      { view: 'triggers', label: 'Triggers', icon: Zap },
+   143→      { view: 'variables', label: 'Variables', icon: Variable },
+   144→      { view: 'executions', label: 'Executions', icon: Activity },
+   145→      { view: 'formBuilder', label: 'Form Builder', icon: ClipboardList },
+   146→      { view: 'workflowAutomations', label: 'Automations', icon: GitBranch },
+   147→    ],
+   148→  },
+   149→  {
+   150→    title: 'Operations',
+   151→    items: [
+   152→      { view: 'booking', label: 'Booking', icon: CalendarCheck },
+   153→      { view: 'calendar', label: 'Calendar', icon: Calendar },
+   154→      { view: 'jobs', label: 'Jobs', icon: Briefcase },
+   155→      { view: 'dispatch', label: 'Dispatch', icon: Radio },
+   156→      { view: 'employees', label: 'Employees', icon: UserCog },
+   157→    ],
+   158→  },
+   159→  {
+   160→    title: 'Finance',
+   161→    items: [
+   162→      { view: 'quotes', label: 'Quotes', icon: Receipt },
+   163→      { view: 'invoices', label: 'Invoices', icon: FileText },
+   164→      { view: 'billing', label: 'Billing', icon: CreditCard },
+   165→    ],
+   166→  },
+   167→  {
+   168→    title: 'System',
+   169→    items: [
+   170→      { view: 'credentials', label: 'Credentials', icon: KeyRound },
+   171→      { view: 'settings', label: 'Settings', icon: Settings },
+   172→      { view: 'auditLogs', label: 'Audit Logs', icon: ScrollText },
+   173→      { view: 'reports', label: 'Reports', icon: BarChart3 },
+   174→    ],
+   175→  },
+   176→  {
+   177→    title: 'Portals',
+   178→    items: [
+   179→      { view: 'customerPortal', label: 'Customer Portal', icon: Globe },
+   180→      { view: 'employeePortal', label: 'Employee Portal', icon: HardHat },
+   181→    ],
+   182→  },
+   183→  {
+   184→    title: 'AI & More',
+   185→    items: [
+   186→      { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
+   187→      { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
+   188→      { view: 'retargeting', label: 'Retargeting', icon: RefreshCw },
+   189→      { view: 'segments', label: 'Segments', icon: Filter },
+   190→      { view: 'marketingAnalytics', label: 'Analytics', icon: BarChart3 },
+   191→      { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },
+   192→      { view: 'communicationProviders', label: 'Providers', icon: KeyRound },
+   193→      { view: 'reviews', label: 'Reviews', icon: Star },
+   194→    ],
+   195→  },
+   196→];
+   197→
+   198→const employeeNavSections: NavSection[] = [
+   199→  {
+   200→    title: 'My Work',
+   201→    items: [
+   202→      { view: 'employeePortal', label: 'My Jobs', icon: Briefcase },
+   203→      { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+   204→    ],
+   205→  },
+   206→  {
+   207→    title: 'Account',
+   208→    items: [
+   209→      { view: 'settings', label: 'Settings', icon: Settings },
+   210→    ],
+   211→  },
+   212→];
+   213→
+   214→// ─── Dedicated Superadmin Navigation ────────────────────────────────────────
+   215→// Superadmin has a completely different sidebar focused on platform management
+   216→
+   217→const superadminNavSections: NavSection[] = [
+   218→  {
+   219→    title: 'Admin Panel',
+   220→    items: [
+   221→      { view: 'superadmin', label: 'Dashboard', icon: ShieldCheck, badge: 'SA' },
+   222→    ],
+   223→  },
+   224→  {
+   225→    title: 'Platform',
+   226→    items: [
+   227→      { view: 'dashboard', label: 'App Dashboard', icon: LayoutDashboard },
+   228→    ],
+   229→  },
+   230→  {
+   231→    title: 'CRM',
+   232→    items: [
+   233→      { view: 'leads', label: 'Leads', icon: Target },
+   234→      { view: 'contacts', label: 'Contacts', icon: Users },
+   235→      { view: 'customers', label: 'Customers', icon: Users },
+   236→      { view: 'salesPipeline', label: 'Sales Pipeline', icon: Kanban },
+   237→    ],
+   238→  },
+   239→  {
+   240→    title: 'Operations',
+   241→    items: [
+   242→      { view: 'booking', label: 'Booking', icon: Calendar },
+   243→      { view: 'jobs', label: 'Jobs', icon: Briefcase },
+   244→      { view: 'employees', label: 'Employees', icon: UserCog },
+   245→    ],
+   246→  },
+   247→  {
+   248→    title: 'Communication',
+   249→    items: [
+   250→      { view: 'inbox', label: 'Inbox', icon: Inbox },
+   251→      { view: 'broadcast', label: 'Broadcast', icon: Radio },
+   252→      { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
+   253→    ],
+   254→  },
+   255→  {
+   256→    title: 'Automation',
+   257→    items: [
+   258→      { view: 'workflows', label: 'Workflows', icon: Workflow },
+   259→      { view: 'triggers', label: 'Triggers', icon: Zap },
+   260→    ],
+   261→  },
+   262→  {
+   263→    title: 'Finance',
+   264→    items: [
+   265→      { view: 'invoices', label: 'Invoices', icon: FileText },
+   266→      { view: 'quotes', label: 'Quotes', icon: Receipt },
+   267→      { view: 'billing', label: 'Billing', icon: CreditCard },
+   268→    ],
+   269→  },
+   270→  {
+   271→    title: 'System',
+   272→    items: [
+   273→      { view: 'settings', label: 'Settings', icon: Settings },
+   274→      { view: 'reports', label: 'Reports', icon: BarChart3 },
+   275→    ],
+   276→  },
+   277→];
+   278→
+   279→// ─── Workspace interface ────────────────────────────────────────────────────
+   280→
+   281→interface Workspace {
+   282→  id: string;
+   283→  name: string;
+   284→  slug: string;
+   285→  industry?: string;
+   286→}
+   287→
+   288→// ─── HardHat icon (not in lucide) ────────────────────────────────────────
+   289→function HardHat(props: React.SVGProps<SVGSVGElement> & { className?: string }) {
+   290→  return (
+   291→    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className}>
+   292→      <path d="M2 18a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v2z"/>
+   293→      <path d="M10 10V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v5"/>
+   294→      <path d="M4 15v-3a8 8 0 0 1 16 0v3"/>
+   295→    </svg>
+   296→  );
+   297→}
+   298→
+   299→// ─── Props ──────────────────────────────────────────────────────────────────
+   300→
+   301→interface AppSidebarProps {
+   302→  onLogout?: () => void;
+   303→}
+   304→
+   305→// ─── Sidebar Content (shared between desktop and mobile) ────────────────────
+   306→
+   307→function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMobile?: boolean }) {
+   308→  const {
+   309→    currentView,
+   310→    setCurrentView,
+   311→    leftSidebarOpen,
+   312→    toggleLeftSidebar,
+   313→    setMobileSidebarOpen,
+   314→    currentWorkspaceId,
+   315→    setCurrentWorkspaceId,
+   316→    currentWorkspaceName,
+   317→    setCurrentWorkspaceName,
+   318→    auth,
+   319→  } = useAppStore();
+   320→
+   321→  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+   322→  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+   323→  const [newWorkspaceName, setNewWorkspaceName] = useState('');
+   324→  const [creating, setCreating] = useState(false);
+   325→  const [disabledMenus, setDisabledMenus] = useState<string[]>([]);
+   326→
+   327→  useEffect(() => {
+   328→    async function fetchWorkspaces() {
+   329→      try {
+   330→        const res = await fetch('/api/workspaces');
+   331→        if (res.ok) {
+   332→          const data = await res.json();
+   333→          setWorkspaces(data);
+   334→          if (data.length > 0 && !currentWorkspaceId) {
+   335→            setCurrentWorkspaceId(data[0].id);
+   336→            setCurrentWorkspaceName(data[0].name);
+   337→          }
+   338→        }
+   339→      } catch {
+   340→        // Silently fail
+   341→      }
+   342→    }
+   343→    fetchWorkspaces();
+   344→  }, []);
+   345→
+   346→  // Fetch menu visibility for non-superadmin users
+   347→  useEffect(() => {
+   348→    if (auth.user?.role === 'superadmin' || auth.user?.role === 'employee') {
+   349→      setDisabledMenus([]);
+   350→      return;
+   351→    }
+   352→    async function fetchMenuVisibility() {
+   353→      try {
+   354→        const res = await fetch('/api/menu-visibility');
+   355→        if (res.ok) {
+   356→          const data = await res.json();
+   357→          setDisabledMenus(data.disabledMenus || []);
+   358→        }
+   359→      } catch {
+   360→        // Silently fail - all menus remain visible
+   361→      }
+   362→    }
+   363→    fetchMenuVisibility();
+   364→  }, [auth.user?.role, auth.user?.tenantId]);
+   365→
+   366→  const handleCreateWorkspace = async () => {
+   367→    if (!newWorkspaceName.trim()) return;
+   368→    setCreating(true);
+   369→    try {
+   370→      const res = await fetch('/api/workspaces', {
+   371→        method: 'POST',
+   372→        headers: { 'Content-Type': 'application/json' },
+   373→        body: JSON.stringify({ name: newWorkspaceName.trim() }),
+   374→      });
+   375→      if (res.ok) {
+   376→        const workspace = await res.json();
+   377→        setWorkspaces((prev) => [...prev, workspace]);
+   378→        setCurrentWorkspaceId(workspace.id);
+   379→        setCurrentWorkspaceName(workspace.name);
+   380→        setCreateDialogOpen(false);
+   381→        setNewWorkspaceName('');
+   382→        toast.success(`Workspace "${workspace.name}" created!`);
+   383→      } else {
+   384→        toast.error('Failed to create workspace');
+   385→      }
+   386→    } catch {
+   387→      toast.error('Failed to create workspace');
+   388→    } finally {
+   389→      setCreating(false);
+   390→    }
+   391→  };
+   392→
+   393→  const getUserInitials = () => {
+   394→    if (auth.user?.name) {
+   395→      return auth.user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+   396→    }
+   397→    if (auth.user?.email) return auth.user.email.slice(0, 2).toUpperCase();
+   398→    return 'U';
+   399→  };
+   400→
+   401→  const getPlanBadge = () => {
+   402→    const plan = auth.tenant?.plan || 'starter';
+   403→    const colors: Record<string, string> = {
+   404→      starter: 'bg-slate-600/40 text-slate-300 border-slate-500/30',
+   405→      growth: 'bg-emerald-600/30 text-emerald-300 border-emerald-500/30',
+   406→      pro: 'bg-amber-600/30 text-amber-300 border-amber-500/30',
+   407→      enterprise: 'bg-purple-600/30 text-purple-300 border-purple-500/30',
+   408→    };
+   409→    return {
+   410→      label: plan.charAt(0).toUpperCase() + plan.slice(1),
+   411→      className: colors[plan] || colors.starter,
+   412→    };
+   413→  };
+   414→
+   415→  const planBadge = getPlanBadge();
+   416→  const isSuperAdmin = auth.user?.role === 'superadmin';
+   417→  const isEmployee = auth.user?.role === 'employee';
+   418→
+   419→  // Filter nav sections based on disabled menus
+   420→  const filteredNavSections = useMemo(() => {
+   421→    let sections: NavSection[];
+   422→
+   423→    if (isSuperAdmin) {
+   424→      sections = superadminNavSections;
+   425→    } else if (isEmployee) {
+   426→      sections = employeeNavSections;
+   427→    } else {
+   428→      sections = ownerNavSections;
+   429→    }
+   430→
+   431→    // Filter out disabled menus for non-superadmin users
+   432→    if (!isSuperAdmin && disabledMenus.length > 0) {
+   433→      const disabledSet = new Set(disabledMenus);
+   434→      sections = sections
+   435→        .map((section) => ({
+   436→          ...section,
+   437→          items: section.items.filter((item) => !disabledSet.has(item.view)),
+   438→        }))
+   439→        .filter((section) => section.items.length > 0);
+   440→    }
+   441→
+   442→    return sections;
+   443→  }, [isSuperAdmin, isEmployee, disabledMenus]);
+   444→
+   445→  const handleNavClick = (view: ViewType) => {
+   446→    setCurrentView(view);
+   447→    if (isMobile) setMobileSidebarOpen(false);
+   448→  };
+   449→
+   450→  const renderNavItem = (item: NavItem) => {
+   451→    const Icon = item.icon;
+   452→    const isActive = currentView === item.view;
+   453→
+   454→    return (
+   455→      <button
+   456→        key={item.view}
+   457→        onClick={() => handleNavClick(item.view)}
+   458→        className={cn(
+   459→          'flex items-center w-full rounded-lg text-sm font-medium transition-all duration-150',
+   460→          isMobile || leftSidebarOpen ? 'h-9 px-3 gap-3' : 'h-9 justify-center',
+   461→          isActive
+   462→            ? 'bg-emerald-500/15 text-emerald-400 shadow-sm'
+   463→            : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200'
+   464→        )}
+   465→      >
+   466→        <Icon className={cn('shrink-0', isActive ? 'size-[18px] text-emerald-400' : 'size-4')} />
+   467→        {(isMobile || leftSidebarOpen) && (
+   468→          <span className="whitespace-nowrap flex-1 text-left text-[13px]">{item.label}</span>
+   469→        )}
+   470→        {(isMobile || leftSidebarOpen) && item.badge && (
+   471→          <Badge variant="outline" className="text-[9px] h-4 px-1.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
+   472→            {item.badge}
+   473→          </Badge>
+   474→        )}
+   475→        {(isMobile || leftSidebarOpen) && item.view === 'billing' && auth.tenant?.planStatus === 'trial' && (
+   476→          <Crown className="size-3 text-amber-400 ml-auto" />
+   477→        )}
+   478→      </button>
+   479→    );
+   480→  };
+   481→
+   482→  return (
+   483→    <div className="flex flex-col h-full">
+   484→      {/* Logo / Branding */}
+   485→      <div
+   486→        className={cn(
+   487→          'flex items-center h-14 px-4 border-b border-slate-800/60 shrink-0',
+   488→          isMobile || leftSidebarOpen ? 'justify-start gap-3' : 'justify-center'
+   489→        )}
+   490→      >
+   491→        <div className={cn(
+   492→          'flex items-center justify-center w-8 h-8 rounded-lg shrink-0 shadow-lg',
+   493→          isSuperAdmin
+   494→            ? 'bg-red-600 shadow-red-500/20'
+   495→            : 'bg-emerald-500 shadow-emerald-500/20'
+   496→        )}>
+   497→          {isSuperAdmin ? (
+   498→            <ShieldCheck className="size-5 text-white" />
+   499→          ) : (
+   500→            <Wrench className="size-5 text-white" />
+   501→          )}
+   502→        </div>
+   503→        {(isMobile || leftSidebarOpen) && (
+   504→          <div className="flex items-center gap-2 min-w-0">
+   505→            <span className="text-lg font-bold tracking-tight whitespace-nowrap text-white">
+   506→              {isSuperAdmin ? 'ServiceOS' : 'ServiceOS'}
+   507→            </span>
+   508→            <Badge variant="outline" className={cn('text-[9px] h-4 px-1.5 border shrink-0', isSuperAdmin ? 'bg-red-500/10 text-red-400 border-red-500/30' : planBadge.className)}>
+   509→              {isSuperAdmin ? 'Admin' : planBadge.label}
+   510→            </Badge>
+   511→          </div>
+   512→        )}
+   513→      </div>
+   514→
+   515→      {/* Workspace Switcher - only for non-superadmin */}
+   516→      {!isSuperAdmin && (
+   517→        (isMobile || leftSidebarOpen) ? (
+   518→          <div className="px-3 py-2 border-b border-slate-800/60 shrink-0">
+   519→            <DropdownMenu>
+   520→              <DropdownMenuTrigger asChild>
+   521→                <button className="flex items-center w-full gap-2 rounded-lg px-2 py-2 text-sm text-slate-300 hover:bg-slate-800/70 transition-colors">
+   522→                  <Building2 className="size-4 text-emerald-400 shrink-0" />
+   523→                  <span className="flex-1 truncate text-left">
+   524→                    {auth.tenant?.name || currentWorkspaceName}
+   525→                  </span>
+   526→                  <ChevronDown className="size-3 text-slate-500 shrink-0" />
+   527→                </button>
+   528→              </DropdownMenuTrigger>
+   529→              <DropdownMenuContent side="right" align="start" className="w-56">
+   530→                <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
+   531→                <DropdownMenuSeparator />
+   532→                {workspaces.map((ws) => (
+   533→                  <DropdownMenuItem
+   534→                    key={ws.id}
+   535→                    onClick={() => {
+   536→                      setCurrentWorkspaceId(ws.id);
+   537→                      setCurrentWorkspaceName(ws.name);
+   538→                    }}
+   539→                    className="flex items-center gap-2 cursor-pointer"
+   540→                  >
+   541→                    <Building2 className="size-4 text-muted-foreground" />
+   542→                    <span className="flex-1 truncate">{ws.name}</span>
+   543→                    {currentWorkspaceId === ws.id && <Check className="size-4 text-emerald-500" />}
+   544→                  </DropdownMenuItem>
+   545→                ))}
+   546→                {workspaces.length > 0 && <DropdownMenuSeparator />}
+   547→                <DropdownMenuItem
+   548→                  onClick={() => setCreateDialogOpen(true)}
+   549→                  className="flex items-center gap-2 cursor-pointer text-emerald-600 dark:text-emerald-400"
+   550→                >
+   551→                  <Plus className="size-4" />
+   552→                  <span>Create Workspace</span>
+   553→                </DropdownMenuItem>
+   554→              </DropdownMenuContent>
+   555→            </DropdownMenu>
+   556→          </div>
+   557→        ) : (
+   558→          <div className="flex justify-center py-2 border-b border-slate-800/60 shrink-0">
+   559→            <Tooltip>
+   560→              <TooltipTrigger asChild>
+   561→                <button className="flex items-center justify-center w-8 h-8 rounded-lg text-slate-300 hover:bg-slate-800/70 transition-colors">
+   562→                  <Building2 className="size-4 text-emerald-400" />
+   563→                </button>
+   564→              </TooltipTrigger>
+   565→              <TooltipContent side="right" sideOffset={8}>
+   566→                {auth.tenant?.name || currentWorkspaceName}
+   567→              </TooltipContent>
+   568→            </Tooltip>
+   569→          </div>
+   570→        )
+   571→      )}
+   572→
+   573→      {/* Superadmin tenant indicator */}
+   574→      {isSuperAdmin && (isMobile || leftSidebarOpen) && (
+   575→        <div className="px-3 py-2 border-b border-slate-800/60 shrink-0">
+   576→          <div className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-red-400/80 bg-red-500/5">
+   577→            <Shield className="size-4 shrink-0" />
+   578→            <span className="text-xs font-medium">Platform Administration</span>
+   579→          </div>
+   580→        </div>
+   581→      )}
+   582→
+   583→      {/* Navigation Sections */}
+   584→      <ScrollArea className="flex-1 py-2 min-h-0">
+   585→        <div className="flex flex-col gap-0.5">
+   586→          {filteredNavSections.map((section, sectionIdx) => (
+   587→            <div key={section.title}>
+   588→              {(isMobile || leftSidebarOpen) && (
+   589→                <div className="px-4 pt-2.5 pb-1">
+   590→                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+   591→                    {section.title}
+   592→                  </span>
+   593→                </div>
+   594→              )}
+   595→              {!isMobile && !leftSidebarOpen && sectionIdx > 0 && (
+   596→                <div className="px-3 my-1.5">
+   597→                  <Separator className="bg-slate-800/60" />
+   598→                </div>
+   599→              )}
+   600→              <nav className="flex flex-col gap-0.5 px-2">
+   601→                {section.items.map((item) => {
+   602→                  if (isMobile || leftSidebarOpen) return renderNavItem(item);
+   603→                  return (
+   604→                    <Tooltip key={item.view}>
+   605→                      <TooltipTrigger asChild>
+   606→                        {renderNavItem(item)}
+   607→                      </TooltipTrigger>
+   608→                      <TooltipContent side="right" sideOffset={8}>
+   609→                        {item.label}
+   610→                      </TooltipContent>
+   611→                    </Tooltip>
+   612→                  );
+   613→                })}
+   614→              </nav>
+   615→            </div>
+   616→          ))}
+   617→        </div>
+   618→      </ScrollArea>
+   619→
+   620→      {/* Collapse Toggle (desktop only) */}
+   621→      {!isMobile && (
+   622→        <button
+   623→          onClick={toggleLeftSidebar}
+   624→          className="absolute -right-3 top-20 z-10 flex items-center justify-center w-6 h-6 rounded-full bg-slate-800 border border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors shadow-md"
+   625→          aria-label={leftSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+   626→        >
+   627→          {leftSidebarOpen ? <ChevronLeft className="size-3" /> : <ChevronRight className="size-3" />}
+   628→        </button>
+   629→      )}
+   630→
+   631→      <Separator className="bg-slate-800/60" />
+   632→
+   633→      {/* User Section */}
+   634→      <div
+   635→        className={cn(
+   636→          'flex items-center gap-3 p-3 shrink-0',
+   637→          isMobile || leftSidebarOpen ? '' : 'justify-center'
+   638→        )}
+   639→      >
+   640→        <Avatar className="size-8 shrink-0">
+   641→          <AvatarFallback className={cn('text-white text-xs', isSuperAdmin ? 'bg-red-600' : 'bg-emerald-600')}>
+   642→            {getUserInitials()}
+   643→          </AvatarFallback>
+   644→        </Avatar>
+   645→        {(isMobile || leftSidebarOpen) && (
+   646→          <div className="flex-1 min-w-0">
+   647→            <p className="text-sm font-medium text-slate-200 truncate">
+   648→              {auth.user?.name || 'Demo User'}
+   649→            </p>
+   650→            <p className="text-xs text-slate-500 truncate">
+   651→              {auth.user?.email || 'demo@serviceos.io'}
+   652→            </p>
+   653→          </div>
+   654→        )}
+   655→        {(isMobile || leftSidebarOpen) && onLogout && (
+   656→          <Button
+   657→            variant="ghost"
+   658→            size="icon"
+   659→            className="text-slate-500 hover:text-white hover:bg-slate-800/70 h-8 w-8 shrink-0"
+   660→            onClick={onLogout}
+   661→          >
+   662→            <LogOut className="size-4" />
+   663→          </Button>
+   664→        )}
+   665→        {!isMobile && !leftSidebarOpen && onLogout && (
+   666→          <Tooltip>
+   667→            <TooltipTrigger asChild>
+   668→              <Button
+   669→                variant="ghost"
+   670→                size="icon"
+   671→                className="text-slate-500 hover:text-white hover:bg-slate-800/70 h-8 w-8 shrink-0 absolute bottom-3 right-1"
+   672→                onClick={onLogout}
+   673→              >
+   674→                <LogOut className="size-4" />
+   675→              </Button>
+   676→            </TooltipTrigger>
+   677→            <TooltipContent side="right" sideOffset={8}>
+   678→              Log out
+   679→            </TooltipContent>
+   680→          </Tooltip>
+   681→        )}
+   682→      </div>
+   683→
+   684→      {/* Create Workspace Dialog */}
+   685→      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+   686→        <DialogContent className="sm:max-w-md">
+   687→          <DialogHeader>
+   688→            <DialogTitle>Create New Workspace</DialogTitle>
+   689→            <DialogDescription>
+   690→              Create a new workspace to organize your workflows and team.
+   691→            </DialogDescription>
+   692→          </DialogHeader>
+   693→          <div className="py-4">
+   694→            <label className="text-sm font-medium mb-2 block">
+   695→              Workspace Name
+   696→            </label>
+   697→            <Input
+   698→              placeholder="e.g., Marketing Team"
+   699→              value={newWorkspaceName}
+   700→              onChange={(e) => setNewWorkspaceName(e.target.value)}
+   701→              onKeyDown={(e) => {
+   702→                if (e.key === 'Enter') handleCreateWorkspace();
+   703→              }}
+   704→              autoFocus
+   705→            />
+   706→          </div>
+   707→          <DialogFooter>
+   708→            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
+   709→              Cancel
+   710→            </Button>
+   711→            <Button
+   712→              onClick={handleCreateWorkspace}
+   713→              disabled={!newWorkspaceName.trim() || creating}
+   714→              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   715→            >
+   716→              {creating ? 'Creating...' : 'Create Workspace'}
+   717→            </Button>
+   718→          </DialogFooter>
+   719→        </DialogContent>
+   720→      </Dialog>
+   721→    </div>
+   722→  );
+   723→}
+   724→
+   725→// ─── Main Component ──────────────────────────────────────────────────────
+   726→
+   727→export function AppSidebar({ onLogout }: AppSidebarProps) {
+   728→  const { leftSidebarOpen, mobileSidebarOpen, setMobileSidebarOpen } = useAppStore();
+   729→  const isMobile = useIsMobile();
+   730→
+   731→  // Mobile: render as Sheet (drawer)
+   732→  if (isMobile) {
+   733→    return (
+   734→      <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
+   735→        <SheetContent
+   736→          side="left"
+   737→          className="w-[280px] p-0 bg-slate-950 border-r-slate-800/60"
+   738→        >
+   739→          <SheetHeader className="sr-only">
+   740→            <SheetTitle>Navigation</SheetTitle>
+   741→          </SheetHeader>
+   742→          <SidebarContent onLogout={onLogout} isMobile />
+   743→        </SheetContent>
+   744→      </Sheet>
+   745→    );
+   746→  }
+   747→
+   748→  // Desktop: render as fixed sidebar
+   749→  return (
+   750→    <aside
+   751→      className={cn(
+   752→        'relative flex flex-col bg-slate-950 text-white transition-all duration-300 ease-in-out shrink-0 h-screen overflow-hidden',
+   753→        leftSidebarOpen ? 'w-60' : 'w-16'
+   754→      )}
+   755→    >
+   756→      <SidebarContent onLogout={onLogout} />
+   757→    </aside>
+   758→  );
+   759→}
+   760→

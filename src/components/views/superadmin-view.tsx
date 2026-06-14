@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
+import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/app-store';
 import {
@@ -9,6 +10,7 @@ import {
   useSubscriptions,
   useFeatureFlags,
   useMenuItems,
+  useGlobalMenuItems,
   useToggleFeatureFlag,
   useToggleMenuItem,
   useUsers,
@@ -17,7 +19,7 @@ import {
 
 import {
   Building2, Users, DollarSign, CreditCard, TrendingUp, TrendingDown,
-  Search, Loader2, ShieldCheck, ShieldAlert, Eye, Ban, Play,
+  Search, Loader2, ShieldCheck, ShieldAlert, Shield, Eye, Ban, Play,
   Menu, ToggleLeft, ToggleRight, Flag, Settings2, Pause, PlayCircle,
   LayoutDashboard, UsersRound, Megaphone, ShoppingCart, MessageSquare,
   Bot, Workflow, Radio, Wallet, BookOpen, Cpu, ChevronDown,
@@ -339,9 +341,25 @@ function TableSkeleton({ rows = 5 }: { rows?: number }) {
 
 export function SuperAdminView() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const { auth } = useAppStore();
+  const { auth, setCurrentView } = useAppStore();
+  const queryClient = useQueryClient();
   const toggleFeatureFlagMutation = useToggleFeatureFlag();
   const toggleMenuItemMutation = useToggleMenuItem();
+
+  // Guard: Only superadmin users can access this view
+  const isSuperAdmin = !!(auth.user?.isSuperAdmin || auth.user?.role === 'superadmin' || auth.user?.role === 'super_admin' || (auth.user?.role === 'admin' && !auth.user?.tenantId));
+  if (!isSuperAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
+        <ShieldAlert className="size-16 text-red-400 opacity-50" />
+        <h2 className="text-xl font-semibold text-white">Access Denied</h2>
+        <p className="text-slate-400">You do not have permission to access the Super Admin panel.</p>
+        <Button variant="outline" onClick={() => setCurrentView('dashboard')} className="mt-2">
+          Go to Dashboard
+        </Button>
+      </div>
+    );
+  }
 
   // ─── Data Hooks ───────────────────────────────────────────────────────────
   const { data: statsData, isLoading: statsLoading, refetch: refetchStats } = useSaasStats();
@@ -355,7 +373,9 @@ export function SuperAdminView() {
 
   // Menu items state
   const [selectedTenantForMenu, setSelectedTenantForMenu] = useState<string>('');
+  const [menuScope, setMenuScope] = useState<'global' | 'tenant'>('global');
   const { data: menuData, isLoading: menuLoading } = useMenuItems(selectedTenantForMenu);
+  const { data: globalMenuData, isLoading: globalMenuLoading } = useGlobalMenuItems();
 
   // Derived data
   const tenants: Tenant[] = useMemo(() => {
@@ -387,50 +407,43 @@ export function SuperAdminView() {
   }, [flagsData]);
 
   const menuItems: MenuItemDef[] = useMemo(() => {
+    if (menuScope === 'global') {
+      if (!globalMenuData) return DEFAULT_MENU_ITEMS.map((item, i) => ({ ...item, id: `default_${item.key}`, enabled: true, sortOrder: i }));
+      const arr = Array.isArray(globalMenuData) ? globalMenuData : (globalMenuData as Record<string, unknown>)?.items || [];
+      return arr as MenuItemDef[];
+    }
     if (!menuData) return DEFAULT_MENU_ITEMS.map((item, i) => ({ ...item, id: `default_${item.key}`, enabled: true, sortOrder: i }));
     const arr = Array.isArray(menuData) ? menuData : (menuData as Record<string, unknown>)?.items || [];
     return arr as MenuItemDef[];
-  }, [menuData]);
+  }, [menuData, globalMenuData, menuScope]);
 
-  // Auto-select first tenant
+  // Auto-select first tenant for feature flags
   useEffect(() => {
     if (tenants.length > 0 && !selectedTenantForFlags) {
       setSelectedTenantForFlags(tenants[0].id);
     }
   }, [tenants, selectedTenantForFlags]);
 
+  // Auto-select first tenant for menu items only when in tenant scope
   useEffect(() => {
-    if (tenants.length > 0 && !selectedTenantForMenu) {
+    if (menuScope === 'tenant' && tenants.length > 0 && !selectedTenantForMenu) {
       setSelectedTenantForMenu(tenants[0].id);
     }
-  }, [tenants, selectedTenantForMenu]);
+  }, [tenants, selectedTenantForMenu, menuScope]);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // 1. DASHBOARD TAB
   // ═══════════════════════════════════════════════════════════════════════════
 
   function DashboardTab() {
-    const [stats, setStats] = useState<PlatformStats | null>(null);
-    const [loading, setLoading] = useState(true);
+    // Use statsData from the parent hook (useSaasStats → /api/superadmin/stats)
+    const stats = (statsData as PlatformStats) || null;
+    const loading = statsLoading;
 
-    const fetchStats = useCallback(async () => {
-      setLoading(true);
-      try {
-        const res = await fetch('/api/superadmin/stats');
-        if (res.ok) {
-          const data = await res.json();
-          setStats(data);
-        } else {
-          setStats(getFallbackStats());
-        }
-      } catch {
-        setStats(getFallbackStats());
-      } finally {
-        setLoading(false);
-      }
-    }, []);
-
-    useEffect(() => { fetchStats(); }, [fetchStats]);
+    const handleRefresh = useCallback(() => {
+      refetchStats();
+      refetchTenants();
+    }, [refetchStats, refetchTenants]);
 
     // Tenant growth chart data (from tenants by month)
     const tenantGrowthData = useMemo(() => {
@@ -581,7 +594,7 @@ export function SuperAdminView() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-medium text-white">Platform Alerts</CardTitle>
-              <Button variant="ghost" size="sm" onClick={fetchStats} className="h-7 text-xs text-slate-400 hover:text-white">
+              <Button variant="ghost" size="sm" onClick={handleRefresh} className="h-7 text-xs text-slate-400 hover:text-white">
                 <RefreshCw className="size-3 mr-1" /> Refresh
               </Button>
             </div>
@@ -1382,62 +1395,98 @@ export function SuperAdminView() {
       setLocalItems(menuItems);
     }, [menuItems]);
 
+    const effectiveTenantId = menuScope === 'global' ? undefined : selectedTenantForMenu;
+
     const handleToggle = (itemKey: string) => {
       const item = localItems.find((i) => i.key === itemKey);
-      if (!item || !selectedTenantForMenu) return;
+      if (!item) return;
+      if (menuScope === 'tenant' && !selectedTenantForMenu) {
+        toast.error('Please select a tenant first');
+        return;
+      }
 
       const newEnabled = !item.enabled;
       setLocalItems((prev) => prev.map((i) => i.key === itemKey ? { ...i, enabled: newEnabled } : i));
 
       toggleMenuItemMutation.mutate(
-        { tenantId: selectedTenantForMenu, menuKey: itemKey, enabled: newEnabled },
+        { tenantId: effectiveTenantId, menuKey: itemKey, enabled: newEnabled, scope: menuScope },
         {
-          onError: () => {
+          onError: (err: Error) => {
             setLocalItems((prev) => prev.map((i) => i.key === itemKey ? { ...i, enabled: !newEnabled } : i));
-            toast.error('Failed to toggle menu item');
+            toast.error(`Failed to toggle menu item: ${err.message || 'Unknown error'}`);
           },
           onSuccess: () => {
-            toast.success(`${item.label} ${newEnabled ? 'enabled' : 'disabled'}`);
+            toast.success(`${item.label} ${newEnabled ? 'enabled' : 'disabled'} ${menuScope === 'global' ? 'globally' : 'for tenant'}`);
           },
         },
       );
     };
 
     const handleBulkToggle = (sectionKey: string, enabled: boolean) => {
-      if (!selectedTenantForMenu) return;
+      if (menuScope === 'tenant' && !selectedTenantForMenu) {
+        toast.error('Please select a tenant first');
+        return;
+      }
       setLocalItems((prev) => prev.map((i) => i.section === sectionKey ? { ...i, enabled } : i));
-      // Save bulk
       const sectionItems = localItems.filter((i) => i.section === sectionKey);
       fetch('/api/superadmin/menu-items', {
         method: 'POST',
+        credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tenantId: selectedTenantForMenu,
+          tenantId: effectiveTenantId,
+          scope: menuScope,
           items: sectionItems.map((i) => ({ key: i.key, enabled, label: i.label, icon: i.icon, section: i.section })),
         }),
-      }).then(() => toast.success(`${sectionKey} ${enabled ? 'enabled' : 'disabled'}`)).catch(() => toast.error('Failed'));
+      }).then((res) => {
+        if (!res.ok) return res.json().then((d: { error?: string }) => { throw new Error(d.error || 'Failed'); });
+        toast.success(`${sectionKey} ${enabled ? 'enabled' : 'disabled'}`);
+        // Invalidate queries to refresh state
+        queryClient.invalidateQueries({ queryKey: ['globalMenuItems'] });
+        queryClient.invalidateQueries({ queryKey: ['menuItems'] });
+      }).catch((err: Error) => toast.error(`Failed: ${err.message}`));
     };
 
     const handleEnableAll = () => {
-      if (!selectedTenantForMenu) return;
+      if (menuScope === 'tenant' && !selectedTenantForMenu) {
+        toast.error('Please select a tenant first');
+        return;
+      }
       setLocalItems((prev) => prev.map((i) => ({ ...i, enabled: true })));
       setSaving(true);
       fetch('/api/superadmin/menu-items', {
         method: 'POST',
+        credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenantId: selectedTenantForMenu, items: localItems.map((i) => ({ key: i.key, enabled: true })) }),
-      }).then(() => { toast.success('All menu items enabled'); setSaving(false); }).catch(() => { setSaving(false); });
+        body: JSON.stringify({ tenantId: effectiveTenantId, scope: menuScope, items: localItems.map((i) => ({ key: i.key, enabled: true })) }),
+      }).then((res) => {
+        if (!res.ok) return res.json().then((d: { error?: string }) => { throw new Error(d.error || 'Failed'); });
+        toast.success('All menu items enabled');
+        queryClient.invalidateQueries({ queryKey: ['globalMenuItems'] });
+        queryClient.invalidateQueries({ queryKey: ['menuItems'] });
+        setSaving(false);
+      }).catch((err: Error) => { toast.error(`Failed: ${err.message}`); setSaving(false); });
     };
 
     const handleDisableAll = () => {
-      if (!selectedTenantForMenu) return;
+      if (menuScope === 'tenant' && !selectedTenantForMenu) {
+        toast.error('Please select a tenant first');
+        return;
+      }
       setLocalItems((prev) => prev.map((i) => ({ ...i, enabled: false })));
       setSaving(true);
       fetch('/api/superadmin/menu-items', {
         method: 'POST',
+        credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenantId: selectedTenantForMenu, items: localItems.map((i) => ({ key: i.key, enabled: false })) }),
-      }).then(() => { toast.success('All menu items disabled'); setSaving(false); }).catch(() => { setSaving(false); });
+        body: JSON.stringify({ tenantId: effectiveTenantId, scope: menuScope, items: localItems.map((i) => ({ key: i.key, enabled: false })) }),
+      }).then((res) => {
+        if (!res.ok) return res.json().then((d: { error?: string }) => { throw new Error(d.error || 'Failed'); });
+        toast.success('All menu items disabled');
+        queryClient.invalidateQueries({ queryKey: ['globalMenuItems'] });
+        queryClient.invalidateQueries({ queryKey: ['menuItems'] });
+        setSaving(false);
+      }).catch((err: Error) => { toast.error(`Failed: ${err.message}`); setSaving(false); });
     };
 
     // Group by section
@@ -1452,26 +1501,64 @@ export function SuperAdminView() {
       return sections;
     }, [localItems]);
 
+    const isLoading = menuScope === 'global' ? globalMenuLoading : menuLoading;
+
     return (
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Left Panel */}
         <div className="w-full lg:w-64 shrink-0 space-y-4">
+          {/* Scope Selector */}
           <Card className="bg-slate-900 border-slate-800">
-            <CardHeader className="pb-3"><CardTitle className="text-sm text-white">Select Tenant</CardTitle></CardHeader>
-            <CardContent className="pt-0">
-              <Select value={selectedTenantForMenu} onValueChange={setSelectedTenantForMenu}>
-                <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue placeholder="Choose tenant..." /></SelectTrigger>
-                <SelectContent>
-                  {tenants.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            <CardHeader className="pb-3"><CardTitle className="text-sm text-white">Menu Visibility Scope</CardTitle></CardHeader>
+            <CardContent className="pt-0 space-y-3">
+              <div className="flex gap-2">
+                <Button
+                  variant={menuScope === 'global' ? 'default' : 'outline'}
+                  size="sm"
+                  className={cn(
+                    'flex-1 text-xs',
+                    menuScope === 'global'
+                      ? 'bg-red-600 hover:bg-red-700 text-white'
+                      : 'border-slate-700 text-slate-300 hover:bg-slate-800'
+                  )}
+                  onClick={() => setMenuScope('global')}
+                >
+                  <Shield className="size-3.5 mr-1.5" /> Global
+                </Button>
+                <Button
+                  variant={menuScope === 'tenant' ? 'default' : 'outline'}
+                  size="sm"
+                  className={cn(
+                    'flex-1 text-xs',
+                    menuScope === 'tenant'
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                      : 'border-slate-700 text-slate-300 hover:bg-slate-800'
+                  )}
+                  onClick={() => setMenuScope('tenant')}
+                >
+                  <Building2 className="size-3.5 mr-1.5" /> Tenant
+                </Button>
+              </div>
+              {menuScope === 'global' && (
+                <div className="p-2 rounded-lg bg-red-500/5 border border-red-500/20">
+                  <p className="text-[11px] text-red-400 font-medium">Global changes affect ALL tenants</p>
+                </div>
+              )}
+              {menuScope === 'tenant' && (
+                <Select value={selectedTenantForMenu} onValueChange={setSelectedTenantForMenu}>
+                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue placeholder="Choose tenant..." /></SelectTrigger>
+                  <SelectContent>
+                    {tenants.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
             </CardContent>
           </Card>
           <div className="space-y-2">
-            <Button variant="outline" size="sm" className="w-full text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10" onClick={handleEnableAll} disabled={!selectedTenantForMenu || saving}>
+            <Button variant="outline" size="sm" className="w-full text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10" onClick={handleEnableAll} disabled={(menuScope === 'tenant' && !selectedTenantForMenu) || saving}>
               <ToggleRight className="size-4 mr-1.5" /> Enable All
             </Button>
-            <Button variant="outline" size="sm" className="w-full border-slate-700 text-slate-300 hover:bg-slate-800" onClick={handleDisableAll} disabled={!selectedTenantForMenu || saving}>
+            <Button variant="outline" size="sm" className="w-full border-slate-700 text-slate-300 hover:bg-slate-800" onClick={handleDisableAll} disabled={(menuScope === 'tenant' && !selectedTenantForMenu) || saving}>
               <ToggleLeft className="size-4 mr-1.5" /> Disable All
             </Button>
           </div>
@@ -1479,12 +1566,13 @@ export function SuperAdminView() {
           <div className="text-sm text-slate-400 space-y-1">
             <p className="font-medium text-white">Summary</p>
             <p>Enabled: <span className="text-emerald-400">{localItems.filter((i) => i.enabled).length}</span>/{localItems.length}</p>
+            <p>Scope: <span className={menuScope === 'global' ? 'text-red-400' : 'text-emerald-400'}>{menuScope === 'global' ? 'All Tenants' : 'Per-Tenant'}</span></p>
           </div>
         </div>
 
         {/* Right Panel - Menu Items by Section */}
         <div className="flex-1 min-w-0">
-          {menuLoading ? (
+          {isLoading ? (
             <div className="space-y-6">
               {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-lg bg-slate-800" />)}
             </div>
@@ -1495,7 +1583,6 @@ export function SuperAdminView() {
                   const items = itemsBySection[section.key] || [];
                   if (items.length === 0) return null;
                   const SectionIcon = section.icon;
-                  const allEnabled = items.every((i) => i.enabled);
                   return (
                     <Card key={section.key} className="bg-slate-900 border-slate-800">
                       <CardHeader className="pb-2">
@@ -1523,7 +1610,7 @@ export function SuperAdminView() {
                                 : 'border-slate-800 bg-slate-900/50 opacity-60',
                             )}>
                               <span className="text-xs font-medium text-center text-white truncate w-full">{item.label}</span>
-                              <Switch checked={item.enabled} onCheckedChange={() => handleToggle(item.key)} disabled={!selectedTenantForMenu} className="scale-75" />
+                              <Switch checked={item.enabled} onCheckedChange={() => handleToggle(item.key)} disabled={menuScope === 'tenant' && !selectedTenantForMenu} className="scale-75" />
                             </div>
                           ))}
                         </div>

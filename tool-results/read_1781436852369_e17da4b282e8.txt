@@ -1,0 +1,615 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback } from 'react';
+     4→import {
+     5→  Megaphone, Plus, Search, Play, Pause, Copy, Eye, Calendar,
+     6→  Users, Send, BarChart3, Clock, CheckCircle2, XCircle,
+     7→  MessageSquare, TrendingUp, Loader2, Trash2,
+     8→} from 'lucide-react';
+     9→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    10→import { Input } from '@/components/ui/input';
+    11→import { Button } from '@/components/ui/button';
+    12→import { Badge } from '@/components/ui/badge';
+    13→import { ScrollArea } from '@/components/ui/scroll-area';
+    14→import { Separator } from '@/components/ui/separator';
+    15→import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    16→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    17→import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+    18→import { Label } from '@/components/ui/label';
+    19→import { Textarea } from '@/components/ui/textarea';
+    20→import { Progress } from '@/components/ui/progress';
+    21→import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+    22→import { toast } from 'sonner';
+    23→import { cn } from '@/lib/utils';
+    24→import { Skeleton } from '@/components/ui/skeleton';
+    25→
+    26→// ─── Types ──────────────────────────────────────────────────────────────────
+    27→
+    28→type CampaignType = 'promotional' | 'transactional' | 'reminder' | 'seasonal' | 're_engagement' | 'follow_up';
+    29→type CampaignStatus = 'draft' | 'scheduled' | 'running' | 'paused' | 'completed' | 'cancelled';
+    30→type CampaignChannel = 'whatsapp' | 'email' | 'sms' | 'multi';
+    31→
+    32→interface Campaign {
+    33→  id: string;
+    34→  name: string;
+    35→  type: CampaignType;
+    36→  status: CampaignStatus;
+    37→  channel: CampaignChannel;
+    38→  audienceType: string;
+    39→  messageContent: string;
+    40→  scheduledAt: string | null;
+    41→  timezone: string;
+    42→  totalRecipients: number;
+    43→  sentCount: number;
+    44→  deliveredCount: number;
+    45→  readCount: number;
+    46→  clickedCount: number;
+    47→  repliedCount: number;
+    48→  convertedCount: number;
+    49→  failedCount: number;
+    50→  createdAt: string;
+    51→  ctaText?: string;
+    52→  ctaUrl?: string;
+    53→}
+    54→
+    55→// ─── Constants ──────────────────────────────────────────────────────────────
+    56→
+    57→const CAMPAIGN_TYPES: { value: CampaignType; label: string }[] = [
+    58→  { value: 'promotional', label: 'Promotional' },
+    59→  { value: 'transactional', label: 'Transactional' },
+    60→  { value: 'reminder', label: 'Reminder' },
+    61→  { value: 'seasonal', label: 'Seasonal' },
+    62→  { value: 're_engagement', label: 'Re-engagement' },
+    63→  { value: 'follow_up', label: 'Follow-up' },
+    64→];
+    65→
+    66→const CAMPAIGN_CHANNELS: { value: CampaignChannel; label: string }[] = [
+    67→  { value: 'whatsapp', label: 'WhatsApp' },
+    68→  { value: 'email', label: 'Email' },
+    69→  { value: 'sms', label: 'SMS' },
+    70→  { value: 'multi', label: 'Multi-channel' },
+    71→];
+    72→
+    73→const AUDIENCE_TYPES = [
+    74→  'all', 'leads', 'customers', 'vip', 'inactive_30', 'recent',
+    75→  'unpaid', 'upcoming_bookings', 'custom',
+    76→];
+    77→
+    78→const AUDIENCE_LABELS: Record<string, string> = {
+    79→  all: 'All Contacts',
+    80→  leads: 'All Leads',
+    81→  customers: 'All Customers',
+    82→  vip: 'VIP Customers',
+    83→  inactive_30: 'Inactive 30 Days',
+    84→  recent: 'Recent Customers',
+    85→  unpaid: 'Unpaid Invoices',
+    86→  upcoming_bookings: 'Upcoming Bookings',
+    87→  custom: 'Custom Segment',
+    88→};
+    89→
+    90→// ─── Helpers ────────────────────────────────────────────────────────────────
+    91→
+    92→function getStatusColor(status: string) {
+    93→  const map: Record<string, string> = {
+    94→    draft: 'bg-slate-100 text-slate-600 border-slate-200',
+    95→    scheduled: 'bg-sky-100 text-sky-700 border-sky-200',
+    96→    running: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    97→    paused: 'bg-amber-100 text-amber-700 border-amber-200',
+    98→    completed: 'bg-green-100 text-green-700 border-green-200',
+    99→    cancelled: 'bg-red-100 text-red-700 border-red-200',
+   100→  };
+   101→  return map[status] || 'bg-slate-100 text-slate-600';
+   102→}
+   103→
+   104→function getStatusIcon(status: string) {
+   105→  const map: Record<string, React.ReactNode> = {
+   106→    draft: <Clock className="size-3" />,
+   107→    scheduled: <Calendar className="size-3" />,
+   108→    running: <Play className="size-3" />,
+   109→    paused: <Pause className="size-3" />,
+   110→    completed: <CheckCircle2 className="size-3" />,
+   111→    cancelled: <XCircle className="size-3" />,
+   112→  };
+   113→  return map[status] || null;
+   114→}
+   115→
+   116→function getChannelColor(channel: string) {
+   117→  const map: Record<string, string> = {
+   118→    whatsapp: 'bg-emerald-100 text-emerald-700',
+   119→    email: 'bg-sky-100 text-sky-700',
+   120→    sms: 'bg-purple-100 text-purple-700',
+   121→    multi: 'bg-amber-100 text-amber-700',
+   122→  };
+   123→  return map[channel] || 'bg-slate-100 text-slate-600';
+   124→}
+   125→
+   126→// ─── Component ──────────────────────────────────────────────────────────────
+   127→
+   128→export function CampaignsView() {
+   129→  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+   130→  const [isLoading, setIsLoading] = useState(true);
+   131→  const [error, setError] = useState<string | null>(null);
+   132→  const [search, setSearch] = useState('');
+   133→  const [statusFilter, setStatusFilter] = useState('all');
+   134→  const [showCreateDialog, setShowCreateDialog] = useState(false);
+   135→  const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
+   136→  const [showDetailDialog, setShowDetailDialog] = useState(false);
+   137→  const [isCreating, setIsCreating] = useState(false);
+   138→
+   139→  const [createForm, setCreateForm] = useState({
+   140→    name: '', type: 'promotional' as CampaignType, channel: 'whatsapp' as CampaignChannel,
+   141→    audienceType: 'all', messageContent: '', ctaText: '', ctaUrl: '',
+   142→    scheduleDate: '', scheduleTime: '', timezone: 'Asia/Kolkata',
+   143→  });
+   144→
+   145→  // ── Load campaigns from API ──
+   146→  const loadCampaigns = useCallback(async () => {
+   147→    setIsLoading(true);
+   148→    setError(null);
+   149→    try {
+   150→      const params = new URLSearchParams();
+   151→      if (statusFilter !== 'all') params.set('status', statusFilter);
+   152→      params.set('limit', '50');
+   153→
+   154→      const res = await fetch(`/api/campaigns?${params.toString()}`);
+   155→      if (res.ok) {
+   156→        const result = await res.json();
+   157→        setCampaigns(result.data || []);
+   158→      } else {
+   159→        setError('Failed to load campaigns');
+   160→        toast.error('Failed to load campaigns');
+   161→      }
+   162→    } catch {
+   163→      setError('Network error. Please check your connection.');
+   164→      toast.error('Network error loading campaigns');
+   165→    } finally {
+   166→      setIsLoading(false);
+   167→    }
+   168→  }, [statusFilter]);
+   169→
+   170→  useEffect(() => {
+   171→    loadCampaigns();
+   172→  }, [loadCampaigns]);
+   173→
+   174→  const filteredCampaigns = campaigns.filter(c => {
+   175→    if (search && !c.name.toLowerCase().includes(search.toLowerCase())) return false;
+   176→    return true;
+   177→  });
+   178→
+   179→  const handleStatusChange = async (id: string, newStatus: CampaignStatus) => {
+   180→    try {
+   181→      const res = await fetch(`/api/campaigns/${id}`, {
+   182→        method: 'PUT',
+   183→        headers: { 'Content-Type': 'application/json' },
+   184→        body: JSON.stringify({ status: newStatus }),
+   185→      });
+   186→      if (res.ok) {
+   187→        setCampaigns(prev => prev.map(c => c.id === id ? { ...c, status: newStatus } : c));
+   188→        toast.success(`Campaign ${newStatus}`);
+   189→      }
+   190→    } catch {
+   191→      toast.error('Failed to update campaign');
+   192→    }
+   193→  };
+   194→
+   195→  const handleClone = async (campaign: Campaign) => {
+   196→    try {
+   197→      const res = await fetch('/api/campaigns', {
+   198→        method: 'POST',
+   199→        headers: { 'Content-Type': 'application/json' },
+   200→        body: JSON.stringify({
+   201→          name: `${campaign.name} (Copy)`,
+   202→          type: campaign.type,
+   203→          channel: campaign.channel,
+   204→          audienceType: campaign.audienceType,
+   205→          messageContent: campaign.messageContent,
+   206→          status: 'draft',
+   207→        }),
+   208→      });
+   209→      if (res.ok) {
+   210→        const result = await res.json();
+   211→        setCampaigns(prev => [result.data, ...prev]);
+   212→        toast.success('Campaign cloned');
+   213→      }
+   214→    } catch {
+   215→      toast.error('Failed to clone campaign');
+   216→    }
+   217→  };
+   218→
+   219→  const handleCreate = async () => {
+   220→    if (!createForm.name) { toast.error('Campaign name is required'); return; }
+   221→    if (!createForm.messageContent) { toast.error('Message content is required'); return; }
+   222→
+   223→    setIsCreating(true);
+   224→    try {
+   225→      const res = await fetch('/api/campaigns', {
+   226→        method: 'POST',
+   227→        headers: { 'Content-Type': 'application/json' },
+   228→        body: JSON.stringify({
+   229→          name: createForm.name,
+   230→          type: createForm.type,
+   231→          channel: createForm.channel,
+   232→          audienceType: createForm.audienceType,
+   233→          messageContent: createForm.messageContent,
+   234→          ctaText: createForm.ctaText || undefined,
+   235→          ctaUrl: createForm.ctaUrl || undefined,
+   236→          status: createForm.scheduleDate ? 'scheduled' : 'draft',
+   237→          scheduledAt: createForm.scheduleDate ? `${createForm.scheduleDate}T${createForm.scheduleTime || '09:00'}:00` : undefined,
+   238→          timezone: createForm.timezone,
+   239→        }),
+   240→      });
+   241→      if (res.ok) {
+   242→        const result = await res.json();
+   243→        setCampaigns(prev => [result.data, ...prev]);
+   244→        setShowCreateDialog(false);
+   245→        setCreateForm({
+   246→          name: '', type: 'promotional', channel: 'whatsapp',
+   247→          audienceType: 'all', messageContent: '', ctaText: '', ctaUrl: '',
+   248→          scheduleDate: '', scheduleTime: '', timezone: 'Asia/Kolkata',
+   249→        });
+   250→        toast.success('Campaign created');
+   251→      } else {
+   252→        toast.error('Failed to create campaign');
+   253→      }
+   254→    } catch {
+   255→      toast.error('Failed to create campaign');
+   256→    } finally {
+   257→      setIsCreating(false);
+   258→    }
+   259→  };
+   260→
+   261→  const handleDelete = async (id: string) => {
+   262→    try {
+   263→      const res = await fetch(`/api/campaigns/${id}`, { method: 'DELETE' });
+   264→      if (res.ok) {
+   265→        setCampaigns(prev => prev.filter(c => c.id !== id));
+   266→        toast.success('Campaign deleted');
+   267→      }
+   268→    } catch {
+   269→      toast.error('Failed to delete campaign');
+   270→    }
+   271→  };
+   272→
+   273→  const stats = {
+   274→    total: campaigns.length,
+   275→    running: campaigns.filter(c => c.status === 'running').length,
+   276→    totalSent: campaigns.reduce((s, c) => s + c.sentCount, 0),
+   277→    avgReadRate: campaigns.filter(c => c.sentCount > 0).length > 0
+   278→      ? Math.round(campaigns.filter(c => c.sentCount > 0).reduce((s, c) => s + (c.readCount / c.sentCount * 100), 0) / campaigns.filter(c => c.sentCount > 0).length)
+   279→      : 0,
+   280→  };
+   281→
+   282→  if (isLoading) {
+   283→    return (
+   284→      <div className="space-y-6 max-w-7xl mx-auto">
+   285→        <div className="flex items-center justify-between">
+   286→          <div className="flex items-center gap-3">
+   287→            <Skeleton className="size-10 rounded-lg" />
+   288→            <div>
+   289→              <Skeleton className="h-5 w-28" />
+   290→              <Skeleton className="h-3 w-44 mt-1" />
+   291→            </div>
+   292→          </div>
+   293→          <Skeleton className="h-9 w-36" />
+   294→        </div>
+   295→        <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+   296→          {Array.from({ length: 4 }).map((_, i) => (
+   297→            <Card key={i} className="p-4"><div className="flex items-center gap-2"><Skeleton className="size-4" /><div><Skeleton className="h-3 w-20" /><Skeleton className="h-5 w-10 mt-1" /></div></div></Card>
+   298→          ))}
+   299→        </div>
+   300→        <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+   301→          {Array.from({ length: 4 }).map((_, i) => (
+   302→            <Card key={i} className="p-4"><div className="space-y-3"><Skeleton className="h-4 w-3/4" /><Skeleton className="h-3 w-1/2" /><Skeleton className="h-10 w-full" /></div></Card>
+   303→          ))}
+   304→        </div>
+   305→      </div>
+   306→    );
+   307→  }
+   308→
+   309→  if (error) {
+   310→    return (
+   311→      <div className="flex flex-col items-center justify-center h-96 text-muted-foreground">
+   312→        <Megaphone className="size-12 mb-4 opacity-20" />
+   313→        <p className="text-lg font-medium">Failed to load campaigns</p>
+   314→        <p className="text-sm mt-1">{error}</p>
+   315→        <Button className="mt-4" variant="outline" onClick={loadCampaigns}>
+   316→          <Loader2 className="size-4 mr-1.5" /> Retry
+   317→        </Button>
+   318→      </div>
+   319→    );
+   320→  }
+   321→
+   322→  return (
+   323→    <div className="space-y-6 max-w-7xl mx-auto">
+   324→      {/* Header */}
+   325→      <div className="flex items-center justify-between flex-wrap gap-4">
+   326→        <div className="flex items-center gap-3">
+   327→          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600">
+   328→            <Megaphone className="size-5 text-white" />
+   329→          </div>
+   330→          <div>
+   331→            <h2 className="text-xl font-bold">Campaigns</h2>
+   332→            <p className="text-sm text-muted-foreground">Multi-channel campaign engine</p>
+   333→          </div>
+   334→        </div>
+   335→        <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowCreateDialog(true)}>
+   336→          <Plus className="size-4 mr-1.5" /> Create Campaign
+   337→        </Button>
+   338→      </div>
+   339→
+   340→      {/* Stats */}
+   341→      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+   342→        {[
+   343→          { label: 'Total Campaigns', value: stats.total, icon: Megaphone, color: 'text-foreground' },
+   344→          { label: 'Active', value: stats.running, icon: Play, color: 'text-emerald-600' },
+   345→          { label: 'Total Sent', value: stats.totalSent.toLocaleString(), icon: Send, color: 'text-sky-600' },
+   346→          { label: 'Avg Read Rate', value: `${stats.avgReadRate}%`, icon: Eye, color: 'text-purple-600' },
+   347→        ].map(stat => {
+   348→          const Icon = stat.icon;
+   349→          return (
+   350→            <Card key={stat.label} className="p-4">
+   351→              <div className="flex items-center gap-2">
+   352→                <Icon className={`size-4 ${stat.color}`} />
+   353→                <div>
+   354→                  <p className="text-xs text-muted-foreground">{stat.label}</p>
+   355→                  <p className={`text-lg font-bold ${stat.color}`}>{stat.value}</p>
+   356→                </div>
+   357→              </div>
+   358→            </Card>
+   359→          );
+   360→        })}
+   361→      </div>
+   362→
+   363→      {/* Filters */}
+   364→      <div className="flex flex-wrap items-center gap-3">
+   365→        <Tabs value={statusFilter} onValueChange={setStatusFilter}>
+   366→          <TabsList>
+   367→            <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
+   368→            <TabsTrigger value="draft" className="text-xs">Draft</TabsTrigger>
+   369→            <TabsTrigger value="scheduled" className="text-xs">Scheduled</TabsTrigger>
+   370→            <TabsTrigger value="running" className="text-xs">Running</TabsTrigger>
+   371→            <TabsTrigger value="paused" className="text-xs">Paused</TabsTrigger>
+   372→            <TabsTrigger value="completed" className="text-xs">Completed</TabsTrigger>
+   373→          </TabsList>
+   374→        </Tabs>
+   375→        <div className="relative flex-1 min-w-[200px]">
+   376→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   377→          <Input placeholder="Search campaigns..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+   378→        </div>
+   379→      </div>
+   380→
+   381→      {/* Campaign List */}
+   382→      {filteredCampaigns.length === 0 ? (
+   383→        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+   384→          <Megaphone className="size-12 mb-4 opacity-20" />
+   385→          <p className="text-lg font-medium">No campaigns found</p>
+   386→          <p className="text-sm mt-1">Create your first campaign to get started</p>
+   387→          <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowCreateDialog(true)}>
+   388→            <Plus className="size-4 mr-1.5" /> Create Campaign
+   389→          </Button>
+   390→        </div>
+   391→      ) : (
+   392→        <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+   393→          {filteredCampaigns.map(campaign => (
+   394→            <Card key={campaign.id} className="hover:shadow-md transition-all cursor-pointer" onClick={() => { setSelectedCampaign(campaign); setShowDetailDialog(true); }}>
+   395→              <CardContent className="p-4 space-y-3">
+   396→                <div className="flex items-start justify-between gap-2">
+   397→                  <div>
+   398→                    <h4 className="font-semibold text-sm">{campaign.name}</h4>
+   399→                    <div className="flex items-center gap-2 mt-1">
+   400→                      <Badge variant="outline" className={`${getStatusColor(campaign.status)} text-[10px]`}>
+   401→                        {getStatusIcon(campaign.status)}
+   402→                        <span className="ml-1">{campaign.status}</span>
+   403→                      </Badge>
+   404→                      <Badge variant="secondary" className={`${getChannelColor(campaign.channel)} text-[10px]`}>
+   405→                        {campaign.channel}
+   406→                      </Badge>
+   407→                      <Badge variant="secondary" className="text-[10px]">{campaign.type}</Badge>
+   408→                    </div>
+   409→                  </div>
+   410→                  <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+   411→                    {campaign.status === 'running' && (
+   412→                      <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleStatusChange(campaign.id, 'paused')}><Pause className="size-3.5" /></Button></TooltipTrigger><TooltipContent>Pause</TooltipContent></Tooltip></TooltipProvider>
+   413→                    )}
+   414→                    {campaign.status === 'paused' && (
+   415→                      <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleStatusChange(campaign.id, 'running')}><Play className="size-3.5" /></Button></TooltipTrigger><TooltipContent>Resume</TooltipContent></Tooltip></TooltipProvider>
+   416→                    )}
+   417→                    {campaign.status === 'draft' && (
+   418→                      <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleStatusChange(campaign.id, 'running')}><Play className="size-3.5" /></Button></TooltipTrigger><TooltipContent>Start</TooltipContent></Tooltip></TooltipProvider>
+   419→                    )}
+   420→                    <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleClone(campaign)}><Copy className="size-3.5" /></Button></TooltipTrigger><TooltipContent>Clone</TooltipContent></Tooltip></TooltipProvider>
+   421→                    <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500" onClick={() => handleDelete(campaign.id)}><Trash2 className="size-3.5" /></Button></TooltipTrigger><TooltipContent>Delete</TooltipContent></Tooltip></TooltipProvider>
+   422→                  </div>
+   423→                </div>
+   424→                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+   425→                  <span className="flex items-center gap-1"><Users className="size-3" />{AUDIENCE_LABELS[campaign.audienceType] || campaign.audienceType}</span>
+   426→                  <span className="flex items-center gap-1"><Calendar className="size-3" />{new Date(campaign.createdAt).toLocaleDateString()}</span>
+   427→                </div>
+   428→                {campaign.sentCount > 0 && (
+   429→                  <div className="grid grid-cols-3 gap-2 pt-2 border-t">
+   430→                    {[
+   431→                      { label: 'Sent', value: campaign.sentCount, icon: Send },
+   432→                      { label: 'Read', value: campaign.readCount, icon: Eye },
+   433→                      { label: 'Replied', value: campaign.repliedCount, icon: MessageSquare },
+   434→                    ].map(stat => {
+   435→                      const Icon = stat.icon;
+   436→                      return (
+   437→                        <div key={stat.label} className="text-center">
+   438→                          <Icon className="size-3 text-muted-foreground mx-auto" />
+   439→                          <p className="font-medium text-sm">{stat.value.toLocaleString()}</p>
+   440→                          <p className="text-[10px] text-muted-foreground">{stat.label}</p>
+   441→                        </div>
+   442→                      );
+   443→                    })}
+   444→                  </div>
+   445→                )}
+   446→              </CardContent>
+   447→            </Card>
+   448→          ))}
+   449→        </div>
+   450→      )}
+   451→
+   452→      {/* Create Campaign Dialog */}
+   453→      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+   454→        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+   455→          <DialogHeader>
+   456→            <DialogTitle>Create Campaign</DialogTitle>
+   457→            <DialogDescription>Set up a new multi-channel campaign</DialogDescription>
+   458→          </DialogHeader>
+   459→          <div className="space-y-4 py-2">
+   460→            <div className="space-y-2">
+   461→              <Label>Campaign Name *</Label>
+   462→              <Input placeholder="e.g., Summer Cleaning Promo" value={createForm.name} onChange={e => setCreateForm({ ...createForm, name: e.target.value })} />
+   463→            </div>
+   464→            <div className="grid grid-cols-2 gap-3">
+   465→              <div className="space-y-2">
+   466→                <Label>Type</Label>
+   467→                <Select value={createForm.type} onValueChange={v => setCreateForm({ ...createForm, type: v as CampaignType })}>
+   468→                  <SelectTrigger><SelectValue /></SelectTrigger>
+   469→                  <SelectContent>
+   470→                    {CAMPAIGN_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+   471→                  </SelectContent>
+   472→                </Select>
+   473→              </div>
+   474→              <div className="space-y-2">
+   475→                <Label>Channel</Label>
+   476→                <Select value={createForm.channel} onValueChange={v => setCreateForm({ ...createForm, channel: v as CampaignChannel })}>
+   477→                  <SelectTrigger><SelectValue /></SelectTrigger>
+   478→                  <SelectContent>
+   479→                    {CAMPAIGN_CHANNELS.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+   480→                  </SelectContent>
+   481→                </Select>
+   482→              </div>
+   483→            </div>
+   484→            <div className="space-y-2">
+   485→              <Label>Audience</Label>
+   486→              <Select value={createForm.audienceType} onValueChange={v => setCreateForm({ ...createForm, audienceType: v })}>
+   487→                <SelectTrigger><SelectValue /></SelectTrigger>
+   488→                <SelectContent>
+   489→                  {AUDIENCE_TYPES.map(a => <SelectItem key={a} value={a}>{AUDIENCE_LABELS[a]}</SelectItem>)}
+   490→                </SelectContent>
+   491→              </Select>
+   492→            </div>
+   493→            <div className="space-y-2">
+   494→              <Label>Message Content *</Label>
+   495→              <Textarea placeholder="Type your message... Use {{name}}, {{service}}, {{amount}} as placeholders" value={createForm.messageContent} onChange={e => setCreateForm({ ...createForm, messageContent: e.target.value })} rows={4} />
+   496→              <p className="text-[10px] text-muted-foreground">{createForm.messageContent.length} characters</p>
+   497→            </div>
+   498→            <div className="grid grid-cols-2 gap-3">
+   499→              <div className="space-y-2">
+   500→                <Label>CTA Button Text</Label>
+   501→                <Input placeholder="e.g., Book Now" value={createForm.ctaText} onChange={e => setCreateForm({ ...createForm, ctaText: e.target.value })} />
+   502→              </div>
+   503→              <div className="space-y-2">
+   504→                <Label>CTA URL</Label>
+   505→                <Input placeholder="https://..." value={createForm.ctaUrl} onChange={e => setCreateForm({ ...createForm, ctaUrl: e.target.value })} />
+   506→              </div>
+   507→            </div>
+   508→            <Separator />
+   509→            <div className="space-y-2">
+   510→              <Label>Schedule (optional)</Label>
+   511→              <div className="grid grid-cols-3 gap-3">
+   512→                <Input type="date" value={createForm.scheduleDate} onChange={e => setCreateForm({ ...createForm, scheduleDate: e.target.value })} />
+   513→                <Input type="time" value={createForm.scheduleTime} onChange={e => setCreateForm({ ...createForm, scheduleTime: e.target.value })} />
+   514→                <Select value={createForm.timezone} onValueChange={v => setCreateForm({ ...createForm, timezone: v })}>
+   515→                  <SelectTrigger><SelectValue /></SelectTrigger>
+   516→                  <SelectContent>
+   517→                    <SelectItem value="Asia/Kolkata">IST (India)</SelectItem>
+   518→                    <SelectItem value="America/New_York">EST (New York)</SelectItem>
+   519→                    <SelectItem value="America/Chicago">CST (Chicago)</SelectItem>
+   520→                    <SelectItem value="America/Los_Angeles">PST (LA)</SelectItem>
+   521→                    <SelectItem value="UTC">UTC</SelectItem>
+   522→                  </SelectContent>
+   523→                </Select>
+   524→              </div>
+   525→            </div>
+   526→          </div>
+   527→          <DialogFooter>
+   528→            <Button variant="outline" onClick={() => setShowCreateDialog(false)}>Cancel</Button>
+   529→            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreate} disabled={!createForm.name || !createForm.messageContent || isCreating}>
+   530→              {isCreating ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
+   531→              {createForm.scheduleDate ? 'Schedule Campaign' : 'Create Campaign'}
+   532→            </Button>
+   533→          </DialogFooter>
+   534→        </DialogContent>
+   535→      </Dialog>
+   536→
+   537→      {/* Campaign Detail Dialog */}
+   538→      <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
+   539→        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+   540→          <DialogHeader>
+   541→            <DialogTitle>{selectedCampaign?.name}</DialogTitle>
+   542→            <DialogDescription>
+   543→              <div className="flex items-center gap-2 mt-1">
+   544→                <Badge variant="outline" className={`${getStatusColor(selectedCampaign?.status || '')} text-xs`}>
+   545→                  {selectedCampaign?.status}
+   546→                </Badge>
+   547→                <Badge variant="secondary" className={`${getChannelColor(selectedCampaign?.channel || '')} text-xs`}>
+   548→                  {selectedCampaign?.channel}
+   549→                </Badge>
+   550→              </div>
+   551→            </DialogDescription>
+   552→          </DialogHeader>
+   553→          {selectedCampaign && (
+   554→            <div className="space-y-4">
+   555→              <div className="grid grid-cols-2 gap-2 text-sm">
+   556→                <div><span className="text-muted-foreground">Type:</span> <span className="font-medium">{selectedCampaign.type}</span></div>
+   557→                <div><span className="text-muted-foreground">Audience:</span> <span className="font-medium">{AUDIENCE_LABELS[selectedCampaign.audienceType] || selectedCampaign.audienceType}</span></div>
+   558→                <div><span className="text-muted-foreground">Channel:</span> <span className="font-medium">{selectedCampaign.channel}</span></div>
+   559→                <div><span className="text-muted-foreground">Timezone:</span> <span className="font-medium">{selectedCampaign.timezone}</span></div>
+   560→              </div>
+   561→
+   562→              {selectedCampaign.messageContent && (
+   563→                <div className="bg-slate-100 dark:bg-slate-800 rounded-lg p-4">
+   564→                  <p className="text-sm whitespace-pre-wrap">{selectedCampaign.messageContent}</p>
+   565→                  {selectedCampaign.ctaText && (
+   566→                    <Button size="sm" className="mt-3 bg-emerald-600 hover:bg-emerald-700 h-7 text-xs">
+   567→                      {selectedCampaign.ctaText}
+   568→                    </Button>
+   569→                  )}
+   570→                </div>
+   571→              )}
+   572→
+   573→              <Separator />
+   574→              <div>
+   575→                <h4 className="font-medium text-sm mb-2">Campaign Analytics</h4>
+   576→                <div className="grid grid-cols-3 gap-3">
+   577→                  {[
+   578→                    { label: 'Sent', value: selectedCampaign.sentCount, color: 'text-sky-600' },
+   579→                    { label: 'Delivered', value: selectedCampaign.deliveredCount, color: 'text-emerald-600' },
+   580→                    { label: 'Read', value: selectedCampaign.readCount, color: 'text-purple-600' },
+   581→                    { label: 'Clicked', value: selectedCampaign.clickedCount, color: 'text-orange-600' },
+   582→                    { label: 'Replied', value: selectedCampaign.repliedCount, color: 'text-amber-600' },
+   583→                    { label: 'Converted', value: selectedCampaign.convertedCount, color: 'text-green-600' },
+   584→                  ].map(stat => (
+   585→                    <Card key={stat.label} className="p-2 text-center">
+   586→                      <p className={`text-lg font-bold ${stat.color}`}>{stat.value.toLocaleString()}</p>
+   587→                      <p className="text-[10px] text-muted-foreground">{stat.label}</p>
+   588→                    </Card>
+   589→                  ))}
+   590→                </div>
+   591→                {selectedCampaign.sentCount > 0 && (
+   592→                  <div className="mt-3 space-y-2">
+   593→                    <div>
+   594→                      <div className="flex justify-between text-xs mb-1"><span>Delivery Rate</span><span>{Math.round(selectedCampaign.deliveredCount / selectedCampaign.sentCount * 100)}%</span></div>
+   595→                      <Progress value={selectedCampaign.deliveredCount / selectedCampaign.sentCount * 100} className="h-2" />
+   596→                    </div>
+   597→                    <div>
+   598→                      <div className="flex justify-between text-xs mb-1"><span>Read Rate</span><span>{Math.round(selectedCampaign.readCount / selectedCampaign.sentCount * 100)}%</span></div>
+   599→                      <Progress value={selectedCampaign.readCount / selectedCampaign.sentCount * 100} className="h-2" />
+   600→                    </div>
+   601→                    <div>
+   602→                      <div className="flex justify-between text-xs mb-1"><span>Conversion Rate</span><span>{Math.round(selectedCampaign.convertedCount / selectedCampaign.sentCount * 100)}%</span></div>
+   603→                      <Progress value={selectedCampaign.convertedCount / selectedCampaign.sentCount * 100} className="h-2" />
+   604→                    </div>
+   605→                  </div>
+   606→                )}
+   607→              </div>
+   608→            </div>
+   609→          )}
+   610→        </DialogContent>
+   611→      </Dialog>
+   612→    </div>
+   613→  );
+   614→}
+   615→

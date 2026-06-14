@@ -1,0 +1,1487 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback, useRef } from 'react';
+     4→import {
+     5→  User, MapPin, Clock, Phone, CheckCircle2, XCircle, Play,
+     6→  Loader2, ChevronDown, ChevronUp, Star, Navigation,
+     7→  Radio, MessageSquare, Calendar, AlertTriangle, Eye,
+     8→  Wifi, WifiOff, Bell, BellOff, Camera, PenLine, Trash2, Timer,
+     9→} from 'lucide-react';
+    10→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    11→import { Button } from '@/components/ui/button';
+    12→import { Badge } from '@/components/ui/badge';
+    13→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    14→import { ScrollArea } from '@/components/ui/scroll-area';
+    15→import { Separator } from '@/components/ui/separator';
+    16→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    17→import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+    18→import { Textarea } from '@/components/ui/textarea';
+    19→import { toast } from 'sonner';
+    20→import { useRealtime } from '@/hooks/use-realtime';
+    21→
+    22→// ─── Types ──────────────────────────────────────────────────────────────────
+    23→
+    24→interface Employee {
+    25→  id: string;
+    26→  name: string;
+    27→  phone: string;
+    28→  email?: string;
+    29→  role: string;
+    30→  status: string;
+    31→  skills: string;
+    32→  rating: number;
+    33→  completedJobs: number;
+    34→  location?: string;
+    35→  latitude?: number;
+    36→  longitude?: number;
+    37→  avatar?: string;
+    38→  updatedAt: string;
+    39→}
+    40→
+    41→interface Job {
+    42→  id: string;
+    43→  jobNumber?: string;
+    44→  title: string;
+    45→  description?: string;
+    46→  status: string;
+    47→  priority: string;
+    48→  type: string;
+    49→  address?: string;
+    50→  scheduledAt?: string;
+    51→  scheduledTime?: string;
+    52→  estimatedDuration?: number;
+    53→  notes?: string;
+    54→  customerName?: string;
+    55→  customerPhone?: string;
+    56→  assigneeId?: string;
+    57→  assigneeName?: string;
+    58→  assigneePhone?: string;
+    59→  checkInLat?: number;
+    60→  checkInLng?: number;
+    61→  checkOutLat?: number;
+    62→  checkOutLng?: number;
+    63→  customerRating?: number;
+    64→  employeeRating?: number;
+    65→  assignmentStatus?: string;
+    66→  createdAt: string;
+    67→  updatedAt: string;
+    68→}
+    69→
+    70→// ─── Helpers ────────────────────────────────────────────────────────────────
+    71→
+    72→const STATUS_COLORS: Record<string, string> = {
+    73→  available: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    74→  busy: 'bg-red-100 text-red-700 border-red-200',
+    75→  offline: 'bg-gray-100 text-gray-600 border-gray-200',
+    76→  leave: 'bg-amber-100 text-amber-700 border-amber-200',
+    77→  traveling: 'bg-blue-100 text-blue-700 border-blue-200',
+    78→};
+    79→
+    80→const STATUS_DOTS: Record<string, string> = {
+    81→  available: 'bg-emerald-500',
+    82→  busy: 'bg-red-500',
+    83→  offline: 'bg-gray-400',
+    84→  leave: 'bg-amber-500',
+    85→  traveling: 'bg-blue-500',
+    86→};
+    87→
+    88→const STATUS_LABELS: Record<string, string> = {
+    89→  available: 'Available',
+    90→  busy: 'Busy',
+    91→  offline: 'Offline',
+    92→  leave: 'On Leave',
+    93→  traveling: 'Traveling',
+    94→};
+    95→
+    96→const PRIORITY_COLORS: Record<string, string> = {
+    97→  low: 'bg-slate-100 text-slate-600 border-slate-200',
+    98→  medium: 'bg-amber-100 text-amber-700 border-amber-200',
+    99→  high: 'bg-orange-100 text-orange-700 border-orange-200',
+   100→  urgent: 'bg-red-100 text-red-700 border-red-200',
+   101→};
+   102→
+   103→const JOB_STATUS_COLORS: Record<string, string> = {
+   104→  pending: 'bg-amber-100 text-amber-700 border-amber-200',
+   105→  assigned: 'bg-blue-100 text-blue-700 border-blue-200',
+   106→  in_progress: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+   107→  completed: 'bg-green-100 text-green-700 border-green-200',
+   108→  cancelled: 'bg-red-100 text-red-700 border-red-200',
+   109→};
+   110→
+   111→function formatTime(dateStr?: string | null) {
+   112→  if (!dateStr) return '--';
+   113→  try {
+   114→    return new Date(dateStr).toLocaleTimeString('en-US', {
+   115→      hour: '2-digit',
+   116→      minute: '2-digit',
+   117→    });
+   118→  } catch {
+   119→    return '--';
+   120→  }
+   121→}
+   122→
+   123→function formatDate(dateStr?: string | null) {
+   124→  if (!dateStr) return '';
+   125→  try {
+   126→    return new Date(dateStr).toLocaleDateString('en-US', {
+   127→      month: 'short',
+   128→      day: 'numeric',
+   129→      year: 'numeric',
+   130→    });
+   131→  } catch {
+   132→    return '';
+   133→  }
+   134→}
+   135→
+   136→function formatRelativeTime(dateStr?: string | null) {
+   137→  if (!dateStr) return 'Unknown';
+   138→  try {
+   139→    const now = new Date();
+   140→    const then = new Date(dateStr);
+   141→    const diffMs = now.getTime() - then.getTime();
+   142→    const diffMins = Math.floor(diffMs / 60000);
+   143→    if (diffMins < 1) return 'Just now';
+   144→    if (diffMins < 60) return `${diffMins}m ago`;
+   145→    const diffHours = Math.floor(diffMins / 60);
+   146→    if (diffHours < 24) return `${diffHours}h ago`;
+   147→    const diffDays = Math.floor(diffHours / 24);
+   148→    return `${diffDays}d ago`;
+   149→  } catch {
+   150→    return 'Unknown';
+   151→  }
+   152→}
+   153→
+   154→// ─── Component ──────────────────────────────────────────────────────────────
+   155→
+   156→export function EmployeePortalView() {
+   157→  // ── State ──
+   158→  const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
+   159→  const [assignedJobs, setAssignedJobs] = useState<Job[]>([]);
+   160→  const [inProgressJobs, setInProgressJobs] = useState<Job[]>([]);
+   161→  const [completedJobs, setCompletedJobs] = useState<Job[]>([]);
+   162→  const [loading, setLoading] = useState(true);
+   163→  const [actionLoading, setActionLoading] = useState<string | null>(null);
+   164→  const [expandedJob, setExpandedJob] = useState<string | null>(null);
+   165→  const [completedExpanded, setCompletedExpanded] = useState(false);
+   166→  const [completionNotes, setCompletionNotes] = useState('');
+   167→  const [showCompleteDialog, setShowCompleteDialog] = useState(false);
+   168→  const [completingJobId, setCompletingJobId] = useState<string | null>(null);
+   169→  const [gpsLoading, setGpsLoading] = useState(false);
+   170→  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+   171→
+   172→  // New feature states
+   173→  const [isOnline, setIsOnline] = useState(true);
+   174→  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>('default');
+   175→  const [activeTimer, setActiveTimer] = useState<string | null>(null); // HH:MM:SS
+   176→  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+   177→  const [showPhotoUpload, setShowPhotoUpload] = useState(false);
+   178→  const [showSignature, setShowSignature] = useState(false);
+   179→  const [signatureData, setSignatureData] = useState<string | null>(null);
+   180→  const [offlineQueue, setOfflineQueue] = useState<Array<{ action: string; data: any }>>([]);
+   181→  const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
+   182→  const isDrawingRef = useRef(false);
+   183→  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+   184→
+   185→  // Real-time connection
+   186→  const { connected: realtimeConnected } = useRealtime({
+   187→    employeeId: currentEmployee?.id,
+   188→    onJobUpdate: useCallback(() => {
+   189→      if (currentEmployee?.id) fetchJobs(currentEmployee.id);
+   190→    }, [currentEmployee?.id]),
+   191→  });
+   192→
+   193→  // ── Fetch Employee ──
+   194→  const fetchCurrentEmployee = useCallback(async () => {
+   195→    try {
+   196→      // Try to get the employee record linked to the current user
+   197→      const meRes = await fetch('/api/auth/me');
+   198→      let userId: string | undefined;
+   199→      if (meRes.ok) {
+   200→        const meData = await meRes.json();
+   201→        userId = meData.user?.id;
+   202→      }
+   203→
+   204→      // Fetch employees, optionally filtered by userId
+   205→      const url = userId ? `/api/employees?userId=${userId}` : '/api/employees';
+   206→      const res = await fetch(url);
+   207→      if (res.ok) {
+   208→        const data = await res.json();
+   209→        if (Array.isArray(data) && data.length > 0) {
+   210→          // If we have a userId, find the matching employee
+   211→          if (userId) {
+   212→            const matching = data.find((e: any) => e.userId === userId);
+   213→            if (matching) {
+   214→              setCurrentEmployee(matching);
+   215→              return;
+   216→            }
+   217→          }
+   218→          // Fallback to first employee
+   219→          setCurrentEmployee(data[0]);
+   220→        }
+   221→      }
+   222→    } catch {
+   223→      // Silently fail
+   224→    }
+   225→  }, []);
+   226→
+   227→  // ── Fetch Jobs ──
+   228→  const fetchJobs = useCallback(async (employeeId: string) => {
+   229→    try {
+   230→      const [assignedRes, inProgressRes, completedRes] = await Promise.all([
+   231→        fetch(`/api/jobs?assigneeId=${employeeId}&status=assigned`),
+   232→        fetch(`/api/jobs?assigneeId=${employeeId}&status=in_progress`),
+   233→        fetch(`/api/jobs?assigneeId=${employeeId}&status=completed`),
+   234→      ]);
+   235→
+   236→      if (assignedRes.ok) {
+   237→        const data = await assignedRes.json();
+   238→        setAssignedJobs(Array.isArray(data) ? data : []);
+   239→      }
+   240→      if (inProgressRes.ok) {
+   241→        const data = await inProgressRes.json();
+   242→        setInProgressJobs(Array.isArray(data) ? data : []);
+   243→      }
+   244→      if (completedRes.ok) {
+   245→        const data = await completedRes.json();
+   246→        setCompletedJobs(Array.isArray(data) ? data : []);
+   247→      }
+   248→    } catch {
+   249→      // Silently fail
+   250→    }
+   251→  }, []);
+   252→
+   253→  // ── Initial Load ──
+   254→  useEffect(() => {
+   255→    const init = async () => {
+   256→      setLoading(true);
+   257→      await fetchCurrentEmployee();
+   258→      setLoading(false);
+   259→    };
+   260→    init();
+   261→  }, [fetchCurrentEmployee]);
+   262→
+   263→  // ── Fetch jobs when employee is set ──
+   264→  useEffect(() => {
+   265→    if (currentEmployee?.id) {
+   266→      fetchJobs(currentEmployee.id);
+   267→    }
+   268→  }, [currentEmployee?.id, fetchJobs]);
+   269→
+   270→  // ── Auto-heartbeat every 60 seconds ──
+   271→  useEffect(() => {
+   272→    if (!currentEmployee?.id) return;
+   273→
+   274→    const sendHeartbeat = async () => {
+   275→      try {
+   276→        await fetch('/api/employees/heartbeat', {
+   277→          method: 'POST',
+   278→          headers: { 'Content-Type': 'application/json' },
+   279→          body: JSON.stringify({ employeeId: currentEmployee.id }),
+   280→        });
+   281→      } catch {
+   282→        // Silent
+   283→      }
+   284→    };
+   285→
+   286→    // Send initial heartbeat
+   287→    sendHeartbeat();
+   288→
+   289→    // Set interval
+   290→    heartbeatIntervalRef.current = setInterval(sendHeartbeat, 60000);
+   291→
+   292→    return () => {
+   293→      if (heartbeatIntervalRef.current) {
+   294→        clearInterval(heartbeatIntervalRef.current);
+   295→      }
+   296→    };
+   297→  }, [currentEmployee?.id]);
+   298→
+   299→  // ── Online/Offline Detection ──
+   300→  useEffect(() => {
+   301→    if (typeof navigator === 'undefined') return;
+   302→    setIsOnline(navigator.onLine);
+   303→
+   304→    const handleOnline = () => {
+   305→      setIsOnline(true);
+   306→      // Process offline queue
+   307→      if (offlineQueue.length > 0) {
+   308→        toast.success(`Back online — processing ${offlineQueue.length} queued action(s)`);
+   309→        setOfflineQueue([]);
+   310→      }
+   311→    };
+   312→    const handleOffline = () => setIsOnline(false);
+   313→
+   314→    window.addEventListener('online', handleOnline);
+   315→    window.addEventListener('offline', handleOffline);
+   316→    return () => {
+   317→      window.removeEventListener('online', handleOnline);
+   318→      window.removeEventListener('offline', handleOffline);
+   319→    };
+   320→  }, [offlineQueue.length]);
+   321→
+   322→  // ── Notification Permission ──
+   323→  useEffect(() => {
+   324→    if (typeof window !== 'undefined' && 'Notification' in window) {
+   325→      setNotificationPermission(Notification.permission);
+   326→    } else {
+   327→      setNotificationPermission('unsupported');
+   328→    }
+   329→  }, []);
+   330→
+   331→  // ── Active Job Timer ──
+   332→  useEffect(() => {
+   333→    const activeJob = inProgressJobs[0];
+   334→    if (!activeJob) {
+   335→      setActiveTimer(null);
+   336→      if (timerRef.current) {
+   337→        clearInterval(timerRef.current);
+   338→        timerRef.current = null;
+   339→      }
+   340→      return;
+   341→    }
+   342→
+   343→    const startTime = activeJob.updatedAt ? new Date(activeJob.updatedAt) : new Date();
+   344→
+   345→    const updateTimer = () => {
+   346→      const now = new Date();
+   347→      const diffMs = now.getTime() - startTime.getTime();
+   348→      const hours = Math.floor(diffMs / 3600000);
+   349→      const minutes = Math.floor((diffMs % 3600000) / 60000);
+   350→      const seconds = Math.floor((diffMs % 60000) / 1000);
+   351→      setActiveTimer(
+   352→        `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+   353→      );
+   354→    };
+   355→
+   356→    updateTimer();
+   357→    timerRef.current = setInterval(updateTimer, 1000);
+   358→    return () => {
+   359→      if (timerRef.current) {
+   360→        clearInterval(timerRef.current);
+   361→        timerRef.current = null;
+   362→      }
+   363→    };
+   364→  }, [inProgressJobs]);
+   365→
+   366→  // ── Refresh employee data (for status and updatedAt) ──
+   367→  const refreshEmployee = useCallback(async () => {
+   368→    if (!currentEmployee?.id) return;
+   369→    try {
+   370→      const res = await fetch('/api/employees');
+   371→      if (res.ok) {
+   372→        const data = await res.json();
+   373→        if (Array.isArray(data)) {
+   374→          const updated = data.find((e: Employee) => e.id === currentEmployee.id);
+   375→          if (updated) setCurrentEmployee(updated);
+   376→        }
+   377→      }
+   378→    } catch {
+   379→      // Silent
+   380→    }
+   381→  }, [currentEmployee?.id]);
+   382→
+   383→  // ── Handlers ──
+   384→
+   385→  const handleStatusChange = async (newStatus: string) => {
+   386→    if (!currentEmployee?.id || newStatus === currentEmployee.status) return;
+   387→    setActionLoading(`status-${newStatus}`);
+   388→    try {
+   389→      const res = await fetch('/api/employees/status', {
+   390→        method: 'POST',
+   391→        headers: { 'Content-Type': 'application/json' },
+   392→        body: JSON.stringify({ employeeId: currentEmployee.id, status: newStatus }),
+   393→      });
+   394→      if (res.ok) {
+   395→        const updated = await res.json();
+   396→        setCurrentEmployee(updated);
+   397→        toast.success(`Status changed to ${STATUS_LABELS[newStatus] || newStatus}`);
+   398→      } else {
+   399→        const err = await res.json();
+   400→        toast.error(err.error || 'Failed to update status');
+   401→      }
+   402→    } catch {
+   403→      toast.error('Network error');
+   404→    } finally {
+   405→      setActionLoading(null);
+   406→    }
+   407→  };
+   408→
+   409→  const handleLifecycleAction = async (action: string, jobId: string) => {
+   410→    setActionLoading(`${action}-${jobId}`);
+   411→    try {
+   412→      const res = await fetch('/api/jobs/lifecycle', {
+   413→        method: 'POST',
+   414→        headers: { 'Content-Type': 'application/json' },
+   415→        body: JSON.stringify({ action, jobId }),
+   416→      });
+   417→      if (res.ok) {
+   418→        const actionLabels: Record<string, string> = {
+   419→          accept: 'accepted',
+   420→          reject: 'rejected',
+   421→          start: 'started',
+   422→          complete: 'completed',
+   423→        };
+   424→        toast.success(`Job ${actionLabels[action] || action} successfully`);
+   425→        if (currentEmployee?.id) {
+   426→          await fetchJobs(currentEmployee.id);
+   427→          await refreshEmployee();
+   428→        }
+   429→      } else {
+   430→        const err = await res.json();
+   431→        toast.error(err.error || `Failed to ${action} job`);
+   432→      }
+   433→    } catch {
+   434→      toast.error('Network error');
+   435→    } finally {
+   436→      setActionLoading(null);
+   437→    }
+   438→  };
+   439→
+   440→  const handleGPSCheckIn = async (jobId: string) => {
+   441→    setGpsLoading(true);
+   442→    try {
+   443→      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+   444→        navigator.geolocation.getCurrentPosition(resolve, reject, {
+   445→          enableHighAccuracy: true,
+   446→          timeout: 10000,
+   447→        });
+   448→      });
+   449→
+   450→      const lat = position.coords.latitude;
+   451→      const lng = position.coords.longitude;
+   452→
+   453→      // Update job with check-in coordinates
+   454→      const res = await fetch(`/api/jobs/${jobId}`, {
+   455→        method: 'PUT',
+   456→        headers: { 'Content-Type': 'application/json' },
+   457→        body: JSON.stringify({
+   458→          id: jobId,
+   459→          checkInLat: lat,
+   460→          checkInLng: lng,
+   461→        }),
+   462→      });
+   463→
+   464→      if (res.ok) {
+   465→        toast.success('GPS check-in captured successfully');
+   466→        if (currentEmployee?.id) {
+   467→          await fetchJobs(currentEmployee.id);
+   468→        }
+   469→      } else {
+   470→        toast.error('Failed to save GPS coordinates');
+   471→      }
+   472→    } catch {
+   473→      toast.error('Unable to get GPS location. Please enable location access.');
+   474→    } finally {
+   475→      setGpsLoading(false);
+   476→    }
+   477→  };
+   478→
+   479→  const handleGPSCheckOut = async (jobId: string) => {
+   480→    setGpsLoading(true);
+   481→    try {
+   482→      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+   483→        navigator.geolocation.getCurrentPosition(resolve, reject, {
+   484→          enableHighAccuracy: true,
+   485→          timeout: 10000,
+   486→        });
+   487→      });
+   488→
+   489→      const lat = position.coords.latitude;
+   490→      const lng = position.coords.longitude;
+   491→
+   492→      const res = await fetch(`/api/jobs/${jobId}`, {
+   493→        method: 'PUT',
+   494→        headers: { 'Content-Type': 'application/json' },
+   495→        body: JSON.stringify({
+   496→          id: jobId,
+   497→          checkOutLat: lat,
+   498→          checkOutLng: lng,
+   499→        }),
+   500→      });
+   501→
+   502→      if (res.ok) {
+   503→        toast.success('GPS check-out captured');
+   504→      } else {
+   505→        toast.error('Failed to save GPS coordinates');
+   506→      }
+   507→    } catch {
+   508→      toast.error('Unable to get GPS location');
+   509→    } finally {
+   510→      setGpsLoading(false);
+   511→    }
+   512→  };
+   513→
+   514→  const handleOpenCompleteDialog = (jobId: string) => {
+   515→    setCompletingJobId(jobId);
+   516→    setCompletionNotes('');
+   517→    setShowCompleteDialog(true);
+   518→  };
+   519→
+   520→  const handleCompleteJob = async () => {
+   521→    if (!completingJobId) return;
+   522→
+   523→    // Save notes first
+   524→    if (completionNotes.trim()) {
+   525→      try {
+   526→        await fetch(`/api/jobs/${completingJobId}`, {
+   527→          method: 'PUT',
+   528→          headers: { 'Content-Type': 'application/json' },
+   529→          body: JSON.stringify({ id: completingJobId, notes: completionNotes }),
+   530→        });
+   531→      } catch {
+   532→        // Continue with completion even if notes fail
+   533→      }
+   534→    }
+   535→
+   536→    setShowCompleteDialog(false);
+   537→    await handleLifecycleAction('complete', completingJobId);
+   538→    setCompletingJobId(null);
+   539→    setCompletionNotes('');
+   540→  };
+   541→
+   542→  // ── Push Notification Permission ──
+   543→  const handleRequestNotificationPermission = async () => {
+   544→    if (typeof window === 'undefined' || !('Notification' in window)) {
+   545→      toast.error('Notifications are not supported in this browser');
+   546→      return;
+   547→    }
+   548→    try {
+   549→      const permission = await Notification.requestPermission();
+   550→      setNotificationPermission(permission);
+   551→      if (permission === 'granted') {
+   552→        toast.success('Push notifications enabled');
+   553→      } else if (permission === 'denied') {
+   554→        toast.error('Push notifications blocked by browser');
+   555→      }
+   556→    } catch {
+   557→      toast.error('Failed to request notification permission');
+   558→    }
+   559→  };
+   560→
+   561→  // ── Photo Upload ──
+   562→  const handlePhotoUpload = (jobId: string) => {
+   563→    const input = document.createElement('input');
+   564→    input.type = 'file';
+   565→    input.accept = 'image/*';
+   566→    input.onchange = async (e) => {
+   567→      const file = (e.target as HTMLInputElement).files?.[0];
+   568→      if (!file) return;
+   569→
+   570→      const reader = new FileReader();
+   571→      reader.onload = async (ev) => {
+   572→        const dataUrl = ev.target?.result as string;
+   573→        setPhotoPreview(dataUrl);
+   574→        setShowPhotoUpload(true);
+   575→
+   576→        // Save to job notes
+   577→        try {
+   578→          const res = await fetch(`/api/jobs/${jobId}`, {
+   579→            method: 'PUT',
+   580→            headers: { 'Content-Type': 'application/json' },
+   581→            body: JSON.stringify({
+   582→              id: jobId,
+   583→              notes: `[Photo uploaded: ${file.name}]`,
+   584→            }),
+   585→          });
+   586→          if (res.ok) {
+   587→            toast.success('Photo uploaded and saved to job notes');
+   588→          } else {
+   589→            toast.error('Failed to save photo to job');
+   590→          }
+   591→        } catch {
+   592→          if (!isOnline) {
+   593→            setOfflineQueue(prev => [...prev, { action: 'photoUpload', data: { jobId, fileName: file.name } }]);
+   594→            toast.warning('Offline — photo upload queued');
+   595→          } else {
+   596→            toast.error('Failed to upload photo');
+   597→          }
+   598→        }
+   599→      };
+   600→      reader.readAsDataURL(file);
+   601→    };
+   602→    input.click();
+   603→  };
+   604→
+   605→  // ── Signature Capture ──
+   606→  const initSignatureCanvas = useCallback(() => {
+   607→    setTimeout(() => {
+   608→      const canvas = signatureCanvasRef.current;
+   609→      if (!canvas) return;
+   610→      const ctx = canvas.getContext('2d');
+   611→      if (!ctx) return;
+   612→      ctx.lineWidth = 2;
+   613→      ctx.strokeStyle = '#1f2937';
+   614→      ctx.lineCap = 'round';
+   615→      ctx.lineJoin = 'round';
+   616→
+   617→      const getPos = (e: MouseEvent | TouchEvent) => {
+   618→        const rect = canvas.getBoundingClientRect();
+   619→        const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+   620→        const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+   621→        return { x: clientX - rect.left, y: clientY - rect.top };
+   622→      };
+   623→
+   624→      const startDrawing = (e: MouseEvent | TouchEvent) => {
+   625→        e.preventDefault();
+   626→        isDrawingRef.current = true;
+   627→        const pos = getPos(e);
+   628→        ctx.beginPath();
+   629→        ctx.moveTo(pos.x, pos.y);
+   630→      };
+   631→
+   632→      const draw = (e: MouseEvent | TouchEvent) => {
+   633→        e.preventDefault();
+   634→        if (!isDrawingRef.current) return;
+   635→        const pos = getPos(e);
+   636→        ctx.lineTo(pos.x, pos.y);
+   637→        ctx.stroke();
+   638→      };
+   639→
+   640→      const stopDrawing = () => {
+   641→        isDrawingRef.current = false;
+   642→      };
+   643→
+   644→      canvas.addEventListener('mousedown', startDrawing);
+   645→      canvas.addEventListener('mousemove', draw);
+   646→      canvas.addEventListener('mouseup', stopDrawing);
+   647→      canvas.addEventListener('mouseleave', stopDrawing);
+   648→      canvas.addEventListener('touchstart', startDrawing, { passive: false });
+   649→      canvas.addEventListener('touchmove', draw, { passive: false });
+   650→      canvas.addEventListener('touchend', stopDrawing);
+   651→    }, 100);
+   652→  }, []);
+   653→
+   654→  const clearSignature = () => {
+   655→    const canvas = signatureCanvasRef.current;
+   656→    if (!canvas) return;
+   657→    const ctx = canvas.getContext('2d');
+   658→    if (!ctx) return;
+   659→    ctx.clearRect(0, 0, canvas.width, canvas.height);
+   660→  };
+   661→
+   662→  const confirmSignature = async (jobId: string) => {
+   663→    const canvas = signatureCanvasRef.current;
+   664→    if (!canvas) return;
+   665→    const data = canvas.toDataURL('image/png');
+   666→    setSignatureData(data);
+   667→    setShowSignature(false);
+   668→
+   669→    // Save signature to job metadata
+   670→    try {
+   671→      const res = await fetch(`/api/jobs/${jobId}`, {
+   672→        method: 'PUT',
+   673→        headers: { 'Content-Type': 'application/json' },
+   674→        body: JSON.stringify({
+   675→          id: jobId,
+   676→          notes: `[Customer signature captured]`,
+   677→        }),
+   678→      });
+   679→      if (res.ok) {
+   680→        toast.success('Signature captured and saved');
+   681→      } else {
+   682→        toast.error('Failed to save signature');
+   683→      }
+   684→    } catch {
+   685→      if (!isOnline) {
+   686→        setOfflineQueue(prev => [...prev, { action: 'signature', data: { jobId } }]);
+   687→        toast.warning('Offline — signature saved locally, will sync later');
+   688→      } else {
+   689→        toast.error('Failed to save signature');
+   690→      }
+   691→    }
+   692→  };
+   693→
+   694→  // ── Loading State ──
+   695→  if (loading) {
+   696→    return (
+   697→      <div className="flex items-center justify-center min-h-[60vh]">
+   698→        <div className="flex flex-col items-center gap-3">
+   699→          <Loader2 className="size-8 animate-spin text-emerald-500" />
+   700→          <span className="text-muted-foreground text-sm">Loading your portal...</span>
+   701→        </div>
+   702→      </div>
+   703→    );
+   704→  }
+   705→
+   706→  // ── No Employee Found ──
+   707→  if (!currentEmployee) {
+   708→    return (
+   709→      <div className="flex items-center justify-center min-h-[60vh]">
+   710→        <Card className="max-w-md w-full">
+   711→          <CardContent className="p-8 text-center">
+   712→            <div className="size-16 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
+   713→              <AlertTriangle className="size-8 text-amber-500" />
+   714→            </div>
+   715→            <h3 className="font-semibold text-lg mb-2">No Employee Record</h3>
+   716→            <p className="text-sm text-muted-foreground">
+   717→              We couldn&apos;t find an employee record linked to your account.
+   718→              Please contact your administrator.
+   719→            </p>
+   720→          </CardContent>
+   721→        </Card>
+   722→      </div>
+   723→    );
+   724→  }
+   725→
+   726→  // ── Computed ──
+   727→  const activeJob = inProgressJobs[0] || null;
+   728→  const upcomingJobs = assignedJobs
+   729→    .filter(j => j.assignmentStatus !== 'rejected')
+   730→    .sort((a, b) => {
+   731→      const timeA = a.scheduledAt || a.createdAt;
+   732→      const timeB = b.scheduledAt || b.createdAt;
+   733→      return new Date(timeA).getTime() - new Date(timeB).getTime();
+   734→    });
+   735→  const recentCompleted = completedJobs.slice(0, 10);
+   736→
+   737→  return (
+   738→    <div className="space-y-5 max-w-2xl mx-auto">
+   739→      {/* ─── Offline Mode Banner ─────────────────────────────────────────── */}
+   740→      {!isOnline && (
+   741→        <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-50 border-2 border-amber-300">
+   742→          <WifiOff className="size-5 text-amber-600 shrink-0" />
+   743→          <div className="flex-1 min-w-0">
+   744→            <p className="text-sm font-semibold text-amber-800">You&apos;re Offline</p>
+   745→            <p className="text-xs text-amber-600">
+   746→              Actions will be queued and synced when you&apos;re back online.
+   747→              {offlineQueue.length > 0 && ` (${offlineQueue.length} pending)`}
+   748→            </p>
+   749→          </div>
+   750→        </div>
+   751→      )}
+   752→      {/* ─── Section 1: Employee Status Card ──────────────────────────────── */}
+   753→      <Card className="border-2" style={{ borderColor: currentEmployee.status === 'available' ? '#10b981' : currentEmployee.status === 'busy' ? '#ef4444' : currentEmployee.status === 'traveling' ? '#3b82f6' : currentEmployee.status === 'leave' ? '#f59e0b' : '#9ca3af' }}>
+   754→        <CardContent className="p-6">
+   755→          <div className="flex items-start gap-4">
+   756→            {/* Avatar with status dot */}
+   757→            <div className="relative shrink-0">
+   758→              <Avatar className="size-16 border-2 border-white shadow-md">
+   759→                <AvatarFallback className="bg-teal-100 text-teal-700 text-xl font-bold">
+   760→                  {currentEmployee.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+   761→                </AvatarFallback>
+   762→              </Avatar>
+   763→              <div className={`absolute -bottom-0.5 -right-0.5 size-5 rounded-full border-3 border-white shadow-sm ${STATUS_DOTS[currentEmployee.status] || 'bg-gray-400'}`} />
+   764→            </div>
+   765→
+   766→            {/* Info */}
+   767→            <div className="flex-1 min-w-0">
+   768→              <div className="flex items-center gap-2 flex-wrap">
+   769→                <h2 className="text-xl font-bold truncate">{currentEmployee.name}</h2>
+   770→                <Badge variant="outline" className={`${STATUS_COLORS[currentEmployee.status] || STATUS_COLORS.offline} font-medium`}>
+   771→                  {STATUS_LABELS[currentEmployee.status] || currentEmployee.status}
+   772→                </Badge>
+   773→              </div>
+   774→              <div className="flex items-center gap-3 mt-1.5 text-sm text-muted-foreground">
+   775→                <Badge variant="secondary" className="text-xs capitalize">
+   776→                  {currentEmployee.role}
+   777→                </Badge>
+   778→                <span className="flex items-center gap-1">
+   779→                  <Star className="size-3.5 text-yellow-500 fill-yellow-500" />
+   780→                  {currentEmployee.rating.toFixed(1)}
+   781→                </span>
+   782→                <span>{currentEmployee.completedJobs} jobs</span>
+   783→              </div>
+   784→
+   785→              {/* Last seen & Location */}
+   786→              <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+   787→                <span className="flex items-center gap-1">
+   788→                  <Clock className="size-3" />
+   789→                  Last seen {formatRelativeTime(currentEmployee.updatedAt)}
+   790→                </span>
+   791→                {currentEmployee.location && (
+   792→                  <span className="flex items-center gap-1">
+   793→                    <MapPin className="size-3" />
+   794→                    {currentEmployee.location}
+   795→                  </span>
+   796→                )}
+   797→              </div>
+   798→            </div>
+   799→          </div>
+   800→
+   801→          {/* Status Toggle Buttons */}
+   802→          <div className="mt-5">
+   803→            <p className="text-xs text-muted-foreground font-medium mb-2">Quick Status Change</p>
+   804→            <div className="flex flex-wrap gap-2">
+   805→              {(['available', 'busy', 'traveling', 'leave', 'offline'] as const).map((status) => (
+   806→                <Button
+   807→                  key={status}
+   808→                  variant={currentEmployee.status === status ? 'default' : 'outline'}
+   809→                  size="sm"
+   810→                  className={`h-8 text-xs ${
+   811→                    currentEmployee.status === status
+   812→                      ? STATUS_COLORS[status] + ' border font-semibold'
+   813→                      : 'hover:' + STATUS_COLORS[status]
+   814→                  }`}
+   815→                  onClick={() => handleStatusChange(status)}
+   816→                  disabled={actionLoading?.startsWith('status-')}
+   817→                >
+   818→                  {actionLoading === `status-${status}` ? (
+   819→                    <Loader2 className="size-3 mr-1 animate-spin" />
+   820→                  ) : (
+   821→                    <span className={`size-2 rounded-full mr-1.5 ${STATUS_DOTS[status]}`} />
+   822→                  )}
+   823→                  {STATUS_LABELS[status]}
+   824→                </Button>
+   825→              ))}
+   826→            </div>
+   827→          </div>
+   828→
+   829→          {/* Connection Status & Notifications Row */}
+   830→          <div className="mt-4 flex flex-wrap items-center gap-3">
+   831→            <div className="flex items-center gap-2 text-xs">
+   832→              {realtimeConnected ? (
+   833→                <div className="flex items-center gap-1.5 text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">
+   834→                  <Wifi className="size-3" />
+   835→                  <span className="font-medium">Connected</span>
+   836→                </div>
+   837→              ) : (
+   838→                <div className="flex items-center gap-1.5 text-red-700 bg-red-50 px-2.5 py-1 rounded-full">
+   839→                  <WifiOff className="size-3" />
+   840→                  <span className="font-medium">Reconnecting...</span>
+   841→                </div>
+   842→              )}
+   843→            </div>
+   844→            <div className="flex items-center gap-2">
+   845→              {notificationPermission === 'granted' ? (
+   846→                <div className="flex items-center gap-1.5 text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full text-xs">
+   847→                  <Bell className="size-3" />
+   848→                  <span className="font-medium">Notifications On</span>
+   849→                </div>
+   850→              ) : notificationPermission === 'denied' ? (
+   851→                <div className="flex items-center gap-1.5 text-red-700 bg-red-50 px-2.5 py-1 rounded-full text-xs">
+   852→                  <BellOff className="size-3" />
+   853→                  <span className="font-medium">Notifications Blocked</span>
+   854→                </div>
+   855→              ) : notificationPermission === 'unsupported' ? null : (
+   856→                <Button
+   857→                  variant="outline"
+   858→                  size="sm"
+   859→                  className="h-7 text-xs border-amber-200 text-amber-700 hover:bg-amber-50"
+   860→                  onClick={handleRequestNotificationPermission}
+   861→                >
+   862→                  <Bell className="size-3 mr-1" />
+   863→                  Enable Notifications
+   864→                </Button>
+   865→              )}
+   866→            </div>
+   867→          </div>
+   868→        </CardContent>
+   869→      </Card>
+   870→
+   871→      {/* ─── Section 2: Active Job Card ───────────────────────────────────── */}
+   872→      {activeJob ? (
+   873→        <Card className="border-2 border-emerald-200 bg-gradient-to-br from-emerald-50/50 to-white">
+   874→          <CardHeader className="pb-3">
+   875→            <div className="flex items-center justify-between">
+   876→              <div className="flex items-center gap-2">
+   877→                <div className="size-8 rounded-lg bg-emerald-600 flex items-center justify-center">
+   878→                  <Play className="size-4 text-white fill-white" />
+   879→                </div>
+   880→                <div>
+   881→                  <CardTitle className="text-base">Active Job</CardTitle>
+   882→                  <CardDescription className="text-xs">Currently in progress</CardDescription>
+   883→                </div>
+   884→              </div>
+   885→              <Badge className={`${JOB_STATUS_COLORS.in_progress} border`}>
+   886→                In Progress
+   887→              </Badge>
+   888→            </div>
+   889→          </CardHeader>
+   890→          <CardContent className="space-y-4">
+   891→            <div>
+   892→              <h3 className="font-semibold text-lg">{activeJob.title}</h3>
+   893→              {activeJob.description && (
+   894→                <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{activeJob.description}</p>
+   895→              )}
+   896→            </div>
+   897→
+   898→            {/* Job Details */}
+   899→            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+   900→              {activeJob.customerName && (
+   901→                <div className="flex items-center gap-2 text-sm">
+   902→                  <User className="size-4 text-muted-foreground shrink-0" />
+   903→                  <span className="truncate">{activeJob.customerName}</span>
+   904→                  {activeJob.customerPhone && (
+   905→                    <a href={`tel:${activeJob.customerPhone}`} className="text-emerald-600 hover:text-emerald-700 shrink-0">
+   906→                      <Phone className="size-3.5" />
+   907→                    </a>
+   908→                  )}
+   909→                </div>
+   910→              )}
+   911→              {activeJob.address && (
+   912→                <div className="flex items-center gap-2 text-sm">
+   913→                  <MapPin className="size-4 text-muted-foreground shrink-0" />
+   914→                  <span className="truncate">{activeJob.address}</span>
+   915→                </div>
+   916→              )}
+   917→              {activeJob.scheduledAt && (
+   918→                <div className="flex items-center gap-2 text-sm">
+   919→                  <Calendar className="size-4 text-muted-foreground shrink-0" />
+   920→                  <span>{formatDate(activeJob.scheduledAt)} at {formatTime(activeJob.scheduledAt)}</span>
+   921→                </div>
+   922→              )}
+   923→              {activeJob.estimatedDuration && (
+   924→                <div className="flex items-center gap-2 text-sm">
+   925→                  <Clock className="size-4 text-muted-foreground shrink-0" />
+   926→                  <span>Est. {activeJob.estimatedDuration} min</span>
+   927→                </div>
+   928→              )}
+   929→            </div>
+   930→
+   931→            {/* Priority */}
+   932→            <div className="flex items-center gap-2">
+   933→              <span className="text-xs text-muted-foreground">Priority:</span>
+   934→              <Badge variant="outline" className={`${PRIORITY_COLORS[activeJob.priority] || PRIORITY_COLORS.medium} text-xs`}>
+   935→                {activeJob.priority}
+   936→              </Badge>
+   937→            </div>
+   938→
+   939→            <Separator />
+   940→
+   941→            {/* Active Job Timer */}
+   942→            {activeTimer && (
+   943→              <div className="flex items-center justify-center gap-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+   944→                <Timer className="size-5 text-emerald-600" />
+   945→                <span className="text-2xl font-mono font-bold text-emerald-700 tracking-wider">{activeTimer}</span>
+   946→                <span className="text-xs text-emerald-600">elapsed</span>
+   947→              </div>
+   948→            )}
+   949→
+   950→            {/* Photo Preview */}
+   951→            {photoPreview && showPhotoUpload && (
+   952→              <div className="space-y-2">
+   953→                <p className="text-xs font-medium text-muted-foreground">Uploaded Photo:</p>
+   954→                <div className="relative rounded-lg overflow-hidden border">
+   955→                  <img src={photoPreview} alt="Job photo" className="w-full h-40 object-cover" />
+   956→                  <Button
+   957→                    variant="secondary"
+   958→                    size="sm"
+   959→                    className="absolute top-2 right-2 size-7 p-0"
+   960→                    onClick={() => { setPhotoPreview(null); setShowPhotoUpload(false); }}
+   961→                  >
+   962→                    <XCircle className="size-4" />
+   963→                  </Button>
+   964→                </div>
+   965→              </div>
+   966→            )}
+   967→
+   968→            {/* Action Buttons */}
+   969→            <div className="flex flex-wrap gap-2">
+   970→              <Button
+   971→                className="bg-emerald-600 hover:bg-emerald-700 flex-1 min-w-[140px]"
+   972→                onClick={() => handleOpenCompleteDialog(activeJob.id)}
+   973→                disabled={actionLoading === `complete-${activeJob.id}`}
+   974→              >
+   975→                {actionLoading === `complete-${activeJob.id}` ? (
+   976→                  <Loader2 className="size-4 mr-2 animate-spin" />
+   977→                ) : (
+   978→                  <CheckCircle2 className="size-4 mr-2" />
+   979→                )}
+   980→                Complete Job
+   981→              </Button>
+   982→              <Button
+   983→                variant="outline"
+   984→                onClick={() => handleGPSCheckOut(activeJob.id)}
+   985→                disabled={gpsLoading}
+   986→              >
+   987→                {gpsLoading ? (
+   988→                  <Loader2 className="size-4 mr-2 animate-spin" />
+   989→                ) : (
+   990→                  <Navigation className="size-4 mr-2" />
+   991→                )}
+   992→                GPS Check-out
+   993→              </Button>
+   994→              <Button
+   995→                variant="outline"
+   996→                className="border-teal-200 text-teal-700 hover:bg-teal-50"
+   997→                onClick={() => handlePhotoUpload(activeJob.id)}
+   998→              >
+   999→                <Camera className="size-4 mr-2" />
+  1000→                Upload Photo
+  1001→              </Button>
+  1002→              <Button
+  1003→                variant="outline"
+  1004→                className="border-purple-200 text-purple-700 hover:bg-purple-50"
+  1005→                onClick={() => { setShowSignature(true); initSignatureCanvas(); }}
+  1006→              >
+  1007→                <PenLine className="size-4 mr-2" />
+  1008→                Get Signature
+  1009→              </Button>
+  1010→            </div>
+  1011→
+  1012→            {/* GPS Info */}
+  1013→            {activeJob.checkInLat && activeJob.checkInLng && (
+  1014→              <div className="text-xs text-muted-foreground flex items-center gap-1">
+  1015→                <MapPin className="size-3 text-emerald-500" />
+  1016→                Checked in at: {activeJob.checkInLat.toFixed(4)}, {activeJob.checkInLng.toFixed(4)}
+  1017→              </div>
+  1018→            )}
+  1019→          </CardContent>
+  1020→        </Card>
+  1021→      ) : upcomingJobs.length > 0 && upcomingJobs[0]?.assignmentStatus !== 'accepted' ? (
+  1022→        /* Show the next upcoming job as a call-to-action if no active job */
+  1023→        <Card className="border-2 border-blue-200 bg-gradient-to-br from-blue-50/50 to-white">
+  1024→          <CardHeader className="pb-3">
+  1025→            <div className="flex items-center justify-between">
+  1026→              <div className="flex items-center gap-2">
+  1027→                <div className="size-8 rounded-lg bg-blue-600 flex items-center justify-center">
+  1028→                  <Radio className="size-4 text-white" />
+  1029→                </div>
+  1030→                <div>
+  1031→                  <CardTitle className="text-base">Next Job</CardTitle>
+  1032→                  <CardDescription className="text-xs">Awaiting your acceptance</CardDescription>
+  1033→                </div>
+  1034→              </div>
+  1035→              <Badge className={`${JOB_STATUS_COLORS.assigned} border`}>
+  1036→                Assigned
+  1037→              </Badge>
+  1038→            </div>
+  1039→          </CardHeader>
+  1040→          <CardContent className="space-y-4">
+  1041→            {(() => {
+  1042→              const nextJob = upcomingJobs[0];
+  1043→              return (
+  1044→                <>
+  1045→                  <div>
+  1046→                    <h3 className="font-semibold text-lg">{nextJob.title}</h3>
+  1047→                    {nextJob.description && (
+  1048→                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{nextJob.description}</p>
+  1049→                    )}
+  1050→                  </div>
+  1051→                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+  1052→                    {nextJob.customerName && (
+  1053→                      <div className="flex items-center gap-2 text-sm">
+  1054→                        <User className="size-4 text-muted-foreground shrink-0" />
+  1055→                        <span className="truncate">{nextJob.customerName}</span>
+  1056→                        {nextJob.customerPhone && (
+  1057→                          <a href={`tel:${nextJob.customerPhone}`} className="text-emerald-600 hover:text-emerald-700 shrink-0">
+  1058→                            <Phone className="size-3.5" />
+  1059→                          </a>
+  1060→                        )}
+  1061→                      </div>
+  1062→                    )}
+  1063→                    {nextJob.address && (
+  1064→                      <div className="flex items-center gap-2 text-sm">
+  1065→                        <MapPin className="size-4 text-muted-foreground shrink-0" />
+  1066→                        <span className="truncate">{nextJob.address}</span>
+  1067→                      </div>
+  1068→                    )}
+  1069→                    {nextJob.scheduledAt && (
+  1070→                      <div className="flex items-center gap-2 text-sm">
+  1071→                        <Calendar className="size-4 text-muted-foreground shrink-0" />
+  1072→                        <span>{formatDate(nextJob.scheduledAt)} at {formatTime(nextJob.scheduledAt)}</span>
+  1073→                      </div>
+  1074→                    )}
+  1075→                  </div>
+  1076→                  <div className="flex items-center gap-2">
+  1077→                    <span className="text-xs text-muted-foreground">Priority:</span>
+  1078→                    <Badge variant="outline" className={`${PRIORITY_COLORS[nextJob.priority] || PRIORITY_COLORS.medium} text-xs`}>
+  1079→                      {nextJob.priority}
+  1080→                    </Badge>
+  1081→                  </div>
+  1082→                  <Separator />
+  1083→                  <div className="flex gap-2">
+  1084→                    <Button
+  1085→                      className="bg-emerald-600 hover:bg-emerald-700 flex-1"
+  1086→                      onClick={() => handleLifecycleAction('accept', nextJob.id)}
+  1087→                      disabled={actionLoading === `accept-${nextJob.id}`}
+  1088→                    >
+  1089→                      {actionLoading === `accept-${nextJob.id}` ? (
+  1090→                        <Loader2 className="size-4 mr-2 animate-spin" />
+  1091→                      ) : (
+  1092→                        <CheckCircle2 className="size-4 mr-2" />
+  1093→                      )}
+  1094→                      Accept Job
+  1095→                    </Button>
+  1096→                    <Button
+  1097→                      variant="outline"
+  1098→                      className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+  1099→                      onClick={() => handleLifecycleAction('reject', nextJob.id)}
+  1100→                      disabled={actionLoading === `reject-${nextJob.id}`}
+  1101→                    >
+  1102→                      {actionLoading === `reject-${nextJob.id}` ? (
+  1103→                        <Loader2 className="size-4 mr-2 animate-spin" />
+  1104→                      ) : (
+  1105→                        <XCircle className="size-4 mr-2" />
+  1106→                      )}
+  1107→                      Reject
+  1108→                    </Button>
+  1109→                  </div>
+  1110→                </>
+  1111→              );
+  1112→            })()}
+  1113→          </CardContent>
+  1114→        </Card>
+  1115→      ) : null}
+  1116→
+  1117→      {/* ─── Section 3: Upcoming Jobs List ─────────────────────────────────── */}
+  1118→      <Card>
+  1119→        <CardHeader className="pb-3">
+  1120→          <div className="flex items-center justify-between">
+  1121→            <div className="flex items-center gap-2">
+  1122→              <div className="size-7 rounded-lg bg-teal-600 flex items-center justify-center">
+  1123→                <Calendar className="size-3.5 text-white" />
+  1124→              </div>
+  1125→              <div>
+  1126→                <CardTitle className="text-base">Upcoming Jobs</CardTitle>
+  1127→                <CardDescription className="text-xs">{upcomingJobs.length} assigned job{upcomingJobs.length !== 1 ? 's' : ''}</CardDescription>
+  1128→              </div>
+  1129→            </div>
+  1130→          </div>
+  1131→        </CardHeader>
+  1132→        <CardContent>
+  1133→          {upcomingJobs.length === 0 ? (
+  1134→            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+  1135→              <Calendar className="size-8 mb-2 opacity-30" />
+  1136→              <p className="text-sm">No upcoming jobs assigned</p>
+  1137→            </div>
+  1138→          ) : (
+  1139→            <ScrollArea className="max-h-96">
+  1140→              <div className="space-y-2">
+  1141→                {upcomingJobs.map((job) => {
+  1142→                  const isExpanded = expandedJob === job.id;
+  1143→                  const isPending = job.assignmentStatus !== 'accepted';
+  1144→
+  1145→                  return (
+  1146→                    <Card
+  1147→                      key={job.id}
+  1148→                      className={`border transition-all ${
+  1149→                        isPending ? 'border-blue-100 bg-blue-50/30' : 'border-border'
+  1150→                      }`}
+  1151→                    >
+  1152→                      <CardContent className="p-4">
+  1153→                        {/* Job Header */}
+  1154→                        <button
+  1155→                          className="w-full text-left"
+  1156→                          onClick={() => setExpandedJob(isExpanded ? null : job.id)}
+  1157→                        >
+  1158→                          <div className="flex items-center justify-between">
+  1159→                            <div className="flex items-center gap-2 min-w-0 flex-1">
+  1160→                              <span className="font-medium text-sm truncate">{job.title}</span>
+  1161→                              <Badge variant="outline" className={`${PRIORITY_COLORS[job.priority] || PRIORITY_COLORS.medium} text-[10px] h-5 shrink-0`}>
+  1162→                                {job.priority}
+  1163→                              </Badge>
+  1164→                              {isPending && (
+  1165→                                <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-[10px] h-5 shrink-0">
+  1166→                                  New
+  1167→                                </Badge>
+  1168→                              )}
+  1169→                            </div>
+  1170→                            <div className="flex items-center gap-2 shrink-0 ml-2">
+  1171→                              {job.scheduledAt && (
+  1172→                                <span className="text-xs text-muted-foreground whitespace-nowrap">
+  1173→                                  {formatTime(job.scheduledAt)}
+  1174→                                </span>
+  1175→                              )}
+  1176→                              {isExpanded ? (
+  1177→                                <ChevronUp className="size-4 text-muted-foreground" />
+  1178→                              ) : (
+  1179→                                <ChevronDown className="size-4 text-muted-foreground" />
+  1180→                              )}
+  1181→                            </div>
+  1182→                          </div>
+  1183→                          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+  1184→                            {job.customerName && (
+  1185→                              <span className="flex items-center gap-1">
+  1186→                                <User className="size-3" /> {job.customerName}
+  1187→                              </span>
+  1188→                            )}
+  1189→                            {job.address && (
+  1190→                              <span className="flex items-center gap-1 truncate">
+  1191→                                <MapPin className="size-3 shrink-0" /> {job.address}
+  1192→                              </span>
+  1193→                            )}
+  1194→                          </div>
+  1195→                        </button>
+  1196→
+  1197→                        {/* Expanded Details */}
+  1198→                        {isExpanded && (
+  1199→                          <div className="mt-3 pt-3 border-t space-y-3">
+  1200→                            {job.description && (
+  1201→                              <p className="text-sm text-muted-foreground">{job.description}</p>
+  1202→                            )}
+  1203→                            <div className="grid grid-cols-2 gap-2 text-xs">
+  1204→                              {job.customerPhone && (
+  1205→                                <div className="flex items-center gap-1.5">
+  1206→                                  <Phone className="size-3 text-muted-foreground" />
+  1207→                                  <a href={`tel:${job.customerPhone}`} className="text-emerald-600 hover:underline">
+  1208→                                    {job.customerPhone}
+  1209→                                  </a>
+  1210→                                </div>
+  1211→                              )}
+  1212→                              {job.scheduledAt && (
+  1213→                                <div className="flex items-center gap-1.5">
+  1214→                                  <Calendar className="size-3 text-muted-foreground" />
+  1215→                                  {formatDate(job.scheduledAt)}
+  1216→                                </div>
+  1217→                              )}
+  1218→                              {job.estimatedDuration && (
+  1219→                                <div className="flex items-center gap-1.5">
+  1220→                                  <Clock className="size-3 text-muted-foreground" />
+  1221→                                  Est. {job.estimatedDuration} min
+  1222→                                </div>
+  1223→                              )}
+  1224→                              {job.type && (
+  1225→                                <div className="flex items-center gap-1.5">
+  1226→                                  <Radio className="size-3 text-muted-foreground" />
+  1227→                                  <span className="capitalize">{job.type}</span>
+  1228→                                </div>
+  1229→                              )}
+  1230→                            </div>
+  1231→
+  1232→                            {/* Action Buttons */}
+  1233→                            <div className="flex gap-2 pt-1">
+  1234→                              {isPending && (
+  1235→                                <>
+  1236→                                  <Button
+  1237→                                    size="sm"
+  1238→                                    className="bg-emerald-600 hover:bg-emerald-700 flex-1 h-9"
+  1239→                                    onClick={() => handleLifecycleAction('accept', job.id)}
+  1240→                                    disabled={actionLoading === `accept-${job.id}`}
+  1241→                                  >
+  1242→                                    {actionLoading === `accept-${job.id}` ? (
+  1243→                                      <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+  1244→                                    ) : (
+  1245→                                      <CheckCircle2 className="size-3.5 mr-1.5" />
+  1246→                                    )}
+  1247→                                    Accept
+  1248→                                  </Button>
+  1249→                                  <Button
+  1250→                                    size="sm"
+  1251→                                    variant="outline"
+  1252→                                    className="border-red-200 text-red-600 hover:bg-red-50 h-9"
+  1253→                                    onClick={() => handleLifecycleAction('reject', job.id)}
+  1254→                                    disabled={actionLoading === `reject-${job.id}`}
+  1255→                                  >
+  1256→                                    {actionLoading === `reject-${job.id}` ? (
+  1257→                                      <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+  1258→                                    ) : (
+  1259→                                      <XCircle className="size-3.5 mr-1.5" />
+  1260→                                    )}
+  1261→                                    Reject
+  1262→                                  </Button>
+  1263→                                </>
+  1264→                              )}
+  1265→                              {!isPending && (
+  1266→                                <>
+  1267→                                  <Button
+  1268→                                    size="sm"
+  1269→                                    className="bg-emerald-600 hover:bg-emerald-700 flex-1 h-9"
+  1270→                                    onClick={() => handleLifecycleAction('start', job.id)}
+  1271→                                    disabled={actionLoading === `start-${job.id}`}
+  1272→                                  >
+  1273→                                    {actionLoading === `start-${job.id}` ? (
+  1274→                                      <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+  1275→                                    ) : (
+  1276→                                      <Play className="size-3.5 mr-1.5" />
+  1277→                                    )}
+  1278→                                    Start Job
+  1279→                                  </Button>
+  1280→                                  <Button
+  1281→                                    size="sm"
+  1282→                                    variant="outline"
+  1283→                                    className="h-9"
+  1284→                                    onClick={() => handleGPSCheckIn(job.id)}
+  1285→                                    disabled={gpsLoading}
+  1286→                                  >
+  1287→                                    {gpsLoading ? (
+  1288→                                      <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+  1289→                                    ) : (
+  1290→                                      <Navigation className="size-3.5 mr-1.5" />
+  1291→                                    )}
+  1292→                                    GPS Check-in
+  1293→                                  </Button>
+  1294→                                </>
+  1295→                              )}
+  1296→                            </div>
+  1297→                          </div>
+  1298→                        )}
+  1299→                      </CardContent>
+  1300→                    </Card>
+  1301→                  );
+  1302→                })}
+  1303→              </div>
+  1304→            </ScrollArea>
+  1305→          )}
+  1306→        </CardContent>
+  1307→      </Card>
+  1308→
+  1309→      {/* ─── Section 4: Completed Jobs (Collapsible) ──────────────────────── */}
+  1310→      <Card>
+  1311→        <button
+  1312→          className="w-full text-left"
+  1313→          onClick={() => setCompletedExpanded(!completedExpanded)}
+  1314→        >
+  1315→          <CardHeader className="pb-0">
+  1316→            <div className="flex items-center justify-between">
+  1317→              <div className="flex items-center gap-2">
+  1318→                <div className="size-7 rounded-lg bg-green-600 flex items-center justify-center">
+  1319→                  <CheckCircle2 className="size-3.5 text-white" />
+  1320→                </div>
+  1321→                <div>
+  1322→                  <CardTitle className="text-base">Completed Jobs</CardTitle>
+  1323→                  <CardDescription className="text-xs">{recentCompleted.length} recent job{recentCompleted.length !== 1 ? 's' : ''}</CardDescription>
+  1324→                </div>
+  1325→              </div>
+  1326→              <div className="flex items-center gap-2">
+  1327→                <Badge variant="secondary" className="text-xs">
+  1328→                  {recentCompleted.length}
+  1329→                </Badge>
+  1330→                {completedExpanded ? (
+  1331→                  <ChevronUp className="size-4 text-muted-foreground" />
+  1332→                ) : (
+  1333→                  <ChevronDown className="size-4 text-muted-foreground" />
+  1334→                )}
+  1335→              </div>
+  1336→            </div>
+  1337→          </CardHeader>
+  1338→        </button>
+  1339→
+  1340→        {completedExpanded && (
+  1341→          <CardContent className="pt-4">
+  1342→            {recentCompleted.length === 0 ? (
+  1343→              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+  1344→                <CheckCircle2 className="size-8 mb-2 opacity-30" />
+  1345→                <p className="text-sm">No completed jobs yet</p>
+  1346→              </div>
+  1347→            ) : (
+  1348→              <ScrollArea className="max-h-64">
+  1349→                <div className="space-y-2">
+  1350→                  {recentCompleted.map((job) => (
+  1351→                    <div
+  1352→                      key={job.id}
+  1353→                      className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+  1354→                    >
+  1355→                      <div className="flex items-center gap-3 min-w-0 flex-1">
+  1356→                        <CheckCircle2 className="size-4 text-green-500 shrink-0" />
+  1357→                        <div className="min-w-0 flex-1">
+  1358→                          <p className="text-sm font-medium truncate">{job.title}</p>
+  1359→                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+  1360→                            {job.customerName && <span>{job.customerName}</span>}
+  1361→                            {job.updatedAt && <span>&middot; {formatDate(job.updatedAt)}</span>}
+  1362→                          </div>
+  1363→                        </div>
+  1364→                      </div>
+  1365→                      <div className="flex items-center gap-2 shrink-0 ml-2">
+  1366→                        {job.customerRating && (
+  1367→                          <div className="flex items-center gap-0.5">
+  1368→                            {[1, 2, 3, 4, 5].map((star) => (
+  1369→                              <Star
+  1370→                                key={star}
+  1371→                                className={`size-3 ${
+  1372→                                  star <= job.customerRating!
+  1373→                                    ? 'text-yellow-500 fill-yellow-500'
+  1374→                                    : 'text-gray-300'
+  1375→                                }`}
+  1376→                              />
+  1377→                            ))}
+  1378→                          </div>
+  1379→                        )}
+  1380→                        <Badge variant="outline" className={`${JOB_STATUS_COLORS.completed} text-[10px] h-5`}>
+  1381→                          Done
+  1382→                        </Badge>
+  1383→                      </div>
+  1384→                    </div>
+  1385→                  ))}
+  1386→                </div>
+  1387→              </ScrollArea>
+  1388→            )}
+  1389→          </CardContent>
+  1390→        )}
+  1391→      </Card>
+  1392→
+  1393→      {/* ─── Signature Capture Dialog ─────────────────────────────────── */}
+  1394→      <Dialog open={showSignature} onOpenChange={setShowSignature}>
+  1395→        <DialogContent className="sm:max-w-md">
+  1396→          <DialogHeader>
+  1397→            <DialogTitle className="flex items-center gap-2">
+  1398→              <PenLine className="size-5" />
+  1399→              Customer Signature
+  1400→            </DialogTitle>
+  1401→            <DialogDescription>
+  1402→              Have the customer sign below to confirm job completion
+  1403→            </DialogDescription>
+  1404→          </DialogHeader>
+  1405→          <div className="space-y-3">
+  1406→            <div className="border-2 border-dashed border-gray-300 rounded-lg overflow-hidden bg-white">
+  1407→              <canvas
+  1408→                ref={signatureCanvasRef}
+  1409→                width={400}
+  1410→                height={200}
+  1411→                className="w-full touch-none cursor-crosshair"
+  1412→                style={{ maxHeight: '200px' }}
+  1413→              />
+  1414→            </div>
+  1415→            <p className="text-xs text-muted-foreground text-center">
+  1416→              Draw signature above using mouse or touch
+  1417→            </p>
+  1418→          </div>
+  1419→          <DialogFooter className="flex gap-2 sm:gap-2">
+  1420→            <Button
+  1421→              variant="outline"
+  1422→              onClick={clearSignature}
+  1423→              className="gap-1.5"
+  1424→            >
+  1425→              <Trash2 className="size-4" />
+  1426→              Clear
+  1427→            </Button>
+  1428→            <Button
+  1429→              className="bg-emerald-600 hover:bg-emerald-700 gap-1.5"
+  1430→              onClick={() => activeJob && confirmSignature(activeJob.id)}
+  1431→              disabled={!activeJob}
+  1432→            >
+  1433→              <CheckCircle2 className="size-4" />
+  1434→              Confirm Signature
+  1435→            </Button>
+  1436→          </DialogFooter>
+  1437→        </DialogContent>
+  1438→      </Dialog>
+  1439→
+  1440→      {/* ─── Complete Job Dialog ──────────────────────────────────────────── */}
+  1441→      <Dialog open={showCompleteDialog} onOpenChange={setShowCompleteDialog}>
+  1442→        <DialogContent className="max-w-md">
+  1443→          <DialogHeader>
+  1444→            <DialogTitle>Complete Job</DialogTitle>
+  1445→            <DialogDescription>
+  1446→              Add any final notes about the job before marking it as complete.
+  1447→            </DialogDescription>
+  1448→          </DialogHeader>
+  1449→          <div className="space-y-4">
+  1450→            <div>
+  1451→              <label className="text-sm font-medium mb-1.5 block">Completion Notes</label>
+  1452→              <Textarea
+  1453→                placeholder="Enter any notes about the job completion, issues encountered, or follow-up needed..."
+  1454→                value={completionNotes}
+  1455→                onChange={(e) => setCompletionNotes(e.target.value)}
+  1456→                rows={4}
+  1457→                className="resize-none"
+  1458→              />
+  1459→            </div>
+  1460→            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+  1461→              <MessageSquare className="size-4" />
+  1462→              <span>These notes will be saved with the job record.</span>
+  1463→            </div>
+  1464→          </div>
+  1465→          <DialogFooter>
+  1466→            <Button variant="outline" onClick={() => setShowCompleteDialog(false)}>
+  1467→              Cancel
+  1468→            </Button>
+  1469→            <Button
+  1470→              className="bg-emerald-600 hover:bg-emerald-700"
+  1471→              onClick={handleCompleteJob}
+  1472→              disabled={actionLoading?.startsWith('complete-')}
+  1473→            >
+  1474→              {actionLoading?.startsWith('complete-') ? (
+  1475→                <Loader2 className="size-4 mr-2 animate-spin" />
+  1476→              ) : (
+  1477→                <CheckCircle2 className="size-4 mr-2" />
+  1478→              )}
+  1479→              Complete Job
+  1480→            </Button>
+  1481→          </DialogFooter>
+  1482→        </DialogContent>
+  1483→      </Dialog>
+  1484→    </div>
+  1485→  );
+  1486→}
+  1487→

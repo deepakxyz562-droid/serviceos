@@ -135,6 +135,7 @@ export function BroadcastView() {
     try {
       const params = new URLSearchParams();
       params.set('limit', '50');
+      params.set('type', 'broadcast');
 
       const res = await fetch(`/api/campaigns?${params.toString()}`);
       if (res.ok) {
@@ -208,7 +209,7 @@ export function BroadcastView() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: createForm.name,
-          type: createForm.type,
+          type: 'broadcast',
           channel: createForm.channel,
           audienceType: createForm.audienceType,
           messageContent: createForm.message,
@@ -287,7 +288,7 @@ export function BroadcastView() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: `${broadcast.name} (Copy)`,
-          type: broadcast.type,
+          type: 'broadcast',
           channel: broadcast.channel,
           audienceType: broadcast.audienceType,
           messageContent: broadcast.message,

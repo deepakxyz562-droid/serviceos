@@ -125,6 +125,7 @@ const TABLE_MAP: Record<string, string> = {
   platformMetric: 'PlatformMetric',
   securityEvent: 'SecurityEvent',
   auditLogEntry: 'AuditLogEntry',
+  otpVerification: 'OtpVerification',
 };
 
 // Known missing tables in Supabase (return empty results gracefully)
@@ -791,11 +792,23 @@ class SupabaseModel {
       serialized.updatedAt = new Date().toISOString();
     }
 
-    const { data: result, error } = await this.client
+    let { data: result, error } = await this.client
       .from(this.tableName)
       .insert(serialized)
       .select('*')
       .single();
+
+    // Retry without updatedAt if the column doesn't exist in the table
+    if (error && error.message && error.message.includes('updatedAt') && 'updatedAt' in serialized) {
+      delete serialized.updatedAt;
+      const retry = await this.client
+        .from(this.tableName)
+        .insert(serialized)
+        .select('*')
+        .single();
+      result = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       console.error(`[SupabaseDB] create error on ${this.tableName}:`, error.message, error.details);
@@ -820,6 +833,7 @@ class SupabaseModel {
 
     // Auto-set updatedAt — Prisma does this with @updatedAt at the application layer,
     // but PostgREST has no such feature. Without this, updatedAt stays stale.
+    // Only set it if it's not already provided; some tables don't have this column.
     if (!('updatedAt' in serialized)) {
       serialized.updatedAt = new Date().toISOString();
     }
@@ -832,7 +846,22 @@ class SupabaseModel {
       }
     }
 
-    const { data: result, error } = await query.single();
+    let { data: result, error } = await query.single();
+
+    // Retry without updatedAt if the column doesn't exist in the table
+    if (error && error.message && error.message.includes('updatedAt') && 'updatedAt' in serialized) {
+      delete serialized.updatedAt;
+      let retryQuery = this.client.from(this.tableName).update(serialized).select('*');
+      for (const [field, value] of Object.entries(where)) {
+        if (value !== undefined) {
+          retryQuery.eq(field, value as string | number | boolean);
+        }
+      }
+      const retry = await retryQuery.single();
+      result = retry.data;
+      error = retry.error;
+    }
+
     if (error) {
       console.error(`[SupabaseDB] update error on ${this.tableName}:`, error.message);
       throw new Error(`Failed to update ${this.tableName}: ${error.message}`);

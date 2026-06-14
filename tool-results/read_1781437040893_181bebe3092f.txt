@@ -1,0 +1,891 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback, useMemo } from 'react';
+     4→import {
+     5→  FileText, Plus, Search, Copy, Trash2, Eye, Send,
+     6→  CheckCircle2, Clock, Loader2, MessageSquare, Mail, Smartphone,
+     7→} from 'lucide-react';
+     8→import { Card, CardContent } from '@/components/ui/card';
+     9→import { Button } from '@/components/ui/button';
+    10→import { Badge } from '@/components/ui/badge';
+    11→import { Input } from '@/components/ui/input';
+    12→import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+    13→import { Textarea } from '@/components/ui/textarea';
+    14→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    15→import { Label } from '@/components/ui/label';
+    16→import { Separator } from '@/components/ui/separator';
+    17→import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    18→import { ScrollArea } from '@/components/ui/scroll-area';
+    19→import { toast } from 'sonner';
+    20→import { cn } from '@/lib/utils';
+    21→import { Skeleton } from '@/components/ui/skeleton';
+    22→
+    23→// ─── Types ──────────────────────────────────────────────────────────────────
+    24→
+    25→type TemplateCategory = 'promotional' | 'reminder' | 'seasonal' | 'follow_up' | 're_engagement' | 'general';
+    26→
+    27→interface CampaignTemplate {
+    28→  id: string;
+    29→  name: string;
+    30→  description: string | null;
+    31→  category: string;
+    32→  content: string;
+    33→  mediaUrl: string | null;
+    34→  mediaType: string | null;
+    35→  ctaText: string | null;
+    36→  ctaUrl: string | null;
+    37→  variablesJson: string;
+    38→  isApproved: boolean;
+    39→  externalId: string | null;
+    40→  usageCount: number;
+    41→  tenantId: string | null;
+    42→  workspaceId: string | null;
+    43→  createdAt: string;
+    44→  updatedAt: string;
+    45→}
+    46→
+    47→// ─── Constants ──────────────────────────────────────────────────────────────
+    48→
+    49→const CATEGORIES: { value: string; label: string }[] = [
+    50→  { value: 'all', label: 'All' },
+    51→  { value: 'promotional', label: 'Promotional' },
+    52→  { value: 'reminder', label: 'Reminder' },
+    53→  { value: 'seasonal', label: 'Seasonal' },
+    54→  { value: 'follow_up', label: 'Follow-up' },
+    55→  { value: 're_engagement', label: 'Re-engagement' },
+    56→  { value: 'general', label: 'General' },
+    57→];
+    58→
+    59→const CATEGORY_COLORS: Record<string, string> = {
+    60→  promotional: 'bg-amber-100 text-amber-700 border-amber-200',
+    61→  reminder: 'bg-sky-100 text-sky-700 border-sky-200',
+    62→  seasonal: 'bg-pink-100 text-pink-700 border-pink-200',
+    63→  follow_up: 'bg-violet-100 text-violet-700 border-violet-200',
+    64→  re_engagement: 'bg-orange-100 text-orange-700 border-orange-200',
+    65→  general: 'bg-slate-100 text-slate-600 border-slate-200',
+    66→};
+    67→
+    68→const VARIABLE_PRESETS = [
+    69→  { label: 'Name', value: '{{name}}' },
+    70→  { label: 'Service', value: '{{service}}' },
+    71→  { label: 'Date', value: '{{date}}' },
+    72→  { label: 'Time', value: '{{time}}' },
+    73→  { label: 'Amount', value: '{{amount}}' },
+    74→  { label: 'Company', value: '{{company}}' },
+    75→  { label: 'Phone', value: '{{phone}}' },
+    76→  { label: 'Address', value: '{{address}}' },
+    77→];
+    78→
+    79→// ─── Helpers ────────────────────────────────────────────────────────────────
+    80→
+    81→function detectVariables(content: string): string[] {
+    82→  const matches = content.match(/\{\{(\w+)\}\}/g);
+    83→  if (!matches) return [];
+    84→  return [...new Set(matches.map(v => v.replace(/\{\{|\}\}/g, '')))];
+    85→}
+    86→
+    87→function detectChannels(content: string): { type: string; label: string; icon: React.ReactNode; color: string }[] {
+    88→  const channels: { type: string; label: string; icon: React.ReactNode; color: string }[] = [];
+    89→
+    90→  // WhatsApp patterns: short messages, emoji, template-style
+    91→  if (content.length < 1000 || /\{\{[\w]+\}\}/.test(content) || /[📱💬✅🎉🔥⭐]/.test(content)) {
+    92→    channels.push({ type: 'whatsapp', label: 'WhatsApp', icon: <MessageSquare className="size-3" />, color: 'bg-emerald-100 text-emerald-700' });
+    93→  }
+    94→
+    95→  // Email patterns: longer content, HTML-like, subject-like structure
+    96→  if (content.length > 200 || /subject|dear|regards|sincerely/i.test(content)) {
+    97→    channels.push({ type: 'email', label: 'Email', icon: <Mail className="size-3" />, color: 'bg-sky-100 text-sky-700' });
+    98→  }
+    99→
+   100→  // SMS patterns: very short, urgency words
+   101→  if (content.length <= 160 || /urgent|reminder|confirm|code/i.test(content)) {
+   102→    channels.push({ type: 'sms', label: 'SMS', icon: <Smartphone className="size-3" />, color: 'bg-purple-100 text-purple-700' });
+   103→  }
+   104→
+   105→  return channels.length > 0 ? channels : [{ type: 'whatsapp', label: 'WhatsApp', icon: <MessageSquare className="size-3" />, color: 'bg-emerald-100 text-emerald-700' }];
+   106→}
+   107→
+   108→function getCategoryColor(category: string): string {
+   109→  return CATEGORY_COLORS[category] || CATEGORY_COLORS.general;
+   110→}
+   111→
+   112→// ─── Component ──────────────────────────────────────────────────────────────
+   113→
+   114→export function MarketingTemplatesView() {
+   115→  const [templates, setTemplates] = useState<CampaignTemplate[]>([]);
+   116→  const [isLoading, setIsLoading] = useState(true);
+   117→  const [error, setError] = useState<string | null>(null);
+   118→  const [search, setSearch] = useState('');
+   119→  const [categoryFilter, setCategoryFilter] = useState('all');
+   120→  const [showCreateDialog, setShowCreateDialog] = useState(false);
+   121→  const [showPreviewDialog, setShowPreviewDialog] = useState(false);
+   122→  const [selectedTemplate, setSelectedTemplate] = useState<CampaignTemplate | null>(null);
+   123→  const [isCreating, setIsCreating] = useState(false);
+   124→  const [isEditing, setIsEditing] = useState(false);
+   125→
+   126→  const [createForm, setCreateForm] = useState({
+   127→    name: '',
+   128→    description: '',
+   129→    category: 'promotional' as TemplateCategory,
+   130→    content: '',
+   131→    ctaText: '',
+   132→    ctaUrl: '',
+   133→    isApproved: false,
+   134→  });
+   135→
+   136→  // ── Load templates from API ──
+   137→  const loadTemplates = useCallback(async () => {
+   138→    setIsLoading(true);
+   139→    setError(null);
+   140→    try {
+   141→      const params = new URLSearchParams();
+   142→      if (categoryFilter !== 'all') params.set('category', categoryFilter);
+   143→      params.set('limit', '50');
+   144→
+   145→      const res = await fetch(`/api/campaign-templates?${params.toString()}`);
+   146→      if (res.ok) {
+   147→        const result = await res.json();
+   148→        setTemplates(result.data || []);
+   149→      } else {
+   150→        setError('Failed to load templates');
+   151→        toast.error('Failed to load templates');
+   152→      }
+   153→    } catch {
+   154→      setError('Network error. Please check your connection.');
+   155→      toast.error('Network error loading templates');
+   156→    } finally {
+   157→      setIsLoading(false);
+   158→    }
+   159→  }, [categoryFilter]);
+   160→
+   161→  useEffect(() => {
+   162→    loadTemplates();
+   163→  }, [loadTemplates]);
+   164→
+   165→  const filteredTemplates = useMemo(() => {
+   166→    return templates.filter(t => {
+   167→      if (search && !t.name.toLowerCase().includes(search.toLowerCase())) return false;
+   168→      return true;
+   169→    });
+   170→  }, [templates, search]);
+   171→
+   172→  // ── Stats ──
+   173→  const stats = useMemo(() => {
+   174→    const approved = templates.filter(t => t.isApproved).length;
+   175→    const pending = templates.filter(t => !t.isApproved).length;
+   176→    const categories = new Set(templates.map(t => t.category)).size;
+   177→    return { total: templates.length, approved, pending, categories };
+   178→  }, [templates]);
+   179→
+   180→  // ── Handlers ──
+   181→  const handleCreate = async () => {
+   182→    if (!createForm.name) { toast.error('Template name is required'); return; }
+   183→    if (!createForm.content) { toast.error('Template content is required'); return; }
+   184→
+   185→    setIsCreating(true);
+   186→    try {
+   187→      const variables = detectVariables(createForm.content);
+   188→
+   189→      if (isEditing && selectedTemplate) {
+   190→        const res = await fetch(`/api/campaign-templates/${selectedTemplate.id}`, {
+   191→          method: 'PUT',
+   192→          headers: { 'Content-Type': 'application/json' },
+   193→          body: JSON.stringify({
+   194→            name: createForm.name,
+   195→            description: createForm.description || null,
+   196→            category: createForm.category,
+   197→            content: createForm.content,
+   198→            ctaText: createForm.ctaText || null,
+   199→            ctaUrl: createForm.ctaUrl || null,
+   200→            variablesJson: JSON.stringify(variables),
+   201→            isApproved: createForm.isApproved,
+   202→          }),
+   203→        });
+   204→        if (res.ok) {
+   205→          const result = await res.json();
+   206→          setTemplates(prev => prev.map(t => t.id === selectedTemplate.id ? result.data : t));
+   207→          toast.success('Template updated');
+   208→        } else {
+   209→          toast.error('Failed to update template');
+   210→        }
+   211→      } else {
+   212→        const res = await fetch('/api/campaign-templates', {
+   213→          method: 'POST',
+   214→          headers: { 'Content-Type': 'application/json' },
+   215→          body: JSON.stringify({
+   216→            name: createForm.name,
+   217→            description: createForm.description || null,
+   218→            category: createForm.category,
+   219→            content: createForm.content,
+   220→            ctaText: createForm.ctaText || null,
+   221→            ctaUrl: createForm.ctaUrl || null,
+   222→            variablesJson: JSON.stringify(variables),
+   223→            isApproved: createForm.isApproved,
+   224→          }),
+   225→        });
+   226→        if (res.ok) {
+   227→          const result = await res.json();
+   228→          setTemplates(prev => [result.data, ...prev]);
+   229→          toast.success('Template created');
+   230→        } else {
+   231→          toast.error('Failed to create template');
+   232→        }
+   233→      }
+   234→
+   235→      setShowCreateDialog(false);
+   236→      resetForm();
+   237→    } catch {
+   238→      toast.error('Something went wrong');
+   239→    } finally {
+   240→      setIsCreating(false);
+   241→    }
+   242→  };
+   243→
+   244→  const handleDelete = async (id: string) => {
+   245→    try {
+   246→      const res = await fetch(`/api/campaign-templates/${id}`, { method: 'DELETE' });
+   247→      if (res.ok) {
+   248→        setTemplates(prev => prev.filter(t => t.id !== id));
+   249→        toast.success('Template deleted');
+   250→      } else {
+   251→        toast.error('Failed to delete template');
+   252→      }
+   253→    } catch {
+   254→      toast.error('Failed to delete template');
+   255→    }
+   256→  };
+   257→
+   258→  const handleCopyContent = async (content: string) => {
+   259→    try {
+   260→      await navigator.clipboard.writeText(content);
+   261→      toast.success('Content copied to clipboard');
+   262→    } catch {
+   263→      toast.error('Failed to copy content');
+   264→    }
+   265→  };
+   266→
+   267→  const handleEdit = (template: CampaignTemplate) => {
+   268→    setSelectedTemplate(template);
+   269→    setIsEditing(true);
+   270→    setCreateForm({
+   271→      name: template.name,
+   272→      description: template.description || '',
+   273→      category: template.category as TemplateCategory,
+   274→      content: template.content,
+   275→      ctaText: template.ctaText || '',
+   276→      ctaUrl: template.ctaUrl || '',
+   277→      isApproved: template.isApproved,
+   278→    });
+   279→    setShowCreateDialog(true);
+   280→  };
+   281→
+   282→  const handlePreview = (template: CampaignTemplate) => {
+   283→    setSelectedTemplate(template);
+   284→    setShowPreviewDialog(true);
+   285→  };
+   286→
+   287→  const handleToggleApproval = async (template: CampaignTemplate) => {
+   288→    try {
+   289→      const res = await fetch(`/api/campaign-templates/${template.id}`, {
+   290→        method: 'PUT',
+   291→        headers: { 'Content-Type': 'application/json' },
+   292→        body: JSON.stringify({ isApproved: !template.isApproved }),
+   293→      });
+   294→      if (res.ok) {
+   295→        setTemplates(prev =>
+   296→          prev.map(t => t.id === template.id ? { ...t, isApproved: !t.isApproved } : t)
+   297→        );
+   298→        toast.success(template.isApproved ? 'Template unapproved' : 'Template approved');
+   299→      }
+   300→    } catch {
+   301→      toast.error('Failed to update template');
+   302→    }
+   303→  };
+   304→
+   305→  const resetForm = () => {
+   306→    setCreateForm({
+   307→      name: '',
+   308→      description: '',
+   309→      category: 'promotional',
+   310→      content: '',
+   311→      ctaText: '',
+   312→      ctaUrl: '',
+   313→      isApproved: false,
+   314→    });
+   315→    setIsEditing(false);
+   316→    setSelectedTemplate(null);
+   317→  };
+   318→
+   319→  const detectedVars = useMemo(() => detectVariables(createForm.content), [createForm.content]);
+   320→
+   321→  // ── Loading State ──
+   322→  if (isLoading) {
+   323→    return (
+   324→      <div className="space-y-6 max-w-7xl mx-auto">
+   325→        <div className="flex items-center justify-between">
+   326→          <div className="flex items-center gap-3">
+   327→            <Skeleton className="size-10 rounded-lg" />
+   328→            <div>
+   329→              <Skeleton className="h-5 w-36" />
+   330→              <Skeleton className="h-3 w-52 mt-1" />
+   331→            </div>
+   332→          </div>
+   333→          <Skeleton className="h-9 w-36" />
+   334→        </div>
+   335→        <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+   336→          {Array.from({ length: 4 }).map((_, i) => (
+   337→            <Card key={i} className="p-4"><div className="flex items-center gap-2"><Skeleton className="size-4" /><div><Skeleton className="h-3 w-20" /><Skeleton className="h-5 w-8 mt-1" /></div></div></Card>
+   338→          ))}
+   339→        </div>
+   340→        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+   341→          {Array.from({ length: 6 }).map((_, i) => (
+   342→            <Card key={i} className="p-4"><div className="space-y-3"><Skeleton className="h-4 w-2/3" /><Skeleton className="h-3 w-full" /><Skeleton className="h-16 w-full" /></div></Card>
+   343→          ))}
+   344→        </div>
+   345→      </div>
+   346→    );
+   347→  }
+   348→
+   349→  if (error) {
+   350→    return (
+   351→      <div className="flex flex-col items-center justify-center h-96 text-muted-foreground">
+   352→        <FileText className="size-12 mb-4 opacity-20" />
+   353→        <p className="text-lg font-medium">Failed to load templates</p>
+   354→        <p className="text-sm mt-1">{error}</p>
+   355→        <Button className="mt-4" variant="outline" onClick={loadTemplates}>
+   356→          <Loader2 className="size-4 mr-1.5" /> Retry
+   357→        </Button>
+   358→      </div>
+   359→    );
+   360→  }
+   361→
+   362→  return (
+   363→    <div className="space-y-6 max-w-7xl mx-auto">
+   364→      {/* Header */}
+   365→      <div className="flex items-center justify-between flex-wrap gap-4">
+   366→        <div className="flex items-center gap-3">
+   367→          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600">
+   368→            <FileText className="size-5 text-white" />
+   369→          </div>
+   370→          <div>
+   371→            <h2 className="text-xl font-bold">Message Templates</h2>
+   372→            <p className="text-sm text-muted-foreground">Campaign message templates & builder</p>
+   373→          </div>
+   374→        </div>
+   375→        <Button
+   376→          className="bg-emerald-600 hover:bg-emerald-700"
+   377→          onClick={() => { resetForm(); setShowCreateDialog(true); }}
+   378→        >
+   379→          <Plus className="size-4 mr-1.5" /> Create Template
+   380→        </Button>
+   381→      </div>
+   382→
+   383→      {/* Stats Cards */}
+   384→      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+   385→        {[
+   386→          { label: 'Total Templates', value: stats.total, icon: FileText, color: 'text-foreground' },
+   387→          { label: 'Approved', value: stats.approved, icon: CheckCircle2, color: 'text-emerald-600' },
+   388→          { label: 'Pending', value: stats.pending, icon: Clock, color: 'text-amber-600' },
+   389→          { label: 'Categories', value: stats.categories, icon: Send, color: 'text-sky-600' },
+   390→        ].map(stat => {
+   391→          const Icon = stat.icon;
+   392→          return (
+   393→            <Card key={stat.label} className="p-4">
+   394→              <div className="flex items-center gap-2">
+   395→                <Icon className={cn('size-4', stat.color)} />
+   396→                <div>
+   397→                  <p className="text-xs text-muted-foreground">{stat.label}</p>
+   398→                  <p className={cn('text-lg font-bold', stat.color)}>{stat.value}</p>
+   399→                </div>
+   400→              </div>
+   401→            </Card>
+   402→          );
+   403→        })}
+   404→      </div>
+   405→
+   406→      {/* Filters */}
+   407→      <div className="flex flex-wrap items-center gap-3">
+   408→        <Tabs value={categoryFilter} onValueChange={setCategoryFilter}>
+   409→          <TabsList>
+   410→            {CATEGORIES.map(cat => (
+   411→              <TabsTrigger key={cat.value} value={cat.value} className="text-xs">
+   412→                {cat.label}
+   413→              </TabsTrigger>
+   414→            ))}
+   415→          </TabsList>
+   416→        </Tabs>
+   417→        <div className="relative flex-1 min-w-[200px]">
+   418→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   419→          <Input
+   420→            placeholder="Search templates..."
+   421→            value={search}
+   422→            onChange={e => setSearch(e.target.value)}
+   423→            className="pl-9"
+   424→          />
+   425→        </div>
+   426→      </div>
+   427→
+   428→      {/* Template List */}
+   429→      {filteredTemplates.length === 0 ? (
+   430→        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+   431→          <FileText className="size-12 mb-4 opacity-20" />
+   432→          <p className="text-lg font-medium">No templates found</p>
+   433→          <p className="text-sm mt-1">Create your first message template to get started</p>
+   434→          <Button
+   435→            className="mt-4 bg-emerald-600 hover:bg-emerald-700"
+   436→            onClick={() => { resetForm(); setShowCreateDialog(true); }}
+   437→          >
+   438→            <Plus className="size-4 mr-1.5" /> Create Template
+   439→          </Button>
+   440→        </div>
+   441→      ) : (
+   442→        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+   443→          {filteredTemplates.map(template => {
+   444→            const variables = detectVariables(template.content);
+   445→            const channels = detectChannels(template.content);
+   446→
+   447→            return (
+   448→              <Card
+   449→                key={template.id}
+   450→                className="hover:shadow-md transition-all cursor-pointer"
+   451→                onClick={() => handlePreview(template)}
+   452→              >
+   453→                <CardContent className="p-4 space-y-3">
+   454→                  {/* Header Row */}
+   455→                  <div className="flex items-start justify-between gap-2">
+   456→                    <div className="flex-1 min-w-0">
+   457→                      <h4 className="font-semibold text-sm truncate">{template.name}</h4>
+   458→                      {template.description && (
+   459→                        <p className="text-xs text-muted-foreground mt-0.5 truncate">{template.description}</p>
+   460→                      )}
+   461→                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+   462→                        <Badge variant="outline" className={cn('text-[10px]', getCategoryColor(template.category))}>
+   463→                          {template.category.replace('_', '-')}
+   464→                        </Badge>
+   465→                        {template.isApproved ? (
+   466→                          <Badge variant="outline" className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-200">
+   467→                            <CheckCircle2 className="size-2.5 mr-0.5" /> Approved
+   468→                          </Badge>
+   469→                        ) : (
+   470→                          <Badge variant="outline" className="text-[10px] bg-amber-100 text-amber-700 border-amber-200">
+   471→                            <Clock className="size-2.5 mr-0.5" /> Pending
+   472→                          </Badge>
+   473→                        )}
+   474→                      </div>
+   475→                    </div>
+   476→                    <div className="flex gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+   477→                      <Button
+   478→                        variant="ghost"
+   479→                        size="sm"
+   480→                        className="h-7 w-7 p-0"
+   481→                        onClick={() => handleCopyContent(template.content)}
+   482→                        title="Copy content"
+   483→                      >
+   484→                        <Copy className="size-3.5" />
+   485→                      </Button>
+   486→                      <Button
+   487→                        variant="ghost"
+   488→                        size="sm"
+   489→                        className="h-7 w-7 p-0"
+   490→                        onClick={() => handleEdit(template)}
+   491→                        title="Edit"
+   492→                      >
+   493→                        <Eye className="size-3.5" />
+   494→                      </Button>
+   495→                      <Button
+   496→                        variant="ghost"
+   497→                        size="sm"
+   498→                        className="h-7 w-7 p-0 text-red-500"
+   499→                        onClick={() => handleDelete(template.id)}
+   500→                        title="Delete"
+   501→                      >
+   502→                        <Trash2 className="size-3.5" />
+   503→                      </Button>
+   504→                    </div>
+   505→                  </div>
+   506→
+   507→                  {/* Content Preview */}
+   508→                  <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3 max-h-24 overflow-hidden">
+   509→                    <p className="text-xs whitespace-pre-wrap line-clamp-3">{template.content}</p>
+   510→                  </div>
+   511→
+   512→                  {/* CTA Preview */}
+   513→                  {template.ctaText && (
+   514→                    <div className="flex items-center gap-2">
+   515→                      <Button size="sm" className="h-6 text-[10px] bg-emerald-600 hover:bg-emerald-700 px-2.5 py-0">
+   516→                        {template.ctaText}
+   517→                      </Button>
+   518→                      {template.ctaUrl && (
+   519→                        <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
+   520→                          {template.ctaUrl}
+   521→                        </span>
+   522→                      )}
+   523→                    </div>
+   524→                  )}
+   525→
+   526→                  {/* Footer: channels + variables + usage */}
+   527→                  <div className="flex items-center justify-between pt-2 border-t">
+   528→                    <div className="flex items-center gap-1">
+   529→                      {channels.map(ch => (
+   530→                        <Badge key={ch.type} variant="secondary" className={cn('text-[10px] gap-0.5', ch.color)}>
+   531→                          {ch.icon} {ch.label}
+   532→                        </Badge>
+   533→                      ))}
+   534→                    </div>
+   535→                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+   536→                      {variables.length > 0 && (
+   537→                        <span>{variables.length} var{variables.length > 1 ? 's' : ''}</span>
+   538→                      )}
+   539→                      {template.usageCount > 0 && (
+   540→                        <span>Used {template.usageCount}×</span>
+   541→                      )}
+   542→                    </div>
+   543→                  </div>
+   544→                </CardContent>
+   545→              </Card>
+   546→            );
+   547→          })}
+   548→        </div>
+   549→      )}
+   550→
+   551→      {/* Create / Edit Template Dialog */}
+   552→      <Dialog open={showCreateDialog} onOpenChange={(open) => { if (!open) resetForm(); setShowCreateDialog(open); }}>
+   553→        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+   554→          <DialogHeader>
+   555→            <DialogTitle>{isEditing ? 'Edit Template' : 'Create Template'}</DialogTitle>
+   556→            <DialogDescription>
+   557→              {isEditing ? 'Update your message template' : 'Design a reusable campaign message template'}
+   558→            </DialogDescription>
+   559→          </DialogHeader>
+   560→          <div className="space-y-4 py-2">
+   561→            {/* Name */}
+   562→            <div className="space-y-2">
+   563→              <Label>Template Name *</Label>
+   564→              <Input
+   565→                placeholder="e.g., Welcome Offer, Appointment Reminder"
+   566→                value={createForm.name}
+   567→                onChange={e => setCreateForm({ ...createForm, name: e.target.value })}
+   568→              />
+   569→            </div>
+   570→
+   571→            {/* Description */}
+   572→            <div className="space-y-2">
+   573→              <Label>Description</Label>
+   574→              <Input
+   575→                placeholder="Brief description of this template"
+   576→                value={createForm.description}
+   577→                onChange={e => setCreateForm({ ...createForm, description: e.target.value })}
+   578→              />
+   579→            </div>
+   580→
+   581→            {/* Category */}
+   582→            <div className="space-y-2">
+   583→              <Label>Category</Label>
+   584→              <Select
+   585→                value={createForm.category}
+   586→                onValueChange={v => setCreateForm({ ...createForm, category: v as TemplateCategory })}
+   587→              >
+   588→                <SelectTrigger><SelectValue /></SelectTrigger>
+   589→                <SelectContent>
+   590→                  {CATEGORIES.filter(c => c.value !== 'all').map(c => (
+   591→                    <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+   592→                  ))}
+   593→                </SelectContent>
+   594→              </Select>
+   595→            </div>
+   596→
+   597→            {/* Content with Variable Insertion */}
+   598→            <div className="space-y-2">
+   599→              <Label>Message Content *</Label>
+   600→              <Textarea
+   601→                placeholder="Type your message... Use {{name}}, {{service}}, {{date}} as placeholders"
+   602→                value={createForm.content}
+   603→                onChange={e => setCreateForm({ ...createForm, content: e.target.value })}
+   604→                rows={5}
+   605→              />
+   606→              <div className="flex items-center justify-between">
+   607→                <p className="text-[10px] text-muted-foreground">{createForm.content.length} characters</p>
+   608→                <div className="flex items-center gap-1">
+   609→                  {detectedVars.length > 0 && (
+   610→                    <span className="text-[10px] text-emerald-600">
+   611→                      {detectedVars.length} variable{detectedVars.length > 1 ? 's' : ''} detected
+   612→                    </span>
+   613→                  )}
+   614→                </div>
+   615→              </div>
+   616→
+   617→              {/* Variable Insertion Buttons */}
+   618→              <div>
+   619→                <p className="text-[10px] text-muted-foreground mb-1.5">Insert variable:</p>
+   620→                <div className="flex flex-wrap gap-1">
+   621→                  {VARIABLE_PRESETS.map(v => (
+   622→                    <Button
+   623→                      key={v.value}
+   624→                      variant="outline"
+   625→                      size="sm"
+   626→                      className="h-6 text-[10px] px-2 py-0"
+   627→                      onClick={() => setCreateForm({
+   628→                        ...createForm,
+   629→                        content: createForm.content + v.value,
+   630→                      })}
+   631→                    >
+   632→                      {v.label}
+   633→                    </Button>
+   634→                  ))}
+   635→                </div>
+   636→              </div>
+   637→
+   638→              {/* Detected Variables */}
+   639→              {detectedVars.length > 0 && (
+   640→                <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-3">
+   641→                  <p className="text-[10px] font-medium text-muted-foreground mb-1.5">Detected Variables</p>
+   642→                  <div className="flex flex-wrap gap-1">
+   643→                    {detectedVars.map(v => (
+   644→                      <Badge key={v} variant="secondary" className="text-[10px] bg-emerald-100 text-emerald-700">
+   645→                        {`{{${v}}}`}
+   646→                      </Badge>
+   647→                    ))}
+   648→                  </div>
+   649→                </div>
+   650→              )}
+   651→            </div>
+   652→
+   653→            <Separator />
+   654→
+   655→            {/* CTA Button */}
+   656→            <div className="grid grid-cols-2 gap-3">
+   657→              <div className="space-y-2">
+   658→                <Label>CTA Button Text</Label>
+   659→                <Input
+   660→                  placeholder="e.g., Book Now"
+   661→                  value={createForm.ctaText}
+   662→                  onChange={e => setCreateForm({ ...createForm, ctaText: e.target.value })}
+   663→                />
+   664→              </div>
+   665→              <div className="space-y-2">
+   666→                <Label>CTA URL</Label>
+   667→                <Input
+   668→                  placeholder="https://..."
+   669→                  value={createForm.ctaUrl}
+   670→                  onChange={e => setCreateForm({ ...createForm, ctaUrl: e.target.value })}
+   671→                />
+   672→              </div>
+   673→            </div>
+   674→
+   675→            {/* Approval Toggle */}
+   676→            <div className="flex items-center gap-3">
+   677→              <Button
+   678→                variant="outline"
+   679→                size="sm"
+   680→                className={cn(
+   681→                  'h-7 text-xs',
+   682→                  createForm.isApproved && 'bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-200'
+   683→                )}
+   684→                onClick={() => setCreateForm({ ...createForm, isApproved: !createForm.isApproved })}
+   685→              >
+   686→                {createForm.isApproved ? <CheckCircle2 className="size-3 mr-1" /> : <Clock className="size-3 mr-1" />}
+   687→                {createForm.isApproved ? 'Approved' : 'Mark as Approved'}
+   688→              </Button>
+   689→              <span className="text-[10px] text-muted-foreground">
+   690→                WhatsApp templates require approval before sending
+   691→              </span>
+   692→            </div>
+   693→
+   694→            {/* Content Preview */}
+   695→            {createForm.content && (
+   696→              <>
+   697→                <Separator />
+   698→                <div>
+   699→                  <p className="text-xs font-medium mb-2">Preview</p>
+   700→                  <div className="bg-emerald-50 dark:bg-emerald-950 rounded-lg p-4 border border-emerald-200 dark:border-emerald-800">
+   701→                    <div className="bg-white dark:bg-slate-900 rounded-lg p-3 max-w-[280px] shadow-sm">
+   702→                      <p className="text-xs whitespace-pre-wrap">
+   703→                        {createForm.content}
+   704→                      </p>
+   705→                      {createForm.ctaText && (
+   706→                        <Button
+   707→                          size="sm"
+   708→                          className="mt-2 w-full bg-emerald-600 hover:bg-emerald-700 h-7 text-xs"
+   709→                        >
+   710→                          {createForm.ctaText}
+   711→                        </Button>
+   712→                      )}
+   713→                    </div>
+   714→                    <p className="text-[10px] text-emerald-600 mt-1.5">WhatsApp preview</p>
+   715→                  </div>
+   716→                </div>
+   717→              </>
+   718→            )}
+   719→          </div>
+   720→          <DialogFooter>
+   721→            <Button variant="outline" onClick={() => { resetForm(); setShowCreateDialog(false); }}>Cancel</Button>
+   722→            <Button
+   723→              className="bg-emerald-600 hover:bg-emerald-700"
+   724→              onClick={handleCreate}
+   725→              disabled={!createForm.name || !createForm.content || isCreating}
+   726→            >
+   727→              {isCreating && <Loader2 className="size-4 animate-spin mr-1" />}
+   728→              {isEditing ? 'Update Template' : 'Create Template'}
+   729→            </Button>
+   730→          </DialogFooter>
+   731→        </DialogContent>
+   732→      </Dialog>
+   733→
+   734→      {/* Template Preview Dialog */}
+   735→      <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
+   736→        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+   737→          <DialogHeader>
+   738→            <DialogTitle>{selectedTemplate?.name}</DialogTitle>
+   739→            <DialogDescription>
+   740→              <div className="flex items-center gap-2 mt-1 flex-wrap">
+   741→                <Badge variant="outline" className={cn('text-xs', getCategoryColor(selectedTemplate?.category || ''))}>
+   742→                  {selectedTemplate?.category?.replace('_', '-')}
+   743→                </Badge>
+   744→                {selectedTemplate?.isApproved ? (
+   745→                  <Badge variant="outline" className="text-xs bg-emerald-100 text-emerald-700 border-emerald-200">
+   746→                    <CheckCircle2 className="size-3 mr-0.5" /> Approved
+   747→                  </Badge>
+   748→                ) : (
+   749→                  <Badge variant="outline" className="text-xs bg-amber-100 text-amber-700 border-amber-200">
+   750→                    <Clock className="size-3 mr-0.5" /> Pending
+   751→                  </Badge>
+   752→                )}
+   753→                {selectedTemplate && detectChannels(selectedTemplate.content).map(ch => (
+   754→                  <Badge key={ch.type} variant="secondary" className={cn('text-xs gap-0.5', ch.color)}>
+   755→                    {ch.icon} {ch.label}
+   756→                  </Badge>
+   757→                ))}
+   758→              </div>
+   759→            </DialogDescription>
+   760→          </DialogHeader>
+   761→          {selectedTemplate && (
+   762→            <div className="space-y-4">
+   763→              {/* Description */}
+   764→              {selectedTemplate.description && (
+   765→                <p className="text-sm text-muted-foreground">{selectedTemplate.description}</p>
+   766→              )}
+   767→
+   768→              {/* Message Preview */}
+   769→              <div className="bg-emerald-50 dark:bg-emerald-950 rounded-lg p-4 border border-emerald-200 dark:border-emerald-800">
+   770→                <div className="bg-white dark:bg-slate-900 rounded-lg p-3 max-w-[320px] shadow-sm">
+   771→                  <ScrollArea className="max-h-60">
+   772→                    <p className="text-sm whitespace-pre-wrap">{selectedTemplate.content}</p>
+   773→                  </ScrollArea>
+   774→                  {selectedTemplate.ctaText && (
+   775→                    <Button
+   776→                      size="sm"
+   777→                      className="mt-3 w-full bg-emerald-600 hover:bg-emerald-700 h-8 text-xs"
+   778→                      onClick={() => {
+   779→                        if (selectedTemplate.ctaUrl) {
+   780→                          window.open(selectedTemplate.ctaUrl, '_blank');
+   781→                        }
+   782→                      }}
+   783→                    >
+   784→                      {selectedTemplate.ctaText}
+   785→                    </Button>
+   786→                  )}
+   787→                </div>
+   788→                <p className="text-[10px] text-emerald-600 mt-1.5">Message preview</p>
+   789→              </div>
+   790→
+   791→              {/* Variables */}
+   792→              {detectVariables(selectedTemplate.content).length > 0 && (
+   793→                <div>
+   794→                  <p className="text-xs font-medium mb-2">Template Variables</p>
+   795→                  <div className="flex flex-wrap gap-1.5">
+   796→                    {detectVariables(selectedTemplate.content).map(v => (
+   797→                      <Badge key={v} variant="secondary" className="text-xs bg-emerald-100 text-emerald-700">
+   798→                        {`{{${v}}}`}
+   799→                      </Badge>
+   800→                    ))}
+   801→                  </div>
+   802→                </div>
+   803→              )}
+   804→
+   805→              <Separator />
+   806→
+   807→              {/* Meta info */}
+   808→              <div className="grid grid-cols-2 gap-2 text-sm">
+   809→                <div>
+   810→                  <span className="text-muted-foreground">Category:</span>{' '}
+   811→                  <span className="font-medium">{selectedTemplate.category.replace('_', '-')}</span>
+   812→                </div>
+   813→                <div>
+   814→                  <span className="text-muted-foreground">Usage:</span>{' '}
+   815→                  <span className="font-medium">{selectedTemplate.usageCount}×</span>
+   816→                </div>
+   817→                {selectedTemplate.externalId && (
+   818→                  <div className="col-span-2">
+   819→                    <span className="text-muted-foreground">WhatsApp ID:</span>{' '}
+   820→                    <span className="font-medium font-mono text-xs">{selectedTemplate.externalId}</span>
+   821→                  </div>
+   822→                )}
+   823→                <div>
+   824→                  <span className="text-muted-foreground">Created:</span>{' '}
+   825→                  <span className="font-medium text-xs">
+   826→                    {new Date(selectedTemplate.createdAt).toLocaleDateString()}
+   827→                  </span>
+   828→                </div>
+   829→                <div>
+   830→                  <span className="text-muted-foreground">Updated:</span>{' '}
+   831→                  <span className="font-medium text-xs">
+   832→                    {new Date(selectedTemplate.updatedAt).toLocaleDateString()}
+   833→                  </span>
+   834→                </div>
+   835→              </div>
+   836→
+   837→              {/* Actions */}
+   838→              <div className="flex items-center gap-2 pt-2">
+   839→                <Button
+   840→                  variant="outline"
+   841→                  size="sm"
+   842→                  className="h-8 text-xs"
+   843→                  onClick={() => handleCopyContent(selectedTemplate.content)}
+   844→                >
+   845→                  <Copy className="size-3 mr-1" /> Copy
+   846→                </Button>
+   847→                <Button
+   848→                  variant="outline"
+   849→                  size="sm"
+   850→                  className="h-8 text-xs"
+   851→                  onClick={() => handleEdit(selectedTemplate)}
+   852→                >
+   853→                  <Eye className="size-3 mr-1" /> Edit
+   854→                </Button>
+   855→                <Button
+   856→                  variant="outline"
+   857→                  size="sm"
+   858→                  className={cn(
+   859→                    'h-8 text-xs',
+   860→                    selectedTemplate.isApproved
+   861→                      ? 'hover:bg-amber-50 hover:text-amber-700'
+   862→                      : 'hover:bg-emerald-50 hover:text-emerald-700'
+   863→                  )}
+   864→                  onClick={() => handleToggleApproval(selectedTemplate)}
+   865→                >
+   866→                  {selectedTemplate.isApproved ? (
+   867→                    <><Clock className="size-3 mr-1" /> Unapprove</>
+   868→                  ) : (
+   869→                    <><CheckCircle2 className="size-3 mr-1" /> Approve</>
+   870→                  )}
+   871→                </Button>
+   872→                <Button
+   873→                  variant="outline"
+   874→                  size="sm"
+   875→                  className="h-8 text-xs text-red-500 hover:bg-red-50 hover:text-red-600 ml-auto"
+   876→                  onClick={() => {
+   877→                    handleDelete(selectedTemplate.id);
+   878→                    setShowPreviewDialog(false);
+   879→                  }}
+   880→                >
+   881→                  <Trash2 className="size-3 mr-1" /> Delete
+   882→                </Button>
+   883→              </div>
+   884→            </div>
+   885→          )}
+   886→        </DialogContent>
+   887→      </Dialog>
+   888→    </div>
+   889→  );
+   890→}
+   891→

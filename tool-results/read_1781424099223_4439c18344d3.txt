@@ -1,0 +1,595 @@
+  1001→                                        return msgs.slice(-5).map((msg: any, idx: number) => (
+  1002→                                          <ChatBubble
+  1003→                                            key={idx}
+  1004→                                            message={msg}
+  1005→                                            isCustomer={msg.senderType === 'customer'}
+  1006→                                          />
+  1007→                                        ));
+  1008→                                      }
+  1009→                                    } catch { /* ignore parse errors */ }
+  1010→                                    return null;
+  1011→                                  })()}
+  1012→                                  <p className="text-[10px] text-muted-foreground text-right">
+  1013→                                    {conv.lastMessageAt
+  1014→                                      ? formatDateTime(conv.lastMessageAt)
+  1015→                                      : ''}
+  1016→                                  </p>
+  1017→                                </div>
+  1018→                              </CardContent>
+  1019→                            </Card>
+  1020→                          ))}
+  1021→                        </div>
+  1022→                      )}
+  1023→                    </div>
+  1024→                  </ScrollArea>
+  1025→                </TabsContent>
+  1026→
+  1027→                {/* ─── Bookings Tab ─────────────────────────────────────────── */}
+  1028→                <TabsContent value="bookings" className="h-full m-0">
+  1029→                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
+  1030→                    <div className="p-5 space-y-5">
+  1031→                      {bookingsLoading ? (
+  1032→                        <div className="space-y-3">
+  1033→                          {Array.from({ length: 3 }).map((_, i) => (
+  1034→                            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+  1035→                          ))}
+  1036→                        </div>
+  1037→                      ) : bookings.length === 0 ? (
+  1038→                        <div className="flex flex-col items-center justify-center py-16 text-center">
+  1039→                          <Calendar className="size-10 text-muted-foreground mb-3" />
+  1040→                          <h3 className="text-base font-semibold text-muted-foreground">
+  1041→                            No bookings
+  1042→                          </h3>
+  1043→                          <p className="text-xs text-muted-foreground mt-1">
+  1044→                            Bookings for this customer will appear here
+  1045→                          </p>
+  1046→                        </div>
+  1047→                      ) : (
+  1048→                        <>
+  1049→                          {/* Upcoming */}
+  1050→                          {bookings.filter(
+  1051→                            (b: any) =>
+  1052→                              b.status === 'confirmed' || b.status === 'pending'
+  1053→                          ).length > 0 && (
+  1054→                            <div className="space-y-2">
+  1055→                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+  1056→                                <Clock className="size-3.5" /> Upcoming
+  1057→                              </h4>
+  1058→                              {bookings
+  1059→                                .filter(
+  1060→                                  (b: any) =>
+  1061→                                    b.status === 'confirmed' || b.status === 'pending'
+  1062→                                )
+  1063→                                .map((booking: any) => {
+  1064→                                  const statusCfg =
+  1065→                                    bookingStatusConfig[booking.status] ||
+  1066→                                    bookingStatusConfig.pending;
+  1067→                                  return (
+  1068→                                    <div
+  1069→                                      key={booking.id}
+  1070→                                      className="flex items-center justify-between p-3 bg-card rounded-lg border border-border"
+  1071→                                    >
+  1072→                                      <div className="min-w-0">
+  1073→                                        <p className="text-sm font-medium text-foreground truncate">
+  1074→                                          {booking.title || 'Booking'}
+  1075→                                        </p>
+  1076→                                        <p className="text-xs text-muted-foreground">
+  1077→                                          {booking.scheduledAt
+  1078→                                            ? formatDateTime(booking.scheduledAt)
+  1079→                                            : 'No date set'}
+  1080→                                          {booking.employee?.name &&
+  1081→                                            ` · ${booking.employee.name}`}
+  1082→                                        </p>
+  1083→                                      </div>
+  1084→                                      <Badge
+  1085→                                        variant="outline"
+  1086→                                        className={cn(
+  1087→                                          'text-[10px] shrink-0',
+  1088→                                          statusCfg.bg,
+  1089→                                          statusCfg.color
+  1090→                                        )}
+  1091→                                      >
+  1092→                                        {statusCfg.label}
+  1093→                                      </Badge>
+  1094→                                    </div>
+  1095→                                  );
+  1096→                                })}
+  1097→                            </div>
+  1098→                          )}
+  1099→
+  1100→                          {/* Completed */}
+  1101→                          {bookings.filter((b: any) => b.status === 'completed').length >
+  1102→                            0 && (
+  1103→                            <div className="space-y-2">
+  1104→                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+  1105→                                <CheckCircle2 className="size-3.5" /> Completed
+  1106→                              </h4>
+  1107→                              {bookings
+  1108→                                .filter((b: any) => b.status === 'completed')
+  1109→                                .map((booking: any) => (
+  1110→                                  <div
+  1111→                                    key={booking.id}
+  1112→                                    className="flex items-center justify-between p-3 bg-card rounded-lg border border-border"
+  1113→                                  >
+  1114→                                    <div className="min-w-0">
+  1115→                                      <p className="text-sm font-medium text-foreground truncate">
+  1116→                                        {booking.title || 'Booking'}
+  1117→                                      </p>
+  1118→                                      <p className="text-xs text-muted-foreground">
+  1119→                                        {booking.scheduledAt
+  1120→                                          ? formatDate(booking.scheduledAt)
+  1121→                                          : ''}
+  1122→                                      </p>
+  1123→                                    </div>
+  1124→                                    <Badge
+  1125→                                      variant="outline"
+  1126→                                      className="text-[10px] shrink-0 bg-emerald-500/10 text-emerald-400 border-emerald-700"
+  1127→                                    >
+  1128→                                      Completed
+  1129→                                    </Badge>
+  1130→                                  </div>
+  1131→                                ))}
+  1132→                            </div>
+  1133→                          )}
+  1134→
+  1135→                          {/* Cancelled */}
+  1136→                          {bookings.filter((b: any) => b.status === 'cancelled').length >
+  1137→                            0 && (
+  1138→                            <div className="space-y-2">
+  1139→                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+  1140→                                <X className="size-3.5" /> Cancelled
+  1141→                              </h4>
+  1142→                              {bookings
+  1143→                                .filter((b: any) => b.status === 'cancelled')
+  1144→                                .map((booking: any) => (
+  1145→                                  <div
+  1146→                                    key={booking.id}
+  1147→                                    className="flex items-center justify-between p-3 bg-card rounded-lg border border-border opacity-60"
+  1148→                                  >
+  1149→                                    <div className="min-w-0">
+  1150→                                      <p className="text-sm font-medium text-muted-foreground line-through truncate">
+  1151→                                        {booking.title || 'Booking'}
+  1152→                                      </p>
+  1153→                                      <p className="text-xs text-muted-foreground">
+  1154→                                        {booking.scheduledAt
+  1155→                                          ? formatDate(booking.scheduledAt)
+  1156→                                          : ''}
+  1157→                                      </p>
+  1158→                                    </div>
+  1159→                                    <Badge
+  1160→                                      variant="outline"
+  1161→                                      className="text-[10px] shrink-0 bg-red-500/10 text-red-400 border-red-700"
+  1162→                                    >
+  1163→                                      Cancelled
+  1164→                                    </Badge>
+  1165→                                  </div>
+  1166→                                ))}
+  1167→                            </div>
+  1168→                          )}
+  1169→                        </>
+  1170→                      )}
+  1171→                    </div>
+  1172→                  </ScrollArea>
+  1173→                </TabsContent>
+  1174→
+  1175→                {/* ─── Jobs Tab ─────────────────────────────────────────────── */}
+  1176→                <TabsContent value="jobs" className="h-full m-0">
+  1177→                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
+  1178→                    <div className="p-5 space-y-3">
+  1179→                      {customer360Loading ? (
+  1180→                        Array.from({ length: 4 }).map((_, i) => (
+  1181→                          <Skeleton key={i} className="h-16 w-full rounded-lg" />
+  1182→                        ))
+  1183→                      ) : jobs.length === 0 ? (
+  1184→                        <div className="flex flex-col items-center justify-center py-16 text-center">
+  1185→                          <Wrench className="size-10 text-muted-foreground mb-3" />
+  1186→                          <h3 className="text-base font-semibold text-muted-foreground">
+  1187→                            No jobs yet
+  1188→                          </h3>
+  1189→                          <p className="text-xs text-muted-foreground mt-1">
+  1190→                            Jobs assigned to this customer will appear here
+  1191→                          </p>
+  1192→                        </div>
+  1193→                      ) : (
+  1194→                        jobs.map(job => {
+  1195→                          const statusCfg =
+  1196→                            jobStatusConfig[job.status] || jobStatusConfig.pending;
+  1197→                          return (
+  1198→                            <div
+  1199→                              key={job.id}
+  1200→                              className="flex items-center justify-between p-4 bg-card rounded-lg border border-border hover:border-border transition-colors"
+  1201→                            >
+  1202→                              <div className="flex items-center gap-3 min-w-0">
+  1203→                                <div
+  1204→                                  className={cn(
+  1205→                                    'size-10 rounded-full flex items-center justify-center shrink-0',
+  1206→                                    job.status === 'completed'
+  1207→                                      ? 'bg-emerald-500/10'
+  1208→                                      : job.status === 'in_progress'
+  1209→                                        ? 'bg-amber-500/10'
+  1210→                                        : job.status === 'cancelled'
+  1211→                                          ? 'bg-red-500/10'
+  1212→                                          : 'bg-muted/50'
+  1213→                                  )}
+  1214→                                >
+  1215→                                  <Wrench
+  1216→                                    className={cn(
+  1217→                                      'size-4',
+  1218→                                      job.status === 'completed'
+  1219→                                        ? 'text-emerald-500'
+  1220→                                        : job.status === 'in_progress'
+  1221→                                          ? 'text-amber-500'
+  1222→                                          : job.status === 'cancelled'
+  1223→                                            ? 'text-red-500'
+  1224→                                            : 'text-muted-foreground'
+  1225→                                    )}
+  1226→                                  />
+  1227→                                </div>
+  1228→                                <div className="min-w-0">
+  1229→                                  <p className="text-sm font-medium text-foreground truncate">
+  1230→                                    {job.title || job.service || 'Service'}
+  1231→                                  </p>
+  1232→                                  <p className="text-xs text-muted-foreground">
+  1233→                                    {job.assigneeName || 'Unassigned'} &middot;{' '}
+  1234→                                    {formatDate(job.createdAt)}
+  1235→                                  </p>
+  1236→                                  {job.address && (
+  1237→                                    <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
+  1238→                                      <MapPin className="size-2.5" /> {job.address}
+  1239→                                    </p>
+  1240→                                  )}
+  1241→                                </div>
+  1242→                              </div>
+  1243→                              <div className="flex items-center gap-2 shrink-0">
+  1244→                                {job.scheduledAt && (
+  1245→                                  <span className="text-[11px] text-muted-foreground hidden sm:block">
+  1246→                                    {formatDate(job.scheduledAt)}
+  1247→                                  </span>
+  1248→                                )}
+  1249→                                <Badge
+  1250→                                  variant="outline"
+  1251→                                  className={cn(
+  1252→                                    'text-[10px]',
+  1253→                                    statusCfg.bg,
+  1254→                                    statusCfg.color
+  1255→                                  )}
+  1256→                                >
+  1257→                                  {statusCfg.label}
+  1258→                                </Badge>
+  1259→                              </div>
+  1260→                            </div>
+  1261→                          );
+  1262→                        })
+  1263→                      )}
+  1264→                    </div>
+  1265→                  </ScrollArea>
+  1266→                </TabsContent>
+  1267→
+  1268→                {/* ─── Invoices Tab ─────────────────────────────────────────── */}
+  1269→                <TabsContent value="invoices" className="h-full m-0">
+  1270→                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
+  1271→                    <div className="p-5 space-y-5">
+  1272→                      {customer360Loading ? (
+  1273→                        Array.from({ length: 3 }).map((_, i) => (
+  1274→                          <Skeleton key={i} className="h-16 w-full rounded-lg" />
+  1275→                        ))
+  1276→                      ) : invoices.length === 0 ? (
+  1277→                        <div className="flex flex-col items-center justify-center py-16 text-center">
+  1278→                          <Receipt className="size-10 text-muted-foreground mb-3" />
+  1279→                          <h3 className="text-base font-semibold text-muted-foreground">
+  1280→                            No invoices
+  1281→                          </h3>
+  1282→                          <p className="text-xs text-muted-foreground mt-1">
+  1283→                            Invoices for this customer will appear here
+  1284→                          </p>
+  1285→                        </div>
+  1286→                      ) : (
+  1287→                        <>
+  1288→                          {/* Paid */}
+  1289→                          {invoices.filter((i: any) => i.status === 'paid').length > 0 && (
+  1290→                            <div className="space-y-2">
+  1291→                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+  1292→                                <CheckCircle2 className="size-3.5 text-emerald-500" /> Paid
+  1293→                              </h4>
+  1294→                              {invoices
+  1295→                                .filter((i: any) => i.status === 'paid')
+  1296→                                .map((inv: any) => (
+  1297→                                  <div
+  1298→                                    key={inv.id}
+  1299→                                    className="flex items-center justify-between p-3 bg-card rounded-lg border border-border"
+  1300→                                  >
+  1301→                                    <div className="min-w-0">
+  1302→                                      <p className="text-sm font-medium text-foreground">
+  1303→                                        {inv.number || inv.invoiceNumber || 'Invoice'}
+  1304→                                      </p>
+  1305→                                      <p className="text-xs text-muted-foreground">
+  1306→                                        {formatDate(inv.createdAt)}
+  1307→                                        {inv.paidAt ? ` · Paid ${formatDate(inv.paidAt)}` : ''}
+  1308→                                      </p>
+  1309→                                    </div>
+  1310→                                    <div className="flex items-center gap-2 shrink-0">
+  1311→                                      <span className="text-sm font-semibold text-emerald-400">
+  1312→                                        {formatCurrency(inv.total)}
+  1313→                                      </span>
+  1314→                                      <Badge
+  1315→                                        variant="outline"
+  1316→                                        className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-700"
+  1317→                                      >
+  1318→                                        Paid
+  1319→                                      </Badge>
+  1320→                                    </div>
+  1321→                                  </div>
+  1322→                                ))}
+  1323→                            </div>
+  1324→                          )}
+  1325→
+  1326→                          {/* Pending */}
+  1327→                          {invoices.filter((i: any) => i.status === 'pending').length > 0 && (
+  1328→                            <div className="space-y-2">
+  1329→                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+  1330→                                <Clock className="size-3.5 text-amber-500" /> Pending
+  1331→                              </h4>
+  1332→                              {invoices
+  1333→                                .filter((i: any) => i.status === 'pending')
+  1334→                                .map((inv: any) => (
+  1335→                                  <div
+  1336→                                    key={inv.id}
+  1337→                                    className="flex items-center justify-between p-3 bg-card rounded-lg border border-amber-700/30"
+  1338→                                  >
+  1339→                                    <div className="min-w-0">
+  1340→                                      <p className="text-sm font-medium text-foreground">
+  1341→                                        {inv.number || inv.invoiceNumber || 'Invoice'}
+  1342→                                      </p>
+  1343→                                      <p className="text-xs text-muted-foreground">
+  1344→                                        {formatDate(inv.createdAt)}
+  1345→                                        {inv.dueDate ? ` · Due ${formatDate(inv.dueDate)}` : ''}
+  1346→                                      </p>
+  1347→                                    </div>
+  1348→                                    <div className="flex items-center gap-2 shrink-0">
+  1349→                                      <span className="text-sm font-semibold text-amber-400">
+  1350→                                        {formatCurrency(inv.total)}
+  1351→                                      </span>
+  1352→                                      <Badge
+  1353→                                        variant="outline"
+  1354→                                        className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-700"
+  1355→                                      >
+  1356→                                        Pending
+  1357→                                      </Badge>
+  1358→                                    </div>
+  1359→                                  </div>
+  1360→                                ))}
+  1361→                            </div>
+  1362→                          )}
+  1363→
+  1364→                          {/* Overdue */}
+  1365→                          {invoices.filter((i: any) => i.status === 'overdue').length > 0 && (
+  1366→                            <div className="space-y-2">
+  1367→                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+  1368→                                <AlertCircle className="size-3.5 text-red-500" /> Overdue
+  1369→                              </h4>
+  1370→                              {invoices
+  1371→                                .filter((i: any) => i.status === 'overdue')
+  1372→                                .map((inv: any) => (
+  1373→                                  <div
+  1374→                                    key={inv.id}
+  1375→                                    className="flex items-center justify-between p-3 bg-destructive/10 rounded-lg border border-red-700/40"
+  1376→                                  >
+  1377→                                    <div className="min-w-0">
+  1378→                                      <p className="text-sm font-medium text-foreground">
+  1379→                                        {inv.number || inv.invoiceNumber || 'Invoice'}
+  1380→                                      </p>
+  1381→                                      <p className="text-xs text-red-400">
+  1382→                                        Due {inv.dueDate ? formatDate(inv.dueDate) : 'N/A'}
+  1383→                                      </p>
+  1384→                                    </div>
+  1385→                                    <div className="flex items-center gap-2 shrink-0">
+  1386→                                      <span className="text-sm font-semibold text-red-400">
+  1387→                                        {formatCurrency(inv.total)}
+  1388→                                      </span>
+  1389→                                      <Badge
+  1390→                                        variant="outline"
+  1391→                                        className="text-[10px] bg-red-500/10 text-red-400 border-red-700"
+  1392→                                      >
+  1393→                                        Overdue
+  1394→                                      </Badge>
+  1395→                                    </div>
+  1396→                                  </div>
+  1397→                                ))}
+  1398→                            </div>
+  1399→                          )}
+  1400→
+  1401→                          {/* Draft */}
+  1402→                          {invoices.filter((i: any) => i.status === 'draft').length > 0 && (
+  1403→                            <div className="space-y-2">
+  1404→                              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+  1405→                                Draft
+  1406→                              </h4>
+  1407→                              {invoices
+  1408→                                .filter((i: any) => i.status === 'draft')
+  1409→                                .map((inv: any) => (
+  1410→                                  <div
+  1411→                                    key={inv.id}
+  1412→                                    className="flex items-center justify-between p-3 bg-card rounded-lg border border-border opacity-70"
+  1413→                                  >
+  1414→                                    <div className="min-w-0">
+  1415→                                      <p className="text-sm font-medium text-muted-foreground">
+  1416→                                        {inv.number || inv.invoiceNumber || 'Invoice'}
+  1417→                                      </p>
+  1418→                                      <p className="text-xs text-muted-foreground">
+  1419→                                        {formatDate(inv.createdAt)}
+  1420→                                      </p>
+  1421→                                    </div>
+  1422→                                    <div className="flex items-center gap-2 shrink-0">
+  1423→                                      <span className="text-sm font-semibold text-muted-foreground">
+  1424→                                        {formatCurrency(inv.total)}
+  1425→                                      </span>
+  1426→                                      <Badge
+  1427→                                        variant="outline"
+  1428→                                        className="text-[10px] bg-muted text-muted-foreground border-border"
+  1429→                                      >
+  1430→                                        Draft
+  1431→                                      </Badge>
+  1432→                                    </div>
+  1433→                                  </div>
+  1434→                                ))}
+  1435→                            </div>
+  1436→                          )}
+  1437→                        </>
+  1438→                      )}
+  1439→                    </div>
+  1440→                  </ScrollArea>
+  1441→                </TabsContent>
+  1442→
+  1443→                {/* ─── Documents Tab ────────────────────────────────────────── */}
+  1444→                <TabsContent value="documents" className="h-full m-0">
+  1445→                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
+  1446→                    <div className="p-5">
+  1447→                      <div className="flex flex-col items-center justify-center py-16 text-center">
+  1448→                        <FileStack className="size-10 text-muted-foreground mb-3" />
+  1449→                        <h3 className="text-base font-semibold text-muted-foreground">
+  1450→                          Documents
+  1451→                        </h3>
+  1452→                        <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+  1453→                          Upload and manage documents for this customer. Contracts, proposals, and other files will appear here.
+  1454→                        </p>
+  1455→                        <Button
+  1456→                          variant="outline"
+  1457→                          size="sm"
+  1458→                          className="mt-4 border-border text-muted-foreground hover:bg-accent hover:text-foreground gap-1.5"
+  1459→                          onClick={() => toast.info('Document upload coming soon')}
+  1460→                        >
+  1461→                          <Plus className="size-3.5" /> Upload Document
+  1462→                        </Button>
+  1463→                      </div>
+  1464→                    </div>
+  1465→                  </ScrollArea>
+  1466→                </TabsContent>
+  1467→
+  1468→                {/* ─── Automation Tab ───────────────────────────────────────── */}
+  1469→                <TabsContent value="automation" className="h-full m-0">
+  1470→                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
+  1471→                    <div className="p-5 space-y-5">
+  1472→                      {/* Automation Stats */}
+  1473→                      <div className="grid grid-cols-3 gap-3">
+  1474→                        <Card className="bg-card border-border">
+  1475→                          <CardContent className="p-3 text-center">
+  1476→                            <Bot className="size-5 text-emerald-400 mx-auto mb-1" />
+  1477→                            <p className="text-lg font-bold text-foreground">
+  1478→                              {timelineEvents.filter(
+  1479→                                (e: any) =>
+  1480→                                  e.actorType === 'system' || e.actorType === 'bot'
+  1481→                              ).length}
+  1482→                            </p>
+  1483→                            <p className="text-[10px] text-muted-foreground">Triggers Fired</p>
+  1484→                          </CardContent>
+  1485→                        </Card>
+  1486→                        <Card className="bg-card border-border">
+  1487→                          <CardContent className="p-3 text-center">
+  1488→                            <Send className="size-5 text-sky-400 mx-auto mb-1" />
+  1489→                            <p className="text-lg font-bold text-foreground">
+  1490→                              {timelineEvents.filter(
+  1491→                                (e: any) =>
+  1492→                                  e.eventType === 'message' ||
+  1493→                                  e.eventType === 'whatsapp_sent'
+  1494→                              ).length}
+  1495→                            </p>
+  1496→                            <p className="text-[10px] text-muted-foreground">Messages Sent</p>
+  1497→                          </CardContent>
+  1498→                        </Card>
+  1499→                        <Card className="bg-card border-border">
+  1500→                          <CardContent className="p-3 text-center">
+  1501→                            <Zap className="size-5 text-amber-400 mx-auto mb-1" />
+  1502→                            <p className="text-lg font-bold text-foreground">
+  1503→                              {timelineEvents.filter((e: any) =>
+  1504→                                e.eventType?.includes('lead') ||
+  1505→                                e.eventType?.includes('booking') ||
+  1506→                                e.eventType?.includes('invoice')
+  1507→                              ).length}
+  1508→                            </p>
+  1509→                            <p className="text-[10px] text-muted-foreground">Workflows Run</p>
+  1510→                          </CardContent>
+  1511→                        </Card>
+  1512→                      </div>
+  1513→
+  1514→                      {/* Automation History */}
+  1515→                      <div className="space-y-3">
+  1516→                        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+  1517→                          Workflow History
+  1518→                        </h4>
+  1519→                        {timelineEvents
+  1520→                          .filter(
+  1521→                            (e: any) =>
+  1522→                              e.actorType === 'system' ||
+  1523→                              e.actorType === 'bot' ||
+  1524→                              e.eventType === 'whatsapp_sent' ||
+  1525→                              e.eventType === 'campaign' ||
+  1526→                              e.eventType === 'lead_converted'
+  1527→                          )
+  1528→                          .length === 0 ? (
+  1529→                          <div className="text-center py-8">
+  1530→                            <Zap className="size-8 text-muted-foreground mx-auto mb-2" />
+  1531→                            <p className="text-sm text-muted-foreground">
+  1532→                              No automation events yet
+  1533→                            </p>
+  1534→                            <p className="text-xs text-muted-foreground mt-1">
+  1535→                              Automated workflows will be recorded here
+  1536→                            </p>
+  1537→                          </div>
+  1538→                        ) : (
+  1539→                          timelineEvents
+  1540→                            .filter(
+  1541→                              (e: any) =>
+  1542→                                e.actorType === 'system' ||
+  1543→                                e.actorType === 'bot' ||
+  1544→                                e.eventType === 'whatsapp_sent' ||
+  1545→                                e.eventType === 'campaign' ||
+  1546→                                e.eventType === 'lead_converted'
+  1547→                            )
+  1548→                            .map((event: any, i: number) => {
+  1549→                              const config =
+  1550→                                timelineEventTypeConfig[event.eventType] ||
+  1551→                                timelineEventTypeConfig.message;
+  1552→                              const Icon = config.icon;
+  1553→                              return (
+  1554→                                <div
+  1555→                                  key={event.id || i}
+  1556→                                  className="flex items-start gap-3 p-3 bg-card rounded-lg border border-border"
+  1557→                                >
+  1558→                                  <div
+  1559→                                    className={cn(
+  1560→                                      'size-8 rounded-full flex items-center justify-center shrink-0',
+  1561→                                      config.bg
+  1562→                                    )}
+  1563→                                  >
+  1564→                                    <Icon className={cn('size-3.5', config.color)} />
+  1565→                                  </div>
+  1566→                                  <div className="min-w-0">
+  1567→                                    <p className="text-sm font-medium text-foreground">
+  1568→                                      {event.title}
+  1569→                                    </p>
+  1570→                                    {event.description && (
+  1571→                                      <p className="text-xs text-muted-foreground mt-0.5">
+  1572→                                        {event.description}
+  1573→                                      </p>
+  1574→                                    )}
+  1575→                                    <p className="text-[11px] text-muted-foreground mt-0.5">
+  1576→                                      {event.createdAt ? formatDateTime(event.createdAt) : ''}
+  1577→                                    </p>
+  1578→                                  </div>
+  1579→                                </div>
+  1580→                              );
+  1581→                            })
+  1582→                        )}
+  1583→                      </div>
+  1584→                    </div>
+  1585→                  </ScrollArea>
+  1586→                </TabsContent>
+  1587→              </div>
+  1588→            </Tabs>
+  1589→          </div>
+  1590→        </div>
+  1591→      </div>
+  1592→    </div>
+  1593→  );
+  1594→}
+  1595→

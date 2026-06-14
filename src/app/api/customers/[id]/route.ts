@@ -36,12 +36,18 @@ export async function GET(
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
     }
 
+    // Ensure related arrays exist (may be undefined with some DB adapters)
+    const jobs = customer.jobs ?? []
+    const invoices = customer.invoices ?? []
+    const conversations = customer.conversations ?? []
+    const leads = customer.leads ?? []
+
     // Compute aggregate stats
-    const completedJobs = customer.jobs.filter(j => j.status === 'completed')
-    const totalRevenue = customer.invoices
+    const completedJobs = jobs.filter(j => j.status === 'completed')
+    const totalRevenue = invoices
       .filter(i => i.status === 'paid')
       .reduce((sum, i) => sum + (i.total || 0), 0)
-    const outstandingBalance = customer.invoices
+    const outstandingBalance = invoices
       .filter(i => i.status === 'pending' || i.status === 'overdue')
       .reduce((sum, i) => sum + (i.total || 0), 0)
     const avgRating = completedJobs.length > 0
@@ -50,14 +56,18 @@ export async function GET(
 
     return NextResponse.json({
       ...customer,
+      jobs,
+      invoices,
+      conversations,
+      leads,
       stats: {
-        totalJobs: customer.jobs.length,
+        totalJobs: jobs.length,
         completedJobs: completedJobs.length,
         totalRevenue,
         outstandingBalance,
         avgRating: Math.round(avgRating * 10) / 10,
-        totalInvoices: customer.invoices.length,
-        totalConversations: customer.conversations.length,
+        totalInvoices: invoices.length,
+        totalConversations: conversations.length,
       },
     })
   } catch (error) {

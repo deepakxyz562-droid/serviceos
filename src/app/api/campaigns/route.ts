@@ -12,7 +12,14 @@ export async function GET(request: NextRequest) {
 
     const where: Record<string, unknown> = {}
     if (status) where.status = status
-    if (type) where.type = type
+    if (type) {
+      const types = type.split(',')
+      if (types.length === 1) {
+        where.type = type
+      } else {
+        where.type = { in: types }
+      }
+    }
     if (tenantId) where.tenantId = tenantId
 
     const skip = (page - 1) * limit
@@ -52,7 +59,6 @@ export async function POST(request: NextRequest) {
         description: body.description,
         type: body.type || 'promotional',
         status: body.status || 'draft',
-        channel: body.channel || 'whatsapp',
         audienceType: body.audienceType || 'all',
         audienceId: body.audienceId,
         audienceFiltersJson: body.audienceFiltersJson || '{}',

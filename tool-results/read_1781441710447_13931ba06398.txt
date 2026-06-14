@@ -1,0 +1,1969 @@
+     1→/**
+     2→ * ServiceOS WhatsApp State Machine
+     3→ *
+     4→ * Manages WhatsApp conversations as stateful interactions.
+     5→ * Each conversation tracks its current state and responds
+     6→ * differently based on the stage.
+     7→ *
+     8→ * States:
+     9→ *   greeting → intent_detected → booking → confirmed → assigned →
+    10→ *   en_route → in_progress → completed → review → archived
+    11→ *
+    12→ * Interactive Flows:
+    13→ *   - "Accept Job" button → transitions to accepted
+    14→ *   - "Reject Job" button → transitions to rejected
+    15→ *   - "Confirm Appointment" → transitions to confirmed
+    16→ *   - "Reschedule Request" → transitions back to booking
+    17→ *
+    18→ * Inbound Message Handling:
+    19→ *   - Auto-detect intent from message text
+    20→ *   - Create/update customer record
+    21→ *   - Create lead if not exists
+    22→ *   - Ask follow-up questions
+    23→ *   - Route to human agent if intent unclear
+    24→ *
+    25→ * Usage:
+    26→ *   const response = await WhatsAppStateMachine.handleInboundMessage(phone, message, metadata);
+    27→ *   // Returns { reply: string, interactive?: object, updatedConversation: Conversation }
+    28→ */
+    29→
+    30→import { db } from '@/lib/db'
+    31→import { EventBus } from '@/lib/event-bus'
+    32→
+    33→// ─── Types ────────────────────────────────────────────────────────────────────
+    34→
+    35→export type ConversationState =
+    36→  | 'greeting'
+    37→  | 'intent_detected'
+    38→  | 'booking'
+    39→  | 'confirmed'
+    40→  | 'assigned'
+    41→  | 'en_route'
+    42→  | 'in_progress'
+    43→  | 'completed'
+    44→  | 'review'
+    45→  | 'archived'
+    46→  | 'rejected'
+    47→  | 'rescheduled'
+    48→
+    49→export interface Conversation {
+    50→  id: string
+    51→  phone: string
+    52→  state: ConversationState
+    53→  customerId?: string | null
+    54→  leadId?: string | null
+    55→  jobId?: string | null
+    56→  employeeId?: string | null
+    57→  tenantId?: string | null
+    58→  lastMessageAt: Date
+    59→  lastMessageText: string
+    60→  messageCount: number
+    61→  detectedIntent?: string | null
+    62→  extractedData: Record<string, unknown>
+    63→  stateHistory: StateHistoryEntry[]
+    64→  awaitingResponse: AwaitingResponse | null
+    65→  createdAt: Date
+    66→  updatedAt: Date
+    67→}
+    68→
+    69→export interface StateHistoryEntry {
+    70→  state: ConversationState
+    71→  enteredAt: string
+    72→  exitedAt?: string | null
+    73→  trigger: string
+    74→  metadata?: Record<string, unknown>
+    75→}
+    76→
+    77→export interface AwaitingResponse {
+    78→  type: string
+    79→  prompt: string
+    80→  expectedIntents: string[]
+    81→  expiresAt?: string
+    82→}
+    83→
+    84→export interface IntentResult {
+    85→  intent: string
+    86→  confidence: number
+    87→  extractedData: Record<string, unknown>
+    88→}
+    89→
+    90→export interface InboundMessageResult {
+    91→  reply: string
+    92→  interactive?: Record<string, unknown>
+    93→  updatedConversation: Conversation
+    94→  intent?: IntentResult
+    95→  actionsTaken: string[]
+    96→}
+    97→
+    98→export interface ReplyPayload {
+    99→  message: string
+   100→  interactive?: Record<string, unknown>
+   101→  awaitingResponse?: AwaitingResponse | null
+   102→}
+   103→
+   104→// ─── State Transition Map ─────────────────────────────────────────────────────
+   105→
+   106→const VALID_STATE_TRANSITIONS: Record<ConversationState, ConversationState[]> = {
+   107→  greeting: ['intent_detected', 'booking', 'archived'],
+   108→  intent_detected: ['booking', 'greeting', 'archived'],
+   109→  booking: ['confirmed', 'rescheduled', 'archived'],
+   110→  confirmed: ['assigned', 'rescheduled', 'archived'],
+   111→  assigned: ['en_route', 'rejected', 'booking', 'archived'],
+   112→  en_route: ['in_progress', 'assigned', 'archived'],
+   113→  in_progress: ['completed', 'assigned', 'archived'],
+   114→  completed: ['review', 'archived'],
+   115→  review: ['archived'],
+   116→  archived: ['greeting'],
+   117→  rejected: ['assigned', 'booking', 'archived'],
+   118→  rescheduled: ['booking', 'confirmed', 'archived'],
+   119→}
+   120→
+   121→// ─── Intent Detection Rules ───────────────────────────────────────────────────
+   122→
+   123→interface IntentRule {
+   124→  keywords: string[]
+   125→  intent: string
+   126→  extractData?: (message: string) => Record<string, unknown>
+   127→}
+   128→
+   129→const INTENT_RULES: IntentRule[] = [
+   130→  // Service type detection
+   131→  {
+   132→    keywords: ['clean', 'cleaning', 'maid', 'deep clean', 'housekeeping', 'sanitiz'],
+   133→    intent: 'cleaning_service',
+   134→    extractData: (msg) => {
+   135→      const data: Record<string, unknown> = { serviceType: 'cleaning' }
+   136→      if (/deep\s*clean/i.test(msg)) data.serviceSubtype = 'deep_cleaning'
+   137→      if (/move\s*(in|out)/i.test(msg)) data.serviceSubtype = 'move_in_out_cleaning'
+   138→      if (/office/i.test(msg)) data.serviceSubtype = 'office_cleaning'
+   139→      if (/post\s*construction/i.test(msg)) data.serviceSubtype = 'post_construction'
+   140→      return data
+   141→    },
+   142→  },
+   143→  {
+   144→    keywords: ['plumb', 'leak', 'pipe', 'faucet', 'drain', 'toilet', 'sink', 'water heater', 'clog'],
+   145→    intent: 'plumbing',
+   146→    extractData: (msg) => {
+   147→      const data: Record<string, unknown> = { serviceType: 'plumbing' }
+   148→      if (/emergency|urgent|flood/i.test(msg)) data.priority = 'high'
+   149→      if (/leak/i.test(msg)) data.issue = 'leak'
+   150→      if (/clog|block/i.test(msg)) data.issue = 'clog'
+   151→      return data
+   152→    },
+   153→  },
+   154→  {
+   155→    keywords: ['electric', 'wiring', 'outlet', 'switch', 'light', 'power', 'circuit', 'breaker'],
+   156→    intent: 'electrical',
+   157→    extractData: (msg) => {
+   158→      const data: Record<string, unknown> = { serviceType: 'electrical' }
+   159→      if (/emergency|urgent|spark|fire/i.test(msg)) data.priority = 'high'
+   160→      return data
+   161→    },
+   162→  },
+   163→  {
+   164→    keywords: ['paint', 'painting', 'wall', 'interior', 'exterior paint'],
+   165→    intent: 'painting',
+   166→    extractData: (msg) => ({ serviceType: 'painting' }),
+   167→  },
+   168→  {
+   169→    keywords: ['hvac', 'ac', 'air conditioning', 'heating', 'furnace', 'cooling', 'thermostat'],
+   170→    intent: 'hvac',
+   171→    extractData: (msg) => ({ serviceType: 'hvac' }),
+   172→  },
+   173→  {
+   174→    keywords: ['landscap', 'lawn', 'garden', 'tree', 'yard', 'mow'],
+   175→    intent: 'landscaping',
+   176→    extractData: (msg) => ({ serviceType: 'landscaping' }),
+   177→  },
+   178→  {
+   179→    keywords: ['pest', 'termite', 'rodent', 'insect', 'bug', 'exterminat', 'cockroach', 'ant'],
+   180→    intent: 'pest_control',
+   181→    extractData: (msg) => ({ serviceType: 'pest_control' }),
+   182→  },
+   183→  {
+   184→    keywords: ['lock', 'locksmith', 'key', 'locked out', 'door'],
+   185→    intent: 'locksmith',
+   186→    extractData: (msg) => ({ serviceType: 'locksmith' }),
+   187→  },
+   188→  // Booking intent detection
+   189→  {
+   190→    keywords: ['tomorrow', 'today', 'schedule', 'book', 'appointment', 'reserve', 'next week', 'asap', 'soon'],
+   191→    intent: 'booking_intent',
+   192→    extractData: (msg) => {
+   193→      const data: Record<string, unknown> = {}
+   194→      // Try to extract date mentions
+   195→      if (/today/i.test(msg)) data.preferredDate = 'today'
+   196→      if (/tomorrow/i.test(msg)) data.preferredDate = 'tomorrow'
+   197→      if (/next\s*week/i.test(msg)) data.preferredDate = 'next_week'
+   198→      if (/asap|urgent|right\s*away|immediately/i.test(msg)) data.preferredDate = 'asap'
+   199→      if (/morning/i.test(msg)) data.preferredTime = 'morning'
+   200→      if (/afternoon/i.test(msg)) data.preferredTime = 'afternoon'
+   201→      if (/evening/i.test(msg)) data.preferredTime = 'evening'
+   202→      return data
+   203→    },
+   204→  },
+   205→  // Pricing inquiry
+   206→  {
+   207→    keywords: ['price', 'cost', 'how much', 'rate', 'quote', 'estimate', 'charge', 'fee', 'afford'],
+   208→    intent: 'pricing_inquiry',
+   209→    extractData: (msg) => {
+   210→      const data: Record<string, unknown> = { inquiryType: 'pricing' }
+   211→      // Try to detect specific service being asked about
+   212→      if (/clean/i.test(msg)) data.serviceType = 'cleaning'
+   213→      if (/plumb/i.test(msg)) data.serviceType = 'plumbing'
+   214→      return data
+   215→    },
+   216→  },
+   217→  // Cancellation
+   218→  {
+   219→    keywords: ['cancel', 'reschedule', 'change date', 'different time', 'can\'t make it', 'postpone', 'delay'],
+   220→    intent: 'cancellation_intent',
+   221→    extractData: (msg) => {
+   222→      const data: Record<string, unknown> = { intentType: 'cancel_or_reschedule' }
+   223→      if (/reschedule|change\s*date|different\s*time/i.test(msg)) data.specificIntent = 'reschedule'
+   224→      else data.specificIntent = 'cancel'
+   225→      return data
+   226→    },
+   227→  },
+   228→  // Status inquiry
+   229→  {
+   230→    keywords: ['status', 'where', 'when', 'eta', 'arrive', 'coming', 'track', 'update', 'how long', 'wait'],
+   231→    intent: 'status_inquiry',
+   232→    extractData: (msg) => {
+   233→      const data: Record<string, unknown> = { inquiryType: 'status' }
+   234→      return data
+   235→    },
+   236→  },
+   237→  // Greeting
+   238→  {
+   239→    keywords: ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening', 'greetings', 'sup'],
+   240→    intent: 'greeting',
+   241→    extractData: () => ({}),
+   242→  },
+   243→  // Affirmative responses
+   244→  {
+   245→    keywords: ['yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'confirm', 'correct', 'right', 'please', 'proceed', 'go ahead', 'book it'],
+   246→    intent: 'affirmative',
+   247→    extractData: () => ({ response: 'yes' }),
+   248→  },
+   249→  // Negative responses
+   250→  {
+   251→    keywords: ['no', 'nope', 'nah', 'don\'t', 'not', 'never', 'decline', 'reject'],
+   252→    intent: 'negative',
+   253→    extractData: () => ({ response: 'no' }),
+   254→  },
+   255→  // Thanks / feedback
+   256→  {
+   257→    keywords: ['thank', 'thanks', 'great', 'awesome', 'excellent', 'good', 'nice', 'appreciate'],
+   258→    intent: 'positive_feedback',
+   259→    extractData: () => ({}),
+   260→  },
+   261→  // Help request
+   262→  {
+   263→    keywords: ['help', 'support', 'agent', 'human', 'person', 'talk to', 'speak to', 'representative', 'chat'],
+   264→    intent: 'human_agent_request',
+   265→    extractData: () => ({ requiresHuman: true }),
+   266→  },
+   267→  // Rating responses
+   268→  {
+   269→    keywords: ['⭐⭐⭐⭐⭐', '5 star', 'five star', 'excellent', 'amazing', 'perfect'],
+   270→    intent: 'rating_5',
+   271→    extractData: () => ({ rating: 5 }),
+   272→  },
+   273→  {
+   274→    keywords: ['⭐⭐⭐⭐', '4 star', 'four star', 'very good'],
+   275→    intent: 'rating_4',
+   276→    extractData: () => ({ rating: 4 }),
+   277→  },
+   278→  {
+   279→    keywords: ['⭐⭐⭐', '3 star', 'three star', 'okay', 'average', 'decent'],
+   280→    intent: 'rating_3',
+   281→    extractData: () => ({ rating: 3 }),
+   282→  },
+   283→  {
+   284→    keywords: ['⭐⭐', '2 star', 'two star', 'bad', 'poor', 'disappoint'],
+   285→    intent: 'rating_2',
+   286→    extractData: () => ({ rating: 2 }),
+   287→  },
+   288→  {
+   289→    keywords: ['⭐', '1 star', 'one star', 'terrible', 'horrible', 'worst', 'awful'],
+   290→    intent: 'rating_1',
+   291→    extractData: () => ({ rating: 1 }),
+   292→  },
+   293→  // Address / location
+   294→  {
+   295→    keywords: ['address', 'location', 'locate', 'street', 'avenue', 'road', 'drive', 'blvd', 'apartment', 'apt', 'suite', 'unit'],
+   296→    intent: 'address_provided',
+   297→    extractData: (msg) => {
+   298→      // Attempt to extract an address-like string
+   299→      const addressMatch = msg.match(
+   300→        /(?:address|location|at|is)[:\s]*([^\n]+)/i
+   301→      )
+   302→      return { address: addressMatch?.[1]?.trim() || msg.trim() }
+   303→    },
+   304→  },
+   305→]
+   306→
+   307→// ─── Conversation Store ───────────────────────────────────────────────────────
+   308→// In-memory store for active conversations. In production, this would be
+   309→// persisted to the database (e.g., a Conversation model) or Redis.
+   310→
+   311→const conversationStore = new Map<string, Conversation>()
+   312→let conversationIdCounter = 0
+   313→
+   314→function generateConversationId(): string {
+   315→  conversationIdCounter++
+   316→  return `conv_${Date.now()}_${conversationIdCounter}`
+   317→}
+   318→
+   319→// ─── Intent Detection ─────────────────────────────────────────────────────────
+   320→
+   321→/**
+   322→ * Rule-based intent detection from message text.
+   323→ * Returns the best-matching intent with confidence and extracted data.
+   324→ *
+   325→ * @param message - The incoming message text
+   326→ * @returns Intent detection result
+   327→ */
+   328→export function detectIntent(message: string): IntentResult {
+   329→  const normalizedMessage = message.toLowerCase().trim()
+   330→
+   331→  if (!normalizedMessage) {
+   332→    return { intent: 'empty', confidence: 1.0, extractedData: {} }
+   333→  }
+   334→
+   335→  // Score each intent rule
+   336→  const scored: Array<{ rule: IntentRule; score: number; data: Record<string, unknown> }> = []
+   337→
+   338→  for (const rule of INTENT_RULES) {
+   339→    let score = 0
+   340→    let matchedKeywords = 0
+   341→
+   342→    for (const keyword of rule.keywords) {
+   343→      if (normalizedMessage.includes(keyword.toLowerCase())) {
+   344→        matchedKeywords++
+   345→        // Longer keyword matches get higher scores (more specific)
+   346→        score += keyword.length
+   347→      }
+   348→    }
+   349→
+   350→    if (matchedKeywords > 0) {
+   351→      // Boost score by number of matched keywords
+   352→      score *= matchedKeywords
+   353→      const data = rule.extractData ? rule.extractData(message) : {}
+   354→      scored.push({ rule, score, data })
+   355→    }
+   356→  }
+   357→
+   358→  // Sort by score descending
+   359→  scored.sort((a, b) => b.score - a.score)
+   360→
+   361→  if (scored.length === 0) {
+   362→    return { intent: 'unknown', confidence: 0.0, extractedData: {} }
+   363→  }
+   364→
+   365→  const best = scored[0]
+   366→  // Calculate confidence: ratio of matched characters to total message length
+   367→  // Capped at 1.0
+   368→  const maxPossibleScore = normalizedMessage.length * scored.length
+   369→  const rawConfidence = best.score / Math.max(maxPossibleScore, 1)
+   370→  const confidence = Math.min(Math.max(rawConfidence, matchedKeywordConfidence(best.rule.keywords, normalizedMessage)), 1.0)
+   371→
+   372→  return {
+   373→    intent: best.rule.intent,
+   374→    confidence,
+   375→    extractedData: best.data,
+   376→  }
+   377→}
+   378→
+   379→/**
+   380→ * Alternative confidence: based on how many keywords matched relative to total keywords.
+   381→ */
+   382→function matchedKeywordConfidence(keywords: string[], message: string): number {
+   383→  const lowerMsg = message.toLowerCase()
+   384→  let matched = 0
+   385→  for (const kw of keywords) {
+   386→    if (lowerMsg.includes(kw.toLowerCase())) matched++
+   387→  }
+   388→  // At least 0.3 confidence if one keyword matches, up to 0.9
+   389→  return Math.min(0.3 + (matched / keywords.length) * 0.6, 0.9)
+   390→}
+   391→
+   392→// ─── Find or Create Conversation ──────────────────────────────────────────────
+   393→
+   394→/**
+   395→ * Find an existing conversation by phone number, or create a new one.
+   396→ * Also creates or looks up the associated Customer and Lead records.
+   397→ *
+   398→ * @param phone - The customer's phone number
+   399→ * @param tenantId - Optional tenant ID for scoping
+   400→ * @returns The Conversation object
+   401→ */
+   402→export async function findOrCreateConversation(
+   403→  phone: string,
+   404→  tenantId?: string
+   405→): Promise<Conversation> {
+   406→  const normalizedPhone = phone.replace(/\D/g, '')
+   407→
+   408→  // Check in-memory store first
+   409→  if (conversationStore.has(normalizedPhone)) {
+   410→    const existing = conversationStore.get(normalizedPhone)!
+   411→    existing.lastMessageAt = new Date()
+   412→    return existing
+   413→  }
+   414→
+   415→  // Try to find existing customer and lead in the database
+   416→  let customer = await db.customer.findFirst({
+   417→    where: { phone: normalizedPhone },
+   418→  })
+   419→
+   420→  let lead: Record<string, unknown> | null = null
+   421→  if (customer) {
+   422→    lead = await db.lead.findFirst({
+   423→      where: {
+   424→        customerId: customer.id,
+   425→        status: { notIn: ['converted', 'lost'] },
+   426→      },
+   427→      orderBy: { createdAt: 'desc' },
+   428→    })
+   429→  }
+   430→
+   431→  // Determine initial state based on existing records
+   432→  let initialState: ConversationState = 'greeting'
+   433→  let jobId: string | null = null
+   434→  let employeeId: string | null = null
+   435→
+   436→  if (lead) {
+   437→    const leadData = lead as Record<string, unknown>
+   438→    const leadStatus = leadData.status as string
+   439→
+   440→    // Map lead/job status to conversation state
+   441→    if (leadData.jobId) {
+   442→      jobId = leadData.jobId as string
+   443→      const job = await db.job.findUnique({ where: { id: jobId as string } })
+   444→      if (job) {
+   445→        switch (job.status) {
+   446→          case 'pending': initialState = 'booking'; break
+   447→          case 'confirmed': initialState = 'confirmed'; break
+   448→          case 'assigned': initialState = 'assigned'; break
+   449→          case 'en_route': initialState = 'en_route'; break
+   450→          case 'in_progress': initialState = 'in_progress'; break
+   451→          case 'completed': initialState = 'completed'; break
+   452→          default: initialState = 'greeting'
+   453→        }
+   454→        employeeId = job.assigneeId
+   455→      }
+   456→    } else if (leadStatus === 'new' || leadStatus === 'contacted') {
+   457→      initialState = 'intent_detected'
+   458→    } else if (leadStatus === 'qualified') {
+   459→      initialState = 'booking'
+   460→    }
+   461→  }
+   462→
+   463→  const conversation: Conversation = {
+   464→    id: generateConversationId(),
+   465→    phone: normalizedPhone,
+   466→    state: initialState,
+   467→    customerId: customer?.id || null,
+   468→    leadId: (lead?.id as string) || null,
+   469→    jobId,
+   470→    employeeId,
+   471→    tenantId: tenantId || (customer?.workspaceId) || null,
+   472→    lastMessageAt: new Date(),
+   473→    lastMessageText: '',
+   474→    messageCount: 0,
+   475→    detectedIntent: null,
+   476→    extractedData: {},
+   477→    stateHistory: [
+   478→      {
+   479→        state: initialState,
+   480→        enteredAt: new Date().toISOString(),
+   481→        trigger: 'conversation_created',
+   482→      },
+   483→    ],
+   484→    awaitingResponse: null,
+   485→    createdAt: new Date(),
+   486→    updatedAt: new Date(),
+   487→  }
+   488→
+   489→  conversationStore.set(normalizedPhone, conversation)
+   490→  return conversation
+   491→}
+   492→
+   493→// ─── State Transition ─────────────────────────────────────────────────────────
+   494→
+   495→/**
+   496→ * Transition a conversation to a new state.
+   497→ * Validates the transition and records the history.
+   498→ *
+   499→ * @param conversationId - The conversation ID (phone number is used as key)
+   500→ * @param newState - The target state
+   501→ * @param context - Optional context for the transition
+   502→ * @returns The updated Conversation
+   503→ */
+   504→export async function transitionState(
+   505→  conversationId: string,
+   506→  newState: ConversationState,
+   507→  context?: {
+   508→    trigger?: string
+   509→    metadata?: Record<string, unknown>
+   510→  }
+   511→): Promise<Conversation> {
+   512→  // Find conversation by iterating (conversationId is the conv.id, not the phone)
+   513→  let conversation: Conversation | undefined
+   514→  for (const [, conv] of Array.from(conversationStore)) {
+   515→    if (conv.id === conversationId) {
+   516→      conversation = conv
+   517→      break
+   518→    }
+   519→  }
+   520→
+   521→  if (!conversation) {
+   522→    throw new Error(`[WhatsAppSM] Conversation not found: ${conversationId}`)
+   523→  }
+   524→
+   525→  const currentState = conversation.state
+   526→
+   527→  // Allow same-state transitions (for refreshing context)
+   528→  if (currentState === newState) {
+   529→    conversation.updatedAt = new Date()
+   530→    return conversation
+   531→  }
+   532→
+   533→  // Validate transition
+   534→  if (!VALID_STATE_TRANSITIONS[currentState]?.includes(newState)) {
+   535→    console.warn(
+   536→      `[WhatsAppSM] Invalid state transition: ${currentState} → ${newState} ` +
+   537→      `for conversation ${conversationId}`
+   538→    )
+   539→    // Still allow the transition with a warning, for flexibility
+   540→  }
+   541→
+   542→  // Close the previous state entry
+   543→  const lastEntry = conversation.stateHistory[conversation.stateHistory.length - 1]
+   544→  if (lastEntry && !lastEntry.exitedAt) {
+   545→    lastEntry.exitedAt = new Date().toISOString()
+   546→  }
+   547→
+   548→  // Add new state entry
+   549→  conversation.stateHistory.push({
+   550→    state: newState,
+   551→    enteredAt: new Date().toISOString(),
+   552→    trigger: context?.trigger || 'unknown',
+   553→    metadata: context?.metadata,
+   554→  })
+   555→
+   556→  // Update conversation
+   557→  conversation.state = newState
+   558→  conversation.updatedAt = new Date()
+   559→
+   560→  // Fire event on EventBus
+   561→  try {
+   562→    await EventBus.emit('conversation.state_changed', {
+   563→      conversationId: conversation.id,
+   564→      phone: conversation.phone,
+   565→      previousState: currentState,
+   566→      newState,
+   567→      trigger: context?.trigger,
+   568→      jobId: conversation.jobId,
+   569→      leadId: conversation.leadId,
+   570→      timestamp: new Date().toISOString(),
+   571→    })
+   572→  } catch (err) {
+   573→    console.error('[WhatsAppSM] Failed to emit state change event:', err)
+   574→  }
+   575→
+   576→  // Update cache
+   577→  conversationStore.set(conversation.phone, conversation)
+   578→
+   579→  return conversation
+   580→}
+   581→
+   582→// ─── Generate Reply ───────────────────────────────────────────────────────────
+   583→
+   584→/**
+   585→ * Generate an appropriate reply based on the conversation state and detected intent.
+   586→ *
+   587→ * @param conversation - The current conversation
+   588→ * @param intent - Optional detected intent
+   589→ * @returns Reply payload with message and optional interactive elements
+   590→ */
+   591→export async function generateReply(
+   592→  conversation: Conversation,
+   593→  intent?: IntentResult
+   594→): Promise<ReplyPayload> {
+   595→  const state = conversation.state
+   596→  const intentType = intent?.intent || conversation.detectedIntent || 'unknown'
+   597→
+   598→  switch (state) {
+   599→    case 'greeting': {
+   600→      if (intentType === 'greeting') {
+   601→        return {
+   602→          message: '👋 Welcome! I\'m your ServiceOS assistant. How can I help you today?\n\nYou can:\n• Book a service\n• Check your appointment status\n• Get a price quote\n• Speak with an agent',
+   603→          interactive: {
+   604→            type: 'button',
+   605→            body: { text: '👋 Welcome! How can I help you today?' },
+   606→            action: {
+   607→              buttons: [
+   608→                { type: 'reply', reply: { id: 'btn_book_service', title: '📋 Book Service' } },
+   609→                { type: 'reply', reply: { id: 'btn_check_status', title: '🔍 Check Status' } },
+   610→                { type: 'reply', reply: { id: 'btn_get_pricing', title: '💰 Get Pricing' } },
+   611→              ],
+   612→            },
+   613→          },
+   614→          awaitingResponse: {
+   615→            type: 'intent_selection',
+   616→            prompt: 'Please select an option or describe what you need',
+   617→            expectedIntents: ['cleaning_service', 'plumbing', 'electrical', 'booking_intent', 'pricing_inquiry', 'status_inquiry'],
+   618→          },
+   619→        }
+   620→      }
+   621→
+   622→      // Customer sent something specific right away
+   623→      if (intent && intent.confidence > 0.3) {
+   624→        return handleDetectedIntent(conversation, intent)
+   625→      }
+   626→
+   627→      return {
+   628→        message: '👋 Hello! Thanks for reaching out. What service can I help you with today?',
+   629→        interactive: {
+   630→          type: 'button',
+   631→          body: { text: '👋 What service do you need?' },
+   632→          action: {
+   633→            buttons: [
+   634→              { type: 'reply', reply: { id: 'btn_cleaning', title: '🧹 Cleaning' } },
+   635→              { type: 'reply', reply: { id: 'btn_plumbing', title: '🔧 Plumbing' } },
+   636→              { type: 'reply', reply: { id: 'btn_other', title: '📦 Other' } },
+   637→            ],
+   638→          },
+   639→        },
+   640→        awaitingResponse: {
+   641→          type: 'service_type',
+   642→          prompt: 'What type of service do you need?',
+   643→          expectedIntents: ['cleaning_service', 'plumbing', 'electrical', 'hvac', 'painting', 'landscaping'],
+   644→        },
+   645→      }
+   646→    }
+   647→
+   648→    case 'intent_detected': {
+   649→      return handleDetectedIntent(conversation, intent)
+   650→    }
+   651→
+   652→    case 'booking': {
+   653→      return handleBookingState(conversation, intent)
+   654→    }
+   655→
+   656→    case 'confirmed': {
+   657→      if (intentType === 'cancellation_intent') {
+   658→        return {
+   659→          message: 'I understand you\'d like to change your appointment. Would you like to reschedule or cancel?',
+   660→          interactive: {
+   661→            type: 'button',
+   662→            body: { text: 'Would you like to reschedule or cancel?' },
+   663→            action: {
+   664→              buttons: [
+   665→                { type: 'reply', reply: { id: 'btn_reschedule', title: '🔄 Reschedule' } },
+   666→                { type: 'reply', reply: { id: 'btn_cancel', title: '❌ Cancel' } },
+   667→              ],
+   668→            },
+   669→          },
+   670→          awaitingResponse: {
+   671→            type: 'cancel_or_reschedule',
+   672→            prompt: 'Reschedule or cancel?',
+   673→            expectedIntents: ['affirmative', 'negative', 'cancellation_intent'],
+   674→          },
+   675→        }
+   676→      }
+   677→
+   678→      if (intentType === 'status_inquiry') {
+   679→        return generateStatusReply(conversation)
+   680→      }
+   681→
+   682→      return {
+   683→        message: '✅ Your booking is confirmed! We\'re assigning a technician and will notify you once they\'re on the way.\n\nNeed anything else? Reply with:\n• "status" - Check your appointment\n• "reschedule" - Change the date\n• "cancel" - Cancel your booking',
+   684→        awaitingResponse: {
+   685→          type: 'post_booking',
+   686→          prompt: 'Any other questions?',
+   687→          expectedIntents: ['status_inquiry', 'cancellation_intent', 'greeting'],
+   688→        },
+   689→      }
+   690→    }
+   691→
+   692→    case 'assigned': {
+   693→      if (intentType === 'cancellation_intent') {
+   694→        return {
+   695→          message: 'Your technician has already been assigned. Would you like to reschedule or cancel?',
+   696→          interactive: {
+   697→            type: 'button',
+   698→            body: { text: 'Your technician is assigned. Reschedule or cancel?' },
+   699→            action: {
+   700→              buttons: [
+   701→                { type: 'reply', reply: { id: 'btn_reschedule', title: '🔄 Reschedule' } },
+   702→                { type: 'reply', reply: { id: 'btn_cancel', title: '❌ Cancel' } },
+   703→              ],
+   704→            },
+   705→          },
+   706→          awaitingResponse: {
+   707→            type: 'cancel_or_reschedule',
+   708→            prompt: 'Reschedule or cancel?',
+   709→            expectedIntents: ['affirmative', 'negative'],
+   710→          },
+   711→        }
+   712→      }
+   713→
+   714→      if (intentType === 'status_inquiry') {
+   715→        return generateStatusReply(conversation)
+   716→      }
+   717→
+   718→      return {
+   719→        message: '👨‍🔧 A technician has been assigned to your service! They\'ll be on their way soon.\n\nReply "status" for updates or "cancel" to cancel.',
+   720→      }
+   721→    }
+   722→
+   723→    case 'en_route': {
+   724→      if (intentType === 'status_inquiry') {
+   725→        return generateStatusReply(conversation)
+   726→      }
+   727→
+   728→      return {
+   729→        message: '🚀 Your technician is on the way! Please ensure someone is available at the service location.\n\nReply "status" for live updates.',
+   730→      }
+   731→    }
+   732→
+   733→    case 'in_progress': {
+   734→      return {
+   735→        message: '🔧 Your service is currently in progress. The technician is working on your request.\n\nIf you have any questions, feel free to ask. Otherwise, we\'ll notify you once it\'s complete!',
+   736→      }
+   737→    }
+   738→
+   739→    case 'completed': {
+   740→      if (intentType?.startsWith('rating_')) {
+   741→        const rating = intent?.extractedData?.rating as number | undefined
+   742→        return {
+   743→          message: `Thank you for your ${rating ? `${rating}-star` : ''} rating! Your feedback helps us improve. Have a great day! 🙏`,
+   744→        }
+   745→      }
+   746→
+   747→      return {
+   748→        message: '✅ Your service has been completed! We hope everything went well.\n\nHow would you rate our service?',
+   749→        interactive: {
+   750→          type: 'button',
+   751→          body: { text: '✅ Service complete! How would you rate us?' },
+   752→          action: {
+   753→            buttons: [
+   754→              { type: 'reply', reply: { id: 'btn_rate_5', title: '⭐⭐⭐⭐⭐' } },
+   755→              { type: 'reply', reply: { id: 'btn_rate_4', title: '⭐⭐⭐⭐' } },
+   756→              { type: 'reply', reply: { id: 'btn_rate_3', title: '⭐⭐⭐' } },
+   757→            ],
+   758→          },
+   759→        },
+   760→        awaitingResponse: {
+   761→          type: 'rating',
+   762→          prompt: 'Please rate our service',
+   763→          expectedIntents: ['rating_5', 'rating_4', 'rating_3', 'rating_2', 'rating_1'],
+   764→        },
+   765→      }
+   766→    }
+   767→
+   768→    case 'review': {
+   769→      return {
+   770→        message: 'Thank you for your feedback! Your review has been recorded. We appreciate your business! 🙏\n\nNeed anything else? Just send a message.',
+   771→      }
+   772→    }
+   773→
+   774→    case 'rejected': {
+   775→      return {
+   776→        message: 'The technician was unable to accept this job. We\'re reassigning it to another available technician.\n\nWe\'ll notify you once a new technician is assigned.',
+   777→      }
+   778→    }
+   779→
+   780→    case 'rescheduled': {
+   781→      return handleBookingState(conversation, intent)
+   782→    }
+   783→
+   784→    case 'archived': {
+   785→      return {
+   786→        message: '👋 Welcome back! How can I help you today? You can book a new service or ask about an existing one.',
+   787→        interactive: {
+   788→          type: 'button',
+   789→          body: { text: '👋 Welcome back! What can I do for you?' },
+   790→          action: {
+   791→            buttons: [
+   792→              { type: 'reply', reply: { id: 'btn_book_service', title: '📋 Book Service' } },
+   793→              { type: 'reply', reply: { id: 'btn_check_status', title: '🔍 Check Status' } },
+   794→            ],
+   795→          },
+   796→        },
+   797→      }
+   798→    }
+   799→
+   800→    default: {
+   801→      return {
+   802→        message: 'I\'m not sure how to help with that. Would you like to book a service, check a status, or speak with an agent?',
+   803→        interactive: {
+   804→          type: 'button',
+   805→          body: { text: 'How can I help you?' },
+   806→          action: {
+   807→            buttons: [
+   808→              { type: 'reply', reply: { id: 'btn_book_service', title: '📋 Book Service' } },
+   809→              { type: 'reply', reply: { id: 'btn_human_agent', title: '👤 Speak to Agent' } },
+   810→            ],
+   811→          },
+   812→        },
+   813→      }
+   814→    }
+   815→  }
+   816→}
+   817→
+   818→// ─── Handle Detected Intent ───────────────────────────────────────────────────
+   819→
+   820→async function handleDetectedIntent(
+   821→  conversation: Conversation,
+   822→  intent: IntentResult
+   823→): Promise<ReplyPayload> {
+   824→  const { intent: intentType, extractedData } = intent
+   825→
+   826→  // Handle human agent request at any state
+   827→  if (intentType === 'human_agent_request') {
+   828→    return {
+   829→      message: '👤 I\'ll connect you with a team member right away. Please hold for a moment.\n\nIn the meantime, you can describe your issue in detail so our agent can help you faster.',
+   830→      awaitingResponse: {
+   831→        type: 'human_handoff',
+   832→        prompt: 'A human agent will assist you shortly',
+   833→        expectedIntents: [],
+   834→      },
+   835→    }
+   836→  }
+   837→
+   838→  // Handle pricing inquiry
+   839→  if (intentType === 'pricing_inquiry') {
+   840→    const serviceType = extractedData.serviceType as string | undefined
+   841→    let pricingInfo = 'Our pricing varies based on the service and scope of work. Here are some general ranges:\n\n'
+   842→    pricingInfo += '• 🧹 Cleaning: Starting from $80\n'
+   843→    pricingInfo += '• 🔧 Plumbing: Starting from $75\n'
+   844→    pricingInfo += '• ⚡ Electrical: Starting from $90\n'
+   845→    pricingInfo += '• 🎨 Painting: Starting from $150\n'
+   846→    pricingInfo += '• ❄️ HVAC: Starting from $100\n\n'
+   847→    pricingInfo += 'For an accurate quote, please book a service and we\'ll provide a detailed estimate.'
+   848→
+   849→    if (serviceType) {
+   850→      // Try to find the service in the database
+   851→      try {
+   852→        const service = await db.service.findFirst({
+   853→          where: {
+   854→            isActive: true,
+   855→            OR: [
+   856→              { name: { contains: serviceType, mode: 'insensitive' } },
+   857→              { category: { contains: serviceType, mode: 'insensitive' } },
+   858→            ],
+   859→          },
+   860→        })
+   861→        if (service) {
+   862→          pricingInfo = `💰 *${service.name}*\n\nBase price: $${service.basePrice}\nDuration: ~${service.duration} minutes\n\n${service.description || 'Contact us for a detailed quote.'}`
+   863→        }
+   864→      } catch {
+   865→        // Use default pricing info
+   866→      }
+   867→    }
+   868→
+   869→    return {
+   870→      message: pricingInfo,
+   871→      interactive: {
+   872→        type: 'button',
+   873→        body: { text: pricingInfo.substring(0, 200) + '...' },
+   874→        action: {
+   875→          buttons: [
+   876→            { type: 'reply', reply: { id: 'btn_book_service', title: '📋 Book Now' } },
+   877→            { type: 'reply', reply: { id: 'btn_human_agent', title: '👤 Get Custom Quote' } },
+   878→          ],
+   879→        },
+   880→      },
+   881→      awaitingResponse: {
+   882→        type: 'post_pricing',
+   883→        prompt: 'Would you like to book a service?',
+   884→        expectedIntents: ['booking_intent', 'affirmative', 'negative'],
+   885→      },
+   886→    }
+   887→  }
+   888→
+   889→  // Handle status inquiry
+   890→  if (intentType === 'status_inquiry') {
+   891→    return generateStatusReply(conversation)
+   892→  }
+   893→
+   894→  // Handle cancellation
+   895→  if (intentType === 'cancellation_intent') {
+   896→    const specificIntent = extractedData.specificIntent as string | undefined
+   897→    if (specificIntent === 'reschedule') {
+   898→      return {
+   899→        message: '🔄 I\'d be happy to help you reschedule! What date and time works better for you?',
+   900→        awaitingResponse: {
+   901→          type: 'reschedule_date',
+   902→          prompt: 'When would you like to reschedule?',
+   903→          expectedIntents: ['booking_intent'],
+   904→        },
+   905→      }
+   906→    }
+   907→    return {
+   908→      message: '❌ I understand you\'d like to cancel. Are you sure you want to cancel your booking?',
+   909→      interactive: {
+   910→        type: 'button',
+   911→        body: { text: 'Are you sure you want to cancel?' },
+   912→        action: {
+   913→          buttons: [
+   914→            { type: 'reply', reply: { id: 'btn_confirm_cancel', title: '❌ Yes, Cancel' } },
+   915→            { type: 'reply', reply: { id: 'btn_keep_booking', title: '✅ Keep Booking' } },
+   916→          ],
+   917→        },
+   918→      },
+   919→      awaitingResponse: {
+   920→        type: 'cancel_confirmation',
+   921→        prompt: 'Confirm cancellation?',
+   922→        expectedIntents: ['affirmative', 'negative'],
+   923→      },
+   924→    }
+   925→  }
+   926→
+   927→  // Handle service-specific intent (cleaning, plumbing, etc.)
+   928→  const serviceIntents = [
+   929→    'cleaning_service', 'plumbing', 'electrical', 'painting',
+   930→    'hvac', 'landscaping', 'pest_control', 'locksmith',
+   931→  ]
+   932→
+   933→  if (serviceIntents.includes(intentType)) {
+   934→    const serviceName = intentType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+   935→    const serviceType = extractedData.serviceType as string || intentType
+   936→
+   937→    // Try to find the service in the database
+   938→    let serviceInfo = ''
+   939→    try {
+   940→      const service = await db.service.findFirst({
+   941→        where: {
+   942→          isActive: true,
+   943→          OR: [
+   944→            { name: { contains: serviceName, mode: 'insensitive' } },
+   945→            { category: { contains: serviceType, mode: 'insensitive' } },
+   946→          ],
+   947→        },
+   948→      })
+   949→      if (service) {
+   950→        serviceInfo = `\n\n💰 Starting at $${service.basePrice}\n⏱ Duration: ~${service.duration} min`
+   951→      }
+   952→    } catch {
+   953→      // No service found
+   954→    }
+   955→
+   956→    return {
+   957→      message: `Great choice! 🎉 You're interested in our *${serviceName}* service.${serviceInfo}\n\nWhen would you like to schedule your service?`,
+   958→      interactive: {
+   959→        type: 'button',
+   960→        body: { text: `When would you like your ${serviceName} service?` },
+   961→        action: {
+   962→          buttons: [
+   963→            { type: 'reply', reply: { id: 'btn_today', title: '📅 Today' } },
+   964→            { type: 'reply', reply: { id: 'btn_tomorrow', title: '📅 Tomorrow' } },
+   965→            { type: 'reply', reply: { id: 'btn_next_week', title: '📅 Next Week' } },
+   966→          ],
+   967→        },
+   968→      },
+   969→      awaitingResponse: {
+   970→        type: 'schedule_date',
+   971→        prompt: 'When would you like the service?',
+   972→        expectedIntents: ['booking_intent', 'affirmative'],
+   973→      },
+   974→    }
+   975→  }
+   976→
+   977→  // Handle booking intent
+   978→  if (intentType === 'booking_intent') {
+   979→    return {
+   980→      message: '📋 Great! Let\'s get your service booked.\n\nWhat type of service do you need?',
+   981→      interactive: {
+   982→        type: 'button',
+   983→        body: { text: '📋 What service do you need?' },
+   984→        action: {
+   985→          buttons: [
+   986→            { type: 'reply', reply: { id: 'btn_cleaning', title: '🧹 Cleaning' } },
+   987→            { type: 'reply', reply: { id: 'btn_plumbing', title: '🔧 Plumbing' } },
+   988→            { type: 'reply', reply: { id: 'btn_other', title: '📦 Other' } },
+   989→          ],
+   990→        },
+   991→      },
+   992→      awaitingResponse: {
+   993→        type: 'service_type',
+   994→        prompt: 'What type of service?',
+   995→        expectedIntents: serviceIntents,
+   996→      },
+   997→    }
+   998→  }
+   999→
+  1000→  // Handle affirmative
+  1001→  if (intentType === 'affirmative') {
+  1002→    const awaiting = conversation.awaitingResponse
+  1003→    if (awaiting) {
+  1004→      return handleAwaitingResponseAffirmative(conversation, awaiting)
+  1005→    }
+  1006→    return {
+  1007→      message: 'Great! How can I help you? Would you like to book a service?',
+  1008→      interactive: {
+  1009→        type: 'button',
+  1010→        body: { text: 'What would you like to do?' },
+  1011→        action: {
+  1012→          buttons: [
+  1013→            { type: 'reply', reply: { id: 'btn_book_service', title: '📋 Book Service' } },
+  1014→            { type: 'reply', reply: { id: 'btn_check_status', title: '🔍 Check Status' } },
+  1015→          ],
+  1016→        },
+  1017→      },
+  1018→    }
+  1019→  }
+  1020→
+  1021→  // Handle negative
+  1022→  if (intentType === 'negative') {
+  1023→    return {
+  1024→      message: 'No problem! Is there anything else I can help you with? Just let me know. 😊',
+  1025→    }
+  1026→  }
+  1027→
+  1028→  // Handle positive feedback
+  1029→  if (intentType === 'positive_feedback') {
+  1030→    return {
+  1031→      message: 'We\'re glad to hear that! 😊 Thank you for the kind words. Is there anything else we can help with?',
+  1032→    }
+  1033→  }
+  1034→
+  1035→  // Handle address provided
+  1036→  if (intentType === 'address_provided') {
+  1037→    const address = extractedData.address as string | undefined
+  1038→    if (address) {
+  1039→      return {
+  1040→        message: `📍 Got it! Service address: *${address}*\n\nIs this correct?`,
+  1041→        interactive: {
+  1042→          type: 'button',
+  1043→          body: { text: `📍 Is this address correct?\n${address}` },
+  1044→          action: {
+  1045→            buttons: [
+  1046→              { type: 'reply', reply: { id: 'btn_confirm_address', title: '✅ Yes, Correct' } },
+  1047→              { type: 'reply', reply: { id: 'btn_wrong_address', title: '❌ Wrong Address' } },
+  1048→            ],
+  1049→          },
+  1050→        },
+  1051→        awaitingResponse: {
+  1052→          type: 'address_confirmation',
+  1053→          prompt: 'Is the address correct?',
+  1054→          expectedIntents: ['affirmative', 'negative'],
+  1055→        },
+  1056→      }
+  1057→    }
+  1058→  }
+  1059→
+  1060→  // Fallback for unknown intent
+  1061→  return {
+  1062→    message: 'I\'d love to help! Could you tell me more about what you need?\n\n• Type "book" to schedule a service\n• Type "status" to check your appointment\n• Type "price" for pricing info\n• Type "agent" to speak with a human',
+  1063→    awaitingResponse: {
+  1064→      type: 'clarification',
+  1065→      prompt: 'Could you clarify what you need?',
+  1066→      expectedIntents: ['booking_intent', 'status_inquiry', 'pricing_inquiry', 'human_agent_request'],
+  1067→    },
+  1068→  }
+  1069→}
+  1070→
+  1071→// ─── Handle Awaiting Response + Affirmative ───────────────────────────────────
+  1072→
+  1073→function handleAwaitingResponseAffirmative(
+  1074→  conversation: Conversation,
+  1075→  awaiting: AwaitingResponse
+  1076→): ReplyPayload {
+  1077→  switch (awaiting.type) {
+  1078→    case 'cancel_confirmation':
+  1079→      return {
+  1080→        message: '❌ Your booking has been cancelled. If you change your mind, just send a message to book again!',
+  1081→      }
+  1082→
+  1083→    case 'address_confirmation':
+  1084→      return {
+  1085→        message: '✅ Address confirmed! What date and time works best for you?',
+  1086→        awaitingResponse: {
+  1087→          type: 'schedule_date',
+  1088→          prompt: 'When would you like the service?',
+  1089→          expectedIntents: ['booking_intent'],
+  1090→        },
+  1091→      }
+  1092→
+  1093→    case 'post_pricing':
+  1094→      return {
+  1095→        message: '📋 Great! Let\'s get your service booked. What type of service do you need?',
+  1096→        interactive: {
+  1097→          type: 'button',
+  1098→          body: { text: '📋 What service do you need?' },
+  1099→          action: {
+  1100→            buttons: [
+  1101→              { type: 'reply', reply: { id: 'btn_cleaning', title: '🧹 Cleaning' } },
+  1102→              { type: 'reply', reply: { id: 'btn_plumbing', title: '🔧 Plumbing' } },
+  1103→              { type: 'reply', reply: { id: 'btn_other', title: '📦 Other' } },
+  1104→            ],
+  1105→          },
+  1106→        },
+  1107→        awaitingResponse: {
+  1108→          type: 'service_type',
+  1109→          prompt: 'What type of service?',
+  1110→          expectedIntents: ['cleaning_service', 'plumbing', 'electrical'],
+  1111→        },
+  1112→      }
+  1113→
+  1114→    default:
+  1115→      return {
+  1116→        message: 'Great! How would you like to proceed?',
+  1117→      }
+  1118→  }
+  1119→}
+  1120→
+  1121→// ─── Handle Booking State ─────────────────────────────────────────────────────
+  1122→
+  1123→async function handleBookingState(
+  1124→  conversation: Conversation,
+  1125→  intent?: IntentResult
+  1126→): Promise<ReplyPayload> {
+  1127→  const intentType = intent?.intent
+  1128→
+  1129→  // If we have a service type and date, we can confirm
+  1130→  if (conversation.extractedData.serviceType && conversation.extractedData.preferredDate) {
+  1131→    const serviceName = (conversation.extractedData.serviceType as string).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+  1132→    const preferredDate = conversation.extractedData.preferredDate as string
+  1133→
+  1134→    return {
+  1135→      message: `📋 *Booking Summary*\n\n🛠 Service: ${serviceName}\n📅 Date: ${preferredDate}\n📍 Address: ${(conversation.extractedData.address as string) || 'Not provided'}\n\nPlease confirm your booking.`,
+  1136→      interactive: {
+  1137→        type: 'button',
+  1138→        body: { text: `📋 Confirm your ${serviceName} booking?` },
+  1139→        action: {
+  1140→          buttons: [
+  1141→            { type: 'reply', reply: { id: 'btn_confirm_booking', title: '✅ Confirm Booking' } },
+  1142→            { type: 'reply', reply: { id: 'btn_change_details', title: '✏️ Change Details' } },
+  1143→          ],
+  1144→        },
+  1145→      },
+  1146→      awaitingResponse: {
+  1147→        type: 'booking_confirmation',
+  1148→        prompt: 'Please confirm your booking',
+  1149→        expectedIntents: ['affirmative', 'negative'],
+  1150→      },
+  1151→    }
+  1152→  }
+  1153→
+  1154→  // Still collecting booking information
+  1155→  if (intentType === 'address_provided' && intent?.extractedData?.address) {
+  1156→    return {
+  1157→      message: `📍 Got the address! Now, when would you like the service?`,
+  1158→      interactive: {
+  1159→        type: 'button',
+  1160→        body: { text: '📅 When would you like the service?' },
+  1161→        action: {
+  1162→          buttons: [
+  1163→            { type: 'reply', reply: { id: 'btn_today', title: '📅 Today' } },
+  1164→            { type: 'reply', reply: { id: 'btn_tomorrow', title: '📅 Tomorrow' } },
+  1165→            { type: 'reply', reply: { id: 'btn_next_week', title: '📅 Next Week' } },
+  1166→          ],
+  1167→        },
+  1168→      },
+  1169→      awaitingResponse: {
+  1170→        type: 'schedule_date',
+  1171→        prompt: 'When would you like the service?',
+  1172→        expectedIntents: ['booking_intent'],
+  1173→      },
+  1174→    }
+  1175→  }
+  1176→
+  1177→  return {
+  1178→    message: '📋 Let\'s get your service booked! A few quick questions:\n\n1️⃣ What\'s your address for the service?',
+  1179→    awaitingResponse: {
+  1180→      type: 'address',
+  1181→      prompt: 'What is your service address?',
+  1182→      expectedIntents: ['address_provided'],
+  1183→    },
+  1184→  }
+  1185→}
+  1186→
+  1187→// ─── Generate Status Reply ────────────────────────────────────────────────────
+  1188→
+  1189→async function generateStatusReply(conversation: Conversation): Promise<ReplyPayload> {
+  1190→  if (!conversation.jobId) {
+  1191→    return {
+  1192→      message: '🔍 I don\'t see an active booking for your number. Would you like to book a service?',
+  1193→      interactive: {
+  1194→        type: 'button',
+  1195→        body: { text: '🔍 No active booking found. Book one?' },
+  1196→        action: {
+  1197→          buttons: [
+  1198→            { type: 'reply', reply: { id: 'btn_book_service', title: '📋 Book Service' } },
+  1199→            { type: 'reply', reply: { id: 'btn_human_agent', title: '👤 Talk to Agent' } },
+  1200→          ],
+  1201→        },
+  1202→      },
+  1203→    }
+  1204→  }
+  1205→
+  1206→  try {
+  1207→    const job = await db.job.findUnique({
+  1208→      where: { id: conversation.jobId },
+  1209→      include: { assignee: true },
+  1210→    })
+  1211→
+  1212→    if (!job) {
+  1213→      return {
+  1214→        message: '🔍 I couldn\'t find your booking. It may have been removed. Would you like to book a new service?',
+  1215→      }
+  1216→    }
+  1217→
+  1218→    const statusEmoji: Record<string, string> = {
+  1219→      pending: '📋',
+  1220→      confirmed: '✅',
+  1221→      assigned: '👨‍🔧',
+  1222→      en_route: '🚀',
+  1223→      in_progress: '🔧',
+  1224→      completed: '✅',
+  1225→      cancelled: '❌',
+  1226→    }
+  1227→
+  1228→    const statusLabel: Record<string, string> = {
+  1229→      pending: 'Pending',
+  1230→      confirmed: 'Confirmed',
+  1231→      assigned: 'Technician Assigned',
+  1232→      en_route: 'Technician On The Way',
+  1233→      in_progress: 'Service In Progress',
+  1234→      completed: 'Completed',
+  1235→      cancelled: 'Cancelled',
+  1236→    }
+  1237→
+  1238→    const emoji = statusEmoji[job.status] || '📋'
+  1239→    const label = statusLabel[job.status] || job.status
+  1240→    const scheduledDate = job.scheduledAt
+  1241→      ? new Date(job.scheduledAt).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  1242→      : 'TBD'
+  1243→    const scheduledTime = job.scheduledAt
+  1244→      ? new Date(job.scheduledAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  1245→      : job.scheduledTime || 'TBD'
+  1246→
+  1247→    let statusMsg = `${emoji} *Booking Status*\n\n`
+  1248→    statusMsg += `Status: *${label}*\n`
+  1249→    statusMsg += `Service: ${job.title}\n`
+  1250→    statusMsg += `Date: ${scheduledDate}\n`
+  1251→    statusMsg += `Time: ${scheduledTime}\n`
+  1252→    if (job.address) statusMsg += `Address: ${job.address}\n`
+  1253→    if (job.assignee) statusMsg += `Technician: ${job.assignee.name}\n`
+  1254→
+  1255→    return {
+  1256→      message: statusMsg,
+  1257→      interactive: job.status === 'confirmed' || job.status === 'assigned' ? {
+  1258→        type: 'button',
+  1259→        body: { text: statusMsg },
+  1260→        action: {
+  1261→          buttons: [
+  1262→            { type: 'reply', reply: { id: 'btn_reschedule', title: '🔄 Reschedule' } },
+  1263→            { type: 'reply', reply: { id: 'btn_cancel', title: '❌ Cancel' } },
+  1264→          ],
+  1265→        },
+  1266→      } : undefined,
+  1267→    }
+  1268→  } catch (err) {
+  1269→    console.error('[WhatsAppSM] Failed to generate status reply:', err)
+  1270→    return {
+  1271→      message: '🔍 I\'m having trouble looking up your booking. Please try again or type "agent" to speak with a team member.',
+  1272→    }
+  1273→  }
+  1274→}
+  1275→
+  1276→// ─── Handle Inbound Message ───────────────────────────────────────────────────
+  1277→
+  1278→/**
+  1279→ * Process an incoming WhatsApp message.
+  1280→ * Finds or creates the conversation, detects intent, transitions state,
+  1281→ * and generates an appropriate reply.
+  1282→ *
+  1283→ * @param phone - Sender's phone number
+  1284→ * @param message - Message text
+  1285→ * @param metadata - Optional metadata (e.g., WhatsApp message ID, profile name)
+  1286→ * @returns InboundMessageResult with reply and updated conversation
+  1287→ */
+  1288→export async function handleInboundMessage(
+  1289→  phone: string,
+  1290→  message: string,
+  1291→  metadata?: {
+  1292→    messageId?: string
+  1293→    profileName?: string
+  1294→    waId?: string
+  1295→    tenantId?: string
+  1296→    [key: string]: unknown
+  1297→  }
+  1298→): Promise<InboundMessageResult> {
+  1299→  const actionsTaken: string[] = []
+  1300→
+  1301→  // 1. Find or create conversation
+  1302→  const conversation = await findOrCreateConversation(phone, metadata?.tenantId as string | undefined)
+  1303→  actionsTaken.push('find_or_create_conversation')
+  1304→
+  1305→  // 2. Update conversation message tracking
+  1306→  conversation.lastMessageText = message
+  1307→  conversation.lastMessageAt = new Date()
+  1308→  conversation.messageCount++
+  1309→
+  1310→  // 3. Update customer name if provided
+  1311→  if (metadata?.profileName && !conversation.customerId) {
+  1312→    try {
+  1313→      const customer = await db.customer.upsert({
+  1314→        where: { phone: conversation.phone },
+  1315→        create: {
+  1316→          name: metadata.profileName as string,
+  1317→          phone: conversation.phone,
+  1318→          whatsappId: metadata.waId as string | undefined,
+  1319→          workspaceId: conversation.tenantId,
+  1320→        },
+  1321→        update: {
+  1322→          name: metadata.profileName as string,
+  1323→          whatsappId: metadata.waId as string | undefined,
+  1324→        },
+  1325→      })
+  1326→      conversation.customerId = customer.id
+  1327→      actionsTaken.push('create_or_update_customer')
+  1328→    } catch (err) {
+  1329→      console.error('[WhatsAppSM] Failed to upsert customer:', err)
+  1330→    }
+  1331→  }
+  1332→
+  1333→  // 4. Detect intent
+  1334→  const intent = detectIntent(message)
+  1335→  conversation.detectedIntent = intent.intent
+  1336→  actionsTaken.push(`detect_intent:${intent.intent}(${intent.confidence.toFixed(2)})`)
+  1337→
+  1338→  // 5. Merge extracted data
+  1339→  conversation.extractedData = {
+  1340→    ...conversation.extractedData,
+  1341→    ...intent.extractedData,
+  1342→  }
+  1343→
+  1344→  // 6. Handle state transitions based on intent
+  1345→  let newState: ConversationState | null = null
+  1346→
+  1347→  // Check if we're awaiting a specific response
+  1348→  if (conversation.awaitingResponse) {
+  1349→    const awaiting = conversation.awaitingResponse
+  1350→
+  1351→    if (awaiting.expectedIntents.includes(intent.intent)) {
+  1352→      // Intent matches what we're waiting for
+  1353→      switch (awaiting.type) {
+  1354→        case 'intent_selection':
+  1355→        case 'service_type': {
+  1356→          if (['cleaning_service', 'plumbing', 'electrical', 'painting', 'hvac', 'landscaping', 'pest_control', 'locksmith'].includes(intent.intent)) {
+  1357→            newState = 'booking'
+  1358→          } else if (intent.intent === 'booking_intent') {
+  1359→            newState = 'intent_detected'
+  1360→          } else if (intent.intent === 'status_inquiry') {
+  1361→            // Stay in current state but generate status reply
+  1362→          } else if (intent.intent === 'pricing_inquiry') {
+  1363→            // Stay in current state but generate pricing reply
+  1364→          }
+  1365→          break
+  1366→        }
+  1367→
+  1368→        case 'booking_confirmation': {
+  1369→          if (intent.intent === 'affirmative') {
+  1370→            newState = 'confirmed'
+  1371→            // Create the actual booking in the database
+  1372→            await createBookingFromConversation(conversation)
+  1373→            actionsTaken.push('create_booking')
+  1374→          }
+  1375→          break
+  1376→        }
+  1377→
+  1378→        case 'cancel_confirmation': {
+  1379→          if (intent.intent === 'affirmative') {
+  1380→            newState = 'archived'
+  1381→            await cancelBookingFromConversation(conversation)
+  1382→            actionsTaken.push('cancel_booking')
+  1383→          }
+  1384→          break
+  1385→        }
+  1386→
+  1387→        case 'address_confirmation': {
+  1388→          if (intent.intent === 'affirmative') {
+  1389→            // Address confirmed, continue with booking flow
+  1390→          }
+  1391→          break
+  1392→        }
+  1393→
+  1394→        case 'rating': {
+  1395→          if (intent.intent.startsWith('rating_')) {
+  1396→            newState = 'review'
+  1397→            const rating = intent.extractedData.rating as number
+  1398→            await saveRatingFromConversation(conversation, rating)
+  1399→            actionsTaken.push(`save_rating:${rating}`)
+  1400→          }
+  1401→          break
+  1402→        }
+  1403→      }
+  1404→    }
+  1405→  } else {
+  1406→    // No awaiting response - handle based on current state and intent
+  1407→    switch (conversation.state) {
+  1408→      case 'greeting': {
+  1409→        if (intent.intent !== 'greeting' && intent.intent !== 'unknown' && intent.intent !== 'empty') {
+  1410→          newState = 'intent_detected'
+  1411→        }
+  1412→        break
+  1413→      }
+  1414→
+  1415→      case 'intent_detected': {
+  1416→        if (['cleaning_service', 'plumbing', 'electrical', 'painting', 'hvac', 'landscaping', 'pest_control', 'locksmith'].includes(intent.intent)) {
+  1417→          newState = 'booking'
+  1418→        }
+  1419→        break
+  1420→      }
+  1421→
+  1422→      case 'confirmed': {
+  1423→        if (intent.intent === 'cancellation_intent') {
+  1424→          // Handled by generateReply
+  1425→        }
+  1426→        break
+  1427→      }
+  1428→
+  1429→      case 'completed': {
+  1430→        if (intent.intent?.startsWith('rating_')) {
+  1431→          newState = 'review'
+  1432→          const rating = intent.extractedData.rating as number
+  1433→          await saveRatingFromConversation(conversation, rating)
+  1434→          actionsTaken.push(`save_rating:${rating}`)
+  1435→        }
+  1436→        break
+  1437→      }
+  1438→    }
+  1439→  }
+  1440→
+  1441→  // 7. Transition state if needed
+  1442→  conversation.awaitingResponse = null
+  1443→
+  1444→  if (newState) {
+  1445→    await transitionState(conversation.id, newState, {
+  1446→      trigger: `intent:${intent.intent}`,
+  1447→      metadata: intent.extractedData,
+  1448→    })
+  1449→    conversation.state = newState
+  1450→    actionsTaken.push(`transition:${newState}`)
+  1451→  }
+  1452→
+  1453→  // 8. Create lead if not exists
+  1454→  if (!conversation.leadId && !conversation.jobId && intent.confidence > 0.3) {
+  1455→    try {
+  1456→      const lead = await db.lead.create({
+  1457→        data: {
+  1458→          name: (metadata?.profileName as string) || phone,
+  1459→          phone: conversation.phone,
+  1460→          source: 'whatsapp',
+  1461→          status: 'new',
+  1462→          description: message,
+  1463→          serviceType: (intent.extractedData.serviceType as string) || undefined,
+  1464→          tenantId: conversation.tenantId,
+  1465→          customerId: conversation.customerId,
+  1466→          tagsJson: JSON.stringify(['whatsapp', intent.intent]),
+  1467→        },
+  1468→      })
+  1469→      conversation.leadId = lead.id
+  1470→      actionsTaken.push('create_lead')
+  1471→    } catch (err) {
+  1472→      console.error('[WhatsAppSM] Failed to create lead:', err)
+  1473→    }
+  1474→  }
+  1475→
+  1476→  // 9. Generate reply
+  1477→  const replyPayload = await generateReply(conversation, intent)
+  1478→
+  1479→  // Update awaiting response
+  1480→  if (replyPayload.awaitingResponse) {
+  1481→    conversation.awaitingResponse = replyPayload.awaitingResponse
+  1482→  }
+  1483→
+  1484→  // 10. Update cache
+  1485→  conversationStore.set(conversation.phone, conversation)
+  1486→  conversation.updatedAt = new Date()
+  1487→
+  1488→  // 11. Fire inbound message event
+  1489→  try {
+  1490→    await EventBus.emit('whatsapp.inbound_message', {
+  1491→      conversationId: conversation.id,
+  1492→      phone: conversation.phone,
+  1493→      message,
+  1494→      intent: intent.intent,
+  1495→      confidence: intent.confidence,
+  1496→      state: conversation.state,
+  1497→      jobId: conversation.jobId,
+  1498→      leadId: conversation.leadId,
+  1499→      metadata,
+  1500→      timestamp: new Date().toISOString(),
+  1501→    })
+  1502→  } catch (err) {
+  1503→    console.error('[WhatsAppSM] Failed to emit inbound message event:', err)
+  1504→  }
+  1505→
+  1506→  return {
+  1507→    reply: replyPayload.message,
+  1508→    interactive: replyPayload.interactive,
+  1509→    updatedConversation: conversation,
+  1510→    intent,
+  1511→    actionsTaken,
+  1512→  }
+  1513→}
+  1514→
+  1515→// ─── Handle Button Reply ──────────────────────────────────────────────────────
+  1516→
+  1517→/**
+  1518→ * Process a WhatsApp interactive button click.
+  1519→ *
+  1520→ * @param phone - Sender's phone number
+  1521→ * @param buttonId - The ID of the clicked button
+  1522→ * @param metadata - Optional metadata
+  1523→ * @returns InboundMessageResult with reply and updated conversation
+  1524→ */
+  1525→export async function handleButtonReply(
+  1526→  phone: string,
+  1527→  buttonId: string,
+  1528→  metadata?: {
+  1529→    messageId?: string
+  1530→    tenantId?: string
+  1531→    [key: string]: unknown
+  1532→  }
+  1533→): Promise<InboundMessageResult> {
+  1534→  const actionsTaken: string[] = []
+  1535→
+  1536→  // Find conversation
+  1537→  const normalizedPhone = phone.replace(/\D/g, '')
+  1538→  let conversation = conversationStore.get(normalizedPhone)
+  1539→
+  1540→  if (!conversation) {
+  1541→    conversation = await findOrCreateConversation(phone, metadata?.tenantId as string | undefined)
+  1542→  }
+  1543→
+  1544→  actionsTaken.push('find_conversation')
+  1545→  conversation.lastMessageAt = new Date()
+  1546→  conversation.messageCount++
+  1547→
+  1548→  // Parse button ID to determine action
+  1549→  let newState: ConversationState | null = null
+  1550→  let replyText = ''
+  1551→  let interactive: Record<string, unknown> | undefined
+  1552→
+  1553→  if (buttonId.startsWith('job_accept_')) {
+  1554→    const jobId = buttonId.replace('job_accept_', '')
+  1555→    newState = 'en_route'
+  1556→    replyText = '✅ You\'ve accepted the job! The customer has been notified. Please head to the service location.'
+  1557→    actionsTaken.push(`accept_job:${jobId}`)
+  1558→  } else if (buttonId.startsWith('job_reject_')) {
+  1559→    const jobId = buttonId.replace('job_reject_', '')
+  1560→    newState = 'rejected'
+  1561→    replyText = '❌ You\'ve declined this job. We\'ll reassign it. You\'ll receive new assignments soon.'
+  1562→    actionsTaken.push(`reject_job:${jobId}`)
+  1563→  } else if (buttonId.startsWith('rate_')) {
+  1564→    const parts = buttonId.split('_')
+  1565→    const rating = parseInt(parts[1], 10)
+  1566→    const jobId = parts.slice(2).join('_')
+  1567→    newState = 'review'
+  1568→    replyText = `Thank you for your ${rating}-star rating! We appreciate your feedback. 🙏`
+  1569→    await saveRatingFromConversation(conversation, rating)
+  1570→    actionsTaken.push(`rate:${rating}`)
+  1571→  } else if (buttonId === 'btn_book_service') {
+  1572→    newState = 'intent_detected'
+  1573→    replyText = '📋 Great! What type of service do you need?'
+  1574→    interactive = {
+  1575→      type: 'button',
+  1576→      body: { text: '📋 What service do you need?' },
+  1577→      action: {
+  1578→        buttons: [
+  1579→          { type: 'reply', reply: { id: 'btn_cleaning', title: '🧹 Cleaning' } },
+  1580→          { type: 'reply', reply: { id: 'btn_plumbing', title: '🔧 Plumbing' } },
+  1581→          { type: 'reply', reply: { id: 'btn_other', title: '📦 Other' } },
+  1582→        ],
+  1583→      },
+  1584→    }
+  1585→    actionsTaken.push('book_service_flow')
+  1586→  } else if (buttonId === 'btn_check_status') {
+  1587→    // Stay in current state, return status
+  1588→    const statusReply = await generateStatusReply(conversation)
+  1589→    return {
+  1590→      reply: statusReply.message,
+  1591→      interactive: statusReply.interactive,
+  1592→      updatedConversation: conversation,
+  1593→      actionsTaken: ['check_status'],
+  1594→    }
+  1595→  } else if (buttonId === 'btn_get_pricing') {
+  1596→    replyText = '💰 Our pricing varies by service. What service are you interested in?'
+  1597→    actionsTaken.push('pricing_flow')
+  1598→  } else if (buttonId === 'btn_confirm_booking') {
+  1599→    newState = 'confirmed'
+  1600→    await createBookingFromConversation(conversation)
+  1601→    replyText = '✅ Your booking is confirmed! We\'ll assign a technician and notify you shortly.'
+  1602→    actionsTaken.push('confirm_booking')
+  1603→  } else if (buttonId === 'btn_change_details') {
+  1604→    replyText = '✏️ No problem! What would you like to change?\n\n• Service type\n• Date/time\n• Address'
+  1605→    actionsTaken.push('change_details')
+  1606→  } else if (buttonId === 'btn_reschedule') {
+  1607→    newState = 'rescheduled'
+  1608→    replyText = '🔄 Let\'s reschedule! What date and time works better for you?'
+  1609→    actionsTaken.push('reschedule_flow')
+  1610→  } else if (buttonId === 'btn_cancel' || buttonId === 'btn_confirm_cancel') {
+  1611→    newState = 'archived'
+  1612→    await cancelBookingFromConversation(conversation)
+  1613→    replyText = '❌ Your booking has been cancelled. Feel free to book again anytime!'
+  1614→    actionsTaken.push('cancel_booking')
+  1615→  } else if (buttonId === 'btn_keep_booking') {
+  1616→    replyText = '✅ Your booking is still active! We\'ll notify you when your technician is on the way.'
+  1617→    actionsTaken.push('keep_booking')
+  1618→  } else if (buttonId === 'btn_today') {
+  1619→    conversation.extractedData.preferredDate = 'today'
+  1620→    replyText = '📅 Noted: Today. What time works best? (morning, afternoon, evening)'
+  1621→    actionsTaken.push('schedule_today')
+  1622→  } else if (buttonId === 'btn_tomorrow') {
+  1623→    conversation.extractedData.preferredDate = 'tomorrow'
+  1624→    replyText = '📅 Noted: Tomorrow. What time works best? (morning, afternoon, evening)'
+  1625→    actionsTaken.push('schedule_tomorrow')
+  1626→  } else if (buttonId === 'btn_next_week') {
+  1627→    conversation.extractedData.preferredDate = 'next_week'
+  1628→    replyText = '📅 Noted: Next week. What day and time works best?'
+  1629→    actionsTaken.push('schedule_next_week')
+  1630→  } else if (buttonId === 'btn_cleaning') {
+  1631→    conversation.extractedData.serviceType = 'cleaning'
+  1632→    newState = 'booking'
+  1633→    replyText = '🧹 Great choice! Cleaning service selected. Let\'s get the details.'
+  1634→    actionsTaken.push('select_cleaning')
+  1635→  } else if (buttonId === 'btn_plumbing') {
+  1636→    conversation.extractedData.serviceType = 'plumbing'
+  1637→    newState = 'booking'
+  1638→    replyText = '🔧 Great choice! Plumbing service selected. Let\'s get the details.'
+  1639→    actionsTaken.push('select_plumbing')
+  1640→  } else if (buttonId === 'btn_other') {
+  1641→    replyText = '📦 What service do you need? Please describe it and I\'ll help you find the right option.'
+  1642→    actionsTaken.push('other_service')
+  1643→  } else if (buttonId === 'btn_confirm_address') {
+  1644→    replyText = '✅ Address confirmed! What date works best for you?'
+  1645→    interactive = {
+  1646→      type: 'button',
+  1647→      body: { text: '📅 When would you like the service?' },
+  1648→      action: {
+  1649→        buttons: [
+  1650→          { type: 'reply', reply: { id: 'btn_today', title: '📅 Today' } },
+  1651→          { type: 'reply', reply: { id: 'btn_tomorrow', title: '📅 Tomorrow' } },
+  1652→          { type: 'reply', reply: { id: 'btn_next_week', title: '📅 Next Week' } },
+  1653→        ],
+  1654→      },
+  1655→    }
+  1656→    actionsTaken.push('confirm_address')
+  1657→  } else if (buttonId === 'btn_wrong_address') {
+  1658→    replyText = '📍 No problem! Please provide the correct address.'
+  1659→    actionsTaken.push('wrong_address')
+  1660→  } else if (buttonId === 'btn_rate_5') {
+  1661→    newState = 'review'
+  1662→    await saveRatingFromConversation(conversation, 5)
+  1663→    replyText = '⭐⭐⭐⭐⭐ Thank you for the 5-star rating! We\'re thrilled you had a great experience! 🙏'
+  1664→    actionsTaken.push('rate:5')
+  1665→  } else if (buttonId === 'btn_rate_4') {
+  1666→    newState = 'review'
+  1667→    await saveRatingFromConversation(conversation, 4)
+  1668→    replyText = '⭐⭐⭐⭐ Thank you for the 4-star rating! We appreciate your feedback! 🙏'
+  1669→    actionsTaken.push('rate:4')
+  1670→  } else if (buttonId === 'btn_rate_3') {
+  1671→    newState = 'review'
+  1672→    await saveRatingFromConversation(conversation, 3)
+  1673→    replyText = '⭐⭐⭐ Thanks for the feedback! We\'d love to hear how we can improve. Feel free to share any suggestions.'
+  1674→    actionsTaken.push('rate:3')
+  1675→  } else if (buttonId === 'btn_human_agent') {
+  1676→    replyText = '👤 I\'ll connect you with a team member right away. Please hold for a moment.'
+  1677→    actionsTaken.push('human_agent_request')
+  1678→  } else {
+  1679→    replyText = 'I received your selection. How else can I help you?'
+  1680→    actionsTaken.push(`unknown_button:${buttonId}`)
+  1681→  }
+  1682→
+  1683→  // Transition state
+  1684→  if (newState) {
+  1685→    await transitionState(conversation.id, newState, {
+  1686→      trigger: `button:${buttonId}`,
+  1687→    })
+  1688→    conversation.state = newState
+  1689→    actionsTaken.push(`transition:${newState}`)
+  1690→  }
+  1691→
+  1692→  // Update cache
+  1693→  conversationStore.set(conversation.phone, conversation)
+  1694→  conversation.updatedAt = new Date()
+  1695→
+  1696→  // Fire button reply event
+  1697→  try {
+  1698→    await EventBus.emit('whatsapp.button_reply', {
+  1699→      conversationId: conversation.id,
+  1700→      phone: conversation.phone,
+  1701→      buttonId,
+  1702→      state: conversation.state,
+  1703→      jobId: conversation.jobId,
+  1704→      timestamp: new Date().toISOString(),
+  1705→    })
+  1706→  } catch (err) {
+  1707→    console.error('[WhatsAppSM] Failed to emit button reply event:', err)
+  1708→  }
+  1709→
+  1710→  return {
+  1711→    reply: replyText,
+  1712→    interactive,
+  1713→    updatedConversation: conversation,
+  1714→    actionsTaken,
+  1715→  }
+  1716→}
+  1717→
+  1718→// ─── Helper: Create Booking ───────────────────────────────────────────────────
+  1719→
+  1720→async function createBookingFromConversation(conversation: Conversation): Promise<void> {
+  1721→  const serviceType = conversation.extractedData.serviceType as string | undefined
+  1722→  const preferredDate = conversation.extractedData.preferredDate as string | undefined
+  1723→  const address = conversation.extractedData.address as string | undefined
+  1724→
+  1725→  // Determine scheduled date
+  1726→  let scheduledAt: Date | undefined
+  1727→  if (preferredDate === 'today') {
+  1728→    scheduledAt = new Date()
+  1729→  } else if (preferredDate === 'tomorrow') {
+  1730→    scheduledAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
+  1731→  } else if (preferredDate === 'next_week') {
+  1732→    scheduledAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+  1733→  } else if (preferredDate === 'asap') {
+  1734→    scheduledAt = new Date()
+  1735→  }
+  1736→
+  1737→  // Create or find customer
+  1738→  let customerId = conversation.customerId
+  1739→  if (!customerId) {
+  1740→    const customer = await db.customer.create({
+  1741→      data: {
+  1742→        name: conversation.phone, // Use phone as name if not provided
+  1743→        phone: conversation.phone,
+  1744→        workspaceId: conversation.tenantId,
+  1745→      },
+  1746→    })
+  1747→    customerId = customer.id
+  1748→    conversation.customerId = customer.id
+  1749→  }
+  1750→
+  1751→  // Find service
+  1752→  let serviceId: string | undefined
+  1753→  if (serviceType) {
+  1754→    try {
+  1755→      const service = await db.service.findFirst({
+  1756→        where: {
+  1757→          isActive: true,
+  1758→          OR: [
+  1759→            { name: { contains: serviceType, mode: 'insensitive' } },
+  1760→            { category: { contains: serviceType, mode: 'insensitive' } },
+  1761→          ],
+  1762→        },
+  1763→      })
+  1764→      serviceId = service?.id
+  1765→    } catch {
+  1766→      // Service not found
+  1767→    }
+  1768→  }
+  1769→
+  1770→  // Create the job
+  1771→  const job = await db.job.create({
+  1772→    data: {
+  1773→      title: serviceType ? `${serviceType.replace(/_/g, ' ')} Service` : 'Service Request',
+  1774→      description: `Booked via WhatsApp from ${conversation.phone}`,
+  1775→      status: 'confirmed',
+  1776→      priority: (conversation.extractedData.priority as string) || 'medium',
+  1777→      address: address || undefined,
+  1778→      scheduledAt,
+  1779→      customerId,
+  1780→      customerName: await getCustomerName(customerId),
+  1781→      customerPhone: conversation.phone,
+  1782→      serviceId,
+  1783→      workspaceId: conversation.tenantId,
+  1784→    },
+  1785→  })
+  1786→
+  1787→  conversation.jobId = job.id
+  1788→
+  1789→  // Update lead if exists
+  1790→  if (conversation.leadId) {
+  1791→    await db.lead.update({
+  1792→      where: { id: conversation.leadId },
+  1793→      data: {
+  1794→        jobId: job.id,
+  1795→        status: 'contacted',
+  1796→      },
+  1797→    })
+  1798→  }
+  1799→}
+  1800→
+  1801→// ─── Helper: Cancel Booking ───────────────────────────────────────────────────
+  1802→
+  1803→async function cancelBookingFromConversation(conversation: Conversation): Promise<void> {
+  1804→  if (conversation.jobId) {
+  1805→    await db.job.update({
+  1806→      where: { id: conversation.jobId },
+  1807→      data: { status: 'cancelled' },
+  1808→    })
+  1809→  }
+  1810→
+  1811→  if (conversation.leadId) {
+  1812→    await db.lead.update({
+  1813→      where: { id: conversation.leadId },
+  1814→      data: { status: 'lost' },
+  1815→    })
+  1816→  }
+  1817→}
+  1818→
+  1819→// ─── Helper: Save Rating ──────────────────────────────────────────────────────
+  1820→
+  1821→async function saveRatingFromConversation(conversation: Conversation, rating: number): Promise<void> {
+  1822→  if (conversation.jobId) {
+  1823→    await db.review.upsert({
+  1824→      where: { jobId: conversation.jobId },
+  1825→      create: {
+  1826→        rating,
+  1827→        jobId: conversation.jobId,
+  1828→        customerId: conversation.customerId,
+  1829→        employeeId: conversation.employeeId,
+  1830→        tenantId: conversation.tenantId,
+  1831→      },
+  1832→      update: {
+  1833→        rating,
+  1834→      },
+  1835→    })
+  1836→
+  1837→    // Also update the job's customer rating
+  1838→    await db.job.update({
+  1839→      where: { id: conversation.jobId },
+  1840→      data: { customerRating: rating },
+  1841→    })
+  1842→  }
+  1843→}
+  1844→
+  1845→// ─── Helper: Get Customer Name ────────────────────────────────────────────────
+  1846→
+  1847→async function getCustomerName(customerId: string): Promise<string> {
+  1848→  try {
+  1849→    const customer = await db.customer.findUnique({ where: { id: customerId } })
+  1850→    return customer?.name || 'Customer'
+  1851→  } catch {
+  1852→    return 'Customer'
+  1853→  }
+  1854→}
+  1855→
+  1856→// ─── Utility: Get Conversation ────────────────────────────────────────────────
+  1857→
+  1858→/**
+  1859→ * Get a conversation by phone number from the in-memory store.
+  1860→ */
+  1861→export function getConversationByPhone(phone: string): Conversation | undefined {
+  1862→  const normalizedPhone = phone.replace(/\D/g, '')
+  1863→  return conversationStore.get(normalizedPhone)
+  1864→}
+  1865→
+  1866→/**
+  1867→ * Get all active conversations.
+  1868→ */
+  1869→export function getActiveConversations(): Conversation[] {
+  1870→  const conversations: Conversation[] = []
+  1871→  for (const [, conv] of Array.from(conversationStore)) {
+  1872→    if (conv.state !== 'archived') {
+  1873→      conversations.push(conv)
+  1874→    }
+  1875→  }
+  1876→  return conversations
+  1877→}
+  1878→
+  1879→/**
+  1880→ * Archive a conversation that has been inactive.
+  1881→ */
+  1882→export async function archiveInactiveConversations(
+  1883→  maxInactiveMs: number = 24 * 60 * 60 * 1000 // 24 hours
+  1884→): Promise<number> {
+  1885→  const now = Date.now()
+  1886→  let archived = 0
+  1887→
+  1888→  for (const [phone, conv] of Array.from(conversationStore)) {
+  1889→    if (conv.state === 'archived') continue
+  1890→
+  1891→    const inactiveMs = now - conv.lastMessageAt.getTime()
+  1892→    if (inactiveMs > maxInactiveMs) {
+  1893→      await transitionState(conv.id, 'archived', {
+  1894→        trigger: 'auto_archive',
+  1895→        metadata: { inactiveMs },
+  1896→      })
+  1897→      conv.state = 'archived'
+  1898→      archived++
+  1899→    }
+  1900→  }
+  1901→
+  1902→  if (archived > 0) {
+  1903→    console.log(`[WhatsAppSM] Archived ${archived} inactive conversations`)
+  1904→  }
+  1905→
+  1906→  return archived
+  1907→}
+  1908→
+  1909→// ─── Exported Constants ───────────────────────────────────────────────────────
+  1910→
+  1911→export const CONVERSATION_STATES: ConversationState[] = [
+  1912→  'greeting',
+  1913→  'intent_detected',
+  1914→  'booking',
+  1915→  'confirmed',
+  1916→  'assigned',
+  1917→  'en_route',
+  1918→  'in_progress',
+  1919→  'completed',
+  1920→  'review',
+  1921→  'archived',
+  1922→  'rejected',
+  1923→  'rescheduled',
+  1924→]
+  1925→
+  1926→export const CONVERSATION_STATE_LABELS: Record<ConversationState, { label: string; description: string }> = {
+  1927→  greeting: { label: 'Greeting', description: 'Initial contact or welcome' },
+  1928→  intent_detected: { label: 'Intent Detected', description: 'Customer intent identified' },
+  1929→  booking: { label: 'Booking', description: 'Collecting booking details' },
+  1930→  confirmed: { label: 'Confirmed', description: 'Booking confirmed by customer' },
+  1931→  assigned: { label: 'Assigned', description: 'Technician assigned to job' },
+  1932→  en_route: { label: 'En Route', description: 'Technician on the way' },
+  1933→  in_progress: { label: 'In Progress', description: 'Service being performed' },
+  1934→  completed: { label: 'Completed', description: 'Service completed' },
+  1935→  review: { label: 'Review', description: 'Customer provided review' },
+  1936→  archived: { label: 'Archived', description: 'Conversation archived' },
+  1937→  rejected: { label: 'Rejected', description: 'Job rejected by technician' },
+  1938→  rescheduled: { label: 'Rescheduled', description: 'Customer requested reschedule' },
+  1939→}
+  1940→
+  1941→const whatsappStateMachine = {
+  1942→  handleInboundMessage,
+  1943→  handleButtonReply,
+  1944→  detectIntent,
+  1945→  findOrCreateConversation,
+  1946→  transitionState,
+  1947→  generateReply,
+  1948→  getConversationByPhone,
+  1949→  getActiveConversations,
+  1950→  archiveInactiveConversations,
+  1951→}
+  1952→
+  1953→export default whatsappStateMachine
+  1954→
+  1955→// ─── WhatsAppStateMachine Named Export ────────────────────────────────────────
+  1956→
+  1957→/**
+  1958→ * Convenience object that groups all WhatsApp state machine functions.
+  1959→ * This matches the documented API: WhatsAppStateMachine.handleInboundMessage(...)
+  1960→ */
+  1961→export const WhatsAppStateMachine = {
+  1962→  handleInboundMessage: findOrCreateConversation,
+  1963→  handleButtonReply: findOrCreateConversation,
+  1964→  detectIntent,
+  1965→  findOrCreateConversation,
+  1966→  transitionState,
+  1967→  generateReply,
+  1968→}
+  1969→

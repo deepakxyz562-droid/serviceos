@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { isSuperAdminRequest } from '@/lib/admin-auth';
 import { cache } from '@/lib/cache';
 
 const CACHE_KEY = 'superadmin:stats';
@@ -26,7 +27,7 @@ export async function GET() {
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (auth.role !== 'superadmin') {
+    if (!(await isSuperAdminRequest())) {
       return NextResponse.json({ error: 'Forbidden - SuperAdmin access required' }, { status: 403 });
     }
 

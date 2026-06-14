@@ -1,0 +1,972 @@
+     1→import { PrismaClient } from '@prisma/client';
+     2→import bcrypt from 'bcryptjs';
+     3→
+     4→// For seeding, use DIRECT_URL (standard pg connection) instead of the pooled HTTP URL
+     5→// This avoids issues with the Neon HTTP adapter during bulk operations
+     6→const directUrl = process.env.DIRECT_URL || process.env.DATABASE_URL || '';
+     7→
+     8→const db = new PrismaClient({
+     9→  datasourceUrl: directUrl,
+    10→  log: ['error', 'warn'],
+    11→});
+    12→
+    13→// ──────────────────────────────────────────────
+    14→// Date helpers
+    15→// ──────────────────────────────────────────────
+    16→const now = new Date();
+    17→const daysAgo = (d: number) => new Date(now.getTime() - d * 24 * 60 * 60 * 1000);
+    18→const hoursAgo = (h: number) => new Date(now.getTime() - h * 60 * 60 * 1000);
+    19→const daysFromNow = (d: number) => new Date(now.getTime() + d * 24 * 60 * 60 * 1000);
+    20→
+    21→async function main() {
+    22→  console.log('🌱 Seeding ServiceOS — 5 Users (1 SuperAdmin) + Full Dummy Data...\n');
+    23→
+    24→  // ════════════════════════════════════════════════
+    25→  // 0. CLEAN ALL EXISTING DATA (reverse dependency order)
+    26→  // ════════════════════════════════════════════════
+    27→  console.log('🧹 Cleaning existing data...');
+    28→  await db.whatsAppMessageAction.deleteMany();
+    29→  await db.webhookTestRequest.deleteMany();
+    30→  await db.webhookEndpointLog.deleteMany();
+    31→  await db.webhookEndpoint.deleteMany();
+    32→  await db.eventWebhookLog.deleteMany();
+    33→  await db.eventWebhook.deleteMany();
+    34→  await db.webhookSource.deleteMany();
+    35→  await db.contactListEntry.deleteMany();
+    36→  await db.contactList.deleteMany();
+    37→  await db.executionNodeData.deleteMany();
+    38→  await db.execution.deleteMany();
+    39→  await db.webhookRegistration.deleteMany();
+    40→  await db.workflowVersion.deleteMany();
+    41→  await db.workflow.deleteMany();
+    42→  await db.template.deleteMany();
+    43→  await db.credential.deleteMany();
+    44→  await db.variable.deleteMany();
+    45→  await db.apiKey.deleteMany();
+    46→  await db.auditLog.deleteMany();
+    47→  await db.folder.deleteMany();
+    48→  await db.customerPortalSession.deleteMany();
+    49→  await db.customerJourney.deleteMany();
+    50→  await db.conversation.deleteMany();
+    51→  await db.inboxMessage.deleteMany();
+    52→  await db.chatLabel.deleteMany();
+    53→  await db.notificationLog.deleteMany();
+    54→  await db.employeeStatusLog.deleteMany();
+    55→  await db.analyticsSnapshot.deleteMany();
+    56→  await db.integrationConfig.deleteMany();
+    57→  await db.invoice.deleteMany();
+    58→  await db.lead.deleteMany();
+    59→  await db.job.deleteMany();
+    60→  await db.resource.deleteMany();
+    61→  await db.employee.deleteMany();
+    62→  await db.customer.deleteMany();
+    63→  await db.review.deleteMany();
+    64→  await db.notification.deleteMany();
+    65→  await db.quote.deleteMany();
+    66→  await db.subscription.deleteMany();
+    67→  await db.service.deleteMany();
+    68→  await db.form.deleteMany();
+    69→  await db.formResponse.deleteMany();
+    70→  await db.workflowAutomation.deleteMany();
+    71→  await db.channelConfig.deleteMany();
+    72→  await db.user.deleteMany();
+    73→  await db.workspace.deleteMany();
+    74→  await db.tenant.deleteMany();
+    75→  console.log('  ✅ All existing data cleared\n');
+    76→
+    77→  // ════════════════════════════════════════════════
+    78→  // 1. HASH ALL PASSWORDS
+    79→  // ════════════════════════════════════════════════
+    80→  console.log('🔑 Hashing passwords...');
+    81→  const superAdminHash = await bcrypt.hash('SuperAdmin@123', 12);
+    82→  const ownerHash = await bcrypt.hash('Owner@123', 12);
+    83→  const managerHash = await bcrypt.hash('Manager@123', 12);
+    84→  const techHash = await bcrypt.hash('Technician@123', 12);
+    85→  const dispatchHash = await bcrypt.hash('Dispatch@123', 12);
+    86→  console.log('  ✅ Passwords hashed\n');
+    87→
+    88→  // ════════════════════════════════════════════════
+    89→  // 2. USER 1: SUPERADMIN (Platform Level — no tenant)
+    90→  // ════════════════════════════════════════════════
+    91→  console.log('👑 Creating SuperAdmin...');
+    92→  const superAdmin = await db.user.create({
+    93→    data: {
+    94→      email: 'admin@serviceos.com',
+    95→      name: 'Vikram Mehta',
+    96→      role: 'admin',
+    97→      passwordHash: superAdminHash,
+    98→      phone: '+1-800-555-0001',
+    99→      avatar: null,
+   100→      isActive: true,
+   101→      lastLoginAt: hoursAgo(2),
+   102→      tenantId: null,
+   103→      workspaceId: null,
+   104→    },
+   105→  });
+   106→  console.log('  ✅ SuperAdmin: admin@serviceos.com / SuperAdmin@123\n');
+   107→
+   108→  // ══════════════════════════════════════════════════════════════
+   109→  // 3. TENANT: ServiceOS Demo Corp (Growth Plan — Multi-Service)
+   110→  // ══════════════════════════════════════════════════════════════
+   111→  console.log('🏢 Creating Tenant: ServiceOS Demo Corp...');
+   112→  const tenant = await db.tenant.create({
+   113→    data: {
+   114→      name: 'ServiceOS Demo Corp',
+   115→      slug: 'serviceos-demo',
+   116→      industry: 'home-services',
+   117→      email: 'rajesh@serviceos-demo.com',
+   118→      phone: '+1-555-0100',
+   119→      address: '100 Business Park, Suite 400, Houston, TX 77001',
+   120→      country: 'US',
+   121→      currency: 'USD',
+   122→      whatsappPhone: '+1-555-0100',
+   123→      plan: 'growth',
+   124→      planStatus: 'active',
+   125→      planStartedAt: daysAgo(60),
+   126→      onboardingCompleted: true,
+   127→      settingsJson: JSON.stringify({
+   128→        timezone: 'America/Chicago',
+   129→        workingHours: { start: '09:00', end: '18:00' },
+   130→        autoAssign: true,
+   131→        notifyOnNewLead: true,
+   132→      }),
+   133→    },
+   134→  });
+   135→
+   136→  // ══════════════════════════════════════════════════════════════
+   137→  // 4. USERS 2-5 (Tenant Users)
+   138→  // ══════════════════════════════════════════════════════════════
+   139→
+   140→  // USER 2: Owner
+   141→  const owner = await db.user.create({
+   142→    data: {
+   143→      email: 'rajesh@serviceos-demo.com',
+   144→      name: 'Rajesh Kumar',
+   145→      role: 'owner',
+   146→      passwordHash: ownerHash,
+   147→      phone: '+1-555-0101',
+   148→      isActive: true,
+   149→      lastLoginAt: hoursAgo(1),
+   150→      tenantId: tenant.id,
+   151→    },
+   152→  });
+   153→
+   154→  // USER 3: Manager
+   155→  const manager = await db.user.create({
+   156→    data: {
+   157→      email: 'priya@serviceos-demo.com',
+   158→      name: 'Priya Patel',
+   159→      role: 'manager',
+   160→      passwordHash: managerHash,
+   161→      phone: '+1-555-0102',
+   162→      isActive: true,
+   163→      lastLoginAt: hoursAgo(5),
+   164→      tenantId: tenant.id,
+   165→    },
+   166→  });
+   167→
+   168→  // USER 4: Technician
+   169→  const technician = await db.user.create({
+   170→    data: {
+   171→      email: 'amit@serviceos-demo.com',
+   172→      name: 'Amit Singh',
+   173→      role: 'technician',
+   174→      passwordHash: techHash,
+   175→      phone: '+1-555-0103',
+   176→      isActive: true,
+   177→      lastLoginAt: daysAgo(1),
+   178→      tenantId: tenant.id,
+   179→    },
+   180→  });
+   181→
+   182→  // USER 5: Dispatcher
+   183→  const dispatcher = await db.user.create({
+   184→    data: {
+   185→      email: 'suresh@serviceos-demo.com',
+   186→      name: 'Suresh Naik',
+   187→      role: 'admin',
+   188→      passwordHash: dispatchHash,
+   189→      phone: '+1-555-0104',
+   190→      isActive: true,
+   191→      lastLoginAt: hoursAgo(12),
+   192→      tenantId: tenant.id,
+   193→    },
+   194→  });
+   195→
+   196→  console.log('  ✅ User 2 (Owner): rajesh@serviceos-demo.com / Owner@123');
+   197→  console.log('  ✅ User 3 (Manager): priya@serviceos-demo.com / Manager@123');
+   198→  console.log('  ✅ User 4 (Technician): amit@serviceos-demo.com / Technician@123');
+   199→  console.log('  ✅ User 5 (Dispatcher): suresh@serviceos-demo.com / Dispatch@123\n');
+   200→
+   201→  // ════════════════════════════════════════════════
+   202→  // 5. WORKSPACE
+   203→  // ════════════════════════════════════════════════
+   204→  console.log('📂 Creating workspace...');
+   205→  const workspace = await db.workspace.create({
+   206→    data: {
+   207→      name: 'ServiceOS Demo Corp',
+   208→      slug: 'serviceos-demo',
+   209→      industry: 'home-services',
+   210→      plan: 'growth',
+   211→      ownerId: owner.id,
+   212→      tenantId: tenant.id,
+   213→      settingsJson: JSON.stringify({
+   214→        defaultJobDuration: 120,
+   215→        autoAssignNearest: true,
+   216→        notificationPreferences: { email: true, whatsapp: true, sms: false },
+   217→      }),
+   218→    },
+   219→  });
+   220→
+   221→  // Link users to workspace
+   222→  await db.user.update({ where: { id: owner.id }, data: { workspaceId: workspace.id } });
+   223→  await db.user.update({ where: { id: manager.id }, data: { workspaceId: workspace.id } });
+   224→  await db.user.update({ where: { id: technician.id }, data: { workspaceId: workspace.id } });
+   225→  await db.user.update({ where: { id: dispatcher.id }, data: { workspaceId: workspace.id } });
+   226→  console.log('  ✅ Workspace created & users linked\n');
+   227→
+   228→  // ════════════════════════════════════════════════
+   229→  // 6. SUBSCRIPTION
+   230→  // ════════════════════════════════════════════════
+   231→  console.log('💳 Creating subscription...');
+   232→  await db.subscription.create({
+   233→    data: {
+   234→      tenantId: tenant.id,
+   235→      plan: 'growth',
+   236→      status: 'active',
+   237→      amount: 79,
+   238→      currency: 'USD',
+   239→      billingCycle: 'monthly',
+   240→      startDate: daysAgo(60),
+   241→      endDate: daysFromNow(305),
+   242→      maxUsers: 10,
+   243→      maxJobs: 500,
+   244→      maxWorkflows: 50,
+   245→      featuresJson: JSON.stringify({
+   246→        omnichannel: true, marketingHub: true, aiChatbot: true,
+   247→        customWorkflows: true, advancedAnalytics: true, apiAccess: true,
+   248→      }),
+   249→    },
+   250→  });
+   251→  console.log('  ✅ Subscription: Growth Plan ($79/mo)\n');
+   252→
+   253→  // ════════════════════════════════════════════════
+   254→  // 7. SERVICES
+   255→  // ════════════════════════════════════════════════
+   256→  console.log('🔧 Creating services...');
+   257→  const services = [];
+   258→  const serviceData = [
+   259→    { name: 'Plumbing Repair', description: 'General plumbing repair and maintenance', category: 'plumbing', basePrice: 150, duration: 90, icon: 'wrench' },
+   260→    { name: 'Drain Cleaning', description: 'Professional drain cleaning with hydro-jetting', category: 'plumbing', basePrice: 200, duration: 120, icon: 'droplets' },
+   261→    { name: 'Water Heater Install', description: 'Tankless water heater installation', category: 'plumbing', basePrice: 800, duration: 240, icon: 'flame' },
+   262→    { name: 'Deep Home Cleaning', description: 'Full deep cleaning for homes', category: 'cleaning', basePrice: 250, duration: 240, icon: 'sparkles' },
+   263→    { name: 'Carpet Steam Clean', description: 'Professional carpet steam cleaning', category: 'cleaning', basePrice: 180, duration: 120, icon: 'wind' },
+   264→    { name: 'Office Cleaning', description: 'Commercial office space cleaning', category: 'cleaning', basePrice: 350, duration: 180, icon: 'building' },
+   265→    { name: 'AC Installation', description: 'Air conditioning unit installation', category: 'hvac', basePrice: 600, duration: 300, icon: 'thermometer' },
+   266→    { name: 'AC Repair', description: 'AC diagnostic and repair service', category: 'hvac', basePrice: 120, duration: 90, icon: 'snowflake' },
+   267→    { name: 'House Painting', description: 'Interior/exterior house painting', category: 'painting', basePrice: 1500, duration: 480, icon: 'paintbrush' },
+   268→    { name: 'Pest Control', description: 'Residential pest control treatment', category: 'pest-control', basePrice: 100, duration: 60, icon: 'bug' },
+   269→  ];
+   270→  for (const s of serviceData) {
+   271→    const service = await db.service.create({ data: { ...s, tenantId: tenant.id } });
+   272→    services.push(service);
+   273→  }
+   274→  console.log(`  ✅ ${services.length} services created\n`);
+   275→
+   276→  // ════════════════════════════════════════════════
+   277→  // 8. EMPLOYEES
+   278→  // ════════════════════════════════════════════════
+   279→  console.log('👥 Creating employees...');
+   280→  const employees = [];
+   281→
+   282→  const emp_owner = await db.employee.create({
+   283→    data: {
+   284→      name: 'Rajesh Kumar', phone: '+1-555-0101', email: 'rajesh@serviceos-demo.com',
+   285→      role: 'owner', status: 'available',
+   286→      skills: '["plumbing","estimation","project_management","sales"]',
+   287→      rating: 4.9, completedJobs: 120, location: 'Houston, TX',
+   288→      workspaceId: workspace.id, userId: owner.id,
+   289→    },
+   290→  });
+   291→  employees.push(emp_owner);
+   292→
+   293→  const emp_manager = await db.employee.create({
+   294→    data: {
+   295→      name: 'Priya Patel', phone: '+1-555-0102', email: 'priya@serviceos-demo.com',
+   296→      role: 'manager', status: 'available',
+   297→      skills: '["scheduling","customer_service","quality_assurance","team_management"]',
+   298→      rating: 4.8, completedJobs: 45, location: 'Houston, TX',
+   299→      workspaceId: workspace.id, userId: manager.id,
+   300→    },
+   301→  });
+   302→  employees.push(emp_manager);
+   303→
+   304→  const emp_tech1 = await db.employee.create({
+   305→    data: {
+   306→      name: 'Amit Singh', phone: '+1-555-0103', email: 'amit@serviceos-demo.com',
+   307→      role: 'technician', status: 'available',
+   308→      skills: '["plumbing","pipe_fitting","water_heater","drain_cleaning"]',
+   309→      rating: 4.6, completedJobs: 87, location: 'Sugar Land, TX',
+   310→      workspaceId: workspace.id, userId: technician.id,
+   311→    },
+   312→  });
+   313→  employees.push(emp_tech1);
+   314→
+   315→  const emp_tech2 = await db.employee.create({
+   316→    data: {
+   317→      name: 'Deepak Rao', phone: '+1-555-0105',
+   318→      role: 'technician', status: 'busy',
+   319→      skills: '["hvac","ac_installation","ac_repair","refrigeration"]',
+   320→      rating: 4.7, completedJobs: 65, location: 'Katy, TX',
+   321→      workspaceId: workspace.id,
+   322→    },
+   323→  });
+   324→  employees.push(emp_tech2);
+   325→
+   326→  const emp_tech3 = await db.employee.create({
+   327→    data: {
+   328→      name: 'Neha Sharma', phone: '+1-555-0106',
+   329→      role: 'technician', status: 'available',
+   330→      skills: '["cleaning","deep_cleaning","carpet_steam","upholstery"]',
+   331→      rating: 4.5, completedJobs: 92, location: 'The Woodlands, TX',
+   332→      workspaceId: workspace.id,
+   333→    },
+   334→  });
+   335→  employees.push(emp_tech3);
+   336→
+   337→  const emp_driver = await db.employee.create({
+   338→    data: {
+   339→      name: 'Ravi Shetty', phone: '+1-555-0107',
+   340→      role: 'driver', status: 'available',
+   341→      skills: '["driving","delivery","equipment_transport"]',
+   342→      rating: 4.4, completedJobs: 55, location: 'Pearland, TX',
+   343→      workspaceId: workspace.id,
+   344→    },
+   345→  });
+   346→  employees.push(emp_driver);
+   347→
+   348→  const emp_dispatcher = await db.employee.create({
+   349→    data: {
+   350→      name: 'Suresh Naik', phone: '+1-555-0104', email: 'suresh@serviceos-demo.com',
+   351→      role: 'dispatcher', status: 'available',
+   352→      skills: '["dispatch","routing","customer_coordination","scheduling"]',
+   353→      rating: 4.6, completedJobs: 30, location: 'Houston, TX',
+   354→      workspaceId: workspace.id, userId: dispatcher.id,
+   355→    },
+   356→  });
+   357→  employees.push(emp_dispatcher);
+   358→
+   359→  console.log(`  ✅ ${employees.length} employees created\n`);
+   360→
+   361→  // ════════════════════════════════════════════════
+   362→  // 9. CUSTOMERS
+   363→  // ════════════════════════════════════════════════
+   364→  console.log('🏠 Creating customers...');
+   365→  const customers = [];
+   366→  const customerData = [
+   367→    { name: 'James Wilson', phone: '+1-555-1001', email: 'james.wilson@email.com', address: '15 Oak Street, Houston, TX 77002' },
+   368→    { name: 'Maria Garcia', phone: '+1-555-1002', email: 'maria.g@email.com', address: '220 Elm Blvd, Houston, TX 77003' },
+   369→    { name: 'Tom Henderson', phone: '+1-555-1003', email: 'tom.h@email.com', address: '89 Pine Road, Houston, TX 77004' },
+   370→    { name: 'Linda Chen', phone: '+1-555-1004', email: 'linda.c@email.com', address: '331 Maple Drive, Houston, TX 77005' },
+   371→    { name: 'Robert Kim', phone: '+1-555-1005', email: 'robert.k@email.com', address: '77 Cedar Lane, Houston, TX 77006' },
+   372→    { name: 'Sarah Mitchell', phone: '+1-555-1006', email: 'sarah.m@email.com', address: '445 Birch St, Houston, TX 77007' },
+   373→    { name: 'TechCorp Office', phone: '+1-555-1007', email: 'office@techcorp.com', address: '1200 Innovation Pkwy, Houston, TX 77008' },
+   374→    { name: 'Amanda Foster', phone: '+1-555-1008', email: 'amanda.f@email.com', address: '67 River Rd, Sugar Land, TX 77478' },
+   375→    { name: 'Brian Mitchell', phone: '+1-555-1009', email: 'brian.m@email.com', address: '102 Lake View Dr, Katy, TX 77494' },
+   376→    { name: 'Catherine Lee', phone: '+1-555-1010', email: 'cathy.lee@email.com', address: '88 Sunrise Blvd, The Woodlands, TX 77380' },
+   377→  ];
+   378→  for (const c of customerData) {
+   379→    const customer = await db.customer.create({ data: { ...c, workspaceId: workspace.id } });
+   380→    customers.push(customer);
+   381→  }
+   382→  console.log(`  ✅ ${customers.length} customers created\n`);
+   383→
+   384→  // ════════════════════════════════════════════════
+   385→  // 10. JOBS (all lifecycle states)
+   386→  // ════════════════════════════════════════════════
+   387→  console.log('📋 Creating jobs...');
+   388→
+   389→  // PENDING — no assignee yet
+   390→  await db.job.create({
+   391→    data: {
+   392→      title: 'Leaking Kitchen Faucet', description: 'Customer reports persistent dripping from kitchen faucet. Needs assessment and repair.',
+   393→      status: 'pending', priority: 'medium', type: 'plumbing',
+   394→      address: '15 Oak Street, Houston, TX 77002',
+   395→      scheduledAt: daysFromNow(1), estimatedDuration: 90,
+   396→      customerId: customers[0].id, customerName: 'James Wilson', customerPhone: '+1-555-1001',
+   397→      serviceId: services[0].id,
+   398→      workspaceId: workspace.id, createdAt: daysAgo(0),
+   399→    },
+   400→  });
+   401→
+   402→  // PENDING — another one
+   403→  await db.job.create({
+   404→    data: {
+   405→      title: 'Deep Clean - 4BR Home', description: 'Full deep cleaning of 4BR house including inside appliances and baseboards.',
+   406→      status: 'pending', priority: 'low', type: 'cleaning',
+   407→      address: '67 River Rd, Sugar Land, TX 77478',
+   408→      scheduledAt: daysFromNow(3), estimatedDuration: 360,
+   409→      customerId: customers[7].id, customerName: 'Amanda Foster', customerPhone: '+1-555-1008',
+   410→      serviceId: services[3].id,
+   411→      workspaceId: workspace.id, createdAt: daysAgo(1),
+   412→    },
+   413→  });
+   414→
+   415→  // ASSIGNED — assigned, waiting to start
+   416→  await db.job.create({
+   417→    data: {
+   418→      title: 'Clogged Bathroom Drain', description: 'Main bathroom drain is completely blocked. Customer tried drain cleaner without success.',
+   419→      status: 'assigned', priority: 'high', type: 'plumbing',
+   420→      address: '220 Elm Blvd, Houston, TX 77003',
+   421→      scheduledAt: daysFromNow(0), estimatedDuration: 120,
+   422→      customerId: customers[1].id, customerName: 'Maria Garcia', customerPhone: '+1-555-1002',
+   423→      assigneeId: emp_tech1.id, assigneeName: 'Amit Singh', assigneePhone: '+1-555-0103',
+   424→      assignmentStatus: 'pending', serviceId: services[1].id,
+   425→      workspaceId: workspace.id, createdAt: daysAgo(1),
+   426→    },
+   427→  });
+   428→
+   429→  // ASSIGNED — another
+   430→  await db.job.create({
+   431→    data: {
+   432→      title: 'AC Installation - New Unit', description: 'Install new 2-ton AC unit in the master bedroom.',
+   433→      status: 'assigned', priority: 'high', type: 'hvac',
+   434→      address: '102 Lake View Dr, Katy, TX 77494',
+   435→      scheduledAt: daysFromNow(1), estimatedDuration: 300,
+   436→      customerId: customers[8].id, customerName: 'Brian Mitchell', customerPhone: '+1-555-1009',
+   437→      assigneeId: emp_tech2.id, assigneeName: 'Deepak Rao', assigneePhone: '+1-555-0105',
+   438→      assignmentStatus: 'accepted', serviceId: services[6].id,
+   439→      workspaceId: workspace.id, createdAt: daysAgo(2),
+   440→    },
+   441→  });
+   442→
+   443→  // IN_PROGRESS
+   444→  await db.job.create({
+   445→    data: {
+   446→      title: 'Water Heater Installation', description: 'Install new tankless water heater to replace old 50-gallon tank unit.',
+   447→      status: 'in_progress', priority: 'high', type: 'plumbing',
+   448→      address: '331 Maple Drive, Houston, TX 77005',
+   449→      scheduledAt: daysAgo(0), estimatedDuration: 240, actualStartTime: hoursAgo(3),
+   450→      customerId: customers[3].id, customerName: 'Linda Chen', customerPhone: '+1-555-1004',
+   451→      assigneeId: emp_tech1.id, assigneeName: 'Amit Singh', assigneePhone: '+1-555-0103',
+   452→      serviceId: services[2].id,
+   453→      workspaceId: workspace.id, createdAt: daysAgo(2),
+   454→    },
+   455→  });
+   456→
+   457→  // IN_PROGRESS — carpet cleaning
+   458→  await db.job.create({
+   459→    data: {
+   460→      title: 'Carpet Steam Cleaning', description: 'Steam clean all carpets in 3-story home. Includes stain pre-treatment and deodorizing.',
+   461→      status: 'in_progress', priority: 'medium', type: 'cleaning',
+   462→      address: '88 Sunrise Blvd, The Woodlands, TX 77380',
+   463→      scheduledAt: daysAgo(0), estimatedDuration: 180, actualStartTime: hoursAgo(1),
+   464→      customerId: customers[9].id, customerName: 'Catherine Lee', customerPhone: '+1-555-1010',
+   465→      assigneeId: emp_tech3.id, assigneeName: 'Neha Sharma', assigneePhone: '+1-555-0106',
+   466→      serviceId: services[4].id,
+   467→      workspaceId: workspace.id, createdAt: daysAgo(3),
+   468→    },
+   469→  });
+   470→
+   471→  // COMPLETED
+   472→  const job_completed = await db.job.create({
+   473→    data: {
+   474→      title: 'Bathroom Pipe Replacement', description: 'Replace corroded copper pipes in master bathroom with PEX tubing.',
+   475→      status: 'completed', priority: 'high', type: 'plumbing',
+   476→      address: '220 Elm Blvd, Houston, TX 77003',
+   477→      scheduledAt: daysAgo(7), estimatedDuration: 300,
+   478→      actualStartTime: daysAgo(7), actualEndTime: daysAgo(6),
+   479→      customerId: customers[1].id, customerName: 'Maria Garcia', customerPhone: '+1-555-1002',
+   480→      assigneeId: emp_tech1.id, assigneeName: 'Amit Singh', assigneePhone: '+1-555-0103',
+   481→      serviceId: services[0].id,
+   482→      workspaceId: workspace.id, createdAt: daysAgo(10),
+   483→    },
+   484→  });
+   485→
+   486→  // COMPLETED
+   487→  const job_completed2 = await db.job.create({
+   488→    data: {
+   489→      title: 'Office Weekly Cleaning', description: 'Weekly cleaning for TechCorp office. Includes common areas, meeting rooms, and kitchen.',
+   490→      status: 'completed', priority: 'medium', type: 'cleaning',
+   491→      address: '1200 Innovation Pkwy, Houston, TX 77008',
+   492→      scheduledAt: daysAgo(5), estimatedDuration: 240,
+   493→      actualStartTime: daysAgo(5), actualEndTime: daysAgo(5),
+   494→      customerId: customers[6].id, customerName: 'TechCorp Office', customerPhone: '+1-555-1007',
+   495→      assigneeId: emp_tech3.id, assigneeName: 'Neha Sharma', assigneePhone: '+1-555-0106',
+   496→      serviceId: services[5].id,
+   497→      workspaceId: workspace.id, createdAt: daysAgo(8),
+   498→    },
+   499→  });
+   500→
+   501→  // COMPLETED
+   502→  const job_completed3 = await db.job.create({
+   503→    data: {
+   504→      title: 'AC Repair - No Cooling', description: 'AC unit not cooling. Diagnosed as refrigerant leak and recharged.',
+   505→      status: 'completed', priority: 'medium', type: 'hvac',
+   506→      address: '77 Cedar Lane, Houston, TX 77006',
+   507→      scheduledAt: daysAgo(12), estimatedDuration: 120,
+   508→      actualStartTime: daysAgo(12), actualEndTime: daysAgo(12),
+   509→      customerId: customers[4].id, customerName: 'Robert Kim', customerPhone: '+1-555-1005',
+   510→      assigneeId: emp_tech2.id, assigneeName: 'Deepak Rao', assigneePhone: '+1-555-0105',
+   511→      serviceId: services[7].id,
+   512→      workspaceId: workspace.id, createdAt: daysAgo(14),
+   513→    },
+   514→  });
+   515→
+   516→  // CANCELLED
+   517→  await db.job.create({
+   518→    data: {
+   519→      title: 'Sewer Line Camera Inspection', description: 'Customer requested sewer line camera inspection but cancelled after resolving issue.',
+   520→      status: 'cancelled', priority: 'low', type: 'plumbing',
+   521→      address: '89 Pine Road, Houston, TX 77004',
+   522→      scheduledAt: daysAgo(5), estimatedDuration: 120,
+   523→      customerId: customers[2].id, customerName: 'Tom Henderson', customerPhone: '+1-555-1003',
+   524→      assigneeId: emp_tech1.id, assigneeName: 'Amit Singh', assigneePhone: '+1-555-0103',
+   525→      notes: 'Customer cancelled — resolved issue on their own',
+   526→      workspaceId: workspace.id, createdAt: daysAgo(8),
+   527→    },
+   528→  });
+   529→
+   530→  console.log('  ✅ 10 jobs created (2 pending, 2 assigned, 2 in_progress, 3 completed, 1 cancelled)\n');
+   531→
+   532→  // ════════════════════════════════════════════════
+   533→  // 11. LEADS (all stages)
+   534→  // ════════════════════════════════════════════════
+   535→  console.log('🎯 Creating leads...');
+   536→  const leadData = [
+   537→    { name: 'Susan Miller', phone: '+1-555-2001', email: 'susan.m@email.com', source: 'website', status: 'new', priority: 'high', value: 850, description: 'Leaking kitchen faucet — needs same-day visit', serviceType: 'plumbing', address: '45 Birch St, Houston, TX 77007', assignedToId: emp_manager.id, followUpAt: daysFromNow(1) },
+   538→    { name: 'Derek Thompson', phone: '+1-555-2002', email: 'derek.t@email.com', source: 'referral', status: 'contacted', priority: 'medium', value: 1200, description: 'Bathroom remodel plumbing — 2 full bathrooms', serviceType: 'plumbing', address: '112 Walnut Ave, Houston, TX 77008', assignedToId: emp_tech1.id, followUpAt: daysFromNow(2) },
+   539→    { name: 'Angela Wright', phone: '+1-555-2003', email: 'angela.w@email.com', source: 'google', status: 'qualified', priority: 'high', value: 2500, description: 'Full house re-piping — 1960s galvanized pipes', serviceType: 'plumbing', address: '88 Spruce Ct, Houston, TX 77009', assignedToId: emp_owner.id, followUpAt: daysFromNow(3) },
+   540→    { name: 'Carlos Rivera', phone: '+1-555-2004', email: 'carlos.r@email.com', source: 'whatsapp', status: 'proposal', priority: 'medium', value: 3500, description: 'Commercial kitchen plumbing for new restaurant', serviceType: 'plumbing', address: '201 Ash Blvd, Houston, TX 77010', assignedToId: emp_manager.id, followUpAt: daysFromNow(1) },
+   541→    { name: 'Emily Watson', phone: '+1-555-2005', email: 'emily.w@email.com', source: 'website', status: 'won', priority: 'high', value: 3200, description: 'Water heater installation — converted to job', serviceType: 'plumbing', address: '55 Redwood Dr, Houston, TX 77011', assignedToId: emp_owner.id, convertedAt: daysAgo(10), customerId: customers[5].id },
+   542→    { name: 'Frank Lopez', phone: '+1-555-2006', email: 'frank.l@email.com', source: 'facebook', status: 'lost', priority: 'low', value: 600, description: 'Faucet replacement — went with competitor', serviceType: 'plumbing', address: '90 Poplar St, Houston, TX 77012', assignedToId: emp_tech1.id },
+   543→    { name: 'Grace Kim', phone: '+1-555-2007', email: 'grace.k@email.com', source: 'google', status: 'new', priority: 'high', value: 1800, description: 'Full house deep cleaning before moving in', serviceType: 'cleaning', address: '305 Oak Crossing, Sugar Land, TX 77479', assignedToId: emp_manager.id, followUpAt: daysFromNow(1) },
+   544→    { name: 'Henry Park', phone: '+1-555-2008', email: 'henry.p@email.com', source: 'instagram', status: 'contacted', priority: 'medium', value: 650, description: 'AC unit making strange noises — needs diagnostic', serviceType: 'hvac', address: '710 Lake Rd, Katy, TX 77450', assignedToId: emp_tech2.id, followUpAt: daysFromNow(2) },
+   545→    { name: 'Irene Davis', phone: '+1-555-2009', email: 'irene.d@email.com', source: 'website', status: 'qualified', priority: 'high', value: 4500, description: 'Interior painting — 2500 sq ft home, 4 rooms', serviceType: 'painting', address: '422 Meadow Ln, Pearland, TX 77584', assignedToId: emp_owner.id, followUpAt: daysFromNow(4) },
+   546→    { name: 'Jake Wilson', phone: '+1-555-2010', email: 'jake.w@email.com', source: 'whatsapp', status: 'proposal', priority: 'medium', value: 900, description: 'Pest control — termite inspection and treatment', serviceType: 'pest-control', address: '88 Pine Road, Houston, TX 77004', assignedToId: emp_dispatcher.id, followUpAt: daysFromNow(2) },
+   547→  ];
+   548→  for (const l of leadData) {
+   549→    await db.lead.create({
+   550→      data: {
+   551→        ...l,
+   552→        tenantId: tenant.id,
+   553→        createdAt: daysAgo(Math.floor(Math.random() * 20) + 1),
+   554→      },
+   555→    });
+   556→  }
+   557→  console.log(`  ✅ ${leadData.length} leads created (all stages)\n`);
+   558→
+   559→  // ════════════════════════════════════════════════
+   560→  // 12. INVOICES
+   561→  // ════════════════════════════════════════════════
+   562→  console.log('📄 Creating invoices...');
+   563→  await db.invoice.create({
+   564→    data: {
+   565→      number: 'INV-SOS-001', tenantId: tenant.id, jobId: job_completed.id,
+   566→      customerId: customers[1].id, employeeId: emp_tech1.id,
+   567→      amount: 850, tax: 68, discount: 0, total: 918, currency: 'USD',
+   568→      status: 'paid', dueDate: daysAgo(5), paidAt: daysAgo(3),
+   569→      itemsJson: JSON.stringify([
+   570→        { description: 'Bathroom Pipe Replacement', quantity: 1, rate: 650 },
+   571→        { description: 'Pipe fittings & PEX materials', quantity: 1, rate: 200 },
+   572→      ]),
+   573→      notes: 'Thank you for your business!', createdAt: daysAgo(6),
+   574→    },
+   575→  });
+   576→  await db.invoice.create({
+   577→    data: {
+   578→      number: 'INV-SOS-002', tenantId: tenant.id, jobId: job_completed2.id,
+   579→      customerId: customers[6].id, employeeId: emp_tech3.id,
+   580→      amount: 1400, tax: 112, discount: 100, total: 1412, currency: 'USD',
+   581→      status: 'paid', dueDate: daysAgo(2), paidAt: daysAgo(1),
+   582→      itemsJson: JSON.stringify([
+   583→        { description: 'Office Weekly Clean (4 sessions)', quantity: 4, rate: 350 },
+   584→      ]),
+   585→      notes: 'Monthly recurring — loyalty discount applied', createdAt: daysAgo(5),
+   586→    },
+   587→  });
+   588→  await db.invoice.create({
+   589→    data: {
+   590→      number: 'INV-SOS-003', tenantId: tenant.id, jobId: job_completed3.id,
+   591→      customerId: customers[4].id, employeeId: emp_tech2.id,
+   592→      amount: 320, tax: 25.6, discount: 0, total: 345.6, currency: 'USD',
+   593→      status: 'pending', dueDate: daysFromNow(14),
+   594→      itemsJson: JSON.stringify([
+   595→        { description: 'AC Repair — Diagnostic & Refrigerant Recharge', quantity: 1, rate: 250 },
+   596→        { description: 'Refrigerant R-410A (2 lbs)', quantity: 2, rate: 35 },
+   597→      ]),
+   598→      notes: 'Net 30 payment terms', createdAt: daysAgo(12),
+   599→    },
+   600→  });
+   601→  await db.invoice.create({
+   602→    data: {
+   603→      number: 'INV-SOS-004', tenantId: tenant.id,
+   604→      customerId: customers[0].id, employeeId: emp_owner.id,
+   605→      amount: 2500, tax: 200, discount: 150, total: 2550, currency: 'USD',
+   606→      status: 'overdue', dueDate: daysAgo(7),
+   607→      itemsJson: JSON.stringify([
+   608→        { description: 'Full House Painting — Interior', quantity: 1, rate: 2500 },
+   609→      ]),
+   610→      notes: 'Payment overdue — follow-up sent', createdAt: daysAgo(30),
+   611→    },
+   612→  });
+   613→  console.log('  ✅ 4 invoices created (2 paid, 1 pending, 1 overdue)\n');
+   614→
+   615→  // ════════════════════════════════════════════════
+   616→  // 13. REVIEWS
+   617→  // ════════════════════════════════════════════════
+   618→  console.log('⭐ Creating reviews...');
+   619→  const reviewData = [
+   620→    { rating: 5, comment: 'Excellent work! Amit fixed our bathroom pipes quickly and professionally. Highly recommend!', jobId: job_completed.id, customerId: customers[1].id, employeeId: emp_tech1.id },
+   621→    { rating: 4, comment: 'Good cleaning service. Office looks great. Would book again.', jobId: job_completed2.id, customerId: customers[6].id, employeeId: emp_tech3.id },
+   622→    { rating: 5, comment: 'Deepak was very knowledgeable. Fixed our AC in under 2 hours. Fair pricing too.', jobId: job_completed3.id, customerId: customers[4].id, employeeId: emp_tech2.id },
+   623→    { rating: 3, comment: 'Service was okay but arrived later than scheduled. Work quality was fine though.', customerId: customers[2].id, employeeId: emp_tech1.id },
+   624→    { rating: 5, comment: 'Rajesh provided a thorough estimate and explained everything clearly. Very professional!', customerId: customers[3].id, employeeId: emp_owner.id },
+   625→    { rating: 4, comment: 'Neha did a wonderful job with our carpet cleaning. Stains that were there for years are gone!', customerId: customers[9].id, employeeId: emp_tech3.id },
+   626→  ];
+   627→  for (const r of reviewData) {
+   628→    await db.review.create({ data: { ...r, tenantId: tenant.id } });
+   629→  }
+   630→  console.log(`  ✅ ${reviewData.length} reviews created\n`);
+   631→
+   632→  // ════════════════════════════════════════════════
+   633→  // 14. QUOTES
+   634→  // ════════════════════════════════════════════════
+   635→  console.log('📝 Creating quotes...');
+   636→  await db.quote.create({
+   637→    data: {
+   638→      title: 'Full House Re-piping Estimate',
+   639→      description: 'Complete re-piping of 1960s home with galvanized pipes. Replace with PEX tubing throughout.',
+   640→      itemsJson: JSON.stringify([
+   641→        { serviceId: services[0].id, name: 'Plumbing Repair — Re-piping', price: 2500, qty: 1 },
+   642→        { serviceId: services[2].id, name: 'Water Heater Inspection', price: 100, qty: 1 },
+   643→      ]),
+   644→      subtotal: 2600, tax: 208, taxRate: 8, discount: 100, discountType: 'fixed',
+   645→      total: 2708, status: 'sent',
+   646→      tenantId: tenant.id, customerId: customers[2].id,
+   647→      validUntil: daysFromNow(30),
+   648→    },
+   649→  });
+   650→  await db.quote.create({
+   651→    data: {
+   652→      title: 'Office Cleaning Contract — Monthly',
+   653→      description: 'Monthly commercial cleaning for 5000 sq ft office space.',
+   654→      itemsJson: JSON.stringify([
+   655→        { serviceId: services[5].id, name: 'Office Cleaning', price: 350, qty: 12 },
+   656→      ]),
+   657→      subtotal: 4200, tax: 336, taxRate: 8, discount: 200, discountType: 'fixed',
+   658→      total: 4336, status: 'accepted',
+   659→      tenantId: tenant.id, customerId: customers[6].id,
+   660→      validUntil: daysFromNow(60),
+   661→    },
+   662→  });
+   663→  await db.quote.create({
+   664→    data: {
+   665→      title: 'Interior Painting — 4BR Home',
+   666→      description: 'Full interior painting with premium paint. Includes prep work, 2 coats, and cleanup.',
+   667→      itemsJson: JSON.stringify([
+   668→        { serviceId: services[8].id, name: 'House Painting — Interior', price: 1500, qty: 1 },
+   669→        { name: 'Accent Wall (2 rooms)', price: 300, qty: 1 },
+   670→      ]),
+   671→      subtotal: 1800, tax: 144, taxRate: 8, discount: 0, discountType: 'fixed',
+   672→      total: 1944, status: 'draft',
+   673→      tenantId: tenant.id, customerId: customers[7].id,
+   674→      validUntil: daysFromNow(14),
+   675→    },
+   676→  });
+   677→  console.log('  ✅ 3 quotes created (1 sent, 1 accepted, 1 draft)\n');
+   678→
+   679→  // ════════════════════════════════════════════════
+   680→  // 15. NOTIFICATIONS
+   681→  // ════════════════════════════════════════════════
+   682→  console.log('🔔 Creating notifications...');
+   683→  const notifData = [
+   684→    { title: 'New Lead Assigned', message: 'Susan Miller has been assigned to you from website', type: 'info', userId: manager.id, tenantId: tenant.id },
+   685→    { title: 'Job Completed', message: 'Bathroom Pipe Replacement job has been completed by Amit Singh', type: 'success', userId: owner.id, tenantId: tenant.id },
+   686→    { title: 'Invoice Overdue', message: 'INV-SOS-004 is 7 days overdue. Follow-up required.', type: 'warning', userId: owner.id, tenantId: tenant.id },
+   687→    { title: 'New WhatsApp Message', message: 'You have a new message from +1-555-2004 (Carlos Rivera)', type: 'info', userId: manager.id, tenantId: tenant.id },
+   688→    { title: 'Lead Converted', message: 'Emily Watson lead has been converted to a customer!', type: 'success', userId: owner.id, tenantId: tenant.id },
+   689→    { title: 'Employee Check-in', message: 'Amit Singh has checked in at 15 Oak Street', type: 'info', userId: dispatcher.id, tenantId: tenant.id },
+   690→  ];
+   691→  for (const n of notifData) {
+   692→    await db.notification.create({ data: n });
+   693→  }
+   694→  console.log(`  ✅ ${notifData.length} notifications created\n`);
+   695→
+   696→  // ════════════════════════════════════════════════
+   697→  // 16. CHANNEL CONFIGS
+   698→  // ════════════════════════════════════════════════
+   699→  console.log('📡 Creating channel configs...');
+   700→  const channelData = [
+   701→    { channel: 'whatsapp', name: 'WhatsApp Business', configJson: '{}', status: 'active', isDefault: true, autoCreateLead: true, autoReply: true, autoReplyMessage: 'Thank you for contacting us! We will get back to you shortly.', totalLeads: 45, totalMessages: 312, lastActivityAt: hoursAgo(1) },
+   702→    { channel: 'email', name: 'Email SMTP', configJson: '{}', status: 'active', autoCreateLead: true, autoReply: false, totalLeads: 18, totalMessages: 95, lastActivityAt: hoursAgo(5) },
+   703→    { channel: 'sms', name: 'SMS Twilio', configJson: '{}', status: 'active', autoCreateLead: true, autoReply: true, autoReplyMessage: 'Thanks for your text! We will respond during business hours.', totalLeads: 12, totalMessages: 67 },
+   704→    { channel: 'instagram', name: 'Instagram DM', configJson: '{}', status: 'disconnected', autoCreateLead: true, totalLeads: 0, totalMessages: 0 },
+   705→    { channel: 'facebook', name: 'Facebook Messenger', configJson: '{}', status: 'disconnected', autoCreateLead: true, totalLeads: 0, totalMessages: 0 },
+   706→    { channel: 'google_ads', name: 'Google Ads Lead Form', configJson: '{}', status: 'disconnected', autoCreateLead: true, totalLeads: 0, totalMessages: 0 },
+   707→  ];
+   708→  for (const ch of channelData) {
+   709→    await db.channelConfig.create({ data: { ...ch, tenantId: tenant.id, workspaceId: workspace.id } });
+   710→  }
+   711→  console.log(`  ✅ ${channelData.length} channel configs created\n`);
+   712→
+   713→  // ════════════════════════════════════════════════
+   714→  // 17. CONVERSATIONS (for Inbox)
+   715→  // ════════════════════════════════════════════════
+   716→  console.log('💬 Creating conversations...');
+   717→  await db.conversation.create({
+   718→    data: {
+   719→      conversationId: 'wa_conv_001', customerPhone: '+1-555-2001', customerName: 'Susan Miller',
+   720→      channel: 'whatsapp', status: 'active', currentStage: 'intent_detected',
+   721→      intentDetected: 'plumbing_service', intentConfidence: 0.92,
+   722→      lastMessageAt: hoursAgo(1), lastMessageBody: 'I need a plumber urgently for a kitchen faucet leak',
+   723→      lastDirection: 'inbound',
+   724→      messagesJson: JSON.stringify([
+   725→        { sender: 'customer', content: 'Hi, I need help with a plumbing issue', time: hoursAgo(2) },
+   726→        { sender: 'agent', content: 'Hello! Welcome to ServiceOS Demo. How can I help you today?', time: hoursAgo(1.9) },
+   727→        { sender: 'customer', content: 'I need a plumber urgently for a kitchen faucet leak', time: hoursAgo(1) },
+   728→      ]),
+   729→      customerId: customers[0].id, tenantId: tenant.id, workspaceId: workspace.id,
+   730→    },
+   731→  });
+   732→  await db.conversation.create({
+   733→    data: {
+   734→      conversationId: 'wa_conv_002', customerPhone: '+1-555-2004', customerName: 'Carlos Rivera',
+   735→      channel: 'whatsapp', status: 'active', currentStage: 'booking',
+   736→      intentDetected: 'commercial_plumbing', intentConfidence: 0.88,
+   737→      lastMessageAt: hoursAgo(3), lastMessageBody: 'Can you send someone for a site visit this week?',
+   738→      lastDirection: 'inbound',
+   739→      messagesJson: JSON.stringify([
+   740→        { sender: 'customer', content: 'Hello, I am opening a new restaurant and need commercial plumbing', time: hoursAgo(5) },
+   741→        { sender: 'agent', content: 'That sounds exciting! We specialize in commercial plumbing. What is the address?', time: hoursAgo(4.5) },
+   742→        { sender: 'customer', content: '201 Ash Blvd, Houston. Can you send someone for a site visit this week?', time: hoursAgo(3) },
+   743→      ]),
+   744→      customerId: null, tenantId: tenant.id, workspaceId: workspace.id,
+   745→    },
+   746→  });
+   747→  await db.conversation.create({
+   748→    data: {
+   749→      conversationId: 'email_conv_001', customerPhone: '+1-555-1003', customerName: 'Tom Henderson',
+   750→      channel: 'email', status: 'completed', currentStage: 'completed',
+   751→      lastMessageAt: daysAgo(5), lastMessageBody: 'Thank you for the quick response. I will book again next time.',
+   752→      lastDirection: 'inbound',
+   753→      messagesJson: JSON.stringify([
+   754→        { sender: 'customer', content: 'Do you offer sewer line inspections?', time: daysAgo(7) },
+   755→        { sender: 'agent', content: 'Yes! We offer camera inspections for $200. Would you like to schedule one?', time: daysAgo(6) },
+   756→        { sender: 'customer', content: 'Thank you for the quick response. I will book again next time.', time: daysAgo(5) },
+   757→      ]),
+   758→      customerId: customers[2].id, tenantId: tenant.id, workspaceId: workspace.id,
+   759→    },
+   760→  });
+   761→  console.log('  ✅ 3 conversations created\n');
+   762→
+   763→  // ════════════════════════════════════════════════
+   764→  // 18. WORKFLOW AUTOMATIONS
+   765→  // ════════════════════════════════════════════════
+   766→  console.log('⚡ Creating workflow automations...');
+   767→  await db.workflowAutomation.create({
+   768→    data: {
+   769→      name: 'New Lead WhatsApp Notification',
+   770→      description: 'Send WhatsApp notification to owner when a new lead is created',
+   771→      triggerType: 'lead.created',
+   772→      conditionsJson: JSON.stringify([{ field: 'priority', operator: 'equals', value: 'high' }]),
+   773→      actionsJson: JSON.stringify([
+   774→        { type: 'send_whatsapp', config: { recipient: '+1-555-0101', template: 'new_lead_alert' } },
+   775→      ]),
+   776→      active: true, executionCount: 23, lastExecutedAt: daysAgo(1), lastExecutionStatus: 'success',
+   777→      tagsJson: '["notifications", "whatsapp"]',
+   778→      tenantId: tenant.id, workspaceId: workspace.id, createdById: owner.id,
+   779→    },
+   780→  });
+   781→  await db.workflowAutomation.create({
+   782→    data: {
+   783→      name: 'Job Completion Review Request',
+   784→      description: 'Automatically send review request to customer after job completion',
+   785→      triggerType: 'job.completed',
+   786→      conditionsJson: '[]',
+   787→      actionsJson: JSON.stringify([
+   788→        { type: 'send_whatsapp', config: { template: 'review_request' } },
+   789→      ]),
+   790→      active: true, executionCount: 45, lastExecutedAt: daysAgo(2), lastExecutionStatus: 'success',
+   791→      tagsJson: '["reviews", "automation"]',
+   792→      tenantId: tenant.id, workspaceId: workspace.id, createdById: owner.id,
+   793→    },
+   794→  });
+   795→  await db.workflowAutomation.create({
+   796→    data: {
+   797→      name: 'Overdue Invoice Reminder',
+   798→      description: 'Send payment reminder for invoices overdue by 3+ days',
+   799→      triggerType: 'invoice.overdue',
+   800→      triggerConfigJson: JSON.stringify({ daysOverdue: 3 }),
+   801→      conditionsJson: '[]',
+   802→      actionsJson: JSON.stringify([
+   803→        { type: 'send_email', config: { template: 'payment_reminder' } },
+   804→        { type: 'send_whatsapp', config: { template: 'payment_reminder_wa' } },
+   805→      ]),
+   806→      active: true, executionCount: 8, lastExecutedAt: daysAgo(3), lastExecutionStatus: 'success',
+   807→      tagsJson: '["billing", "reminders"]',
+   808→      tenantId: tenant.id, workspaceId: workspace.id, createdById: owner.id,
+   809→    },
+   810→  });
+   811→  console.log('  ✅ 3 workflow automations created\n');
+   812→
+   813→  // ════════════════════════════════════════════════
+   814→  // 19. FORMS
+   815→  // ════════════════════════════════════════════════
+   816→  console.log('📋 Creating forms...');
+   817→  await db.form.create({
+   818→    data: {
+   819→      name: 'Lead Capture Form', description: 'Website lead capture form for all services',
+   820→      type: 'lead_capture', status: 'active',
+   821→      fieldsJson: JSON.stringify([
+   822→        { id: 'f1', name: 'name', label: 'Full Name', type: 'text', required: true },
+   823→        { id: 'f2', name: 'phone', label: 'Phone Number', type: 'tel', required: true },
+   824→        { id: 'f3', name: 'email', label: 'Email Address', type: 'email', required: false },
+   825→        { id: 'f4', name: 'service', label: 'Service Needed', type: 'select', options: ['Plumbing', 'Cleaning', 'HVAC', 'Painting', 'Pest Control'], required: true },
+   826→        { id: 'f5', name: 'message', label: 'Describe Your Issue', type: 'textarea', required: false },
+   827→      ]),
+   828→      submissionActions: '["create_lead"]',
+   829→      welcomeMessage: 'Welcome! Tell us about your service needs.',
+   830→      completionMessage: 'Thank you! We will contact you shortly.',
+   831→      submissions: 67, conversionRate: 0.72,
+   832→      tenantId: tenant.id, workspaceId: workspace.id, createdById: owner.id,
+   833→    },
+   834→  });
+   835→  await db.form.create({
+   836→    data: {
+   837→      name: 'Booking Request Form', description: 'Quick booking request form',
+   838→      type: 'booking', status: 'active',
+   839→      fieldsJson: JSON.stringify([
+   840→        { id: 'f1', name: 'name', label: 'Full Name', type: 'text', required: true },
+   841→        { id: 'f2', name: 'phone', label: 'Phone Number', type: 'tel', required: true },
+   842→        { id: 'f3', name: 'date', label: 'Preferred Date', type: 'date', required: true },
+   843→        { id: 'f4', name: 'time', label: 'Preferred Time', type: 'time', required: true },
+   844→        { id: 'f5', name: 'service', label: 'Service', type: 'select', options: ['Plumbing', 'Cleaning', 'HVAC'], required: true },
+   845→      ]),
+   846→      submissionActions: '["create_lead", "create_booking"]',
+   847→      welcomeMessage: 'Book a service appointment!',
+   848→      completionMessage: 'Your booking request has been received. We will confirm shortly!',
+   849→      submissions: 34, conversionRate: 0.85,
+   850→      tenantId: tenant.id, workspaceId: workspace.id, createdById: manager.id,
+   851→    },
+   852→  });
+   853→  console.log('  ✅ 2 forms created\n');
+   854→
+   855→  // ════════════════════════════════════════════════
+   856→  // 20. RESOURCES
+   857→  // ════════════════════════════════════════════════
+   858→  console.log('🚗 Creating resources...');
+   859→  const resourceData = [
+   860→    { name: 'Service Van #1', phone: '', type: 'vehicle', status: 'available', skills: '["plumbing", "tool_storage"]', location: 'Houston, TX' },
+   861→    { name: 'Service Van #2', phone: '', type: 'vehicle', status: 'available', skills: '["hvac", "equipment"]', location: 'Katy, TX' },
+   862→    { name: 'Service Van #3', phone: '', type: 'vehicle', status: 'busy', skills: '["cleaning", "supplies"]', location: 'Sugar Land, TX' },
+   863→    { name: 'Ravi Shetty', phone: '+1-555-0107', type: 'driver', status: 'available', skills: '["driving", "delivery"]', rating: 4.4, completedJobs: 55, location: 'Houston, TX' },
+   864→    { name: 'Portable Generator', phone: '', type: 'equipment', status: 'available', skills: '["power", "emergency"]', location: 'Warehouse' },
+   865→  ];
+   866→  for (const r of resourceData) {
+   867→    await db.resource.create({ data: { ...r, workspaceId: workspace.id } });
+   868→  }
+   869→  console.log(`  ✅ ${resourceData.length} resources created\n`);
+   870→
+   871→  // ════════════════════════════════════════════════
+   872→  // 21. AUDIT LOGS
+   873→  // ════════════════════════════════════════════════
+   874→  console.log('📜 Creating audit logs...');
+   875→  const auditData = [
+   876→    { userId: owner.id, action: 'user.login', resourceType: 'auth', metadataJson: JSON.stringify({ ip: '192.168.1.1', userAgent: 'Chrome/120' }) },
+   877→    { userId: manager.id, action: 'lead.created', resourceType: 'lead', metadataJson: JSON.stringify({ leadName: 'Susan Miller', source: 'website' }) },
+   878→    { userId: owner.id, action: 'job.assigned', resourceType: 'job', metadataJson: JSON.stringify({ jobTitle: 'Clogged Bathroom Drain', assignee: 'Amit Singh' }) },
+   879→    { userId: technician.id, action: 'job.started', resourceType: 'job', metadataJson: JSON.stringify({ jobTitle: 'Water Heater Installation' }) },
+   880→    { userId: owner.id, action: 'invoice.created', resourceType: 'invoice', metadataJson: JSON.stringify({ invoiceNumber: 'INV-SOS-001' }) },
+   881→    { userId: superAdmin.id, action: 'tenant.settings_updated', resourceType: 'tenant', metadataJson: JSON.stringify({ tenant: 'ServiceOS Demo Corp' }) },
+   882→  ];
+   883→  for (const a of auditData) {
+   884→    await db.auditLog.create({ data: { ...a, createdAt: daysAgo(Math.floor(Math.random() * 7)) } });
+   885→  }
+   886→  console.log(`  ✅ ${auditData.length} audit logs created\n`);
+   887→
+   888→  // ════════════════════════════════════════════════
+   889→  // 22. CUSTOMER JOURNEYS
+   890→  // ════════════════════════════════════════════════
+   891→  console.log('🗺️ Creating customer journeys...');
+   892→  await db.customerJourney.create({
+   893→    data: {
+   894→      customerId: customers[1].id, jobId: job_completed.id,
+   895→      currentStage: 'completed', previousStage: 'in_progress',
+   896→      stageChangedAt: daysAgo(6), automationActive: false,
+   897→      completedStagesJson: JSON.stringify([
+   898→        { stage: 'lead', at: daysAgo(10) },
+   899→        { stage: 'booking', at: daysAgo(8) },
+   900→        { stage: 'assigned', at: daysAgo(7) },
+   901→        { stage: 'in_progress', at: daysAgo(7) },
+   902→        { stage: 'completed', at: daysAgo(6) },
+   903→      ]),
+   904→      tenantId: tenant.id,
+   905→    },
+   906→  });
+   907→  await db.customerJourney.create({
+   908→    data: {
+   909→      customerId: customers[3].id,
+   910→      currentStage: 'in_progress', previousStage: 'assigned',
+   911→      stageChangedAt: hoursAgo(3), automationActive: true,
+   912→      completedStagesJson: JSON.stringify([
+   913→        { stage: 'lead', at: daysAgo(2) },
+   914→        { stage: 'booking', at: daysAgo(1) },
+   915→        { stage: 'assigned', at: daysAgo(1) },
+   916→        { stage: 'in_progress', at: hoursAgo(3) },
+   917→      ]),
+   918→      nextActionAt: hoursAgo(0),
+   919→      nextActionType: 'whatsapp_message',
+   920→      nextActionData: JSON.stringify({ template: 'job_status_update', message: 'Your water heater installation is in progress!' }),
+   921→      tenantId: tenant.id,
+   922→    },
+   923→  });
+   924→  console.log('  ✅ 2 customer journeys created\n');
+   925→
+   926→  // ════════════════════════════════════════════════
+   927→  // SUMMARY
+   928→  // ════════════════════════════════════════════════
+   929→  console.log('='.repeat(70));
+   930→  console.log('🎉 SEED COMPLETE — ServiceOS CRM Database');
+   931→  console.log('='.repeat(70));
+   932→  console.log('');
+   933→  console.log('👤 USERS (5):');
+   934→  console.log('  1. SuperAdmin: admin@serviceos.com / SuperAdmin@123 (Platform Admin)');
+   935→  console.log('  2. Owner:      rajesh@serviceos-demo.com / Owner@123');
+   936→  console.log('  3. Manager:    priya@serviceos-demo.com / Manager@123');
+   937→  console.log('  4. Technician: amit@serviceos-demo.com / Technician@123');
+   938→  console.log('  5. Dispatcher: suresh@serviceos-demo.com / Dispatch@123');
+   939→  console.log('');
+   940→  console.log('📊 DATA SUMMARY:');
+   941→  console.log(`  Tenants:        1 (ServiceOS Demo Corp)`);
+   942→  console.log(`  Workspaces:     1`);
+   943→  console.log(`  Subscriptions:  1 (Growth Plan)`);
+   944→  console.log(`  Services:       ${services.length}`);
+   945→  console.log(`  Employees:      ${employees.length}`);
+   946→  console.log(`  Customers:      ${customers.length}`);
+   947→  console.log(`  Jobs:           10 (all lifecycle states)`);
+   948→  console.log(`  Leads:          ${leadData.length} (all stages)`);
+   949→  console.log(`  Invoices:       4 (paid, pending, overdue)`);
+   950→  console.log(`  Reviews:        ${reviewData.length}`);
+   951→  console.log(`  Quotes:         3`);
+   952→  console.log(`  Notifications:  ${notifData.length}`);
+   953→  console.log(`  Channels:       ${channelData.length}`);
+   954→  console.log(`  Conversations:  3`);
+   955→  console.log(`  Automations:    3`);
+   956→  console.log(`  Forms:          2`);
+   957→  console.log(`  Resources:      ${resourceData.length}`);
+   958→  console.log(`  Audit Logs:     ${auditData.length}`);
+   959→  console.log(`  Journeys:       2`);
+   960→  console.log('='.repeat(70));
+   961→}
+   962→
+   963→main()
+   964→  .catch(async (e) => {
+   965→    console.error('❌ Seeding failed:', e);
+   966→    await db.$disconnect();
+   967→    process.exit(1);
+   968→  })
+   969→  .finally(async () => {
+   970→    await db.$disconnect();
+   971→  });
+   972→

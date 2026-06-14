@@ -1,0 +1,858 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useRef, useCallback } from 'react';
+     4→import {
+     5→  Contact, Upload, Download, Plus, Search, Filter, Edit, Trash2,
+     6→  MoreVertical, FileSpreadsheet, CheckCircle2, AlertCircle, X,
+     7→  Loader2, Mail, Phone, Building2, Tag, ChevronDown,
+     8→} from 'lucide-react';
+     9→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    10→import { Button } from '@/components/ui/button';
+    11→import { Badge } from '@/components/ui/badge';
+    12→import { Input } from '@/components/ui/input';
+    13→import { Label } from '@/components/ui/label';
+    14→import {
+    15→  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+    16→} from '@/components/ui/dialog';
+    17→import {
+    18→  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+    19→} from '@/components/ui/table';
+    20→import {
+    21→  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+    22→} from '@/components/ui/dropdown-menu';
+    23→import {
+    24→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    25→} from '@/components/ui/select';
+    26→import { Checkbox } from '@/components/ui/checkbox';
+    27→import { Separator } from '@/components/ui/separator';
+    28→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    29→import { ScrollArea } from '@/components/ui/scroll-area';
+    30→import { toast } from 'sonner';
+    31→import { cn } from '@/lib/utils';
+    32→
+    33→// ─── Types ──────────────────────────────────────────────────────────────────
+    34→
+    35→interface Contact {
+    36→  id: string;
+    37→  name: string;
+    38→  email: string | null;
+    39→  phone: string | null;
+    40→  company: string | null;
+    41→  tags: string | null;
+    42→  createdAt: string;
+    43→  updatedAt: string;
+    44→}
+    45→
+    46→interface ImportStats {
+    47→  total: number;
+    48→  imported: number;
+    49→  duplicates: number;
+    50→  skipped: number;
+    51→}
+    52→
+    53→// ─── Component ──────────────────────────────────────────────────────────────
+    54→
+    55→export function ContactsView() {
+    56→  const [contacts, setContacts] = useState<Contact[]>([]);
+    57→  const [loading, setLoading] = useState(true);
+    58→  const [searchQuery, setSearchQuery] = useState('');
+    59→  const [tagFilter, setTagFilter] = useState<string>('all');
+    60→  const [allTags, setAllTags] = useState<string[]>([]);
+    61→  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    62→
+    63→  // Dialogs
+    64→  const [addDialogOpen, setAddDialogOpen] = useState(false);
+    65→  const [editDialogOpen, setEditDialogOpen] = useState(false);
+    66→  const [importDialogOpen, setImportDialogOpen] = useState(false);
+    67→  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+    68→  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    69→  const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null);
+    70→
+    71→  // Form state
+    72→  const [formName, setFormName] = useState('');
+    73→  const [formEmail, setFormEmail] = useState('');
+    74→  const [formPhone, setFormPhone] = useState('');
+    75→  const [formCompany, setFormCompany] = useState('');
+    76→  const [formTags, setFormTags] = useState('');
+    77→  const [editingContact, setEditingContact] = useState<Contact | null>(null);
+    78→  const [saving, setSaving] = useState(false);
+    79→
+    80→  // Import state
+    81→  const [importFile, setImportFile] = useState<File | null>(null);
+    82→  const [importPreview, setImportPreview] = useState<Record<string, string>[]>([]);
+    83→  const [importHeaders, setImportHeaders] = useState<string[]>([]);
+    84→  const [fieldMapping, setFieldMapping] = useState<Record<string, string>>({});
+    85→  const [importing, setImporting] = useState(false);
+    86→  const [importStats, setImportStats] = useState<ImportStats | null>(null);
+    87→  const fileInputRef = useRef<HTMLInputElement>(null);
+    88→
+    89→  // Export state
+    90→  const [exportFormat, setExportFormat] = useState<string>('csv');
+    91→
+    92→  // ─── Fetch contacts ─────────────────────────────────────────────────────
+    93→
+    94→  const fetchContacts = useCallback(async () => {
+    95→    try {
+    96→      setLoading(true);
+    97→      const res = await fetch('/api/contacts');
+    98→      if (res.ok) {
+    99→        const data = await res.json();
+   100→        setContacts(data);
+   101→        // Extract unique tags
+   102→        const tagSet = new Set<string>();
+   103→        data.forEach((c: Contact) => {
+   104→          if (c.tags) {
+   105→            c.tags.split(',').map(t => t.trim()).filter(Boolean).forEach(tagSet.add, tagSet);
+   106→          }
+   107→        });
+   108→        setAllTags(Array.from(tagSet).sort());
+   109→      }
+   110→    } catch {
+   111→      toast.error('Failed to load contacts');
+   112→    } finally {
+   113→      setLoading(false);
+   114→    }
+   115→  }, []);
+   116→
+   117→  useEffect(() => { fetchContacts(); }, [fetchContacts]);
+   118→
+   119→  // ─── Filtered contacts ──────────────────────────────────────────────────
+   120→
+   121→  const filteredContacts = contacts.filter(c => {
+   122→    const q = searchQuery.toLowerCase();
+   123→    if (q && !c.name.toLowerCase().includes(q) && !(c.email || '').toLowerCase().includes(q) && !(c.phone || '').toLowerCase().includes(q) && !(c.company || '').toLowerCase().includes(q)) {
+   124→      return false;
+   125→    }
+   126→    if (tagFilter !== 'all') {
+   127→      const contactTags = (c.tags || '').split(',').map(t => t.trim());
+   128→      if (!contactTags.includes(tagFilter)) return false;
+   129→    }
+   130→    return true;
+   131→  });
+   132→
+   133→  // ─── Add/Edit contact ───────────────────────────────────────────────────
+   134→
+   135→  const handleSave = async () => {
+   136→    if (!formName.trim()) {
+   137→      toast.error('Name is required');
+   138→      return;
+   139→    }
+   140→    setSaving(true);
+   141→    try {
+   142→      const body = {
+   143→        name: formName.trim(),
+   144→        email: formEmail.trim() || null,
+   145→        phone: formPhone.trim() || null,
+   146→        company: formCompany.trim() || null,
+   147→        tags: formTags.trim() || null,
+   148→      };
+   149→
+   150→      const url = editingContact ? `/api/contacts?id=${editingContact.id}` : '/api/contacts';
+   151→      const method = editingContact ? 'PUT' : 'POST';
+   152→
+   153→      const res = await fetch(url, {
+   154→        method,
+   155→        headers: { 'Content-Type': 'application/json' },
+   156→        body: JSON.stringify(body),
+   157→      });
+   158→
+   159→      if (res.ok) {
+   160→        toast.success(editingContact ? 'Contact updated' : 'Contact created');
+   161→        resetForm();
+   162→        fetchContacts();
+   163→      } else {
+   164→        const err = await res.json();
+   165→        toast.error(err.error || 'Failed to save contact');
+   166→      }
+   167→    } catch {
+   168→      toast.error('Failed to save contact');
+   169→    } finally {
+   170→      setSaving(false);
+   171→    }
+   172→  };
+   173→
+   174→  const resetForm = () => {
+   175→    setFormName('');
+   176→    setFormEmail('');
+   177→    setFormPhone('');
+   178→    setFormCompany('');
+   179→    setFormTags('');
+   180→    setEditingContact(null);
+   181→    setAddDialogOpen(false);
+   182→    setEditDialogOpen(false);
+   183→  };
+   184→
+   185→  const openEditDialog = (contact: Contact) => {
+   186→    setEditingContact(contact);
+   187→    setFormName(contact.name);
+   188→    setFormEmail(contact.email || '');
+   189→    setFormPhone(contact.phone || '');
+   190→    setFormCompany(contact.company || '');
+   191→    setFormTags(contact.tags || '');
+   192→    setEditDialogOpen(true);
+   193→  };
+   194→
+   195→  // ─── Delete contact ─────────────────────────────────────────────────────
+   196→
+   197→  const handleDelete = async () => {
+   198→    if (!deleteTarget) return;
+   199→    try {
+   200→      const res = await fetch(`/api/contacts?id=${deleteTarget.id}`, { method: 'DELETE' });
+   201→      if (res.ok) {
+   202→        toast.success('Contact deleted');
+   203→        setDeleteDialogOpen(false);
+   204→        setDeleteTarget(null);
+   205→        fetchContacts();
+   206→      } else {
+   207→        toast.error('Failed to delete contact');
+   208→      }
+   209→    } catch {
+   210→      toast.error('Failed to delete contact');
+   211→    }
+   212→  };
+   213→
+   214→  const handleBulkDelete = async () => {
+   215→    if (selectedIds.size === 0) return;
+   216→    try {
+   217→      const ids = Array.from(selectedIds);
+   218→      await Promise.all(ids.map(id => fetch(`/api/contacts?id=${id}`, { method: 'DELETE' })));
+   219→      toast.success(`${ids.length} contacts deleted`);
+   220→      setSelectedIds(new Set());
+   221→      fetchContacts();
+   222→    } catch {
+   223→      toast.error('Failed to delete contacts');
+   224→    }
+   225→  };
+   226→
+   227→  // ─── Import ─────────────────────────────────────────────────────────────
+   228→
+   229→  const CONTACT_FIELDS = [
+   230→    { key: 'name', label: 'Name', required: true },
+   231→    { key: 'email', label: 'Email' },
+   232→    { key: 'phone', label: 'Phone' },
+   233→    { key: 'company', label: 'Company' },
+   234→    { key: 'tags', label: 'Tags' },
+   235→  ];
+   236→
+   237→  const parseCSV = (text: string): Record<string, string>[] => {
+   238→    const lines = text.split(/\r?\n/).filter(Boolean);
+   239→    if (lines.length < 2) return [];
+   240→    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+   241→    return lines.slice(1).map(line => {
+   242→      const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+   243→      const row: Record<string, string> = {};
+   244→      headers.forEach((h, i) => { row[h] = values[i] || ''; });
+   245→      return row;
+   246→    });
+   247→  };
+   248→
+   249→  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+   250→    const file = e.target.files?.[0];
+   251→    if (!file) return;
+   252→    setImportFile(file);
+   253→    setImportStats(null);
+   254→
+   255→    const ext = file.name.split('.').pop()?.toLowerCase();
+   256→    if (ext === 'csv') {
+   257→      const text = await file.text();
+   258→      const rows = parseCSV(text);
+   259→      if (rows.length === 0) {
+   260→        toast.error('No data found in CSV file');
+   261→        return;
+   262→      }
+   263→      const headers = Object.keys(rows[0]);
+   264→      setImportHeaders(headers);
+   265→      setImportPreview(rows.slice(0, 10));
+   266→      // Auto-map fields
+   267→      const mapping: Record<string, string> = {};
+   268→      headers.forEach(h => {
+   269→        const lower = h.toLowerCase();
+   270→        if (lower.includes('name') || lower === 'full name' || lower === 'first name') mapping[h] = 'name';
+   271→        else if (lower.includes('email') || lower === 'e-mail') mapping[h] = 'email';
+   272→        else if (lower.includes('phone') || lower.includes('mobile') || lower.includes('tel')) mapping[h] = 'phone';
+   273→        else if (lower.includes('company') || lower.includes('organization') || lower.includes('org')) mapping[h] = 'company';
+   274→        else if (lower.includes('tag') || lower.includes('label') || lower.includes('category')) mapping[h] = 'tags';
+   275→        else mapping[h] = '_skip';
+   276→      });
+   277→      setFieldMapping(mapping);
+   278→    } else {
+   279→      // For xlsx/xls, send to API for parsing
+   280→      const formData = new FormData();
+   281→      formData.append('file', file);
+   282→      try {
+   283→        const res = await fetch('/api/contacts/import?preview=true', { method: 'POST', body: formData });
+   284→        if (res.ok) {
+   285→          const data = await res.json();
+   286→          setImportHeaders(data.headers || []);
+   287→          setImportPreview(data.preview || []);
+   288→          setFieldMapping(data.mapping || {});
+   289→        } else {
+   290→          toast.error('Failed to parse file. Please use CSV format.');
+   291→        }
+   292→      } catch {
+   293→        toast.error('Failed to parse file');
+   294→      }
+   295→    }
+   296→  };
+   297→
+   298→  const handleImport = async () => {
+   299→    if (importPreview.length === 0) return;
+   300→    setImporting(true);
+   301→    try {
+   302→      // For CSV, map fields on client side and send JSON
+   303→      const ext = importFile?.name.split('.').pop()?.toLowerCase();
+   304→
+   305→      if (ext === 'csv') {
+   306→        const text = await importFile!.text();
+   307→        const allRows = parseCSV(text);
+   308→        const mappedContacts = allRows.map(row => {
+   309→          const contact: Record<string, string | null> = {};
+   310→          CONTACT_FIELDS.forEach(f => {
+   311→            const sourceHeader = Object.entries(fieldMapping).find(([, target]) => target === f.key)?.[0];
+   312→            contact[f.key] = sourceHeader ? (row[sourceHeader] || null) : null;
+   313→          });
+   314→          return contact;
+   315→        }).filter(c => c.name);
+   316→
+   317→        const res = await fetch('/api/contacts/import', {
+   318→          method: 'POST',
+   319→          headers: { 'Content-Type': 'application/json' },
+   320→          body: JSON.stringify({ contacts: mappedContacts }),
+   321→        });
+   322→        if (res.ok) {
+   323→          const stats = await res.json();
+   324→          setImportStats(stats);
+   325→          toast.success(`Imported ${stats.imported} contacts`);
+   326→          fetchContacts();
+   327→        } else {
+   328→          toast.error('Import failed');
+   329→        }
+   330→      } else {
+   331→        const formData = new FormData();
+   332→        if (importFile) formData.append('file', importFile);
+   333→        formData.append('mapping', JSON.stringify(fieldMapping));
+   334→        const res = await fetch('/api/contacts/import', { method: 'POST', body: formData });
+   335→        if (res.ok) {
+   336→          const stats = await res.json();
+   337→          setImportStats(stats);
+   338→          toast.success(`Imported ${stats.imported} contacts`);
+   339→          fetchContacts();
+   340→        } else {
+   341→          toast.error('Import failed');
+   342→        }
+   343→      }
+   344→    } catch {
+   345→      toast.error('Import failed');
+   346→    } finally {
+   347→      setImporting(false);
+   348→    }
+   349→  };
+   350→
+   351→  // ─── Export ─────────────────────────────────────────────────────────────
+   352→
+   353→  const handleExport = async () => {
+   354→    try {
+   355→      const params = new URLSearchParams();
+   356→      params.set('format', exportFormat);
+   357→      if (selectedIds.size > 0) {
+   358→        params.set('ids', Array.from(selectedIds).join(','));
+   359→      }
+   360→      if (tagFilter !== 'all') {
+   361→        params.set('tag', tagFilter);
+   362→      }
+   363→      const res = await fetch(`/api/contacts/export?${params}`);
+   364→      if (res.ok) {
+   365→        const blob = await res.blob();
+   366→        const url = URL.createObjectURL(blob);
+   367→        const a = document.createElement('a');
+   368→        a.href = url;
+   369→        a.download = `contacts.${exportFormat}`;
+   370→        a.click();
+   371→        URL.revokeObjectURL(url);
+   372→        toast.success('Export complete');
+   373→        setExportDialogOpen(false);
+   374→      } else {
+   375→        toast.error('Export failed');
+   376→      }
+   377→    } catch {
+   378→      toast.error('Export failed');
+   379→    }
+   380→  };
+   381→
+   382→  // ─── Selection ──────────────────────────────────────────────────────────
+   383→
+   384→  const toggleSelect = (id: string) => {
+   385→    const next = new Set(selectedIds);
+   386→    if (next.has(id)) next.delete(id); else next.add(id);
+   387→    setSelectedIds(next);
+   388→  };
+   389→
+   390→  const toggleSelectAll = () => {
+   391→    if (selectedIds.size === filteredContacts.length) {
+   392→      setSelectedIds(new Set());
+   393→    } else {
+   394→      setSelectedIds(new Set(filteredContacts.map(c => c.id)));
+   395→    }
+   396→  };
+   397→
+   398→  // ─── Format date ────────────────────────────────────────────────────────
+   399→
+   400→  const formatDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+   401→
+   402→  // ─── Render ─────────────────────────────────────────────────────────────
+   403→
+   404→  return (
+   405→    <div className="space-y-6 max-w-7xl mx-auto">
+   406→      {/* Header */}
+   407→      <div className="flex items-center justify-between">
+   408→        <div className="flex items-center gap-3">
+   409→          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600">
+   410→            <Contact className="size-5 text-white" />
+   411→          </div>
+   412→          <div>
+   413→            <h2 className="text-xl font-bold">Contacts</h2>
+   414→            <p className="text-sm text-muted-foreground">Manage your contacts with import & export</p>
+   415→          </div>
+   416→        </div>
+   417→        <div className="flex items-center gap-2">
+   418→          <Button variant="outline" onClick={() => setImportDialogOpen(true)}><Upload className="size-4 mr-1.5" /> Import</Button>
+   419→          <Button variant="outline" onClick={() => setExportDialogOpen(true)}><Download className="size-4 mr-1.5" /> Export</Button>
+   420→          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => { resetForm(); setAddDialogOpen(true); }}><Plus className="size-4 mr-1.5" /> Add Contact</Button>
+   421→        </div>
+   422→      </div>
+   423→
+   424→      {/* Stats */}
+   425→      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   426→        <Card>
+   427→          <CardContent className="p-4">
+   428→            <div className="flex items-center gap-3">
+   429→              <div className="size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+   430→                <Contact className="size-4 text-emerald-600" />
+   431→              </div>
+   432→              <div>
+   433→                <p className="text-2xl font-bold">{contacts.length}</p>
+   434→                <p className="text-xs text-muted-foreground">Total Contacts</p>
+   435→              </div>
+   436→            </div>
+   437→          </CardContent>
+   438→        </Card>
+   439→        <Card>
+   440→          <CardContent className="p-4">
+   441→            <div className="flex items-center gap-3">
+   442→              <div className="size-9 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+   443→                <Mail className="size-4 text-blue-600" />
+   444→              </div>
+   445→              <div>
+   446→                <p className="text-2xl font-bold">{contacts.filter(c => c.email).length}</p>
+   447→                <p className="text-xs text-muted-foreground">With Email</p>
+   448→              </div>
+   449→            </div>
+   450→          </CardContent>
+   451→        </Card>
+   452→        <Card>
+   453→          <CardContent className="p-4">
+   454→            <div className="flex items-center gap-3">
+   455→              <div className="size-9 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+   456→                <Phone className="size-4 text-purple-600" />
+   457→              </div>
+   458→              <div>
+   459→                <p className="text-2xl font-bold">{contacts.filter(c => c.phone).length}</p>
+   460→                <p className="text-xs text-muted-foreground">With Phone</p>
+   461→              </div>
+   462→            </div>
+   463→          </CardContent>
+   464→        </Card>
+   465→        <Card>
+   466→          <CardContent className="p-4">
+   467→            <div className="flex items-center gap-3">
+   468→              <div className="size-9 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+   469→                <Tag className="size-4 text-amber-600" />
+   470→              </div>
+   471→              <div>
+   472→                <p className="text-2xl font-bold">{allTags.length}</p>
+   473→                <p className="text-xs text-muted-foreground">Tags</p>
+   474→              </div>
+   475→            </div>
+   476→          </CardContent>
+   477→        </Card>
+   478→      </div>
+   479→
+   480→      {/* Search and filters */}
+   481→      <Card>
+   482→        <CardContent className="p-4">
+   483→          <div className="flex flex-wrap items-center gap-3">
+   484→            <div className="relative flex-1 min-w-[200px]">
+   485→              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   486→              <Input
+   487→                placeholder="Search by name, email, phone, or company..."
+   488→                value={searchQuery}
+   489→                onChange={e => setSearchQuery(e.target.value)}
+   490→                className="pl-9"
+   491→              />
+   492→            </div>
+   493→            <Select value={tagFilter} onValueChange={setTagFilter}>
+   494→              <SelectTrigger className="w-40"><SelectValue placeholder="All Tags" /></SelectTrigger>
+   495→              <SelectContent>
+   496→                <SelectItem value="all">All Tags</SelectItem>
+   497→                {allTags.map(tag => <SelectItem key={tag} value={tag}>{tag}</SelectItem>)}
+   498→              </SelectContent>
+   499→            </Select>
+   500→            {selectedIds.size > 0 && (
+   501→              <Button variant="destructive" size="sm" onClick={handleBulkDelete}>
+   502→                <Trash2 className="size-3 mr-1" /> Delete ({selectedIds.size})
+   503→              </Button>
+   504→            )}
+   505→          </div>
+   506→        </CardContent>
+   507→      </Card>
+   508→
+   509→      {/* Contact table */}
+   510→      <Card>
+   511→        <CardContent className="p-0">
+   512→          {loading ? (
+   513→            <div className="flex items-center justify-center py-16">
+   514→              <Loader2 className="size-8 animate-spin text-emerald-500" />
+   515→            </div>
+   516→          ) : filteredContacts.length === 0 ? (
+   517→            <div className="flex flex-col items-center justify-center py-16 gap-4">
+   518→              <div className="size-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+   519→                <Contact className="size-8 text-emerald-600" />
+   520→              </div>
+   521→              <h3 className="text-lg font-semibold">{searchQuery || tagFilter !== 'all' ? 'No matching contacts' : 'No contacts yet'}</h3>
+   522→              <p className="text-sm text-muted-foreground max-w-md">
+   523→                {searchQuery || tagFilter !== 'all'
+   524→                  ? 'Try adjusting your search or filter criteria.'
+   525→                  : 'Add contacts manually or import from a CSV/XLSX file to get started.'}
+   526→              </p>
+   527→              {!searchQuery && tagFilter === 'all' && (
+   528→                <div className="flex gap-2">
+   529→                  <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => { resetForm(); setAddDialogOpen(true); }}><Plus className="size-4 mr-1.5" /> Add Contact</Button>
+   530→                  <Button variant="outline" onClick={() => setImportDialogOpen(true)}><Upload className="size-4 mr-1.5" /> Import</Button>
+   531→                </div>
+   532→              )}
+   533→            </div>
+   534→          ) : (
+   535→            <ScrollArea className="max-h-[600px]">
+   536→              <Table>
+   537→                <TableHeader>
+   538→                  <TableRow>
+   539→                    <TableHead className="w-12">
+   540→                      <Checkbox
+   541→                        checked={selectedIds.size === filteredContacts.length && filteredContacts.length > 0}
+   542→                        onCheckedChange={toggleSelectAll}
+   543→                      />
+   544→                    </TableHead>
+   545→                    <TableHead>Name</TableHead>
+   546→                    <TableHead>Email</TableHead>
+   547→                    <TableHead>Phone</TableHead>
+   548→                    <TableHead>Company</TableHead>
+   549→                    <TableHead>Tags</TableHead>
+   550→                    <TableHead>Created</TableHead>
+   551→                    <TableHead className="w-12" />
+   552→                  </TableRow>
+   553→                </TableHeader>
+   554→                <TableBody>
+   555→                  {filteredContacts.map(contact => (
+   556→                    <TableRow key={contact.id} className={cn(selectedIds.has(contact.id) && 'bg-emerald-50 dark:bg-emerald-900/10')}>
+   557→                      <TableCell><Checkbox checked={selectedIds.has(contact.id)} onCheckedChange={() => toggleSelect(contact.id)} /></TableCell>
+   558→                      <TableCell className="font-medium">{contact.name}</TableCell>
+   559→                      <TableCell className="text-sm text-muted-foreground">{contact.email || '-'}</TableCell>
+   560→                      <TableCell className="text-sm text-muted-foreground">{contact.phone || '-'}</TableCell>
+   561→                      <TableCell className="text-sm text-muted-foreground">{contact.company || '-'}</TableCell>
+   562→                      <TableCell>
+   563→                        <div className="flex flex-wrap gap-1">
+   564→                          {(contact.tags || '').split(',').map(t => t.trim()).filter(Boolean).map(tag => (
+   565→                            <Badge key={tag} variant="outline" className="text-[10px] h-5 bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800">{tag}</Badge>
+   566→                          ))}
+   567→                        </div>
+   568→                      </TableCell>
+   569→                      <TableCell className="text-xs text-muted-foreground">{formatDate(contact.createdAt)}</TableCell>
+   570→                      <TableCell>
+   571→                        <DropdownMenu>
+   572→                          <DropdownMenuTrigger asChild>
+   573→                            <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="size-4" /></Button>
+   574→                          </DropdownMenuTrigger>
+   575→                          <DropdownMenuContent align="end">
+   576→                            <DropdownMenuItem onClick={() => openEditDialog(contact)}><Edit className="size-3 mr-2" /> Edit</DropdownMenuItem>
+   577→                            <DropdownMenuItem className="text-red-600" onClick={() => { setDeleteTarget(contact); setDeleteDialogOpen(true); }}><Trash2 className="size-3 mr-2" /> Delete</DropdownMenuItem>
+   578→                          </DropdownMenuContent>
+   579→                        </DropdownMenu>
+   580→                      </TableCell>
+   581→                    </TableRow>
+   582→                  ))}
+   583→                </TableBody>
+   584→              </Table>
+   585→            </ScrollArea>
+   586→          )}
+   587→        </CardContent>
+   588→      </Card>
+   589→
+   590→      {/* ─── Add Contact Dialog ──────────────────────────────────────────── */}
+   591→      <Dialog open={addDialogOpen} onOpenChange={(open) => { if (!open) resetForm(); }}>
+   592→        <DialogContent className="sm:max-w-md">
+   593→          <DialogHeader>
+   594→            <DialogTitle>Add Contact</DialogTitle>
+   595→            <DialogDescription>Create a new contact manually</DialogDescription>
+   596→          </DialogHeader>
+   597→          <div className="space-y-4 py-4">
+   598→            <div className="space-y-2">
+   599→              <Label>Name *</Label>
+   600→              <Input placeholder="Full name" value={formName} onChange={e => setFormName(e.target.value)} />
+   601→            </div>
+   602→            <div className="grid grid-cols-2 gap-4">
+   603→              <div className="space-y-2">
+   604→                <Label>Email</Label>
+   605→                <Input type="email" placeholder="email@example.com" value={formEmail} onChange={e => setFormEmail(e.target.value)} />
+   606→              </div>
+   607→              <div className="space-y-2">
+   608→                <Label>Phone</Label>
+   609→                <Input placeholder="+1 555-0100" value={formPhone} onChange={e => setFormPhone(e.target.value)} />
+   610→              </div>
+   611→            </div>
+   612→            <div className="space-y-2">
+   613→              <Label>Company</Label>
+   614→              <Input placeholder="Company name" value={formCompany} onChange={e => setFormCompany(e.target.value)} />
+   615→            </div>
+   616→            <div className="space-y-2">
+   617→              <Label>Tags</Label>
+   618→              <Input placeholder="Comma separated: VIP, Client, Lead" value={formTags} onChange={e => setFormTags(e.target.value)} />
+   619→              {allTags.length > 0 && (
+   620→                <div className="flex flex-wrap gap-1 mt-1">
+   621→                  {allTags.map(tag => (
+   622→                    <Badge
+   623→                      key={tag}
+   624→                      variant="outline"
+   625→                      className="cursor-pointer text-[10px] h-5 hover:bg-emerald-50"
+   626→                      onClick={() => {
+   627→                        const current = formTags.split(',').map(t => t.trim()).filter(Boolean);
+   628→                        if (!current.includes(tag)) {
+   629→                          setFormTags(prev => prev ? `${prev}, ${tag}` : tag);
+   630→                        }
+   631→                      }}
+   632→                    >
+   633→                      + {tag}
+   634→                    </Badge>
+   635→                  ))}
+   636→                </div>
+   637→              )}
+   638→            </div>
+   639→          </div>
+   640→          <DialogFooter>
+   641→            <Button variant="outline" onClick={resetForm}>Cancel</Button>
+   642→            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSave} disabled={saving}>
+   643→              {saving && <Loader2 className="size-4 mr-1 animate-spin" />} Add Contact
+   644→            </Button>
+   645→          </DialogFooter>
+   646→        </DialogContent>
+   647→      </Dialog>
+   648→
+   649→      {/* ─── Edit Contact Dialog ─────────────────────────────────────────── */}
+   650→      <Dialog open={editDialogOpen} onOpenChange={(open) => { if (!open) resetForm(); }}>
+   651→        <DialogContent className="sm:max-w-md">
+   652→          <DialogHeader>
+   653→            <DialogTitle>Edit Contact</DialogTitle>
+   654→            <DialogDescription>Update contact information</DialogDescription>
+   655→          </DialogHeader>
+   656→          <div className="space-y-4 py-4">
+   657→            <div className="space-y-2">
+   658→              <Label>Name *</Label>
+   659→              <Input placeholder="Full name" value={formName} onChange={e => setFormName(e.target.value)} />
+   660→            </div>
+   661→            <div className="grid grid-cols-2 gap-4">
+   662→              <div className="space-y-2">
+   663→                <Label>Email</Label>
+   664→                <Input type="email" placeholder="email@example.com" value={formEmail} onChange={e => setFormEmail(e.target.value)} />
+   665→              </div>
+   666→              <div className="space-y-2">
+   667→                <Label>Phone</Label>
+   668→                <Input placeholder="+1 555-0100" value={formPhone} onChange={e => setFormPhone(e.target.value)} />
+   669→              </div>
+   670→            </div>
+   671→            <div className="space-y-2">
+   672→              <Label>Company</Label>
+   673→              <Input placeholder="Company name" value={formCompany} onChange={e => setFormCompany(e.target.value)} />
+   674→            </div>
+   675→            <div className="space-y-2">
+   676→              <Label>Tags</Label>
+   677→              <Input placeholder="Comma separated: VIP, Client, Lead" value={formTags} onChange={e => setFormTags(e.target.value)} />
+   678→            </div>
+   679→          </div>
+   680→          <DialogFooter>
+   681→            <Button variant="outline" onClick={resetForm}>Cancel</Button>
+   682→            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSave} disabled={saving}>
+   683→              {saving && <Loader2 className="size-4 mr-1 animate-spin" />} Save Changes
+   684→            </Button>
+   685→          </DialogFooter>
+   686→        </DialogContent>
+   687→      </Dialog>
+   688→
+   689→      {/* ─── Delete Confirmation Dialog ──────────────────────────────────── */}
+   690→      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+   691→        <DialogContent className="sm:max-w-sm">
+   692→          <DialogHeader>
+   693→            <DialogTitle>Delete Contact</DialogTitle>
+   694→            <DialogDescription>
+   695→              Are you sure you want to delete &quot;{deleteTarget?.name}&quot;? This action cannot be undone.
+   696→            </DialogDescription>
+   697→          </DialogHeader>
+   698→          <DialogFooter>
+   699→            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+   700→            <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+   701→          </DialogFooter>
+   702→        </DialogContent>
+   703→      </Dialog>
+   704→
+   705→      {/* ─── Import Dialog ───────────────────────────────────────────────── */}
+   706→      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+   707→        <DialogContent className="sm:max-w-2xl">
+   708→          <DialogHeader>
+   709→            <DialogTitle>Import Contacts</DialogTitle>
+   710→            <DialogDescription>Import contacts from CSV or XLSX files</DialogDescription>
+   711→          </DialogHeader>
+   712→
+   713→          {!importStats ? (
+   714→            <div className="space-y-4 py-4">
+   715→              {/* File upload */}
+   716→              <div
+   717→                className="border-2 border-dashed rounded-lg p-8 text-center hover:border-emerald-400 transition-colors cursor-pointer"
+   718→                onClick={() => fileInputRef.current?.click()}
+   719→              >
+   720→                <FileSpreadsheet className="size-10 text-muted-foreground mx-auto mb-3" />
+   721→                <p className="text-sm font-medium">{importFile ? importFile.name : 'Click to select a file'}</p>
+   722→                <p className="text-xs text-muted-foreground mt-1">Supports .csv, .xlsx, .xls files</p>
+   723→                <input
+   724→                  ref={fileInputRef}
+   725→                  type="file"
+   726→                  accept=".csv,.xlsx,.xls"
+   727→                  className="hidden"
+   728→                  onChange={handleFileSelect}
+   729→                />
+   730→              </div>
+   731→
+   732→              {/* Preview and mapping */}
+   733→              {importPreview.length > 0 && (
+   734→                <>
+   735→                  <Separator />
+   736→                  <div>
+   737→                    <h4 className="text-sm font-medium mb-2">Field Mapping</h4>
+   738→                    <p className="text-xs text-muted-foreground mb-3">Map file columns to contact fields</p>
+   739→                    <div className="grid grid-cols-2 gap-2">
+   740→                      {importHeaders.map(header => (
+   741→                        <div key={header} className="flex items-center gap-2">
+   742→                          <span className="text-xs font-mono bg-muted px-2 py-1 rounded truncate flex-1" title={header}>{header}</span>
+   743→                          <ChevronDown className="size-3 text-muted-foreground" />
+   744→                          <Select
+   745→                            value={fieldMapping[header] || '_skip'}
+   746→                            onValueChange={v => setFieldMapping(prev => ({ ...prev, [header]: v }))}
+   747→                          >
+   748→                            <SelectTrigger className="w-28 h-8 text-xs"><SelectValue /></SelectTrigger>
+   749→                            <SelectContent>
+   750→                              <SelectItem value="_skip">Skip</SelectItem>
+   751→                              {CONTACT_FIELDS.map(f => (
+   752→                                <SelectItem key={f.key} value={f.key}>{f.label}{f.required ? ' *' : ''}</SelectItem>
+   753→                              ))}
+   754→                            </SelectContent>
+   755→                          </Select>
+   756→                        </div>
+   757→                      ))}
+   758→                    </div>
+   759→                  </div>
+   760→
+   761→                  <Separator />
+   762→
+   763→                  <div>
+   764→                    <h4 className="text-sm font-medium mb-2">Preview ({importPreview.length} rows shown)</h4>
+   765→                    <ScrollArea className="max-h-48">
+   766→                      <Table>
+   767→                        <TableHeader>
+   768→                          <TableRow>
+   769→                            {importHeaders.map(h => <TableHead key={h} className="text-[10px]">{h}</TableHead>)}
+   770→                          </TableRow>
+   771→                        </TableHeader>
+   772→                        <TableBody>
+   773→                          {importPreview.map((row, i) => (
+   774→                            <TableRow key={i}>
+   775→                              {importHeaders.map(h => (
+   776→                                <TableCell key={h} className="text-xs py-1">{row[h] || '-'}</TableCell>
+   777→                              ))}
+   778→                            </TableRow>
+   779→                          ))}
+   780→                        </TableBody>
+   781→                      </Table>
+   782→                    </ScrollArea>
+   783→                  </div>
+   784→                </>
+   785→              )}
+   786→            </div>
+   787→          ) : (
+   788→            <div className="py-8 text-center space-y-4">
+   789→              <CheckCircle2 className="size-12 text-emerald-600 mx-auto" />
+   790→              <h3 className="text-lg font-semibold">Import Complete</h3>
+   791→              <div className="grid grid-cols-3 gap-4 max-w-sm mx-auto">
+   792→                <div>
+   793→                  <p className="text-2xl font-bold text-emerald-600">{importStats.imported}</p>
+   794→                  <p className="text-xs text-muted-foreground">Imported</p>
+   795→                </div>
+   796→                <div>
+   797→                  <p className="text-2xl font-bold text-amber-600">{importStats.duplicates}</p>
+   798→                  <p className="text-xs text-muted-foreground">Duplicates</p>
+   799→                </div>
+   800→                <div>
+   801→                  <p className="text-2xl font-bold text-red-600">{importStats.skipped}</p>
+   802→                  <p className="text-xs text-muted-foreground">Skipped</p>
+   803→                </div>
+   804→              </div>
+   805→              <p className="text-xs text-muted-foreground">Total rows: {importStats.total}</p>
+   806→            </div>
+   807→          )}
+   808→
+   809→          <DialogFooter>
+   810→            {!importStats ? (
+   811→              <>
+   812→                <Button variant="outline" onClick={() => { setImportDialogOpen(false); setImportFile(null); setImportPreview([]); setImportHeaders([]); }}>Cancel</Button>
+   813→                <Button
+   814→                  className="bg-emerald-600 hover:bg-emerald-700"
+   815→                  onClick={handleImport}
+   816→                  disabled={importing || importPreview.length === 0}
+   817→                >
+   818→                  {importing ? <><Loader2 className="size-4 mr-1 animate-spin" /> Importing...</> : <><Upload className="size-4 mr-1" /> Import</>}
+   819→                </Button>
+   820→              </>
+   821→            ) : (
+   822→              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => { setImportStats(null); setImportFile(null); setImportPreview([]); setImportHeaders([]); setImportDialogOpen(false); }}>Done</Button>
+   823→            )}
+   824→          </DialogFooter>
+   825→        </DialogContent>
+   826→      </Dialog>
+   827→
+   828→      {/* ─── Export Dialog ───────────────────────────────────────────────── */}
+   829→      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+   830→        <DialogContent className="sm:max-w-md">
+   831→          <DialogHeader>
+   832→            <DialogTitle>Export Contacts</DialogTitle>
+   833→            <DialogDescription>
+   834→              Export {selectedIds.size > 0 ? `${selectedIds.size} selected` : tagFilter !== 'all' ? `filtered` : 'all'} contacts
+   835→            </DialogDescription>
+   836→          </DialogHeader>
+   837→          <div className="space-y-4 py-4">
+   838→            <div className="space-y-2">
+   839→              <Label>Format</Label>
+   840→              <Select value={exportFormat} onValueChange={setExportFormat}>
+   841→                <SelectTrigger><SelectValue /></SelectTrigger>
+   842→                <SelectContent>
+   843→                  <SelectItem value="csv">CSV</SelectItem>
+   844→                  <SelectItem value="json">JSON</SelectItem>
+   845→                </SelectContent>
+   846→              </Select>
+   847→            </div>
+   848→          </div>
+   849→          <DialogFooter>
+   850→            <Button variant="outline" onClick={() => setExportDialogOpen(false)}>Cancel</Button>
+   851→            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleExport}><Download className="size-4 mr-1" /> Export</Button>
+   852→          </DialogFooter>
+   853→        </DialogContent>
+   854→      </Dialog>
+   855→    </div>
+   856→  );
+   857→}
+   858→

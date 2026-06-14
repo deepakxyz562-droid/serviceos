@@ -1,0 +1,788 @@
+     1→     1→     1→'use client';
+     2→     2→     2→
+     3→     3→     3→import { useState, useEffect, useCallback } from 'react';
+     4→     4→     4→import {
+     5→     5→     5→  Calendar, Clock, MapPin, Star, MessageCircle, Phone,
+     6→     6→     6→  CheckCircle2, ArrowRight, ExternalLink, FileText,
+     7→     7→     7→  RefreshCw, Loader2, AlertCircle, ChevronRight,
+     8→     8→     8→  Building2, User, CreditCard, Zap, Send,
+     9→     9→     9→} from 'lucide-react';
+    10→    10→    10→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    11→    11→    11→import { Button } from '@/components/ui/button';
+    12→    12→    12→import { Badge } from '@/components/ui/badge';
+    13→    13→    13→import { Separator } from '@/components/ui/separator';
+    14→    14→    14→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    15→    15→    15→import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+    16→    16→    16→import { Textarea } from '@/components/ui/textarea';
+    17→    17→    17→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    18→    18→    18→import { Progress } from '@/components/ui/progress';
+    19→    19→    19→import { toast } from 'sonner';
+    20→    20→    20→
+    21→    21→    21→// ─── Types ──────────────────────────────────────────────────────────────────
+    22→    22→    22→
+    23→    23→    23→interface CustomerPortalProps {
+    24→    24→    24→  token?: string;
+    25→    25→    25→}
+    26→    26→    26→
+    27→    27→    27→interface Booking {
+    28→    28→    28→  id: string;
+    29→    29→    29→  title: string;
+    30→    30→    30→  status: string;
+    31→    31→    31→  priority: string;
+    32→    32→    32→  address: string | null;
+    33→    33→    33→  scheduledAt: string | null;
+    34→    34→    34→  assigneeName: string | null;
+    35→    35→    35→  assignee?: { id: string; name: string; phone: string; avatar: string | null; rating: number } | null;
+    36→    36→    36→  createdAt: string;
+    37→    37→    37→  updatedAt: string;
+    38→    38→    38→}
+    39→    39→    39→
+    40→    40→    40→interface Invoice {
+    41→    41→    41→  id: string;
+    42→    42→    42→  number: string | null;
+    43→    43→    43→  amount: number;
+    44→    44→    44→  tax: number;
+    45→    45→    45→  total: number;
+    46→    46→    46→  status: string;
+    47→    47→    47→  dueDate: string | null;
+    48→    48→    48→  paidAt: string | null;
+    49→    49→    49→  createdAt: string;
+    50→    50→    50→}
+    51→    51→    51→
+    52→    52→    52→interface Customer {
+    53→    53→    53→  id: string;
+    54→    54→    54→  name: string;
+    55→    55→    55→  email?: string;
+    56→    56→    56→  phone?: string;
+    57→    57→    57→  company?: string;
+    58→    58→    58→}
+    59→    59→    59→
+    60→    60→    60→interface PortalData {
+    61→    61→    61→  customer: Customer;
+    62→    62→    62→  bookings: Booking[];
+    63→    63→    63→  invoices: Invoice[];
+    64→    64→    64→  session: { id: string; expiresAt: string };
+    65→    65→    65→}
+    66→    66→    66→
+    67→    67→    67→// ─── Helpers ────────────────────────────────────────────────────────────────
+    68→    68→    68→
+    69→    69→    69→const JOB_STEPS = [
+    70→    70→    70→  { key: 'pending', label: 'Booked', icon: Calendar },
+    71→    71→    71→  { key: 'assigned', label: 'Assigned', icon: User },
+    72→    72→    72→  { key: 'en_route', label: 'En Route', icon: ArrowRight },
+    73→    73→    73→  { key: 'in_progress', label: 'In Progress', icon: Zap },
+    74→    74→    74→  { key: 'completed', label: 'Completed', icon: CheckCircle2 },
+    75→    75→    75→];
+    76→    76→    76→
+    77→    77→    77→function getStepIndex(status: string): number {
+    78→    78→    78→  const idx = JOB_STEPS.findIndex(s => s.key === status);
+    79→    79→    79→  return idx >= 0 ? idx : 0;
+    80→    80→    80→}
+    81→    81→    81→
+    82→    82→    82→function getStatusColor(status: string) {
+    83→    83→    83→  const map: Record<string, string> = {
+    84→    84→    84→    pending: 'bg-amber-100 text-amber-700 border-amber-200',
+    85→    85→    85→    assigned: 'bg-blue-100 text-blue-700 border-blue-200',
+    86→    86→    86→    in_progress: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    87→    87→    87→    en_route: 'bg-sky-100 text-sky-700 border-sky-200',
+    88→    88→    88→    completed: 'bg-green-100 text-green-700 border-green-200',
+    89→    89→    89→    cancelled: 'bg-red-100 text-red-700 border-red-200',
+    90→    90→    90→  };
+    91→    91→    91→  return map[status] || 'bg-gray-100 text-gray-600 border-gray-200';
+    92→    92→    92→}
+    93→    93→    93→
+    94→    94→    94→function getInvoiceStatusColor(status: string) {
+    95→    95→    95→  const map: Record<string, string> = {
+    96→    96→    96→    draft: 'bg-gray-100 text-gray-600 border-gray-200',
+    97→    97→    97→    sent: 'bg-blue-100 text-blue-700 border-blue-200',
+    98→    98→    98→    paid: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    99→    99→    99→    overdue: 'bg-red-100 text-red-700 border-red-200',
+   100→   100→   100→    cancelled: 'bg-gray-100 text-gray-600 border-gray-200',
+   101→   101→   101→  };
+   102→   102→   102→  return map[status] || 'bg-gray-100 text-gray-600 border-gray-200';
+   103→   103→   103→}
+   104→   104→   104→
+   105→   105→   105→function formatCurrency(amount: number): string {
+   106→   106→   106→  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+   107→   107→   107→}
+   108→   108→   108→
+   109→   109→   109→function formatDate(dateStr?: string | null): string {
+   110→   110→   110→  if (!dateStr) return '--';
+   111→   111→   111→  try {
+   112→   112→   112→    return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+   113→   113→   113→  } catch { return '--'; }
+   114→   114→   114→}
+   115→   115→   115→
+   116→   116→   116→function formatTime(dateStr?: string | null): string {
+   117→   117→   117→  if (!dateStr) return '--';
+   118→   118→   118→  try {
+   119→   119→   119→    return new Date(dateStr).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+   120→   120→   120→  } catch { return '--'; }
+   121→   121→   121→}
+   122→   122→   122→
+   123→   123→   123→// ─── Star Rating Component ──────────────────────────────────────────────────
+   124→   124→   124→
+   125→   125→   125→function StarRating({ value, onChange, readonly = false, size = 'md' }: {
+   126→   126→   126→  value: number;
+   127→   127→   127→  onChange?: (val: number) => void;
+   128→   128→   128→  readonly?: boolean;
+   129→   129→   129→  size?: 'sm' | 'md' | 'lg';
+   130→   130→   130→}) {
+   131→   131→   131→  const [hovered, setHovered] = useState(0);
+   132→   132→   132→  const sizeClasses = { sm: 'size-4', md: 'size-6', lg: 'size-8' };
+   133→   133→   133→  const sizeClass = sizeClasses[size];
+   134→   134→   134→
+   135→   135→   135→  return (
+   136→   136→   136→    <div className="flex items-center gap-0.5">
+   137→   137→   137→      {[1, 2, 3, 4, 5].map((star) => (
+   138→   138→   138→        <button
+   139→   139→   139→          key={star}
+   140→   140→   140→          type="button"
+   141→   141→   141→          disabled={readonly}
+   142→   142→   142→          className={`${readonly ? 'cursor-default' : 'cursor-pointer hover:scale-110'} transition-transform`}
+   143→   143→   143→          onMouseEnter={() => !readonly && setHovered(star)}
+   144→   144→   144→          onMouseLeave={() => !readonly && setHovered(0)}
+   145→   145→   145→          onClick={() => onChange?.(star)}
+   146→   146→   146→        >
+   147→   147→   147→          <Star
+   148→   148→   148→            className={`${sizeClass} transition-colors ${
+   149→   149→   149→              star <= (hovered || value)
+   150→   150→   150→                ? 'text-amber-400 fill-amber-400'
+   151→   151→   151→                : 'text-gray-200 fill-gray-200'
+   152→   152→   152→            }`}
+   153→   153→   153→          />
+   154→   154→   154→        </button>
+   155→   155→   155→      ))}
+   156→   156→   156→    </div>
+   157→   157→   157→  );
+   158→   158→   158→}
+   159→   159→   159→
+   160→   160→   160→// ─── Progress Stepper Component ─────────────────────────────────────────────
+   161→   161→   161→
+   162→   162→   162→function JobProgressStepper({ status }: { status: string }) {
+   163→   163→   163→  const currentIndex = getStepIndex(status);
+   164→   164→   164→  const progressPercent = (currentIndex / (JOB_STEPS.length - 1)) * 100;
+   165→   165→   165→
+   166→   166→   166→  return (
+   167→   167→   167→    <div className="space-y-3">
+   168→   168→   168→      {/* Progress bar */}
+   169→   169→   169→      <Progress value={progressPercent} className="h-2" />
+   170→   170→   170→
+   171→   171→   171→      {/* Steps */}
+   172→   172→   172→      <div className="flex items-start justify-between">
+   173→   173→   173→        {JOB_STEPS.map((step, index) => {
+   174→   174→   174→          const isCompleted = index < currentIndex;
+   175→   175→   175→          const isCurrent = index === currentIndex;
+   176→   176→   176→          const isFuture = index > currentIndex;
+   177→   177→   177→          const Icon = step.icon;
+   178→   178→   178→
+   179→   179→   179→          return (
+   180→   180→   180→            <div key={step.key} className="flex flex-col items-center gap-1 flex-1">
+   181→   181→   181→              <div
+   182→   182→   182→                className={`flex items-center justify-center size-8 rounded-full border-2 transition-all ${
+   183→   183→   183→                  isCompleted
+   184→   184→   184→                    ? 'bg-emerald-500 border-emerald-500 text-white'
+   185→   185→   185→                    : isCurrent
+   186→   186→   186→                    ? 'bg-emerald-100 border-emerald-500 text-emerald-600'
+   187→   187→   187→                    : 'bg-gray-50 border-gray-200 text-gray-300'
+   188→   188→   188→                }`}
+   189→   189→   189→              >
+   190→   190→   190→                <Icon className="size-4" />
+   191→   191→   191→              </div>
+   192→   192→   192→              <span className={`text-[10px] font-medium text-center ${
+   193→   193→   193→                isCompleted || isCurrent ? 'text-emerald-700' : 'text-gray-300'
+   194→   194→   194→              }`}>
+   195→   195→   195→                {step.label}
+   196→   196→   196→              </span>
+   197→   197→   197→            </div>
+   198→   198→   198→          );
+   199→   199→   199→        })}
+   200→   200→   200→      </div>
+   201→   201→   201→    </div>
+   202→   202→   202→  );
+   203→   203→   203→}
+   204→   204→   204→
+   205→   205→   205→// ─── Main Component ─────────────────────────────────────────────────────────
+   206→   206→   206→
+   207→   207→   207→export function CustomerPortalView({ token: tokenProp }: CustomerPortalProps) {
+   208→   208→   208→  // Get token from prop or URL params
+   209→   209→   209→  const [portalData, setPortalData] = useState<PortalData | null>(null);
+   210→   210→   210→  const [loading, setLoading] = useState(true);
+   211→   211→   211→  const [error, setError] = useState<string | null>(null);
+   212→   212→   212→
+   213→   213→   213→  // Review dialog
+   214→   214→   214→  const [showReviewDialog, setShowReviewDialog] = useState(false);
+   215→   215→   215→  const [reviewJob, setReviewJob] = useState<Booking | null>(null);
+   216→   216→   216→  const [reviewRating, setReviewRating] = useState(5);
+   217→   217→   217→  const [reviewComment, setReviewComment] = useState('');
+   218→   218→   218→  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+   219→   219→   219→
+   220→   220→   220→  // Active booking for tracker
+   221→   221→   221→  const [activeBookingId, setActiveBookingId] = useState<string | null>(null);
+   222→   222→   222→
+   223→   223→   223→  // ─── Get token from URL or prop ──────────────────────────────────────
+   224→   224→   224→  const getToken = useCallback(() => {
+   225→   225→   225→    if (tokenProp) return tokenProp;
+   226→   226→   226→    if (typeof window !== 'undefined') {
+   227→   227→   227→      const params = new URLSearchParams(window.location.search);
+   228→   228→   228→      return params.get('token') || '';
+   229→   229→   229→    }
+   230→   230→   230→    return '';
+   231→   231→   231→  }, [tokenProp]);
+   232→   232→   232→
+   233→   233→   233→  // ─── Fetch portal data ──────────────────────────────────────────────
+   234→   234→   234→  const fetchPortalData = useCallback(async () => {
+   235→   235→   235→    const token = getToken();
+   236→   236→   236→    if (!token) {
+   237→   237→   237→      setError('No portal token provided');
+   238→   238→   238→      setLoading(false);
+   239→   239→   239→      return;
+   240→   240→   240→    }
+   241→   241→   241→
+   242→   242→   242→    try {
+   243→   243→   243→      const res = await fetch(`/api/customer-portal/${token}?XTransformPort=3000`);
+   244→   244→   244→      if (res.ok) {
+   245→   245→   245→        const data = await res.json();
+   246→   246→   246→        setPortalData(data);
+   247→   247→   247→        setError(null);
+   248→   248→   248→        // Set default active booking
+   249→   249→   249→        const activeBookings = data.bookings?.filter(
+   250→   250→   250→          (b: Booking) => !['completed', 'cancelled'].includes(b.status)
+   251→   251→   251→        );
+   252→   252→   252→        if (activeBookings?.length > 0 && !activeBookingId) {
+   253→   253→   253→          setActiveBookingId(activeBookings[0].id);
+   254→   254→   254→        }
+   255→   255→   255→      } else if (res.status === 404) {
+   256→   256→   256→        setError('Invalid portal link');
+   257→   257→   257→      } else if (res.status === 410) {
+   258→   258→   258→        setError('This portal link has expired');
+   259→   259→   259→      } else {
+   260→   260→   260→        setError('Failed to load portal data');
+   261→   261→   261→      }
+   262→   262→   262→    } catch {
+   263→   263→   263→      setError('Unable to connect');
+   264→   264→   264→    } finally {
+   265→   265→   265→      setLoading(false);
+   266→   266→   266→    }
+   267→   267→   267→  }, [getToken, activeBookingId]);
+   268→   268→   268→
+   269→   269→   269→  useEffect(() => {
+   270→   270→   270→    fetchPortalData();
+   271→   271→   271→  }, [fetchPortalData]);
+   272→   272→   272→
+   273→   273→   273→  // ─── Handlers ────────────────────────────────────────────────────────
+   274→   274→   274→
+   275→   275→   275→  const handleReschedule = (booking: Booking) => {
+   276→   276→   276→    const message = `Hi, I'd like to reschedule my booking "${booking.title}" (scheduled for ${formatDate(booking.scheduledAt)}). Please let me know available times.`;
+   277→   277→   277→    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+   278→   278→   278→    window.open(whatsappUrl, '_blank');
+   279→   279→   279→    toast.success('Opening WhatsApp to request reschedule');
+   280→   280→   280→  };
+   281→   281→   281→
+   282→   282→   282→  const handleWhatsAppContact = () => {
+   283→   283→   283→    const message = `Hi, I have a question about my service.`;
+   284→   284→   284→    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+   285→   285→   285→    window.open(whatsappUrl, '_blank');
+   286→   286→   286→  };
+   287→   287→   287→
+   288→   288→   288→  const handleSubmitReview = async () => {
+   289→   289→   289→    if (!reviewJob) return;
+   290→   290→   290→    setReviewSubmitting(true);
+   291→   291→   291→    try {
+   292→   292→   292→      // Submit review via API
+   293→   293→   293→      const res = await fetch(`/api/jobs/${reviewJob.id}?XTransformPort=3000`, {
+   294→   294→   294→        method: 'PUT',
+   295→   295→   295→        headers: { 'Content-Type': 'application/json' },
+   296→   296→   296→        body: JSON.stringify({
+   297→   297→   297→          id: reviewJob.id,
+   298→   298→   298→          reviewRating,
+   299→   299→   299→          reviewComment,
+   300→   300→   300→        }),
+   301→   301→   301→      });
+   302→   302→   302→      if (res.ok) {
+   303→   303→   303→        toast.success('Review submitted! Thank you for your feedback.');
+   304→   304→   304→        setShowReviewDialog(false);
+   305→   305→   305→        setReviewJob(null);
+   306→   306→   306→        setReviewComment('');
+   307→   307→   307→        setReviewRating(5);
+   308→   308→   308→        fetchPortalData();
+   309→   309→   309→      } else {
+   310→   310→   310→        toast.error('Failed to submit review');
+   311→   311→   311→      }
+   312→   312→   312→    } catch {
+   313→   313→   313→      toast.error('Network error');
+   314→   314→   314→    } finally {
+   315→   315→   315→      setReviewSubmitting(false);
+   316→   316→   316→    }
+   317→   317→   317→  };
+   318→   318→   318→
+   319→   319→   319→  const handlePayInvoice = (invoice: Invoice) => {
+   320→   320→   320→    toast.info(`Payment for invoice ${invoice.number || invoice.id} — ${formatCurrency(invoice.total)}`);
+   321→   321→   321→  };
+   322→   322→   322→
+   323→   323→   323→  // ─── Computed ────────────────────────────────────────────────────────
+   324→   324→   324→  const bookings = portalData?.bookings || [];
+   325→   325→   325→  const invoices = portalData?.invoices || [];
+   326→   326→   326→  const customer = portalData?.customer;
+   327→   327→   327→
+   328→   328→   328→  const activeBookings = bookings.filter(b => !['completed', 'cancelled'].includes(b.status));
+   329→   329→   329→  const completedBookings = bookings.filter(b => b.status === 'completed');
+   330→   330→   330→  const pastBookings = bookings.filter(b => ['completed', 'cancelled'].includes(b.status));
+   331→   331→   331→
+   332→   332→   332→  const activeBooking = activeBookings.find(b => b.id === activeBookingId) || activeBookings[0] || null;
+   333→   333→   333→
+   334→   334→   334→  // ─── Loading / Error States ──────────────────────────────────────────
+   335→   335→   335→
+   336→   336→   336→  if (loading) {
+   337→   337→   337→    return (
+   338→   338→   338→      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-teal-50">
+   339→   339→   339→        <div className="text-center">
+   340→   340→   340→          <Loader2 className="size-8 animate-spin text-emerald-600 mx-auto" />
+   341→   341→   341→          <p className="mt-3 text-sm text-emerald-700">Loading your portal...</p>
+   342→   342→   342→        </div>
+   343→   343→   343→      </div>
+   344→   344→   344→    );
+   345→   345→   345→  }
+   346→   346→   346→
+   347→   347→   347→  if (error) {
+   348→   348→   348→    return (
+   349→   349→   349→      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-teal-50">
+   350→   350→   350→        <Card className="w-full max-w-md mx-4 border-0 shadow-lg">
+   351→   351→   351→          <CardContent className="p-8 text-center">
+   352→   352→   352→            <AlertCircle className="size-12 text-red-400 mx-auto mb-3" />
+   353→   353→   353→            <h2 className="text-lg font-semibold text-gray-900 mb-1">Unable to Access Portal</h2>
+   354→   354→   354→            <p className="text-sm text-gray-500">{error}</p>
+   355→   355→   355→            <p className="text-xs text-gray-400 mt-3">Please contact the business for a new link.</p>
+   356→   356→   356→          </CardContent>
+   357→   357→   357→        </Card>
+   358→   358→   358→      </div>
+   359→   359→   359→    );
+   360→   360→   360→  }
+   361→   361→   361→
+   362→   362→   362→  // ─── Render ──────────────────────────────────────────────────────────
+   363→   363→   363→
+   364→   364→   364→  return (
+   365→   365→   365→    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50">
+   366→   366→   366→      {/* ─── Header ──────────────────────────────────────────────────── */}
+   367→   367→   367→      <header className="bg-white/80 backdrop-blur-sm border-b border-emerald-100 sticky top-0 z-10">
+   368→   368→   368→        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+   369→   369→   369→          <div className="flex items-center gap-3">
+   370→   370→   370→            <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-600 shadow-md shadow-emerald-600/20">
+   371→   371→   371→              <Building2 className="size-5 text-white" />
+   372→   372→   372→            </div>
+   373→   373→   373→            <div>
+   374→   374→   374→              <h1 className="text-base font-bold text-gray-900">ServiceOS</h1>
+   375→   375→   375→              <p className="text-xs text-gray-500">Customer Portal</p>
+   376→   376→   376→            </div>
+   377→   377→   377→          </div>
+   378→   378→   378→          <div className="flex items-center gap-2">
+   379→   379→   379→            <span className="text-sm text-gray-600">Hi, {customer?.name || 'there'}</span>
+   380→   380→   380→          </div>
+   381→   381→   381→        </div>
+   382→   382→   382→      </header>
+   383→   383→   383→
+   384→   384→   384→      <main className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+   385→   385→   385→        {/* ─── 1. Job Tracker (Active Job) ──────────────────────────── */}
+   386→   386→   386→        {activeBooking && (
+   387→   387→   387→          <Card className="border-emerald-200 bg-white shadow-md">
+   388→   388→   388→            <CardHeader className="pb-3">
+   389→   389→   389→              <CardTitle className="text-lg font-semibold flex items-center gap-2 text-emerald-900">
+   390→   390→   390→                <Zap className="size-5 text-emerald-600" />
+   391→   391→   391→                Job Tracker
+   392→   392→   392→              </CardTitle>
+   393→   393→   393→              <CardDescription>Real-time status of your active service</CardDescription>
+   394→   394→   394→            </CardHeader>
+   395→   395→   395→            <CardContent className="space-y-4">
+   396→   396→   396→              <div className="flex items-center justify-between">
+   397→   397→   397→                <div>
+   398→   398→   398→                  <h3 className="font-medium text-gray-900">{activeBooking.title}</h3>
+   399→   399→   399→                  <div className="flex items-center gap-2 mt-1 text-sm text-gray-500">
+   400→   400→   400→                    {activeBooking.address && (
+   401→   401→   401→                      <span className="flex items-center gap-1">
+   402→   402→   402→                        <MapPin className="size-3.5" /> {activeBooking.address}
+   403→   403→   403→                      </span>
+   404→   404→   404→                    )}
+   405→   405→   405→                    {activeBooking.scheduledAt && (
+   406→   406→   406→                      <span className="flex items-center gap-1">
+   407→   407→   407→                        <Calendar className="size-3.5" /> {formatDate(activeBooking.scheduledAt)} {formatTime(activeBooking.scheduledAt)}
+   408→   408→   408→                      </span>
+   409→   409→   409→                    )}
+   410→   410→   410→                  </div>
+   411→   411→   411→                </div>
+   412→   412→   412→                <Badge variant="outline" className={`${getStatusColor(activeBooking.status)} text-xs`}>
+   413→   413→   413→                  {activeBooking.status.replace('_', ' ')}
+   414→   414→   414→                </Badge>
+   415→   415→   415→              </div>
+   416→   416→   416→
+   417→   417→   417→              {/* Progress Stepper */}
+   418→   418→   418→              <JobProgressStepper status={activeBooking.status} />
+   419→   419→   419→
+   420→   420→   420→              {/* Assigned technician */}
+   421→   421→   421→              {activeBooking.assigneeName && (
+   422→   422→   422→                <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-lg">
+   423→   423→   423→                  <Avatar className="size-9">
+   424→   424→   424→                    <AvatarFallback className="bg-emerald-200 text-emerald-800 text-sm font-medium">
+   425→   425→   425→                      {activeBooking.assigneeName[0]}
+   426→   426→   426→                    </AvatarFallback>
+   427→   427→   427→                  </Avatar>
+   428→   428→   428→                  <div>
+   429→   429→   429→                    <p className="text-sm font-medium text-gray-900">{activeBooking.assigneeName}</p>
+   430→   430→   430→                    <p className="text-xs text-gray-500">Your technician</p>
+   431→   431→   431→                  </div>
+   432→   432→   432→                  {activeBooking.assignee?.phone && (
+   433→   433→   433→                    <Button
+   434→   434→   434→                      variant="outline"
+   435→   435→   435→                      size="sm"
+   436→   436→   436→                      className="ml-auto h-7 text-xs"
+   437→   437→   437→                      onClick={() => window.open(`tel:${activeBooking.assignee!.phone}`)}
+   438→   438→   438→                    >
+   439→   439→   439→                      <Phone className="size-3 mr-1" /> Call
+   440→   440→   440→                    </Button>
+   441→   441→   441→                  )}
+   442→   442→   442→                </div>
+   443→   443→   443→              )}
+   444→   444→   444→
+   445→   445→   445→              {/* Switch active booking if multiple */}
+   446→   446→   446→              {activeBookings.length > 1 && (
+   447→   447→   447→                <div className="flex items-center gap-2 flex-wrap">
+   448→   448→   448→                  <span className="text-xs text-gray-500">Track another:</span>
+   449→   449→   449→                  {activeBookings.filter(b => b.id !== activeBooking.id).map(b => (
+   450→   450→   450→                    <Button
+   451→   451→   451→                      key={b.id}
+   452→   452→   452→                      variant="outline"
+   453→   453→   453→                      size="sm"
+   454→   454→   454→                      className="h-6 text-[10px] px-2"
+   455→   455→   455→                      onClick={() => setActiveBookingId(b.id)}
+   456→   456→   456→                    >
+   457→   457→   457→                      {b.title}
+   458→   458→   458→                    </Button>
+   459→   459→   459→                  ))}
+   460→   460→   460→                </div>
+   461→   461→   461→              )}
+   462→   462→   462→            </CardContent>
+   463→   463→   463→          </Card>
+   464→   464→   464→        )}
+   465→   465→   465→
+   466→   466→   466→        {/* ─── Tabs: Bookings / Invoices / Reviews / Contact ────────── */}
+   467→   467→   467→        <Tabs defaultValue="bookings" className="space-y-4">
+   468→   468→   468→          <TabsList className="w-full h-10 bg-white border shadow-sm">
+   469→   469→   469→            <TabsTrigger value="bookings" className="text-xs flex-1">
+   470→   470→   470→              <Calendar className="size-3.5 mr-1" /> My Bookings
+   471→   471→   471→            </TabsTrigger>
+   472→   472→   472→            <TabsTrigger value="invoices" className="text-xs flex-1">
+   473→   473→   473→              <FileText className="size-3.5 mr-1" /> Invoices
+   474→   474→   474→            </TabsTrigger>
+   475→   475→   475→            <TabsTrigger value="reviews" className="text-xs flex-1">
+   476→   476→   476→              <Star className="size-3.5 mr-1" /> Reviews
+   477→   477→   477→            </TabsTrigger>
+   478→   478→   478→            <TabsTrigger value="contact" className="text-xs flex-1">
+   479→   479→   479→              <MessageCircle className="size-3.5 mr-1" /> Contact
+   480→   480→   480→            </TabsTrigger>
+   481→   481→   481→          </TabsList>
+   482→   482→   482→
+   483→   483→   483→          {/* ─── 2. My Bookings ─────────────────────────────────────── */}
+   484→   484→   484→          <TabsContent value="bookings" className="space-y-3">
+   485→   485→   485→            {bookings.length === 0 ? (
+   486→   486→   486→              <Card className="border-0 shadow-sm">
+   487→   487→   487→                <CardContent className="p-8 text-center">
+   488→   488→   488→                  <Calendar className="size-10 text-gray-200 mx-auto mb-3" />
+   489→   489→   489→                  <p className="text-sm text-gray-500">No bookings yet</p>
+   490→   490→   490→                </CardContent>
+   491→   491→   491→              </Card>
+   492→   492→   492→            ) : (
+   493→   493→   493→              <>
+   494→   494→   494→                {/* Upcoming */}
+   495→   495→   495→                {activeBookings.length > 0 && (
+   496→   496→   496→                  <div className="space-y-2">
+   497→   497→   497→                    <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+   498→   498→   498→                      <Clock className="size-3.5 text-emerald-600" /> Upcoming
+   499→   499→   499→                    </h3>
+   500→   500→   500→                    {activeBookings.map(booking => (
+   501→   501→   501→                      <Card key={booking.id} className="border-0 shadow-sm bg-white">
+   502→   502→   502→                        <CardContent className="p-4">
+   503→   503→   503→                          <div className="flex items-start justify-between gap-3">
+   504→   504→   504→                            <div className="flex-1 min-w-0">
+   505→   505→   505→                              <h4 className="font-medium text-sm text-gray-900">{booking.title}</h4>
+   506→   506→   506→                              {booking.address && (
+   507→   507→   507→                                <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
+   508→   508→   508→                                  <MapPin className="size-3" /> {booking.address}
+   509→   509→   509→                                </div>
+   510→   510→   510→                              )}
+   511→   511→   511→                              {booking.scheduledAt && (
+   512→   512→   512→                                <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
+   513→   513→   513→                                  <Calendar className="size-3" /> {formatDate(booking.scheduledAt)} at {formatTime(booking.scheduledAt)}
+   514→   514→   514→                                </div>
+   515→   515→   515→                              )}
+   516→   516→   516→                              {booking.assigneeName && (
+   517→   517→   517→                                <div className="flex items-center gap-1.5 mt-1.5">
+   518→   518→   518→                                  <Avatar className="size-5">
+   519→   519→   519→                                    <AvatarFallback className="bg-emerald-100 text-emerald-700 text-[8px]">
+   520→   520→   520→                                      {booking.assigneeName[0]}
+   521→   521→   521→                                    </AvatarFallback>
+   522→   522→   522→                                  </Avatar>
+   523→   523→   523→                                  <span className="text-xs text-gray-600">{booking.assigneeName}</span>
+   524→   524→   524→                                </div>
+   525→   525→   525→                              )}
+   526→   526→   526→                            </div>
+   527→   527→   527→                            <div className="flex flex-col items-end gap-1.5">
+   528→   528→   528→                              <Badge variant="outline" className={`${getStatusColor(booking.status)} text-[10px]`}>
+   529→   529→   529→                                {booking.status.replace('_', ' ')}
+   530→   530→   530→                              </Badge>
+   531→   531→   531→                              <Button
+   532→   532→   532→                                variant="outline"
+   533→   533→   533→                                size="sm"
+   534→   534→   534→                                className="h-6 text-[10px] px-2"
+   535→   535→   535→                                onClick={() => handleReschedule(booking)}
+   536→   536→   536→                              >
+   537→   537→   537→                                <RefreshCw className="size-2.5 mr-1" /> Reschedule
+   538→   538→   538→                              </Button>
+   539→   539→   539→                            </div>
+   540→   540→   540→                          </div>
+   541→   541→   541→                        </CardContent>
+   542→   542→   542→                      </Card>
+   543→   543→   543→                    ))}
+   544→   544→   544→                  </div>
+   545→   545→   545→                )}
+   546→   546→   546→
+   547→   547→   547→                {/* Past */}
+   548→   548→   548→                {pastBookings.length > 0 && (
+   549→   549→   549→                  <div className="space-y-2">
+   550→   550→   550→                    <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+   551→   551→   551→                      <CheckCircle2 className="size-3.5 text-gray-400" /> Past
+   552→   552→   552→                    </h3>
+   553→   553→   553→                    {pastBookings.map(booking => (
+   554→   554→   554→                      <Card key={booking.id} className="border-0 shadow-sm bg-white/70">
+   555→   555→   555→                        <CardContent className="p-4">
+   556→   556→   556→                          <div className="flex items-start justify-between gap-3">
+   557→   557→   557→                            <div className="flex-1 min-w-0">
+   558→   558→   558→                              <h4 className="font-medium text-sm text-gray-700">{booking.title}</h4>
+   559→   559→   559→                              {booking.scheduledAt && (
+   560→   560→   560→                                <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
+   561→   561→   561→                                  <Calendar className="size-3" /> {formatDate(booking.scheduledAt)}
+   562→   562→   562→                                </div>
+   563→   563→   563→                              )}
+   564→   564→   564→                            </div>
+   565→   565→   565→                            <Badge variant="outline" className={`${getStatusColor(booking.status)} text-[10px]`}>
+   566→   566→   566→                              {booking.status.replace('_', ' ')}
+   567→   567→   567→                            </Badge>
+   568→   568→   568→                          </div>
+   569→   569→   569→                        </CardContent>
+   570→   570→   570→                      </Card>
+   571→   571→   571→                    ))}
+   572→   572→   572→                  </div>
+   573→   573→   573→                )}
+   574→   574→   574→              </>
+   575→   575→   575→            )}
+   576→   576→   576→          </TabsContent>
+   577→   577→   577→
+   578→   578→   578→          {/* ─── 5. Invoices ─────────────────────────────────────────── */}
+   579→   579→   579→          <TabsContent value="invoices" className="space-y-3">
+   580→   580→   580→            {invoices.length === 0 ? (
+   581→   581→   581→              <Card className="border-0 shadow-sm">
+   582→   582→   582→                <CardContent className="p-8 text-center">
+   583→   583→   583→                  <FileText className="size-10 text-gray-200 mx-auto mb-3" />
+   584→   584→   584→                  <p className="text-sm text-gray-500">No invoices yet</p>
+   585→   585→   585→                </CardContent>
+   586→   586→   586→              </Card>
+   587→   587→   587→            ) : (
+   588→   588→   588→              invoices.map(invoice => (
+   589→   589→   589→                <Card key={invoice.id} className="border-0 shadow-sm bg-white">
+   590→   590→   590→                  <CardContent className="p-4">
+   591→   591→   591→                    <div className="flex items-center justify-between">
+   592→   592→   592→                      <div>
+   593→   593→   593→                        <h4 className="font-medium text-sm text-gray-900">
+   594→   594→   594→                          Invoice {invoice.number || invoice.id.slice(0, 8)}
+   595→   595→   595→                        </h4>
+   596→   596→   596→                        <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500">
+   597→   597→   597→                          <span>Issued: {formatDate(invoice.createdAt)}</span>
+   598→   598→   598→                          {invoice.dueDate && <span>Due: {formatDate(invoice.dueDate)}</span>}
+   599→   599→   599→                        </div>
+   600→   600→   600→                      </div>
+   601→   601→   601→                      <div className="flex flex-col items-end gap-1.5">
+   602→   602→   602→                        <span className="text-lg font-bold text-gray-900">{formatCurrency(invoice.total)}</span>
+   603→   603→   603→                        <div className="flex items-center gap-2">
+   604→   604→   604→                          <Badge variant="outline" className={`${getInvoiceStatusColor(invoice.status)} text-[10px]`}>
+   605→   605→   605→                            {invoice.status}
+   606→   606→   606→                          </Badge>
+   607→   607→   607→                          {invoice.status !== 'paid' && invoice.status !== 'cancelled' && (
+   608→   608→   608→                            <Button
+   609→   609→   609→                              size="sm"
+   610→   610→   610→                              className="h-6 text-[10px] px-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+   611→   611→   611→                              onClick={() => handlePayInvoice(invoice)}
+   612→   612→   612→                            >
+   613→   613→   613→                              <CreditCard className="size-2.5 mr-1" /> Pay
+   614→   614→   614→                            </Button>
+   615→   615→   615→                          )}
+   616→   616→   616→                        </div>
+   617→   617→   617→                      </div>
+   618→   618→   618→                    </div>
+   619→   619→   619→                    {invoice.paidAt && (
+   620→   620→   620→                      <p className="text-xs text-emerald-600 mt-1">Paid on {formatDate(invoice.paidAt)}</p>
+   621→   621→   621→                    )}
+   622→   622→   622→                  </CardContent>
+   623→   623→   623→                </Card>
+   624→   624→   624→              ))
+   625→   625→   625→            )}
+   626→   626→   626→          </TabsContent>
+   627→   627→   627→
+   628→   628→   628→          {/* ─── 6. Reviews ──────────────────────────────────────────── */}
+   629→   629→   629→          <TabsContent value="reviews" className="space-y-3">
+   630→   630→   630→            {completedBookings.length === 0 ? (
+   631→   631→   631→              <Card className="border-0 shadow-sm">
+   632→   632→   632→                <CardContent className="p-8 text-center">
+   633→   633→   633→                  <Star className="size-10 text-gray-200 mx-auto mb-3" />
+   634→   634→   634→                  <p className="text-sm text-gray-500">No completed jobs to review yet</p>
+   635→   635→   635→                </CardContent>
+   636→   636→   636→              </Card>
+   637→   637→   637→            ) : (
+   638→   638→   638→              completedBookings.map(booking => (
+   639→   639→   639→                <Card key={booking.id} className="border-0 shadow-sm bg-white">
+   640→   640→   640→                  <CardContent className="p-4">
+   641→   641→   641→                    <div className="flex items-center justify-between">
+   642→   642→   642→                      <div>
+   643→   643→   643→                        <h4 className="font-medium text-sm text-gray-900">{booking.title}</h4>
+   644→   644→   644→                        <p className="text-xs text-gray-500 mt-0.5">Completed {formatDate(booking.updatedAt)}</p>
+   645→   645→   645→                        {booking.assigneeName && (
+   646→   646→   646→                          <p className="text-xs text-gray-500 mt-0.5">Technician: {booking.assigneeName}</p>
+   647→   647→   647→                        )}
+   648→   648→   648→                      </div>
+   649→   649→   649→                      <Button
+   650→   650→   650→                        size="sm"
+   651→   651→   651→                        variant="outline"
+   652→   652→   652→                        className="h-7 text-xs"
+   653→   653→   653→                        onClick={() => {
+   654→   654→   654→                          setReviewJob(booking);
+   655→   655→   655→                          setReviewRating(5);
+   656→   656→   656→                          setReviewComment('');
+   657→   657→   657→                          setShowReviewDialog(true);
+   658→   658→   658→                        }}
+   659→   659→   659→                      >
+   660→   660→   660→                        <Star className="size-3 mr-1" /> Leave Review
+   661→   661→   661→                      </Button>
+   662→   662→   662→                    </div>
+   663→   663→   663→                  </CardContent>
+   664→   664→   664→                </Card>
+   665→   665→   665→              ))
+   666→   666→   666→            )}
+   667→   667→   667→          </TabsContent>
+   668→   668→   668→
+   669→   669→   669→          {/* ─── 7. Contact ──────────────────────────────────────────── */}
+   670→   670→   670→          <TabsContent value="contact">
+   671→   671→   671→            <Card className="border-0 shadow-sm bg-white">
+   672→   672→   672→              <CardContent className="p-6 space-y-4">
+   673→   673→   673→                <div className="text-center">
+   674→   674→   674→                  <MessageCircle className="size-10 text-emerald-500 mx-auto mb-3" />
+   675→   675→   675→                  <h3 className="font-semibold text-gray-900">Need Help?</h3>
+   676→   676→   676→                  <p className="text-sm text-gray-500 mt-1">
+   677→   677→   677→                    Reach out to us via WhatsApp for quick support
+   678→   678→   678→                  </p>
+   679→   679→   679→                </div>
+   680→   680→   680→
+   681→   681→   681→                <Button
+   682→   682→   682→                  className="w-full h-12 text-sm bg-green-600 hover:bg-green-700 text-white shadow-md"
+   683→   683→   683→                  onClick={handleWhatsAppContact}
+   684→   684→   684→                >
+   685→   685→   685→                  <MessageCircle className="size-5 mr-2" />
+   686→   686→   686→                  Message Us on WhatsApp
+   687→   687→   687→                </Button>
+   688→   688→   688→
+   689→   689→   689→                <Separator />
+   690→   690→   690→
+   691→   691→   691→                <div className="space-y-2">
+   692→   692→   692→                  <h4 className="text-sm font-medium text-gray-700">Common Questions</h4>
+   693→   693→   693→                  <div className="space-y-1.5">
+   694→   694→   694→                    {[
+   695→   695→   695→                      'How do I reschedule my appointment?',
+   696→   696→   696→                      'What are your business hours?',
+   697→   697→   697→                      'How can I get a quote for a new service?',
+   698→   698→   698→                      'I have an issue with my recent service',
+   699→   699→   699→                    ].map((question, i) => (
+   700→   700→   700→                      <button
+   701→   701→   701→                        key={i}
+   702→   702→   702→                        className="w-full text-left p-2.5 rounded-lg border border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/50 transition-colors text-sm text-gray-600 flex items-center justify-between group"
+   703→   703→   703→                        onClick={() => {
+   704→   704→   704→                          const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(question)}`;
+   705→   705→   705→                          window.open(whatsappUrl, '_blank');
+   706→   706→   706→                        }}
+   707→   707→   707→                      >
+   708→   708→   708→                        <span>{question}</span>
+   709→   709→   709→                        <ChevronRight className="size-3.5 text-gray-300 group-hover:text-emerald-500 transition-colors" />
+   710→   710→   710→                      </button>
+   711→   711→   711→                    ))}
+   712→   712→   712→                  </div>
+   713→   713→   713→                </div>
+   714→   714→   714→              </CardContent>
+   715→   715→   715→            </Card>
+   716→   716→   716→          </TabsContent>
+   717→   717→   717→        </Tabs>
+   718→   718→   718→      </main>
+   719→   719→   719→
+   720→   720→   720→      {/* ─── Footer ─────────────────────────────────────────────────── */}
+   721→   721→   721→      <footer className="mt-auto border-t border-emerald-100 bg-white/50">
+   722→   722→   722→        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between text-xs text-gray-400">
+   723→   723→   723→          <span>Powered by ServiceOS</span>
+   724→   724→   724→          {portalData?.session?.expiresAt && (
+   725→   725→   725→            <span>Session expires {formatDate(portalData.session.expiresAt)}</span>
+   726→   726→   726→          )}
+   727→   727→   727→        </div>
+   728→   728→   728→      </footer>
+   729→   729→   729→
+   730→   730→   730→      {/* ─── Review Dialog ──────────────────────────────────────────── */}
+   731→   731→   731→      <Dialog open={showReviewDialog} onOpenChange={setShowReviewDialog}>
+   732→   732→   732→        <DialogContent className="sm:max-w-md">
+   733→   733→   733→          <DialogHeader>
+   734→   734→   734→            <DialogTitle className="flex items-center gap-2">
+   735→   735→   735→              <Star className="size-5 text-amber-500" />
+   736→   736→   736→              Leave a Review
+   737→   737→   737→            </DialogTitle>
+   738→   738→   738→            <DialogDescription>
+   739→   739→   739→              {reviewJob ? `How was your experience with "${reviewJob.title}"?` : ''}
+   740→   740→   740→            </DialogDescription>
+   741→   741→   741→          </DialogHeader>
+   742→   742→   742→
+   743→   743→   743→          <div className="space-y-4 py-2">
+   744→   744→   744→            {/* Star rating */}
+   745→   745→   745→            <div className="space-y-2">
+   746→   746→   746→              <label className="text-sm font-medium text-gray-700">Rating</label>
+   747→   747→   747→              <div className="flex items-center gap-3">
+   748→   748→   748→                <StarRating value={reviewRating} onChange={setReviewRating} size="lg" />
+   749→   749→   749→                <span className="text-sm text-gray-500">{reviewRating}/5</span>
+   750→   750→   750→              </div>
+   751→   751→   751→            </div>
+   752→   752→   752→
+   753→   753→   753→            {/* Comment */}
+   754→   754→   754→            <div className="space-y-2">
+   755→   755→   755→              <label className="text-sm font-medium text-gray-700">Your feedback</label>
+   756→   756→   756→              <Textarea
+   757→   757→   757→                placeholder="Tell us about your experience..."
+   758→   758→   758→                value={reviewComment}
+   759→   759→   759→                onChange={(e) => setReviewComment(e.target.value)}
+   760→   760→   760→                rows={4}
+   761→   761→   761→                className="resize-none"
+   762→   762→   762→              />
+   763→   763→   763→            </div>
+   764→   764→   764→          </div>
+   765→   765→   765→
+   766→   766→   766→          <DialogFooter>
+   767→   767→   767→            <Button variant="outline" onClick={() => setShowReviewDialog(false)}>
+   768→   768→   768→              Cancel
+   769→   769→   769→            </Button>
+   770→   770→   770→            <Button
+   771→   771→   771→              onClick={handleSubmitReview}
+   772→   772→   772→              disabled={reviewSubmitting}
+   773→   773→   773→              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+   774→   774→   774→            >
+   775→   775→   775→              {reviewSubmitting ? (
+   776→   776→   776→                <Loader2 className="size-4 mr-1 animate-spin" />
+   777→   777→   777→              ) : (
+   778→   778→   778→                <Send className="size-4 mr-1" />
+   779→   779→   779→              )}
+   780→   780→   780→              Submit Review
+   781→   781→   781→            </Button>
+   782→   782→   782→          </DialogFooter>
+   783→   783→   783→        </DialogContent>
+   784→   784→   784→      </Dialog>
+   785→   785→   785→    </div>
+   786→   786→   786→  );
+   787→   787→   787→}
+   788→   788→   788→

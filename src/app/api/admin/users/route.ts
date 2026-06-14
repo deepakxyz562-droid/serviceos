@@ -15,8 +15,8 @@ export async function GET(request: NextRequest) {
     const role = searchParams.get('role') || '';
     const tenantId = searchParams.get('tenantId') || '';
 
-    // Build where clause
-    const where: Record<string, unknown> = { role: { not: 'admin' } };
+    // Build where clause - show all users including admins
+    const where: Record<string, unknown> = {};
 
     if (search) {
       where.OR = [
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const formattedUsers = users.map((user) => ({
+    const formattedUsers = users.map((user: Record<string, unknown>) => ({
       id: user.id,
       name: user.name,
       email: user.email,
@@ -68,12 +68,12 @@ export async function GET(request: NextRequest) {
       isActive: user.isActive,
       avatar: user.avatar,
       authProvider: user.authProvider,
-      lastLoginAt: user.lastLoginAt?.toISOString() || null,
+      lastLoginAt: user.lastLoginAt ? new Date(user.lastLoginAt as string | Date).toISOString() : null,
       tenantId: user.tenantId,
-      tenantName: user.tenant?.name || null,
-      tenantSlug: user.tenant?.slug || null,
-      tenantPlan: user.tenant?.plan || null,
-      createdAt: user.createdAt.toISOString(),
+      tenantName: (user.tenant as Record<string, unknown>)?.name || null,
+      tenantSlug: (user.tenant as Record<string, unknown>)?.slug || null,
+      tenantPlan: (user.tenant as Record<string, unknown>)?.plan || null,
+      createdAt: new Date(user.createdAt as string | Date).toISOString(),
     }));
 
     return NextResponse.json({ users: formattedUsers, total: formattedUsers.length });
