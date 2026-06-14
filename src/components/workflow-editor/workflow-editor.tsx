@@ -50,6 +50,11 @@ import {
   conditionNodes,
   actionNodes,
   flowControlNodes,
+  logicNodes,
+  codeNodes,
+  dataNodes,
+  communicationNodes,
+  cloudNodes,
   aiNodes,
   utilityNodes,
   workflowTemplates,
@@ -58,7 +63,7 @@ import type { NodeCategory, NodeTypeDefinition } from '@/types/workflow';
 
 // ─── Types ────────────────────────────────────────────────────────────────
 
-type NodeType = 'trigger' | 'action' | 'condition' | 'flowControl' | 'ai' | 'utility' | 'delay';
+type NodeType = 'trigger' | 'action' | 'condition' | 'flowControl' | 'logic' | 'code' | 'data' | 'communication' | 'cloud' | 'ai' | 'utility' | 'delay';
 
 interface CanvasNode {
   id: string;
@@ -86,6 +91,11 @@ const CATEGORY_BORDER_COLOR: Record<string, string> = {
   condition: 'border-l-orange-500',
   action: 'border-l-emerald-500',
   flowControl: 'border-l-purple-500',
+  logic: 'border-l-orange-500',
+  code: 'border-l-yellow-500',
+  data: 'border-l-blue-500',
+  communication: 'border-l-pink-500',
+  cloud: 'border-l-amber-500',
   ai: 'border-l-pink-500',
   utility: 'border-l-gray-500',
   template: 'border-l-yellow-500',
@@ -96,6 +106,11 @@ const CATEGORY_ICON_BG: Record<string, string> = {
   condition: 'bg-orange-500/15 text-orange-600',
   action: 'bg-emerald-500/15 text-emerald-600',
   flowControl: 'bg-purple-500/15 text-purple-600',
+  logic: 'bg-orange-500/15 text-orange-600',
+  code: 'bg-yellow-500/15 text-yellow-600',
+  data: 'bg-blue-500/15 text-blue-600',
+  communication: 'bg-pink-500/15 text-pink-600',
+  cloud: 'bg-amber-500/15 text-amber-600',
   ai: 'bg-pink-500/15 text-pink-600',
   utility: 'bg-gray-500/15 text-gray-600',
   template: 'bg-yellow-500/15 text-yellow-600',
@@ -143,7 +158,7 @@ export function WorkflowEditor() {
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(
-    new Set(['trigger', 'condition', 'action', 'flowControl']),
+    new Set(['trigger', 'condition', 'action', 'flowControl', 'logic']),
   );
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -242,6 +257,11 @@ export function WorkflowEditor() {
           case 'trigger': return 'trigger';
           case 'condition': return 'condition';
           case 'flowControl': return 'flowControl';
+          case 'logic': return 'logic';
+          case 'code': return 'code';
+          case 'data': return 'data';
+          case 'communication': return 'communication';
+          case 'cloud': return 'cloud';
           case 'ai': return 'ai';
           case 'utility': return 'utility';
           default: return 'action';
@@ -282,6 +302,11 @@ export function WorkflowEditor() {
           case 'trigger': return 'trigger';
           case 'condition': return 'condition';
           case 'flowControl': return 'flowControl';
+          case 'logic': return 'logic';
+          case 'code': return 'code';
+          case 'data': return 'data';
+          case 'communication': return 'communication';
+          case 'cloud': return 'cloud';
           case 'ai': return 'ai';
           case 'utility': return 'utility';
           default: return 'action';
@@ -618,6 +643,11 @@ export function WorkflowEditor() {
     actions: actionNodes,
     conditions: conditionNodes,
     flowControl: flowControlNodes,
+    logic: logicNodes,
+    code: codeNodes,
+    data: dataNodes,
+    communication: communicationNodes,
+    cloud: cloudNodes,
     ai: aiNodes,
     utilities: utilityNodes,
   }), []);
@@ -1159,6 +1189,106 @@ export function WorkflowEditor() {
                                   }}
                                 >
                                   <DynamicIcon name={nodeDef.icon} className="h-3.5 w-3.5 text-purple-500" />
+                                  <span>{nodeDef.displayName}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Logic group */}
+                          {addMenuNodes.logic.length > 0 && (
+                            <div className="mb-2">
+                              <p className="px-1 mb-1 text-[10px] font-semibold text-orange-600 uppercase tracking-wider">Logic</p>
+                              {addMenuNodes.logic.map((nodeDef) => (
+                                <button
+                                  key={nodeDef.type}
+                                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    addConnectedNode(node.id, nodeDef.type);
+                                  }}
+                                >
+                                  <DynamicIcon name={nodeDef.icon} className="h-3.5 w-3.5 text-orange-500" />
+                                  <span>{nodeDef.displayName}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Code group */}
+                          {addMenuNodes.code.length > 0 && (
+                            <div className="mb-2">
+                              <p className="px-1 mb-1 text-[10px] font-semibold text-yellow-600 uppercase tracking-wider">Code</p>
+                              {addMenuNodes.code.map((nodeDef) => (
+                                <button
+                                  key={nodeDef.type}
+                                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    addConnectedNode(node.id, nodeDef.type);
+                                  }}
+                                >
+                                  <DynamicIcon name={nodeDef.icon} className="h-3.5 w-3.5 text-yellow-500" />
+                                  <span>{nodeDef.displayName}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Data group */}
+                          {addMenuNodes.data.length > 0 && (
+                            <div className="mb-2">
+                              <p className="px-1 mb-1 text-[10px] font-semibold text-blue-600 uppercase tracking-wider">Data</p>
+                              {addMenuNodes.data.map((nodeDef) => (
+                                <button
+                                  key={nodeDef.type}
+                                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    addConnectedNode(node.id, nodeDef.type);
+                                  }}
+                                >
+                                  <DynamicIcon name={nodeDef.icon} className="h-3.5 w-3.5 text-blue-500" />
+                                  <span>{nodeDef.displayName}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Communication group */}
+                          {addMenuNodes.communication.length > 0 && (
+                            <div className="mb-2">
+                              <p className="px-1 mb-1 text-[10px] font-semibold text-pink-600 uppercase tracking-wider">Communication</p>
+                              {addMenuNodes.communication.map((nodeDef) => (
+                                <button
+                                  key={nodeDef.type}
+                                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    addConnectedNode(node.id, nodeDef.type);
+                                  }}
+                                >
+                                  <DynamicIcon name={nodeDef.icon} className="h-3.5 w-3.5 text-pink-500" />
+                                  <span>{nodeDef.displayName}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Cloud group */}
+                          {addMenuNodes.cloud.length > 0 && (
+                            <div className="mb-2">
+                              <p className="px-1 mb-1 text-[10px] font-semibold text-amber-600 uppercase tracking-wider">Cloud & Storage</p>
+                              {addMenuNodes.cloud.map((nodeDef) => (
+                                <button
+                                  key={nodeDef.type}
+                                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-gray-700 transition-colors hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    addConnectedNode(node.id, nodeDef.type);
+                                  }}
+                                >
+                                  <DynamicIcon name={nodeDef.icon} className="h-3.5 w-3.5 text-amber-500" />
                                   <span>{nodeDef.displayName}</span>
                                 </button>
                               ))}

@@ -7,7 +7,7 @@ export interface NodePort {
 }
 
 // Node categories
-export type NodeCategory = 'trigger' | 'condition' | 'action' | 'flowControl' | 'template' | 'ai' | 'utility';
+export type NodeCategory = 'trigger' | 'condition' | 'action' | 'flowControl' | 'logic' | 'code' | 'data' | 'communication' | 'cloud' | 'template' | 'ai' | 'utility';
 
 // Node status for execution
 export type NodeStatus = 'idle' | 'running' | 'success' | 'error' | 'waiting';
