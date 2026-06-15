@@ -169,6 +169,7 @@ const MENU_SECTIONS = [
   { key: 'Finance', label: 'Finance', icon: Wallet, color: 'teal' },
   { key: 'System', label: 'System', icon: Settings2, color: 'slate' },
   { key: 'Portals', label: 'Portals', icon: Globe, color: 'rose' },
+  { key: 'AI & More', label: 'AI & More', icon: Cpu, color: 'indigo' },
 ] as const;
 
 const DEFAULT_MENU_ITEMS: { key: string; label: string; section: string }[] = [
@@ -209,6 +210,15 @@ const DEFAULT_MENU_ITEMS: { key: string; label: string; section: string }[] = [
   // Portals
   { key: 'customerPortal', label: 'Customer Portal', section: 'Portals' },
   { key: 'employeePortal', label: 'Employee Portal', section: 'Portals' },
+  // AI & More
+  { key: 'aiAssistant', label: 'AI Assistant', section: 'AI & More' },
+  { key: 'chatbotBuilder', label: 'Chatbot Builder', section: 'AI & More' },
+  { key: 'retargeting', label: 'Retargeting', section: 'AI & More' },
+  { key: 'segments', label: 'Segments', section: 'AI & More' },
+  { key: 'marketingAnalytics', label: 'Analytics', section: 'AI & More' },
+  { key: 'serviceCatalog', label: 'Service Catalog', section: 'AI & More' },
+  { key: 'communicationProviders', label: 'Providers', section: 'AI & More' },
+  { key: 'reviews', label: 'Reviews', section: 'AI & More' },
 ];
 
 const FEATURE_DEFINITIONS = [

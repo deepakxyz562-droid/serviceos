@@ -143,7 +143,6 @@ const ownerNavSections: NavSection[] = [
       { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
       { view: 'marketingTemplates', label: 'Templates', icon: MessageSquare },
       { view: 'omnichannel', label: 'Omnichannel', icon: RadioTower },
-      { view: 'communicationProviders', label: 'Providers', icon: KeyRound },
     ],
   },
   {
@@ -163,7 +162,6 @@ const ownerNavSections: NavSection[] = [
       { view: 'quotes', label: 'Quotes', icon: Receipt },
       { view: 'invoices', label: 'Invoices', icon: FileText },
       { view: 'billing', label: 'Billing', icon: CreditCard },
-      { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },
     ],
   },
   {
@@ -190,6 +188,8 @@ const ownerNavSections: NavSection[] = [
       { view: 'retargeting', label: 'Retargeting', icon: RefreshCw },
       { view: 'segments', label: 'Segments', icon: Filter },
       { view: 'marketingAnalytics', label: 'Analytics', icon: BarChart3 },
+      { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },
+      { view: 'communicationProviders', label: 'Providers', icon: KeyRound },
       { view: 'reviews', label: 'Reviews', icon: Star },
     ],
   },
