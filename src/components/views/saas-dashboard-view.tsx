@@ -828,8 +828,8 @@ export function SaaSDashboardView() {
               variant="outline"
               className="justify-start gap-2.5 h-auto py-3 border-green-200 text-green-700 hover:bg-green-50"
               onClick={() => {
-                toast.success('Navigate to WhatsApp');
-                setCurrentView('whatsapp');
+                toast.success('Navigate to Omnichannel');
+                setCurrentView('omnichannel');
               }}
             >
               <MessageCircle className="size-4" />

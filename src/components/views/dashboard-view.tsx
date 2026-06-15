@@ -47,6 +47,7 @@ import {
 import { useAppStore } from '@/store/app-store';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { formatCurrency, formatCurrencyCompact } from '@/lib/currency';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useRealtime } from '@/hooks/use-realtime';
 import {
@@ -191,24 +192,6 @@ interface EcommerceRecentOrder {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatINR(amount: number): string {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
-function formatUSD(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
 
 function formatShortDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -714,7 +697,7 @@ export function DashboardView() {
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-muted-foreground font-medium">Monthly Revenue</p>
-                    <p className="text-2xl font-bold mt-1">{formatUSD(stats.monthlyRevenue.amount)}</p>
+                    <p className="text-2xl font-bold mt-1">{formatCurrencyCompact(stats.monthlyRevenue.amount, 'INR')}</p>
                     <div className="flex items-center gap-1 mt-1">
                       {stats.monthlyRevenue.trend >= 0 ? (
                         <TrendingUp className="size-3.5 text-emerald-500" />
@@ -818,7 +801,7 @@ export function DashboardView() {
                       </p>
                       <p className={cn('text-2xl font-bold mt-0.5', colors.text)}>{stage.count}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {formatUSD(stage.value)}
+                        {formatCurrencyCompact(stage.value, 'INR')}
                       </p>
                     </div>
                     {idx < displayPipeline.length - 1 && (
@@ -884,7 +867,7 @@ export function DashboardView() {
                       boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
                       fontSize: '12px',
                     }}
-                    formatter={(value: number) => [formatUSD(value), 'Revenue']}
+                    formatter={(value: number) => [formatCurrencyCompact(value, 'INR'), 'Revenue']}
                   />
                   <Area
                     type="monotone"
@@ -1116,8 +1099,8 @@ export function DashboardView() {
                 variant="outline"
                 className="justify-start gap-2.5 h-auto py-3 border-green-200 text-green-700 hover:bg-green-50"
                 onClick={() => {
-                  setCurrentView('whatsapp');
-                  toast.info('Opening WhatsApp');
+                  setCurrentView('omnichannel');
+                  toast.info('Opening Omnichannel');
                 }}
               >
                 <MessageCircle className="size-4" />
@@ -1188,7 +1171,7 @@ export function DashboardView() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right font-medium text-sm">
-                          {formatUSD(lead.value)}
+                          {formatCurrencyCompact(lead.value, 'INR')}
                         </TableCell>
                         <TableCell className="text-right text-xs text-muted-foreground hidden sm:table-cell">
                           {formatShortDate(lead.date)}
@@ -1448,7 +1431,7 @@ export function DashboardView() {
                 variant="ghost"
                 size="sm"
                 className="text-muted-foreground"
-                onClick={() => setCurrentView('whatsapp')}
+                onClick={() => setCurrentView('omnichannel')}
               >
                 Open <ArrowRight className="size-3.5 ml-1" />
               </Button>
@@ -1490,7 +1473,7 @@ export function DashboardView() {
                     <div
                       key={conv.id}
                       className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
-                      onClick={() => setCurrentView('whatsapp')}
+                      onClick={() => setCurrentView('omnichannel')}
                     >
                       <div className="size-8 rounded-full bg-green-100 flex items-center justify-center shrink-0">
                         <span className="text-xs font-semibold text-green-700">
@@ -1653,11 +1636,11 @@ export function DashboardView() {
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-muted-foreground font-medium">Revenue Today</p>
-                    <p className="text-2xl font-bold mt-1">{formatINR(ecommerceStats.revenueToday)}</p>
+                    <p className="text-2xl font-bold mt-1">{formatCurrencyCompact(ecommerceStats.revenueToday, 'INR')}</p>
                     <div className="flex items-center gap-1 mt-1">
                       <TrendingUp className="size-3.5 text-emerald-500" />
                       <span className="text-xs font-medium text-emerald-600">
-                        {formatINR(ecommerceStats.totalRevenue)} total
+                        {formatCurrencyCompact(ecommerceStats.totalRevenue, 'INR')} total
                       </span>
                     </div>
                   </div>
@@ -1695,7 +1678,7 @@ export function DashboardView() {
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-muted-foreground font-medium">Avg Order Value</p>
-                    <p className="text-2xl font-bold mt-1">{formatINR(ecommerceStats.avgOrderValue)}</p>
+                    <p className="text-2xl font-bold mt-1">{formatCurrencyCompact(ecommerceStats.avgOrderValue, 'INR')}</p>
                     <div className="flex items-center gap-1 mt-1">
                       <TrendingUp className="size-3.5 text-emerald-500" />
                       <span className="text-xs font-medium text-emerald-600">
@@ -1807,7 +1790,7 @@ export function DashboardView() {
                               </div>
                             </TableCell>
                             <TableCell className="text-center text-sm">{product.totalQty}</TableCell>
-                            <TableCell className="text-right text-sm font-medium">{formatINR(product.revenue)}</TableCell>
+                            <TableCell className="text-right text-sm font-medium">{formatCurrency(product.revenue, 'INR')}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -1880,7 +1863,7 @@ export function DashboardView() {
                                 {order.status}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-right text-sm font-medium">{formatINR(order.total)}</TableCell>
+                            <TableCell className="text-right text-sm font-medium">{formatCurrency(order.total, 'INR')}</TableCell>
                             <TableCell className="hidden sm:table-cell">
                               <Badge variant="outline" className="text-[10px] px-1.5 py-0 capitalize">
                                 {order.integration?.provider || '—'}

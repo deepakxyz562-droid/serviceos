@@ -48,6 +48,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { formatCurrency as formatCurrencyShared } from '@/lib/currency';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -199,15 +200,6 @@ const PLANS: Plan[] = [
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatUSD(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
 
 function getTrialDaysRemaining(trialEndsAt: string | null): number {
   if (!trialEndsAt) return 0;
@@ -368,7 +360,7 @@ function PayPalCheckoutDialog({
         throw new Error(data.error || 'Failed to capture payment');
       }
       toast.success(`Successfully upgraded to ${plan.name} plan!`, {
-        description: `Payment of ${formatUSD(price)} processed via PayPal`,
+        description: `Payment of ${formatCurrencyShared(price, 'INR')} processed via PayPal`,
       });
       onSuccess();
     } catch (err) {
@@ -410,7 +402,7 @@ function PayPalCheckoutDialog({
             <div className="flex justify-between">
               <span className="font-semibold">Total</span>
               <span className="text-lg font-bold text-emerald-600">
-                {formatUSD(price)}<span className="text-sm text-muted-foreground font-normal">/{billingCycle === 'yearly' ? 'year' : 'month'}</span>
+                {formatCurrencyShared(price, 'INR')}<span className="text-sm text-muted-foreground font-normal">/{billingCycle === 'yearly' ? 'year' : 'month'}</span>
               </span>
             </div>
           </div>
@@ -706,7 +698,7 @@ export function BillingView() {
               </CardTitle>
               <CardDescription className="mt-1">
                 {currentPlanData?.name} · {data.billingCycle === 'yearly' ? 'Yearly' : 'Monthly'} billing
-                {currentPrice > 0 && <span className="font-semibold text-foreground"> · {formatUSD(currentPrice)}/{data.billingCycle === 'yearly' ? 'year' : 'month'}</span>}
+                {currentPrice > 0 && <span className="font-semibold text-foreground"> · {formatCurrencyShared(currentPrice, 'INR')}/{data.billingCycle === 'yearly' ? 'year' : 'month'}</span>}
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
@@ -841,13 +833,13 @@ export function BillingView() {
                     <p className="text-3xl font-bold">Custom</p>
                   ) : (
                     <>
-                      <span className="text-3xl font-bold">{formatUSD(price)}</span>
+                      <span className="text-3xl font-bold">{formatCurrencyShared(price, 'INR')}</span>
                       <span className="text-sm text-muted-foreground">
                         /{isYearly ? 'year' : 'month'}
                       </span>
                       {isYearly && plan.monthlyPrice > 0 && (
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {formatUSD(Math.round(plan.yearlyPrice / 12))}/mo billed annually
+                          {formatCurrencyShared(Math.round(plan.yearlyPrice / 12), 'INR')}/mo billed annually
                         </p>
                       )}
                     </>
@@ -1028,7 +1020,7 @@ export function BillingView() {
                       {record.description}
                     </TableCell>
                     <TableCell className="text-right text-sm">
-                      {formatUSD(record.amount)}
+                      {formatCurrencyShared(record.amount, 'INR')}
                     </TableCell>
                     <TableCell className="text-center">
                       <span

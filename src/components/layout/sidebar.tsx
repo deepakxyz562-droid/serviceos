@@ -28,7 +28,6 @@ import {
   Plus,
   Crown,
   Globe,
-  Inbox,
   UserCircle,
   Megaphone,
   Filter,
@@ -141,11 +140,18 @@ const ownerNavSections: NavSection[] = [
   {
     title: 'Communication',
     items: [
-      { view: 'inbox', label: 'WhatsApp Inbox', icon: Inbox, badge: 'New' },
-      { view: 'broadcast', label: 'Broadcast', icon: Send },
-      { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
-      { view: 'marketingTemplates', label: 'Templates', icon: MessageSquare },
       { view: 'omnichannel', label: 'Omnichannel', icon: RadioTower },
+      { view: 'broadcast', label: 'Broadcast', icon: Send },
+      { view: 'marketingTemplates', label: 'Templates', icon: MessageSquare },
+    ],
+  },
+  {
+    title: 'Marketing',
+    items: [
+      { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
+      { view: 'segments', label: 'Segments', icon: Filter },
+      { view: 'retargeting', label: 'Retargeting', icon: RefreshCw },
+      { view: 'marketingAnalytics', label: 'Analytics', icon: BarChart3 },
     ],
   },
   {
@@ -189,9 +195,6 @@ const ownerNavSections: NavSection[] = [
     items: [
       { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
       { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
-      { view: 'retargeting', label: 'Retargeting', icon: RefreshCw },
-      { view: 'segments', label: 'Segments', icon: Filter },
-      { view: 'marketingAnalytics', label: 'Analytics', icon: BarChart3 },
       { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },
       { view: 'communicationProviders', label: 'Providers', icon: KeyRound },
       { view: 'reviews', label: 'Reviews', icon: Star },
@@ -251,7 +254,7 @@ const superadminNavSections: NavSection[] = [
   {
     title: 'Communication',
     items: [
-      { view: 'inbox', label: 'Inbox', icon: Inbox },
+      { view: 'omnichannel', label: 'Omnichannel', icon: Radio },
       { view: 'broadcast', label: 'Broadcast', icon: Radio },
       { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
     ],

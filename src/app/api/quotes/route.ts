@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { toISOString } from '@/lib/utils';
+import { getExchangeRate, convertCurrency } from '@/lib/currency';
 
 export async function GET(req: NextRequest) {
   try {
@@ -27,6 +28,10 @@ export async function GET(req: NextRequest) {
       taxRate: q.taxRate,
       tax: q.tax,
       total: q.total,
+      currency: q.currency || 'USD',
+      exchangeRate: q.exchangeRate || 1,
+      baseCurrency: q.baseCurrency || 'USD',
+      baseAmount: q.baseAmount || q.total,
       status: q.status,
       validUntil: q.validUntil ? toISOString(q.validUntil as Date | string | null)?.split('T')[0] ?? null : null,
       whatsappSent: q.whatsappSent,
@@ -46,6 +51,7 @@ export async function POST(req: NextRequest) {
     const {
       title, description, customerId,
       services, addOns, discountType, discountValue, taxRate, validUntil,
+      currency: quoteCurrency, tenantId: bodyTenantId,
     } = body;
 
     if (!title || !customerId) {
@@ -66,6 +72,17 @@ export async function POST(req: NextRequest) {
     const tax = afterDiscount * ((taxRate || 0) / 100);
     const total = afterDiscount + tax;
 
+    // Resolve base currency from tenant
+    let baseCurrency = 'USD';
+    try {
+      const tenant = await db.tenant.findFirst({ orderBy: { createdAt: 'asc' } });
+      if (tenant?.currency) baseCurrency = tenant.currency;
+    } catch { /* fallback */ }
+
+    const transactionCurrency = quoteCurrency || baseCurrency;
+    const exchangeRate = transactionCurrency === baseCurrency ? 1 : getExchangeRate(transactionCurrency, baseCurrency);
+    const baseAmount = transactionCurrency === baseCurrency ? total : convertCurrency(total, transactionCurrency, baseCurrency, exchangeRate);
+
     const quote = await db.quote.create({
       data: {
         title,
@@ -79,8 +96,13 @@ export async function POST(req: NextRequest) {
         taxRate: taxRate || 0,
         tax,
         total,
+        currency: transactionCurrency,
+        exchangeRate,
+        baseCurrency,
+        baseAmount,
         status: 'draft',
         validUntil: validUntil ? new Date(validUntil) : null,
+        tenantId: bodyTenantId || null,
       },
     });
 

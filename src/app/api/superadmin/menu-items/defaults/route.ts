@@ -17,25 +17,24 @@ const DEFAULT_MENU_ITEMS = [
   // Marketing
   { key: 'campaigns', label: 'Campaigns', icon: 'Megaphone', section: 'marketing', sortOrder: 9 },
   { key: 'segments', label: 'Segments', icon: 'Filter', section: 'marketing', sortOrder: 10 },
-  { key: 'marketing_templates', label: 'Templates', icon: 'FileText', section: 'marketing', sortOrder: 11 },
-  { key: 'marketing_analytics', label: 'Analytics', icon: 'BarChart3', section: 'marketing', sortOrder: 12 },
+  { key: 'retargeting', label: 'Retargeting', icon: 'RefreshCw', section: 'marketing', sortOrder: 11 },
+  { key: 'marketing_templates', label: 'Templates', icon: 'FileText', section: 'marketing', sortOrder: 12 },
+  { key: 'marketing_analytics', label: 'Analytics', icon: 'BarChart3', section: 'marketing', sortOrder: 13 },
   // Sales
-  { key: 'sales_pipeline', label: 'Pipeline', icon: 'ShoppingCart', section: 'sales', sortOrder: 13 },
-  { key: 'quotes', label: 'Quotes', icon: 'FileText', section: 'sales', sortOrder: 14 },
-  { key: 'invoices', label: 'Invoices', icon: 'Receipt', section: 'sales', sortOrder: 15 },
+  { key: 'sales_pipeline', label: 'Pipeline', icon: 'ShoppingCart', section: 'sales', sortOrder: 14 },
+  { key: 'quotes', label: 'Quotes', icon: 'FileText', section: 'sales', sortOrder: 15 },
+  { key: 'invoices', label: 'Invoices', icon: 'Receipt', section: 'sales', sortOrder: 16 },
   // WhatsApp CRM
-  { key: 'inbox', label: 'Inbox', icon: 'MessageSquare', section: 'whatsapp_crm', sortOrder: 16 },
-  { key: 'broadcast', label: 'Broadcast', icon: 'Radio', section: 'whatsapp_crm', sortOrder: 17 },
-  { key: 'chatbot_builder', label: 'Chatbot Builder', icon: 'Bot', section: 'whatsapp_crm', sortOrder: 18 },
-  { key: 'whatsapp', label: 'WhatsApp', icon: 'MessageSquare', section: 'whatsapp_crm', sortOrder: 19 },
+  { key: 'omnichannel', label: 'Omnichannel', icon: 'RadioTower', section: 'whatsapp_crm', sortOrder: 17 },
+  { key: 'broadcast', label: 'Broadcast', icon: 'Radio', section: 'whatsapp_crm', sortOrder: 18 },
+  { key: 'chatbot_builder', label: 'Chatbot Builder', icon: 'Bot', section: 'whatsapp_crm', sortOrder: 19 },
   // AI & Automation
   { key: 'ai_assistant', label: 'AI Assistant', icon: 'Bot', section: 'ai_automation', sortOrder: 20 },
   { key: 'workflows', label: 'Workflows', icon: 'Workflow', section: 'ai_automation', sortOrder: 21 },
   { key: 'workflow_automations', label: 'Automations', icon: 'Zap', section: 'ai_automation', sortOrder: 22 },
   { key: 'triggers', label: 'Triggers', icon: 'Zap', section: 'ai_automation', sortOrder: 23 },
   // Channels
-  { key: 'omnichannel', label: 'Omnichannel', icon: 'Radio', section: 'channels', sortOrder: 24 },
-  { key: 'communication_providers', label: 'Providers', icon: 'Settings', section: 'channels', sortOrder: 25 },
+  { key: 'communication_providers', label: 'Providers', icon: 'Settings', section: 'channels', sortOrder: 24 },
   { key: 'forms', label: 'Forms', icon: 'FileInput', section: 'channels', sortOrder: 26 },
   // Finance
   { key: 'billing', label: 'Billing', icon: 'CreditCard', section: 'finance', sortOrder: 27 },

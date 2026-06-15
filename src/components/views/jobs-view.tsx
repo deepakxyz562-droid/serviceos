@@ -837,7 +837,7 @@ export function JobsView() {
 
       {/* ─── Assign Employee Dialog ────────────────────────────────────── */}
       <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Assign Employee</DialogTitle>
             <DialogDescription>
@@ -845,7 +845,7 @@ export function JobsView() {
             </DialogDescription>
           </DialogHeader>
           {assigningJob && (
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-y-auto flex-1 min-h-0">
               <div className="p-3 rounded-lg bg-muted/50 space-y-1">
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-sm">{assigningJob.title}</span>
@@ -867,7 +867,7 @@ export function JobsView() {
                     No available employees
                   </div>
                 ) : (
-                  <ScrollArea className="max-h-64">
+                  <ScrollArea className="max-h-[50vh]">
                     <div className="space-y-2">
                       {employees.filter(e => e.status === 'available').map((emp) => {
                         let skills: string[] = [];

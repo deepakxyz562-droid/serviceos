@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { getExchangeRate, convertCurrency } from '@/lib/currency';
 
 /**
  * Resolves a tenant ID from the auth user, falling back to the first tenant
@@ -98,7 +99,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { customerId, jobId, employeeId, items, dueDate, notes, discount, taxPercent } = body;
+    const { customerId, jobId, employeeId, items, dueDate, notes, discount, taxPercent, currency: invoiceCurrency } = body;
 
     if (!customerId) {
       return NextResponse.json({ error: 'Customer ID is required' }, { status: 400 });
@@ -113,12 +114,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No tenant found' }, { status: 400 });
     }
 
+    // Resolve tenant's base currency
+    const tenant = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { currency: true },
+    });
+    const baseCurrency = tenant?.currency || 'USD';
+    const transactionCurrency = invoiceCurrency || baseCurrency;
+
     // Calculate amounts
     const subtotal = items.reduce((sum: number, item: { quantity: number; rate: number }) => sum + item.quantity * item.rate, 0);
     const taxPercentVal = taxPercent || 0;
     const tax = subtotal * (taxPercentVal / 100);
     const discountVal = discount || 0;
     const total = subtotal + tax - discountVal;
+
+    // Calculate exchange rate and base amount for multi-currency
+    const exchangeRate = transactionCurrency === baseCurrency ? 1 : getExchangeRate(transactionCurrency, baseCurrency);
+    const baseAmount = transactionCurrency === baseCurrency ? total : convertCurrency(total, transactionCurrency, baseCurrency, exchangeRate);
 
     // Generate invoice number
     const invoiceCount = await db.invoice.count({ where: { tenantId } });
@@ -135,6 +148,10 @@ export async function POST(request: NextRequest) {
         tax,
         discount: discountVal,
         total,
+        currency: transactionCurrency,
+        exchangeRate,
+        baseCurrency,
+        baseAmount,
         status: 'draft',
         dueDate: dueDate ? new Date(dueDate) : null,
         itemsJson: JSON.stringify(items),

@@ -627,7 +627,7 @@ export function CrmView() {
                     <Button variant="outline" size="sm" className="flex-1" onClick={() => { setShowCustomerDetail(false); openEditCustomer(selectedCustomer); }}>
                       <Pencil className="size-3.5 mr-1" /> Edit
                     </Button>
-                    <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => { setShowCustomerDetail(false); setActiveView('whatsapp'); }}>
+                    <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => { setShowCustomerDetail(false); setActiveView('omnichannel'); }}>
                       <MessageCircle className="size-3.5 mr-1" /> Message
                     </Button>
                   </div>
@@ -1068,7 +1068,7 @@ export function CrmView() {
                       <Button variant="outline" size="sm" className="flex-1" onClick={() => { setShowEmployeeDetail(false); openEditEmployee(selectedEmployee); }}>
                         <Pencil className="size-3.5 mr-1" /> Edit
                       </Button>
-                      <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => { setShowEmployeeDetail(false); setActiveView('whatsapp'); }}>
+                      <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => { setShowEmployeeDetail(false); setActiveView('omnichannel'); }}>
                         <MessageCircle className="size-3.5 mr-1" /> WhatsApp
                       </Button>
                     </div>

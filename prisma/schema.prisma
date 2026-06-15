@@ -221,7 +221,10 @@ model Invoice {
   tax         Float     @default(0)
   discount    Float     @default(0)
   total       Float     @default(0)
-  currency    String    @default("USD")
+  currency    String    @default("USD")      // Transaction currency (what the customer sees/pays)
+  exchangeRate Float    @default(1)           // Rate at creation: 1 base = X transaction currency
+  baseCurrency String   @default("USD")      // Tenant base currency at creation time
+  baseAmount   Float    @default(0)           // Amount converted to base currency (for reporting)
   status      String    @default("draft")
   dueDate     DateTime?
   paidAt      DateTime?
@@ -300,6 +303,10 @@ model Quote {
   discount      Float     @default(0)
   discountType  String    @default("fixed") // fixed, percentage
   total         Float     @default(0)
+  currency      String    @default("USD")      // Transaction currency
+  exchangeRate  Float     @default(1)           // Rate at creation: 1 base = X transaction currency
+  baseCurrency  String    @default("USD")      // Tenant base currency at creation time
+  baseAmount    Float     @default(0)           // Amount converted to base currency (for reporting)
   status        String    @default("draft") // draft, sent, accepted, rejected, expired
   tenantId      String?
   customerId    String?
@@ -712,15 +719,16 @@ model NotificationLog {
 }
 
 model Customer {
-  id          String   @id @default(cuid())
-  name        String
-  phone       String
-  email       String?
-  address     String?
-  whatsappId  String?
-  workspaceId String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  name               String
+  phone              String
+  email              String?
+  address            String?
+  whatsappId         String?
+  preferredCurrency  String   @default("USD")  // Customer's preferred display currency
+  workspaceId        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   workspace Workspace? @relation(fields: [workspaceId], references: [id])
   jobs      Job[]

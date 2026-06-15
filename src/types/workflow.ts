@@ -168,7 +168,7 @@ export type ViewType =
   // CRM
   | 'crm' | 'leads' | 'contacts' | 'customers' | 'customer360' | 'salesPipeline'
   // Communication
-  | 'whatsapp' | 'inbox' | 'broadcast' | 'campaigns' | 'marketingTemplates' | 'omnichannel'
+  | 'broadcast' | 'campaigns' | 'marketingTemplates' | 'omnichannel'
   // Automation
   | 'workflows' | 'canvas' | 'triggers' | 'variables' | 'executions' | 'formBuilder' | 'workflowAutomations'
   // Operations

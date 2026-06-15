@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { formatCurrency as formatCurrencyShared } from '@/lib/currency';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -86,15 +87,6 @@ function formatNumber(n: number): string {
   if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
   if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
   return n.toLocaleString();
-}
-
-function formatCurrency(n: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(n);
 }
 
 function getChannelIcon(channel: string) {
@@ -239,7 +231,7 @@ export function MarketingAnalyticsView() {
     { label: 'Reply Rate', value: `${overview.replyRate}%`, icon: MessageSquare, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-950/50' },
     { label: 'Click Rate', value: `${overview.clickRate}%`, icon: MousePointer, color: 'text-orange-600', bg: 'bg-orange-50 dark:bg-orange-950/50' },
     { label: 'Conversion Rate', value: `${overview.conversionRate}%`, icon: Target, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/50' },
-    { label: 'Revenue Generated', value: formatCurrency(overview.totalRevenue), icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/50' },
+    { label: 'Revenue Generated', value: formatCurrencyShared(overview.totalRevenue, 'INR'), icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/50' },
     { label: 'Total Failed', value: formatNumber(overview.totalFailed), icon: ArrowDownRight, color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-950/50' },
   ];
 

@@ -23,8 +23,6 @@ const Customer360View = lazy(() => import('@/components/views/customer-360-view'
 const SalesPipelineView = lazy(() => import('@/components/views/sales-pipeline-view').then(m => ({ default: m.SalesPipelineView })));
 
 // Communication
-const InboxView = lazy(() => import('@/components/views/inbox-view').then(m => ({ default: m.InboxView })));
-const WhatsAppView = lazy(() => import('@/components/views/whatsapp-view').then(m => ({ default: m.WhatsAppView })));
 const BroadcastView = lazy(() => import('@/components/views/broadcast-view').then(m => ({ default: m.BroadcastView })));
 const CampaignsView = lazy(() => import('@/components/views/campaigns-view').then(m => ({ default: m.CampaignsView })));
 const MarketingTemplatesView = lazy(() => import('@/components/views/marketing-templates-view').then(m => ({ default: m.MarketingTemplatesView })));
@@ -100,8 +98,6 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   customer360: Customer360View,
   salesPipeline: SalesPipelineView,
   // Communication
-  whatsapp: WhatsAppView,
-  inbox: InboxView,
   broadcast: BroadcastView,
   campaigns: CampaignsView,
   marketingTemplates: MarketingTemplatesView,

@@ -49,6 +49,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
+import { formatCurrency as formatCurrencyShared } from '@/lib/currency';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -164,8 +165,9 @@ interface AuditLog {
 const MENU_SECTIONS = [
   { key: 'CRM', label: 'CRM', icon: UsersRound, color: 'emerald' },
   { key: 'Communication', label: 'Communication', icon: MessageSquare, color: 'sky' },
+  { key: 'Marketing', label: 'Marketing', icon: Megaphone, color: 'amber' },
   { key: 'Automation', label: 'Automation', icon: Bot, color: 'violet' },
-  { key: 'Operations', label: 'Operations', icon: LayoutDashboard, color: 'amber' },
+  { key: 'Operations', label: 'Operations', icon: LayoutDashboard, color: 'orange' },
   { key: 'Finance', label: 'Finance', icon: Wallet, color: 'teal' },
   { key: 'System', label: 'System', icon: Settings2, color: 'slate' },
   { key: 'Portals', label: 'Portals', icon: Globe, color: 'rose' },
@@ -180,11 +182,14 @@ const DEFAULT_MENU_ITEMS: { key: string; label: string; section: string }[] = [
   { key: 'customer360', label: 'Customer 360', section: 'CRM' },
   { key: 'salesPipeline', label: 'Sales Pipeline', section: 'CRM' },
   // Communication
-  { key: 'inbox', label: 'Inbox', section: 'Communication' },
-  { key: 'broadcast', label: 'Broadcast', section: 'Communication' },
-  { key: 'campaigns', label: 'Campaigns', section: 'Communication' },
-  { key: 'marketingTemplates', label: 'Marketing Templates', section: 'Communication' },
   { key: 'omnichannel', label: 'Omnichannel', section: 'Communication' },
+  { key: 'broadcast', label: 'Broadcast', section: 'Communication' },
+  { key: 'marketingTemplates', label: 'Marketing Templates', section: 'Communication' },
+  // Marketing
+  { key: 'campaigns', label: 'Campaigns', section: 'Marketing' },
+  { key: 'segments', label: 'Segments', section: 'Marketing' },
+  { key: 'retargeting', label: 'Retargeting', section: 'Marketing' },
+  { key: 'marketingAnalytics', label: 'Analytics', section: 'Marketing' },
   // Automation
   { key: 'workflows', label: 'Workflows', section: 'Automation' },
   { key: 'triggers', label: 'Triggers', section: 'Automation' },
@@ -214,9 +219,6 @@ const DEFAULT_MENU_ITEMS: { key: string; label: string; section: string }[] = [
   // AI & More
   { key: 'aiAssistant', label: 'AI Assistant', section: 'AI & More' },
   { key: 'chatbotBuilder', label: 'Chatbot Builder', section: 'AI & More' },
-  { key: 'retargeting', label: 'Retargeting', section: 'AI & More' },
-  { key: 'segments', label: 'Segments', section: 'AI & More' },
-  { key: 'marketingAnalytics', label: 'Analytics', section: 'AI & More' },
   { key: 'serviceCatalog', label: 'Service Catalog', section: 'AI & More' },
   { key: 'communicationProviders', label: 'Providers', section: 'AI & More' },
   { key: 'reviews', label: 'Reviews', section: 'AI & More' },
@@ -245,13 +247,6 @@ const PLAN_AMOUNTS: Record<string, number> = {
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency', currency: 'USD',
-    minimumFractionDigits: 0, maximumFractionDigits: 0,
-  }).format(amount);
-}
 
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '—';
@@ -503,8 +498,8 @@ export function SuperAdminView() {
     const kpiCards = [
       { label: 'Total Tenants', value: stats?.totalTenants ?? 0, icon: Building2, trend: stats?.trends?.tenants, color: 'emerald' },
       { label: 'Active Users', value: stats?.activeUsers ?? stats?.totalUsers ?? 0, icon: Users, trend: stats?.trends?.users, color: 'sky' },
-      { label: 'MRR', value: formatCurrency(stats?.mrr ?? 0), icon: DollarSign, trend: stats?.trends?.revenue, color: 'emerald', isFormatted: true },
-      { label: 'ARR', value: formatCurrency(stats?.arr ?? 0), icon: TrendingUp, trend: null, color: 'teal', isFormatted: true },
+      { label: 'MRR', value: formatCurrencyShared(stats?.mrr ?? 0, 'USD'), icon: DollarSign, trend: stats?.trends?.revenue, color: 'emerald', isFormatted: true },
+      { label: 'ARR', value: formatCurrencyShared(stats?.arr ?? 0, 'USD'), icon: TrendingUp, trend: null, color: 'teal', isFormatted: true },
       { label: 'Churn Rate', value: `${stats?.avgChurnRate ?? 0}%`, icon: TrendingDown, trend: null, color: stats?.avgChurnRate && stats.avgChurnRate > 5 ? 'red' : 'emerald', isFormatted: true },
     ];
 
@@ -827,7 +822,7 @@ export function SuperAdminView() {
                           {tenant.suspendedAt ? 'suspended' : tenant.planStatus}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right text-slate-300">{formatCurrency(tenant.mrr)}</TableCell>
+                      <TableCell className="text-right text-slate-300">{formatCurrencyShared(tenant.mrr, 'USD')}</TableCell>
                       <TableCell className="text-center text-slate-300">{tenant.userCount}</TableCell>
                       <TableCell className="text-slate-400 text-sm">{formatDate(tenant.createdAt)}</TableCell>
                       <TableCell className="text-right">
@@ -921,7 +916,7 @@ export function SuperAdminView() {
                   <div><p className="text-xs text-slate-400">Email</p><p className="font-medium">{viewTenant.email || '—'}</p></div>
                   <div><p className="text-xs text-slate-400">Plan</p><Badge variant="outline" className={cn('capitalize text-xs', getPlanBadge(viewTenant.plan))}>{viewTenant.plan}</Badge></div>
                   <div><p className="text-xs text-slate-400">Status</p><Badge variant="outline" className={cn('capitalize text-xs', getStatusBadge(viewTenant.suspendedAt ? 'suspended' : viewTenant.planStatus))}>{viewTenant.suspendedAt ? 'suspended' : viewTenant.planStatus}</Badge></div>
-                  <div><p className="text-xs text-slate-400">MRR</p><p className="font-medium">{formatCurrency(viewTenant.mrr)}</p></div>
+                  <div><p className="text-xs text-slate-400">MRR</p><p className="font-medium">{formatCurrencyShared(viewTenant.mrr, 'USD')}</p></div>
                   <div><p className="text-xs text-slate-400">Users</p><p className="font-medium">{viewTenant.userCount}</p></div>
                   <div><p className="text-xs text-slate-400">Industry</p><p className="font-medium">{viewTenant.industry || '—'}</p></div>
                   <div><p className="text-xs text-slate-400">Created</p><p className="font-medium">{formatDate(viewTenant.createdAt)}</p></div>
@@ -1152,7 +1147,7 @@ export function SuperAdminView() {
                         <TableCell className="font-medium text-white">{sub.tenantName}</TableCell>
                         <TableCell><Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadge(sub.plan))}>{sub.plan}</Badge></TableCell>
                         <TableCell><Badge variant="outline" className={cn('capitalize text-[10px]', getStatusBadge(sub.status))}>{sub.status}</Badge></TableCell>
-                        <TableCell className="text-right text-slate-300">{formatCurrency(sub.amount)}</TableCell>
+                        <TableCell className="text-right text-slate-300">{formatCurrencyShared(sub.amount, 'USD')}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
                             {sub.status === 'active' && (

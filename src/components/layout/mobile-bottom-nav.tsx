@@ -23,7 +23,7 @@ interface MobileNavItem {
 const regularNavItems: MobileNavItem[] = [
   { view: 'dashboard', label: 'Home', icon: LayoutDashboard },
   { view: 'jobs', label: 'Jobs', icon: Briefcase },
-  { view: 'inbox', label: 'Inbox', icon: Inbox },
+  { view: 'omnichannel', label: 'Inbox', icon: Inbox },
   { view: 'contacts', label: 'People', icon: Users },
 ];
 

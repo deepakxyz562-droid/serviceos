@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   FileText, Plus, Search, Send, MoreHorizontal, DollarSign,
   Clock, CheckCircle2, AlertCircle, XCircle, Eye, Trash2,
   X, PlusCircle, MinusCircle, ArrowUpDown, ChevronUp, ChevronDown,
   CalendarDays, Calculator, MessageCircle, Phone, ShoppingCart, Tag,
-  Percent, Receipt, Copy, Edit3,
+  Percent, Receipt, Copy, Edit3, Globe,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
+import { formatCurrency, convertCurrency, CURRENCIES as SHARED_CURRENCIES, currencySymbol, getExchangeRate } from '@/lib/currency';
 
 // ============================================================
 // Types
@@ -77,6 +78,10 @@ interface Quote {
   validUntil: string;
   whatsappSent: boolean;
   createdAt: string;
+  currency?: string;       // Transaction currency
+  exchangeRate?: number;   // Rate at creation
+  baseCurrency?: string;   // Base currency at creation
+  baseAmount?: number;     // Amount in base currency
 }
 
 interface QuoteFormData {
@@ -103,6 +108,8 @@ const STATUS_CONFIG: Record<QuoteStatus, { label: string; bg: string; text: stri
   rejected: { label: 'Rejected', bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', icon: <XCircle className="size-3" /> },
   expired: { label: 'Expired', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', icon: <Clock className="size-3" /> },
 };
+
+const VIEW_CURRENCY_OPTIONS = ['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD'];
 
 const MOCK_CUSTOMERS = [
   { id: 'c1', name: 'John Smith', phone: '+447911123456' },
@@ -137,6 +144,7 @@ const MOCK_QUOTES: Quote[] = [
     addOns: [{ id: 'qa1', name: 'Solar Panel Cleaning', price: 50 }],
     subtotal: 250, discountType: 'fixed', discountValue: 0, discount: 0, taxRate: 20, tax: 50, total: 300,
     status: 'sent', validUntil: '2025-03-20', whatsappSent: true, createdAt: '2025-03-05',
+    currency: 'INR', exchangeRate: 1, baseCurrency: 'INR', baseAmount: 300,
   },
   {
     id: 'q2', title: 'Deep Clean + Carpet', description: 'Full deep clean and carpet steam cleaning',
@@ -148,6 +156,7 @@ const MOCK_QUOTES: Quote[] = [
     addOns: [],
     subtotal: 550, discountType: 'percentage', discountValue: 10, discount: 55, taxRate: 20, tax: 99, total: 594,
     status: 'accepted', validUntil: '2025-04-01', whatsappSent: true, createdAt: '2025-03-01',
+    currency: 'INR', exchangeRate: 1, baseCurrency: 'INR', baseAmount: 594,
   },
   {
     id: 'q3', title: 'Plumbing Repair', description: '',
@@ -156,6 +165,7 @@ const MOCK_QUOTES: Quote[] = [
     addOns: [],
     subtotal: 95, discountType: 'fixed', discountValue: 0, discount: 0, taxRate: 20, tax: 19, total: 114,
     status: 'draft', validUntil: '2025-04-15', whatsappSent: false, createdAt: '2025-03-10',
+    currency: 'INR', exchangeRate: 1, baseCurrency: 'INR', baseAmount: 114,
   },
   {
     id: 'q4', title: 'Full Property Maintenance', description: 'Complete property maintenance package',
@@ -168,6 +178,7 @@ const MOCK_QUOTES: Quote[] = [
     addOns: [{ id: 'qa2', name: 'Emergency Callout Fee', price: 150 }],
     subtotal: 535, discountType: 'fixed', discountValue: 35, discount: 35, taxRate: 20, tax: 100, total: 600,
     status: 'rejected', validUntil: '2025-03-01', whatsappSent: true, createdAt: '2025-02-15',
+    currency: 'INR', exchangeRate: 1, baseCurrency: 'INR', baseAmount: 600,
   },
   {
     id: 'q5', title: 'Pest Control', description: 'Full pest control treatment',
@@ -176,6 +187,7 @@ const MOCK_QUOTES: Quote[] = [
     addOns: [{ id: 'qa3', name: 'Follow-up Visit', price: 75 }],
     subtotal: 255, discountType: 'fixed', discountValue: 0, discount: 0, taxRate: 20, tax: 51, total: 306,
     status: 'expired', validUntil: '2025-02-28', whatsappSent: true, createdAt: '2025-02-01',
+    currency: 'INR', exchangeRate: 1, baseCurrency: 'INR', baseAmount: 306,
   },
   {
     id: 'q6', title: 'Painting Service', description: 'Two room painting',
@@ -184,6 +196,7 @@ const MOCK_QUOTES: Quote[] = [
     addOns: [{ id: 'qa4', name: 'Wallpaper Removal', price: 200 }],
     subtotal: 900, discountType: 'percentage', discountValue: 5, discount: 45, taxRate: 20, tax: 171, total: 1026,
     status: 'sent', validUntil: '2025-04-10', whatsappSent: false, createdAt: '2025-03-08',
+    currency: 'INR', exchangeRate: 1, baseCurrency: 'INR', baseAmount: 1026,
   },
 ];
 
@@ -208,13 +221,6 @@ const EMPTY_FORM = (): QuoteFormData => ({
 // Helpers
 // ============================================================
 
-function formatGBP(amount: number): string {
-  return new Intl.NumberFormat('en-GB', {
-    style: 'currency', currency: 'GBP',
-    minimumFractionDigits: 2, maximumFractionDigits: 2,
-  }).format(amount);
-}
-
 function formatShortDate(dateStr: string): string {
   try {
     const d = new Date(dateStr + 'T00:00:00');
@@ -238,12 +244,19 @@ function calcSummary(services: QuoteServiceItem[], addOns: QuoteAddOn[], discoun
   return { servicesTotal, addOnsTotal, subtotal, discount, tax, total };
 }
 
+/** Convert an amount from a quote's stored currency to the view currency */
+function convertToViewCurrency(amount: number, quote: Quote, viewCurrency: string): number {
+  const quoteCurrency = quote.currency || 'INR';
+  return convertCurrency(amount, quoteCurrency, viewCurrency, quote.exchangeRate);
+}
+
 // ============================================================
 // WhatsApp Preview Component
 // ============================================================
 
-function WhatsAppPreview({ quote }: { quote: Quote | null }) {
+function WhatsAppPreview({ quote, viewCurrency }: { quote: Quote | null; viewCurrency: string }) {
   if (!quote) return null;
+  const quoteCurrency = quote.currency || viewCurrency;
   return (
     <div className="bg-[#e5ddd5] dark:bg-[#1f2c34] rounded-lg p-4 max-w-sm mx-auto">
       <div className="bg-[#dcf8c6] dark:bg-[#005c4b] rounded-lg p-3 shadow-sm">
@@ -251,21 +264,21 @@ function WhatsAppPreview({ quote }: { quote: Quote | null }) {
         <p className="text-sm mt-1">Customer: {quote.customerName}</p>
         <p className="text-sm mt-2">Services:</p>
         {quote.services.map((s) => (
-          <p key={s.id} className="text-sm">✓ {s.name} ({formatGBP(s.price * s.quantity)})</p>
+          <p key={s.id} className="text-sm">✓ {s.name} ({formatCurrency(s.price * s.quantity, quoteCurrency)})</p>
         ))}
         {quote.addOns.length > 0 && (
           <>
             <p className="text-sm mt-2">Add-ons:</p>
             {quote.addOns.map((a) => (
-              <p key={a.id} className="text-sm">✓ {a.name} ({formatGBP(a.price)})</p>
+              <p key={a.id} className="text-sm">✓ {a.name} ({formatCurrency(a.price, quoteCurrency)})</p>
             ))}
           </>
         )}
         <Separator className="my-2 bg-black/10 dark:bg-white/10" />
-        <p className="text-sm">Subtotal: {formatGBP(quote.subtotal)}</p>
-        {quote.discount > 0 && <p className="text-sm">Discount: -{formatGBP(quote.discount)}</p>}
-        <p className="text-sm">Tax ({quote.taxRate}%): {formatGBP(quote.tax)}</p>
-        <p className="font-bold text-sm">*Total: {formatGBP(quote.total)}*</p>
+        <p className="text-sm">Subtotal: {formatCurrency(quote.subtotal, quoteCurrency)}</p>
+        {quote.discount > 0 && <p className="text-sm">Discount: -{formatCurrency(quote.discount, quoteCurrency)}</p>}
+        <p className="text-sm">Tax ({quote.taxRate}%): {formatCurrency(quote.tax, quoteCurrency)}</p>
+        <p className="font-bold text-sm">*Total: {formatCurrency(quote.total, quoteCurrency)}*</p>
         <p className="text-xs mt-2 opacity-70">Valid until: {formatShortDate(quote.validUntil)}</p>
       </div>
     </div>
@@ -291,6 +304,36 @@ export function QuotesView() {
 
   const [form, setForm] = useState<QuoteFormData>(EMPTY_FORM());
   const [saving, setSaving] = useState(false);
+
+  // ── Currency state ──────────────────────────────────────────
+  const [viewCurrency, setViewCurrency] = useState<string>('INR');
+  const [baseCurrency, setBaseCurrency] = useState<string>('INR');
+  const baseCurrencyFetched = useRef(false);
+
+  useEffect(() => {
+    if (baseCurrencyFetched.current) return;
+    baseCurrencyFetched.current = true;
+    fetch('/api/settings/currency')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.baseCurrency) {
+          setBaseCurrency(data.baseCurrency);
+          setViewCurrency(data.baseCurrency);
+        }
+      })
+      .catch(() => {
+        // Use default INR
+      });
+  }, []);
+
+  /** Format an amount, optionally converting from a quote's currency to viewCurrency */
+  const fmtCurrency = (amount: number, quote?: Quote) => {
+    if (quote && quote.currency && quote.currency !== viewCurrency) {
+      const converted = convertToViewCurrency(amount, quote, viewCurrency);
+      return formatCurrency(converted, viewCurrency);
+    }
+    return formatCurrency(amount, viewCurrency);
+  };
 
   // ============================================================
   // Filtered & sorted quotes
@@ -331,15 +374,15 @@ export function QuotesView() {
   // ============================================================
 
   const stats = useMemo(() => {
-    const totalValue = quotes.reduce((s, q) => s + q.total, 0);
-    const acceptedValue = quotes.filter((q) => q.status === 'accepted').reduce((s, q) => s + q.total, 0);
-    const sentValue = quotes.filter((q) => q.status === 'sent').reduce((s, q) => s + q.total, 0);
+    const totalValue = quotes.reduce((s, q) => s + convertToViewCurrency(q.total, q, viewCurrency), 0);
+    const acceptedValue = quotes.filter((q) => q.status === 'accepted').reduce((s, q) => s + convertToViewCurrency(q.total, q, viewCurrency), 0);
+    const sentValue = quotes.filter((q) => q.status === 'sent').reduce((s, q) => s + convertToViewCurrency(q.total, q, viewCurrency), 0);
     const draftCount = quotes.filter((q) => q.status === 'draft').length;
     const acceptanceRate = quotes.length > 0
       ? Math.round((quotes.filter((q) => q.status === 'accepted').length / quotes.length) * 100)
       : 0;
     return { totalValue, acceptedValue, sentValue, draftCount, acceptanceRate };
-  }, [quotes]);
+  }, [quotes, viewCurrency]);
 
   // ============================================================
   // Form calculations
@@ -490,6 +533,10 @@ export function QuotesView() {
           validUntil: form.validUntil,
           whatsappSent: false,
           createdAt: new Date().toISOString().split('T')[0],
+          currency: baseCurrency,
+          exchangeRate: 1,
+          baseCurrency: baseCurrency,
+          baseAmount: summary.total,
         };
         setQuotes((prev) => [newQuote, ...prev]);
         toast.success('Quote created successfully');
@@ -583,17 +630,39 @@ export function QuotesView() {
             <p className="text-sm text-muted-foreground">Create, send, and track quotes</p>
           </div>
         </div>
-        <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={openCreateDialog}>
-          <Plus className="size-4 mr-1.5" /> Create Quote
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* ── View Currency Selector ────────────────────────────── */}
+          <div className="flex items-center gap-1.5">
+            <Globe className="size-4 text-muted-foreground" />
+            <Select value={viewCurrency} onValueChange={setViewCurrency}>
+              <SelectTrigger className="h-9 w-[100px] text-xs">
+                <span className="text-xs">{currencySymbol(viewCurrency)}</span>
+                <span>{viewCurrency}</span>
+              </SelectTrigger>
+              <SelectContent>
+                {VIEW_CURRENCY_OPTIONS.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-xs">{currencySymbol(c)}</span>
+                      <span>{c}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={openCreateDialog}>
+            <Plus className="size-4 mr-1.5" /> Create Quote
+          </Button>
+        </div>
       </div>
 
       {/* ── Stats ────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { title: 'Total Value', value: formatGBP(stats.totalValue), icon: DollarSign, color: 'text-emerald-500', bg: 'bg-emerald-50' },
-          { title: 'Accepted', value: formatGBP(stats.acceptedValue), icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-50' },
-          { title: 'Pending', value: formatGBP(stats.sentValue), icon: Clock, color: 'text-blue-500', bg: 'bg-blue-50' },
+          { title: 'Total Value', value: formatCurrency(stats.totalValue, viewCurrency), icon: DollarSign, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+          { title: 'Accepted', value: formatCurrency(stats.acceptedValue, viewCurrency), icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-50' },
+          { title: 'Pending', value: formatCurrency(stats.sentValue, viewCurrency), icon: Clock, color: 'text-blue-500', bg: 'bg-blue-50' },
           { title: 'Acceptance Rate', value: `${stats.acceptanceRate}%`, icon: Calculator, color: 'text-purple-500', bg: 'bg-purple-50' },
         ].map((stat) => {
           const Icon = stat.icon;
@@ -688,7 +757,7 @@ export function QuotesView() {
                         </div>
                       </TableCell>
                       <TableCell className="text-sm">{quote.customerName}</TableCell>
-                      <TableCell className="text-right text-sm font-semibold">{formatGBP(quote.total)}</TableCell>
+                      <TableCell className="text-right text-sm font-semibold">{fmtCurrency(quote.total, quote)}</TableCell>
                       <TableCell>{renderStatusBadge(quote.status)}</TableCell>
                       <TableCell className="hidden md:table-cell">
                         {quote.whatsappSent ? (
@@ -845,7 +914,7 @@ export function QuotesView() {
                         <SelectContent>
                           {MOCK_SERVICE_CATALOG.map((s) => (
                             <SelectItem key={s.id} value={s.id}>
-                              {s.name} — {formatGBP(s.basePrice)}
+                              {s.name} — {formatCurrency(s.basePrice, viewCurrency)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -865,7 +934,7 @@ export function QuotesView() {
                         placeholder="Price"
                       />
                       <div className="text-right text-sm font-medium pr-1">
-                        {formatGBP(item.price * item.quantity)}
+                        {formatCurrency(item.price * item.quantity, viewCurrency)}
                       </div>
                       <Button
                         variant="ghost" size="icon"
@@ -947,7 +1016,7 @@ export function QuotesView() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="fixed">Fixed Amount (£)</SelectItem>
+                        <SelectItem value="fixed">Fixed Amount ({currencySymbol(viewCurrency)})</SelectItem>
                         <SelectItem value="percentage">Percentage (%)</SelectItem>
                       </SelectContent>
                     </Select>
@@ -979,7 +1048,7 @@ export function QuotesView() {
                     className="h-8 text-sm w-24"
                   />
                   <span className="text-sm text-muted-foreground">% rate</span>
-                  <span className="text-sm ml-auto font-medium">{formatGBP(formSummary.tax)}</span>
+                  <span className="text-sm ml-auto font-medium">{formatCurrency(formSummary.tax, viewCurrency)}</span>
                 </div>
               </div>
 
@@ -992,22 +1061,22 @@ export function QuotesView() {
                 </h4>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Subtotal (services + add-ons)</span>
-                  <span className="font-medium">{formatGBP(formSummary.subtotal)}</span>
+                  <span className="font-medium">{formatCurrency(formSummary.subtotal, viewCurrency)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">
                     Discount {form.discountType === 'percentage' ? `(${form.discountValue}%)` : ''}
                   </span>
-                  <span className="font-medium text-red-600">-{formatGBP(formSummary.discount)}</span>
+                  <span className="font-medium text-red-600">-{formatCurrency(formSummary.discount, viewCurrency)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Tax ({form.taxRate}%)</span>
-                  <span className="font-medium">+{formatGBP(formSummary.tax)}</span>
+                  <span className="font-medium">+{formatCurrency(formSummary.tax, viewCurrency)}</span>
                 </div>
                 <Separator />
                 <div className="flex justify-between text-base font-bold">
                   <span>Total</span>
-                  <span className="text-emerald-700">{formatGBP(formSummary.total)}</span>
+                  <span className="text-emerald-700">{formatCurrency(formSummary.total, viewCurrency)}</span>
                 </div>
               </div>
 
@@ -1044,6 +1113,7 @@ export function QuotesView() {
                       discountType: form.discountType, discountValue: form.discountValue, taxRate: form.taxRate,
                       status: 'draft', validUntil: form.validUntil, whatsappSent: false,
                       createdAt: new Date().toISOString().split('T')[0],
+                      currency: baseCurrency, exchangeRate: 1, baseCurrency: baseCurrency, baseAmount: summary.total,
                     };
                     setSelectedQuote(previewQuote);
                     setShowPreviewDialog(true);
@@ -1098,6 +1168,22 @@ export function QuotesView() {
                     </div>
                   )}
 
+                  {/* ── Currency Conversion Note ──────────────────── */}
+                  {selectedQuote.currency && selectedQuote.currency !== viewCurrency && (
+                    <div className="rounded-lg border bg-amber-50 border-amber-200 p-3 text-sm">
+                      <div className="flex items-center gap-2 font-medium text-amber-800">
+                        <Globe className="size-4" />
+                        Currency Conversion
+                      </div>
+                      <p className="mt-1 text-amber-700">
+                        Original: {formatCurrency(selectedQuote.total, selectedQuote.currency)} {selectedQuote.currency} → Viewed in: {fmtCurrency(selectedQuote.total, selectedQuote)} {viewCurrency}
+                      </p>
+                      <p className="mt-0.5 text-xs text-amber-600">
+                        Rate: 1 {viewCurrency} = {getExchangeRate(viewCurrency, selectedQuote.currency).toFixed(4)} {selectedQuote.currency}
+                      </p>
+                    </div>
+                  )}
+
                   <Separator />
 
                   {/* Services */}
@@ -1118,8 +1204,8 @@ export function QuotesView() {
                             <TableRow key={s.id}>
                               <TableCell className="text-sm py-2">{s.name}</TableCell>
                               <TableCell className="text-sm py-2 text-right">{s.quantity}</TableCell>
-                              <TableCell className="text-sm py-2 text-right">{formatGBP(s.price)}</TableCell>
-                              <TableCell className="text-sm py-2 text-right font-medium">{formatGBP(s.price * s.quantity)}</TableCell>
+                              <TableCell className="text-sm py-2 text-right">{fmtCurrency(s.price, selectedQuote)}</TableCell>
+                              <TableCell className="text-sm py-2 text-right font-medium">{fmtCurrency(s.price * s.quantity, selectedQuote)}</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -1134,7 +1220,7 @@ export function QuotesView() {
                       {selectedQuote.addOns.map((a) => (
                         <div key={a.id} className="flex justify-between text-sm border rounded-lg px-3 py-2">
                           <span>{a.name}</span>
-                          <span className="font-medium">{formatGBP(a.price)}</span>
+                          <span className="font-medium">{fmtCurrency(a.price, selectedQuote)}</span>
                         </div>
                       ))}
                     </div>
@@ -1145,24 +1231,24 @@ export function QuotesView() {
                     <div className="w-full max-w-xs space-y-1.5">
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Subtotal</span>
-                        <span>{formatGBP(selectedQuote.subtotal)}</span>
+                        <span>{fmtCurrency(selectedQuote.subtotal, selectedQuote)}</span>
                       </div>
                       {selectedQuote.discount > 0 && (
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">
                             Discount {selectedQuote.discountType === 'percentage' ? `(${selectedQuote.discountValue}%)` : ''}
                           </span>
-                          <span className="text-red-600">-{formatGBP(selectedQuote.discount)}</span>
+                          <span className="text-red-600">-{fmtCurrency(selectedQuote.discount, selectedQuote)}</span>
                         </div>
                       )}
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Tax ({selectedQuote.taxRate}%)</span>
-                        <span>{formatGBP(selectedQuote.tax)}</span>
+                        <span>{fmtCurrency(selectedQuote.tax, selectedQuote)}</span>
                       </div>
                       <Separator />
                       <div className="flex justify-between text-base font-bold">
                         <span>Total</span>
-                        <span className="text-emerald-700">{formatGBP(selectedQuote.total)}</span>
+                        <span className="text-emerald-700">{fmtCurrency(selectedQuote.total, selectedQuote)}</span>
                       </div>
                     </div>
                   </div>
@@ -1219,7 +1305,7 @@ export function QuotesView() {
               How this quote will appear when sent via WhatsApp
             </DialogDescription>
           </DialogHeader>
-          <WhatsAppPreview quote={selectedQuote} />
+          <WhatsAppPreview quote={selectedQuote} viewCurrency={viewCurrency} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowPreviewDialog(false)}>Close</Button>
             {selectedQuote && (

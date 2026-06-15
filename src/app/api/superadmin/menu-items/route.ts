@@ -13,11 +13,14 @@ const DEFAULT_MENU_ITEMS = [
   { key: 'customer360', label: 'Customer 360', icon: 'UserCircle', section: 'CRM', sortOrder: 3 },
   { key: 'salesPipeline', label: 'Sales Pipeline', icon: 'Kanban', section: 'CRM', sortOrder: 4 },
   // Communication
-  { key: 'inbox', label: 'Inbox', icon: 'Inbox', section: 'Communication', sortOrder: 5 },
+  { key: 'omnichannel', label: 'Omnichannel', icon: 'RadioTower', section: 'Communication', sortOrder: 5 },
   { key: 'broadcast', label: 'Broadcast', icon: 'Send', section: 'Communication', sortOrder: 6 },
-  { key: 'campaigns', label: 'Campaigns', icon: 'Megaphone', section: 'Communication', sortOrder: 7 },
-  { key: 'marketingTemplates', label: 'Marketing Templates', icon: 'MessageSquare', section: 'Communication', sortOrder: 8 },
-  { key: 'omnichannel', label: 'Omnichannel', icon: 'RadioTower', section: 'Communication', sortOrder: 9 },
+  { key: 'marketingTemplates', label: 'Marketing Templates', icon: 'MessageSquare', section: 'Communication', sortOrder: 7 },
+  // Marketing
+  { key: 'campaigns', label: 'Campaigns', icon: 'Megaphone', section: 'Marketing', sortOrder: 8 },
+  { key: 'segments', label: 'Segments', icon: 'Filter', section: 'Marketing', sortOrder: 9 },
+  { key: 'retargeting', label: 'Retargeting', icon: 'RefreshCw', section: 'Marketing', sortOrder: 10 },
+  { key: 'marketingAnalytics', label: 'Analytics', icon: 'BarChart3', section: 'Marketing', sortOrder: 11 },
   // Automation
   { key: 'workflows', label: 'Workflows', icon: 'Workflow', section: 'Automation', sortOrder: 10 },
   { key: 'triggers', label: 'Triggers', icon: 'Zap', section: 'Automation', sortOrder: 11 },

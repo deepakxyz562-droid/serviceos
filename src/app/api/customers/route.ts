@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { name, phone, email, address, whatsappId, workspaceId } = body
+    const { name, phone, email, address, whatsappId, workspaceId, preferredCurrency } = body
 
     if (!name || !phone) {
       return NextResponse.json({ error: 'Name and phone are required' }, { status: 400 })
@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
         address,
         whatsappId,
         workspaceId,
+        preferredCurrency: preferredCurrency || 'USD',
       },
     })
 
@@ -65,7 +66,7 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, phone, email, address, whatsappId } = body
+    const { name, phone, email, address, whatsappId, preferredCurrency } = body
 
     const customer = await db.customer.update({
       where: { id },
@@ -75,6 +76,7 @@ export async function PUT(request: NextRequest) {
         ...(email !== undefined && { email }),
         ...(address !== undefined && { address }),
         ...(whatsappId !== undefined && { whatsappId }),
+        ...(preferredCurrency !== undefined && { preferredCurrency }),
       },
     })
 
