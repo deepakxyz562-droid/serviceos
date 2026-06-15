@@ -2,85 +2,115 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 
-// GET /api/integrations - List integration configs
+// GET /api/integrations - List all integration connections for the tenant
 export async function GET(request: NextRequest) {
   try {
-    const authUser = await getAuthUser()
+    const auth = await getAuthUser()
+    if (!auth?.tenantId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
-    const type = searchParams.get('type')
-    const active = searchParams.get('active')
+    const provider = searchParams.get('provider')
+    const status = searchParams.get('status')
 
-    const where: Record<string, unknown> = {}
-
-    if (authUser?.tenantId) {
-      where.tenantId = authUser.tenantId
+    const where: Record<string, unknown> = {
+      tenantId: auth.tenantId,
     }
 
-    if (type) where.type = type
-    if (active !== null && active !== undefined) {
-      where.active = active === 'true'
-    }
+    if (provider) where.provider = provider
+    if (status) where.status = status
 
-    const integrations = await db.integrationConfig.findMany({
+    const integrations = await db.integrationConnection.findMany({
       where,
       orderBy: { createdAt: 'desc' },
+      include: {
+        _count: {
+          select: { orders: true, products: true, syncLogs: true },
+        },
+      },
     })
 
-    // Parse configJson for each integration
-    const result = integrations.map(int => ({
+    // Parse JSON fields for each integration
+    const result = integrations.map((int) => ({
       ...int,
+      scopes: safeJsonParse(int.scopesJson, []),
       config: safeJsonParse(int.configJson, {}),
+      syncSettings: safeJsonParse(int.syncSettingsJson, {}),
     }))
 
     return NextResponse.json({ integrations: result })
   } catch (error) {
-    console.error('Error listing integrations:', error)
+    console.error('Error listing integration connections:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
-// POST /api/integrations - Create integration config
+// POST /api/integrations - Create a new integration connection
 export async function POST(request: NextRequest) {
   try {
-    const authUser = await getAuthUser()
+    const auth = await getAuthUser()
+    if (!auth?.tenantId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json()
+    const {
+      provider,
+      name,
+      storeUrl,
+      accessToken,
+      apiSecret,
+      scopes,
+      config,
+      syncSettings,
+      workspaceId,
+    } = body
 
-    const { name, type, config, active, workspaceId, tenantId } = body
-
-    if (!name || !type) {
+    if (!provider || !name) {
       return NextResponse.json(
-        { error: 'name and type are required' },
+        { error: 'provider and name are required' },
         { status: 400 }
       )
     }
 
-    const validTypes = ['n8n', 'zapier', 'custom_webhook', 'google_sheets', 'slack']
-    if (!validTypes.includes(type)) {
+    const validProviders = ['shopify', 'woocommerce', 'magento', 'bigcommerce']
+    if (!validProviders.includes(provider)) {
       return NextResponse.json(
-        { error: `Invalid type. Valid types: ${validTypes.join(', ')}` },
+        { error: `Invalid provider. Valid providers: ${validProviders.join(', ')}` },
         { status: 400 }
       )
     }
 
-    const integration = await db.integrationConfig.create({
+    const integration = await db.integrationConnection.create({
       data: {
+        provider,
         name,
-        type,
+        storeUrl: storeUrl || null,
+        accessToken: accessToken || null,
+        apiSecret: apiSecret || null,
+        scopesJson: JSON.stringify(scopes || []),
         configJson: JSON.stringify(config || {}),
-        active: active !== undefined ? active : true,
-        workspaceId: workspaceId || null,
-        tenantId: tenantId || authUser?.tenantId || null,
+        syncSettingsJson: JSON.stringify(syncSettings || {}),
+        status: 'disconnected',
+        tenantId: auth.tenantId,
+        workspaceId: workspaceId || auth.workspaceId || null,
       },
     })
 
-    return NextResponse.json({
-      integration: {
-        ...integration,
-        config: safeJsonParse(integration.configJson, {}),
+    return NextResponse.json(
+      {
+        integration: {
+          ...integration,
+          scopes: safeJsonParse(integration.scopesJson, []),
+          config: safeJsonParse(integration.configJson, {}),
+          syncSettings: safeJsonParse(integration.syncSettingsJson, {}),
+        },
       },
-    }, { status: 201 })
+      { status: 201 }
+    )
   } catch (error) {
-    console.error('Error creating integration:', error)
+    console.error('Error creating integration connection:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

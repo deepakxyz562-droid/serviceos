@@ -1,1436 +1,2523 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
-  Plug, CheckCircle2, XCircle, Clock, ExternalLink, Copy, Loader2,
-  Zap, Globe, KeyRound, TestTube2, Workflow, ArrowRight, X, RefreshCw,
-  Settings2, PlugZap, Unplug, Filter, TrendingUp, Activity, Shield,
-  AlertCircle, FileSpreadsheet, MessageSquare, Hash, Cable,
-  Trash2, Edit, Eye, Plus, Search, Server, Link2, ChevronDown,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { useAppStore } from '@/store/app-store';
+import {
+  Plug,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Loader2,
+  Zap,
+  Globe,
+  KeyRound,
+  RefreshCw,
+  Settings2,
+  Unplug,
+  Plus,
+  Search,
+  ShoppingBag,
+  Package,
+  ArrowRight,
+  ShoppingCart,
+  Store,
+  Webhook,
+  Workflow,
+  ChevronRight,
+  LayoutGrid,
+  List,
+  ExternalLink,
+  Copy,
+  AlertCircle,
+  Activity,
+  TrendingUp,
+  DollarSign,
+  Users,
+  Box,
+  ArrowLeftRight,
+  Send,
+  MessageSquare,
+  CalendarDays,
+  Tag,
+  Star,
+  UserPlus,
+  Timer,
+  CreditCard,
+  Eye,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-interface IntegrationConfig {
+interface IntegrationConnection {
   id: string;
+  provider: string;
   name: string;
-  type: string;
-  configJson: string;
-  config?: Record<string, any>;
-  active: boolean;
+  status: string;
+  storeUrl: string | null;
+  accessToken: string | null;
+  apiSecret: string | null;
+  scopes: string[];
+  config: Record<string, unknown>;
+  syncSettings: Record<string, unknown>;
   lastSyncAt: string | null;
+  lastSyncStatus: string | null;
   lastError: string | null;
-  failCount: number;
-  workspaceId?: string | null;
-  tenantId?: string | null;
+  totalSyncedOrders: number;
+  totalSyncedProducts: number;
+  totalSyncedCustomers: number;
+  webhookUrl: string | null;
+  webhookVerified: boolean;
+  tenantId: string | null;
+  workspaceId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  _count?: { orders: number; products: number; syncLogs: number };
+  syncLogs?: SyncLogEntry[];
+}
+
+interface SyncLogEntry {
+  id: string;
+  syncType: string;
+  entity: string;
+  status: string;
+  recordsTotal: number;
+  recordsSynced: number;
+  recordsFailed: number;
+  errorsJson: string;
+  durationMs: number;
+  createdAt: string;
+  integrationId: string;
+}
+
+interface EcommerceOrder {
+  id: string;
+  externalOrderId: string;
+  orderNumber: string | null;
+  status: string;
+  financialStatus: string | null;
+  fulfillmentStatus: string | null;
+  customerEmail: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  subtotal: number;
+  total: number;
+  currency: string;
+  discountTotal: number;
+  taxTotal: number;
+  itemsJson: string;
+  items: Array<Record<string, unknown>>;
+  tagsJson: string;
+  tags: string[];
+  shippingAddress: Record<string, unknown> | null;
+  billingAddress: Record<string, unknown> | null;
+  orderedAt: string;
+  integration: { id: string; provider: string; name: string };
+}
+
+interface EcommerceProduct {
+  id: string;
+  externalProductId: string;
+  title: string;
+  description: string | null;
+  status: string;
+  productType: string | null;
+  vendor: string | null;
+  sku: string | null;
+  price: number;
+  compareAtPrice: number | null;
+  inventory: number;
+  imagesJson: string;
+  images: string[];
+  tagsJson: string;
+  tags: string[];
+  variantsJson: string;
+  variants: Array<Record<string, unknown>>;
+  integration: { id: string; provider: string; name: string };
   createdAt: string;
   updatedAt: string;
 }
 
-interface EventWebhook {
-  id: string;
-  name: string;
-  event: string;
-  url: string;
-  method: string;
-  headersJson: string;
-  active: boolean;
-  retryOnFail: boolean;
-  maxRetries: number;
-  timeoutMs: number;
-  lastTriggered: string | null;
-  lastStatus: string | null;
-  lastError: string | null;
-  failCount: number;
-  workspaceId?: string | null;
-  tenantId?: string | null;
-  createdAt: string;
-  updatedAt: string;
+interface EcommerceStats {
+  ordersToday: number;
+  revenueToday: number;
+  totalOrders: number;
+  totalRevenue: number;
+  avgOrderValue: number;
+  abandonedCarts: number;
+  conversionRate: number;
+  pendingOrders: number;
+  totalProducts: number;
+  activeProducts: number;
+  totalCustomers: number;
+  ordersLast30Days: number;
+  ordersByStatus: Record<string, number>;
+  topProducts: Array<{ id: string; name: string; totalQty: number; revenue: number }>;
+  storeRevenueByProvider: Array<{
+    provider: string;
+    name: string;
+    integrationId: string;
+    revenue: number;
+    totalOrders: number;
+    totalProducts: number;
+  }>;
+  integrations: Array<{
+    id: string;
+    provider: string;
+    name: string;
+    status: string;
+    lastSyncAt: string | null;
+    lastSyncStatus: string | null;
+    totalSyncedOrders: number;
+    totalSyncedProducts: number;
+    totalSyncedCustomers: number;
+  }>;
 }
 
-interface EventWebhookLog {
-  id: string;
-  eventWebhookId: string;
-  event: string;
-  jobId?: string | null;
-  payloadJson: string;
-  responseStatus?: number | null;
-  responseBody?: string | null;
-  error?: string | null;
-  durationMs?: number | null;
-  retried: boolean;
-  createdAt: string;
-}
-
-interface ApiKeyData {
-  id: string;
-  userId: string;
-  keyHash: string;
-  name: string;
-  scopes: string;
-  lastUsed: string | null;
-  createdAt: string;
-}
-
-interface EventTypeOption {
-  value: string;
-  label: string;
-  description: string;
-  icon: string;
-}
-
-interface IntegrationTemplate {
+interface WorkflowTemplate {
   id: string;
   name: string;
   description: string;
   icon: React.ElementType;
+  steps: Array<{ label: string; icon: React.ElementType; color: string }>;
   category: string;
-  color: string;
-  bgColor: string;
-  borderColor: string;
-  features: string[];
-  configFields: { key: string; label: string; placeholder: string; type: 'text' | 'password' | 'url'; required: boolean }[];
 }
 
-// ─── Integration Templates ───────────────────────────────────────────────────
+// ─── Constants ───────────────────────────────────────────────────────────────
 
-const INTEGRATION_TEMPLATES: IntegrationTemplate[] = [
+const SHOPIFY_COLOR = '#96bf48';
+const WOOCOMMERCE_COLOR = '#7f54b3';
+
+const STATUS_BADGE_MAP: Record<string, { label: string; className: string }> = {
+  connected: { label: 'Connected', className: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+  disconnected: { label: 'Disconnected', className: 'bg-slate-100 text-slate-600 border-slate-200' },
+  syncing: { label: 'Syncing', className: 'bg-blue-100 text-blue-800 border-blue-200' },
+  error: { label: 'Error', className: 'bg-red-100 text-red-800 border-red-200' },
+};
+
+const ORDER_STATUS_BADGE: Record<string, string> = {
+  pending: 'bg-yellow-100 text-yellow-800',
+  confirmed: 'bg-blue-100 text-blue-800',
+  processing: 'bg-indigo-100 text-indigo-800',
+  shipped: 'bg-purple-100 text-purple-800',
+  delivered: 'bg-emerald-100 text-emerald-800',
+  cancelled: 'bg-red-100 text-red-800',
+  refunded: 'bg-slate-100 text-slate-600',
+};
+
+const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
   {
-    id: 'n8n-job-automation',
-    name: 'n8n Job Automation',
-    description: 'Connects job events to n8n workflows for automated processing, notifications, and data sync.',
-    icon: Workflow,
-    category: 'Automation',
-    color: 'text-orange-600',
-    bgColor: 'bg-orange-50',
-    borderColor: 'border-orange-200',
-    features: ['Auto-notify on job events', 'WhatsApp message triggers', 'CRM sync', 'Custom workflow triggers'],
-    configFields: [
-      { key: 'webhookUrl', label: 'n8n Webhook URL', placeholder: 'https://n8n.example.com/webhook/abc123', type: 'url', required: true },
-      { key: 'apiKey', label: 'API Key (optional)', placeholder: '••••••••', type: 'password', required: false },
+    id: 'order-confirmation',
+    name: 'Order Confirmation',
+    description: 'Automatically send WhatsApp confirmation and create customer records when a new order is placed.',
+    icon: ShoppingCart,
+    category: 'Orders',
+    steps: [
+      { label: 'Order Created', icon: ShoppingBag, color: 'bg-emerald-100 text-emerald-700' },
+      { label: 'Send WhatsApp', icon: MessageSquare, color: 'bg-green-100 text-green-700' },
+      { label: 'Create Customer', icon: UserPlus, color: 'bg-blue-100 text-blue-700' },
+      { label: 'Add Timeline', icon: Clock, color: 'bg-slate-100 text-slate-700' },
     ],
   },
   {
-    id: 'whatsapp-lead-bot',
-    name: 'WhatsApp Lead Bot',
-    description: 'Auto-responds to WhatsApp leads with intent detection and booking automation.',
-    icon: MessageSquare,
-    category: 'Communication',
-    color: 'text-emerald-600',
-    bgColor: 'bg-emerald-50',
-    borderColor: 'border-emerald-200',
-    features: ['Auto-greeting for new leads', 'Intent detection', 'Booking flow', 'Lead qualification'],
-    configFields: [
-      { key: 'botWebhookUrl', label: 'Bot Webhook URL', placeholder: 'https://your-bot.com/webhook', type: 'url', required: true },
-      { key: 'welcomeMessage', label: 'Welcome Message', placeholder: 'Hello! How can we help?', type: 'text', required: false },
+    id: 'abandoned-cart-recovery',
+    name: 'Abandoned Cart Recovery',
+    description: 'Recover lost sales by sending timed WhatsApp reminders to customers who abandoned their cart.',
+    icon: ShoppingCart,
+    category: 'Marketing',
+    steps: [
+      { label: 'Cart Abandoned', icon: AlertCircle, color: 'bg-red-100 text-red-700' },
+      { label: 'Wait 1 Hour', icon: Timer, color: 'bg-yellow-100 text-yellow-700' },
+      { label: 'WhatsApp Reminder', icon: MessageSquare, color: 'bg-green-100 text-green-700' },
+      { label: 'Wait 24 Hours', icon: Timer, color: 'bg-yellow-100 text-yellow-700' },
+      { label: 'Coupon Message', icon: Tag, color: 'bg-purple-100 text-purple-700' },
     ],
   },
   {
-    id: 'google-sheets-sync',
-    name: 'Google Sheets Sync',
-    description: 'Syncs job, lead, and customer data to Google Sheets for reporting and analysis.',
-    icon: FileSpreadsheet,
-    category: 'Data Sync',
-    color: 'text-green-600',
-    bgColor: 'bg-green-50',
-    borderColor: 'border-green-200',
-    features: ['Job data export', 'Lead tracking sheet', 'Revenue reporting', 'Auto-sync on events'],
-    configFields: [
-      { key: 'spreadsheetId', label: 'Spreadsheet ID', placeholder: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms', type: 'text', required: true },
-      { key: 'serviceAccountKey', label: 'Service Account Key (JSON)', placeholder: '{ "type": "service_account", ... }', type: 'password', required: true },
+    id: 'order-to-booking',
+    name: 'Order to Booking',
+    description: 'Convert product purchases into service bookings with automatic employee assignment.',
+    icon: CalendarDays,
+    category: 'Operations',
+    steps: [
+      { label: 'Product Purchased', icon: ShoppingBag, color: 'bg-emerald-100 text-emerald-700' },
+      { label: 'Create Booking', icon: CalendarDays, color: 'bg-blue-100 text-blue-700' },
+      { label: 'Assign Employee', icon: Users, color: 'bg-indigo-100 text-indigo-700' },
+      { label: 'Send WhatsApp', icon: MessageSquare, color: 'bg-green-100 text-green-700' },
     ],
   },
   {
-    id: 'slack-notifications',
-    name: 'Slack Notifications',
-    description: 'Sends job updates, lead alerts, and team notifications to Slack channels.',
-    icon: Hash,
-    category: 'Communication',
-    color: 'text-purple-600',
-    bgColor: 'bg-purple-50',
-    borderColor: 'border-purple-200',
-    features: ['Job status alerts', 'New lead notifications', 'Team mentions', 'Daily summary'],
-    configFields: [
-      { key: 'webhookUrl', label: 'Slack Webhook URL', placeholder: 'https://hooks.slack.com/services/T00/B00/xxx', type: 'url', required: true },
-      { key: 'channel', label: 'Default Channel', placeholder: '#serviceos-alerts', type: 'text', required: false },
+    id: 'review-request',
+    name: 'Review Request',
+    description: 'Automatically request reviews from customers a few days after order delivery.',
+    icon: Star,
+    category: 'Marketing',
+    steps: [
+      { label: 'Order Delivered', icon: CheckCircle2, color: 'bg-emerald-100 text-emerald-700' },
+      { label: 'Wait 3 Days', icon: Timer, color: 'bg-yellow-100 text-yellow-700' },
+      { label: 'Request Review', icon: Star, color: 'bg-amber-100 text-amber-700' },
     ],
   },
   {
-    id: 'custom-webhook',
-    name: 'Custom Webhook',
-    description: 'Generic webhook integration for any external service or custom automation.',
-    icon: Cable,
-    category: 'Custom',
-    color: 'text-slate-600',
-    bgColor: 'bg-slate-50',
-    borderColor: 'border-slate-200',
-    features: ['Custom HTTP endpoint', 'Configurable events', 'Custom headers', 'Retry logic'],
-    configFields: [
-      { key: 'url', label: 'Webhook URL', placeholder: 'https://your-service.com/api/webhook', type: 'url', required: true },
-      { key: 'secret', label: 'Signing Secret (optional)', placeholder: 'whsec_...', type: 'password', required: false },
+    id: 'upsell-campaign',
+    name: 'Upsell Campaign',
+    description: 'Send targeted upsell messages based on customer segment after purchase.',
+    icon: TrendingUp,
+    category: 'Marketing',
+    steps: [
+      { label: 'Order Delivered', icon: CheckCircle2, color: 'bg-emerald-100 text-emerald-700' },
+      { label: 'Check Segment', icon: Users, color: 'bg-blue-100 text-blue-700' },
+      { label: 'Send Upsell', icon: Send, color: 'bg-purple-100 text-purple-700' },
     ],
   },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function safeJsonParse(str: string, fallback: any = {}) {
-  try { return JSON.parse(str); } catch { return fallback; }
-}
-
-function formatTime(dateStr: string | null | undefined): string {
+function formatTimeAgo(dateStr: string | null | undefined): string {
   if (!dateStr) return 'Never';
   try {
     const date = new Date(dateStr);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
-    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  } catch { return dateStr || 'Never'; }
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    if (days < 30) return `${days}d ago`;
+    return date.toLocaleDateString();
+  } catch {
+    return 'Unknown';
+  }
 }
 
-const TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string; bgColor: string }> = {
-  n8n: { label: 'n8n', icon: Workflow, color: 'text-orange-600', bgColor: 'bg-orange-50' },
-  zapier: { label: 'Zapier', icon: Zap, color: 'text-orange-500', bgColor: 'bg-orange-50' },
-  custom_webhook: { label: 'Custom Webhook', icon: Cable, color: 'text-slate-600', bgColor: 'bg-slate-50' },
-  google_sheets: { label: 'Google Sheets', icon: FileSpreadsheet, color: 'text-green-600', bgColor: 'bg-green-50' },
-  slack: { label: 'Slack', icon: Hash, color: 'text-purple-600', bgColor: 'bg-purple-50' },
-};
+function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return '—';
+  try {
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch {
+    return '—';
+  }
+}
 
-// ─── Main Component ──────────────────────────────────────────────────────────
+function formatDateTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return '—';
+  try {
+    return new Date(dateStr).toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return '—';
+  }
+}
+
+function formatCurrency(amount: number, currency = 'USD'): string {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
+}
+
+function getProviderColor(provider: string): string {
+  if (provider === 'shopify') return SHOPIFY_COLOR;
+  if (provider === 'woocommerce') return WOOCOMMERCE_COLOR;
+  return '#64748b';
+}
+
+function getProviderLabel(provider: string): string {
+  const map: Record<string, string> = { shopify: 'Shopify', woocommerce: 'WooCommerce', magento: 'Magento', bigcommerce: 'BigCommerce' };
+  return map[provider] || provider;
+}
+
+function getProviderIcon(provider: string) {
+  if (provider === 'shopify') return ShoppingBag;
+  if (provider === 'woocommerce') return Store;
+  return Globe;
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export function IntegrationsView() {
-  const [activeTab, setActiveTab] = useState('connected');
+  const { setActiveView } = useAppStore();
+  const [activeTab, setActiveTab] = useState('overview');
+  const [integrations, setIntegrations] = useState<IntegrationConnection[]>([]);
+  const [stats, setStats] = useState<EcommerceStats | null>(null);
+  const [orders, setOrders] = useState<EcommerceOrder[]>([]);
+  const [products, setProducts] = useState<EcommerceProduct[]>([]);
+  const [loading, setLoading] = useState<Record<string, boolean>>({});
+  const [shopifyDialogOpen, setShopifyDialogOpen] = useState(false);
+  const [wooDialogOpen, setWooDialogOpen] = useState(false);
+  const [orderDetailDialog, setOrderDetailDialog] = useState<EcommerceOrder | null>(null);
+  const [productViewMode, setProductViewMode] = useState<'grid' | 'list'>('grid');
 
-  // Connected Integrations
-  const [integrations, setIntegrations] = useState<IntegrationConfig[]>([]);
-  const [loadingIntegrations, setLoadingIntegrations] = useState(true);
-  const [showAddIntegration, setShowAddIntegration] = useState(false);
-  const [newIntName, setNewIntName] = useState('');
-  const [newIntType, setNewIntType] = useState('n8n');
-  const [newIntUrl, setNewIntUrl] = useState('');
-  const [testingIntegrationId, setTestingIntegrationId] = useState<string | null>(null);
+  // Filters
+  const [orderSearch, setOrderSearch] = useState('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState('all');
+  const [orderProviderFilter, setOrderProviderFilter] = useState('all');
+  const [productSearch, setProductSearch] = useState('');
+  const [productStatusFilter, setProductStatusFilter] = useState('all');
+  const [productProviderFilter, setProductProviderFilter] = useState('all');
 
-  // Event Webhooks
-  const [eventWebhooks, setEventWebhooks] = useState<EventWebhook[]>([]);
-  const [eventTypes, setEventTypes] = useState<EventTypeOption[]>([]);
-  const [loadingWebhooks, setLoadingWebhooks] = useState(true);
-  const [showAddWebhook, setShowAddWebhook] = useState(false);
-  const [newWebhookName, setNewWebhookName] = useState('');
-  const [newWebhookEvent, setNewWebhookEvent] = useState('');
-  const [newWebhookUrl, setNewWebhookUrl] = useState('');
-  const [testingWebhookId, setTestingWebhookId] = useState<string | null>(null);
-  const [webhookLogDialogWebhookId, setWebhookLogDialogWebhookId] = useState<string | null>(null);
-  const [webhookDialogLogs, setWebhookDialogLogs] = useState<EventWebhookLog[]>([]);
+  // Shopify setup state
+  const [shopifyStep, setShopifyStep] = useState(0);
+  const [shopifyStoreUrl, setShopifyStoreUrl] = useState('');
+  const [shopifyAccessToken, setShopifyAccessToken] = useState('');
+  const [shopifySyncSettings, setShopifySyncSettings] = useState({
+    customers: true, orders: true, products: true, carts: false,
+  });
+  const [shopifyConnecting, setShopifyConnecting] = useState(false);
 
-  // API Keys
-  const [apiKeys, setApiKeys] = useState<ApiKeyData[]>([]);
-  const [loadingApiKeys, setLoadingApiKeys] = useState(true);
-  const [showCreateApiKey, setShowCreateApiKey] = useState(false);
-  const [newKeyName, setNewKeyName] = useState('');
-  const [newKeyScopes, setNewKeyScopes] = useState('read,write');
-  const [createdKeyDisplay, setCreatedKeyDisplay] = useState<string | null>(null);
+  // WooCommerce setup state
+  const [wooStep, setWooStep] = useState(0);
+  const [wooStoreUrl, setWooStoreUrl] = useState('');
+  const [wooConsumerKey, setWooConsumerKey] = useState('');
+  const [wooConsumerSecret, setWooConsumerSecret] = useState('');
+  const [wooSyncSettings, setWooSyncSettings] = useState({
+    customers: true, orders: true, products: true, coupons: false, subscriptions: false,
+  });
+  const [wooConnecting, setWooConnecting] = useState(false);
 
-  // Webhook Logs
-  const [webhookLogs, setWebhookLogs] = useState<EventWebhookLog[]>([]);
-  const [loadingLogs, setLoadingLogs] = useState(true);
-  const [logFilterEvent, setLogFilterEvent] = useState('all');
-  const [logFilterStatus, setLogFilterStatus] = useState('all');
-  const [logDetailLog, setLogDetailLog] = useState<EventWebhookLog | null>(null);
+  // Syncing state
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
 
-  // Template activation
-  const [activatingTemplateId, setActivatingTemplateId] = useState<string | null>(null);
-  const [templateConfigValues, setTemplateConfigValues] = useState<Record<string, string>>({});
-  const [showTemplateDialog, setShowTemplateDialog] = useState<IntegrationTemplate | null>(null);
-
-  // ─── Data Fetching ────────────────────────────────────────────────────────
+  // ─── Data Fetching ───────────────────────────────────────────────────────
 
   const fetchIntegrations = useCallback(async () => {
-    setLoadingIntegrations(true);
+    setLoading((p) => ({ ...p, integrations: true }));
     try {
-      const res = await fetch('/api/integrations?XTransformPort=3000');
-      if (res.ok) {
-        const data = await res.json();
-        setIntegrations(data.integrations || []);
-      } else {
-        setIntegrations(getDemoIntegrations());
-      }
-    } catch {
-      setIntegrations(getDemoIntegrations());
+      const res = await fetch('/api/integrations');
+      if (!res.ok) throw new Error('Failed to fetch integrations');
+      const data = await res.json();
+      setIntegrations(data.integrations || []);
+    } catch (err) {
+      toast.error('Failed to load integrations');
     } finally {
-      setLoadingIntegrations(false);
+      setLoading((p) => ({ ...p, integrations: false }));
     }
   }, []);
 
-  const fetchEventWebhooks = useCallback(async () => {
-    setLoadingWebhooks(true);
+  const fetchStats = useCallback(async () => {
+    setLoading((p) => ({ ...p, stats: true }));
     try {
-      const res = await fetch('/api/event-webhooks?XTransformPort=3000');
-      if (res.ok) {
-        const data = await res.json();
-        setEventWebhooks(data.webhooks || []);
-        setEventTypes(data.eventTypes || []);
-      } else {
-        setEventWebhooks(getDemoWebhooks());
-        setEventTypes(getDemoEventTypes());
-      }
-    } catch {
-      setEventWebhooks(getDemoWebhooks());
-      setEventTypes(getDemoEventTypes());
+      const res = await fetch('/api/ecommerce/stats');
+      if (!res.ok) throw new Error('Failed to fetch stats');
+      const data = await res.json();
+      setStats(data);
+    } catch (err) {
+      toast.error('Failed to load stats');
     } finally {
-      setLoadingWebhooks(false);
+      setLoading((p) => ({ ...p, stats: false }));
     }
   }, []);
 
-  const fetchApiKeys = useCallback(async () => {
-    setLoadingApiKeys(true);
+  const fetchOrders = useCallback(async () => {
+    setLoading((p) => ({ ...p, orders: true }));
     try {
-      const res = await fetch('/api/credentials?XTransformPort=3000');
-      if (res.ok) {
-        const data = await res.json();
-        // Credentials double as API keys in this system
-        const keys: ApiKeyData[] = (data.credentials || []).map((c: any) => ({
-          id: c.id,
-          userId: c.userId || '',
-          keyHash: c.encryptedData || c.id,
-          name: c.name,
-          scopes: c.type || 'read',
-          lastUsed: c.updatedAt,
-          createdAt: c.createdAt,
-        }));
-        setApiKeys(keys);
-      } else {
-        setApiKeys(getDemoApiKeys());
-      }
-    } catch {
-      setApiKeys(getDemoApiKeys());
+      const params = new URLSearchParams();
+      if (orderSearch) params.set('search', orderSearch);
+      if (orderStatusFilter !== 'all') params.set('status', orderStatusFilter);
+      if (orderProviderFilter !== 'all') params.set('provider', orderProviderFilter);
+      params.set('limit', '50');
+      const res = await fetch(`/api/ecommerce/orders?${params.toString()}`);
+      if (!res.ok) throw new Error('Failed to fetch orders');
+      const data = await res.json();
+      setOrders(data.orders || []);
+    } catch (err) {
+      toast.error('Failed to load orders');
     } finally {
-      setLoadingApiKeys(false);
+      setLoading((p) => ({ ...p, orders: false }));
     }
-  }, []);
+  }, [orderSearch, orderStatusFilter, orderProviderFilter]);
 
-  const fetchWebhookLogs = useCallback(async () => {
-    setLoadingLogs(true);
+  const fetchProducts = useCallback(async () => {
+    setLoading((p) => ({ ...p, products: true }));
     try {
-      const res = await fetch('/api/event-webhooks/logs?XTransformPort=3000&limit=100');
-      if (res.ok) {
-        const data = await res.json();
-        setWebhookLogs(data.logs || []);
-      } else {
-        setWebhookLogs(getDemoWebhookLogs());
-      }
-    } catch {
-      setWebhookLogs(getDemoWebhookLogs());
+      const params = new URLSearchParams();
+      if (productSearch) params.set('search', productSearch);
+      if (productStatusFilter !== 'all') params.set('status', productStatusFilter);
+      if (productProviderFilter !== 'all') params.set('provider', productProviderFilter);
+      params.set('limit', '50');
+      const res = await fetch(`/api/ecommerce/products?${params.toString()}`);
+      if (!res.ok) throw new Error('Failed to fetch products');
+      const data = await res.json();
+      setProducts(data.products || []);
+    } catch (err) {
+      toast.error('Failed to load products');
     } finally {
-      setLoadingLogs(false);
+      setLoading((p) => ({ ...p, products: false }));
     }
-  }, []);
+  }, [productSearch, productStatusFilter, productProviderFilter]);
 
+  // Initial load
   useEffect(() => {
     fetchIntegrations();
-    fetchEventWebhooks();
-    fetchApiKeys();
-    fetchWebhookLogs();
-  }, [fetchIntegrations, fetchEventWebhooks, fetchApiKeys, fetchWebhookLogs]);
+    fetchStats();
+  }, [fetchIntegrations, fetchStats]);
 
-  // ─── Integration Actions ──────────────────────────────────────────────────
+  // Load orders when on orders tab
+  useEffect(() => {
+    if (activeTab === 'orders') fetchOrders();
+  }, [activeTab, fetchOrders]);
 
-  const handleToggleIntegration = async (int: IntegrationConfig) => {
+  // Load products when on products tab
+  useEffect(() => {
+    if (activeTab === 'products') fetchProducts();
+  }, [activeTab, fetchProducts]);
+
+  // ─── Derived State ───────────────────────────────────────────────────────
+
+  const shopifyIntegration = useMemo(
+    () => integrations.find((i) => i.provider === 'shopify'),
+    [integrations]
+  );
+  const wooIntegration = useMemo(
+    () => integrations.find((i) => i.provider === 'woocommerce'),
+    [integrations]
+  );
+  const connectedIntegrations = useMemo(
+    () => integrations.filter((i) => i.status === 'connected'),
+    [integrations]
+  );
+
+  // ─── Actions ─────────────────────────────────────────────────────────────
+
+  const handleSyncNow = async (integrationId: string) => {
+    setSyncingId(integrationId);
     try {
-      const res = await fetch(`/api/integrations/${int.id}?XTransformPort=3000`, {
+      const res = await fetch(`/api/integrations/${integrationId}/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ syncType: 'full', entities: ['orders', 'products', 'customers'] }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Sync failed');
+      }
+      toast.success('Sync completed successfully');
+      fetchIntegrations();
+      fetchStats();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Sync failed');
+    } finally {
+      setSyncingId(null);
+    }
+  };
+
+  const handleDisconnect = async (integrationId: string) => {
+    setDisconnectingId(integrationId);
+    try {
+      const res = await fetch(`/api/integrations/${integrationId}/disconnect`, { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Disconnect failed');
+      }
+      toast.success('Integration disconnected');
+      fetchIntegrations();
+      fetchStats();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Disconnect failed');
+    } finally {
+      setDisconnectingId(null);
+    }
+  };
+
+  const handleShopifyConnect = async () => {
+    setShopifyConnecting(true);
+    try {
+      // Create integration if not exists
+      let intId = shopifyIntegration?.id;
+      if (!intId) {
+        const createRes = await fetch('/api/integrations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            provider: 'shopify',
+            name: shopifyStoreUrl.replace('.myshopify.com', ''),
+            storeUrl: shopifyStoreUrl,
+            accessToken: shopifyAccessToken,
+            syncSettings: shopifySyncSettings,
+          }),
+        });
+        if (!createRes.ok) throw new Error('Failed to create integration');
+        const createData = await createRes.json();
+        intId = createData.integration.id;
+      }
+
+      // Connect
+      const connectRes = await fetch(`/api/integrations/${intId}/connect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storeUrl: shopifyStoreUrl,
+          accessToken: shopifyAccessToken,
+          scopes: ['read_orders', 'read_products', 'read_customers'],
+        }),
+      });
+      if (!connectRes.ok) {
+        const data = await connectRes.json().catch(() => ({}));
+        throw new Error(data.error || 'Connection failed');
+      }
+
+      // Update sync settings
+      await fetch(`/api/integrations/${intId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ active: !int.active }),
+        body: JSON.stringify({ syncSettings: shopifySyncSettings }),
       });
-      if (res.ok) {
-        toast.success(`Integration ${int.active ? 'deactivated' : 'activated'}`);
-        fetchIntegrations();
-      } else {
-        toast.error('Failed to toggle integration');
-      }
-    } catch {
-      toast.error('Network error');
-    }
-  };
 
-  const handleTestIntegration = async (int: IntegrationConfig) => {
-    setTestingIntegrationId(int.id);
-    try {
-      const config = int.config || safeJsonParse(int.configJson);
-      const testUrl = config.webhookUrl || config.url || config.botWebhookUrl;
-      if (!testUrl) {
-        toast.error('No webhook URL configured for this integration');
-        setTestingIntegrationId(null);
-        return;
-      }
-      // Simulate test ping
-      await new Promise(r => setTimeout(r, 1500));
-      toast.success(`Connection to ${int.name} successful!`);
-    } catch {
-      toast.error('Connection test failed');
+      toast.success('Shopify store connected successfully!');
+      setShopifyDialogOpen(false);
+      resetShopifyForm();
+      fetchIntegrations();
+      fetchStats();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to connect Shopify');
     } finally {
-      setTestingIntegrationId(null);
+      setShopifyConnecting(false);
     }
   };
 
-  const handleDeleteIntegration = async (id: string) => {
+  const handleWooConnect = async () => {
+    setWooConnecting(true);
     try {
-      const res = await fetch(`/api/integrations/${id}?XTransformPort=3000`, { method: 'DELETE' });
-      if (res.ok) {
-        toast.success('Integration deleted');
-        fetchIntegrations();
-      } else {
-        toast.error('Failed to delete integration');
-      }
-    } catch {
-      toast.error('Network error');
-    }
-  };
-
-  const handleAddIntegration = async () => {
-    if (!newIntName || !newIntUrl) {
-      toast.error('Name and URL are required');
-      return;
-    }
-    try {
-      const res = await fetch('/api/integrations?XTransformPort=3000', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newIntName,
-          type: newIntType,
-          config: { url: newIntUrl, webhookUrl: newIntUrl },
-          active: true,
-        }),
-      });
-      if (res.ok) {
-        toast.success('Integration created!');
-        setShowAddIntegration(false);
-        setNewIntName('');
-        setNewIntUrl('');
-        fetchIntegrations();
-      } else {
-        toast.error('Failed to create integration');
-      }
-    } catch {
-      toast.error('Network error');
-    }
-  };
-
-  // ─── Event Webhook Actions ────────────────────────────────────────────────
-
-  const handleAddWebhook = async () => {
-    if (!newWebhookName || !newWebhookEvent || !newWebhookUrl) {
-      toast.error('Name, event, and URL are required');
-      return;
-    }
-    try {
-      const res = await fetch('/api/event-webhooks?XTransformPort=3000', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newWebhookName,
-          event: newWebhookEvent,
-          url: newWebhookUrl,
+      let intId = wooIntegration?.id;
+      if (!intId) {
+        const createRes = await fetch('/api/integrations', {
           method: 'POST',
-          active: true,
-        }),
-      });
-      if (res.ok) {
-        toast.success('Event webhook created!');
-        setShowAddWebhook(false);
-        setNewWebhookName('');
-        setNewWebhookEvent('');
-        setNewWebhookUrl('');
-        fetchEventWebhooks();
-      } else {
-        const data = await res.json();
-        toast.error(data.error || 'Failed to create webhook');
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            provider: 'woocommerce',
+            name: new URL(wooStoreUrl).hostname.replace('www.', ''),
+            storeUrl: wooStoreUrl,
+            accessToken: wooConsumerKey,
+            apiSecret: wooConsumerSecret,
+            syncSettings: wooSyncSettings,
+          }),
+        });
+        if (!createRes.ok) throw new Error('Failed to create integration');
+        const createData = await createRes.json();
+        intId = createData.integration.id;
       }
-    } catch {
-      toast.error('Network error');
-    }
-  };
 
-  const handleTestWebhook = async (webhook: EventWebhook) => {
-    setTestingWebhookId(webhook.id);
-    try {
-      const res = await fetch('/api/event-webhooks/test?XTransformPort=3000', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ webhookId: webhook.id }),
-      });
-      if (res.ok) {
-        toast.success('Test webhook fired successfully!');
-      } else {
-        toast.error('Test webhook failed');
-      }
-    } catch {
-      toast.error('Network error');
-    } finally {
-      setTestingWebhookId(null);
-    }
-  };
-
-  const handleDeleteWebhook = async (id: string) => {
-    try {
-      const res = await fetch(`/api/event-webhooks/${id}?XTransformPort=3000`, { method: 'DELETE' });
-      if (res.ok) {
-        toast.success('Webhook deleted');
-        fetchEventWebhooks();
-      } else {
-        toast.error('Failed to delete webhook');
-      }
-    } catch {
-      toast.error('Network error');
-    }
-  };
-
-  const handleViewWebhookLogs = async (webhookId: string) => {
-    setWebhookLogDialogWebhookId(webhookId);
-    try {
-      const res = await fetch(`/api/event-webhooks/logs?XTransformPort=3000&eventWebhookId=${webhookId}&limit=20`);
-      if (res.ok) {
-        const data = await res.json();
-        setWebhookDialogLogs(data.logs || []);
-      } else {
-        setWebhookDialogLogs([]);
-      }
-    } catch {
-      setWebhookDialogLogs([]);
-    }
-  };
-
-  // ─── API Key Actions ──────────────────────────────────────────────────────
-
-  const handleCreateApiKey = async () => {
-    if (!newKeyName) {
-      toast.error('Key name is required');
-      return;
-    }
-    try {
-      const res = await fetch('/api/credentials?XTransformPort=3000', {
+      const connectRes = await fetch(`/api/integrations/${intId}/connect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: newKeyName,
-          type: 'api_key',
-          data: { scopes: newKeyScopes },
+          storeUrl: wooStoreUrl,
+          accessToken: wooConsumerKey,
+          apiSecret: wooConsumerSecret,
+          scopes: ['read', 'write'],
         }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        toast.success('API key created!');
-        setShowCreateApiKey(false);
-        // Show the key once
-        setCreatedKeyDisplay(data.credential?.id || `skey_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`);
-        setNewKeyName('');
-        fetchApiKeys();
-      } else {
-        toast.error('Failed to create API key');
+      if (!connectRes.ok) {
+        const data = await connectRes.json().catch(() => ({}));
+        throw new Error(data.error || 'Connection failed');
       }
-    } catch {
-      toast.error('Network error');
+
+      await fetch(`/api/integrations/${intId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ syncSettings: wooSyncSettings }),
+      });
+
+      toast.success('WooCommerce store connected successfully!');
+      setWooDialogOpen(false);
+      resetWooForm();
+      fetchIntegrations();
+      fetchStats();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to connect WooCommerce');
+    } finally {
+      setWooConnecting(false);
     }
   };
 
-  const handleDeleteApiKey = async (id: string) => {
-    try {
-      const res = await fetch(`/api/credentials/${id}?XTransformPort=3000`, { method: 'DELETE' });
-      if (res.ok) {
-        toast.success('API key revoked');
-        fetchApiKeys();
-      } else {
-        toast.error('Failed to revoke key');
-      }
-    } catch {
-      toast.error('Network error');
-    }
+  const resetShopifyForm = () => {
+    setShopifyStep(0);
+    setShopifyStoreUrl('');
+    setShopifyAccessToken('');
+    setShopifySyncSettings({ customers: true, orders: true, products: true, carts: false });
+  };
+
+  const resetWooForm = () => {
+    setWooStep(0);
+    setWooStoreUrl('');
+    setWooConsumerKey('');
+    setWooConsumerSecret('');
+    setWooSyncSettings({ customers: true, orders: true, products: true, coupons: false, subscriptions: false });
   };
 
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success('Copied to clipboard');
+    navigator.clipboard.writeText(text).then(() => toast.success('Copied to clipboard'));
   };
 
-  // ─── Template Actions ─────────────────────────────────────────────────────
+  // ─── Render: Overview Tab ────────────────────────────────────────────────
 
-  const handleActivateTemplate = async (template: IntegrationTemplate) => {
-    setActivatingTemplateId(template.id);
-    try {
-      const config: Record<string, string> = {};
-      template.configFields.forEach(f => {
-        if (templateConfigValues[f.key]) config[f.key] = templateConfigValues[f.key];
-      });
+  const renderOverview = () => {
+    const statCards = [
+      { title: 'Connected Stores', value: connectedIntegrations.length, icon: Store, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+      { title: 'Total Orders', value: stats?.totalOrders ?? 0, icon: ShoppingBag, color: 'text-blue-600', bg: 'bg-blue-50' },
+      { title: 'Total Revenue', value: formatCurrency(stats?.totalRevenue ?? 0), icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+      { title: 'Total Products', value: stats?.totalProducts ?? 0, icon: Package, color: 'text-purple-600', bg: 'bg-purple-50' },
+    ];
 
-      const requiredMissing = template.configFields
-        .filter(f => f.required && !config[f.key])
-        .map(f => f.label);
-
-      if (requiredMissing.length > 0) {
-        toast.error(`Missing required fields: ${requiredMissing.join(', ')}`);
-        setActivatingTemplateId(null);
-        return;
-      }
-
-      // Create integration + event webhooks
-      const intRes = await fetch('/api/integrations?XTransformPort=3000', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: template.name,
-          type: template.id.includes('n8n') ? 'n8n' : template.id.includes('slack') ? 'slack' : template.id.includes('sheets') ? 'google_sheets' : template.id.includes('whatsapp') ? 'custom_webhook' : 'custom_webhook',
-          config,
-          active: true,
-        }),
-      });
-
-      if (intRes.ok) {
-        toast.success(`Template "${template.name}" activated!`);
-        setShowTemplateDialog(null);
-        setTemplateConfigValues({});
-        fetchIntegrations();
-      } else {
-        toast.error('Failed to activate template');
-      }
-    } catch {
-      toast.error('Network error');
-    } finally {
-      setActivatingTemplateId(null);
-    }
-  };
-
-  // ─── Filtered Logs ────────────────────────────────────────────────────────
-
-  const filteredLogs = useMemo(() => {
-    return webhookLogs.filter(log => {
-      if (logFilterEvent !== 'all' && log.event !== logFilterEvent) return false;
-      if (logFilterStatus === 'success' && (log.error || log.responseStatus && log.responseStatus >= 400)) return false;
-      if (logFilterStatus === 'failed' && !log.error && (!log.responseStatus || log.responseStatus < 400)) return false;
-      return true;
-    });
-  }, [webhookLogs, logFilterEvent, logFilterStatus]);
-
-  // ─── Stats ────────────────────────────────────────────────────────────────
-
-  const stats = {
-    connected: integrations.filter(i => i.active).length,
-    totalIntegrations: integrations.length,
-    activeWebhooks: eventWebhooks.filter(w => w.active).length,
-    totalWebhooks: eventWebhooks.length,
-    apiKeysCount: apiKeys.length,
-    totalLogs: webhookLogs.length,
-    successLogs: webhookLogs.filter(l => l.responseStatus && l.responseStatus >= 200 && l.responseStatus < 400).length,
-    failedLogs: webhookLogs.filter(l => l.error || (l.responseStatus && l.responseStatus >= 400)).length,
-  };
-
-  // ─── Render ───────────────────────────────────────────────────────────────
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center size-10 rounded-lg bg-orange-600">
-            <Plug className="size-5 text-white" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold">Integration Hub</h2>
-            <p className="text-sm text-muted-foreground">Manage webhooks, API keys, and external integrations</p>
-          </div>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => { fetchIntegrations(); fetchEventWebhooks(); fetchApiKeys(); fetchWebhookLogs(); }}>
-          <RefreshCw className="size-3.5 mr-1.5" /> Refresh
-        </Button>
-      </div>
-
-      {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Integrations</CardTitle>
-            <Plug className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.connected}/{stats.totalIntegrations}</div>
-            <p className="text-xs text-muted-foreground">Active connections</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Event Webhooks</CardTitle>
-            <Zap className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.activeWebhooks}/{stats.totalWebhooks}</div>
-            <p className="text-xs text-muted-foreground">Active webhooks</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">API Keys</CardTitle>
-            <KeyRound className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.apiKeysCount}</div>
-            <p className="text-xs text-muted-foreground">Active keys</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Webhook Success</CardTitle>
-            <CheckCircle2 className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {stats.totalLogs > 0 ? Math.round((stats.successLogs / stats.totalLogs) * 100) : 0}%
-            </div>
-            <p className="text-xs text-muted-foreground">Delivery rate</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Dispatches</CardTitle>
-            <Activity className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalLogs}</div>
-            <p className="text-xs text-muted-foreground">{stats.failedLogs} failed</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="flex-wrap">
-          <TabsTrigger value="connected" className="gap-1.5">
-            <Plug className="size-3.5" /> Connected
-          </TabsTrigger>
-          <TabsTrigger value="webhooks" className="gap-1.5">
-            <Zap className="size-3.5" /> Event Webhooks
-          </TabsTrigger>
-          <TabsTrigger value="apikeys" className="gap-1.5">
-            <KeyRound className="size-3.5" /> API Keys
-          </TabsTrigger>
-          <TabsTrigger value="templates" className="gap-1.5">
-            <Workflow className="size-3.5" /> Templates
-          </TabsTrigger>
-          <TabsTrigger value="logs" className="gap-1.5">
-            <FileSpreadsheet className="size-3.5" /> Logs
-          </TabsTrigger>
-        </TabsList>
-
-        {/* ═══ Tab 1: Connected Integrations ══════════════════════════════════ */}
-        <TabsContent value="connected" className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-muted-foreground">{integrations.length} integration{integrations.length !== 1 ? 's' : ''} configured</h3>
-            <Button size="sm" onClick={() => setShowAddIntegration(true)}>
-              <Plus className="size-3.5 mr-1" /> Add Integration
-            </Button>
-          </div>
-
-          {loadingIntegrations ? (
-            <div className="flex items-center justify-center py-12"><RefreshCw className="size-6 animate-spin text-muted-foreground" /></div>
-          ) : integrations.length === 0 ? (
-            <Card className="border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <Plug className="size-12 mb-3 opacity-30" />
-                <p className="text-sm font-medium">No integrations configured</p>
-                <p className="text-xs mt-1">Add an integration or use a template to get started</p>
-                <Button size="sm" className="mt-4" onClick={() => setShowAddIntegration(true)}>
-                  <Plus className="size-3.5 mr-1" /> Add Integration
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              {integrations.map((int) => {
-                const typeConf = TYPE_CONFIG[int.type] || TYPE_CONFIG.custom_webhook;
-                const TypeIcon = typeConf.icon;
-                const config = int.config || safeJsonParse(int.configJson);
-                return (
-                  <Card key={int.id} className={`transition-all ${!int.active ? 'opacity-60' : ''}`}>
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className={`flex items-center justify-center size-10 rounded-lg ${typeConf.bgColor}`}>
-                            <TypeIcon className={`size-5 ${typeConf.color}`} />
-                          </div>
-                          <div>
-                            <CardTitle className="text-base">{int.name}</CardTitle>
-                            <div className="flex items-center gap-2 mt-1">
-                              <Badge variant="outline" className="text-[10px]">{typeConf.label}</Badge>
-                              <Badge variant="outline" className={int.active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}>
-                                {int.active ? 'Active' : 'Inactive'}
-                              </Badge>
-                              {int.failCount > 0 && (
-                                <Badge variant="outline" className="bg-red-50 text-red-600 border-red-200 text-[10px]">
-                                  <AlertCircle className="size-3 mr-0.5" /> {int.failCount} errors
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <Switch checked={int.active} onCheckedChange={() => handleToggleIntegration(int)} />
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Clock className="size-3" /> Last sync: {formatTime(int.lastSyncAt)}
-                        </span>
-                        {int.lastError && (
-                          <span className="flex items-center gap-1 text-red-600">
-                            <AlertCircle className="size-3" /> {int.lastError.slice(0, 40)}
-                          </span>
-                        )}
-                      </div>
-                      {(config.webhookUrl || config.url) && (
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Globe className="size-3 shrink-0" />
-                          <span className="truncate">{config.webhookUrl || config.url}</span>
-                          <Button variant="ghost" size="sm" className="size-6 p-0 shrink-0" onClick={() => copyToClipboard(config.webhookUrl || config.url)}>
-                            <Copy className="size-3" />
-                          </Button>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" onClick={() => handleTestIntegration(int)} disabled={testingIntegrationId === int.id}>
-                          {testingIntegrationId === int.id ? <Loader2 className="size-3 mr-1 animate-spin" /> : <TestTube2 className="size-3 mr-1" />}
-                          Test Connection
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleDeleteIntegration(int.id)}>
-                          <Trash2 className="size-3 mr-1" /> Delete
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* ═══ Tab 2: Event Webhooks ══════════════════════════════════════════ */}
-        <TabsContent value="webhooks" className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-muted-foreground">{eventWebhooks.length} event webhook{eventWebhooks.length !== 1 ? 's' : ''}</h3>
-            <Button size="sm" onClick={() => setShowAddWebhook(true)}>
-              <Plus className="size-3.5 mr-1" /> Add Webhook
-            </Button>
-          </div>
-
-          {loadingWebhooks ? (
-            <div className="flex items-center justify-center py-12"><RefreshCw className="size-6 animate-spin text-muted-foreground" /></div>
-          ) : eventWebhooks.length === 0 ? (
-            <Card className="border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <Zap className="size-12 mb-3 opacity-30" />
-                <p className="text-sm font-medium">No event webhooks configured</p>
-                <p className="text-xs mt-1">Add a webhook to receive notifications when job events occur</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <ScrollArea className="max-h-[600px]">
-              <div className="space-y-3">
-                {eventWebhooks.map((webhook) => {
-                  const successRate = webhook.lastTriggered ? (webhook.lastStatus === 'success' ? 100 : webhook.failCount > 3 ? 20 : 60) : 0;
-                  return (
-                    <Card key={webhook.id} className={`transition-all ${!webhook.active ? 'opacity-60' : ''}`}>
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-sm">{webhook.name}</span>
-                              <Badge variant="outline" className="text-[10px] bg-sky-50 text-sky-700 border-sky-200">{webhook.event}</Badge>
-                              <Badge variant="outline" className={webhook.active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}>
-                                {webhook.active ? 'Active' : 'Inactive'}
-                              </Badge>
-                            </div>
-                            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                              <span className="flex items-center gap-1 truncate">
-                                <Globe className="size-3 shrink-0" /> {webhook.url}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                              <span className="flex items-center gap-1"><Clock className="size-3" /> Last: {formatTime(webhook.lastTriggered)}</span>
-                              {webhook.lastStatus && (
-                                <span className={`flex items-center gap-1 ${webhook.lastStatus === 'success' ? 'text-emerald-600' : 'text-red-600'}`}>
-                                  {webhook.lastStatus === 'success' ? <CheckCircle2 className="size-3" /> : <XCircle className="size-3" />}
-                                  {webhook.lastStatus}
-                                </span>
-                              )}
-                              <span>Success: {successRate}%</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0 ml-3">
-                            <Button variant="outline" size="sm" onClick={() => handleTestWebhook(webhook)} disabled={testingWebhookId === webhook.id}>
-                              {testingWebhookId === webhook.id ? <Loader2 className="size-3 animate-spin" /> : <TestTube2 className="size-3" />}
-                            </Button>
-                            <Button variant="outline" size="sm" onClick={() => handleViewWebhookLogs(webhook.id)}>
-                              <Eye className="size-3" />
-                            </Button>
-                            <Button variant="outline" size="sm" onClick={() => handleDeleteWebhook(webhook.id)}>
-                              <Trash2 className="size-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            </ScrollArea>
-          )}
-        </TabsContent>
-
-        {/* ═══ Tab 3: API Keys ════════════════════════════════════════════════ */}
-        <TabsContent value="apikeys" className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-muted-foreground">{apiKeys.length} API key{apiKeys.length !== 1 ? 's' : ''}</h3>
-            <Button size="sm" onClick={() => { setShowCreateApiKey(true); setCreatedKeyDisplay(null); }}>
-              <Plus className="size-3.5 mr-1" /> Create API Key
-            </Button>
-          </div>
-
-          {createdKeyDisplay && (
-            <Card className="bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800">
-              <CardContent className="py-4">
-                <div className="flex items-start gap-3">
-                  <CheckCircle2 className="size-5 text-emerald-600 mt-0.5 shrink-0" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">API Key Created</p>
-                    <p className="text-xs text-muted-foreground mt-1">Copy this key now. You won&apos;t be able to see it again.</p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <code className="text-xs font-mono bg-white dark:bg-gray-900 px-2 py-1 rounded border flex-1 truncate">
-                        {createdKeyDisplay}
-                      </code>
-                      <Button variant="outline" size="sm" onClick={() => copyToClipboard(createdKeyDisplay)}>
-                        <Copy className="size-3 mr-1" /> Copy
-                      </Button>
+    return (
+      <div className="space-y-6">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {statCards.map((card) => (
+            <Card key={card.title} className="border-slate-200">
+              <CardContent className="p-4">
+                {loading.stats ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-8 w-32" />
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <div className={cn('p-2 rounded-lg', card.bg)}>
+                      <card.icon className={cn('h-5 w-5', card.color)} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-500">{card.title}</p>
+                      <p className="text-2xl font-bold text-slate-900">{card.value}</p>
                     </div>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => setCreatedKeyDisplay(null)}>
-                    <X className="size-4" />
-                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Additional Metrics */}
+        {stats && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Card className="border-slate-200">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-slate-500">Revenue Today</p>
+                    <p className="text-xl font-bold text-slate-900">{formatCurrency(stats.revenueToday)}</p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-emerald-50">
+                    <TrendingUp className="h-5 w-5 text-emerald-600" />
+                  </div>
                 </div>
               </CardContent>
             </Card>
-          )}
-
-          {loadingApiKeys ? (
-            <div className="flex items-center justify-center py-12"><RefreshCw className="size-6 animate-spin text-muted-foreground" /></div>
-          ) : apiKeys.length === 0 ? (
-            <Card className="border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <KeyRound className="size-12 mb-3 opacity-30" />
-                <p className="text-sm font-medium">No API keys</p>
-                <p className="text-xs mt-1">Create an API key to access ServiceOS programmatically</p>
+            <Card className="border-slate-200">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-slate-500">Avg. Order Value</p>
+                    <p className="text-xl font-bold text-slate-900">{formatCurrency(stats.avgOrderValue)}</p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-blue-50">
+                    <CreditCard className="h-5 w-5 text-blue-600" />
+                  </div>
+                </div>
               </CardContent>
             </Card>
-          ) : (
-            <div className="space-y-3">
-              {apiKeys.map((key) => (
-                <Card key={key.id}>
+            <Card className="border-slate-200">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-slate-500">Abandoned Carts</p>
+                    <p className="text-xl font-bold text-slate-900">{stats.abandonedCarts}</p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-red-50">
+                    <ShoppingCart className="h-5 w-5 text-red-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Connected Integrations */}
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-slate-900">Connected Integrations</h3>
+          <Button
+            onClick={() => {
+              setActiveTab('shopify');
+            }}
+            size="sm"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Add Integration
+          </Button>
+        </div>
+
+        {loading.integrations ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2, 3].map((i) => (
+              <Card key={i} className="border-slate-200">
+                <CardContent className="p-4 space-y-3">
+                  <Skeleton className="h-6 w-32" />
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-40" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : integrations.length === 0 ? (
+          <Card className="border-dashed border-slate-300">
+            <CardContent className="p-8 text-center">
+              <Plug className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+              <h4 className="text-lg font-medium text-slate-700 mb-1">No Integrations Yet</h4>
+              <p className="text-sm text-slate-500 mb-4">
+                Connect your e-commerce stores to start syncing orders, products, and customers.
+              </p>
+              <div className="flex items-center justify-center gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setActiveTab('shopify')}
+                  className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                >
+                  <ShoppingBag className="h-4 w-4 mr-2" style={{ color: SHOPIFY_COLOR }} />
+                  Connect Shopify
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setActiveTab('woocommerce')}
+                  className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                >
+                  <Store className="h-4 w-4 mr-2" style={{ color: WOOCOMMERCE_COLOR }} />
+                  Connect WooCommerce
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {integrations.map((intg) => {
+              const ProviderIcon = getProviderIcon(intg.provider);
+              const statusInfo = STATUS_BADGE_MAP[intg.status] || STATUS_BADGE_MAP.disconnected;
+              return (
+                <Card key={intg.id} className="border-slate-200 hover:shadow-md transition-shadow">
                   <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3">
-                        <div className="flex items-center justify-center size-9 rounded-lg bg-slate-100">
-                          <KeyRound className="size-4 text-slate-600" />
+                        <div
+                          className="p-2 rounded-lg"
+                          style={{ backgroundColor: `${getProviderColor(intg.provider)}15` }}
+                        >
+                          <ProviderIcon
+                            className="h-5 w-5"
+                            style={{ color: getProviderColor(intg.provider) }}
+                          />
                         </div>
                         <div>
-                          <span className="font-medium text-sm">{key.name}</span>
-                          <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                            <span>Scopes: <Badge variant="outline" className="text-[10px] ml-0.5">{key.scopes}</Badge></span>
-                            <span className="flex items-center gap-1"><Clock className="size-3" /> Last used: {formatTime(key.lastUsed)}</span>
-                            <span>Created: {new Date(key.createdAt).toLocaleDateString()}</span>
-                          </div>
+                          <p className="font-semibold text-slate-900">{intg.name}</p>
+                          <p className="text-xs text-slate-500">{getProviderLabel(intg.provider)}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" onClick={() => copyToClipboard(key.id)}>
-                          <Copy className="size-3 mr-1" /> Copy ID
-                        </Button>
-                        <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50" onClick={() => handleDeleteApiKey(key.id)}>
-                          <Trash2 className="size-3 mr-1" /> Revoke
-                        </Button>
-                      </div>
+                      <Badge variant="outline" className={cn('text-xs', statusInfo.className)}>
+                        {statusInfo.label}
+                      </Badge>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
 
-        {/* ═══ Tab 4: Integration Templates ═══════════════════════════════════ */}
-        <TabsContent value="templates" className="space-y-4">
-          <div>
-            <h3 className="text-sm font-medium text-muted-foreground mb-4">Pre-built integration templates — click to configure and activate</h3>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {INTEGRATION_TEMPLATES.map((template) => {
-              const TemplateIcon = template.icon;
-              return (
-                <Card key={template.id} className="hover:shadow-md transition-shadow flex flex-col">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start gap-3">
-                      <div className={`flex items-center justify-center size-10 rounded-lg ${template.bgColor} shrink-0`}>
-                        <TemplateIcon className={`size-5 ${template.color}`} />
+                    {intg.storeUrl && (
+                      <p className="text-sm text-slate-500 mb-2 truncate" title={intg.storeUrl}>
+                        {intg.storeUrl}
+                      </p>
+                    )}
+
+                    <Separator className="my-3" />
+
+                    <div className="grid grid-cols-3 gap-2 text-center mb-3">
+                      <div>
+                        <p className="text-lg font-bold text-slate-900">{intg.totalSyncedOrders}</p>
+                        <p className="text-xs text-slate-500">Orders</p>
                       </div>
                       <div>
-                        <CardTitle className="text-sm">{template.name}</CardTitle>
-                        <Badge variant="outline" className="text-[10px] mt-1">{template.category}</Badge>
+                        <p className="text-lg font-bold text-slate-900">{intg.totalSyncedProducts}</p>
+                        <p className="text-xs text-slate-500">Products</p>
+                      </div>
+                      <div>
+                        <p className="text-lg font-bold text-slate-900">{intg.totalSyncedCustomers}</p>
+                        <p className="text-xs text-slate-500">Customers</p>
                       </div>
                     </div>
-                  </CardHeader>
-                  <CardContent className="flex-1 flex flex-col gap-3">
-                    <CardDescription className="text-xs leading-relaxed">{template.description}</CardDescription>
-                    <div className="space-y-1">
-                      {template.features.map((f, i) => (
-                        <div key={i} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          <CheckCircle2 className="size-3 text-emerald-600 shrink-0" /> {f}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="mt-auto">
-                      <Button
-                        size="sm"
-                        className={`w-full ${template.color.includes('emerald') ? 'bg-emerald-600 hover:bg-emerald-700' : template.color.includes('orange') ? 'bg-orange-600 hover:bg-orange-700' : template.color.includes('purple') ? 'bg-purple-600 hover:bg-purple-700' : template.color.includes('green') ? 'bg-green-600 hover:bg-green-700' : 'bg-slate-600 hover:bg-slate-700'}`}
-                        onClick={() => { setShowTemplateDialog(template); setTemplateConfigValues({}); }}
-                      >
-                        <Zap className="size-3.5 mr-1.5" /> Configure & Activate
-                      </Button>
+
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span>Last sync: {formatTimeAgo(intg.lastSyncAt)}</span>
+                      {intg.status === 'connected' && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs text-emerald-600 hover:text-emerald-700"
+                          onClick={() => handleSyncNow(intg.id)}
+                          disabled={syncingId === intg.id}
+                        >
+                          {syncingId === intg.id ? (
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-3 w-3 mr-1" />
+                          )}
+                          Sync
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
               );
             })}
           </div>
-        </TabsContent>
+        )}
 
-        {/* ═══ Tab 5: Webhook Logs ════════════════════════════════════════════ */}
-        <TabsContent value="logs" className="space-y-4">
-          {/* Filters */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
-              <Filter className="size-4 text-muted-foreground" />
-              <Select value={logFilterEvent} onValueChange={setLogFilterEvent}>
-                <SelectTrigger className="w-40"><SelectValue placeholder="Event type" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Events</SelectItem>
-                  {eventTypes.map(et => (
-                    <SelectItem key={et.value} value={et.value}>{et.label}</SelectItem>
-                  ))}
-                  {eventTypes.length === 0 && ['job.created', 'job.assigned', 'job.completed', 'job.cancelled'].map(e => (
-                    <SelectItem key={e} value={e}>{e}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Select value={logFilterStatus} onValueChange={setLogFilterStatus}>
-              <SelectTrigger className="w-32"><SelectValue placeholder="Status" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="success">Success</SelectItem>
-                <SelectItem value="failed">Failed</SelectItem>
-              </SelectContent>
-            </Select>
-            <span className="text-xs text-muted-foreground">
-              Showing {filteredLogs.length} of {webhookLogs.length} logs
-            </span>
-          </div>
-
-          {loadingLogs ? (
-            <div className="flex items-center justify-center py-12"><RefreshCw className="size-6 animate-spin text-muted-foreground" /></div>
-          ) : filteredLogs.length === 0 ? (
-            <Card className="border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <Activity className="size-12 mb-3 opacity-30" />
-                <p className="text-sm font-medium">No webhook logs</p>
-                <p className="text-xs mt-1">Logs will appear when event webhooks are triggered</p>
+        {/* Top Products */}
+        {stats?.topProducts && stats.topProducts.length > 0 && (
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900 mb-3">Top Products (Last 30 Days)</h3>
+            <Card className="border-slate-200">
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Product</TableHead>
+                      <TableHead className="text-right">Qty Sold</TableHead>
+                      <TableHead className="text-right">Revenue</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {stats.topProducts.map((product) => (
+                      <TableRow key={product.id}>
+                        <TableCell className="font-medium text-slate-900">{product.name}</TableCell>
+                        <TableCell className="text-right">{product.totalQty}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(product.revenue)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </CardContent>
             </Card>
-          ) : (
-            <ScrollArea className="max-h-[500px]">
-              <div className="space-y-2">
-                {filteredLogs.map((log) => {
-                  const isSuccess = !log.error && (!log.responseStatus || (log.responseStatus >= 200 && log.responseStatus < 400));
-                  return (
-                    <Card key={log.id} className="py-0">
-                      <CardContent className="p-3">
-                        <div className="flex items-center gap-3">
-                          <div className={`size-2 rounded-full shrink-0 ${isSuccess ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-[10px] bg-sky-50 text-sky-700 border-sky-200">{log.event}</Badge>
-                              {log.responseStatus && (
-                                <span className={`text-xs font-mono ${isSuccess ? 'text-emerald-600' : 'text-red-600'}`}>
-                                  {log.responseStatus}
-                                </span>
-                              )}
-                              {log.error && (
-                                <span className="text-xs text-red-600 truncate">{log.error.slice(0, 50)}</span>
-                              )}
-                              {log.durationMs !== null && log.durationMs !== undefined && (
-                                <span className="text-[10px] text-muted-foreground">{log.durationMs}ms</span>
-                              )}
-                              {log.retried && (
-                                <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">retried</Badge>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
-                              <span>{new Date(log.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-                              {log.jobId && <span>Job: {log.jobId.slice(0, 8)}...</span>}
-                            </div>
-                          </div>
-                          <Button variant="ghost" size="sm" onClick={() => setLogDetailLog(log)}>
-                            <Eye className="size-3.5" />
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ─── Render: Shopify Setup Dialog ────────────────────────────────────────
+
+  const renderShopifyDialog = () => {
+    const steps = ['Store URL', 'Access Token', 'Sync Settings', 'Connect'];
+
+    return (
+      <Dialog open={shopifyDialogOpen} onOpenChange={(open) => { setShopifyDialogOpen(open); if (!open) resetShopifyForm(); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ShoppingBag className="h-5 w-5" style={{ color: SHOPIFY_COLOR }} />
+              Connect Shopify Store
+            </DialogTitle>
+            <DialogDescription>Set up your Shopify integration in a few steps.</DialogDescription>
+          </DialogHeader>
+
+          {/* Progress */}
+          <div className="flex items-center gap-2 mb-4">
+            {steps.map((step, idx) => (
+              <div key={step} className="flex items-center gap-2 flex-1">
+                <div
+                  className={cn(
+                    'h-7 w-7 rounded-full flex items-center justify-center text-xs font-medium',
+                    idx < shopifyStep
+                      ? 'bg-emerald-600 text-white'
+                      : idx === shopifyStep
+                        ? 'bg-emerald-100 text-emerald-700 border-2 border-emerald-600'
+                        : 'bg-slate-100 text-slate-400'
+                  )}
+                >
+                  {idx < shopifyStep ? <CheckCircle2 className="h-4 w-4" /> : idx + 1}
+                </div>
+                <span className={cn('text-xs hidden sm:inline', idx <= shopifyStep ? 'text-slate-900 font-medium' : 'text-slate-400')}>
+                  {step}
+                </span>
+                {idx < steps.length - 1 && <div className={cn('flex-1 h-0.5', idx < shopifyStep ? 'bg-emerald-600' : 'bg-slate-200')} />}
               </div>
-            </ScrollArea>
+            ))}
+          </div>
+
+          {/* Step Content */}
+          {shopifyStep === 0 && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="shopify-url">Store URL</Label>
+                <Input
+                  id="shopify-url"
+                  placeholder="mystore.myshopify.com"
+                  value={shopifyStoreUrl}
+                  onChange={(e) => setShopifyStoreUrl(e.target.value)}
+                  className="mt-1"
+                />
+                <p className="text-xs text-slate-500 mt-1">Enter your Shopify store URL (e.g., mystore.myshopify.com)</p>
+              </div>
+            </div>
           )}
-        </TabsContent>
-      </Tabs>
 
-      {/* ─── Dialogs ────────────────────────────────────────────────────────── */}
-
-      {/* Add Integration Dialog */}
-      <Dialog open={showAddIntegration} onOpenChange={setShowAddIntegration}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Plus className="size-5" /> Add Integration</DialogTitle>
-            <DialogDescription>Configure a new integration connection</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Name</Label>
-              <Input placeholder="My Integration" value={newIntName} onChange={(e) => setNewIntName(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Type</Label>
-              <Select value={newIntType} onValueChange={setNewIntType}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="n8n">n8n</SelectItem>
-                  <SelectItem value="zapier">Zapier</SelectItem>
-                  <SelectItem value="custom_webhook">Custom Webhook</SelectItem>
-                  <SelectItem value="google_sheets">Google Sheets</SelectItem>
-                  <SelectItem value="slack">Slack</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Webhook URL</Label>
-              <Input placeholder="https://..." value={newIntUrl} onChange={(e) => setNewIntUrl(e.target.value)} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddIntegration(false)}>Cancel</Button>
-            <Button onClick={handleAddIntegration} disabled={!newIntName || !newIntUrl}>Create</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Event Webhook Dialog */}
-      <Dialog open={showAddWebhook} onOpenChange={setShowAddWebhook}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Zap className="size-5" /> Add Event Webhook</DialogTitle>
-            <DialogDescription>Create a new webhook that fires on job events</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Name</Label>
-              <Input placeholder="e.g., n8n - Job Created → WhatsApp" value={newWebhookName} onChange={(e) => setNewWebhookName(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Event</Label>
-              <Select value={newWebhookEvent} onValueChange={setNewWebhookEvent}>
-                <SelectTrigger><SelectValue placeholder="Select event type..." /></SelectTrigger>
-                <SelectContent>
-                  {eventTypes.length > 0 ? eventTypes.map(et => (
-                    <SelectItem key={et.value} value={et.value}>{et.label} — {et.description}</SelectItem>
-                  )) : ['job.created', 'job.assigned', 'job.accepted', 'job.started', 'job.completed', 'job.cancelled', 'job.rejected'].map(e => (
-                    <SelectItem key={e} value={e}>{e}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Webhook URL</Label>
-              <Input placeholder="https://n8n.example.com/webhook/abc123" value={newWebhookUrl} onChange={(e) => setNewWebhookUrl(e.target.value)} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddWebhook(false)}>Cancel</Button>
-            <Button onClick={handleAddWebhook} disabled={!newWebhookName || !newWebhookEvent || !newWebhookUrl}>Create Webhook</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Create API Key Dialog */}
-      <Dialog open={showCreateApiKey} onOpenChange={setShowCreateApiKey}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><KeyRound className="size-5" /> Create API Key</DialogTitle>
-            <DialogDescription>Generate a new API key for programmatic access</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Key Name</Label>
-              <Input placeholder="e.g., Production API Key" value={newKeyName} onChange={(e) => setNewKeyName(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Scopes</Label>
-              <Input placeholder="read,write" value={newKeyScopes} onChange={(e) => setNewKeyScopes(e.target.value)} />
-              <p className="text-xs text-muted-foreground">Comma-separated: read, write, admin</p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateApiKey(false)}>Cancel</Button>
-            <Button onClick={handleCreateApiKey} disabled={!newKeyName}>Create Key</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Webhook Logs Dialog */}
-      <Dialog open={!!webhookLogDialogWebhookId} onOpenChange={() => setWebhookLogDialogWebhookId(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Activity className="size-5" /> Webhook Logs</DialogTitle>
-            <DialogDescription>Dispatch history for this webhook</DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="max-h-96">
-            {webhookDialogLogs.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">No logs found for this webhook</p>
-            ) : (
-              <div className="space-y-2">
-                {webhookDialogLogs.map((log) => {
-                  const isSuccess = !log.error && (!log.responseStatus || (log.responseStatus >= 200 && log.responseStatus < 400));
-                  return (
-                    <div key={log.id} className="p-3 rounded-lg border text-sm">
-                      <div className="flex items-center gap-2">
-                        <div className={`size-2 rounded-full ${isSuccess ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                        <Badge variant="outline" className="text-[10px]">{log.event}</Badge>
-                        {log.responseStatus && <span className="font-mono text-xs">{log.responseStatus}</span>}
-                        {log.durationMs !== null && log.durationMs !== undefined && <span className="text-[10px] text-muted-foreground">{log.durationMs}ms</span>}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {new Date(log.createdAt).toLocaleString()}
-                      </p>
-                    </div>
-                  );
-                })}
+          {shopifyStep === 1 && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="shopify-token">Access Token</Label>
+                <Input
+                  id="shopify-token"
+                  type="password"
+                  placeholder="shpat_..."
+                  value={shopifyAccessToken}
+                  onChange={(e) => setShopifyAccessToken(e.target.value)}
+                  className="mt-1"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Find this in your Shopify Admin → Apps → Develop apps → Your App → API credentials
+                </p>
               </div>
-            )}
-          </ScrollArea>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setWebhookLogDialogWebhookId(null)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </div>
+          )}
 
-      {/* Log Detail Dialog */}
-      <Dialog open={!!logDetailLog} onOpenChange={() => setLogDetailLog(null)}>
-        <DialogContent className="max-w-lg">
-          {logDetailLog && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2"><Eye className="size-5" /> Log Detail</DialogTitle>
-                <DialogDescription>Webhook dispatch details</DialogDescription>
-              </DialogHeader>
+          {shopifyStep === 2 && (
+            <div className="space-y-4">
+              <p className="text-sm text-slate-600">Choose what data to sync from your Shopify store:</p>
               <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Event</Label>
-                    <p className="text-sm font-medium">{logDetailLog.event}</p>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Status</Label>
-                    <p className="text-sm font-medium">{logDetailLog.responseStatus || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Duration</Label>
-                    <p className="text-sm font-medium">{logDetailLog.durationMs ? `${logDetailLog.durationMs}ms` : 'N/A'}</p>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Retried</Label>
-                    <p className="text-sm font-medium">{logDetailLog.retried ? 'Yes' : 'No'}</p>
-                  </div>
-                </div>
-                <Separator />
-                <div>
-                  <Label className="text-xs text-muted-foreground">Payload</Label>
-                  <pre className="text-xs bg-muted p-3 rounded-lg mt-1 overflow-auto max-h-32">
-                    {(() => { try { return JSON.stringify(JSON.parse(logDetailLog.payloadJson), null, 2); } catch { return logDetailLog.payloadJson; } })()}
-                  </pre>
-                </div>
-                {logDetailLog.responseBody && (
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Response Body</Label>
-                    <pre className="text-xs bg-muted p-3 rounded-lg mt-1 overflow-auto max-h-32">
-                      {(() => { try { return JSON.stringify(JSON.parse(logDetailLog.responseBody!), null, 2); } catch { return logDetailLog.responseBody; } })()}
-                    </pre>
-                  </div>
-                )}
-                {logDetailLog.error && (
-                  <div>
-                    <Label className="text-xs text-red-600">Error</Label>
-                    <pre className="text-xs bg-red-50 text-red-700 p-3 rounded-lg mt-1">
-                      {logDetailLog.error}
-                    </pre>
-                  </div>
-                )}
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setLogDetailLog(null)}>Close</Button>
-              </DialogFooter>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Template Configuration Dialog */}
-      <Dialog open={!!showTemplateDialog} onOpenChange={() => { setShowTemplateDialog(null); setTemplateConfigValues({}); }}>
-        <DialogContent>
-          {showTemplateDialog && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <showTemplateDialog.icon className={`size-5 ${showTemplateDialog.color}`} />
-                  {showTemplateDialog.name}
-                </DialogTitle>
-                <DialogDescription>{showTemplateDialog.description}</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  {showTemplateDialog.features.map((f, i) => (
-                    <div key={i} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <CheckCircle2 className="size-3 text-emerald-600 shrink-0" /> {f}
+                {[
+                  { key: 'customers' as const, label: 'Customers', desc: 'Sync customer data from Shopify' },
+                  { key: 'orders' as const, label: 'Orders', desc: 'Sync all orders and fulfillments' },
+                  { key: 'products' as const, label: 'Products', desc: 'Sync product catalog and inventory' },
+                  { key: 'carts' as const, label: 'Abandoned Carts', desc: 'Track abandoned checkouts' },
+                ].map((item) => (
+                  <div key={item.key} className="flex items-center justify-between p-3 rounded-lg border border-slate-200">
+                    <div>
+                      <p className="text-sm font-medium text-slate-900">{item.label}</p>
+                      <p className="text-xs text-slate-500">{item.desc}</p>
                     </div>
-                  ))}
-                </div>
-                <Separator />
-                {showTemplateDialog.configFields.map((field) => (
-                  <div key={field.key} className="space-y-2">
-                    <Label>{field.label} {field.required && <span className="text-red-500">*</span>}</Label>
-                    <Input
-                      type={field.type}
-                      placeholder={field.placeholder}
-                      value={templateConfigValues[field.key] || ''}
-                      onChange={(e) => setTemplateConfigValues(prev => ({ ...prev, [field.key]: e.target.value }))}
+                    <Switch
+                      checked={shopifySyncSettings[item.key]}
+                      onCheckedChange={(checked) =>
+                        setShopifySyncSettings((prev) => ({ ...prev, [item.key]: checked }))
+                      }
                     />
                   </div>
                 ))}
               </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => { setShowTemplateDialog(null); setTemplateConfigValues({}); }}>Cancel</Button>
-                <Button
-                  onClick={() => handleActivateTemplate(showTemplateDialog)}
-                  disabled={activatingTemplateId === showTemplateDialog.id}
-                >
-                  {activatingTemplateId === showTemplateDialog.id ? (
-                    <Loader2 className="size-4 mr-2 animate-spin" />
-                  ) : (
-                    <Zap className="size-4 mr-2" />
+            </div>
+          )}
+
+          {shopifyStep === 3 && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Globe className="h-4 w-4 text-slate-500" />
+                  <span className="text-sm text-slate-600">Store:</span>
+                  <span className="text-sm font-medium text-slate-900">{shopifyStoreUrl || '—'}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <KeyRound className="h-4 w-4 text-slate-500" />
+                  <span className="text-sm text-slate-600">Token:</span>
+                  <span className="text-sm font-medium text-slate-900">
+                    {shopifyAccessToken ? `${shopifyAccessToken.slice(0, 6)}${'•'.repeat(10)}` : '—'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Settings2 className="h-4 w-4 text-slate-500" />
+                  <span className="text-sm text-slate-600">Sync:</span>
+                  <span className="text-sm font-medium text-slate-900">
+                    {Object.entries(shopifySyncSettings)
+                      .filter(([, v]) => v)
+                      .map(([k]) => k.charAt(0).toUpperCase() + k.slice(1))
+                      .join(', ')}
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm text-slate-500">Click &quot;Connect&quot; to test the connection and complete setup.</p>
+            </div>
+          )}
+
+          <DialogFooter>
+            {shopifyStep > 0 && (
+              <Button variant="outline" onClick={() => setShopifyStep((s) => s - 1)} disabled={shopifyConnecting}>
+                Back
+              </Button>
+            )}
+            {shopifyStep < 3 ? (
+              <Button
+                onClick={() => setShopifyStep((s) => s + 1)}
+                disabled={
+                  (shopifyStep === 0 && !shopifyStoreUrl) ||
+                  (shopifyStep === 1 && !shopifyAccessToken)
+                }
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                Next
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            ) : (
+              <Button
+                onClick={handleShopifyConnect}
+                disabled={shopifyConnecting}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                {shopifyConnecting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Connecting...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="h-4 w-4 mr-2" />
+                    Connect
+                  </>
+                )}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  };
+
+  // ─── Render: WooCommerce Setup Dialog ────────────────────────────────────
+
+  const renderWooDialog = () => {
+    const steps = ['Store URL', 'API Keys', 'Sync Settings', 'Connect'];
+
+    return (
+      <Dialog open={wooDialogOpen} onOpenChange={(open) => { setWooDialogOpen(open); if (!open) resetWooForm(); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Store className="h-5 w-5" style={{ color: WOOCOMMERCE_COLOR }} />
+              Connect WooCommerce Store
+            </DialogTitle>
+            <DialogDescription>Set up your WooCommerce integration in a few steps.</DialogDescription>
+          </DialogHeader>
+
+          {/* Progress */}
+          <div className="flex items-center gap-2 mb-4">
+            {steps.map((step, idx) => (
+              <div key={step} className="flex items-center gap-2 flex-1">
+                <div
+                  className={cn(
+                    'h-7 w-7 rounded-full flex items-center justify-center text-xs font-medium',
+                    idx < wooStep
+                      ? 'bg-purple-600 text-white'
+                      : idx === wooStep
+                        ? 'bg-purple-100 text-purple-700 border-2 border-purple-600'
+                        : 'bg-slate-100 text-slate-400'
                   )}
-                  Activate
-                </Button>
-              </DialogFooter>
+                >
+                  {idx < wooStep ? <CheckCircle2 className="h-4 w-4" /> : idx + 1}
+                </div>
+                <span className={cn('text-xs hidden sm:inline', idx <= wooStep ? 'text-slate-900 font-medium' : 'text-slate-400')}>
+                  {step}
+                </span>
+                {idx < steps.length - 1 && <div className={cn('flex-1 h-0.5', idx < wooStep ? 'bg-purple-600' : 'bg-slate-200')} />}
+              </div>
+            ))}
+          </div>
+
+          {wooStep === 0 && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="woo-url">Store URL</Label>
+                <Input
+                  id="woo-url"
+                  placeholder="https://mystore.com"
+                  value={wooStoreUrl}
+                  onChange={(e) => setWooStoreUrl(e.target.value)}
+                  className="mt-1"
+                />
+                <p className="text-xs text-slate-500 mt-1">Enter your WooCommerce store URL</p>
+              </div>
+            </div>
+          )}
+
+          {wooStep === 1 && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="woo-key">Consumer Key</Label>
+                <Input
+                  id="woo-key"
+                  placeholder="ck_..."
+                  value={wooConsumerKey}
+                  onChange={(e) => setWooConsumerKey(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="woo-secret">Consumer Secret</Label>
+                <Input
+                  id="woo-secret"
+                  type="password"
+                  placeholder="cs_..."
+                  value={wooConsumerSecret}
+                  onChange={(e) => setWooConsumerSecret(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <p className="text-xs text-slate-500">
+                Generate API keys in WooCommerce → Settings → Advanced → REST API → Add Key
+              </p>
+            </div>
+          )}
+
+          {wooStep === 2 && (
+            <div className="space-y-4">
+              <p className="text-sm text-slate-600">Choose what data to sync from your WooCommerce store:</p>
+              <div className="space-y-3">
+                {[
+                  { key: 'customers' as const, label: 'Customers', desc: 'Sync customer data' },
+                  { key: 'orders' as const, label: 'Orders', desc: 'Sync all orders and fulfillments' },
+                  { key: 'products' as const, label: 'Products', desc: 'Sync product catalog and inventory' },
+                  { key: 'coupons' as const, label: 'Coupons', desc: 'Sync discount coupons' },
+                  { key: 'subscriptions' as const, label: 'Subscriptions', desc: 'Sync WooCommerce Subscriptions' },
+                ].map((item) => (
+                  <div key={item.key} className="flex items-center justify-between p-3 rounded-lg border border-slate-200">
+                    <div>
+                      <p className="text-sm font-medium text-slate-900">{item.label}</p>
+                      <p className="text-xs text-slate-500">{item.desc}</p>
+                    </div>
+                    <Switch
+                      checked={wooSyncSettings[item.key]}
+                      onCheckedChange={(checked) =>
+                        setWooSyncSettings((prev) => ({ ...prev, [item.key]: checked }))
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {wooStep === 3 && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Globe className="h-4 w-4 text-slate-500" />
+                  <span className="text-sm text-slate-600">Store:</span>
+                  <span className="text-sm font-medium text-slate-900">{wooStoreUrl || '—'}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <KeyRound className="h-4 w-4 text-slate-500" />
+                  <span className="text-sm text-slate-600">Key:</span>
+                  <span className="text-sm font-medium text-slate-900">
+                    {wooConsumerKey ? `${wooConsumerKey.slice(0, 6)}${'•'.repeat(10)}` : '—'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Settings2 className="h-4 w-4 text-slate-500" />
+                  <span className="text-sm text-slate-600">Sync:</span>
+                  <span className="text-sm font-medium text-slate-900">
+                    {Object.entries(wooSyncSettings)
+                      .filter(([, v]) => v)
+                      .map(([k]) => k.charAt(0).toUpperCase() + k.slice(1))
+                      .join(', ')}
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm text-slate-500">Click &quot;Connect&quot; to test the connection and complete setup.</p>
+            </div>
+          )}
+
+          <DialogFooter>
+            {wooStep > 0 && (
+              <Button variant="outline" onClick={() => setWooStep((s) => s - 1)} disabled={wooConnecting}>
+                Back
+              </Button>
+            )}
+            {wooStep < 3 ? (
+              <Button
+                onClick={() => setWooStep((s) => s + 1)}
+                disabled={
+                  (wooStep === 0 && !wooStoreUrl) ||
+                  (wooStep === 1 && (!wooConsumerKey || !wooConsumerSecret))
+                }
+                className="bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                Next
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            ) : (
+              <Button
+                onClick={handleWooConnect}
+                disabled={wooConnecting}
+                className="bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                {wooConnecting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Connecting...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="h-4 w-4 mr-2" />
+                    Connect
+                  </>
+                )}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  };
+
+  // ─── Render: Shopify Tab ─────────────────────────────────────────────────
+
+  const renderShopifyTab = () => {
+    if (!shopifyIntegration) {
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg" style={{ backgroundColor: `${SHOPIFY_COLOR}15` }}>
+                <ShoppingBag className="h-6 w-6" style={{ color: SHOPIFY_COLOR }} />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Shopify</h3>
+                <p className="text-sm text-slate-500">Connect your Shopify store to sync data</p>
+              </div>
+            </div>
+          </div>
+
+          <Card className="border-dashed border-slate-300">
+            <CardContent className="p-8 text-center">
+              <ShoppingBag className="h-16 w-16 mx-auto mb-4" style={{ color: SHOPIFY_COLOR, opacity: 0.3 }} />
+              <h4 className="text-lg font-medium text-slate-700 mb-2">No Shopify Store Connected</h4>
+              <p className="text-sm text-slate-500 mb-4 max-w-md mx-auto">
+                Connect your Shopify store to sync orders, products, customers, and automate workflows.
+              </p>
+              <Button
+                onClick={() => setShopifyDialogOpen(true)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Connect Shopify Store
+              </Button>
+            </CardContent>
+          </Card>
+
+          {renderShopifyDialog()}
+        </div>
+      );
+    }
+
+    // Connected state
+    const intg = shopifyIntegration;
+    const statusInfo = STATUS_BADGE_MAP[intg.status] || STATUS_BADGE_MAP.disconnected;
+    const syncSettings = (intg.syncSettings || {}) as Record<string, boolean>;
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg" style={{ backgroundColor: `${SHOPIFY_COLOR}15` }}>
+              <ShoppingBag className="h-6 w-6" style={{ color: SHOPIFY_COLOR }} />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">Shopify — {intg.name}</h3>
+              <div className="flex items-center gap-2 mt-0.5">
+                <Badge variant="outline" className={cn('text-xs', statusInfo.className)}>
+                  {statusInfo.label}
+                </Badge>
+                {intg.lastSyncAt && (
+                  <span className="text-xs text-slate-500">Last synced {formatTimeAgo(intg.lastSyncAt)}</span>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleSyncNow(intg.id)}
+              disabled={syncingId === intg.id || intg.status === 'disconnected'}
+            >
+              {syncingId === intg.id ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Sync Now
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+              onClick={() => handleDisconnect(intg.id)}
+              disabled={disconnectingId === intg.id || intg.status === 'syncing'}
+            >
+              {disconnectingId === intg.id ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Unplug className="h-4 w-4 mr-2" />
+              )}
+              Disconnect
+            </Button>
+          </div>
+        </div>
+
+        {/* Store Details */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card className="border-slate-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-slate-500">Store Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Store Name</span>
+                <span className="text-sm font-medium text-slate-900">{intg.name}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Store URL</span>
+                <a
+                  href={intg.storeUrl ? `https://${intg.storeUrl}` : '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-medium text-emerald-600 hover:underline flex items-center gap-1"
+                >
+                  {intg.storeUrl || '—'}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Status</span>
+                <Badge variant="outline" className={cn('text-xs', statusInfo.className)}>
+                  {statusInfo.label}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Connected</span>
+                <span className="text-sm font-medium text-slate-900">{formatDate(intg.createdAt)}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-slate-500">Sync Statistics</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Total Orders Synced</span>
+                <span className="text-sm font-bold text-slate-900">{intg.totalSyncedOrders}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Total Products Synced</span>
+                <span className="text-sm font-bold text-slate-900">{intg.totalSyncedProducts}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Total Customers Synced</span>
+                <span className="text-sm font-bold text-slate-900">{intg.totalSyncedCustomers}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Last Sync Status</span>
+                <Badge variant="outline" className={cn('text-xs', intg.lastSyncStatus === 'success' ? 'bg-emerald-100 text-emerald-800' : intg.lastSyncStatus === 'partial' ? 'bg-yellow-100 text-yellow-800' : 'bg-slate-100 text-slate-600')}>
+                  {intg.lastSyncStatus || 'Never'}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Sync Settings */}
+        <Card className="border-slate-200">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-slate-500">Sync Settings</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {['customers', 'orders', 'products', 'carts'].map((key) => (
+                <div key={key} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 bg-slate-50">
+                  <span className="text-sm font-medium text-slate-700 capitalize">{key === 'carts' ? 'Abandoned Carts' : key}</span>
+                  <Switch
+                    checked={!!syncSettings[key]}
+                    onCheckedChange={async (checked) => {
+                      const newSettings = { ...syncSettings, [key]: checked };
+                      try {
+                        await fetch(`/api/integrations/${intg.id}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ syncSettings: newSettings }),
+                        });
+                        toast.success(`${key === 'carts' ? 'Abandoned Carts' : key.charAt(0).toUpperCase() + key.slice(1)} sync ${checked ? 'enabled' : 'disabled'}`);
+                        fetchIntegrations();
+                      } catch {
+                        toast.error('Failed to update sync settings');
+                      }
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Sync Log */}
+        {intg.syncLogs && intg.syncLogs.length > 0 && (
+          <Card className="border-slate-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-slate-500">Sync Log</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <ScrollArea className="max-h-64">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Entity</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Synced</TableHead>
+                      <TableHead className="text-right">Failed</TableHead>
+                      <TableHead className="text-right">Duration</TableHead>
+                      <TableHead className="text-right">Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {intg.syncLogs.map((log) => (
+                      <TableRow key={log.id}>
+                        <TableCell className="capitalize text-xs">{log.syncType}</TableCell>
+                        <TableCell className="capitalize text-xs">{log.entity}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={cn('text-xs', log.status === 'completed' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800')}>
+                            {log.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right text-xs">{log.recordsSynced}</TableCell>
+                        <TableCell className="text-right text-xs">{log.recordsFailed}</TableCell>
+                        <TableCell className="text-right text-xs">{(log.durationMs / 1000).toFixed(1)}s</TableCell>
+                        <TableCell className="text-right text-xs text-slate-500">{formatDateTime(log.createdAt)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        )}
+
+        {renderShopifyDialog()}
+      </div>
+    );
+  };
+
+  // ─── Render: WooCommerce Tab ─────────────────────────────────────────────
+
+  const renderWooTab = () => {
+    if (!wooIntegration) {
+      return (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg" style={{ backgroundColor: `${WOOCOMMERCE_COLOR}15` }}>
+                <Store className="h-6 w-6" style={{ color: WOOCOMMERCE_COLOR }} />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">WooCommerce</h3>
+                <p className="text-sm text-slate-500">Connect your WooCommerce store to sync data</p>
+              </div>
+            </div>
+          </div>
+
+          <Card className="border-dashed border-slate-300">
+            <CardContent className="p-8 text-center">
+              <Store className="h-16 w-16 mx-auto mb-4" style={{ color: WOOCOMMERCE_COLOR, opacity: 0.3 }} />
+              <h4 className="text-lg font-medium text-slate-700 mb-2">No WooCommerce Store Connected</h4>
+              <p className="text-sm text-slate-500 mb-4 max-w-md mx-auto">
+                Connect your WooCommerce store to sync orders, products, customers, and automate workflows.
+              </p>
+              <Button
+                onClick={() => setWooDialogOpen(true)}
+                className="bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Connect WooCommerce Store
+              </Button>
+            </CardContent>
+          </Card>
+
+          {renderWooDialog()}
+        </div>
+      );
+    }
+
+    const intg = wooIntegration;
+    const statusInfo = STATUS_BADGE_MAP[intg.status] || STATUS_BADGE_MAP.disconnected;
+    const syncSettings = (intg.syncSettings || {}) as Record<string, boolean>;
+
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg" style={{ backgroundColor: `${WOOCOMMERCE_COLOR}15` }}>
+              <Store className="h-6 w-6" style={{ color: WOOCOMMERCE_COLOR }} />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">WooCommerce — {intg.name}</h3>
+              <div className="flex items-center gap-2 mt-0.5">
+                <Badge variant="outline" className={cn('text-xs', statusInfo.className)}>
+                  {statusInfo.label}
+                </Badge>
+                {intg.lastSyncAt && (
+                  <span className="text-xs text-slate-500">Last synced {formatTimeAgo(intg.lastSyncAt)}</span>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleSyncNow(intg.id)}
+              disabled={syncingId === intg.id || intg.status === 'disconnected'}
+            >
+              {syncingId === intg.id ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Sync Now
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+              onClick={() => handleDisconnect(intg.id)}
+              disabled={disconnectingId === intg.id || intg.status === 'syncing'}
+            >
+              {disconnectingId === intg.id ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Unplug className="h-4 w-4 mr-2" />
+              )}
+              Disconnect
+            </Button>
+          </div>
+        </div>
+
+        {/* Store Details */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card className="border-slate-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-slate-500">Store Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Store Name</span>
+                <span className="text-sm font-medium text-slate-900">{intg.name}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Store URL</span>
+                <a
+                  href={intg.storeUrl || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-medium text-purple-600 hover:underline flex items-center gap-1"
+                >
+                  {intg.storeUrl || '—'}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Status</span>
+                <Badge variant="outline" className={cn('text-xs', statusInfo.className)}>
+                  {statusInfo.label}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Connected</span>
+                <span className="text-sm font-medium text-slate-900">{formatDate(intg.createdAt)}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-slate-500">Sync Statistics</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Total Orders Synced</span>
+                <span className="text-sm font-bold text-slate-900">{intg.totalSyncedOrders}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Total Products Synced</span>
+                <span className="text-sm font-bold text-slate-900">{intg.totalSyncedProducts}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Total Customers Synced</span>
+                <span className="text-sm font-bold text-slate-900">{intg.totalSyncedCustomers}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-slate-600">Last Sync Status</span>
+                <Badge variant="outline" className={cn('text-xs', intg.lastSyncStatus === 'success' ? 'bg-emerald-100 text-emerald-800' : intg.lastSyncStatus === 'partial' ? 'bg-yellow-100 text-yellow-800' : 'bg-slate-100 text-slate-600')}>
+                  {intg.lastSyncStatus || 'Never'}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Sync Settings */}
+        <Card className="border-slate-200">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-slate-500">Sync Settings</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {['customers', 'orders', 'products', 'coupons', 'subscriptions'].map((key) => (
+                <div key={key} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 bg-slate-50">
+                  <span className="text-sm font-medium text-slate-700 capitalize">{key}</span>
+                  <Switch
+                    checked={!!syncSettings[key]}
+                    onCheckedChange={async (checked) => {
+                      const newSettings = { ...syncSettings, [key]: checked };
+                      try {
+                        await fetch(`/api/integrations/${intg.id}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ syncSettings: newSettings }),
+                        });
+                        toast.success(`${key.charAt(0).toUpperCase() + key.slice(1)} sync ${checked ? 'enabled' : 'disabled'}`);
+                        fetchIntegrations();
+                      } catch {
+                        toast.error('Failed to update sync settings');
+                      }
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Sync Log */}
+        {intg.syncLogs && intg.syncLogs.length > 0 && (
+          <Card className="border-slate-200">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-slate-500">Sync Log</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <ScrollArea className="max-h-64">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Entity</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Synced</TableHead>
+                      <TableHead className="text-right">Failed</TableHead>
+                      <TableHead className="text-right">Duration</TableHead>
+                      <TableHead className="text-right">Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {intg.syncLogs.map((log) => (
+                      <TableRow key={log.id}>
+                        <TableCell className="capitalize text-xs">{log.syncType}</TableCell>
+                        <TableCell className="capitalize text-xs">{log.entity}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={cn('text-xs', log.status === 'completed' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800')}>
+                            {log.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right text-xs">{log.recordsSynced}</TableCell>
+                        <TableCell className="text-right text-xs">{log.recordsFailed}</TableCell>
+                        <TableCell className="text-right text-xs">{(log.durationMs / 1000).toFixed(1)}s</TableCell>
+                        <TableCell className="text-right text-xs text-slate-500">{formatDateTime(log.createdAt)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        )}
+
+        {renderWooDialog()}
+      </div>
+    );
+  };
+
+  // ─── Render: Orders Tab ──────────────────────────────────────────────────
+
+  const renderOrdersTab = () => (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input
+            placeholder="Search orders..."
+            value={orderSearch}
+            onChange={(e) => setOrderSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select value={orderStatusFilter} onValueChange={setOrderStatusFilter}>
+          <SelectTrigger className="w-full sm:w-[160px]">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="confirmed">Confirmed</SelectItem>
+            <SelectItem value="processing">Processing</SelectItem>
+            <SelectItem value="shipped">Shipped</SelectItem>
+            <SelectItem value="delivered">Delivered</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={orderProviderFilter} onValueChange={setOrderProviderFilter}>
+          <SelectTrigger className="w-full sm:w-[160px]">
+            <SelectValue placeholder="Provider" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Providers</SelectItem>
+            <SelectItem value="shopify">Shopify</SelectItem>
+            <SelectItem value="woocommerce">WooCommerce</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {loading.orders ? (
+        <div className="space-y-3">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Card key={i} className="border-slate-200">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-4">
+                  <Skeleton className="h-5 w-24" />
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-5 w-20" />
+                  <Skeleton className="h-5 w-16" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : orders.length === 0 ? (
+        <Card className="border-dashed border-slate-300">
+          <CardContent className="p-8 text-center">
+            <ShoppingBag className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+            <h4 className="text-lg font-medium text-slate-700 mb-1">No Orders Found</h4>
+            <p className="text-sm text-slate-500">
+              {orderSearch || orderStatusFilter !== 'all' || orderProviderFilter !== 'all'
+                ? 'Try adjusting your filters.'
+                : 'Orders will appear here once you sync from your connected stores.'}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="border-slate-200">
+          <CardContent className="p-0">
+            <ScrollArea className="max-h-[600px]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Order #</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Financial</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead>Provider</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {orders.map((order) => (
+                    <TableRow
+                      key={order.id}
+                      className="cursor-pointer hover:bg-slate-50"
+                      onClick={() => setOrderDetailDialog(order)}
+                    >
+                      <TableCell className="font-medium text-slate-900">
+                        {order.orderNumber || order.externalOrderId}
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="text-sm text-slate-900">{order.customerName || '—'}</p>
+                          <p className="text-xs text-slate-500">{order.customerEmail || ''}</p>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={cn('text-xs', ORDER_STATUS_BADGE[order.status] || 'bg-slate-100 text-slate-600')}>
+                          {order.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-xs text-slate-600">{order.financialStatus || '—'}</span>
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatCurrency(order.total, order.currency)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs" style={{ borderColor: getProviderColor(order.integration?.provider), color: getProviderColor(order.integration?.provider) }}>
+                          {getProviderLabel(order.integration?.provider)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-500">
+                        {formatDate(order.orderedAt)}
+                      </TableCell>
+                      <TableCell>
+                        <Eye className="h-4 w-4 text-slate-400" />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Order Detail Dialog */}
+      <Dialog open={!!orderDetailDialog} onOpenChange={(open) => { if (!open) setOrderDetailDialog(null); }}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          {orderDetailDialog && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  Order {orderDetailDialog.orderNumber || orderDetailDialog.externalOrderId}
+                  <Badge variant="outline" className={cn('text-xs', ORDER_STATUS_BADGE[orderDetailDialog.status] || '')}>
+                    {orderDetailDialog.status}
+                  </Badge>
+                </DialogTitle>
+                <DialogDescription>
+                  From {getProviderLabel(orderDetailDialog.integration?.provider)} • {formatDateTime(orderDetailDialog.orderedAt)}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                {/* Customer Info */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold text-slate-700">Customer</h4>
+                    <div className="text-sm space-y-1">
+                      <p><span className="text-slate-500">Name:</span> {orderDetailDialog.customerName || '—'}</p>
+                      <p><span className="text-slate-500">Email:</span> {orderDetailDialog.customerEmail || '—'}</p>
+                      <p><span className="text-slate-500">Phone:</span> {orderDetailDialog.customerPhone || '—'}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold text-slate-700">Payment</h4>
+                    <div className="text-sm space-y-1">
+                      <p><span className="text-slate-500">Financial Status:</span> {orderDetailDialog.financialStatus || '—'}</p>
+                      <p><span className="text-slate-500">Fulfillment:</span> {orderDetailDialog.fulfillmentStatus || '—'}</p>
+                      <p><span className="text-slate-500">Currency:</span> {orderDetailDialog.currency}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Order Totals */}
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-slate-700">Order Totals</h4>
+                  <div className="text-sm space-y-1">
+                    <div className="flex justify-between"><span className="text-slate-500">Subtotal</span><span>{formatCurrency(orderDetailDialog.subtotal, orderDetailDialog.currency)}</span></div>
+                    {orderDetailDialog.discountTotal > 0 && (
+                      <div className="flex justify-between"><span className="text-slate-500">Discount</span><span className="text-red-600">-{formatCurrency(orderDetailDialog.discountTotal, orderDetailDialog.currency)}</span></div>
+                    )}
+                    <div className="flex justify-between"><span className="text-slate-500">Tax</span><span>{formatCurrency(orderDetailDialog.taxTotal, orderDetailDialog.currency)}</span></div>
+                    <Separator />
+                    <div className="flex justify-between font-bold"><span>Total</span><span>{formatCurrency(orderDetailDialog.total, orderDetailDialog.currency)}</span></div>
+                  </div>
+                </div>
+
+                {/* Items */}
+                {orderDetailDialog.items && orderDetailDialog.items.length > 0 && (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-semibold text-slate-700">Items</h4>
+                      <div className="space-y-2">
+                        {orderDetailDialog.items.map((item, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-2 rounded bg-slate-50 text-sm">
+                            <span className="text-slate-900">{(item as Record<string, unknown>).name as string || (item as Record<string, unknown>).title as string || 'Item'}</span>
+                            <div className="flex items-center gap-3">
+                              <span className="text-slate-500">×{(item as Record<string, unknown>).qty as number || (item as Record<string, unknown>).quantity as number || 1}</span>
+                              <span className="font-medium">{formatCurrency((item as Record<string, unknown>).price as number || 0, orderDetailDialog.currency)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Tags */}
+                {orderDetailDialog.tags && orderDetailDialog.tags.length > 0 && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm text-slate-500">Tags:</span>
+                    {orderDetailDialog.tags.map((tag, idx) => (
+                      <Badge key={idx} variant="outline" className="text-xs">{tag}</Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
             </>
           )}
         </DialogContent>
       </Dialog>
     </div>
   );
-}
 
-// ─── Demo Data ───────────────────────────────────────────────────────────────
+  // ─── Render: Products Tab ────────────────────────────────────────────────
 
-function getDemoIntegrations(): IntegrationConfig[] {
-  return [
-    {
-      id: 'int1', name: 'n8n Job Automation', type: 'n8n', configJson: '{"webhookUrl":"https://n8n.example.com/webhook/job-events"}', config: { webhookUrl: 'https://n8n.example.com/webhook/job-events' },
-      active: true, lastSyncAt: new Date(Date.now() - 300000).toISOString(), lastError: null, failCount: 0,
-      createdAt: new Date(Date.now() - 86400000).toISOString(), updatedAt: new Date(Date.now() - 300000).toISOString(),
-    },
-    {
-      id: 'int2', name: 'Slack Notifications', type: 'slack', configJson: '{"webhookUrl":"https://hooks.slack.com/services/T00/B00/xxx","channel":"#serviceos-alerts"}', config: { webhookUrl: 'https://hooks.slack.com/services/T00/B00/xxx', channel: '#serviceos-alerts' },
-      active: true, lastSyncAt: new Date(Date.now() - 600000).toISOString(), lastError: null, failCount: 0,
-      createdAt: new Date(Date.now() - 172800000).toISOString(), updatedAt: new Date(Date.now() - 600000).toISOString(),
-    },
-    {
-      id: 'int3', name: 'Google Sheets Sync', type: 'google_sheets', configJson: '{"spreadsheetId":"1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"}', config: { spreadsheetId: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms' },
-      active: false, lastSyncAt: new Date(Date.now() - 86400000).toISOString(), lastError: 'Service account key expired', failCount: 3,
-      createdAt: new Date(Date.now() - 259200000).toISOString(), updatedAt: new Date(Date.now() - 86400000).toISOString(),
-    },
-    {
-      id: 'int4', name: 'Custom CRM Webhook', type: 'custom_webhook', configJson: '{"url":"https://crm.example.com/api/webhook"}', config: { url: 'https://crm.example.com/api/webhook' },
-      active: true, lastSyncAt: new Date(Date.now() - 1200000).toISOString(), lastError: null, failCount: 1,
-      createdAt: new Date(Date.now() - 432000000).toISOString(), updatedAt: new Date(Date.now() - 1200000).toISOString(),
-    },
-  ];
-}
+  const renderProductsTab = () => (
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <Input
+            placeholder="Search products..."
+            value={productSearch}
+            onChange={(e) => setProductSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select value={productStatusFilter} onValueChange={setProductStatusFilter}>
+          <SelectTrigger className="w-full sm:w-[160px]">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="draft">Draft</SelectItem>
+            <SelectItem value="archived">Archived</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={productProviderFilter} onValueChange={setProductProviderFilter}>
+          <SelectTrigger className="w-full sm:w-[160px]">
+            <SelectValue placeholder="Provider" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Providers</SelectItem>
+            <SelectItem value="shopify">Shopify</SelectItem>
+            <SelectItem value="woocommerce">WooCommerce</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn('rounded-none', productViewMode === 'grid' ? 'bg-slate-100' : '')}
+            onClick={() => setProductViewMode('grid')}
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn('rounded-none', productViewMode === 'list' ? 'bg-slate-100' : '')}
+            onClick={() => setProductViewMode('list')}
+          >
+            <List className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
 
-function getDemoWebhooks(): EventWebhook[] {
-  return [
-    { id: 'ew1', name: 'n8n - Job Created → WhatsApp', event: 'job.created', url: 'https://n8n.example.com/webhook/job-created', method: 'POST', headersJson: '{}', active: true, retryOnFail: true, maxRetries: 3, timeoutMs: 10000, lastTriggered: new Date(Date.now() - 300000).toISOString(), lastStatus: 'success', lastError: null, failCount: 0, createdAt: new Date(Date.now() - 86400000).toISOString(), updatedAt: new Date(Date.now() - 300000).toISOString() },
-    { id: 'ew2', name: 'Slack - Job Assigned', event: 'job.assigned', url: 'https://hooks.slack.com/services/T00/B00/yyy', method: 'POST', headersJson: '{}', active: true, retryOnFail: true, maxRetries: 3, timeoutMs: 10000, lastTriggered: new Date(Date.now() - 600000).toISOString(), lastStatus: 'success', lastError: null, failCount: 0, createdAt: new Date(Date.now() - 172800000).toISOString(), updatedAt: new Date(Date.now() - 600000).toISOString() },
-    { id: 'ew3', name: 'CRM - Job Completed', event: 'job.completed', url: 'https://crm.example.com/api/webhook', method: 'POST', headersJson: '{"Authorization":"Bearer xxx"}', active: true, retryOnFail: true, maxRetries: 3, timeoutMs: 10000, lastTriggered: new Date(Date.now() - 1800000).toISOString(), lastStatus: 'failed', lastError: 'Connection timeout', failCount: 2, createdAt: new Date(Date.now() - 259200000).toISOString(), updatedAt: new Date(Date.now() - 1800000).toISOString() },
-    { id: 'ew4', name: 'n8n - Job Cancelled Alert', event: 'job.cancelled', url: 'https://n8n.example.com/webhook/job-cancelled', method: 'POST', headersJson: '{}', active: false, retryOnFail: true, maxRetries: 3, timeoutMs: 10000, lastTriggered: null, lastStatus: null, lastError: null, failCount: 0, createdAt: new Date(Date.now() - 432000000).toISOString(), updatedAt: new Date(Date.now() - 432000000).toISOString() },
-  ];
-}
+      {loading.products ? (
+        <div className={cn('grid gap-4', productViewMode === 'grid' ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' : 'grid-cols-1')}>
+          {[1, 2, 3, 4, 5, 6].map((i) => (
+            <Card key={i} className="border-slate-200">
+              <CardContent className="p-4 space-y-3">
+                <Skeleton className="h-32 w-full rounded" />
+                <Skeleton className="h-5 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : products.length === 0 ? (
+        <Card className="border-dashed border-slate-300">
+          <CardContent className="p-8 text-center">
+            <Package className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+            <h4 className="text-lg font-medium text-slate-700 mb-1">No Products Found</h4>
+            <p className="text-sm text-slate-500">
+              {productSearch || productStatusFilter !== 'all' || productProviderFilter !== 'all'
+                ? 'Try adjusting your filters.'
+                : 'Products will appear here once you sync from your connected stores.'}
+            </p>
+          </CardContent>
+        </Card>
+      ) : productViewMode === 'grid' ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {products.map((product) => (
+            <Card key={product.id} className="border-slate-200 hover:shadow-md transition-shadow overflow-hidden">
+              {/* Product Image Placeholder */}
+              <div className="h-36 bg-slate-100 flex items-center justify-center">
+                {product.images && product.images.length > 0 && typeof product.images[0] === 'string' && product.images[0].startsWith('http') ? (
+                  <img src={product.images[0]} alt={product.title} className="h-full w-full object-cover" />
+                ) : (
+                  <Package className="h-12 w-12 text-slate-300" />
+                )}
+              </div>
+              <CardContent className="p-3">
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <h4 className="text-sm font-medium text-slate-900 line-clamp-2">{product.title}</h4>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      'text-xs shrink-0',
+                      product.status === 'active' ? 'bg-emerald-100 text-emerald-800' :
+                      product.status === 'draft' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-slate-100 text-slate-600'
+                    )}
+                  >
+                    {product.status}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between mt-2">
+                  <span className="text-sm font-bold text-slate-900">{formatCurrency(product.price)}</span>
+                  {product.compareAtPrice && product.compareAtPrice > product.price && (
+                    <span className="text-xs text-slate-400 line-through">{formatCurrency(product.compareAtPrice)}</span>
+                  )}
+                </div>
+                <div className="flex items-center justify-between mt-2 text-xs text-slate-500">
+                  <span>SKU: {product.sku || '—'}</span>
+                  <span className={cn(product.inventory <= 0 ? 'text-red-600 font-medium' : product.inventory < 10 ? 'text-yellow-600' : 'text-emerald-600')}>
+                    Stock: {product.inventory}
+                  </span>
+                </div>
+                <div className="mt-2">
+                  <Badge variant="outline" className="text-xs" style={{ borderColor: getProviderColor(product.integration?.provider), color: getProviderColor(product.integration?.provider) }}>
+                    {getProviderLabel(product.integration?.provider)}
+                  </Badge>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <Card className="border-slate-200">
+          <CardContent className="p-0">
+            <ScrollArea className="max-h-[600px]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product</TableHead>
+                    <TableHead>SKU</TableHead>
+                    <TableHead>Price</TableHead>
+                    <TableHead className="text-right">Inventory</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Provider</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {products.map((product) => (
+                    <TableRow key={product.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="h-10 w-10 rounded bg-slate-100 flex items-center justify-center shrink-0">
+                            <Package className="h-5 w-5 text-slate-300" />
+                          </div>
+                          <span className="font-medium text-slate-900 text-sm">{product.title}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm text-slate-600">{product.sku || '—'}</TableCell>
+                      <TableCell className="text-sm font-medium">{formatCurrency(product.price)}</TableCell>
+                      <TableCell className="text-right">
+                        <span className={cn('text-sm', product.inventory <= 0 ? 'text-red-600 font-medium' : product.inventory < 10 ? 'text-yellow-600' : 'text-emerald-600')}>
+                          {product.inventory}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={cn('text-xs', product.status === 'active' ? 'bg-emerald-100 text-emerald-800' : product.status === 'draft' ? 'bg-yellow-100 text-yellow-800' : 'bg-slate-100 text-slate-600')}>
+                          {product.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs" style={{ borderColor: getProviderColor(product.integration?.provider), color: getProviderColor(product.integration?.provider) }}>
+                          {getProviderLabel(product.integration?.provider)}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
 
-function getDemoEventTypes(): EventTypeOption[] {
-  return [
-    { value: 'job.created', label: 'Job Created', description: 'Fires when a new job is created', icon: '📋' },
-    { value: 'job.assigned', label: 'Job Assigned', description: 'Fires when a job is assigned to an employee', icon: '👤' },
-    { value: 'job.accepted', label: 'Job Accepted', description: 'Fires when an employee accepts a job', icon: '✅' },
-    { value: 'job.started', label: 'Job Started', description: 'Fires when work begins on a job', icon: '🚀' },
-    { value: 'job.completed', label: 'Job Completed', description: 'Fires when a job is marked complete', icon: '🎉' },
-    { value: 'job.cancelled', label: 'Job Cancelled', description: 'Fires when a job is cancelled', icon: '❌' },
-    { value: 'job.rejected', label: 'Job Rejected', description: 'Fires when an employee rejects a job', icon: '🚫' },
-  ];
-}
+  // ─── Render: Webhooks & Events Tab ───────────────────────────────────────
 
-function getDemoApiKeys(): ApiKeyData[] {
-  return [
-    { id: 'key1', userId: 'u1', keyHash: 'hash1', name: 'Production API Key', scopes: 'read,write', lastUsed: new Date(Date.now() - 300000).toISOString(), createdAt: new Date(Date.now() - 86400000).toISOString() },
-    { id: 'key2', userId: 'u1', keyHash: 'hash2', name: 'Read-Only Key', scopes: 'read', lastUsed: new Date(Date.now() - 86400000).toISOString(), createdAt: new Date(Date.now() - 259200000).toISOString() },
-    { id: 'key3', userId: 'u1', keyHash: 'hash3', name: 'n8n Integration Key', scopes: 'read,write', lastUsed: new Date(Date.now() - 600000).toISOString(), createdAt: new Date(Date.now() - 172800000).toISOString() },
-  ];
-}
+  const renderWebhooksTab = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-slate-900">Webhooks & Events</h3>
+          <p className="text-sm text-slate-500">Manage webhook endpoints and view sync events</p>
+        </div>
+      </div>
 
-function getDemoWebhookLogs(): EventWebhookLog[] {
-  return [
-    { id: 'wl1', eventWebhookId: 'ew1', event: 'job.created', jobId: 'j_001', payloadJson: '{"job":{"id":"j_001","title":"Kitchen Repair","status":"pending"}}', responseStatus: 200, responseBody: '{"success":true}', durationMs: 245, retried: false, createdAt: new Date(Date.now() - 300000).toISOString() },
-    { id: 'wl2', eventWebhookId: 'ew2', event: 'job.assigned', jobId: 'j_002', payloadJson: '{"job":{"id":"j_002","title":"Bathroom Fix","status":"assigned"}}', responseStatus: 200, responseBody: '{"ok":true}', durationMs: 180, retried: false, createdAt: new Date(Date.now() - 600000).toISOString() },
-    { id: 'wl3', eventWebhookId: 'ew3', event: 'job.completed', jobId: 'j_003', payloadJson: '{"job":{"id":"j_003","title":"Office Wiring","status":"completed"}}', responseStatus: 503, responseBody: '{"error":"Service Unavailable"}', error: 'Connection timeout', durationMs: 10000, retried: false, createdAt: new Date(Date.now() - 900000).toISOString() },
-    { id: 'wl4', eventWebhookId: 'ew1', event: 'job.created', jobId: 'j_004', payloadJson: '{"job":{"id":"j_004","title":"AC Service","status":"pending"}}', responseStatus: 200, responseBody: '{"success":true}', durationMs: 310, retried: false, createdAt: new Date(Date.now() - 1200000).toISOString() },
-    { id: 'wl5', eventWebhookId: 'ew3', event: 'job.completed', jobId: 'j_003', payloadJson: '{"job":{"id":"j_003","title":"Office Wiring","status":"completed"}}', responseStatus: 200, responseBody: '{"success":true}', durationMs: 190, retried: true, createdAt: new Date(Date.now() - 1500000).toISOString() },
-    { id: 'wl6', eventWebhookId: 'ew2', event: 'job.assigned', jobId: 'j_005', payloadJson: '{"job":{"id":"j_005","title":"Plumbing Fix","status":"assigned"}}', responseStatus: 401, responseBody: '{"error":"Unauthorized"}', error: 'HTTP 401 Unauthorized', durationMs: 95, retried: false, createdAt: new Date(Date.now() - 1800000).toISOString() },
-  ];
+      {/* Webhook URLs */}
+      {connectedIntegrations.length > 0 && (
+        <div className="space-y-4">
+          <h4 className="text-sm font-semibold text-slate-700">Webhook Endpoints</h4>
+          <div className="space-y-3">
+            {connectedIntegrations.map((intg) => {
+              const ProviderIcon = getProviderIcon(intg.provider);
+              const webhookUrl = intg.webhookUrl || `https://your-domain.com/api/webhooks/ecommerce/${intg.provider}/${intg.id}`;
+              return (
+                <Card key={intg.id} className="border-slate-200">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div
+                        className="p-2 rounded-lg shrink-0"
+                        style={{ backgroundColor: `${getProviderColor(intg.provider)}15` }}
+                      >
+                        <ProviderIcon className="h-5 w-5" style={{ color: getProviderColor(intg.provider) }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className="text-sm font-medium text-slate-900">{intg.name}</p>
+                          <Badge variant="outline" className="text-xs" style={{ borderColor: getProviderColor(intg.provider), color: getProviderColor(intg.provider) }}>
+                            {getProviderLabel(intg.provider)}
+                          </Badge>
+                          {intg.webhookVerified && (
+                            <Badge variant="outline" className="text-xs bg-emerald-100 text-emerald-800 border-emerald-200">
+                              <CheckCircle2 className="h-3 w-3 mr-1" />
+                              Verified
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <code className="text-xs bg-slate-100 px-2 py-1 rounded font-mono truncate block max-w-full">
+                            {webhookUrl}
+                          </code>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 shrink-0"
+                            onClick={() => copyToClipboard(webhookUrl)}
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Last event: {formatTimeAgo(intg.lastSyncAt)} • Total events: {intg._count?.syncLogs ?? 0}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {connectedIntegrations.length === 0 && (
+        <Card className="border-dashed border-slate-300">
+          <CardContent className="p-8 text-center">
+            <Webhook className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+            <h4 className="text-lg font-medium text-slate-700 mb-1">No Connected Stores</h4>
+            <p className="text-sm text-slate-500">Webhook URLs will appear here once you connect a store.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Recent Events / Sync Log */}
+      <div className="space-y-4">
+        <h4 className="text-sm font-semibold text-slate-700">Recent Sync Events</h4>
+        {integrations.length > 0 ? (
+          <Card className="border-slate-200">
+            <CardContent className="p-0">
+              <ScrollArea className="max-h-96">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Integration</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Entity</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Synced</TableHead>
+                      <TableHead className="text-right">Failed</TableHead>
+                      <TableHead className="text-right">Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {integrations.flatMap((intg) =>
+                      (intg.syncLogs || []).map((log) => ({
+                        ...log,
+                        integrationName: intg.name,
+                        integrationProvider: intg.provider,
+                      }))
+                    ).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                      .slice(0, 20)
+                      .map((log) => (
+                        <TableRow key={log.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="h-2 w-2 rounded-full"
+                                style={{ backgroundColor: getProviderColor(log.integrationProvider) }}
+                              />
+                              <span className="text-sm text-slate-900">{log.integrationName}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="capitalize text-xs">{log.syncType}</TableCell>
+                          <TableCell className="capitalize text-xs">{log.entity}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={cn('text-xs', log.status === 'completed' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800')}>
+                              {log.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right text-xs">{log.recordsSynced}</TableCell>
+                          <TableCell className="text-right text-xs">{log.recordsFailed}</TableCell>
+                          <TableCell className="text-right text-xs text-slate-500">{formatDateTime(log.createdAt)}</TableCell>
+                        </TableRow>
+                      ))}
+                    {integrations.every((intg) => !intg.syncLogs || intg.syncLogs.length === 0) && (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center text-sm text-slate-500 py-8">
+                          No sync events yet. Trigger a sync to see events here.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="border-dashed border-slate-300">
+            <CardContent className="p-6 text-center">
+              <Activity className="h-10 w-10 text-slate-300 mx-auto mb-2" />
+              <p className="text-sm text-slate-500">Connect an integration to see sync events</p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+
+  // ─── Render: Workflow Templates Tab ──────────────────────────────────────
+
+  const renderWorkflowTemplates = () => (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-semibold text-slate-900">Workflow Templates</h3>
+        <p className="text-sm text-slate-500">Pre-built automation workflows for your e-commerce integrations</p>
+      </div>
+
+      <div className="space-y-4">
+        {WORKFLOW_TEMPLATES.map((template) => (
+          <Card key={template.id} className="border-slate-200 hover:shadow-md transition-shadow">
+            <CardContent className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                {/* Icon & Info */}
+                <div className="flex items-start gap-3 flex-1">
+                  <div className="p-2.5 rounded-lg bg-emerald-50 shrink-0">
+                    <template.icon className="h-5 w-5 text-emerald-600" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h4 className="font-semibold text-slate-900">{template.name}</h4>
+                      <Badge variant="outline" className="text-xs bg-slate-50">{template.category}</Badge>
+                    </div>
+                    <p className="text-sm text-slate-500 mb-4">{template.description}</p>
+
+                    {/* Flow Diagram */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {template.steps.map((step, idx) => (
+                        <div key={idx} className="flex items-center gap-1.5">
+                          <div className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium', step.color)}>
+                            <step.icon className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">{step.label}</span>
+                            <span className="sm:hidden">{step.label.split(' ').slice(0, 2).join(' ')}</span>
+                          </div>
+                          {idx < template.steps.length - 1 && (
+                            <ArrowRight className="h-4 w-4 text-slate-300 shrink-0" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action */}
+                <Button
+                  onClick={() => {
+                    setActiveView('workflows');
+                    toast.success(`Opening workflow editor with "${template.name}" template`);
+                  }}
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0"
+                >
+                  <Workflow className="h-4 w-4 mr-1.5" />
+                  Use Template
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Custom Workflow CTA */}
+      <Card className="border-dashed border-emerald-300 bg-emerald-50/50">
+        <CardContent className="p-6 text-center">
+          <Workflow className="h-10 w-10 text-emerald-400 mx-auto mb-2" />
+          <h4 className="text-lg font-medium text-emerald-800 mb-1">Need a Custom Workflow?</h4>
+          <p className="text-sm text-emerald-600 mb-4 max-w-md mx-auto">
+            Build your own automation from scratch with our visual workflow builder.
+          </p>
+          <Button
+            onClick={() => setActiveView('workflows')}
+            variant="outline"
+            className="border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+          >
+            <Plus className="h-4 w-4 mr-1.5" />
+            Create Custom Workflow
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  // ─── Main Render ─────────────────────────────────────────────────────────
+
+  return (
+    <div className="h-full flex flex-col">
+      <div className="flex-1 overflow-auto">
+        <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                <Plug className="h-6 w-6 text-emerald-600" />
+                E-commerce Integration Hub
+              </h1>
+              <p className="text-sm text-slate-500 mt-1">
+                Connect stores, sync data, and automate workflows
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  fetchIntegrations();
+                  fetchStats();
+                }}
+                className="text-slate-600"
+              >
+                <RefreshCw className="h-4 w-4 mr-1.5" />
+                Refresh
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setActiveTab('shopify')}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <Plus className="h-4 w-4 mr-1.5" />
+                Add Integration
+              </Button>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <TabsList className="bg-slate-100 p-1 h-auto flex-wrap">
+              <TabsTrigger value="overview" className="text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:text-emerald-700">
+                Overview
+              </TabsTrigger>
+              <TabsTrigger
+                value="shopify"
+                className="text-xs sm:text-sm data-[state=active]:bg-white"
+                style={activeTab === 'shopify' ? { color: SHOPIFY_COLOR } : undefined}
+              >
+                <ShoppingBag className="h-3.5 w-3.5 mr-1" />
+                Shopify
+                {shopifyIntegration?.status === 'connected' && (
+                  <span className="ml-1 h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                )}
+              </TabsTrigger>
+              <TabsTrigger
+                value="woocommerce"
+                className="text-xs sm:text-sm data-[state=active]:bg-white"
+                style={activeTab === 'woocommerce' ? { color: WOOCOMMERCE_COLOR } : undefined}
+              >
+                <Store className="h-3.5 w-3.5 mr-1" />
+                WooCommerce
+                {wooIntegration?.status === 'connected' && (
+                  <span className="ml-1 h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="orders" className="text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:text-emerald-700">
+                <ShoppingBag className="h-3.5 w-3.5 mr-1 hidden sm:inline" />
+                Orders
+              </TabsTrigger>
+              <TabsTrigger value="products" className="text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:text-emerald-700">
+                <Package className="h-3.5 w-3.5 mr-1 hidden sm:inline" />
+                Products
+              </TabsTrigger>
+              <TabsTrigger value="webhooks" className="text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:text-emerald-700">
+                <Webhook className="h-3.5 w-3.5 mr-1 hidden sm:inline" />
+                Webhooks
+              </TabsTrigger>
+              <TabsTrigger value="templates" className="text-xs sm:text-sm data-[state=active]:bg-white data-[state=active]:text-emerald-700">
+                <Workflow className="h-3.5 w-3.5 mr-1 hidden sm:inline" />
+                Templates
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="overview">{renderOverview()}</TabsContent>
+            <TabsContent value="shopify">{renderShopifyTab()}</TabsContent>
+            <TabsContent value="woocommerce">{renderWooTab()}</TabsContent>
+            <TabsContent value="orders">{renderOrdersTab()}</TabsContent>
+            <TabsContent value="products">{renderProductsTab()}</TabsContent>
+            <TabsContent value="webhooks">{renderWebhooksTab()}</TabsContent>
+            <TabsContent value="templates">{renderWorkflowTemplates()}</TabsContent>
+          </Tabs>
+        </div>
+      </div>
+    </div>
+  );
 }

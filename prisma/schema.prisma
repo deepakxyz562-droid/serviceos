@@ -1165,6 +1165,156 @@ model IntegrationConfig {
   @@index([tenantId])
 }
 
+// ==========================================
+// E-COMMERCE INTEGRATIONS
+// ==========================================
+
+// Connection to an e-commerce platform (Shopify, WooCommerce, etc.)
+model IntegrationConnection {
+  id                String   @id @default(cuid())
+  provider          String   // shopify, woocommerce, magento, bigcommerce
+  name              String   // Display name e.g., "My Shopify Store"
+  status            String   @default("disconnected") // connected, disconnected, syncing, error
+  storeUrl          String?  // e.g., "mystore.myshopify.com"
+  accessToken       String?  // Encrypted access token / API key
+  apiSecret         String?  // Encrypted API secret
+  scopesJson        String   @default("[]")  // Granted scopes / permissions
+  configJson        String   @default("{}")  // Provider-specific configuration
+  syncSettingsJson  String   @default("{}")  // What to sync: { customers: true, orders: true, products: true, carts: true }
+  lastSyncAt        DateTime?
+  lastSyncStatus    String?  // success, partial, failed
+  lastError         String?
+  totalSyncedOrders Int      @default(0)
+  totalSyncedProducts Int    @default(0)
+  totalSyncedCustomers Int   @default(0)
+  webhookUrl        String?  // Our webhook endpoint for receiving platform events
+  webhookVerified   Boolean  @default(false)
+  tenantId          String?
+  workspaceId       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  orders     EcommerceOrder[]
+  products   EcommerceProduct[]
+  syncLogs   EcommerceSyncLog[]
+
+  @@index([provider])
+  @@index([status])
+  @@index([tenantId])
+  @@index([lastSyncAt])
+}
+
+// Synced e-commerce orders
+model EcommerceOrder {
+  id                String   @id @default(cuid())
+  externalOrderId   String   // Order ID from Shopify/WooCommerce
+  orderNumber       String?  // Human-readable order number e.g., "#1001"
+  status            String   @default("pending") // pending, confirmed, processing, shipped, delivered, cancelled, refunded
+  financialStatus   String?  // paid, unpaid, partially_refunded, refunded
+  fulfillmentStatus String?  // fulfilled, unfulfilled, partial
+  customerId        String?  // Link to our Customer record
+  customerEmail     String?
+  customerName      String?
+  customerPhone     String?
+  subtotal          Float    @default(0)
+  total             Float    @default(0)
+  currency          String   @default("USD")
+  discountTotal     Float    @default(0)
+  taxTotal          Float    @default(0)
+  shippingTotal     Float    @default(0)
+  itemsJson         String   @default("[]")  // Line items: [{ productId, name, qty, price }]
+  shippingAddress   String?  // JSON string
+  billingAddress    String?  // JSON string
+  tagsJson          String   @default("[]")
+  notes             String?
+  couponCode        String?
+  orderedAt         DateTime?
+  fulfilledAt       DateTime?
+  cancelledAt       DateTime?
+  refundedAt        DateTime?
+  rawDataJson       String   @default("{}")  // Full order payload from provider
+  integrationId     String   // FK to IntegrationConnection
+  tenantId          String?
+  workspaceId       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  integration IntegrationConnection @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, externalOrderId])
+  @@index([status])
+  @@index([financialStatus])
+  @@index([customerId])
+  @@index([tenantId])
+  @@index([orderedAt])
+  @@index([integrationId])
+}
+
+// Synced e-commerce products
+model EcommerceProduct {
+  id                String   @id @default(cuid())
+  externalProductId String   // Product ID from Shopify/WooCommerce
+  title             String
+  description       String?
+  status            String   @default("active") // active, draft, archived
+  productType       String?  // e.g., "Service", "Physical"
+  vendor           String?
+  tagsJson          String   @default("[]")
+  price             Float    @default(0)
+  compareAtPrice    Float?
+  costPrice         Float?
+  currency          String   @default("USD")
+  sku               String?
+  barcode           String?
+  inventoryQuantity Int      @default(0)
+  weight            Float?
+  weightUnit        String   @default("kg")
+  imagesJson        String   @default("[]")  // Array of image URLs
+  variantsJson      String   @default("[]")  // Product variants
+  optionsJson       String   @default("[]")  // Product options (size, color, etc.)
+  seoTitle          String?
+  seoDescription    String?
+  rawDataJson       String   @default("{}")  // Full product payload
+  integrationId     String   // FK to IntegrationConnection
+  tenantId          String?
+  workspaceId       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  integration IntegrationConnection @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, externalProductId])
+  @@index([status])
+  @@index([tenantId])
+  @@index([sku])
+  @@index([productType])
+  @@index([integrationId])
+}
+
+// Sync log for tracking data imports
+model EcommerceSyncLog {
+  id              String   @id @default(cuid())
+  syncType        String   // full, incremental, webhook
+  entity          String   // orders, products, customers, carts
+  status          String   // started, completed, failed
+  recordsTotal    Int      @default(0)
+  recordsSynced   Int      @default(0)
+  recordsFailed   Int      @default(0)
+  errorsJson      String   @default("[]")  // Array of error messages
+  durationMs      Int?
+  integrationId   String   // FK to IntegrationConnection
+  tenantId        String?
+  createdAt       DateTime @default(now())
+
+  integration IntegrationConnection @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@index([entity])
+  @@index([status])
+  @@index([tenantId])
+  @@index([integrationId])
+  @@index([createdAt])
+}
+
 model AnalyticsSnapshot {
   id              String   @id @default(cuid())
   date            String   // YYYY-MM-DD

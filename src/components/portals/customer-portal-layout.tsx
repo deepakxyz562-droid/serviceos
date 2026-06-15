@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   LayoutDashboard,
   CalendarCheck,
@@ -16,6 +16,11 @@ import {
   Moon,
   Sun,
   ChevronDown,
+  ChevronUp,
+  ShoppingBag,
+  Package,
+  Truck,
+  IndianRupee,
   Plus,
   Download,
   Send,
@@ -80,11 +85,12 @@ import {
 } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useTheme } from 'next-themes';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type CustomerView = 'dashboard' | 'bookings' | 'invoices' | 'payments' | 'messages' | 'reviews' | 'profile';
+type CustomerView = 'dashboard' | 'bookings' | 'orders' | 'invoices' | 'payments' | 'messages' | 'reviews' | 'profile';
 
 interface CustomerPortalLayoutProps {
   onLogout?: () => void;
@@ -95,6 +101,7 @@ interface CustomerPortalLayoutProps {
 const SIDEBAR_ITEMS: { key: CustomerView; label: string; icon: React.ElementType }[] = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { key: 'bookings', label: 'Bookings', icon: CalendarCheck },
+  { key: 'orders', label: 'My Orders', icon: ShoppingBag },
   { key: 'invoices', label: 'Invoices', icon: Receipt },
   { key: 'payments', label: 'Payments', icon: CreditCard },
   { key: 'messages', label: 'Messages', icon: MessageSquare },
@@ -540,6 +547,346 @@ function BookingsView() {
             </CardContent>
           </Card>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Orders View ────────────────────────────────────────────────────────────
+
+interface EcommerceOrderItem {
+  name?: string;
+  title?: string;
+  qty?: number;
+  quantity?: number;
+  price?: number;
+  sku?: string;
+}
+
+interface EcommerceOrder {
+  id: string;
+  orderNumber: string | null;
+  status: string;
+  financialStatus: string | null;
+  fulfillmentStatus: string | null;
+  customerEmail: string | null;
+  customerName: string | null;
+  subtotal: number;
+  total: number;
+  currency: string;
+  discountTotal: number;
+  taxTotal: number;
+  shippingTotal: number;
+  items: EcommerceOrderItem[];
+  shippingAddress: Record<string, unknown> | null;
+  tags: string[];
+  orderedAt: string | null;
+  integration: { id: string; provider: string; name: string } | null;
+}
+
+function getOrderStatusBadge(status: string) {
+  const config: Record<string, { label: string; className: string }> = {
+    delivered: { label: 'Delivered', className: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800' },
+    shipped: { label: 'Shipped', className: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800' },
+    processing: { label: 'Processing', className: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800' },
+    confirmed: { label: 'Confirmed', className: 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-400 dark:border-teal-800' },
+    pending: { label: 'Pending', className: 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950/40 dark:text-gray-400 dark:border-gray-800' },
+    cancelled: { label: 'Cancelled', className: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800' },
+    refunded: { label: 'Refunded', className: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-400 dark:border-purple-800' },
+  };
+  const c = config[status] || { label: status, className: 'bg-gray-50 text-gray-700 border-gray-200' };
+  return <Badge variant="outline" className={cn('text-xs font-medium', c.className)}>{c.label}</Badge>;
+}
+
+function getFinancialStatusBadge(status: string | null) {
+  if (!status) return null;
+  const config: Record<string, { label: string; className: string }> = {
+    paid: { label: 'Paid', className: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800' },
+    unpaid: { label: 'Unpaid', className: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800' },
+    refunded: { label: 'Refunded', className: 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-400 dark:border-purple-800' },
+    partially_refunded: { label: 'Partially Refunded', className: 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/40 dark:text-orange-400 dark:border-orange-800' },
+  };
+  const c = config[status] || { label: status, className: 'bg-gray-50 text-gray-700 border-gray-200' };
+  return <Badge variant="outline" className={cn('text-xs font-medium', c.className)}>{c.label}</Badge>;
+}
+
+function formatINR(amount: number): string {
+  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
+}
+
+function OrdersView({ customerEmail }: { customerEmail: string }) {
+  const [orders, setOrders] = useState<EcommerceOrder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+
+  const fetchOrders = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/ecommerce/orders?search=${encodeURIComponent(customerEmail)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setOrders(data.orders || []);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setLoading(false);
+    }
+  }, [customerEmail]);
+
+  useEffect(() => {
+    if (customerEmail) {
+      fetchOrders();
+    }
+  }, [customerEmail, fetchOrders]);
+
+  const toggleExpand = (orderId: string) => {
+    setExpandedOrderId(prev => prev === orderId ? null : orderId);
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-bold text-foreground">My Orders</h2>
+          <p className="text-muted-foreground text-sm">Track and manage your e-commerce orders</p>
+        </div>
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <Card key={i}>
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-2 flex-1">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-3 w-48" />
+                  </div>
+                  <div className="space-y-2">
+                    <Skeleton className="h-5 w-16" />
+                    <Skeleton className="h-4 w-20" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (orders.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-bold text-foreground">My Orders</h2>
+          <p className="text-muted-foreground text-sm">Track and manage your e-commerce orders</p>
+        </div>
+        <Card className="border-dashed">
+          <CardContent className="p-12 flex flex-col items-center justify-center text-center">
+            <div className="size-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">
+              <ShoppingBag className="size-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-semibold text-foreground mb-1">No orders yet</h3>
+            <p className="text-sm text-muted-foreground max-w-sm">Your e-commerce orders will appear here once you place an order through our connected stores.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h2 className="text-xl font-bold text-foreground">My Orders</h2>
+        <p className="text-muted-foreground text-sm">Track and manage your e-commerce orders</p>
+      </div>
+
+      {/* Summary Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="size-10 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center">
+              <ShoppingBag className="size-5 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Total Orders</p>
+              <p className="text-lg font-bold text-foreground">{orders.length}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="size-10 rounded-lg bg-teal-50 dark:bg-teal-950/40 flex items-center justify-center">
+              <Package className="size-5 text-teal-600 dark:text-teal-400" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Delivered</p>
+              <p className="text-lg font-bold text-foreground">{orders.filter(o => o.status === 'delivered').length}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="size-10 rounded-lg bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center">
+              <Truck className="size-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">In Transit</p>
+              <p className="text-lg font-bold text-foreground">{orders.filter(o => o.status === 'shipped' || o.status === 'processing').length}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="size-10 rounded-lg bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center">
+              <IndianRupee className="size-5 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Total Spent</p>
+              <p className="text-lg font-bold text-foreground">{formatINR(orders.reduce((sum, o) => sum + o.total, 0))}</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Order Cards */}
+      <div className="space-y-3">
+        {orders.map((order) => {
+          const isExpanded = expandedOrderId === order.id;
+          const items = order.items || [];
+          const orderDate = order.orderedAt ? new Date(order.orderedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+          const shippingAddr = order.shippingAddress as Record<string, string> | null;
+
+          return (
+            <Card key={order.id} className="hover:shadow-md transition-shadow">
+              <CardContent className="p-4 sm:p-5">
+                {/* Order Header - Clickable */}
+                <button
+                  type="button"
+                  className="w-full text-left"
+                  onClick={() => toggleExpand(order.id)}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <h3 className="font-semibold text-foreground">#{order.orderNumber || order.id.slice(-6)}</h3>
+                        {getOrderStatusBadge(order.status)}
+                        {getFinancialStatusBadge(order.financialStatus)}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Package className="size-3.5" />
+                          {items.length} {items.length === 1 ? 'item' : 'items'}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="size-3.5" />
+                          {orderDate}
+                        </span>
+                        {order.integration && (
+                          <span className="text-xs capitalize">{order.integration.provider}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg font-bold text-foreground">{formatINR(order.total)}</span>
+                      {isExpanded ? (
+                        <ChevronUp className="size-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronDown className="size-4 text-muted-foreground" />
+                      )}
+                    </div>
+                  </div>
+                </button>
+
+                {/* Expanded Details */}
+                {isExpanded && (
+                  <div className="mt-4 pt-4 border-t border-border space-y-4">
+                    {/* Line Items */}
+                    <div>
+                      <h4 className="text-sm font-semibold text-foreground mb-2">Items</h4>
+                      <div className="space-y-2">
+                        {items.map((item, idx) => (
+                          <div key={idx} className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-muted/50">
+                            <div className="flex items-center gap-2">
+                              <Package className="size-4 text-muted-foreground" />
+                              <span className="text-sm text-foreground">{item.name || item.title || 'Item'}</span>
+                              {item.sku && <span className="text-xs text-muted-foreground font-mono">({item.sku})</span>}
+                            </div>
+                            <div className="flex items-center gap-4 text-sm">
+                              <span className="text-muted-foreground">×{item.qty || item.quantity || 1}</span>
+                              <span className="font-medium text-foreground">{formatINR((item.price || 0) * (item.qty || item.quantity || 1))}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Shipping Address */}
+                    {shippingAddr && (
+                      <div>
+                        <h4 className="text-sm font-semibold text-foreground mb-2">Shipping Address</h4>
+                        <div className="text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">
+                          <div className="flex items-start gap-2">
+                            <MapPin className="size-4 mt-0.5 shrink-0" />
+                            <div>
+                              {shippingAddr.name && <p className="font-medium text-foreground">{shippingAddr.name}</p>}
+                              <p>{[shippingAddr.address1, shippingAddr.address2, shippingAddr.city, shippingAddr.province, shippingAddr.zip].filter(Boolean).join(', ')}</p>
+                              {shippingAddr.country && <p>{shippingAddr.country}</p>}
+                              {shippingAddr.phone && <p className="flex items-center gap-1 mt-1"><Phone className="size-3" />{shippingAddr.phone}</p>}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Order Totals Breakdown */}
+                    <div>
+                      <h4 className="text-sm font-semibold text-foreground mb-2">Order Summary</h4>
+                      <div className="bg-muted/50 rounded-lg p-3 space-y-1.5">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Subtotal</span>
+                          <span className="text-foreground">{formatINR(order.subtotal)}</span>
+                        </div>
+                        {order.taxTotal > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Tax</span>
+                            <span className="text-foreground">{formatINR(order.taxTotal)}</span>
+                          </div>
+                        )}
+                        {order.shippingTotal > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Shipping</span>
+                            <span className="text-foreground">{formatINR(order.shippingTotal)}</span>
+                          </div>
+                        )}
+                        {order.discountTotal > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Discount</span>
+                            <span className="text-emerald-600 dark:text-emerald-400">-{formatINR(order.discountTotal)}</span>
+                          </div>
+                        )}
+                        <Separator />
+                        <div className="flex justify-between text-sm font-bold">
+                          <span className="text-foreground">Total</span>
+                          <span className="text-foreground">{formatINR(order.total)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Tags */}
+                    {order.tags && order.tags.length > 0 && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {order.tags.map((tag, idx) => (
+                          <Badge key={idx} variant="secondary" className="text-xs">{tag}</Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
@@ -1078,6 +1425,7 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
   const auth = useAppStore((s) => s.auth);
 
   const customerName = auth.user?.name || 'Rajesh Kumar';
+  const customerEmail = auth.user?.email || 'rajesh.kumar@email.com';
   const customerPhone = auth.user?.phone || '+91 98765 43210';
 
   const handleViewChange = (view: CustomerView) => {
@@ -1091,6 +1439,8 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
         return <DashboardView />;
       case 'bookings':
         return <BookingsView />;
+      case 'orders':
+        return <OrdersView customerEmail={customerEmail} />;
       case 'invoices':
         return <InvoicesView />;
       case 'payments':

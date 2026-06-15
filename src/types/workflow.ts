@@ -7,7 +7,7 @@ export interface NodePort {
 }
 
 // Node categories
-export type NodeCategory = 'trigger' | 'condition' | 'action' | 'flowControl' | 'logic' | 'code' | 'data' | 'communication' | 'cloud' | 'template' | 'ai' | 'utility';
+export type NodeCategory = 'trigger' | 'condition' | 'action' | 'flowControl' | 'logic' | 'code' | 'data' | 'communication' | 'cloud' | 'template' | 'ai' | 'ecommerce' | 'utility';
 
 // Node status for execution
 export type NodeStatus = 'idle' | 'running' | 'success' | 'error' | 'waiting';
@@ -179,6 +179,8 @@ export type ViewType =
   | 'credentials' | 'settings' | 'auditLogs' | 'reports'
   // Portals
   | 'customerPortal' | 'employeePortal'
+  // Integrations
+  | 'integrations'
   // AI & Extras
   | 'aiAssistant' | 'chatbotBuilder' | 'retargeting' | 'segments' | 'marketingAnalytics'
   | 'serviceCatalog' | 'knowledgeBase' | 'communicationProviders'

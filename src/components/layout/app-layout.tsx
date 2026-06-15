@@ -53,6 +53,7 @@ const BillingView = lazy(() => import('@/components/views/billing-view').then(m 
 
 // System
 const CredentialsView = lazy(() => import('@/components/views/credentials-view').then(m => ({ default: m.CredentialsView })));
+const IntegrationsView = lazy(() => import('@/components/views/integrations-view').then(m => ({ default: m.IntegrationsView })));
 const SettingsView = lazy(() => import('@/components/views/settings-view').then(m => ({ default: m.SettingsView })));
 const ReportsView = lazy(() => import('@/components/views/reports-view').then(m => ({ default: m.ReportsView })));
 
@@ -126,6 +127,7 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   billing: BillingView,
   // System
   credentials: CredentialsView,
+  integrations: IntegrationsView,
   settings: SettingsView,
   auditLogs: ReportsView,
   reports: ReportsView,

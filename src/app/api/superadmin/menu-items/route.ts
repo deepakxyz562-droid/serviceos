@@ -37,21 +37,22 @@ const DEFAULT_MENU_ITEMS = [
   { key: 'billing', label: 'Billing', icon: 'CreditCard', section: 'Finance', sortOrder: 23 },
   // System
   { key: 'credentials', label: 'Credentials', icon: 'KeyRound', section: 'System', sortOrder: 24 },
-  { key: 'settings', label: 'Settings', icon: 'Settings', section: 'System', sortOrder: 25 },
-  { key: 'auditLogs', label: 'Audit Logs', icon: 'ScrollText', section: 'System', sortOrder: 26 },
-  { key: 'reports', label: 'Reports', icon: 'BarChart3', section: 'System', sortOrder: 27 },
+  { key: 'integrations', label: 'Integrations', icon: 'Plug', section: 'System', sortOrder: 25 },
+  { key: 'settings', label: 'Settings', icon: 'Settings', section: 'System', sortOrder: 26 },
+  { key: 'auditLogs', label: 'Audit Logs', icon: 'ScrollText', section: 'System', sortOrder: 27 },
+  { key: 'reports', label: 'Reports', icon: 'BarChart3', section: 'System', sortOrder: 28 },
   // Portals
-  { key: 'customerPortal', label: 'Customer Portal', icon: 'Globe', section: 'Portals', sortOrder: 28 },
-  { key: 'employeePortal', label: 'Employee Portal', icon: 'HardHat', section: 'Portals', sortOrder: 29 },
+  { key: 'customerPortal', label: 'Customer Portal', icon: 'Globe', section: 'Portals', sortOrder: 29 },
+  { key: 'employeePortal', label: 'Employee Portal', icon: 'HardHat', section: 'Portals', sortOrder: 30 },
   // AI & More
-  { key: 'aiAssistant', label: 'AI Assistant', icon: 'Sparkles', section: 'AI & More', sortOrder: 30 },
-  { key: 'chatbotBuilder', label: 'Chatbot Builder', icon: 'Bot', section: 'AI & More', sortOrder: 31 },
-  { key: 'retargeting', label: 'Retargeting', icon: 'RefreshCw', section: 'AI & More', sortOrder: 32 },
-  { key: 'segments', label: 'Segments', icon: 'Filter', section: 'AI & More', sortOrder: 33 },
-  { key: 'marketingAnalytics', label: 'Analytics', icon: 'BarChart3', section: 'AI & More', sortOrder: 34 },
-  { key: 'serviceCatalog', label: 'Service Catalog', icon: 'BookOpen', section: 'AI & More', sortOrder: 35 },
-  { key: 'communicationProviders', label: 'Providers', icon: 'KeyRound', section: 'AI & More', sortOrder: 36 },
-  { key: 'reviews', label: 'Reviews', icon: 'Star', section: 'AI & More', sortOrder: 37 },
+  { key: 'aiAssistant', label: 'AI Assistant', icon: 'Sparkles', section: 'AI & More', sortOrder: 31 },
+  { key: 'chatbotBuilder', label: 'Chatbot Builder', icon: 'Bot', section: 'AI & More', sortOrder: 32 },
+  { key: 'retargeting', label: 'Retargeting', icon: 'RefreshCw', section: 'AI & More', sortOrder: 33 },
+  { key: 'segments', label: 'Segments', icon: 'Filter', section: 'AI & More', sortOrder: 34 },
+  { key: 'marketingAnalytics', label: 'Analytics', icon: 'BarChart3', section: 'AI & More', sortOrder: 35 },
+  { key: 'serviceCatalog', label: 'Service Catalog', icon: 'BookOpen', section: 'AI & More', sortOrder: 36 },
+  { key: 'communicationProviders', label: 'Providers', icon: 'KeyRound', section: 'AI & More', sortOrder: 37 },
+  { key: 'reviews', label: 'Reviews', icon: 'Star', section: 'AI & More', sortOrder: 38 },
 ];
 
 interface MenuItemEntry {

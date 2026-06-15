@@ -204,6 +204,7 @@ const DEFAULT_MENU_ITEMS: { key: string; label: string; section: string }[] = [
   { key: 'billing', label: 'Billing', section: 'Finance' },
   // System
   { key: 'credentials', label: 'Credentials', section: 'System' },
+  { key: 'integrations', label: 'Integrations', section: 'System' },
   { key: 'settings', label: 'Settings', section: 'System' },
   { key: 'auditLogs', label: 'Audit Logs', section: 'System' },
   { key: 'reports', label: 'Reports', section: 'System' },

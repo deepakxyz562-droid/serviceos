@@ -55,6 +55,9 @@ import {
   Search,
   Shield,
   CreditCard as CreditCardIcon,
+  Plug,
+  ShoppingBag,
+  Package,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -165,9 +168,10 @@ const ownerNavSections: NavSection[] = [
     ],
   },
   {
-    title: 'System',
+    title: 'Administration',
     items: [
       { view: 'credentials', label: 'Credentials', icon: KeyRound },
+      { view: 'integrations', label: 'Integrations', icon: Plug, badge: 'New' },
       { view: 'settings', label: 'Settings', icon: Settings },
       { view: 'auditLogs', label: 'Audit Logs', icon: ScrollText },
       { view: 'reports', label: 'Reports', icon: BarChart3 },

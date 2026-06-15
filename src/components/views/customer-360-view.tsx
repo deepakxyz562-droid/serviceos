@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   User, Search, Phone, Mail, MapPin, MessageSquare, Calendar, DollarSign,
   Wrench, Activity, Clock, Star, Tag, Plus, Send, FileText, Zap,
@@ -9,6 +9,7 @@ import {
   Bot, Sparkles, Users, StickyNote,
   TrendingUp, TrendingDown, ArrowUpDown, Upload, Image, File,
   PhoneCall, Heart, Workflow,
+  ShoppingCart, Package, Truck, ChevronDown, ChevronUp, ExternalLink,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -202,6 +203,27 @@ const timelineEventTypeConfig: Record<string, { icon: React.ElementType; color: 
   review: { icon: Star, color: 'text-amber-600', bg: 'bg-amber-500/10' },
   whatsapp_sent: { icon: MessageSquare, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
   lead_converted: { icon: Sparkles, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
+  order_created: { icon: ShoppingCart, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
+  order_delivered: { icon: Package, color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
+  order_shipped: { icon: Truck, color: 'text-sky-600', bg: 'bg-sky-500/10' },
+  order_cancelled: { icon: X, color: 'text-red-600', bg: 'bg-red-500/10' },
+};
+
+const orderStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
+  pending: { label: 'Pending', color: 'text-amber-700', bg: 'bg-amber-100 border-amber-200' },
+  confirmed: { label: 'Confirmed', color: 'text-sky-700', bg: 'bg-sky-100 border-sky-200' },
+  processing: { label: 'Processing', color: 'text-violet-700', bg: 'bg-violet-100 border-violet-200' },
+  shipped: { label: 'Shipped', color: 'text-sky-700', bg: 'bg-sky-100 border-sky-200' },
+  delivered: { label: 'Delivered', color: 'text-emerald-700', bg: 'bg-emerald-100 border-emerald-200' },
+  cancelled: { label: 'Cancelled', color: 'text-red-700', bg: 'bg-red-100 border-red-200' },
+  refunded: { label: 'Refunded', color: 'text-muted-foreground', bg: 'bg-muted border-border' },
+};
+
+const financialStatusConfig: Record<string, { label: string; color: string; bg: string }> = {
+  paid: { label: 'Paid', color: 'text-emerald-700', bg: 'bg-emerald-100 border-emerald-200' },
+  unpaid: { label: 'Unpaid', color: 'text-amber-700', bg: 'bg-amber-100 border-amber-200' },
+  refunded: { label: 'Refunded', color: 'text-muted-foreground', bg: 'bg-muted border-border' },
+  partially_refunded: { label: 'Partial Refund', color: 'text-amber-700', bg: 'bg-amber-100 border-amber-200' },
 };
 
 // ─── Demo trend data for KPI cards ──────────────────────────────────────────
@@ -487,6 +509,98 @@ export function Customer360View() {
   // Fetch bookings for selected customer
   const { data: bookingsData, isLoading: bookingsLoading } = useBookings(selectedCustomerId || undefined);
 
+  // ─── E-commerce Orders State & Fetch ─────────────────────────────────────
+  const [ecommerceOrders, setEcommerceOrders] = useState<any[]>([]);
+  const [ecommerceOrdersLoading, setEcommerceOrdersLoading] = useState(false);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+
+  const fetchEcommerceOrders = useCallback(async (email?: string, phone?: string) => {
+    if (!email && !phone) {
+      setEcommerceOrders([]);
+      return;
+    }
+    setEcommerceOrdersLoading(true);
+    try {
+      const searchParam = email || phone || '';
+      const res = await fetch(`/api/ecommerce/orders?search=${encodeURIComponent(searchParam)}&limit=50`);
+      if (res.ok) {
+        const data = await res.json();
+        setEcommerceOrders(data.orders || []);
+      } else {
+        setEcommerceOrders([]);
+      }
+    } catch {
+      setEcommerceOrders([]);
+    } finally {
+      setEcommerceOrdersLoading(false);
+    }
+  }, []);
+
+  // Fetch ecommerce orders when customer changes
+  useEffect(() => {
+    if (customer) {
+      const email = (customer as any).email;
+      const phone = (customer as any).phone;
+      fetchEcommerceOrders(email, phone);
+    } else {
+      setEcommerceOrders([]);
+    }
+  }, [customer, fetchEcommerceOrders]);
+
+  // E-commerce order stats
+  const ecommerceStats = useMemo(() => {
+    const totalOrders = ecommerceOrders.length;
+    const totalSpent = ecommerceOrders.reduce((s, o) => s + (o.totalAmount || o.total || 0), 0);
+    const avgOrderValue = totalOrders > 0 ? totalSpent / totalOrders : 0;
+    return { totalOrders, totalSpent, avgOrderValue };
+  }, [ecommerceOrders]);
+
+  // Merge ecommerce order events into timeline
+  const orderTimelineEvents = useMemo(() => {
+    const events: any[] = [];
+    ecommerceOrders.forEach((order) => {
+      // Order created event
+      events.push({
+        id: `order-created-${order.id}`,
+        eventType: 'order_created',
+        title: `Order ${order.orderNumber || order.externalOrderId} created`,
+        description: `${order.currency || 'INR'} ${(order.totalAmount || order.total || 0).toLocaleString()} via ${(order.integration as any)?.provider || 'store'}`,
+        createdAt: order.orderedAt || order.createdAt,
+      });
+      // Order delivered event
+      if (order.status === 'delivered' || order.fulfillmentStatus === 'fulfilled') {
+        events.push({
+          id: `order-delivered-${order.id}`,
+          eventType: 'order_delivered',
+          title: `Order ${order.orderNumber || order.externalOrderId} delivered`,
+          description: `${(order.items || []).length} item(s) delivered`,
+          createdAt: order.deliveredAt || order.updatedAt || order.orderedAt || order.createdAt,
+        });
+      }
+      // Order shipped event
+      if (order.status === 'shipped') {
+        events.push({
+          id: `order-shipped-${order.id}`,
+          eventType: 'order_shipped',
+          title: `Order ${order.orderNumber || order.externalOrderId} shipped`,
+          description: `Tracking: ${order.trackingNumber || 'N/A'}`,
+          createdAt: order.updatedAt || order.orderedAt || order.createdAt,
+        });
+      }
+      // Order cancelled event
+      if (order.status === 'cancelled') {
+        events.push({
+          id: `order-cancelled-${order.id}`,
+          eventType: 'order_cancelled',
+          title: `Order ${order.orderNumber || order.externalOrderId} cancelled`,
+          description: `Refund: ${(order.financialStatus || 'N/A')}`,
+          createdAt: order.updatedAt || order.orderedAt || order.createdAt,
+        });
+      }
+    });
+    return events;
+  }, [ecommerceOrders]);
+
   // Filtered + sorted customer list
   const filteredCustomers = useMemo(() => {
     if (!customers) return [];
@@ -545,7 +659,7 @@ export function Customer360View() {
   // Health score
   const healthScore = useMemo(() => computeHealthScore(stats), [stats]);
 
-  // Grouped timeline
+  // Grouped timeline (including ecommerce order events)
   const groupedTimeline = useMemo(() => {
     const groups: { label: string; events: any[] }[] = [];
     const today: any[] = [];
@@ -553,7 +667,12 @@ export function Customer360View() {
     const thisWeek: any[] = [];
     const earlier: any[] = [];
 
-    timelineEvents.forEach(event => {
+    // Merge CRM timeline events + ecommerce order events
+    const allEvents = [...timelineEvents, ...orderTimelineEvents];
+    // Sort by createdAt descending
+    allEvents.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+    allEvents.forEach(event => {
       if (!event.createdAt) {
         earlier.push(event);
         return;
@@ -570,7 +689,7 @@ export function Customer360View() {
     if (earlier.length > 0) groups.push({ label: 'Earlier', events: earlier });
 
     return groups;
-  }, [timelineEvents]);
+  }, [timelineEvents, orderTimelineEvents]);
 
   // Parse tags from customer data
   const customerTags = useMemo(() => {
@@ -1012,7 +1131,7 @@ export function Customer360View() {
             {customer360Loading ? (
               <KpiSkeleton />
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
                 <KpiCard
                   label="Total Bookings"
                   value={stats.totalBookings}
@@ -1052,6 +1171,20 @@ export function Customer360View() {
                   accent={stats.outstandingBalance > 0 ? 'text-red-400' : 'text-muted-foreground'}
                   borderColor="border-l-red-500"
                   trendKey="outstanding"
+                />
+                <KpiCard
+                  label="Ecom Revenue"
+                  value={formatCurrency(ecommerceStats.totalSpent)}
+                  icon={ShoppingCart}
+                  accent="text-emerald-400"
+                  borderColor="border-l-emerald-500"
+                />
+                <KpiCard
+                  label="Ecom Orders"
+                  value={ecommerceStats.totalOrders}
+                  icon={Package}
+                  accent="text-sky-400"
+                  borderColor="border-l-sky-500"
                 />
               </div>
             )}
@@ -1108,6 +1241,17 @@ export function Customer360View() {
                     )}
                   </TabsTrigger>
                   <TabsTrigger
+                    value="orders"
+                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
+                  >
+                    <ShoppingCart className="size-3.5" /> Orders
+                    {ecommerceOrders.length > 0 && (
+                      <Badge className="size-4 rounded-full p-0 text-[9px] bg-emerald-600 text-foreground flex items-center justify-center">
+                        {ecommerceOrders.length}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger
                     value="documents"
                     className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
                   >
@@ -1128,7 +1272,7 @@ export function Customer360View() {
                   <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
                     <div className="p-5 space-y-6">
                       {/* Last 30 Days Summary Row */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
                         <div className="bg-card rounded-xl p-3 border border-border shadow-sm">
                           <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Last 30 Days</p>
                           <p className="text-lg font-extrabold text-foreground mt-1">
@@ -1172,6 +1316,20 @@ export function Customer360View() {
                             }).length}
                           </p>
                           <p className="text-[10px] text-muted-foreground">Conversations</p>
+                        </div>
+                        <div className="bg-card rounded-xl p-3 border border-border shadow-sm">
+                          <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">E-Commerce</p>
+                          <p className="text-lg font-extrabold text-emerald-500 mt-1">
+                            {formatCurrency(ecommerceStats.totalSpent)}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">Revenue</p>
+                        </div>
+                        <div className="bg-card rounded-xl p-3 border border-border shadow-sm">
+                          <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">E-Commerce</p>
+                          <p className="text-lg font-extrabold text-foreground mt-1">
+                            {ecommerceStats.totalOrders}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">Orders</p>
                         </div>
                       </div>
 
@@ -1835,6 +1993,225 @@ export function Customer360View() {
                                 })}
                             </div>
                           )}
+                        </>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
+
+                {/* ─── Orders Tab ──────────────────────────────────────────── */}
+                <TabsContent value="orders" className="h-full m-0">
+                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
+                    <div className="p-5 space-y-6">
+                      {ecommerceOrdersLoading ? (
+                        <div className="space-y-4">
+                          {Array.from({ length: 3 }).map((_, i) => (
+                            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+                          ))}
+                        </div>
+                      ) : ecommerceOrders.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-16 text-center">
+                          <ShoppingCart className="size-10 text-muted-foreground mb-3" />
+                          <h3 className="text-base font-semibold text-foreground">
+                            No e-commerce orders
+                          </h3>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            E-commerce orders for this customer will appear here
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Summary Stats */}
+                          <div className="grid grid-cols-3 gap-3">
+                            <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-emerald-500 shadow-sm">
+                              <p className="text-lg font-extrabold text-foreground">
+                                {ecommerceStats.totalOrders}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground font-medium">Total Orders</p>
+                            </div>
+                            <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-emerald-500 shadow-sm">
+                              <p className="text-lg font-extrabold text-emerald-500">
+                                {formatCurrency(ecommerceStats.totalSpent)}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground font-medium">Total Spent</p>
+                            </div>
+                            <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-sky-500 shadow-sm">
+                              <p className="text-lg font-extrabold text-foreground">
+                                {formatCurrency(ecommerceStats.avgOrderValue)}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground font-medium">Avg Order Value</p>
+                            </div>
+                          </div>
+
+                          {/* Orders Table */}
+                          <div className="space-y-2">
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                              All Orders
+                            </h4>
+                            <div className="space-y-2">
+                              {ecommerceOrders.map((order: any) => {
+                                const statusCfg = orderStatusConfig[order.status] || orderStatusConfig.pending;
+                                const finCfg = financialStatusConfig[order.financialStatus] || financialStatusConfig.unpaid;
+                                const isExpanded = expandedOrderId === order.id;
+                                const items = Array.isArray(order.items) ? order.items : [];
+                                const shippingAddr = order.shippingAddress;
+                                const provider = (order.integration as any)?.provider || 'unknown';
+                                const providerLabel = provider.charAt(0).toUpperCase() + provider.slice(1);
+                                return (
+                                  <div key={order.id} className="bg-card rounded-xl border border-border overflow-hidden hover:shadow-sm transition-all duration-200">
+                                    {/* Order Row */}
+                                    <button
+                                      type="button"
+                                      className="w-full flex items-center justify-between p-3 text-left hover:bg-accent/30 transition-colors"
+                                      onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
+                                    >
+                                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                                        <div className="size-8 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
+                                          <ShoppingCart className="size-3.5 text-emerald-500" />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <p className="text-sm font-medium text-foreground">
+                                              {order.orderNumber || order.externalOrderId || 'Order'}
+                                            </p>
+                                            <Badge
+                                              variant="outline"
+                                              className={cn('text-[10px] rounded-md shrink-0', statusCfg.bg, statusCfg.color)}
+                                            >
+                                              {statusCfg.label}
+                                            </Badge>
+                                            <Badge
+                                              variant="outline"
+                                              className={cn('text-[10px] rounded-md shrink-0', finCfg.bg, finCfg.color)}
+                                            >
+                                              {finCfg.label}
+                                            </Badge>
+                                          </div>
+                                          <p className="text-xs text-muted-foreground mt-0.5">
+                                            {items.length} item{items.length !== 1 ? 's' : ''} &middot; {providerLabel} &middot; {order.orderedAt ? formatDate(order.orderedAt) : formatDate(order.createdAt)}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-2 shrink-0 ml-2">
+                                        <span className="text-sm font-bold text-emerald-400">
+                                          {formatCurrency(order.totalAmount || order.total || 0)}
+                                        </span>
+                                        {isExpanded ? (
+                                          <ChevronUp className="size-4 text-muted-foreground" />
+                                        ) : (
+                                          <ChevronDown className="size-4 text-muted-foreground" />
+                                        )}
+                                      </div>
+                                    </button>
+
+                                    {/* Expanded Detail */}
+                                    {isExpanded && (
+                                      <div className="border-t border-border p-4 bg-muted/30 space-y-4">
+                                        {/* Line Items */}
+                                        {items.length > 0 && (
+                                          <div className="space-y-2">
+                                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Line Items</p>
+                                            <div className="space-y-1.5">
+                                              {items.map((item: any, idx: number) => (
+                                                <div key={idx} className="flex items-center justify-between text-sm bg-card rounded-lg p-2.5 border border-border">
+                                                  <div className="flex items-center gap-2 min-w-0">
+                                                    <Package className="size-3.5 text-muted-foreground shrink-0" />
+                                                    <span className="text-foreground truncate">{item.title || item.name || item.productTitle || `Item ${idx + 1}`}</span>
+                                                  </div>
+                                                  <div className="flex items-center gap-3 shrink-0">
+                                                    <span className="text-xs text-muted-foreground">
+                                                      {item.quantity || 1}x
+                                                    </span>
+                                                    <span className="text-xs font-medium text-foreground">
+                                                      {formatCurrency(item.price || item.total || 0)}
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        {/* Shipping & Order Info Grid */}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                          {/* Shipping Address */}
+                                          {shippingAddr && typeof shippingAddr === 'object' && (
+                                            <div className="bg-card rounded-lg p-3 border border-border">
+                                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                                                <Truck className="size-3" /> Shipping Address
+                                              </p>
+                                              <p className="text-sm text-foreground">
+                                                {shippingAddr.name && <span className="font-medium">{shippingAddr.name}<br /></span>}
+                                                {shippingAddr.address1 || shippingAddr.line1 || ''}
+                                                {shippingAddr.address2 || shippingAddr.line2 ? `, ${shippingAddr.address2 || shippingAddr.line2}` : ''}
+                                                <br />
+                                                {shippingAddr.city || ''}{shippingAddr.province || shippingAddr.state ? `, ${shippingAddr.province || shippingAddr.state}` : ''} {shippingAddr.zip || shippingAddr.postal_code || ''}
+                                                {shippingAddr.country && <><br />{shippingAddr.country}</>}
+                                              </p>
+                                            </div>
+                                          )}
+
+                                          {/* Order Details */}
+                                          <div className="bg-card rounded-lg p-3 border border-border space-y-1.5">
+                                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                              <ExternalLink className="size-3" /> Order Details
+                                            </p>
+                                            <div className="flex justify-between text-sm">
+                                              <span className="text-muted-foreground">Provider</span>
+                                              <span className="text-foreground font-medium">{providerLabel}</span>
+                                            </div>
+                                            <div className="flex justify-between text-sm">
+                                              <span className="text-muted-foreground">Currency</span>
+                                              <span className="text-foreground font-medium">{order.currency || 'INR'}</span>
+                                            </div>
+                                            <div className="flex justify-between text-sm">
+                                              <span className="text-muted-foreground">Subtotal</span>
+                                              <span className="text-foreground font-medium">{formatCurrency(order.subtotal || 0)}</span>
+                                            </div>
+                                            {order.totalTax > 0 && (
+                                              <div className="flex justify-between text-sm">
+                                                <span className="text-muted-foreground">Tax</span>
+                                                <span className="text-foreground font-medium">{formatCurrency(order.totalTax)}</span>
+                                              </div>
+                                            )}
+                                            {order.totalShipping > 0 && (
+                                              <div className="flex justify-between text-sm">
+                                                <span className="text-muted-foreground">Shipping</span>
+                                                <span className="text-foreground font-medium">{formatCurrency(order.totalShipping)}</span>
+                                              </div>
+                                            )}
+                                            {order.totalDiscount > 0 && (
+                                              <div className="flex justify-between text-sm">
+                                                <span className="text-muted-foreground">Discount</span>
+                                                <span className="text-emerald-500 font-medium">-{formatCurrency(order.totalDiscount)}</span>
+                                              </div>
+                                            )}
+                                            <Separator className="bg-border" />
+                                            <div className="flex justify-between text-sm">
+                                              <span className="text-muted-foreground font-medium">Total</span>
+                                              <span className="text-foreground font-bold">{formatCurrency(order.totalAmount || order.total || 0)}</span>
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        {/* Tags */}
+                                        {order.tags && Array.isArray(order.tags) && order.tags.length > 0 && (
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <Tag className="size-3 text-muted-foreground" />
+                                            {order.tags.map((tag: string, idx: number) => (
+                                              <Badge key={idx} variant="outline" className="text-[10px] bg-muted text-muted-foreground border-border">
+                                                {tag}
+                                              </Badge>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
                         </>
                       )}
                     </div>

@@ -26,6 +26,11 @@ import {
   Camera,
   Eye,
   Send,
+  ShoppingCart,
+  AlertTriangle,
+  Package,
+  ExternalLink,
+  IndianRupee,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -154,7 +159,47 @@ interface ScheduledAction {
   status: string;
 }
 
+interface EcommerceStats {
+  ordersToday: number;
+  revenueToday: number;
+  totalOrders: number;
+  totalRevenue: number;
+  avgOrderValue: number;
+  abandonedCarts: number;
+  conversionRate: number;
+  pendingOrders: number;
+  totalProducts: number;
+  activeProducts: number;
+  totalCustomers: number;
+  ordersLast30Days: number;
+  ordersByStatus: Record<string, number>;
+  topProducts: Array<{ id: string; name: string; totalQty: number; revenue: number }>;
+  storeRevenueByProvider: Array<{ provider: string; name: string; integrationId: string; revenue: number; totalOrders: number; totalProducts: number }>;
+  integrations: Array<{ id: string; provider: string; name: string; status: string; lastSyncAt: string | null; lastSyncStatus: string | null; totalSyncedOrders: number; totalSyncedProducts: number; totalSyncedCustomers: number }>;
+}
+
+interface EcommerceRecentOrder {
+  id: string;
+  orderNumber: string;
+  customerName: string | null;
+  customerEmail: string | null;
+  status: string;
+  total: number;
+  currency: string;
+  orderedAt: string;
+  integration: { id: string; provider: string; name: string };
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatINR(amount: number): string {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
 
 function formatUSD(amount: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -359,6 +404,11 @@ export function DashboardView() {
   const [conversations, setConversations] = useState<ConversationData[]>([]);
   const [scheduledActions, setScheduledActions] = useState<ScheduledAction[]>([]);
 
+  // E-commerce states
+  const [ecommerceStats, setEcommerceStats] = useState<EcommerceStats | null>(null);
+  const [ecommerceRecentOrders, setEcommerceRecentOrders] = useState<EcommerceRecentOrder[]>([]);
+  const [ecommerceLoading, setEcommerceLoading] = useState(true);
+
   // Real-time connection
   const { connected: realtimeConnected } = useRealtime({
     onEmployeeStatus: useCallback((data: any) => {
@@ -467,6 +517,30 @@ export function DashboardView() {
     fetchConversations();
     const interval = setInterval(fetchConversations, 30000);
     return () => clearInterval(interval);
+  }, []);
+
+  // Fetch e-commerce stats and recent orders
+  useEffect(() => {
+    async function fetchEcommerce() {
+      try {
+        const [statsRes, ordersRes] = await Promise.all([
+          fetch('/api/ecommerce/stats'),
+          fetch('/api/ecommerce/orders?limit=5'),
+        ]);
+        if (statsRes.ok) {
+          const statsData = await statsRes.json();
+          setEcommerceStats(statsData);
+        }
+        if (ordersRes.ok) {
+          const ordersData = await ordersRes.json();
+          setEcommerceRecentOrders(ordersData.orders || []);
+        }
+      } catch { /* silent */ }
+      finally {
+        setEcommerceLoading(false);
+      }
+    }
+    fetchEcommerce();
   }, []);
 
   // Build pie chart data for lead sources
@@ -1520,6 +1594,333 @@ export function DashboardView() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ─── E-Commerce Overview Section ────────────────────────────────── */}
+      {ecommerceLoading ? (
+        <div className="space-y-4">
+          <Skeleton className="h-6 w-48" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)}
+          </div>
+        </div>
+      ) : ecommerceStats && ecommerceStats.totalOrders > 0 ? (
+        <div className="space-y-6">
+          {/* Section heading */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight text-foreground flex items-center gap-2">
+                <ShoppingCart className="size-5 text-emerald-600" />
+                E-Commerce Overview
+              </h2>
+              <p className="text-sm text-muted-foreground mt-0.5">Your online store performance at a glance</p>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              onClick={() => setCurrentView('integrations')}
+            >
+              View details <ArrowRight className="size-3.5 ml-1" />
+            </Button>
+          </div>
+
+          {/* E-Commerce KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Orders Today */}
+            <Card className="hover:shadow-md transition-shadow">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-muted-foreground font-medium">Orders Today</p>
+                    <p className="text-2xl font-bold mt-1">{ecommerceStats.ordersToday}</p>
+                    <div className="flex items-center gap-1 mt-1">
+                      <TrendingUp className="size-3.5 text-emerald-500" />
+                      <span className="text-xs font-medium text-emerald-600">
+                        {ecommerceStats.ordersLast30Days} last 30d
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-emerald-50">
+                    <ShoppingCart className="size-5 text-emerald-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Revenue Today */}
+            <Card className="hover:shadow-md transition-shadow">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-muted-foreground font-medium">Revenue Today</p>
+                    <p className="text-2xl font-bold mt-1">{formatINR(ecommerceStats.revenueToday)}</p>
+                    <div className="flex items-center gap-1 mt-1">
+                      <TrendingUp className="size-3.5 text-emerald-500" />
+                      <span className="text-xs font-medium text-emerald-600">
+                        {formatINR(ecommerceStats.totalRevenue)} total
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-teal-50">
+                    <IndianRupee className="size-5 text-teal-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Abandoned Carts */}
+            <Card className="hover:shadow-md transition-shadow">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-muted-foreground font-medium">Abandoned Carts</p>
+                    <p className="text-2xl font-bold mt-1">{ecommerceStats.abandonedCarts}</p>
+                    <div className="flex items-center gap-1 mt-1">
+                      <AlertTriangle className="size-3.5 text-amber-500" />
+                      <span className="text-xs font-medium text-amber-600">
+                        ~{ecommerceStats.conversionRate}% conversion
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-amber-50">
+                    <AlertTriangle className="size-5 text-amber-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Avg Order Value */}
+            <Card className="hover:shadow-md transition-shadow">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-muted-foreground font-medium">Avg Order Value</p>
+                    <p className="text-2xl font-bold mt-1">{formatINR(ecommerceStats.avgOrderValue)}</p>
+                    <div className="flex items-center gap-1 mt-1">
+                      <TrendingUp className="size-3.5 text-emerald-500" />
+                      <span className="text-xs font-medium text-emerald-600">
+                        {ecommerceStats.totalCustomers} customers
+                      </span>
+                    </div>
+                  </div>
+                  <div className="p-2.5 rounded-xl bg-violet-50">
+                    <TrendingUp className="size-5 text-violet-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Orders by Status + Top Products */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Orders by Status */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Package className="size-4 text-emerald-600" />
+                  Orders by Status
+                </CardTitle>
+                <CardDescription>Current order distribution across fulfillment stages</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {Object.keys(ecommerceStats.ordersByStatus).length === 0 ? (
+                  <div className="flex items-center justify-center h-20 text-sm text-muted-foreground">
+                    No order data yet
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {(() => {
+                      const statusConfig: Record<string, { label: string; bg: string; fill: string; text: string }> = {
+                        pending: { label: 'Pending', bg: 'bg-amber-100', fill: 'bg-amber-500', text: 'text-amber-700' },
+                        confirmed: { label: 'Confirmed', bg: 'bg-blue-100', fill: 'bg-blue-500', text: 'text-blue-700' },
+                        processing: { label: 'Processing', bg: 'bg-purple-100', fill: 'bg-purple-500', text: 'text-purple-700' },
+                        shipped: { label: 'Shipped', bg: 'bg-teal-100', fill: 'bg-teal-500', text: 'text-teal-700' },
+                        delivered: { label: 'Delivered', bg: 'bg-emerald-100', fill: 'bg-emerald-500', text: 'text-emerald-700' },
+                        cancelled: { label: 'Cancelled', bg: 'bg-red-100', fill: 'bg-red-500', text: 'text-red-700' },
+                        refunded: { label: 'Refunded', bg: 'bg-gray-100', fill: 'bg-gray-500', text: 'text-gray-700' },
+                      };
+                      const totalOrders = Object.values(ecommerceStats.ordersByStatus).reduce((a, b) => a + b, 0);
+                      const statusOrder = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'];
+                      return statusOrder
+                        .filter((s) => ecommerceStats.ordersByStatus[s] !== undefined)
+                        .map((status) => {
+                          const count = ecommerceStats.ordersByStatus[status];
+                          const pct = totalOrders > 0 ? Math.round((count / totalOrders) * 100) : 0;
+                          const config = statusConfig[status] || { label: status, bg: 'bg-gray-100', fill: 'bg-gray-500', text: 'text-gray-700' };
+                          return (
+                            <div key={status} className="flex items-center gap-3">
+                              <div className="w-24 text-xs font-medium text-right capitalize shrink-0">
+                                {config.label}
+                              </div>
+                              <div className="flex-1 h-6 rounded-full bg-muted overflow-hidden">
+                                <div
+                                  className={cn('h-full rounded-full transition-all', config.fill)}
+                                  style={{ width: `${Math.max(pct, 2)}%` }}
+                                />
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0 w-16 justify-end">
+                                <span className={cn('text-xs font-bold', config.text)}>{count}</span>
+                                <span className="text-[10px] text-muted-foreground">({pct}%)</span>
+                              </div>
+                            </div>
+                          );
+                        });
+                    })()}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Top Products */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Package className="size-4 text-teal-600" />
+                  Top Products
+                </CardTitle>
+                <CardDescription>Best performing products by order volume</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {!ecommerceStats.topProducts || ecommerceStats.topProducts.length === 0 ? (
+                  <div className="flex items-center justify-center h-20 text-sm text-muted-foreground">
+                    No product data yet
+                  </div>
+                ) : (
+                  <div className="max-h-64 overflow-y-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Product</TableHead>
+                          <TableHead className="text-center">Qty</TableHead>
+                          <TableHead className="text-right">Revenue</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {ecommerceStats.topProducts.map((product, idx) => (
+                          <TableRow key={product.id} className="hover:bg-muted/50">
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <span className="size-5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold flex items-center justify-center shrink-0">
+                                  {idx + 1}
+                                </span>
+                                <span className="text-sm font-medium truncate max-w-[160px]">{product.name}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center text-sm">{product.totalQty}</TableCell>
+                            <TableCell className="text-right text-sm font-medium">{formatINR(product.revenue)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Recent Orders */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <ShoppingCart className="size-4 text-emerald-600" />
+                    Recent Orders
+                  </CardTitle>
+                  <CardDescription>Latest e-commerce orders from your connected stores</CardDescription>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground"
+                  onClick={() => setCurrentView('integrations')}
+                >
+                  View all <ArrowRight className="size-3.5 ml-1" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {ecommerceRecentOrders.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-32 text-sm text-muted-foreground gap-2">
+                  <ShoppingCart className="size-8 text-muted-foreground/40" />
+                  <p>No recent orders</p>
+                </div>
+              ) : (
+                <div className="max-h-72 overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Order #</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="hidden sm:table-cell">Provider</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {ecommerceRecentOrders.map((order) => {
+                        const orderStatusColors: Record<string, string> = {
+                          pending: 'bg-amber-100 text-amber-800',
+                          confirmed: 'bg-blue-100 text-blue-800',
+                          processing: 'bg-purple-100 text-purple-800',
+                          shipped: 'bg-teal-100 text-teal-800',
+                          delivered: 'bg-emerald-100 text-emerald-800',
+                          cancelled: 'bg-red-100 text-red-800',
+                          refunded: 'bg-gray-100 text-gray-800',
+                        };
+                        return (
+                          <TableRow key={order.id} className="cursor-pointer hover:bg-muted/50">
+                            <TableCell className="font-medium text-sm">{order.orderNumber}</TableCell>
+                            <TableCell className="text-sm">{order.customerName || order.customerEmail || '—'}</TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="secondary"
+                                className={cn('text-[10px] px-1.5 py-0 capitalize', orderStatusColors[order.status] || 'bg-gray-100 text-gray-800')}
+                              >
+                                {order.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right text-sm font-medium">{formatINR(order.total)}</TableCell>
+                            <TableCell className="hidden sm:table-cell">
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 capitalize">
+                                {order.integration?.provider || '—'}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <Card className="border-dashed">
+          <CardContent className="p-8">
+            <div className="flex flex-col items-center justify-center text-center gap-4">
+              <div className="size-14 rounded-full bg-emerald-50 flex items-center justify-center">
+                <ShoppingCart className="size-7 text-emerald-500" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-foreground">Connect your e-commerce store</p>
+                <p className="text-xs text-muted-foreground mt-1 max-w-sm">
+                  Link your Shopify, WooCommerce, or other store to see orders, revenue, and product insights right here on your dashboard.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                className="gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                onClick={() => setCurrentView('integrations')}
+              >
+                <ExternalLink className="size-3.5" />
+                Go to Integrations
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
