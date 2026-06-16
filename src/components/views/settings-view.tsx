@@ -54,8 +54,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useAppStore } from '@/store/app-store';
 import { toast } from 'sonner';
-import { formatCurrency, currencySymbol, getExchangeRateTable, CURRENCIES as SHARED_CURRENCIES } from '@/lib/currency';
-import { invalidateCurrencyCache } from '@/hooks/use-base-currency';
+import { CURRENCIES as SHARED_CURRENCIES } from '@/lib/currency';
+import { invalidateCurrencyCache } from '@/hooks/use-company-currency';
 
 // ─── Event Webhook Types ──────────────────────────────────────────────────
 
@@ -247,28 +247,14 @@ export function SettingsView() {
     { id: 'viewer', name: 'Viewer', description: 'Read-only access to dashboards and reports', users: 0, color: 'bg-slate-100 text-slate-600 border-slate-200' },
   ]);
 
-  // ─── Workspace URL State ──────────────────────────────────────────────
-  const [workspaceSlug, setWorkspaceSlug] = useState('');
-  const [customDomain, setCustomDomain] = useState('');
-  const [savingWorkspace, setSavingWorkspace] = useState(false);
+
 
   // ─── Billing State ────────────────────────────────────────────────────
   const [billingPlan, setBillingPlan] = useState('starter');
   const [planStatus, setPlanStatus] = useState('trial');
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
 
-  // ─── Currency/Locales State ──────────────────────────────────────────
-  const [currencySettings, setCurrencySettings] = useState({
-    baseCurrency: 'INR',
-    multiCurrencyEnabled: true,
-    autoExchangeRates: true,
-    supportedCurrencies: ['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD'],
-    rateSource: 'auto',
-    lastRateUpdate: null as string | null,
-  });
-  const [exchangeRates, setExchangeRates] = useState<any[]>([]);
-  const [currencyLoading, setCurrencyLoading] = useState(false);
-  const [currencySaving, setCurrencySaving] = useState(false);
+
 
   // ─── Fetch tenant data ──────────────────────────────────────────────────
   const fetchTenantData = useCallback(async () => {
@@ -703,31 +689,7 @@ export function SettingsView() {
     }
   };
 
-  // ─── Save Workspace URL ───────────────────────────────────────────────
-  const handleSaveWorkspace = async () => {
-    setSavingWorkspace(true);
-    try {
-      if (!tenantId) {
-        toast.error('No tenant found');
-        return;
-      }
-      const res = await fetch(`/api/tenants/${tenantId}?XTransformPort=3000`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug: workspaceSlug }),
-      });
-      if (res.ok) {
-        toast.success('Workspace URL updated successfully');
-      } else {
-        const err = await res.json();
-        toast.error(err.error || 'Failed to update workspace URL');
-      }
-    } catch {
-      toast.error('Network error');
-    } finally {
-      setSavingWorkspace(false);
-    }
-  };
+
 
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
@@ -739,104 +701,7 @@ export function SettingsView() {
     }
   };
 
-  // ─── Currency Settings Handlers ────────────────────────────────────────
-  const fetchCurrencySettings = useCallback(async () => {
-    setCurrencyLoading(true);
-    try {
-      const res = await fetch('/api/settings/currency?XTransformPort=3000');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.currencySettings) {
-          setCurrencySettings({
-            baseCurrency: data.baseCurrency || data.currencySettings.baseCurrency || 'INR',
-            multiCurrencyEnabled: data.currencySettings.multiCurrencyEnabled ?? true,
-            autoExchangeRates: data.currencySettings.autoExchangeRates ?? true,
-            supportedCurrencies: data.currencySettings.supportedCurrencies || ['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD'],
-            rateSource: data.currencySettings.rateSource || 'auto',
-            lastRateUpdate: data.currencySettings.lastRateUpdate || null,
-          });
-        }
-      }
-    } catch {
-      // silently fail
-    } finally {
-      setCurrencyLoading(false);
-    }
-  }, []);
 
-  const fetchExchangeRates = useCallback(async (base: string) => {
-    try {
-      const res = await fetch(`/api/currency/exchange-rates?base=${base}&XTransformPort=3000`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.rates) {
-          setExchangeRates(data.rates);
-        } else {
-          // Fallback: use local utility
-          setExchangeRates(getExchangeRateTable(base));
-        }
-      } else {
-        // Fallback: use local utility
-        setExchangeRates(getExchangeRateTable(base));
-      }
-    } catch {
-      // Fallback: use local utility
-      setExchangeRates(getExchangeRateTable(base));
-    }
-  }, []);
-
-  const handleSaveCurrencySettings = async () => {
-    setCurrencySaving(true);
-    try {
-      const res = await fetch('/api/settings/currency?XTransformPort=3000', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          baseCurrency: currencySettings.baseCurrency,
-          currencySettings,
-        }),
-      });
-      if (res.ok) {
-        invalidateCurrencyCache(); // Invalidate cache so other views pick up the change
-        toast.success('Currency settings saved successfully');
-      } else {
-        const err = await res.json();
-        toast.error(err.error || 'Failed to save currency settings');
-      }
-    } catch {
-      toast.error('Network error saving currency settings');
-    } finally {
-      setCurrencySaving(false);
-    }
-  };
-
-  const handleRefreshRates = async () => {
-    setCurrencyLoading(true);
-    try {
-      await fetchExchangeRates(currencySettings.baseCurrency);
-      setCurrencySettings({
-        ...currencySettings,
-        lastRateUpdate: new Date().toISOString(),
-      });
-      toast.success('Exchange rates refreshed');
-    } catch {
-      toast.error('Failed to refresh exchange rates');
-    } finally {
-      setCurrencyLoading(false);
-    }
-  };
-
-  // Fetch currency settings on mount
-  useEffect(() => {
-    fetchCurrencySettings();
-  }, [fetchCurrencySettings]);
-
-  // Fetch exchange rates when base currency changes
-  useEffect(() => {
-    if (currencySettings.baseCurrency) {
-      fetchExchangeRates(currencySettings.baseCurrency);
-    }
-  }, [currencySettings.baseCurrency, fetchExchangeRates]);
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -866,16 +731,6 @@ export function SettingsView() {
             <CreditCard className="size-4" />
             <span className="hidden sm:inline">Billing</span>
             <span className="sm:hidden">Bill</span>
-          </TabsTrigger>
-          <TabsTrigger value="workspace" className="gap-1.5 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 py-2">
-            <Globe className="size-4" />
-            <span className="hidden sm:inline">Workspace URL</span>
-            <span className="sm:hidden">URL</span>
-          </TabsTrigger>
-          <TabsTrigger value="localization" className="gap-1.5 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 py-2">
-            <Globe className="size-4" />
-            <span className="hidden sm:inline">Localization</span>
-            <span className="sm:hidden">Local</span>
           </TabsTrigger>
         </TabsList>
 
@@ -937,6 +792,9 @@ export function SettingsView() {
                           ))}
                         </SelectContent>
                       </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Your company currency is used across CRM, dashboard, invoices, quotes, and reports.
+                      </p>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -2054,423 +1912,6 @@ export function SettingsView() {
           </Card>
         </TabsContent>
 
-        {/* ═══════════════════════════════════════════════════════════════════
-            Workspace URL Tab
-            ═══════════════════════════════════════════════════════════════════ */}
-        <TabsContent value="workspace" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                  <Globe className="size-4 text-emerald-600" />
-                </div>
-                <div>
-                  <CardTitle className="text-base">Workspace URL</CardTitle>
-                  <CardDescription>Configure your workspace URL and custom domain</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Default Workspace URL */}
-              <div className="space-y-3">
-                <Label className="text-sm font-medium">Workspace Slug</Label>
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center bg-muted rounded-md border px-3 py-2 text-sm text-muted-foreground whitespace-nowrap">
-                    app.serviceos.io/
-                  </div>
-                  <Input
-                    placeholder="your-workspace"
-                    value={workspaceSlug}
-                    onChange={(e) => setWorkspaceSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                    className="flex-1"
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  This is your default workspace URL. Only lowercase letters, numbers, and hyphens are allowed.
-                </p>
-                <Button
-                  size="sm"
-                  className="bg-emerald-600 hover:bg-emerald-700 gap-1.5"
-                  onClick={handleSaveWorkspace}
-                  disabled={savingWorkspace}
-                >
-                  {savingWorkspace ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="size-3.5" />
-                  )}
-                  Save Workspace URL
-                </Button>
-              </div>
-
-              <Separator />
-
-              {/* Custom Domain */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Label className="text-sm font-medium">Custom Domain</Label>
-                  <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200">
-                    Pro &amp; Enterprise
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Input
-                    placeholder="crm.yourcompany.com"
-                    value={customDomain}
-                    onChange={(e) => setCustomDomain(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Button variant="outline" size="sm" className="shrink-0 gap-1.5">
-                    Verify Domain
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Point your custom domain to your ServiceOS workspace. Requires a CNAME record pointing to
-                  <code className="mx-1 px-1 py-0.5 bg-muted rounded text-[10px]">app.serviceos.io</code>
-                </p>
-              </div>
-
-              <Separator />
-
-              {/* DNS Configuration Reference */}
-              <div className="space-y-3">
-                <Label className="text-sm font-medium">DNS Configuration</Label>
-                <div className="p-4 rounded-lg border bg-muted/30 space-y-3">
-                  <div className="grid grid-cols-4 gap-2 text-xs font-medium text-muted-foreground">
-                    <span>Type</span>
-                    <span>Name</span>
-                    <span className="col-span-2">Value</span>
-                  </div>
-                  <div className="grid grid-cols-4 gap-2 text-xs">
-                    <span className="font-mono">CNAME</span>
-                    <span className="font-mono">crm</span>
-                    <span className="font-mono col-span-2">app.serviceos.io</span>
-                  </div>
-                  <div className="grid grid-cols-4 gap-2 text-xs">
-                    <span className="font-mono">TXT</span>
-                    <span className="font-mono">@</span>
-                    <span className="font-mono col-span-2">serviceos-verification=abc123</span>
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Add these DNS records to your domain registrar. DNS changes can take up to 48 hours to propagate.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* About */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center size-9 rounded-lg bg-muted">
-                  <Globe className="size-4 text-emerald-500" />
-                </div>
-                <div>
-                  <CardTitle className="text-base">About ServiceOS</CardTitle>
-                  <CardDescription>Version and system information</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Version</span>
-                <span className="font-mono">0.3.0</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Build</span>
-                <span className="font-mono">2025.03.05</span>
-              </div>
-              <div className="flex gap-2 mt-4">
-                <Button variant="outline" size="sm" className="gap-1.5 text-xs">
-                  <ExternalLink className="size-3" /> Documentation
-                </Button>
-                <Button variant="outline" size="sm" className="gap-1.5 text-xs">
-                  <ExternalLink className="size-3" /> Changelog
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ═══════════════════════════════════════════════════════════════════
-            Localization Tab
-            ═══════════════════════════════════════════════════════════════════ */}
-        <TabsContent value="localization" className="space-y-6">
-          {currencyLoading ? (
-            <div className="flex items-center justify-center py-12 text-muted-foreground">
-              <Loader2 className="size-5 animate-spin mr-2" /> Loading currency settings...
-            </div>
-          ) : (
-            <>
-              {/* Section 1: Currency Configuration */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                      <Globe className="size-4 text-emerald-600" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-base">Currency Configuration</CardTitle>
-                      <CardDescription>Set your base currency and enable multi-currency support</CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  {/* Base Currency */}
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Base Currency</Label>
-                    <Select value={currencySettings.baseCurrency} onValueChange={(v) => setCurrencySettings({ ...currencySettings, baseCurrency: v })}>
-                      <SelectTrigger className="max-w-xs">
-                        <SelectValue placeholder="Select base currency" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CURRENCIES.map((c) => (
-                          <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      All reports and dashboards will default to this currency. Invoices and quotes can be created in other currencies.
-                    </p>
-                  </div>
-
-                  <Separator />
-
-                  {/* Allow Multi Currency */}
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label className="text-sm font-medium">Allow Multi Currency</Label>
-                      <p className="text-xs text-muted-foreground">Enable creating invoices and quotes in currencies other than the base</p>
-                    </div>
-                    <Switch
-                      checked={currencySettings.multiCurrencyEnabled}
-                      onCheckedChange={(checked) => setCurrencySettings({ ...currencySettings, multiCurrencyEnabled: checked })}
-                    />
-                  </div>
-
-                  <Separator />
-
-                  {/* Auto Exchange Rates */}
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label className="text-sm font-medium">Auto Exchange Rates</Label>
-                      <p className="text-xs text-muted-foreground">Automatically fetch and update exchange rates daily</p>
-                    </div>
-                    <Switch
-                      checked={currencySettings.autoExchangeRates}
-                      onCheckedChange={(checked) => setCurrencySettings({ ...currencySettings, autoExchangeRates: checked })}
-                    />
-                  </div>
-
-                  <Separator />
-
-                  {/* Supported Currencies Multi-select */}
-                  <div className="space-y-3">
-                    <Label className="text-sm font-medium">Supported Currencies</Label>
-                    <p className="text-xs text-muted-foreground">Select which currencies are available for invoices, quotes, and view conversion</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {CURRENCIES.map((c) => {
-                        const isBase = c.value === currencySettings.baseCurrency;
-                        const isChecked = currencySettings.supportedCurrencies.includes(c.value);
-                        return (
-                          <label
-                            key={c.value}
-                            className={`flex items-center gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-colors ${
-                              isChecked ? 'border-emerald-300 bg-emerald-50/50 dark:border-emerald-700 dark:bg-emerald-950/20' :
-                              isBase ? 'border-amber-300 bg-amber-50/50 dark:border-amber-700 dark:bg-amber-950/20' :
-                              'hover:bg-muted/50'
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isChecked || isBase}
-                              disabled={isBase}
-                              onChange={() => {
-                                if (isBase) return;
-                                const updated = isChecked
-                                  ? currencySettings.supportedCurrencies.filter((code) => code !== c.value)
-                                  : [...currencySettings.supportedCurrencies, c.value];
-                                setCurrencySettings({ ...currencySettings, supportedCurrencies: updated });
-                              }}
-                              className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                            />
-                            <span className="text-sm">
-                              <span className="font-medium">{c.value}</span>
-                              <span className="text-muted-foreground ml-1">{c.label.split('—')[1]?.trim() || ''}</span>
-                            </span>
-                            {isBase && (
-                              <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200 ml-auto">
-                                Base
-                              </Badge>
-                            )}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Section 2: Exchange Rates */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                        <ArrowRight className="size-4 text-emerald-600" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-base">Exchange Rates</CardTitle>
-                        <CardDescription>Current rates relative to {currencySettings.baseCurrency}</CardDescription>
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-1.5"
-                      onClick={handleRefreshRates}
-                      disabled={currencyLoading}
-                    >
-                      {currencyLoading ? (
-                        <Loader2 className="size-3.5 animate-spin" />
-                      ) : (
-                        <Zap className="size-3.5" />
-                      )}
-                      Refresh Rates
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* Last Updated */}
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Clock className="size-3" />
-                    <span>
-                      Last updated: {currencySettings.lastRateUpdate
-                        ? new Date(currencySettings.lastRateUpdate).toLocaleString()
-                        : 'Just now (local rates)'}
-                    </span>
-                  </div>
-
-                  {/* Exchange Rate Table */}
-                  <ScrollArea className="max-h-96">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b">
-                            <th className="text-left py-2 px-3 font-medium text-muted-foreground">Code</th>
-                            <th className="text-left py-2 px-3 font-medium text-muted-foreground">Currency Name</th>
-                            <th className="text-left py-2 px-3 font-medium text-muted-foreground">Symbol</th>
-                            <th className="text-right py-2 px-3 font-medium text-muted-foreground">Rate (1 {currencySettings.baseCurrency} =)</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {exchangeRates.map((rate) => (
-                            <tr key={rate.code} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                              <td className="py-2 px-3 font-medium">
-                                {rate.code}
-                                {rate.code === currencySettings.baseCurrency && (
-                                  <Badge variant="outline" className="ml-1.5 text-[9px] bg-amber-50 text-amber-700 border-amber-200">
-                                    Base
-                                  </Badge>
-                                )}
-                              </td>
-                              <td className="py-2 px-3 text-muted-foreground">{rate.name}</td>
-                              <td className="py-2 px-3 font-mono">{rate.symbol}</td>
-                              <td className="py-2 px-3 text-right font-mono">
-                                {rate.rate === 1 ? '—' : rate.rate.toFixed(rate.rate < 1 ? 6 : 4)}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </ScrollArea>
-
-                  <p className="text-xs text-muted-foreground">
-                    Rates are indicative and sourced from local data. In production, rates are fetched from an external forex API.
-                  </p>
-                </CardContent>
-              </Card>
-
-              {/* Section 3: Currency Preferences */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                      <CreditCard className="size-4 text-emerald-600" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-base">Currency Preferences</CardTitle>
-                      <CardDescription>How invoices and quotes handle currency conversion</CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="p-4 rounded-lg border bg-muted/30 space-y-3">
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      <CheckCircle2 className="size-4 text-emerald-500" />
-                      Exchange Rate Locking
-                    </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      When an invoice or quote is created in a foreign currency, the exchange rate at that moment is
-                      <strong> locked and stored</strong> with the document. This ensures that even if rates fluctuate later,
-                      the original conversion remains accurate for accounting and reconciliation purposes.
-                    </p>
-                  </div>
-
-                  <Separator />
-
-                  {/* Example Display */}
-                  <div className="p-4 rounded-lg border-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 space-y-3">
-                    <p className="text-xs font-medium text-muted-foreground">Example Conversion</p>
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <div className="px-3 py-2 rounded-lg bg-background border text-sm font-medium">
-                        {formatCurrency(5000, 'INR')}
-                      </div>
-                      <span className="text-muted-foreground text-sm">≈</span>
-                      <div className="px-3 py-2 rounded-lg bg-background border text-sm font-medium">
-                        {formatCurrency(5000 * (1 / 85), 'USD')}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>Rate: 1 INR = ${(1 / 85).toFixed(6)} USD</span>
-                      <span className="text-emerald-500">•</span>
-                      <span>Locked at creation time</span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-                    <div className="p-3 rounded-lg border space-y-1">
-                      <p className="text-xs font-medium text-muted-foreground">View Currency</p>
-                      <p className="text-sm">Dashboards and reports use your base currency ({currencySettings.baseCurrency}) by default, with an option to switch view currency.</p>
-                    </div>
-                    <div className="p-3 rounded-lg border space-y-1">
-                      <p className="text-xs font-medium text-muted-foreground">Transaction Currency</p>
-                      <p className="text-sm">Each invoice/quote records both the original amount and the exchange rate at creation for full auditability.</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Save Button */}
-              <div className="flex justify-end">
-                <Button
-                  className="bg-emerald-600 hover:bg-emerald-700 gap-1.5 px-6"
-                  onClick={handleSaveCurrencySettings}
-                  disabled={currencySaving}
-                >
-                  {currencySaving ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Save className="size-4" />
-                  )}
-                  Save Currency Settings
-                </Button>
-              </div>
-            </>
-          )}
-        </TabsContent>
       </Tabs>
     </div>
   );

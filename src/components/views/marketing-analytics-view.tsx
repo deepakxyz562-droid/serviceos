@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { useBaseCurrency } from '@/hooks/use-base-currency';
+import { useCompanyCurrency } from '@/hooks/use-company-currency';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -150,7 +150,7 @@ function getSourceLabel(source: string): string {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function MarketingAnalyticsView() {
-  const { format, viewCurrency, setViewCurrency, currencyOptions } = useBaseCurrency();
+  const { currency, format, formatCompact, symbol } = useCompanyCurrency();
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -261,16 +261,6 @@ export function MarketingAnalyticsView() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Select value={viewCurrency} onValueChange={setViewCurrency}>
-            <SelectTrigger className="w-[80px] h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {currencyOptions.map(c => (
-                <SelectItem key={c.code} value={c.code}>{c.symbol} {c.code}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Select value={period} onValueChange={setPeriod}>
             <SelectTrigger className="w-[140px]">
               <SelectValue />

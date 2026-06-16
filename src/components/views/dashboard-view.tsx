@@ -47,11 +47,11 @@ import {
 import { useAppStore } from '@/store/app-store';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { convertCurrency, currencySymbol } from '@/lib/currency';
+
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useRealtime } from '@/hooks/use-realtime';
-import { useBaseCurrency } from '@/hooks/use-base-currency';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useCompanyCurrency } from '@/hooks/use-company-currency';
+
 import {
   AreaChart,
   Area,
@@ -394,8 +394,8 @@ export function DashboardView() {
   const [ecommerceRecentOrders, setEcommerceRecentOrders] = useState<EcommerceRecentOrder[]>([]);
   const [ecommerceLoading, setEcommerceLoading] = useState(true);
 
-  // Base currency
-  const { baseCurrency, viewCurrency, setViewCurrency, format, formatCompact, currencyOptions } = useBaseCurrency();
+  // Company currency
+  const { currency, format, formatCompact, symbol, isLoading: currencyLoading } = useCompanyCurrency();
 
   // Real-time connection
   const { connected: realtimeConnected } = useRealtime({
@@ -630,16 +630,6 @@ export function DashboardView() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={viewCurrency} onValueChange={setViewCurrency}>
-            <SelectTrigger className="w-[80px] h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {currencyOptions.map(c => (
-                <SelectItem key={c.code} value={c.code}>{c.symbol} {c.code}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Badge variant="outline" className="text-xs px-3 py-1 border-emerald-300 text-emerald-700 bg-emerald-50">
             <Zap className="size-3 mr-1" /> Live
           </Badge>
@@ -873,7 +863,7 @@ export function DashboardView() {
                     tick={{ fontSize: 11, fill: '#94a3b8' }}
                     axisLine={false}
                     tickLine={false}
-                    tickFormatter={(v: number) => `${currencySymbol(viewCurrency)}${(convertCurrency(v, baseCurrency, viewCurrency) / 1000).toFixed(0)}k`}
+                    tickFormatter={(v: number) => `${symbol}${(v / 1000).toFixed(0)}k`}
                   />
                   <Tooltip
                     contentStyle={{

@@ -48,8 +48,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useBaseCurrency } from '@/hooks/use-base-currency';
+import { useCompanyCurrency } from '@/hooks/use-company-currency';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -309,7 +308,7 @@ function PayPalCheckoutDialog({
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const { format } = useBaseCurrency();
+  const { format } = useCompanyCurrency();
   const [paypalConfig, setPaypalConfig] = useState<PayPalConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -362,7 +361,7 @@ function PayPalCheckoutDialog({
         throw new Error(data.error || 'Failed to capture payment');
       }
       toast.success(`Successfully upgraded to ${plan.name} plan!`, {
-        description: `Payment of ${format(price, 'USD')} processed via PayPal`,
+        description: `Payment of ${format(price)} processed via PayPal`,
       });
       onSuccess();
     } catch (err) {
@@ -404,7 +403,7 @@ function PayPalCheckoutDialog({
             <div className="flex justify-between">
               <span className="font-semibold">Total</span>
               <span className="text-lg font-bold text-emerald-600">
-                {format(price, 'USD')}<span className="text-sm text-muted-foreground font-normal">/{billingCycle === 'yearly' ? 'year' : 'month'}</span>
+                {format(price)}<span className="text-sm text-muted-foreground font-normal">/{billingCycle === 'yearly' ? 'year' : 'month'}</span>
               </span>
             </div>
           </div>
@@ -544,7 +543,7 @@ function PayPalCheckoutDialog({
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export function BillingView() {
-  const { format, viewCurrency, setViewCurrency, currencyOptions } = useBaseCurrency();
+  const { currency, format, formatCompact, symbol } = useCompanyCurrency();
   const [data, setData] = useState<SubscriptionData>(FALLBACK_DATA);
   const [isYearly, setIsYearly] = useState(data.billingCycle === 'yearly');
   const [confirmPlan, setConfirmPlan] = useState<Plan | null>(null);
@@ -682,16 +681,6 @@ export function BillingView() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={viewCurrency} onValueChange={setViewCurrency}>
-            <SelectTrigger className="w-[80px] h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {currencyOptions.map(c => (
-                <SelectItem key={c.code} value={c.code}>{c.symbol} {c.code}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Badge
             variant="outline"
             className="w-fit border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
@@ -713,7 +702,7 @@ export function BillingView() {
               </CardTitle>
               <CardDescription className="mt-1">
                 {currentPlanData?.name} · {data.billingCycle === 'yearly' ? 'Yearly' : 'Monthly'} billing
-                {currentPrice > 0 && <span className="font-semibold text-foreground"> · {format(currentPrice, 'USD')}/{data.billingCycle === 'yearly' ? 'year' : 'month'}</span>}
+                {currentPrice > 0 && <span className="font-semibold text-foreground"> · {format(currentPrice)}/{data.billingCycle === 'yearly' ? 'year' : 'month'}</span>}
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
@@ -848,13 +837,13 @@ export function BillingView() {
                     <p className="text-3xl font-bold">Custom</p>
                   ) : (
                     <>
-                      <span className="text-3xl font-bold">{format(price, 'USD')}</span>
+                      <span className="text-3xl font-bold">{format(price)}</span>
                       <span className="text-sm text-muted-foreground">
                         /{isYearly ? 'year' : 'month'}
                       </span>
                       {isYearly && plan.monthlyPrice > 0 && (
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {format(Math.round(plan.yearlyPrice / 12), 'USD')}/mo billed annually
+                          {format(Math.round(plan.yearlyPrice / 12))}/mo billed annually
                         </p>
                       )}
                     </>
@@ -1035,7 +1024,7 @@ export function BillingView() {
                       {record.description}
                     </TableCell>
                     <TableCell className="text-right text-sm">
-                      {format(record.amount, 'USD')}
+                      {format(record.amount)}
                     </TableCell>
                     <TableCell className="text-center">
                       <span

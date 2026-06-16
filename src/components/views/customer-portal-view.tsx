@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { useAppStore } from '@/store/app-store';
-import { useBaseCurrency } from '@/hooks/use-base-currency';
+import { useCompanyCurrency } from '@/hooks/use-company-currency';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -237,17 +237,11 @@ function JobProgressStepper({ status }: { status: string }) {
 
 // ─── Portal Experience Component (reused for both direct access & preview) ──
 
-function PortalExperience({ portalData, onRefresh, viewCurrency = 'INR' }: {
+function PortalExperience({ portalData, onRefresh }: {
   portalData: PortalData;
   onRefresh?: () => void;
-  viewCurrency?: string;
 }) {
-  const { format: fmt, baseCurrency, setViewCurrency: setHookViewCurrency } = useBaseCurrency();
-
-  // Sync prop viewCurrency with hook so fmt() uses the correct target currency
-  useEffect(() => {
-    setHookViewCurrency(viewCurrency);
-  }, [viewCurrency, setHookViewCurrency]);
+  const { currency, format } = useCompanyCurrency();
 
   const [showReviewDialog, setShowReviewDialog] = useState(false);
   const [reviewJob, setReviewJob] = useState<Booking | null>(null);
@@ -312,7 +306,7 @@ function PortalExperience({ portalData, onRefresh, viewCurrency = 'INR' }: {
   };
 
   const handlePayInvoice = (invoice: Invoice) => {
-    toast.info(`Payment for invoice ${invoice.number || invoice.id} — ${fmt(invoice.total, baseCurrency)}`);
+    toast.info(`Payment for invoice ${invoice.number || invoice.id} — ${format(invoice.total)}`);
   };
 
   return (
@@ -529,7 +523,7 @@ function PortalExperience({ portalData, onRefresh, viewCurrency = 'INR' }: {
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1.5">
-                      <span className="text-lg font-bold text-gray-900">{fmt(invoice.total, baseCurrency)}</span>
+                      <span className="text-lg font-bold text-gray-900">{format(invoice.total)}</span>
                       <div className="flex items-center gap-2">
                         <Badge variant="outline" className={`${getInvoiceStatusColor(invoice.status)} text-[10px]`}>
                           {invoice.status}
@@ -709,8 +703,7 @@ function PortalManagementView() {
   const { auth } = useAppStore();
   const tenantId = auth.user?.tenantId || null;
 
-  // View Currency from hook
-  const { viewCurrency, setViewCurrency, currencyOptions } = useBaseCurrency();
+  useCompanyCurrency();
 
   // Customers
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -913,17 +906,6 @@ function PortalManagementView() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Select value={viewCurrency} onValueChange={setViewCurrency}>
-                <SelectTrigger className="w-[85px] h-8 text-xs">
-                  <Globe className="size-3 mr-1 text-muted-foreground" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {currencyOptions.map(c => (
-                    <SelectItem key={c.code} value={c.code}>{c.symbol} {c.code}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
               <Button
                 variant="outline"
                 size="sm"
@@ -1270,7 +1252,7 @@ function PortalManagementView() {
                     <span className="text-xs text-gray-500">Hi, {selectedCustomer.name}</span>
                   </div>
 
-                  <PortalExperience portalData={previewData} onRefresh={handleRefreshPreview} viewCurrency={viewCurrency} />
+                  <PortalExperience portalData={previewData} onRefresh={handleRefreshPreview} />
 
                   {/* Mini footer */}
                   <div className="mt-4 pt-3 border-t border-emerald-100 flex items-center justify-between text-[10px] text-gray-400">
@@ -1317,7 +1299,7 @@ function DirectPortalView({ token }: { token: string }) {
   const [portalData, setPortalData] = useState<PortalData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { viewCurrency, setViewCurrency, currencyOptions } = useBaseCurrency();
+  useCompanyCurrency();
 
   const fetchPortalData = useCallback(async () => {
     try {
@@ -1385,24 +1367,13 @@ function DirectPortalView({ token }: { token: string }) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Select value={viewCurrency} onValueChange={setViewCurrency}>
-              <SelectTrigger className="w-[85px] h-8 text-xs">
-                <Globe className="size-3 mr-1 text-muted-foreground" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {currencyOptions.map(c => (
-                  <SelectItem key={c.code} value={c.code}>{c.symbol} {c.code}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             <span className="text-sm text-gray-600">Hi, {portalData.customer?.name || 'there'}</span>
           </div>
         </div>
       </header>
 
       <main className="flex-1 max-w-4xl mx-auto px-4 py-6 w-full">
-        <PortalExperience portalData={portalData} onRefresh={fetchPortalData} viewCurrency={viewCurrency} />
+        <PortalExperience portalData={portalData} onRefresh={fetchPortalData} />
       </main>
 
       <footer className="mt-auto border-t border-emerald-100 bg-white/50">

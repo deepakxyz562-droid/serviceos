@@ -41,7 +41,7 @@ import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 
-import { useBaseCurrency } from '@/hooks/use-base-currency';
+import { useCompanyCurrency } from '@/hooks/use-company-currency';
 
 // ============================================================
 // Types
@@ -266,7 +266,7 @@ function mapToKanbanStatus(status: string): string {
 // ============================================================
 
 export function LeadsView() {
-  const { baseCurrency, formatCompact, viewCurrency, setViewCurrency, currencyOptions } = useBaseCurrency();
+  const { currency, formatCompact, format: formatCurrency, symbol } = useCompanyCurrency();
 
   // Data state
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -1436,16 +1436,6 @@ export function LeadsView() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={viewCurrency} onValueChange={setViewCurrency}>
-            <SelectTrigger className="w-[80px] h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {currencyOptions.map(c => (
-                <SelectItem key={c.code} value={c.code}>{c.symbol} {c.code}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           {/* View toggle */}
           <div className="flex items-center border rounded-lg p-0.5">
             <Button

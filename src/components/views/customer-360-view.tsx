@@ -20,7 +20,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useAppStore } from '@/store/app-store';
@@ -29,7 +28,7 @@ import {
   useCustomer360,
   useBookings,
 } from '@/hooks/queries/use-supabase-queries';
-import { useBaseCurrency } from '@/hooks/use-base-currency';
+import { useCompanyCurrency } from '@/hooks/use-company-currency';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -479,7 +478,7 @@ type SortOption = 'name' | 'recent' | 'value';
 
 export function Customer360View() {
   const { auth } = useAppStore();
-  const { format, viewCurrency, setViewCurrency, currencyOptions } = useBaseCurrency();
+  const { currency, format, formatCompact, symbol } = useCompanyCurrency();
   const tenantId = auth?.tenant?.id;
 
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
@@ -665,16 +664,6 @@ export function Customer360View() {
               <Badge variant="outline" className="bg-card border-border text-muted-foreground">
                 {filteredCustomers.length} customer{filteredCustomers.length !== 1 ? 's' : ''}
               </Badge>
-              <Select value={viewCurrency} onValueChange={setViewCurrency}>
-                <SelectTrigger className="w-[80px] h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {currencyOptions.map(c => (
-                    <SelectItem key={c.code} value={c.code}>{c.symbol} {c.code}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
           </div>
         </div>
