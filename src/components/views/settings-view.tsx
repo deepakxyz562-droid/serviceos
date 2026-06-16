@@ -983,8 +983,8 @@ export function SettingsView() {
                   <p className="text-xs">Invite users to your workspace</p>
                 </div>
               ) : (
-                <ScrollArea className="max-h-96">
-                  <div className="space-y-2">
+                <ScrollArea className="h-[calc(100vh-420px)] min-h-[300px] max-h-[600px]">
+                  <div className="space-y-2 pr-3">
                     {users.map((user) => (
                       <div key={user.id} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors">
                         <div className="flex items-center justify-center size-9 rounded-full bg-muted shrink-0">
