@@ -320,6 +320,83 @@ export async function testCredential(
     );
   }
 
+  // ─── Phase 4: Additional AI providers ───────────────────────────────────
+  //
+  // Each provider's test endpoint is a lightweight authenticated GET that
+  // returns 200 if the API key is valid. All endpoints are documented in
+  // each provider's official API reference.
+
+  if (type === 'gemini' && apiKey) {
+    // Google AI Studio — list models (read-only)
+    return tryFetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
+      { method: 'GET' },
+      'Google Gemini'
+    );
+  }
+
+  if (type === 'mistral' && apiKey) {
+    // Mistral AI — list models (OpenAI-compatible endpoint)
+    return tryFetch(
+      'https://api.mistral.ai/v1/models',
+      { headers: { Authorization: `Bearer ${apiKey}` }, method: 'GET' },
+      'Mistral AI'
+    );
+  }
+
+  if (type === 'groq' && apiKey) {
+    // Groq — list models (OpenAI-compatible endpoint)
+    return tryFetch(
+      'https://api.groq.com/openai/v1/models',
+      { headers: { Authorization: `Bearer ${apiKey}` }, method: 'GET' },
+      'Groq'
+    );
+  }
+
+  if (type === 'cohere' && apiKey) {
+    // Cohere — check token validity (returns 200 with key info on success)
+    return tryFetch(
+      'https://api.cohere.ai/v1/check-api-key',
+      {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'X-Client-Name': 'serviceos-workflow',
+        },
+        method: 'POST',
+      },
+      'Cohere'
+    );
+  }
+
+  if (type === 'perplexity' && apiKey) {
+    // Perplexity — list models (OpenAI-compatible endpoint)
+    return tryFetch(
+      'https://api.perplexity.ai/models',
+      { headers: { Authorization: `Bearer ${apiKey}` }, method: 'GET' },
+      'Perplexity'
+    );
+  }
+
+  if (type === 'deepseek' && apiKey) {
+    // DeepSeek — list models (OpenAI-compatible endpoint)
+    return tryFetch(
+      'https://api.deepseek.com/v1/models',
+      { headers: { Authorization: `Bearer ${apiKey}` }, method: 'GET' },
+      'DeepSeek'
+    );
+  }
+
+  // Platform AI is a virtual credential type — there's no key to test.
+  // We just return a friendly "ready" message so the Test button shows
+  // something useful instead of the generic "skipped" fallback.
+  if (type === 'platform_ai') {
+    return {
+      success: true,
+      message: 'Platform AI is ready — uses the server-side Z.AI SDK (no API key needed).',
+      details: { platform: true, freeTier: '100 calls/month' },
+    };
+  }
+
   return {
     success: true,
     message: 'Test skipped (no test available for this credential type)',

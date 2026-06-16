@@ -108,6 +108,157 @@ async function loadCredential(
   }
 }
 
+/**
+ * Like `loadCredential`, but also returns the credential's `type` field.
+ *
+ * Used by AI handlers that need to detect the special `platform_ai`
+ * credential type and route through the Z.AI SDK instead of a
+ * user-supplied provider API key (the "Hybrid Mode" from the n8n-style
+ * BYOK design).
+ */
+async function loadCredentialWithType(
+  credentialId: string,
+): Promise<{ type: string; name: string; data: Record<string, any> } | null> {
+  if (!credentialId) return null;
+  try {
+    const cred = await db.credential.findUnique({ where: { id: credentialId } });
+    if (!cred) return null;
+    let data: Record<string, any>;
+    if (cred.encryptedData?.startsWith('aes-256-gcm:')) {
+      data = decryptCredentialData(cred.encryptedData);
+    } else {
+      data = JSON.parse(cred.encryptedData);
+    }
+    return { type: cred.type, name: cred.name, data };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Call the platform's built-in AI (Z.AI SDK) — used when a node is configured
+ * with a `platform_ai` credential. This is the "Hybrid Mode" from the
+ * n8n-style BYOK design: users who don't have their own provider API key
+ * can still run AI nodes using the platform's free-tier AI.
+ *
+ * Returns the assistant's text content plus a `platform: true` flag so the
+ * workflow output makes it clear that platform AI was used (not a
+ * user-supplied key).
+ *
+ * If the Z.AI SDK is not configured (no ZAI_API_KEY env var), returns a
+ * graceful error object instead of throwing.
+ */
+async function callPlatformAI(params: {
+  prompt: string;
+  systemPrompt?: string;
+  temperature?: number;
+  maxTokens?: number;
+  operation?: string;
+}): Promise<Record<string, any>> {
+  const { prompt, systemPrompt, temperature = 0.7, maxTokens, operation } = params;
+  try {
+    const ZAI = (await import('z-ai-web-dev-sdk')).default;
+    const zai = await ZAI.create();
+    // Cast messages to any[] — the Z.AI SDK's ChatMessage type has strict
+    // `role` literal types, but at runtime any 'system'/'user'/'assistant'
+    // string works fine. This mirrors the pattern used in /api/ai/* routes.
+    const messages: any[] = [
+      ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+      { role: 'user', content: prompt },
+    ];
+    const result: any = await zai.chat.completions.create({
+      messages,
+      temperature,
+      ...(maxTokens ? { max_tokens: maxTokens } : {}),
+    } as any);
+    return {
+      content: result?.choices?.[0]?.message?.content || '',
+      model: 'platform-ai',
+      usage: result?.usage,
+      platform: true,
+      operation: operation || 'chatCompletion',
+    };
+  } catch (err: any) {
+    return {
+      error: `Platform AI is not available: ${err?.message || 'Z.AI SDK not configured'}`,
+      platform: true,
+      hint: 'Set ZAI_API_KEY environment variable on the server, or supply your own AI provider API key in the node settings.',
+    };
+  }
+}
+
+/**
+ * Shared helper: call an OpenAI-compatible `/v1/chat/completions` endpoint.
+ *
+ * Used by Mistral, Groq, Perplexity, and DeepSeek — all of which mirror the
+ * OpenAI request/response shape but on different base URLs. Returns the
+ * assistant's text content + usage info, or an `{ error }` object on
+ * failure. Never throws.
+ */
+async function callOpenAICompatibleProvider(params: {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  prompt: string;
+  systemPrompt?: string;
+  temperature: number;
+  maxTokens: number;
+  providerName: string;
+  extraBody?: Record<string, any>;
+  extraResponseFields?: (data: any) => Record<string, any>;
+}): Promise<Record<string, any>> {
+  const {
+    baseUrl, apiKey, model, prompt, systemPrompt,
+    temperature, maxTokens, providerName, extraBody, extraResponseFields,
+  } = params;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60000);
+
+  try {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+          { role: 'user', content: prompt },
+        ],
+        temperature,
+        max_tokens: maxTokens,
+        ...extraBody,
+      }),
+      signal: controller.signal,
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      return {
+        error: `${providerName} API error: ${data.error?.message || data.message || response.statusText}`,
+        statusCode: response.status,
+      };
+    }
+
+    return {
+      content: data.choices?.[0]?.message?.content || '',
+      model: data.model || model,
+      usage: data.usage,
+      ...(extraResponseFields ? extraResponseFields(data) : {}),
+    };
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      return { error: `${providerName} request timed out after 60s` };
+    }
+    return { error: `${providerName} request failed: ${err?.message || 'unknown error'}` };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // ─── Topological Sort ─────────────────────────────────────────────────────────
 
 /**
@@ -1649,14 +1800,51 @@ const nodeHandlers: Record<string, NodeHandler> = {
       return {
         output: [{
           json: {
-            error: 'No credential selected. Pick an OpenAI API key credential in the AI Reply node settings.',
+            error: 'No credential selected. Pick an OpenAI API key credential (or Platform AI) in the AI Reply node settings.',
           },
         }],
         context,
       };
     }
-    const credentialData = await loadCredential(credentialId);
-    if (!credentialData?.apiKey) {
+    const cred = await loadCredentialWithType(credentialId);
+    if (!cred) {
+      return {
+        output: [{
+          json: {
+            error: 'Credential not found. Edit the node and pick a valid credential.',
+            credentialId,
+          },
+        }],
+        context,
+      };
+    }
+
+    const systemPrompt = `You are a helpful assistant replying to a customer message. Reply in a ${tone} tone. Context: ${contextText}`;
+
+    // Hybrid Mode: Platform AI credential → use Z.AI SDK
+    if (cred.type === 'platform_ai') {
+      const result = await callPlatformAI({
+        prompt: userMessage,
+        systemPrompt,
+        temperature: 0.7,
+        maxTokens: 1000,
+        operation: 'aiReply',
+      });
+      return {
+        output: [{
+          json: {
+            reply: result.content || '',
+            originalMessage: userMessage,
+            tone,
+            platform: true,
+            ...(result.error ? { error: result.error } : {}),
+          },
+        }],
+        context,
+      };
+    }
+
+    if (!cred.data?.apiKey) {
       return {
         output: [{
           json: {
@@ -1668,8 +1856,7 @@ const nodeHandlers: Record<string, NodeHandler> = {
       };
     }
 
-    const systemPrompt = `You are a helpful assistant replying to a customer message. Reply in a ${tone} tone. Context: ${contextText}`;
-
+    const credentialData = cred.data;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 60000);
 
@@ -1751,14 +1938,51 @@ const nodeHandlers: Record<string, NodeHandler> = {
       return {
         output: [{
           json: {
-            error: 'No credential selected. Pick an OpenAI API key credential in the AI Summarize node settings.',
+            error: 'No credential selected. Pick an OpenAI API key credential (or Platform AI) in the AI Summarize node settings.',
           },
         }],
         context,
       };
     }
-    const credentialData = await loadCredential(credentialId);
-    if (!credentialData?.apiKey) {
+    const cred = await loadCredentialWithType(credentialId);
+    if (!cred) {
+      return {
+        output: [{
+          json: {
+            error: 'Credential not found. Edit the node and pick a valid credential.',
+            credentialId,
+          },
+        }],
+        context,
+      };
+    }
+
+    const systemPrompt = `Summarize the following text in at most ${maxLength} words. Capture the key points only.`;
+
+    // Hybrid Mode: Platform AI credential → use Z.AI SDK
+    if (cred.type === 'platform_ai') {
+      const result = await callPlatformAI({
+        prompt: textToSummarize,
+        systemPrompt,
+        temperature: 0.3,
+        maxTokens: 1000,
+        operation: 'aiSummarize',
+      });
+      return {
+        output: [{
+          json: {
+            summary: result.content || '',
+            originalLength: textToSummarize.length,
+            summarizedAt: new Date().toISOString(),
+            platform: true,
+            ...(result.error ? { error: result.error } : {}),
+          },
+        }],
+        context,
+      };
+    }
+
+    if (!cred.data?.apiKey) {
       return {
         output: [{
           json: {
@@ -1770,8 +1994,7 @@ const nodeHandlers: Record<string, NodeHandler> = {
       };
     }
 
-    const systemPrompt = `Summarize the following text in at most ${maxLength} words. Capture the key points only.`;
-
+    const credentialData = cred.data;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 60000);
 
@@ -1863,14 +2086,51 @@ const nodeHandlers: Record<string, NodeHandler> = {
       return {
         output: [{
           json: {
-            error: 'No credential selected. Pick an OpenAI API key credential in the AI Classify node settings.',
+            error: 'No credential selected. Pick an OpenAI API key credential (or Platform AI) in the AI Classify node settings.',
           },
         }],
         context,
       };
     }
-    const credentialData = await loadCredential(credentialId);
-    if (!credentialData?.apiKey) {
+    const cred = await loadCredentialWithType(credentialId);
+    if (!cred) {
+      return {
+        output: [{
+          json: {
+            error: 'Credential not found. Edit the node and pick a valid credential.',
+            credentialId,
+          },
+        }],
+        context,
+      };
+    }
+
+    const systemPrompt = `You are a text classifier. Classify the user's text into exactly one of these categories: ${categories}. Respond with ONLY the category name, no other text.`;
+
+    // Hybrid Mode: Platform AI credential → use Z.AI SDK
+    if (cred.type === 'platform_ai') {
+      const result = await callPlatformAI({
+        prompt: inputText,
+        systemPrompt,
+        temperature: 0,
+        maxTokens: 100,
+        operation: 'aiClassify',
+      });
+      return {
+        output: [{
+          json: {
+            category: (result.content || '').trim(),
+            availableCategories: categories,
+            originalText: inputText,
+            platform: true,
+            ...(result.error ? { error: result.error } : {}),
+          },
+        }],
+        context,
+      };
+    }
+
+    if (!cred.data?.apiKey) {
       return {
         output: [{
           json: {
@@ -1882,8 +2142,7 @@ const nodeHandlers: Record<string, NodeHandler> = {
       };
     }
 
-    const systemPrompt = `You are a text classifier. Classify the user's text into exactly one of these categories: ${categories}. Respond with ONLY the category name, no other text.`;
-
+    const credentialData = cred.data;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 60000);
 
@@ -2039,6 +2298,365 @@ const nodeHandlers: Record<string, NodeHandler> = {
       }],
       context,
     };
+  },
+
+  // ─── Additional AI Providers (Phase 4 — n8n-style BYOK extension) ─────────
+  //
+  // Each handler follows the same pattern:
+  //   1. Resolve config + prompt via `resolveExpression`
+  //   2. Require a `credentialId` (graceful error if missing)
+  //   3. Call `loadCredentialWithType` — this returns { type, data }
+  //   4. If `type === 'platform_ai'` → use `callPlatformAI()` (Z.AI SDK)
+  //      Otherwise, use `data.apiKey` to call the provider's API directly
+  //   5. 60-second AbortController timeout, graceful error on failure
+  //
+  // All providers below expose an OpenAI-compatible `/chat/completions`
+  // endpoint except Gemini (Google's own schema) and Cohere (its own
+  // `/chat` schema). OpenAI-compatible providers share the
+  // `callOpenAICompatibleProvider()` module-level helper to keep the
+  // code DRY.
+
+  geminiNode: async (node, input, context) => {
+    const config = node.data.config;
+    const model = config.model || 'gemini-1.5-flash';
+    const temperature = config.temperature ?? 0.7;
+    const maxTokens = Number(config.maxTokens) || 1000;
+    const prompt = resolveExpression(config.prompt || '', context);
+    const systemPrompt = resolveExpression(config.systemPrompt || '', context);
+
+    const credentialId = config.credentialId;
+    if (!credentialId) {
+      return {
+        output: [{
+          json: {
+            error: 'No credential selected. Pick a Google Gemini API key credential (or Platform AI) in the node settings.',
+            model,
+          },
+        }],
+        context,
+      };
+    }
+
+    const cred = await loadCredentialWithType(credentialId);
+    if (!cred) {
+      return {
+        output: [{
+          json: {
+            error: 'Credential not found. Edit the node and pick a valid credential.',
+            credentialId,
+          },
+        }],
+        context,
+      };
+    }
+
+    // Hybrid Mode: Platform AI credential → use Z.AI SDK
+    if (cred.type === 'platform_ai') {
+      const result = await callPlatformAI({
+        prompt, systemPrompt, temperature, maxTokens, operation: 'chatCompletion',
+      });
+      return { output: [{ json: { ...result, provider: 'google-gemini', model } }], context };
+    }
+
+    if (!cred.data?.apiKey) {
+      return {
+        output: [{
+          json: {
+            error: 'Gemini credential missing apiKey. Edit the credential and add your Google AI Studio API key.',
+            credentialId,
+          },
+        }],
+        context,
+      };
+    }
+
+    // Google Gemini generateContent endpoint
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000);
+
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${cred.data.apiKey}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          ...(systemPrompt
+            ? { systemInstruction: { parts: [{ text: systemPrompt }] } }
+            : {}),
+          generationConfig: { temperature, maxOutputTokens: maxTokens },
+        }),
+        signal: controller.signal,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        return {
+          output: [{
+            json: {
+              error: `Gemini API error: ${data.error?.message || response.statusText}`,
+              statusCode: response.status,
+              model,
+            },
+          }],
+          context,
+        };
+      }
+
+      return {
+        output: [{
+          json: {
+            content: data.candidates?.[0]?.content?.parts?.[0]?.text || '',
+            model,
+            usage: data.usageMetadata,
+            provider: 'google-gemini',
+            operation: 'chatCompletion',
+          },
+        }],
+        context,
+      };
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        return { output: [{ json: { error: 'Gemini request timed out after 60s', model } }], context };
+      }
+      return { output: [{ json: { error: `Gemini request failed: ${err?.message || 'unknown error'}`, model } }], context };
+    } finally {
+      clearTimeout(timeout);
+    }
+  },
+
+  mistralNode: async (node, input, context) => {
+    const config = node.data.config;
+    const model = config.model || 'mistral-large-latest';
+    const temperature = config.temperature ?? 0.7;
+    const maxTokens = Number(config.maxTokens) || 1000;
+    const prompt = resolveExpression(config.prompt || '', context);
+    const systemPrompt = resolveExpression(config.systemPrompt || '', context);
+
+    const credentialId = config.credentialId;
+    if (!credentialId) {
+      return {
+        output: [{ json: { error: 'No credential selected. Pick a Mistral API key credential (or Platform AI) in the node settings.', model } }],
+        context,
+      };
+    }
+    const cred = await loadCredentialWithType(credentialId);
+    if (!cred) {
+      return { output: [{ json: { error: 'Credential not found.', credentialId } }], context };
+    }
+    if (cred.type === 'platform_ai') {
+      const result = await callPlatformAI({ prompt, systemPrompt, temperature, maxTokens, operation: 'chatCompletion' });
+      return { output: [{ json: { ...result, provider: 'mistral', model } }], context };
+    }
+    if (!cred.data?.apiKey) {
+      return { output: [{ json: { error: 'Mistral credential missing apiKey.', credentialId } }], context };
+    }
+
+    const result = await callOpenAICompatibleProvider({
+      baseUrl: 'https://api.mistral.ai/v1',
+      apiKey: cred.data.apiKey,
+      model, prompt, systemPrompt, temperature, maxTokens,
+      providerName: 'Mistral',
+    });
+    return { output: [{ json: { ...result, provider: 'mistral', operation: 'chatCompletion' } }], context };
+  },
+
+  groqNode: async (node, input, context) => {
+    const config = node.data.config;
+    const model = config.model || 'llama-3.3-70b-versatile';
+    const temperature = config.temperature ?? 0.7;
+    const maxTokens = Number(config.maxTokens) || 1000;
+    const prompt = resolveExpression(config.prompt || '', context);
+    const systemPrompt = resolveExpression(config.systemPrompt || '', context);
+
+    const credentialId = config.credentialId;
+    if (!credentialId) {
+      return {
+        output: [{ json: { error: 'No credential selected. Pick a Groq API key credential (or Platform AI) in the node settings.', model } }],
+        context,
+      };
+    }
+    const cred = await loadCredentialWithType(credentialId);
+    if (!cred) {
+      return { output: [{ json: { error: 'Credential not found.', credentialId } }], context };
+    }
+    if (cred.type === 'platform_ai') {
+      const result = await callPlatformAI({ prompt, systemPrompt, temperature, maxTokens, operation: 'chatCompletion' });
+      return { output: [{ json: { ...result, provider: 'groq', model } }], context };
+    }
+    if (!cred.data?.apiKey) {
+      return { output: [{ json: { error: 'Groq credential missing apiKey.', credentialId } }], context };
+    }
+
+    const result = await callOpenAICompatibleProvider({
+      baseUrl: 'https://api.groq.com/openai/v1',
+      apiKey: cred.data.apiKey,
+      model, prompt, systemPrompt, temperature, maxTokens,
+      providerName: 'Groq',
+    });
+    return { output: [{ json: { ...result, provider: 'groq', operation: 'chatCompletion' } }], context };
+  },
+
+  cohereNode: async (node, input, context) => {
+    const config = node.data.config;
+    const operation = config.operation || 'chat';
+    const model = config.model || 'command-r-plus';
+    const temperature = config.temperature ?? 0.7;
+    const maxTokens = Number(config.maxTokens) || 1000;
+    const prompt = resolveExpression(config.prompt || '', context);
+
+    const credentialId = config.credentialId;
+    if (!credentialId) {
+      return {
+        output: [{ json: { error: 'No credential selected. Pick a Cohere API key credential (or Platform AI) in the node settings.', model } }],
+        context,
+      };
+    }
+    const cred = await loadCredentialWithType(credentialId);
+    if (!cred) {
+      return { output: [{ json: { error: 'Credential not found.', credentialId } }], context };
+    }
+    if (cred.type === 'platform_ai') {
+      const result = await callPlatformAI({ prompt, temperature, maxTokens, operation });
+      return { output: [{ json: { ...result, provider: 'cohere', model } }], context };
+    }
+    if (!cred.data?.apiKey) {
+      return { output: [{ json: { error: 'Cohere credential missing apiKey.', credentialId } }], context };
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000);
+
+    try {
+      // Cohere v1 endpoints: /chat, /generate, /classify, /summarize
+      const endpoints: Record<string, string> = {
+        chat: 'https://api.cohere.ai/v1/chat',
+        generate: 'https://api.cohere.ai/v1/generate',
+        classify: 'https://api.cohere.ai/v1/classify',
+        summarize: 'https://api.cohere.ai/v1/summarize',
+      };
+      const url = endpoints[operation] || endpoints.chat;
+
+      const bodies: Record<string, any> = {
+        chat: { model, message: prompt, temperature, max_tokens: maxTokens },
+        generate: { model, prompt, temperature, max_tokens: maxTokens },
+        classify: { model, inputs: [prompt] },
+        summarize: { model, text: prompt, length: 'medium' },
+      };
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${cred.data.apiKey}`,
+          'Content-Type': 'application/json',
+          'X-Client-Name': 'serviceos-workflow',
+        },
+        body: JSON.stringify(bodies[operation] || bodies.chat),
+        signal: controller.signal,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        return {
+          output: [{ json: { error: `Cohere API error: ${data.message || data.error?.message || response.statusText}`, statusCode: response.status, operation } }],
+          context,
+        };
+      }
+
+      // Each Cohere operation returns a different shape — extract the main text
+      let content = '';
+      if (operation === 'chat') content = data.text || '';
+      else if (operation === 'generate') content = data.generations?.[0]?.text || '';
+      else if (operation === 'classify') content = data.classifications?.[0]?.prediction || '';
+      else if (operation === 'summarize') content = data.summary || '';
+
+      return {
+        output: [{ json: { content, model, operation, provider: 'cohere', meta: data.meta } }],
+        context,
+      };
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        return { output: [{ json: { error: 'Cohere request timed out after 60s', operation } }], context };
+      }
+      return { output: [{ json: { error: `Cohere request failed: ${err?.message || 'unknown error'}`, operation } }], context };
+    } finally {
+      clearTimeout(timeout);
+    }
+  },
+
+  perplexityNode: async (node, input, context) => {
+    const config = node.data.config;
+    const model = config.model || 'llama-3.1-sonar-large-128k-online';
+    const temperature = config.temperature ?? 0.7;
+    const maxTokens = Number(config.maxTokens) || 1000;
+    const prompt = resolveExpression(config.prompt || '', context);
+    const systemPrompt = resolveExpression(config.systemPrompt || '', context);
+
+    const credentialId = config.credentialId;
+    if (!credentialId) {
+      return {
+        output: [{ json: { error: 'No credential selected. Pick a Perplexity API key credential (or Platform AI) in the node settings.', model } }],
+        context,
+      };
+    }
+    const cred = await loadCredentialWithType(credentialId);
+    if (!cred) {
+      return { output: [{ json: { error: 'Credential not found.', credentialId } }], context };
+    }
+    if (cred.type === 'platform_ai') {
+      const result = await callPlatformAI({ prompt, systemPrompt, temperature, maxTokens, operation: 'chatCompletion' });
+      return { output: [{ json: { ...result, provider: 'perplexity', model } }], context };
+    }
+    if (!cred.data?.apiKey) {
+      return { output: [{ json: { error: 'Perplexity credential missing apiKey.', credentialId } }], context };
+    }
+
+    const result = await callOpenAICompatibleProvider({
+      baseUrl: 'https://api.perplexity.ai',
+      apiKey: cred.data.apiKey,
+      model, prompt, systemPrompt, temperature, maxTokens,
+      providerName: 'Perplexity',
+      // Perplexity returns `citations` array alongside the chat response
+      extraResponseFields: (data) => ({ citations: data.citations || [] }),
+    });
+    return { output: [{ json: { ...result, provider: 'perplexity', operation: 'chatCompletion' } }], context };
+  },
+
+  deepseekNode: async (node, input, context) => {
+    const config = node.data.config;
+    const model = config.model || 'deepseek-chat';
+    const temperature = config.temperature ?? 0.7;
+    const maxTokens = Number(config.maxTokens) || 1000;
+    const prompt = resolveExpression(config.prompt || '', context);
+    const systemPrompt = resolveExpression(config.systemPrompt || '', context);
+
+    const credentialId = config.credentialId;
+    if (!credentialId) {
+      return {
+        output: [{ json: { error: 'No credential selected. Pick a DeepSeek API key credential (or Platform AI) in the node settings.', model } }],
+        context,
+      };
+    }
+    const cred = await loadCredentialWithType(credentialId);
+    if (!cred) {
+      return { output: [{ json: { error: 'Credential not found.', credentialId } }], context };
+    }
+    if (cred.type === 'platform_ai') {
+      const result = await callPlatformAI({ prompt, systemPrompt, temperature, maxTokens, operation: 'chatCompletion' });
+      return { output: [{ json: { ...result, provider: 'deepseek', model } }], context };
+    }
+    if (!cred.data?.apiKey) {
+      return { output: [{ json: { error: 'DeepSeek credential missing apiKey.', credentialId } }], context };
+    }
+
+    const result = await callOpenAICompatibleProvider({
+      baseUrl: 'https://api.deepseek.com/v1',
+      apiKey: cred.data.apiKey,
+      model, prompt, systemPrompt, temperature, maxTokens,
+      providerName: 'DeepSeek',
+    });
+    // DeepSeek-R1 (reasoner) returns an extra `reasoning_content` field
+    return { output: [{ json: { ...result, provider: 'deepseek', operation: 'chatCompletion' } }], context };
   },
 
   // ─── Default Handler ────────────────────────────────────────────────────

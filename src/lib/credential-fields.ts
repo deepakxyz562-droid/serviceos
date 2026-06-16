@@ -16,6 +16,10 @@
  *
  * These names line up with the keys the backend (workflow-executor +
  * credential-crypto.testCredential) expects to find in `data`.
+ *
+ * For AI providers, all credentials store the API key under `apiKey`
+ * (single field) so they're interchangeable in the credential picker
+ * — any `apiKey`-typed credential can be used with any AI node.
  */
 export function getCreateFields(type: string): string[] {
   switch (type) {
@@ -37,6 +41,20 @@ export function getCreateFields(type: string): string[] {
       return ['accessKeyId', 'secretAccessKey', 'region'];
     case 'googleServiceAccount':
       return ['clientEmail', 'privateKey', 'projectId'];
+    // ─── AI providers (Phase 4) — all use a single `apiKey` field ────────
+    case 'openai':
+    case 'anthropic':
+    case 'huggingface':
+    case 'gemini':
+    case 'mistral':
+    case 'groq':
+    case 'cohere':
+    case 'perplexity':
+    case 'deepseek':
+      return ['apiKey'];
+    // ─── Hybrid Mode: Platform AI uses no key (server-side Z.AI SDK) ─────
+    case 'platform_ai':
+      return [];
     default:
       return ['key'];
   }

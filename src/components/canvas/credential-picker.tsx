@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { Plus, KeyRound, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Plus, KeyRound, Loader2, Eye, EyeOff, Gift } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -50,6 +50,47 @@ interface CredentialPickerProps {
 }
 
 /**
+ * AI provider credential types that all share the same `apiKey` field shape
+ * and are interchangeable in any AI node's credential picker. When a node
+ * declares `credentialTypes: ['apiKey']`, the picker treats it as a generic
+ * "any AI provider key" filter — so a user's "My OpenAI Key" credential
+ * (type: `openai`) shows up alongside "My Anthropic Key" (type: `anthropic`)
+ * and so on.
+ */
+const AI_PROVIDER_TYPES = [
+  'apiKey',
+  'openai',
+  'anthropic',
+  'huggingface',
+  'gemini',
+  'mistral',
+  'groq',
+  'cohere',
+  'perplexity',
+  'deepseek',
+];
+
+/**
+ * Returns true if a credential's `type` should be visible in a picker that
+ * declares the given `allowedTypes`.
+ *
+ * - Empty/undefined allowedTypes → all credentials match.
+ * - Exact match → match.
+ * - If 'apiKey' is in allowedTypes, ANY AI provider type also matches,
+ *   PLUS `platform_ai` (the free-tier option) — so AI nodes don't need to
+ *   explicitly declare 'platform_ai' to surface the free tier.
+ */
+function matchesCredentialType(credType: string, allowedTypes?: string[]): boolean {
+  if (!allowedTypes || allowedTypes.length === 0) return true;
+  if (allowedTypes.includes(credType)) return true;
+  if (allowedTypes.includes('apiKey')) {
+    if (AI_PROVIDER_TYPES.includes(credType)) return true;
+    if (credType === 'platform_ai') return true;
+  }
+  return false;
+}
+
+/**
  * Inline credential picker used inside the workflow node config panel.
  *
  * - Renders a `<Select>` populated from `GET /api/credentials`.
@@ -71,31 +112,29 @@ export function CredentialPicker({
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  // Filter the credential list by `credentialTypes` when provided so the
-  // AI nodes (which declare `credentialTypes: ['apiKey']`) only show
-  // matching credentials. Otherwise list everything.
+  // Fetch all credentials and filter client-side. We fetch all (rather than
+  // using ?type=X) because the picker's `apiKey` filter should also match
+  // provider-specific types like `openai` / `anthropic` / `gemini` etc.
+  // — a server-side filter on `type=apiKey` would hide those.
   const fetchCredentials = useCallback(async () => {
     setLoading(true);
     try {
-      // Pick the first declared type to filter on the server; if multiple
-      // types are declared we fetch all and filter client-side instead.
-      let url = '/api/credentials';
-      if (credentialTypes && credentialTypes.length === 1) {
-        url += `?type=${encodeURIComponent(credentialTypes[0])}`;
-      }
-      const res = await fetch(url);
+      const res = await fetch('/api/credentials');
       if (!res.ok) throw new Error(`Failed to load credentials (${res.status})`);
       const json = await res.json();
-      let list: PickerCredential[] = (json.credentials || []).map((c: any) => ({
+      const all: PickerCredential[] = (json.credentials || []).map((c: any) => ({
         id: c.id,
         name: c.name,
         type: c.type,
       }));
-      if (credentialTypes && credentialTypes.length > 1) {
-        const allowed = new Set(credentialTypes);
-        list = list.filter((c) => allowed.has(c.type));
-      }
-      setCredentials(list);
+      const filtered = all.filter((c) => matchesCredentialType(c.type, credentialTypes));
+      // Sort: Platform AI first (so it's the easy default), then alphabetical
+      filtered.sort((a, b) => {
+        if (a.type === 'platform_ai' && b.type !== 'platform_ai') return -1;
+        if (b.type === 'platform_ai' && a.type !== 'platform_ai') return 1;
+        return a.name.localeCompare(b.name);
+      });
+      setCredentials(filtered);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to load credentials';
       // Don't toast on initial mount failures — too noisy. Just log.
@@ -164,9 +203,12 @@ export function CredentialPicker({
                 {credentials.map((c) => (
                   <SelectItem key={c.id} value={c.id} className="text-xs">
                     <span className="flex items-center gap-1.5">
+                      {c.type === 'platform_ai' ? (
+                        <Gift className="size-3 text-pink-500 shrink-0" />
+                      ) : null}
                       <span className="truncate">{c.name}</span>
                       <span className="text-[9px] uppercase text-gray-400">
-                        {c.type}
+                        {c.type === 'platform_ai' ? 'Free tier' : c.type}
                       </span>
                     </span>
                   </SelectItem>
@@ -213,12 +255,22 @@ function CreateCredentialDialog({
   credentialTypes,
   onCreated,
 }: CreateCredentialDialogProps) {
-  // Default the type to the first declared credentialType (e.g. 'apiKey'
-  // for AI nodes) so the user only sees the fields they actually need.
-  // If no credentialTypes were declared, fall back to 'apiKey' as a sane
-  // default — the user can still pick a different type from the dropdown.
-  const defaultType =
-    credentialTypes && credentialTypes.length > 0 ? credentialTypes[0] : 'apiKey';
+  // Determine the full list of types the user is allowed to pick from in
+  // this dialog. When the parent node declares `credentialTypes: ['apiKey']`,
+  // we expand it to include all AI provider types + platform_ai so the user
+  // can pick the specific provider they have a key for.
+  const allowedTypes: string[] = (() => {
+    if (!credentialTypes || credentialTypes.length === 0) {
+      return ['apiKey', 'httpBasic', 'httpBearer', 'oAuth2', 'dbConnection', 'sshKey', 'awsIam', 'googleServiceAccount', 'whatsapp'];
+    }
+    // Expand 'apiKey' → all AI provider types + platform_ai
+    if (credentialTypes.includes('apiKey')) {
+      return [...AI_PROVIDER_TYPES, 'platform_ai'];
+    }
+    return credentialTypes;
+  })();
+
+  const defaultType = allowedTypes[0] || 'apiKey';
 
   const [name, setName] = useState('');
   const [type, setType] = useState(defaultType);
@@ -269,6 +321,11 @@ function CreateCredentialDialog({
     }
   };
 
+  // Special-case the platform_ai type in the create dialog — instead of
+  // showing zero fields (which is confusing), show a friendly info box
+  // explaining what Platform AI is.
+  const isPlatformAi = type === 'platform_ai';
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
@@ -295,7 +352,13 @@ function CreateCredentialDialog({
               placeholder="e.g., OpenAI, Anthropic (optional)"
               value={serviceName}
               onChange={(e) => setServiceName(e.target.value)}
+              disabled={isPlatformAi}
             />
+            {isPlatformAi && (
+              <p className="text-[10px] text-muted-foreground">
+                Auto-filled as &quot;Platform AI&quot; — no service name needed.
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label>Type</Label>
@@ -304,6 +367,9 @@ function CreateCredentialDialog({
               onValueChange={(v) => {
                 setType(v);
                 setFields({});
+                if (v === 'platform_ai') {
+                  setServiceName('Platform AI');
+                }
               }}
               disabled={
                 // Lock the type when the parent node declares exactly one
@@ -316,54 +382,71 @@ function CreateCredentialDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {/* Show only allowed types when the parent restricts them. */}
-                {(credentialTypes && credentialTypes.length > 0
-                  ? credentialTypes
-                  : ['apiKey', 'httpBasic', 'httpBearer', 'oAuth2', 'dbConnection', 'sshKey', 'awsIam', 'googleServiceAccount', 'whatsapp']
-                ).map((t) => (
+                {allowedTypes.map((t) => (
                   <SelectItem key={t} value={t}>
-                    {t}
+                    <span className="flex items-center gap-1.5">
+                      {t === 'platform_ai' ? (
+                        <Gift className="size-3 text-pink-500" />
+                      ) : null}
+                      {t === 'platform_ai' ? 'Platform AI (Free tier)' : t}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <Separator />
-          {createFieldList.map((field) => {
-            const sensitive = isSensitiveField(field);
-            const isRevealed = revealed[field];
-            return (
-              <div key={field} className="space-y-2">
-                <Label className="text-xs">{getFieldLabel(field)}</Label>
-                <div className="relative">
-                  <Input
-                    type={sensitive && !isRevealed ? 'password' : 'text'}
-                    placeholder={`Enter ${getFieldLabel(field).toLowerCase()}...`}
-                    value={fields[field] || ''}
-                    onChange={(e) =>
-                      setFields((prev) => ({ ...prev, [field]: e.target.value }))
-                    }
-                    className={cn(sensitive && 'pr-9')}
-                  />
-                  {sensitive && (
-                    <button
-                      type="button"
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      onClick={() =>
-                        setRevealed((prev) => ({ ...prev, [field]: !prev[field] }))
+          {isPlatformAi ? (
+            <div className="rounded-lg bg-pink-50 border border-pink-200 p-3 text-xs text-pink-700 space-y-1">
+              <p className="font-medium flex items-center gap-1.5">
+                <Gift className="size-3.5" /> Platform AI — Free Tier
+              </p>
+              <p className="text-pink-600">
+                Uses the server-side Z.AI SDK (no API key required). Billed by
+                the platform with usage limits per plan. Perfect for trying
+                out AI nodes without your own provider key.
+              </p>
+              <p className="text-[10px] text-pink-500 italic">
+                Free tier: 100 calls/month. Upgrade in Settings → Billing.
+              </p>
+            </div>
+          ) : (
+            createFieldList.map((field) => {
+              const sensitive = isSensitiveField(field);
+              const isRevealed = revealed[field];
+              return (
+                <div key={field} className="space-y-2">
+                  <Label className="text-xs">{getFieldLabel(field)}</Label>
+                  <div className="relative">
+                    <Input
+                      type={sensitive && !isRevealed ? 'password' : 'text'}
+                      placeholder={`Enter ${getFieldLabel(field).toLowerCase()}...`}
+                      value={fields[field] || ''}
+                      onChange={(e) =>
+                        setFields((prev) => ({ ...prev, [field]: e.target.value }))
                       }
-                    >
-                      {isRevealed ? (
-                        <EyeOff className="size-4" />
-                      ) : (
-                        <Eye className="size-4" />
-                      )}
-                    </button>
-                  )}
+                      className={cn(sensitive && 'pr-9')}
+                    />
+                    {sensitive && (
+                      <button
+                        type="button"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        onClick={() =>
+                          setRevealed((prev) => ({ ...prev, [field]: !prev[field] }))
+                        }
+                      >
+                        {isRevealed ? (
+                          <EyeOff className="size-4" />
+                        ) : (
+                          <Eye className="size-4" />
+                        )}
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
