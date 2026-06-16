@@ -1,23 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-
-function maskCredentialData(data: Record<string, any>): Record<string, any> {
-  const masked: Record<string, any> = {};
-  for (const [key, value] of Object.entries(data)) {
-    if (typeof value === 'string' && value.length > 0) {
-      if (key.toLowerCase().includes('password') || key.toLowerCase().includes('secret') || key.toLowerCase().includes('key') || key.toLowerCase().includes('token')) {
-        masked[key] = '••••••••';
-      } else if (value.length <= 4) {
-        masked[key] = '••••';
-      } else {
-        masked[key] = value.slice(0, 2) + '••••' + value.slice(-2);
-      }
-    } else {
-      masked[key] = value;
-    }
-  }
-  return masked;
-}
+import {
+  encryptCredentialData,
+  decryptCredentialData,
+  maskCredentialData,
+} from '@/lib/credential-crypto';
 
 function safeJsonParse(str: string | null, fallback: unknown = {}) {
   if (!str) return fallback;
@@ -26,6 +13,20 @@ function safeJsonParse(str: string | null, fallback: unknown = {}) {
   } catch {
     return fallback;
   }
+}
+
+/**
+ * Decrypt a credential's stored payload into a plain object.
+ *
+ * Supports both the new `aes-256-gcm:` encrypted format and legacy
+ * `JSON.stringify()` records.
+ */
+function readCredentialData(encryptedData: string | null): Record<string, any> {
+  if (!encryptedData) return {};
+  if (encryptedData.startsWith('aes-256-gcm:')) {
+    return decryptCredentialData(encryptedData);
+  }
+  return safeJsonParse(encryptedData, {}) as Record<string, any>;
 }
 
 export async function GET(request: NextRequest) {
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest) {
         id: c.id,
         name: c.name,
         type: c.type,
-        data: maskCredentialData(safeJsonParse(c.encryptedData, {})),
+        data: maskCredentialData(readCredentialData(c.encryptedData)),
         workspaceId: c.workspaceId,
         userId: c.userId,
         createdAt: c.createdAt,
@@ -72,11 +73,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const encryptedData = encryptCredentialData(body.data || {});
+
     const credential = await db.credential.create({
       data: {
         name: body.name,
         type: body.type,
-        encryptedData: JSON.stringify(body.data || {}),
+        encryptedData,
         workspaceId: body.workspaceId || null,
         userId: body.userId || null,
       },
@@ -87,7 +90,9 @@ export async function POST(request: NextRequest) {
         id: credential.id,
         name: credential.name,
         type: credential.type,
-        data: maskCredentialData(safeJsonParse(credential.encryptedData, {})),
+        data: maskCredentialData(
+          decryptCredentialData(credential.encryptedData)
+        ),
         workspaceId: credential.workspaceId,
         userId: credential.userId,
         createdAt: credential.createdAt,

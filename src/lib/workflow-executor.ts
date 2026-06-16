@@ -6,6 +6,7 @@
  */
 
 import { db } from '@/lib/db';
+import { decryptCredentialData } from '@/lib/credential-crypto';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -97,7 +98,11 @@ async function loadCredential(
   try {
     const cred = await db.credential.findUnique({ where: { id: credentialId } });
     if (!cred) return null;
-    return JSON.parse(cred.encryptedData);
+    // Try new encrypted format first, fall back to legacy JSON for old records
+    if (cred.encryptedData?.startsWith('aes-256-gcm:')) {
+      return decryptCredentialData(cred.encryptedData);
+    }
+    return JSON.parse(cred.encryptedData); // legacy unencrypted records
   } catch {
     return null;
   }
@@ -1053,19 +1058,208 @@ const nodeHandlers: Record<string, NodeHandler> = {
 
   // ─── AI Nodes ───────────────────────────────────────────────────────────
   openaiNode: async (node, input, context) => {
-    // AI processing - pass through with note
     const config = node.data.config;
-    return {
-      output: [{
-        json: {
-          simulated: true,
-          model: config.model || 'gpt-4o',
-          prompt: resolveExpression(config.prompt || '', context),
-          note: 'OpenAI integration requires API key configuration',
-        },
-      }],
-      context,
-    };
+    const operation = config.operation || 'chatCompletion';
+    const model = config.model || 'gpt-4o';
+    const temperature = config.temperature ?? 0.7;
+    const maxTokens = config.maxTokens ?? 1000;
+    const prompt = resolveExpression(config.prompt || '', context);
+    const systemPrompt = resolveExpression(config.systemPrompt || '', context);
+
+    // Audio transcription requires multipart upload — not supported yet
+    if (operation === 'audioTranscription') {
+      return {
+        output: [{
+          json: {
+            error: 'Audio transcription not supported in workflow executor yet',
+            operation,
+          },
+        }],
+        context,
+      };
+    }
+
+    // Load credential
+    const credentialId = config.credentialId;
+    if (!credentialId) {
+      return {
+        output: [{
+          json: {
+            error: 'No credential selected. Pick an OpenAI API key credential in the node settings.',
+            operation,
+          },
+        }],
+        context,
+      };
+    }
+    const credentialData = await loadCredential(credentialId);
+    if (!credentialData?.apiKey) {
+      return {
+        output: [{
+          json: {
+            error: 'OpenAI credential not found or missing apiKey field. Edit the credential and add your OpenAI API key.',
+            credentialId,
+          },
+        }],
+        context,
+      };
+    }
+
+    // 60-second timeout — AI calls can be slow
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000);
+
+    try {
+      if (operation === 'chatCompletion') {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${credentialData.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+              { role: 'user', content: prompt },
+            ],
+            temperature,
+            max_tokens: maxTokens,
+          }),
+          signal: controller.signal,
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          return {
+            output: [{
+              json: {
+                error: `OpenAI API error: ${data.error?.message || response.statusText}`,
+                statusCode: response.status,
+                operation,
+              },
+            }],
+            context,
+          };
+        }
+
+        return {
+          output: [{
+            json: {
+              content: data.choices?.[0]?.message?.content || '',
+              model: data.model,
+              usage: data.usage,
+              operation,
+            },
+          }],
+          context,
+        };
+      }
+
+      if (operation === 'embeddings') {
+        const response = await fetch('https://api.openai.com/v1/embeddings', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${credentialData.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'text-embedding-3-small',
+            input: prompt,
+          }),
+          signal: controller.signal,
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          return {
+            output: [{
+              json: {
+                error: `OpenAI API error: ${data.error?.message || response.statusText}`,
+                statusCode: response.status,
+                operation,
+              },
+            }],
+            context,
+          };
+        }
+
+        return {
+          output: [{
+            json: {
+              embedding: data.data?.[0]?.embedding || [],
+              model: data.model,
+              operation,
+            },
+          }],
+          context,
+        };
+      }
+
+      if (operation === 'imageGeneration') {
+        const response = await fetch('https://api.openai.com/v1/images/generations', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${credentialData.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            prompt,
+            n: 1,
+            size: '1024x1024',
+          }),
+          signal: controller.signal,
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          return {
+            output: [{
+              json: {
+                error: `OpenAI API error: ${data.error?.message || response.statusText}`,
+                statusCode: response.status,
+                operation,
+              },
+            }],
+            context,
+          };
+        }
+
+        return {
+          output: [{
+            json: {
+              imageUrl: data.data?.[0]?.url || '',
+              model,
+              operation,
+            },
+          }],
+          context,
+        };
+      }
+
+      // Unknown operation
+      return {
+        output: [{
+          json: {
+            error: `Unknown OpenAI operation: ${operation}`,
+            operation,
+          },
+        }],
+        context,
+      };
+    } catch (error: any) {
+      return {
+        output: [{
+          json: {
+            error: `OpenAI request failed: ${error.name === 'AbortError' ? 'Request timed out after 60s' : error.message}`,
+            operation,
+          },
+        }],
+        context,
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
   },
 
   // ─── Database Query Node ────────────────────────────────────────────────
@@ -1217,6 +1411,634 @@ const nodeHandlers: Record<string, NodeHandler> = {
         context,
       };
     }
+  },
+
+  // ─── Anthropic (Claude) ────────────────────────────────────────────────
+  anthropicNode: async (node, input, context) => {
+    const config = node.data.config;
+    const model = config.model || 'claude-3-5-sonnet-20241022';
+    const temperature = config.temperature ?? 0.7;
+    const maxTokens = config.maxTokens ?? 1000;
+    const prompt = resolveExpression(config.prompt || '', context);
+    const systemPrompt = resolveExpression(config.systemPrompt || '', context);
+
+    const credentialId = config.credentialId;
+    if (!credentialId) {
+      return {
+        output: [{
+          json: {
+            error: 'No credential selected. Pick an Anthropic API key credential in the node settings.',
+          },
+        }],
+        context,
+      };
+    }
+    const credentialData = await loadCredential(credentialId);
+    if (!credentialData?.apiKey) {
+      return {
+        output: [{
+          json: {
+            error: 'Anthropic credential not found or missing apiKey field. Edit the credential and add your Anthropic API key.',
+            credentialId,
+          },
+        }],
+        context,
+      };
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000);
+
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': credentialData.apiKey,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: maxTokens,
+          temperature,
+          ...(systemPrompt ? { system: systemPrompt } : {}),
+          messages: [{ role: 'user', content: prompt }],
+        }),
+        signal: controller.signal,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        return {
+          output: [{
+            json: {
+              error: `Anthropic API error: ${data.error?.message || response.statusText}`,
+              statusCode: response.status,
+              model,
+            },
+          }],
+          context,
+        };
+      }
+
+      return {
+        output: [{
+          json: {
+            content: data.content?.[0]?.text || '',
+            model: data.model,
+            usage: data.usage,
+          },
+        }],
+        context,
+      };
+    } catch (error: any) {
+      return {
+        output: [{
+          json: {
+            error: `Anthropic request failed: ${error.name === 'AbortError' ? 'Request timed out after 60s' : error.message}`,
+            model,
+          },
+        }],
+        context,
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
+  },
+
+  // ─── Hugging Face ──────────────────────────────────────────────────────
+  huggingFaceNode: async (node, input, context) => {
+    const config = node.data.config;
+    const model = config.model || 'meta-llama/Llama-2-7b-chat-hf';
+    const operation = config.operation || 'textGeneration';
+    const inputText = resolveExpression(config.input || '', context);
+
+    // Image classification not supported (multipart upload required)
+    if (operation === 'imageClassification') {
+      return {
+        output: [{
+          json: {
+            error: 'Image classification not supported in workflow executor yet',
+            operation,
+            model,
+          },
+        }],
+        context,
+      };
+    }
+
+    const credentialId = config.credentialId;
+    if (!credentialId) {
+      return {
+        output: [{
+          json: {
+            error: 'No credential selected. Pick a Hugging Face API key credential in the node settings.',
+          },
+        }],
+        context,
+      };
+    }
+    const credentialData = await loadCredential(credentialId);
+    if (!credentialData?.apiKey) {
+      return {
+        output: [{
+          json: {
+            error: 'Hugging Face credential not found or missing apiKey field. Edit the credential and add your Hugging Face API token.',
+            credentialId,
+          },
+        }],
+        context,
+      };
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000);
+
+    try {
+      const url = `https://api-inference.huggingface.co/models/${model}`;
+      const body: Record<string, any> = { inputs: inputText };
+      if (operation === 'textGeneration') {
+        body.parameters = {
+          temperature: config.temperature ?? 0.7,
+          max_new_tokens: config.maxTokens || 500,
+        };
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${credentialData.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        return {
+          output: [{
+            json: {
+              error: `Hugging Face API error: ${data.error || response.statusText}`,
+              statusCode: response.status,
+              model,
+              operation,
+            },
+          }],
+          context,
+        };
+      }
+
+      if (operation === 'textClassification') {
+        // Response: array like [{ label: 'POSITIVE', score: 0.99 }]
+        const first = Array.isArray(data) ? data[0] : data;
+        return {
+          output: [{
+            json: {
+              label: first?.label,
+              score: first?.score,
+              model,
+              operation,
+            },
+          }],
+          context,
+        };
+      }
+
+      // Default: textGeneration — response: [{ generated_text: '...' }]
+      const first = Array.isArray(data) ? data[0] : data;
+      return {
+        output: [{
+          json: {
+            content: first?.generated_text || '',
+            model,
+            operation,
+          },
+        }],
+        context,
+      };
+    } catch (error: any) {
+      return {
+        output: [{
+          json: {
+            error: `Hugging Face request failed: ${error.name === 'AbortError' ? 'Request timed out after 60s' : error.message}`,
+            model,
+          },
+        }],
+        context,
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
+  },
+
+  // ─── High-level AI: AI Reply ────────────────────────────────────────────
+  aiReply: async (node, input, context) => {
+    const config = node.data.config;
+    const tone = config.tone || 'professional';
+    const contextText = resolveExpression(config.context || '', context);
+
+    // Extract the user message from the input
+    const inputJson = input[0]?.json || {};
+    const userMessage =
+      inputJson.message || inputJson.text || inputJson.body ||
+      (typeof inputJson === 'string' ? inputJson : JSON.stringify(inputJson));
+
+    const credentialId = config.credentialId;
+    if (!credentialId) {
+      return {
+        output: [{
+          json: {
+            error: 'No credential selected. Pick an OpenAI API key credential in the AI Reply node settings.',
+          },
+        }],
+        context,
+      };
+    }
+    const credentialData = await loadCredential(credentialId);
+    if (!credentialData?.apiKey) {
+      return {
+        output: [{
+          json: {
+            error: 'OpenAI credential not found or missing apiKey field. Edit the credential and add your OpenAI API key.',
+            credentialId,
+          },
+        }],
+        context,
+      };
+    }
+
+    const systemPrompt = `You are a helpful assistant replying to a customer message. Reply in a ${tone} tone. Context: ${contextText}`;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000);
+
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${credentialData.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage },
+          ],
+          temperature: 0.7,
+          max_tokens: 1000,
+        }),
+        signal: controller.signal,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        return {
+          output: [{
+            json: {
+              error: `OpenAI API error: ${data.error?.message || response.statusText}`,
+              statusCode: response.status,
+            },
+          }],
+          context,
+        };
+      }
+
+      return {
+        output: [{
+          json: {
+            reply: data.choices?.[0]?.message?.content || '',
+            originalMessage: userMessage,
+            tone,
+          },
+        }],
+        context,
+      };
+    } catch (error: any) {
+      return {
+        output: [{
+          json: {
+            error: `AI Reply request failed: ${error.name === 'AbortError' ? 'Request timed out after 60s' : error.message}`,
+          },
+        }],
+        context,
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
+  },
+
+  // ─── High-level AI: AI Summarize ────────────────────────────────────────
+  aiSummarize: async (node, input, context) => {
+    const config = node.data.config;
+    const maxLength = config.maxLength || 100;
+    const textToSummarize = resolveExpression(config.input || '', context);
+
+    if (!textToSummarize) {
+      return {
+        output: [{
+          json: {
+            error: 'No input text to summarize. Set the "input" expression in the AI Summarize node.',
+          },
+        }],
+        context,
+      };
+    }
+
+    const credentialId = config.credentialId;
+    if (!credentialId) {
+      return {
+        output: [{
+          json: {
+            error: 'No credential selected. Pick an OpenAI API key credential in the AI Summarize node settings.',
+          },
+        }],
+        context,
+      };
+    }
+    const credentialData = await loadCredential(credentialId);
+    if (!credentialData?.apiKey) {
+      return {
+        output: [{
+          json: {
+            error: 'OpenAI credential not found or missing apiKey field. Edit the credential and add your OpenAI API key.',
+            credentialId,
+          },
+        }],
+        context,
+      };
+    }
+
+    const systemPrompt = `Summarize the following text in at most ${maxLength} words. Capture the key points only.`;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000);
+
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${credentialData.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: textToSummarize },
+          ],
+          temperature: 0.3,
+          max_tokens: 1000,
+        }),
+        signal: controller.signal,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        return {
+          output: [{
+            json: {
+              error: `OpenAI API error: ${data.error?.message || response.statusText}`,
+              statusCode: response.status,
+            },
+          }],
+          context,
+        };
+      }
+
+      return {
+        output: [{
+          json: {
+            summary: data.choices?.[0]?.message?.content || '',
+            originalLength: textToSummarize.length,
+            summarizedAt: new Date().toISOString(),
+          },
+        }],
+        context,
+      };
+    } catch (error: any) {
+      return {
+        output: [{
+          json: {
+            error: `AI Summarize request failed: ${error.name === 'AbortError' ? 'Request timed out after 60s' : error.message}`,
+          },
+        }],
+        context,
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
+  },
+
+  // ─── High-level AI: AI Classify ─────────────────────────────────────────
+  aiClassify: async (node, input, context) => {
+    const config = node.data.config;
+    const categories = config.categories || '';
+    const inputText = resolveExpression(config.input || '', context);
+
+    if (!inputText) {
+      return {
+        output: [{
+          json: {
+            error: 'No input text to classify. Set the "input" expression in the AI Classify node.',
+          },
+        }],
+        context,
+      };
+    }
+    if (!categories) {
+      return {
+        output: [{
+          json: {
+            error: 'No categories defined. Set the "categories" field (comma-separated) in the AI Classify node.',
+          },
+        }],
+        context,
+      };
+    }
+
+    const credentialId = config.credentialId;
+    if (!credentialId) {
+      return {
+        output: [{
+          json: {
+            error: 'No credential selected. Pick an OpenAI API key credential in the AI Classify node settings.',
+          },
+        }],
+        context,
+      };
+    }
+    const credentialData = await loadCredential(credentialId);
+    if (!credentialData?.apiKey) {
+      return {
+        output: [{
+          json: {
+            error: 'OpenAI credential not found or missing apiKey field. Edit the credential and add your OpenAI API key.',
+            credentialId,
+          },
+        }],
+        context,
+      };
+    }
+
+    const systemPrompt = `You are a text classifier. Classify the user's text into exactly one of these categories: ${categories}. Respond with ONLY the category name, no other text.`;
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000);
+
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${credentialData.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: inputText },
+          ],
+          temperature: 0,
+          max_tokens: 100,
+        }),
+        signal: controller.signal,
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        return {
+          output: [{
+            json: {
+              error: `OpenAI API error: ${data.error?.message || response.statusText}`,
+              statusCode: response.status,
+            },
+          }],
+          context,
+        };
+      }
+
+      return {
+        output: [{
+          json: {
+            category: (data.choices?.[0]?.message?.content || '').trim(),
+            availableCategories: categories,
+            originalText: inputText,
+          },
+        }],
+        context,
+      };
+    } catch (error: any) {
+      return {
+        output: [{
+          json: {
+            error: `AI Classify request failed: ${error.name === 'AbortError' ? 'Request timed out after 60s' : error.message}`,
+          },
+        }],
+        context,
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
+  },
+
+  // ─── Text Splitter (no credential needed) ───────────────────────────────
+  textSplitterNode: async (node, input, context) => {
+    const config = node.data.config;
+    const method = config.method || 'character';
+    const chunkSize = Number(config.chunkSize) || 1000;
+    const overlap = Number(config.overlap) ?? 200;
+    // Property default is the literal string "\\n\\n" — convert to actual newlines
+    const separator = (config.separator || '\\n\\n')
+      .replace(/\\\\n/g, '\n')
+      .replace(/\\\\t/g, '\t')
+      .replace(/\\\\r/g, '\r');
+
+    // Text to split: prefer config.text expression, fall back to input json fields
+    let text = resolveExpression(config.text || '', context);
+    if (!text) {
+      const inputJson = input[0]?.json || {};
+      text = inputJson.text || inputJson.content || inputJson.body || inputJson.message ||
+        (typeof inputJson === 'string' ? inputJson : JSON.stringify(inputJson));
+    }
+
+    if (!text) {
+      return {
+        output: [{
+          json: {
+            error: 'No text provided to split. Set a "text" expression in the Text Splitter node or pass text via the input.',
+          },
+        }],
+        context,
+      };
+    }
+
+    const chunks: string[] = [];
+
+    // Helper: join consecutive parts into chunks of ~chunkSize chars with overlap
+    const applyOverlap = (parts: string[]): string[] => {
+      const out: string[] = [];
+      let current = '';
+      for (const part of parts) {
+        if (!part) continue;
+        const candidate = current ? current + separator + part : part;
+        if (candidate.length > chunkSize && current) {
+          out.push(current);
+          // Start next chunk with the last `overlap` chars of current
+          const tail = current.slice(Math.max(0, current.length - overlap));
+          current = tail + separator + part;
+        } else {
+          current = candidate;
+        }
+      }
+      if (current) out.push(current);
+      return out;
+    };
+
+    if (method === 'character') {
+      chunks.push(...applyOverlap(text.split(separator)));
+    } else if (method === 'paragraph') {
+      const parts = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+      chunks.push(...applyOverlap(parts));
+    } else if (method === 'token') {
+      // Approximate tokens as words; chunkSize words per chunk
+      const words = text.split(/\s+/).filter(Boolean);
+      const step = Math.max(1, chunkSize - Math.floor(overlap / 2));
+      for (let i = 0; i < words.length; i += step) {
+        const slice = words.slice(i, i + chunkSize);
+        if (slice.length > 0) chunks.push(slice.join(' '));
+        if (i + chunkSize >= words.length) break;
+      }
+    } else if (method === 'recursive') {
+      // Split by paragraphs first; if any paragraph exceeds chunkSize, split by sentences
+      const paragraphs = text.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+      for (const para of paragraphs) {
+        if (para.length <= chunkSize) {
+          chunks.push(para);
+        } else {
+          const sentences = para.match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g) || [para];
+          chunks.push(...applyOverlap(sentences.map((s) => s.trim())));
+        }
+      }
+    } else {
+      // Unknown method — fall back to character split
+      chunks.push(...applyOverlap(text.split(separator)));
+    }
+
+    return {
+      output: [{
+        json: {
+          chunks,
+          count: chunks.length,
+          method,
+          chunkSize,
+          overlap,
+          originalLength: text.length,
+        },
+      }],
+      context,
+    };
   },
 
   // ─── Default Handler ────────────────────────────────────────────────────

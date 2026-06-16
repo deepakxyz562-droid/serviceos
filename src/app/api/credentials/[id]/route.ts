@@ -1,28 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-
-function maskCredentialData(data: Record<string, any>): Record<string, any> {
-  const masked: Record<string, any> = {};
-  for (const [key, value] of Object.entries(data)) {
-    if (typeof value === 'string' && value.length > 0) {
-      if (
-        key.toLowerCase().includes('password') ||
-        key.toLowerCase().includes('secret') ||
-        key.toLowerCase().includes('key') ||
-        key.toLowerCase().includes('token')
-      ) {
-        masked[key] = '••••••••';
-      } else if (value.length <= 4) {
-        masked[key] = '••••';
-      } else {
-        masked[key] = value.slice(0, 2) + '••••' + value.slice(-2);
-      }
-    } else {
-      masked[key] = value;
-    }
-  }
-  return masked;
-}
+import {
+  encryptCredentialData,
+  decryptCredentialData,
+  maskCredentialData,
+} from '@/lib/credential-crypto';
 
 function safeJsonParse(str: string | null, fallback: unknown = {}) {
   if (!str) return fallback;
@@ -31,6 +13,49 @@ function safeJsonParse(str: string | null, fallback: unknown = {}) {
   } catch {
     return fallback;
   }
+}
+
+/**
+ * Decrypt a credential's stored payload into a plain object.
+ *
+ * Supports both the new `aes-256-gcm:` encrypted format and legacy
+ * `JSON.stringify()` records.
+ */
+function readCredentialData(encryptedData: string | null): Record<string, any> {
+  if (!encryptedData) return {};
+  if (encryptedData.startsWith('aes-256-gcm:')) {
+    return decryptCredentialData(encryptedData);
+  }
+  return safeJsonParse(encryptedData, {}) as Record<string, any>;
+}
+
+/**
+ * Whether a key should be treated as a sensitive secret. Mirrors the
+ * client-side `isSensitiveField` helper in `credential-fields.ts`.
+ */
+function isSensitiveKey(key: string): boolean {
+  const lower = key.toLowerCase();
+  return (
+    lower.includes('key') ||
+    lower.includes('secret') ||
+    lower.includes('password') ||
+    lower.includes('token') ||
+    lower.includes('private')
+  );
+}
+
+/**
+ * Returns true when the supplied value should be treated as "no change"
+ * for a sensitive field during a PUT. The frontend leaves sensitive
+ * fields blank (empty string) on edit, and may also send back the masked
+ * sentinel `'••••••••'` returned by the GET endpoint.
+ */
+function isUnchangedSensitiveValue(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (typeof value !== 'string') return false;
+  if (value === '') return true;
+  if (value.startsWith('••••')) return true;
+  return false;
 }
 
 export async function GET(
@@ -52,7 +77,7 @@ export async function GET(
       id: credential.id,
       name: credential.name,
       type: credential.type,
-      data: maskCredentialData(safeJsonParse(credential.encryptedData, {})),
+      data: maskCredentialData(readCredentialData(credential.encryptedData)),
       workspaceId: credential.workspaceId,
       userId: credential.userId,
       createdAt: credential.createdAt,
@@ -83,7 +108,27 @@ export async function PUT(
     const data: any = {};
     if (body.name !== undefined) data.name = body.name;
     if (body.type !== undefined) data.type = body.type;
-    if (body.data !== undefined) data.encryptedData = JSON.stringify(body.data);
+    if (body.data !== undefined) {
+      // Decrypt the existing payload so we can preserve sensitive values
+      // that the frontend left blank or sent back masked.
+      const existingData = readCredentialData(existing.encryptedData);
+      const incoming: Record<string, any> = body.data || {};
+
+      // Start from the existing decrypted data so any fields the client
+      // omitted entirely are preserved as-is.
+      const merged: Record<string, any> = { ...existingData };
+
+      for (const [key, newValue] of Object.entries(incoming)) {
+        if (isSensitiveKey(key) && isUnchangedSensitiveValue(newValue)) {
+          // Keep the existing decrypted value for this sensitive field.
+          // (merged already has it from existingData.)
+          continue;
+        }
+        merged[key] = newValue;
+      }
+
+      data.encryptedData = encryptCredentialData(merged);
+    }
     if (body.workspaceId !== undefined) data.workspaceId = body.workspaceId;
 
     const credential = await db.credential.update({
@@ -95,7 +140,9 @@ export async function PUT(
       id: credential.id,
       name: credential.name,
       type: credential.type,
-      data: maskCredentialData(safeJsonParse(credential.encryptedData, {})),
+      data: maskCredentialData(
+        decryptCredentialData(credential.encryptedData)
+      ),
       workspaceId: credential.workspaceId,
       userId: credential.userId,
       createdAt: credential.createdAt,

@@ -2077,9 +2077,11 @@ export const aiNodes: NodeTypeDefinition[] = [
     inputs: [{ id: 'main', name: 'main', type: 'input' }],
     outputs: [{ id: 'main', name: 'main', type: 'output' }],
     properties: [
+      { name: 'credentialId', displayName: 'AI Provider Credential', type: 'credentials', required: true },
       { name: 'input', displayName: 'Input Text', type: 'expression', required: true },
       { name: 'categories', displayName: 'Categories', type: 'string', required: true, placeholder: 'urgent, normal, low' },
     ],
+    credentialTypes: ['apiKey'],
   },
   {
     type: 'aiReply',
@@ -2091,6 +2093,7 @@ export const aiNodes: NodeTypeDefinition[] = [
     inputs: [{ id: 'main', name: 'main', type: 'input' }],
     outputs: [{ id: 'main', name: 'main', type: 'output' }],
     properties: [
+      { name: 'credentialId', displayName: 'AI Provider Credential', type: 'credentials', required: true },
       { name: 'context', displayName: 'Context', type: 'text', placeholder: 'Provide context for the reply...' },
       { name: 'tone', displayName: 'Tone', type: 'select', default: 'professional', options: [
         { name: 'Professional', value: 'professional' },
@@ -2098,6 +2101,7 @@ export const aiNodes: NodeTypeDefinition[] = [
         { name: 'Casual', value: 'casual' },
       ]},
     ],
+    credentialTypes: ['apiKey'],
   },
   {
     type: 'aiSummarize',
@@ -2109,9 +2113,11 @@ export const aiNodes: NodeTypeDefinition[] = [
     inputs: [{ id: 'main', name: 'main', type: 'input' }],
     outputs: [{ id: 'main', name: 'main', type: 'output' }],
     properties: [
+      { name: 'credentialId', displayName: 'AI Provider Credential', type: 'credentials', required: true },
       { name: 'input', displayName: 'Text to Summarize', type: 'expression', required: true },
       { name: 'maxLength', displayName: 'Max Length (words)', type: 'number', default: 100 },
     ],
+    credentialTypes: ['apiKey'],
   },
   // General AI
   {
@@ -2124,6 +2130,7 @@ export const aiNodes: NodeTypeDefinition[] = [
     inputs: [{ id: 'main', name: 'main', type: 'input' }],
     outputs: [{ id: 'main', name: 'main', type: 'output' }],
     properties: [
+      { name: 'credentialId', displayName: 'AI Provider Credential', type: 'credentials', required: true },
       { name: 'operation', displayName: 'Operation', type: 'select', default: 'chatCompletion', options: [{ name: 'Chat Completion', value: 'chatCompletion' }, { name: 'Embeddings', value: 'embeddings' }, { name: 'Image Generation', value: 'imageGeneration' }, { name: 'Audio Transcription', value: 'audioTranscription' }] },
       { name: 'model', displayName: 'Model', type: 'select', default: 'gpt-4o', options: [{ name: 'GPT-4o', value: 'gpt-4o' }, { name: 'GPT-4o Mini', value: 'gpt-4o-mini' }, { name: 'GPT-4 Turbo', value: 'gpt-4-turbo' }, { name: 'GPT-3.5 Turbo', value: 'gpt-3.5-turbo' }] },
       { name: 'prompt', displayName: 'Prompt', type: 'expression', required: true },
@@ -2143,6 +2150,7 @@ export const aiNodes: NodeTypeDefinition[] = [
     inputs: [{ id: 'main', name: 'main', type: 'input' }],
     outputs: [{ id: 'main', name: 'main', type: 'output' }],
     properties: [
+      { name: 'credentialId', displayName: 'AI Provider Credential', type: 'credentials', required: true },
       { name: 'model', displayName: 'Model', type: 'select', default: 'claude-3-5-sonnet-20241022', options: [{ name: 'Claude 3.5 Sonnet', value: 'claude-3-5-sonnet-20241022' }, { name: 'Claude 3 Opus', value: 'claude-3-opus-20240229' }, { name: 'Claude 3 Haiku', value: 'claude-3-haiku-20240307' }] },
       { name: 'prompt', displayName: 'Prompt', type: 'expression', required: true },
       { name: 'systemPrompt', displayName: 'System Prompt', type: 'expression' },
@@ -2161,6 +2169,7 @@ export const aiNodes: NodeTypeDefinition[] = [
     inputs: [{ id: 'main', name: 'main', type: 'input' }],
     outputs: [{ id: 'main', name: 'main', type: 'output' }],
     properties: [
+      { name: 'credentialId', displayName: 'AI Provider Credential', type: 'credentials', required: true },
       { name: 'model', displayName: 'Model ID', type: 'string', required: true, placeholder: 'meta-llama/Llama-2-7b-chat-hf' },
       { name: 'operation', displayName: 'Operation', type: 'select', default: 'textGeneration', options: [{ name: 'Text Generation', value: 'textGeneration' }, { name: 'Text Classification', value: 'textClassification' }, { name: 'Image Classification', value: 'imageClassification' }] },
       { name: 'input', displayName: 'Input', type: 'expression', required: true },
