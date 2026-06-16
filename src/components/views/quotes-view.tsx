@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useMemo } from 'react';
 import {
   FileText, Plus, Search, Send, MoreHorizontal, DollarSign,
   Clock, CheckCircle2, AlertCircle, XCircle, Eye, Trash2,
@@ -28,7 +28,8 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { formatCurrency, convertCurrency, CURRENCIES as SHARED_CURRENCIES, currencySymbol, getExchangeRate } from '@/lib/currency';
+import { formatCurrency, currencySymbol, getExchangeRate } from '@/lib/currency';
+import { useBaseCurrency } from '@/hooks/use-base-currency';
 
 // ============================================================
 // Types
@@ -109,7 +110,6 @@ const STATUS_CONFIG: Record<QuoteStatus, { label: string; bg: string; text: stri
   expired: { label: 'Expired', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', icon: <Clock className="size-3" /> },
 };
 
-const VIEW_CURRENCY_OPTIONS = ['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD'];
 
 const MOCK_CUSTOMERS = [
   { id: 'c1', name: 'John Smith', phone: '+447911123456' },
@@ -244,12 +244,6 @@ function calcSummary(services: QuoteServiceItem[], addOns: QuoteAddOn[], discoun
   return { servicesTotal, addOnsTotal, subtotal, discount, tax, total };
 }
 
-/** Convert an amount from a quote's stored currency to the view currency */
-function convertToViewCurrency(amount: number, quote: Quote, viewCurrency: string): number {
-  const quoteCurrency = quote.currency || 'INR';
-  return convertCurrency(amount, quoteCurrency, viewCurrency, quote.exchangeRate);
-}
-
 // ============================================================
 // WhatsApp Preview Component
 // ============================================================
@@ -305,34 +299,12 @@ export function QuotesView() {
   const [form, setForm] = useState<QuoteFormData>(EMPTY_FORM());
   const [saving, setSaving] = useState(false);
 
-  // ── Currency state ──────────────────────────────────────────
-  const [viewCurrency, setViewCurrency] = useState<string>('INR');
-  const [baseCurrency, setBaseCurrency] = useState<string>('INR');
-  const baseCurrencyFetched = useRef(false);
+  // ── Currency from hook ───────────────────────────────────
+  const { format: fmt, convert, viewCurrency, setViewCurrency, baseCurrency, currencyOptions } = useBaseCurrency();
 
-  useEffect(() => {
-    if (baseCurrencyFetched.current) return;
-    baseCurrencyFetched.current = true;
-    fetch('/api/settings/currency')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.baseCurrency) {
-          setBaseCurrency(data.baseCurrency);
-          setViewCurrency(data.baseCurrency);
-        }
-      })
-      .catch(() => {
-        // Use default INR
-      });
-  }, []);
-
-  /** Format an amount, optionally converting from a quote's currency to viewCurrency */
+  /** Format an amount, converting from the quote's currency to viewCurrency */
   const fmtCurrency = (amount: number, quote?: Quote) => {
-    if (quote && quote.currency && quote.currency !== viewCurrency) {
-      const converted = convertToViewCurrency(amount, quote, viewCurrency);
-      return formatCurrency(converted, viewCurrency);
-    }
-    return formatCurrency(amount, viewCurrency);
+    return fmt(amount, quote?.currency || baseCurrency);
   };
 
   // ============================================================
@@ -374,15 +346,15 @@ export function QuotesView() {
   // ============================================================
 
   const stats = useMemo(() => {
-    const totalValue = quotes.reduce((s, q) => s + convertToViewCurrency(q.total, q, viewCurrency), 0);
-    const acceptedValue = quotes.filter((q) => q.status === 'accepted').reduce((s, q) => s + convertToViewCurrency(q.total, q, viewCurrency), 0);
-    const sentValue = quotes.filter((q) => q.status === 'sent').reduce((s, q) => s + convertToViewCurrency(q.total, q, viewCurrency), 0);
+    const totalValue = quotes.reduce((s, q) => s + convert(q.total, q.currency || baseCurrency), 0);
+    const acceptedValue = quotes.filter((q) => q.status === 'accepted').reduce((s, q) => s + convert(q.total, q.currency || baseCurrency), 0);
+    const sentValue = quotes.filter((q) => q.status === 'sent').reduce((s, q) => s + convert(q.total, q.currency || baseCurrency), 0);
     const draftCount = quotes.filter((q) => q.status === 'draft').length;
     const acceptanceRate = quotes.length > 0
       ? Math.round((quotes.filter((q) => q.status === 'accepted').length / quotes.length) * 100)
       : 0;
     return { totalValue, acceptedValue, sentValue, draftCount, acceptanceRate };
-  }, [quotes, viewCurrency]);
+  }, [quotes, viewCurrency, baseCurrency, convert]);
 
   // ============================================================
   // Form calculations
@@ -640,11 +612,11 @@ export function QuotesView() {
                 <span>{viewCurrency}</span>
               </SelectTrigger>
               <SelectContent>
-                {VIEW_CURRENCY_OPTIONS.map((c) => (
-                  <SelectItem key={c} value={c}>
+                {currencyOptions.map((c) => (
+                  <SelectItem key={c.code} value={c.code}>
                     <span className="flex items-center gap-1.5">
-                      <span className="text-xs">{currencySymbol(c)}</span>
-                      <span>{c}</span>
+                      <span className="text-xs">{c.symbol}</span>
+                      <span>{c.code}</span>
                     </span>
                   </SelectItem>
                 ))}
@@ -660,9 +632,9 @@ export function QuotesView() {
       {/* ── Stats ────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { title: 'Total Value', value: formatCurrency(stats.totalValue, viewCurrency), icon: DollarSign, color: 'text-emerald-500', bg: 'bg-emerald-50' },
-          { title: 'Accepted', value: formatCurrency(stats.acceptedValue, viewCurrency), icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-50' },
-          { title: 'Pending', value: formatCurrency(stats.sentValue, viewCurrency), icon: Clock, color: 'text-blue-500', bg: 'bg-blue-50' },
+          { title: 'Total Value', value: fmt(stats.totalValue, viewCurrency), icon: DollarSign, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+          { title: 'Accepted', value: fmt(stats.acceptedValue, viewCurrency), icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-50' },
+          { title: 'Pending', value: fmt(stats.sentValue, viewCurrency), icon: Clock, color: 'text-blue-500', bg: 'bg-blue-50' },
           { title: 'Acceptance Rate', value: `${stats.acceptanceRate}%`, icon: Calculator, color: 'text-purple-500', bg: 'bg-purple-50' },
         ].map((stat) => {
           const Icon = stat.icon;
@@ -914,7 +886,7 @@ export function QuotesView() {
                         <SelectContent>
                           {MOCK_SERVICE_CATALOG.map((s) => (
                             <SelectItem key={s.id} value={s.id}>
-                              {s.name} — {formatCurrency(s.basePrice, viewCurrency)}
+                              {s.name} — {fmt(s.basePrice, baseCurrency)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -934,7 +906,7 @@ export function QuotesView() {
                         placeholder="Price"
                       />
                       <div className="text-right text-sm font-medium pr-1">
-                        {formatCurrency(item.price * item.quantity, viewCurrency)}
+                        {fmt(item.price * item.quantity, baseCurrency)}
                       </div>
                       <Button
                         variant="ghost" size="icon"
@@ -1016,7 +988,7 @@ export function QuotesView() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="fixed">Fixed Amount ({currencySymbol(viewCurrency)})</SelectItem>
+                        <SelectItem value="fixed">Fixed Amount ({currencySymbol(baseCurrency)})</SelectItem>
                         <SelectItem value="percentage">Percentage (%)</SelectItem>
                       </SelectContent>
                     </Select>
@@ -1048,7 +1020,7 @@ export function QuotesView() {
                     className="h-8 text-sm w-24"
                   />
                   <span className="text-sm text-muted-foreground">% rate</span>
-                  <span className="text-sm ml-auto font-medium">{formatCurrency(formSummary.tax, viewCurrency)}</span>
+                  <span className="text-sm ml-auto font-medium">{fmt(formSummary.tax, baseCurrency)}</span>
                 </div>
               </div>
 
@@ -1061,22 +1033,22 @@ export function QuotesView() {
                 </h4>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Subtotal (services + add-ons)</span>
-                  <span className="font-medium">{formatCurrency(formSummary.subtotal, viewCurrency)}</span>
+                  <span className="font-medium">{fmt(formSummary.subtotal, baseCurrency)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">
                     Discount {form.discountType === 'percentage' ? `(${form.discountValue}%)` : ''}
                   </span>
-                  <span className="font-medium text-red-600">-{formatCurrency(formSummary.discount, viewCurrency)}</span>
+                  <span className="font-medium text-red-600">-{fmt(formSummary.discount, baseCurrency)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Tax ({form.taxRate}%)</span>
-                  <span className="font-medium">+{formatCurrency(formSummary.tax, viewCurrency)}</span>
+                  <span className="font-medium">+{fmt(formSummary.tax, baseCurrency)}</span>
                 </div>
                 <Separator />
                 <div className="flex justify-between text-base font-bold">
                   <span>Total</span>
-                  <span className="text-emerald-700">{formatCurrency(formSummary.total, viewCurrency)}</span>
+                  <span className="text-emerald-700">{fmt(formSummary.total, baseCurrency)}</span>
                 </div>
               </div>
 

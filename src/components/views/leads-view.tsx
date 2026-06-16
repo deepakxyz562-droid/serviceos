@@ -40,7 +40,7 @@ import { useAppStore } from '@/store/app-store';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { formatCurrencyCompact } from '@/lib/currency';
+
 import { useBaseCurrency } from '@/hooks/use-base-currency';
 
 // ============================================================
@@ -266,7 +266,7 @@ function mapToKanbanStatus(status: string): string {
 // ============================================================
 
 export function LeadsView() {
-  const { baseCurrency } = useBaseCurrency();
+  const { baseCurrency, formatCompact, viewCurrency, setViewCurrency, currencyOptions } = useBaseCurrency();
 
   // Data state
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -696,7 +696,7 @@ export function LeadsView() {
         {lead.value > 0 && (
           <div className="flex items-center gap-1 text-sm font-semibold text-emerald-700">
             <DollarSign className="size-3.5" />
-            {formatCurrencyCompact(lead.value, baseCurrency)}
+            {formatCompact(lead.value)}
           </div>
         )}
 
@@ -756,7 +756,7 @@ export function LeadsView() {
                     </Badge>
                   </div>
                   {columnValue > 0 && (
-                    <span className="text-xs opacity-80">{formatCurrencyCompact(columnValue, baseCurrency)}</span>
+                    <span className="text-xs opacity-80">{formatCompact(columnValue)}</span>
                   )}
                 </div>
                 {/* Column body */}
@@ -864,7 +864,7 @@ export function LeadsView() {
                       </TableCell>
                       <TableCell>{renderStatusBadge(lead.status)}</TableCell>
                       <TableCell className="hidden md:table-cell font-medium text-sm">
-                        {lead.value > 0 ? formatCurrencyCompact(lead.value, baseCurrency) : '—'}
+                        {lead.value > 0 ? formatCompact(lead.value) : '—'}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
                         {formatDateShort(lead.createdAt)}
@@ -1179,7 +1179,7 @@ export function LeadsView() {
                   <DollarSign className="size-4 text-muted-foreground" />
                   <div>
                     <p className="text-xs text-muted-foreground">Value</p>
-                    <p className="font-semibold text-emerald-700">{formatCurrencyCompact(selectedLead.value, baseCurrency)}</p>
+                    <p className="font-semibold text-emerald-700">{formatCompact(selectedLead.value)}</p>
                   </div>
                 </div>
               )}
@@ -1368,7 +1368,7 @@ export function LeadsView() {
                 <p className="font-medium text-sm">{convertingLead.name}</p>
                 <p className="text-xs text-muted-foreground">{convertingLead.phone}</p>
                 {convertingLead.value > 0 && (
-                  <p className="text-sm font-semibold text-emerald-700">{formatCurrencyCompact(convertingLead.value, baseCurrency)}</p>
+                  <p className="text-sm font-semibold text-emerald-700">{formatCompact(convertingLead.value)}</p>
                 )}
                 {convertingLead.serviceType && (
                   <p className="text-xs text-muted-foreground">{getServiceTypeLabel(convertingLead.serviceType)}</p>
@@ -1436,6 +1436,16 @@ export function LeadsView() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Select value={viewCurrency} onValueChange={setViewCurrency}>
+            <SelectTrigger className="w-[80px] h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {currencyOptions.map(c => (
+                <SelectItem key={c.code} value={c.code}>{c.symbol} {c.code}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           {/* View toggle */}
           <div className="flex items-center border rounded-lg p-0.5">
             <Button
@@ -1472,7 +1482,7 @@ export function LeadsView() {
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
         {[
           { label: 'Total Leads', value: totalLeads, icon: Target, color: 'text-foreground' },
-          { label: 'Pipeline Value', value: formatCurrencyCompact(leads.reduce((s, l) => s + (l.value || 0), 0), baseCurrency), icon: DollarSign, color: 'text-emerald-600' },
+          { label: 'Pipeline Value', value: formatCompact(leads.reduce((s, l) => s + (l.value || 0), 0)), icon: DollarSign, color: 'text-emerald-600' },
           { label: 'Won', value: leads.filter(l => l.status === 'won').length, icon: CheckCircle2, color: 'text-green-600' },
           { label: 'Conversion Rate', value: leads.length > 0 ? `${Math.round(leads.filter(l => l.status === 'won').length / leads.length * 100)}%` : '0%', icon: TrendingUp, color: 'text-purple-600' },
         ].map(stat => {

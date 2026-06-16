@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo } from 'react';
 import {
   FileText,
   Plus,
@@ -54,7 +54,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
-import { formatCurrency, convertCurrency, CURRENCIES as SHARED_CURRENCIES, currencySymbol, getExchangeRate } from '@/lib/currency';
+import { formatCurrency, currencySymbol, getExchangeRate } from '@/lib/currency';
+import { useBaseCurrency } from '@/hooks/use-base-currency';
 
 // ============================================================
 // Types
@@ -122,7 +123,6 @@ const CUSTOMERS = [
   { id: 'c8', name: 'Joshi Home Care' },
 ];
 
-const VIEW_CURRENCY_OPTIONS = ['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD'];
 
 const MOCK_INVOICES: Invoice[] = [
   {
@@ -343,15 +343,6 @@ function calcTotal(subtotal: number, taxPercent: number, discount: number): numb
   return subtotal + tax - discount;
 }
 
-/**
- * Convert an amount from the invoice's original currency to the view currency.
- * Uses the stored exchange rate if available, otherwise uses current rates.
- */
-function convertToViewCurrency(amount: number, invoice: Invoice, viewCurrency: string): number {
-  const invoiceCurrency = invoice.currency || 'INR';
-  return convertCurrency(amount, invoiceCurrency, viewCurrency, invoice.exchangeRate);
-}
-
 // ============================================================
 // Component
 // ============================================================
@@ -377,31 +368,8 @@ export function InvoicesView() {
   const [form, setForm] = useState<InvoiceFormData>(EMPTY_FORM());
   const [saving, setSaving] = useState(false);
 
-  // Currency state
-  const [viewCurrency, setViewCurrency] = useState<string>('INR');
-  const [baseCurrency, setBaseCurrency] = useState<string>('INR');
-  const baseCurrencyFetched = useRef(false);
-
-  // Fetch tenant base currency on mount
-  useEffect(() => {
-    if (baseCurrencyFetched.current) return;
-    baseCurrencyFetched.current = true;
-
-    fetch('/api/settings/currency')
-      .then((res) => {
-        if (!res.ok) throw new Error('Failed to fetch');
-        return res.json();
-      })
-      .then((data) => {
-        if (data?.baseCurrency) {
-          setBaseCurrency(data.baseCurrency);
-          setViewCurrency(data.baseCurrency);
-        }
-      })
-      .catch(() => {
-        // Silently use default INR
-      });
-  }, []);
+  // Currency from hook
+  const { format: fmt, convert, viewCurrency, setViewCurrency, baseCurrency, currencyOptions } = useBaseCurrency();
 
   // ============================================================
   // Filtered & sorted invoices
@@ -450,13 +418,13 @@ export function InvoicesView() {
   // ============================================================
 
   const stats = useMemo(() => {
-    const totalRevenue = invoices.reduce((s, i) => s + convertToViewCurrency(i.total, i, viewCurrency), 0);
-    const paidAmount = invoices.filter((i) => i.status === 'paid').reduce((s, i) => s + convertToViewCurrency(i.total, i, viewCurrency), 0);
-    const sentAmount = invoices.filter((i) => i.status === 'sent').reduce((s, i) => s + convertToViewCurrency(i.total, i, viewCurrency), 0);
-    const overdueAmount = invoices.filter((i) => i.status === 'overdue').reduce((s, i) => s + convertToViewCurrency(i.total, i, viewCurrency), 0);
+    const totalRevenue = invoices.reduce((s, i) => s + convert(i.total, i.currency || baseCurrency), 0);
+    const paidAmount = invoices.filter((i) => i.status === 'paid').reduce((s, i) => s + convert(i.total, i.currency || baseCurrency), 0);
+    const sentAmount = invoices.filter((i) => i.status === 'sent').reduce((s, i) => s + convert(i.total, i.currency || baseCurrency), 0);
+    const overdueAmount = invoices.filter((i) => i.status === 'overdue').reduce((s, i) => s + convert(i.total, i.currency || baseCurrency), 0);
     const draftCount = invoices.filter((i) => i.status === 'draft').length;
     return { totalRevenue, paidAmount, sentAmount, overdueAmount, draftCount };
-  }, [invoices, viewCurrency]);
+  }, [invoices, viewCurrency, baseCurrency, convert]);
 
   // ============================================================
   // Handlers
@@ -611,14 +579,10 @@ export function InvoicesView() {
 
   /**
    * Format a monetary amount from an invoice in the current view currency.
-   * Handles conversion from the invoice's original currency to the view currency.
+   * Uses the hook's format which auto-converts from sourceCurrency to viewCurrency.
    */
   const fmtCurrency = (amount: number, invoice?: Invoice) => {
-    if (invoice && invoice.currency && invoice.currency !== viewCurrency) {
-      const converted = convertToViewCurrency(amount, invoice, viewCurrency);
-      return formatCurrency(converted, viewCurrency);
-    }
-    return formatCurrency(amount, viewCurrency);
+    return fmt(amount, invoice?.currency || baseCurrency);
   };
 
   // ============================================================
@@ -652,11 +616,11 @@ export function InvoicesView() {
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {VIEW_CURRENCY_OPTIONS.map((code) => (
-                  <SelectItem key={code} value={code}>
+                {currencyOptions.map((c) => (
+                  <SelectItem key={c.code} value={c.code}>
                     <span className="flex items-center gap-1.5">
-                      <span className="font-medium">{currencySymbol(code)}</span>
-                      <span>{code}</span>
+                      <span className="font-medium">{c.symbol}</span>
+                      <span>{c.code}</span>
                     </span>
                   </SelectItem>
                 ))}
@@ -672,10 +636,10 @@ export function InvoicesView() {
       {/* ── Stats ────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { title: 'Total Revenue', value: formatCurrency(stats.totalRevenue, viewCurrency), icon: DollarSign, color: 'text-emerald-500', bg: 'bg-emerald-50' },
-          { title: 'Pending', value: formatCurrency(stats.sentAmount, viewCurrency), icon: Clock, color: 'text-blue-500', bg: 'bg-blue-50' },
-          { title: 'Paid', value: formatCurrency(stats.paidAmount, viewCurrency), icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-50' },
-          { title: 'Overdue', value: formatCurrency(stats.overdueAmount, viewCurrency), icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-50' },
+          { title: 'Total Revenue', value: fmt(stats.totalRevenue, viewCurrency), icon: DollarSign, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+          { title: 'Pending', value: fmt(stats.sentAmount, viewCurrency), icon: Clock, color: 'text-blue-500', bg: 'bg-blue-50' },
+          { title: 'Paid', value: fmt(stats.paidAmount, viewCurrency), icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-50' },
+          { title: 'Overdue', value: fmt(stats.overdueAmount, viewCurrency), icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-50' },
         ].map((stat) => {
           const Icon = stat.icon;
           return (
@@ -890,7 +854,7 @@ export function InvoicesView() {
                   <div className="grid grid-cols-[1fr_70px_90px_90px_32px] gap-2 text-xs font-medium text-muted-foreground px-1">
                     <span>Description</span>
                     <span>Qty</span>
-                    <span>Rate ({currencySymbol(viewCurrency)})</span>
+                    <span>Rate ({currencySymbol(baseCurrency)})</span>
                     <span className="text-right">Amount</span>
                     <span></span>
                   </div>
@@ -921,7 +885,7 @@ export function InvoicesView() {
                         className="h-8 text-sm"
                       />
                       <div className="text-right text-sm font-medium pr-1">
-                        {formatCurrency(item.quantity * item.rate, viewCurrency)}
+                        {fmt(item.quantity * item.rate, baseCurrency)}
                       </div>
                       <Button
                         variant="ghost"
@@ -944,7 +908,7 @@ export function InvoicesView() {
                 <div className="w-full max-w-xs space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Subtotal</span>
-                    <span className="font-medium">{formatCurrency(formSubtotal, viewCurrency)}</span>
+                    <span className="font-medium">{fmt(formSubtotal, baseCurrency)}</span>
                   </div>
                   <div className="flex justify-between items-center gap-3 text-sm">
                     <span className="text-muted-foreground">Tax</span>
@@ -958,7 +922,7 @@ export function InvoicesView() {
                         className="h-7 w-16 text-sm text-right"
                       />
                       <span className="text-muted-foreground">%</span>
-                      <span className="font-medium ml-2">{formatCurrency(formTax, viewCurrency)}</span>
+                      <span className="font-medium ml-2">{fmt(formTax, baseCurrency)}</span>
                     </div>
                   </div>
                   <div className="flex justify-between items-center gap-3 text-sm">
@@ -971,13 +935,13 @@ export function InvoicesView() {
                         onChange={(e) => setForm((prev) => ({ ...prev, discount: parseFloat(e.target.value) || 0 }))}
                         className="h-7 w-20 text-sm text-right"
                       />
-                      <span className="font-medium ml-2">-{formatCurrency(form.discount, viewCurrency)}</span>
+                      <span className="font-medium ml-2">-{fmt(form.discount, baseCurrency)}</span>
                     </div>
                   </div>
                   <Separator />
                   <div className="flex justify-between text-base font-bold">
                     <span>Total</span>
-                    <span className="text-emerald-700">{formatCurrency(formTotal, viewCurrency)}</span>
+                    <span className="text-emerald-700">{fmt(formTotal, baseCurrency)}</span>
                   </div>
                 </div>
               </div>

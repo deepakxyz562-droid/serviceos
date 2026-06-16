@@ -49,7 +49,6 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
-import { formatCurrency as formatCurrencyShared } from '@/lib/currency';
 import { useBaseCurrency } from '@/hooks/use-base-currency';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -347,7 +346,7 @@ function TableSkeleton({ rows = 5 }: { rows?: number }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export function SuperAdminView() {
-  const { baseCurrency } = useBaseCurrency();
+  const { format, viewCurrency, setViewCurrency, currencyOptions } = useBaseCurrency();
   const [activeTab, setActiveTab] = useState('dashboard');
   const { auth, setCurrentView } = useAppStore();
   const queryClient = useQueryClient();
@@ -500,8 +499,8 @@ export function SuperAdminView() {
     const kpiCards = [
       { label: 'Total Tenants', value: stats?.totalTenants ?? 0, icon: Building2, trend: stats?.trends?.tenants, color: 'emerald' },
       { label: 'Active Users', value: stats?.activeUsers ?? stats?.totalUsers ?? 0, icon: Users, trend: stats?.trends?.users, color: 'sky' },
-      { label: 'MRR', value: formatCurrencyShared(stats?.mrr ?? 0, baseCurrency), icon: DollarSign, trend: stats?.trends?.revenue, color: 'emerald', isFormatted: true },
-      { label: 'ARR', value: formatCurrencyShared(stats?.arr ?? 0, baseCurrency), icon: TrendingUp, trend: null, color: 'teal', isFormatted: true },
+      { label: 'MRR', value: format(stats?.mrr ?? 0, 'USD'), icon: DollarSign, trend: stats?.trends?.revenue, color: 'emerald', isFormatted: true },
+      { label: 'ARR', value: format(stats?.arr ?? 0, 'USD'), icon: TrendingUp, trend: null, color: 'teal', isFormatted: true },
       { label: 'Churn Rate', value: `${stats?.avgChurnRate ?? 0}%`, icon: TrendingDown, trend: null, color: stats?.avgChurnRate && stats.avgChurnRate > 5 ? 'red' : 'emerald', isFormatted: true },
     ];
 
@@ -824,7 +823,7 @@ export function SuperAdminView() {
                           {tenant.suspendedAt ? 'suspended' : tenant.planStatus}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right text-slate-300">{formatCurrencyShared(tenant.mrr, baseCurrency)}</TableCell>
+                      <TableCell className="text-right text-slate-300">{format(tenant.mrr, 'USD')}</TableCell>
                       <TableCell className="text-center text-slate-300">{tenant.userCount}</TableCell>
                       <TableCell className="text-slate-400 text-sm">{formatDate(tenant.createdAt)}</TableCell>
                       <TableCell className="text-right">
@@ -918,7 +917,7 @@ export function SuperAdminView() {
                   <div><p className="text-xs text-slate-400">Email</p><p className="font-medium">{viewTenant.email || '—'}</p></div>
                   <div><p className="text-xs text-slate-400">Plan</p><Badge variant="outline" className={cn('capitalize text-xs', getPlanBadge(viewTenant.plan))}>{viewTenant.plan}</Badge></div>
                   <div><p className="text-xs text-slate-400">Status</p><Badge variant="outline" className={cn('capitalize text-xs', getStatusBadge(viewTenant.suspendedAt ? 'suspended' : viewTenant.planStatus))}>{viewTenant.suspendedAt ? 'suspended' : viewTenant.planStatus}</Badge></div>
-                  <div><p className="text-xs text-slate-400">MRR</p><p className="font-medium">{formatCurrencyShared(viewTenant.mrr, baseCurrency)}</p></div>
+                  <div><p className="text-xs text-slate-400">MRR</p><p className="font-medium">{format(viewTenant.mrr, 'USD')}</p></div>
                   <div><p className="text-xs text-slate-400">Users</p><p className="font-medium">{viewTenant.userCount}</p></div>
                   <div><p className="text-xs text-slate-400">Industry</p><p className="font-medium">{viewTenant.industry || '—'}</p></div>
                   <div><p className="text-xs text-slate-400">Created</p><p className="font-medium">{formatDate(viewTenant.createdAt)}</p></div>
@@ -1149,7 +1148,7 @@ export function SuperAdminView() {
                         <TableCell className="font-medium text-white">{sub.tenantName}</TableCell>
                         <TableCell><Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadge(sub.plan))}>{sub.plan}</Badge></TableCell>
                         <TableCell><Badge variant="outline" className={cn('capitalize text-[10px]', getStatusBadge(sub.status))}>{sub.status}</Badge></TableCell>
-                        <TableCell className="text-right text-slate-300">{formatCurrencyShared(sub.amount, baseCurrency)}</TableCell>
+                        <TableCell className="text-right text-slate-300">{format(sub.amount, 'USD')}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
                             {sub.status === 'active' && (
@@ -1934,6 +1933,16 @@ export function SuperAdminView() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Select value={viewCurrency} onValueChange={setViewCurrency}>
+            <SelectTrigger className="w-[80px] h-8 text-xs border-slate-700 bg-slate-900 text-slate-300">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {currencyOptions.map(c => (
+                <SelectItem key={c.code} value={c.code}>{c.symbol} {c.code}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button variant="outline" size="sm" onClick={() => { refetchStats(); refetchTenants(); }} className="min-h-[36px] border-slate-700 text-slate-300 hover:text-white">
             <RefreshCw className="size-4 mr-1.5" /> Refresh
           </Button>

@@ -15,7 +15,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { formatCurrency as formatCurrencyShared } from '@/lib/currency';
 import { useBaseCurrency } from '@/hooks/use-base-currency';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -151,7 +150,7 @@ function getSourceLabel(source: string): string {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function MarketingAnalyticsView() {
-  const { baseCurrency } = useBaseCurrency();
+  const { format, viewCurrency, setViewCurrency, currencyOptions } = useBaseCurrency();
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -233,7 +232,7 @@ export function MarketingAnalyticsView() {
     { label: 'Reply Rate', value: `${overview.replyRate}%`, icon: MessageSquare, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-950/50' },
     { label: 'Click Rate', value: `${overview.clickRate}%`, icon: MousePointer, color: 'text-orange-600', bg: 'bg-orange-50 dark:bg-orange-950/50' },
     { label: 'Conversion Rate', value: `${overview.conversionRate}%`, icon: Target, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/50' },
-    { label: 'Revenue Generated', value: formatCurrencyShared(overview.totalRevenue, baseCurrency), icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/50' },
+    { label: 'Revenue Generated', value: format(overview.totalRevenue), icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/50' },
     { label: 'Total Failed', value: formatNumber(overview.totalFailed), icon: ArrowDownRight, color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-950/50' },
   ];
 
@@ -262,6 +261,16 @@ export function MarketingAnalyticsView() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <Select value={viewCurrency} onValueChange={setViewCurrency}>
+            <SelectTrigger className="w-[80px] h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {currencyOptions.map(c => (
+                <SelectItem key={c.code} value={c.code}>{c.symbol} {c.code}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select value={period} onValueChange={setPeriod}>
             <SelectTrigger className="w-[140px]">
               <SelectValue />

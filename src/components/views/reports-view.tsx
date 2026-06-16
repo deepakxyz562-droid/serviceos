@@ -62,7 +62,7 @@ import {
   Line,
 } from 'recharts';
 import { toast } from 'sonner';
-import { formatCurrency, formatCurrencyCompact, currencySymbol } from '@/lib/currency';
+import { currencySymbol } from '@/lib/currency';
 import { useBaseCurrency } from '@/hooks/use-base-currency';
 
 // ============================================================
@@ -383,22 +383,14 @@ function StatCard({
 // Main Component
 // ============================================================
 
-const VIEW_CURRENCY_OPTIONS = ['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD'];
-
 export function ReportsView() {
-  const { baseCurrency } = useBaseCurrency();
+  const { format, formatCompact, viewCurrency, setViewCurrency, baseCurrency, currencyOptions } = useBaseCurrency();
   const [dateRange, setDateRange] = useState('30d');
   const [activeTab, setActiveTab] = useState('overview');
   const [analytics, setAnalytics] = useState<Record<string, unknown> | null>(null);
   const [loadedRange, setLoadedRange] = useState<string | null>(null);
-  const [viewCurrency, setViewCurrency] = useState<string>(baseCurrency);
 
   const loading = loadedRange !== dateRange;
-
-  // Sync viewCurrency when baseCurrency loads/changes
-  useEffect(() => {
-    setViewCurrency(baseCurrency);
-  }, [baseCurrency]);
 
   useEffect(() => {
     let cancelled = false;
@@ -494,8 +486,8 @@ export function ReportsView() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {VIEW_CURRENCY_OPTIONS.map(c => (
-                <SelectItem key={c} value={c}>{currencySymbol(c)} {c}</SelectItem>
+              {currencyOptions.map(c => (
+                <SelectItem key={c.code} value={c.code}>{c.symbol} {c.code}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -540,7 +532,7 @@ export function ReportsView() {
               <>
                 <StatCard
                   label="Total Revenue"
-                  value={formatCurrencyCompact(totalRevenue, viewCurrency)}
+                  value={formatCompact(totalRevenue, baseCurrency)}
                   icon={DollarSign}
                   iconBg="bg-emerald-50"
                   iconColor="text-emerald-600"
@@ -606,7 +598,7 @@ export function ReportsView() {
                       tickFormatter={(v: any) => `${currencySymbol(viewCurrency)}${(v / 1000).toFixed(0)}k`}
                     />
                     <ChartTooltip
-                      content={<ChartTooltipContent formatter={(value: any) => [formatCurrency(value, viewCurrency), 'Revenue']} />}
+                      content={<ChartTooltipContent formatter={(value: any) => [format(value, baseCurrency), 'Revenue']} />}
                     />
                     <Area
                       type="monotone"
@@ -776,7 +768,7 @@ export function ReportsView() {
               <>
                 <StatCard
                   label="Total Revenue"
-                  value={formatCurrencyCompact(totalRevenue, viewCurrency)}
+                  value={formatCompact(totalRevenue, baseCurrency)}
                   icon={DollarSign}
                   iconBg="bg-emerald-50"
                   iconColor="text-emerald-600"
@@ -784,7 +776,7 @@ export function ReportsView() {
                 />
                 <StatCard
                   label="Avg Job Value"
-                  value={formatCurrencyCompact(avgJobValue, viewCurrency)}
+                  value={formatCompact(avgJobValue, baseCurrency)}
                   icon={Activity}
                   iconBg="bg-teal-50"
                   iconColor="text-teal-600"
@@ -834,7 +826,7 @@ export function ReportsView() {
                       tickFormatter={(v: any) => `${currencySymbol(viewCurrency)}${(v / 1000).toFixed(0)}k`}
                     />
                     <ChartTooltip
-                      content={<ChartTooltipContent formatter={(value: any) => [formatCurrency(value, viewCurrency), 'Revenue']} />}
+                      content={<ChartTooltipContent formatter={(value: any) => [format(value, baseCurrency), 'Revenue']} />}
                     />
                     <Area
                       type="monotone"
@@ -884,7 +876,7 @@ export function ReportsView() {
                         width={80}
                       />
                       <ChartTooltip
-                        content={<ChartTooltipContent formatter={(value: any) => [formatCurrency(value, viewCurrency), 'Revenue']} />}
+                        content={<ChartTooltipContent formatter={(value: any) => [format(value, baseCurrency), 'Revenue']} />}
                       />
                       <Bar
                         dataKey="revenue"
@@ -927,7 +919,7 @@ export function ReportsView() {
                           ))}
                         </Pie>
                         <ChartTooltip
-                          content={<ChartTooltipContent formatter={(value: any, name: any) => [formatCurrency(value, viewCurrency), name]} />}
+                          content={<ChartTooltipContent formatter={(value: any, name: any) => [format(value, baseCurrency), name]} />}
                         />
                       </PieChart>
                     </ChartContainer>
@@ -941,7 +933,7 @@ export function ReportsView() {
                               <span className="text-sm">{item.source}</span>
                             </div>
                             <div className="flex items-center gap-3">
-                              <span className="text-sm font-medium">{formatCurrency(item.revenue, viewCurrency)}</span>
+                              <span className="text-sm font-medium">{format(item.revenue, baseCurrency)}</span>
                               <span className="text-xs text-muted-foreground">
                                 {((item.revenue / total) * 100).toFixed(0)}%
                               </span>

@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { useAppStore } from '@/store/app-store';
-import { formatCurrency as formatCurrencyShared, convertCurrency, currencySymbol } from '@/lib/currency';
+import { useBaseCurrency } from '@/hooks/use-base-currency';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -237,13 +237,18 @@ function JobProgressStepper({ status }: { status: string }) {
 
 // ─── Portal Experience Component (reused for both direct access & preview) ──
 
-const VIEW_CURRENCY_OPTIONS = ['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD'];
-
 function PortalExperience({ portalData, onRefresh, viewCurrency = 'INR' }: {
   portalData: PortalData;
   onRefresh?: () => void;
   viewCurrency?: string;
 }) {
+  const { format: fmt, baseCurrency, setViewCurrency: setHookViewCurrency } = useBaseCurrency();
+
+  // Sync prop viewCurrency with hook so fmt() uses the correct target currency
+  useEffect(() => {
+    setHookViewCurrency(viewCurrency);
+  }, [viewCurrency, setHookViewCurrency]);
+
   const [showReviewDialog, setShowReviewDialog] = useState(false);
   const [reviewJob, setReviewJob] = useState<Booking | null>(null);
   const [reviewRating, setReviewRating] = useState(5);
@@ -307,7 +312,7 @@ function PortalExperience({ portalData, onRefresh, viewCurrency = 'INR' }: {
   };
 
   const handlePayInvoice = (invoice: Invoice) => {
-    toast.info(`Payment for invoice ${invoice.number || invoice.id} — ${formatCurrencyShared(invoice.total, viewCurrency)}`);
+    toast.info(`Payment for invoice ${invoice.number || invoice.id} — ${fmt(invoice.total, baseCurrency)}`);
   };
 
   return (
@@ -524,12 +529,7 @@ function PortalExperience({ portalData, onRefresh, viewCurrency = 'INR' }: {
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1.5">
-                      <span className="text-lg font-bold text-gray-900">{formatCurrencyShared(invoice.total, viewCurrency)}</span>
-                      {viewCurrency !== 'INR' && (
-                        <span className="text-[10px] text-amber-600">
-                          ≈ {currencySymbol(viewCurrency)} {convertCurrency(invoice.total, 'INR', viewCurrency).toFixed(2)} converted
-                        </span>
-                      )}
+                      <span className="text-lg font-bold text-gray-900">{fmt(invoice.total, baseCurrency)}</span>
                       <div className="flex items-center gap-2">
                         <Badge variant="outline" className={`${getInvoiceStatusColor(invoice.status)} text-[10px]`}>
                           {invoice.status}
@@ -709,8 +709,8 @@ function PortalManagementView() {
   const { auth } = useAppStore();
   const tenantId = auth.user?.tenantId || null;
 
-  // View Currency
-  const [viewCurrency, setViewCurrency] = useState<string>('INR');
+  // View Currency from hook
+  const { viewCurrency, setViewCurrency, currencyOptions } = useBaseCurrency();
 
   // Customers
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -767,18 +767,6 @@ function PortalManagementView() {
       setSessionsLoading(false);
     }
   }, [tenantId]);
-
-  // Fetch tenant base currency on mount
-  useEffect(() => {
-    fetch('/api/settings/currency?XTransformPort=3000')
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.baseCurrency) {
-          setViewCurrency(data.baseCurrency);
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     fetchCustomers();
@@ -931,8 +919,8 @@ function PortalManagementView() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {VIEW_CURRENCY_OPTIONS.map(c => (
-                    <SelectItem key={c} value={c}>{currencySymbol(c)} {c}</SelectItem>
+                  {currencyOptions.map(c => (
+                    <SelectItem key={c.code} value={c.code}>{c.symbol} {c.code}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1329,7 +1317,7 @@ function DirectPortalView({ token }: { token: string }) {
   const [portalData, setPortalData] = useState<PortalData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [viewCurrency, setViewCurrency] = useState<string>('INR');
+  const { viewCurrency, setViewCurrency, currencyOptions } = useBaseCurrency();
 
   const fetchPortalData = useCallback(async () => {
     try {
@@ -1355,18 +1343,6 @@ function DirectPortalView({ token }: { token: string }) {
   useEffect(() => {
     fetchPortalData();
   }, [fetchPortalData]);
-
-  // Fetch tenant base currency on mount
-  useEffect(() => {
-    fetch('/api/settings/currency?XTransformPort=3000')
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.baseCurrency) {
-          setViewCurrency(data.baseCurrency);
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   if (loading) {
     return (
@@ -1415,8 +1391,8 @@ function DirectPortalView({ token }: { token: string }) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {VIEW_CURRENCY_OPTIONS.map(c => (
-                  <SelectItem key={c} value={c}>{currencySymbol(c)} {c}</SelectItem>
+                {currencyOptions.map(c => (
+                  <SelectItem key={c.code} value={c.code}>{c.symbol} {c.code}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
