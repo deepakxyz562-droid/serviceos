@@ -7,8 +7,15 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authUser = await getAuthUser()
+    if (!authUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
+
     const { id } = await params
-    const segment = await db.segment.findUnique({ where: { id } })
+    const segment = await db.segment.findFirst({
+      where: { id, tenantId: authUser.tenantId },
+    })
     if (!segment) {
       return NextResponse.json({ error: 'Segment not found' }, { status: 404 })
     }
@@ -25,10 +32,16 @@ export async function PUT(
 ) {
   try {
     const authUser = await getAuthUser()
+    if (!authUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
+
     const { id } = await params
     const body = await request.json()
 
-    const existing = await db.segment.findUnique({ where: { id } })
+    const existing = await db.segment.findFirst({
+      where: { id, tenantId: authUser.tenantId },
+    })
     if (!existing) {
       return NextResponse.json({ error: 'Segment not found' }, { status: 404 })
     }
@@ -53,9 +66,16 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authUser = await getAuthUser()
+    if (!authUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
+
     const { id } = await params
 
-    const existing = await db.segment.findUnique({ where: { id } })
+    const existing = await db.segment.findFirst({
+      where: { id, tenantId: authUser.tenantId },
+    })
     if (!existing) {
       return NextResponse.json({ error: 'Segment not found' }, { status: 404 })
     }

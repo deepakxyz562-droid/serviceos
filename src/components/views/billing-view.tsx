@@ -49,6 +49,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { formatCurrency as formatCurrencyShared } from '@/lib/currency';
+import { useBaseCurrency } from '@/hooks/use-base-currency';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -360,7 +361,7 @@ function PayPalCheckoutDialog({
         throw new Error(data.error || 'Failed to capture payment');
       }
       toast.success(`Successfully upgraded to ${plan.name} plan!`, {
-        description: `Payment of ${formatCurrencyShared(price, 'INR')} processed via PayPal`,
+        description: `Payment of ${formatCurrencyShared(price, baseCurrency)} processed via PayPal`,
       });
       onSuccess();
     } catch (err) {
@@ -402,7 +403,7 @@ function PayPalCheckoutDialog({
             <div className="flex justify-between">
               <span className="font-semibold">Total</span>
               <span className="text-lg font-bold text-emerald-600">
-                {formatCurrencyShared(price, 'INR')}<span className="text-sm text-muted-foreground font-normal">/{billingCycle === 'yearly' ? 'year' : 'month'}</span>
+                {formatCurrencyShared(price, baseCurrency)}<span className="text-sm text-muted-foreground font-normal">/{billingCycle === 'yearly' ? 'year' : 'month'}</span>
               </span>
             </div>
           </div>
@@ -542,6 +543,7 @@ function PayPalCheckoutDialog({
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export function BillingView() {
+  const { baseCurrency } = useBaseCurrency();
   const [data, setData] = useState<SubscriptionData>(FALLBACK_DATA);
   const [isYearly, setIsYearly] = useState(data.billingCycle === 'yearly');
   const [confirmPlan, setConfirmPlan] = useState<Plan | null>(null);
@@ -698,7 +700,7 @@ export function BillingView() {
               </CardTitle>
               <CardDescription className="mt-1">
                 {currentPlanData?.name} · {data.billingCycle === 'yearly' ? 'Yearly' : 'Monthly'} billing
-                {currentPrice > 0 && <span className="font-semibold text-foreground"> · {formatCurrencyShared(currentPrice, 'INR')}/{data.billingCycle === 'yearly' ? 'year' : 'month'}</span>}
+                {currentPrice > 0 && <span className="font-semibold text-foreground"> · {formatCurrencyShared(currentPrice, baseCurrency)}/{data.billingCycle === 'yearly' ? 'year' : 'month'}</span>}
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
@@ -833,13 +835,13 @@ export function BillingView() {
                     <p className="text-3xl font-bold">Custom</p>
                   ) : (
                     <>
-                      <span className="text-3xl font-bold">{formatCurrencyShared(price, 'INR')}</span>
+                      <span className="text-3xl font-bold">{formatCurrencyShared(price, baseCurrency)}</span>
                       <span className="text-sm text-muted-foreground">
                         /{isYearly ? 'year' : 'month'}
                       </span>
                       {isYearly && plan.monthlyPrice > 0 && (
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {formatCurrencyShared(Math.round(plan.yearlyPrice / 12), 'INR')}/mo billed annually
+                          {formatCurrencyShared(Math.round(plan.yearlyPrice / 12), baseCurrency)}/mo billed annually
                         </p>
                       )}
                     </>
@@ -1020,7 +1022,7 @@ export function BillingView() {
                       {record.description}
                     </TableCell>
                     <TableCell className="text-right text-sm">
-                      {formatCurrencyShared(record.amount, 'INR')}
+                      {formatCurrencyShared(record.amount, baseCurrency)}
                     </TableCell>
                     <TableCell className="text-center">
                       <span

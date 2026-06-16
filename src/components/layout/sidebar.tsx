@@ -256,7 +256,15 @@ const superadminNavSections: NavSection[] = [
     items: [
       { view: 'omnichannel', label: 'Omnichannel', icon: Radio },
       { view: 'broadcast', label: 'Broadcast', icon: Radio },
+    ],
+  },
+  {
+    title: 'Marketing',
+    items: [
       { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
+      { view: 'segments', label: 'Segments', icon: Filter },
+      { view: 'retargeting', label: 'Retargeting', icon: RefreshCw },
+      { view: 'marketingAnalytics', label: 'Analytics', icon: BarChart3 },
     ],
   },
   {

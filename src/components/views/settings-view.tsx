@@ -55,6 +55,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAppStore } from '@/store/app-store';
 import { toast } from 'sonner';
 import { formatCurrency, currencySymbol, getExchangeRateTable, CURRENCIES as SHARED_CURRENCIES } from '@/lib/currency';
+import { invalidateCurrencyCache } from '@/hooks/use-base-currency';
 
 // ─── Event Webhook Types ──────────────────────────────────────────────────
 
@@ -424,6 +425,7 @@ export function SettingsView() {
         }),
       });
       if (res.ok) {
+        invalidateCurrencyCache(); // Currency may have changed – invalidate cache so other views pick up the change
         toast.success('Company profile saved successfully');
       } else {
         const err = await res.json();
@@ -795,6 +797,7 @@ export function SettingsView() {
         }),
       });
       if (res.ok) {
+        invalidateCurrencyCache(); // Invalidate cache so other views pick up the change
         toast.success('Currency settings saved successfully');
       } else {
         const err = await res.json();

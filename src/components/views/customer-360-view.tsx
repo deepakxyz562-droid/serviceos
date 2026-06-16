@@ -29,6 +29,7 @@ import {
   useBookings,
 } from '@/hooks/queries/use-supabase-queries';
 import { formatCurrency as formatCurrencyShared } from '@/lib/currency';
+import { useBaseCurrency } from '@/hooks/use-base-currency';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -478,6 +479,7 @@ type SortOption = 'name' | 'recent' | 'value';
 
 export function Customer360View() {
   const { auth } = useAppStore();
+  const { baseCurrency } = useBaseCurrency();
   const tenantId = auth?.tenant?.id;
 
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
@@ -985,7 +987,7 @@ export function Customer360View() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-emerald-500 shadow-sm">
                       <p className="text-lg font-extrabold text-emerald-500">
-                        {formatCurrencyShared(stats.totalRevenue, 'INR')}
+                        {formatCurrencyShared(stats.totalRevenue, baseCurrency)}
                       </p>
                       <p className="text-[10px] text-muted-foreground font-medium">Revenue</p>
                     </div>
@@ -1020,7 +1022,7 @@ export function Customer360View() {
                           <span className="text-xs text-destructive font-semibold">Outstanding Balance</span>
                         </div>
                         <span className="text-sm font-extrabold text-destructive">
-                          {formatCurrencyShared(stats.outstandingBalance, 'INR')}
+                          {formatCurrencyShared(stats.outstandingBalance, baseCurrency)}
                         </span>
                       </div>
                     </div>
@@ -1054,7 +1056,7 @@ export function Customer360View() {
                 />
                 <KpiCard
                   label="Total Revenue"
-                  value={formatCurrencyShared(stats.totalRevenue, 'INR')}
+                  value={formatCurrencyShared(stats.totalRevenue, baseCurrency)}
                   icon={DollarSign}
                   accent="text-emerald-400"
                   borderColor="border-l-emerald-500"
@@ -1078,7 +1080,7 @@ export function Customer360View() {
                 />
                 <KpiCard
                   label="Outstanding"
-                  value={formatCurrencyShared(stats.outstandingBalance, 'INR')}
+                  value={formatCurrencyShared(stats.outstandingBalance, baseCurrency)}
                   icon={AlertCircle}
                   accent={stats.outstandingBalance > 0 ? 'text-red-400' : 'text-muted-foreground'}
                   borderColor="border-l-red-500"
@@ -1200,7 +1202,7 @@ export function Customer360View() {
                               if (!i.paidAt) return false;
                               const diff = Date.now() - new Date(i.paidAt).getTime();
                               return diff < 30 * 24 * 60 * 60 * 1000 && i.status === 'paid';
-                            }).reduce((s, i) => s + (i.total || 0), 0), 'INR')}
+                            }).reduce((s, i) => s + (i.total || 0), 0), baseCurrency)}
                           </p>
                           <p className="text-[10px] text-muted-foreground">Revenue</p>
                         </div>
@@ -1724,7 +1726,7 @@ export function Customer360View() {
                                       </div>
                                       <div className="flex items-center gap-2 shrink-0">
                                         <span className="text-sm font-bold text-emerald-400">
-                                          {formatCurrencyShared(inv.total, 'INR')}
+                                          {formatCurrencyShared(inv.total, baseCurrency)}
                                         </span>
                                         <Badge
                                           variant="outline"
@@ -1771,7 +1773,7 @@ export function Customer360View() {
                                       </div>
                                       <div className="flex items-center gap-2 shrink-0">
                                         <span className="text-sm font-bold text-amber-400">
-                                          {formatCurrencyShared(inv.total, 'INR')}
+                                          {formatCurrencyShared(inv.total, baseCurrency)}
                                         </span>
                                         <Badge
                                           variant="outline"
@@ -1817,7 +1819,7 @@ export function Customer360View() {
                                       </div>
                                       <div className="flex items-center gap-2 shrink-0">
                                         <span className="text-sm font-bold text-red-400">
-                                          {formatCurrencyShared(inv.total, 'INR')}
+                                          {formatCurrencyShared(inv.total, baseCurrency)}
                                         </span>
                                         <Badge
                                           variant="outline"
@@ -1863,7 +1865,7 @@ export function Customer360View() {
                                       </div>
                                       <div className="flex items-center gap-2 shrink-0">
                                         <span className="text-sm font-bold text-muted-foreground">
-                                          {formatCurrencyShared(inv.total, 'INR')}
+                                          {formatCurrencyShared(inv.total, baseCurrency)}
                                         </span>
                                         <Badge
                                           variant="outline"
@@ -1907,11 +1909,11 @@ export function Customer360View() {
                               <p className="text-[10px] text-muted-foreground font-medium">Total Orders</p>
                             </div>
                             <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-emerald-500 shadow-sm">
-                              <p className="text-lg font-extrabold text-emerald-500">{formatCurrencyShared(ecommerceStats.totalSpent, 'INR')}</p>
+                              <p className="text-lg font-extrabold text-emerald-500">{formatCurrencyShared(ecommerceStats.totalSpent, baseCurrency)}</p>
                               <p className="text-[10px] text-muted-foreground font-medium">Total Spent</p>
                             </div>
                             <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-sky-500 shadow-sm">
-                              <p className="text-lg font-extrabold text-foreground">{formatCurrencyShared(ecommerceStats.avgOrderValue, 'INR')}</p>
+                              <p className="text-lg font-extrabold text-foreground">{formatCurrencyShared(ecommerceStats.avgOrderValue, baseCurrency)}</p>
                               <p className="text-[10px] text-muted-foreground font-medium">Avg Order Value</p>
                             </div>
                           </div>
@@ -1934,7 +1936,7 @@ export function Customer360View() {
                                       </div>
                                     </div>
                                     <div className="text-right shrink-0">
-                                      <p className="text-sm font-semibold text-foreground">{formatCurrencyShared(order.total || 0, 'INR')}</p>
+                                      <p className="text-sm font-semibold text-foreground">{formatCurrencyShared(order.total || 0, baseCurrency)}</p>
                                       <p className="text-[10px] text-muted-foreground">{order.orderedAt ? new Date(order.orderedAt).toLocaleDateString() : ''}</p>
                                     </div>
                                   </div>

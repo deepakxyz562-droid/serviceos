@@ -63,6 +63,7 @@ import {
 } from 'recharts';
 import { toast } from 'sonner';
 import { formatCurrency, formatCurrencyCompact, currencySymbol } from '@/lib/currency';
+import { useBaseCurrency } from '@/hooks/use-base-currency';
 
 // ============================================================
 // Chart Configs
@@ -385,27 +386,19 @@ function StatCard({
 const VIEW_CURRENCY_OPTIONS = ['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD'];
 
 export function ReportsView() {
+  const { baseCurrency } = useBaseCurrency();
   const [dateRange, setDateRange] = useState('30d');
   const [activeTab, setActiveTab] = useState('overview');
   const [analytics, setAnalytics] = useState<Record<string, unknown> | null>(null);
   const [loadedRange, setLoadedRange] = useState<string | null>(null);
-  const [viewCurrency, setViewCurrency] = useState<string>('INR');
-  const [baseCurrency, setBaseCurrency] = useState<string>('INR');
+  const [viewCurrency, setViewCurrency] = useState<string>(baseCurrency);
 
   const loading = loadedRange !== dateRange;
 
-  // Fetch tenant's base currency on mount
+  // Sync viewCurrency when baseCurrency loads/changes
   useEffect(() => {
-    fetch('/api/settings/currency?XTransformPort=3000')
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.baseCurrency) {
-          setBaseCurrency(data.baseCurrency);
-          setViewCurrency(data.baseCurrency);
-        }
-      })
-      .catch(() => {});
-  }, []);
+    setViewCurrency(baseCurrency);
+  }, [baseCurrency]);
 
   useEffect(() => {
     let cancelled = false;

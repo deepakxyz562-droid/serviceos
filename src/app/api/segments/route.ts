@@ -1,16 +1,22 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { getAuthUser } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
+    const authUser = await getAuthUser()
+    if (!authUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
-    const tenantId = searchParams.get('tenantId')
     const type = searchParams.get('type')
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
 
-    const where: Record<string, unknown> = {}
-    if (tenantId) where.tenantId = tenantId
+    const where: Record<string, unknown> = {
+      tenantId: authUser.tenantId,
+    }
     if (type) where.type = type
 
     const skip = (page - 1) * limit
@@ -42,6 +48,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const authUser = await getAuthUser()
+    if (!authUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
+
     const body = await request.json()
 
     const segment = await db.segment.create({
@@ -56,7 +67,7 @@ export async function POST(request: NextRequest) {
         color: body.color,
         icon: body.icon,
         isDefault: body.isDefault || false,
-        tenantId: body.tenantId,
+        tenantId: authUser.tenantId,
         workspaceId: body.workspaceId,
       },
     })
