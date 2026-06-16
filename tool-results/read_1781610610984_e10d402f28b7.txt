@@ -1,0 +1,1099 @@
+     1→import { NextRequest, NextResponse } from 'next/server';
+     2→import { createClient } from '@supabase/supabase-js';
+     3→
+     4→// ── Configuration ──────────────────────────────────────────────────────────
+     5→
+     6→const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+     7→const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+     8→
+     9→function getAdminClient() {
+    10→  return createClient(supabaseUrl, supabaseServiceKey, {
+    11→    auth: { autoRefreshToken: false, persistSession: false },
+    12→  });
+    13→}
+    14→
+    15→// ── SQL Migration Script ───────────────────────────────────────────────────
+    16→
+    17→const SQL_MIGRATION = `-- ============================================
+    18→-- ServiceOS: Missing Tables Migration for Supabase
+    19→-- Generated: ${new Date().toISOString()}
+    20→-- ============================================
+    21→
+    22→-- 1. CommunicationProvider
+    23→CREATE TABLE IF NOT EXISTS "CommunicationProvider" (
+    24→  "id" TEXT PRIMARY KEY DEFAULT substring(replace(gen_random_uuid()::text, '-', ''), 1, 25),
+    25→  "name" TEXT NOT NULL,
+    26→  "type" TEXT NOT NULL,
+    27→  "provider" TEXT NOT NULL,
+    28→  "status" TEXT NOT NULL DEFAULT 'active',
+    29→  "configJson" TEXT NOT NULL DEFAULT '{}',
+    30→  "isDefault" BOOLEAN NOT NULL DEFAULT false,
+    31→  "sendingEnabled" BOOLEAN NOT NULL DEFAULT true,
+    32→  "dailyLimit" INTEGER NOT NULL DEFAULT 1000,
+    33→  "monthlyLimit" INTEGER NOT NULL DEFAULT 30000,
+    34→  "sentToday" INTEGER NOT NULL DEFAULT 0,
+    35→  "sentThisMonth" INTEGER NOT NULL DEFAULT 0,
+    36→  "totalSent" INTEGER NOT NULL DEFAULT 0,
+    37→  "totalDelivered" INTEGER NOT NULL DEFAULT 0,
+    38→  "totalFailed" INTEGER NOT NULL DEFAULT 0,
+    39→  "lastUsedAt" TIMESTAMPTZ,
+    40→  "lastError" TEXT,
+    41→  "tenantId" TEXT REFERENCES "Tenant"("id"),
+    42→  "workspaceId" TEXT,
+    43→  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    44→  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+    45→);
+    46→
+    47→CREATE INDEX IF NOT EXISTS "CommunicationProvider_type_idx" ON "CommunicationProvider"("type");
+    48→CREATE INDEX IF NOT EXISTS "CommunicationProvider_provider_idx" ON "CommunicationProvider"("provider");
+    49→CREATE INDEX IF NOT EXISTS "CommunicationProvider_status_idx" ON "CommunicationProvider"("status");
+    50→CREATE INDEX IF NOT EXISTS "CommunicationProvider_tenantId_idx" ON "CommunicationProvider"("tenantId");
+    51→
+    52→-- 2. Contact
+    53→CREATE TABLE IF NOT EXISTS "Contact" (
+    54→  "id" TEXT PRIMARY KEY DEFAULT substring(replace(gen_random_uuid()::text, '-', ''), 1, 25),
+    55→  "name" TEXT NOT NULL,
+    56→  "email" TEXT,
+    57→  "phone" TEXT,
+    58→  "company" TEXT,
+    59→  "tags" TEXT,
+    60→  "tenantId" TEXT NOT NULL REFERENCES "Tenant"("id"),
+    61→  "workspaceId" TEXT,
+    62→  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    63→  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+    64→);
+    65→
+    66→CREATE INDEX IF NOT EXISTS "Contact_tenantId_idx" ON "Contact"("tenantId");
+    67→CREATE INDEX IF NOT EXISTS "Contact_email_idx" ON "Contact"("email");
+    68→CREATE INDEX IF NOT EXISTS "Contact_phone_idx" ON "Contact"("phone");
+    69→CREATE INDEX IF NOT EXISTS "Contact_createdAt_idx" ON "Contact"("createdAt");
+    70→
+    71→-- 3. Form
+    72→CREATE TABLE IF NOT EXISTS "Form" (
+    73→  "id" TEXT PRIMARY KEY DEFAULT substring(replace(gen_random_uuid()::text, '-', ''), 1, 25),
+    74→  "name" TEXT NOT NULL,
+    75→  "description" TEXT,
+    76→  "type" TEXT NOT NULL DEFAULT 'lead_capture',
+    77→  "status" TEXT NOT NULL DEFAULT 'active',
+    78→  "fieldsJson" TEXT NOT NULL DEFAULT '[]',
+    79→  "submissionActions" TEXT NOT NULL DEFAULT '[]',
+    80→  "fieldMappingJson" TEXT NOT NULL DEFAULT '{}',
+    81→  "welcomeMessage" TEXT NOT NULL DEFAULT '',
+    82→  "completionMessage" TEXT NOT NULL DEFAULT '',
+    83→  "whatsappOwnerTemplate" TEXT NOT NULL DEFAULT '',
+    84→  "whatsappUserTemplate" TEXT NOT NULL DEFAULT '',
+    85→  "whatsappAiGenerated" BOOLEAN NOT NULL DEFAULT false,
+    86→  "embedScriptEnabled" BOOLEAN NOT NULL DEFAULT false,
+    87→  "embedIframeEnabled" BOOLEAN NOT NULL DEFAULT false,
+    88→  "slug" TEXT UNIQUE,
+    89→  "submissions" INTEGER NOT NULL DEFAULT 0,
+    90→  "conversionRate" DOUBLE PRECISION NOT NULL DEFAULT 0,
+    91→  "tenantId" TEXT REFERENCES "Tenant"("id"),
+    92→  "workspaceId" TEXT,
+    93→  "createdById" TEXT,
+    94→  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+    95→  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+    96→);
+    97→
+    98→CREATE INDEX IF NOT EXISTS "Form_tenantId_idx" ON "Form"("tenantId");
+    99→CREATE INDEX IF NOT EXISTS "Form_type_idx" ON "Form"("type");
+   100→CREATE INDEX IF NOT EXISTS "Form_status_idx" ON "Form"("status");
+   101→CREATE INDEX IF NOT EXISTS "Form_slug_idx" ON "Form"("slug");
+   102→
+   103→-- 4. FormResponse
+   104→CREATE TABLE IF NOT EXISTS "FormResponse" (
+   105→  "id" TEXT PRIMARY KEY DEFAULT substring(replace(gen_random_uuid()::text, '-', ''), 1, 25),
+   106→  "formId" TEXT NOT NULL REFERENCES "Form"("id") ON DELETE CASCADE,
+   107→  "dataJson" TEXT NOT NULL DEFAULT '{}',
+   108→  "respondent" TEXT,
+   109→  "respondentName" TEXT,
+   110→  "source" TEXT NOT NULL DEFAULT 'direct',
+   111→  "leadId" TEXT,
+   112→  "customerId" TEXT,
+   113→  "jobId" TEXT,
+   114→  "quoteId" TEXT,
+   115→  "bookingId" TEXT,
+   116→  "actionsResultsJson" TEXT NOT NULL DEFAULT '{}',
+   117→  "tenantId" TEXT,
+   118→  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+   119→);
+   120→
+   121→CREATE INDEX IF NOT EXISTS "FormResponse_formId_idx" ON "FormResponse"("formId");
+   122→CREATE INDEX IF NOT EXISTS "FormResponse_source_idx" ON "FormResponse"("source");
+   123→CREATE INDEX IF NOT EXISTS "FormResponse_tenantId_idx" ON "FormResponse"("tenantId");
+   124→CREATE INDEX IF NOT EXISTS "FormResponse_createdAt_idx" ON "FormResponse"("createdAt");
+   125→
+   126→-- 5. WorkflowAutomation
+   127→CREATE TABLE IF NOT EXISTS "WorkflowAutomation" (
+   128→  "id" TEXT PRIMARY KEY DEFAULT substring(replace(gen_random_uuid()::text, '-', ''), 1, 25),
+   129→  "name" TEXT NOT NULL,
+   130→  "description" TEXT,
+   131→  "triggerType" TEXT NOT NULL,
+   132→  "triggerConfigJson" TEXT NOT NULL DEFAULT '{}',
+   133→  "conditionsJson" TEXT NOT NULL DEFAULT '[]',
+   134→  "actionsJson" TEXT NOT NULL DEFAULT '[]',
+   135→  "active" BOOLEAN NOT NULL DEFAULT true,
+   136→  "executionCount" INTEGER NOT NULL DEFAULT 0,
+   137→  "lastExecutedAt" TIMESTAMPTZ,
+   138→  "lastExecutionStatus" TEXT,
+   139→  "tagsJson" TEXT NOT NULL DEFAULT '[]',
+   140→  "tenantId" TEXT REFERENCES "Tenant"("id"),
+   141→  "workspaceId" TEXT,
+   142→  "createdById" TEXT,
+   143→  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+   144→  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+   145→);
+   146→
+   147→CREATE INDEX IF NOT EXISTS "WorkflowAutomation_tenantId_idx" ON "WorkflowAutomation"("tenantId");
+   148→CREATE INDEX IF NOT EXISTS "WorkflowAutomation_triggerType_idx" ON "WorkflowAutomation"("triggerType");
+   149→CREATE INDEX IF NOT EXISTS "WorkflowAutomation_active_idx" ON "WorkflowAutomation"("active");
+   150→
+   151→-- 6. TriggerExecution
+   152→CREATE TABLE IF NOT EXISTS "TriggerExecution" (
+   153→  "id" TEXT PRIMARY KEY DEFAULT substring(replace(gen_random_uuid()::text, '-', ''), 1, 25),
+   154→  "automationId" TEXT NOT NULL REFERENCES "WorkflowAutomation"("id") ON DELETE CASCADE,
+   155→  "triggerEvent" TEXT NOT NULL,
+   156→  "triggerPayload" TEXT NOT NULL DEFAULT '{}',
+   157→  "conditionsMet" BOOLEAN NOT NULL DEFAULT true,
+   158→  "actionsResultsJson" TEXT NOT NULL DEFAULT '[]',
+   159→  "status" TEXT NOT NULL DEFAULT 'success',
+   160→  "error" TEXT,
+   161→  "durationMs" INTEGER,
+   162→  "tenantId" TEXT,
+   163→  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+   164→);
+   165→
+   166→CREATE INDEX IF NOT EXISTS "TriggerExecution_automationId_idx" ON "TriggerExecution"("automationId");
+   167→CREATE INDEX IF NOT EXISTS "TriggerExecution_triggerEvent_idx" ON "TriggerExecution"("triggerEvent");
+   168→CREATE INDEX IF NOT EXISTS "TriggerExecution_status_idx" ON "TriggerExecution"("status");
+   169→CREATE INDEX IF NOT EXISTS "TriggerExecution_tenantId_idx" ON "TriggerExecution"("tenantId");
+   170→CREATE INDEX IF NOT EXISTS "TriggerExecution_createdAt_idx" ON "TriggerExecution"("createdAt");
+   171→
+   172→-- ============================================
+   173→-- Row Level Security (RLS) Policies
+   174→-- ============================================
+   175→
+   176→-- Enable RLS on all new tables
+   177→ALTER TABLE "CommunicationProvider" ENABLE ROW LEVEL SECURITY;
+   178→ALTER TABLE "Contact" ENABLE ROW LEVEL SECURITY;
+   179→ALTER TABLE "Form" ENABLE ROW LEVEL SECURITY;
+   180→ALTER TABLE "FormResponse" ENABLE ROW LEVEL SECURITY;
+   181→ALTER TABLE "WorkflowAutomation" ENABLE ROW LEVEL SECURITY;
+   182→ALTER TABLE "TriggerExecution" ENABLE ROW LEVEL SECURITY;
+   183→
+   184→-- Service role can do everything (using service role key bypasses RLS, but add policy for clarity)
+   185→CREATE POLICY "Service role full access on CommunicationProvider" ON "CommunicationProvider" FOR ALL USING (true) WITH CHECK (true);
+   186→CREATE POLICY "Service role full access on Contact" ON "Contact" FOR ALL USING (true) WITH CHECK (true);
+   187→CREATE POLICY "Service role full access on Form" ON "Form" FOR ALL USING (true) WITH CHECK (true);
+   188→CREATE POLICY "Service role full access on FormResponse" ON "FormResponse" FOR ALL USING (true) WITH CHECK (true);
+   189→CREATE POLICY "Service role full access on WorkflowAutomation" ON "WorkflowAutomation" FOR ALL USING (true) WITH CHECK (true);
+   190→CREATE POLICY "Service role full access on TriggerExecution" ON "TriggerExecution" FOR ALL USING (true) WITH CHECK (true);
+   191→
+   192→-- Auto-update updatedAt trigger
+   193→CREATE OR REPLACE FUNCTION update_updated_at_column()
+   194→RETURNS TRIGGER AS $$
+   195→BEGIN
+   196→  NEW."updatedAt" = now();
+   197→  RETURN NEW;
+   198→END;
+   199→$$ LANGUAGE plpgsql;
+   200→
+   201→-- Apply updatedAt triggers
+   202→DROP TRIGGER IF EXISTS set_CommunicationProvider_updatedAt ON "CommunicationProvider";
+   203→CREATE TRIGGER set_CommunicationProvider_updatedAt
+   204→  BEFORE UPDATE ON "CommunicationProvider"
+   205→  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+   206→
+   207→DROP TRIGGER IF EXISTS set_Contact_updatedAt ON "Contact";
+   208→CREATE TRIGGER set_Contact_updatedAt
+   209→  BEFORE UPDATE ON "Contact"
+   210→  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+   211→
+   212→DROP TRIGGER IF EXISTS set_Form_updatedAt ON "Form";
+   213→CREATE TRIGGER set_Form_updatedAt
+   214→  BEFORE UPDATE ON "Form"
+   215→  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+   216→
+   217→DROP TRIGGER IF EXISTS set_WorkflowAutomation_updatedAt ON "WorkflowAutomation";
+   218→CREATE TRIGGER set_WorkflowAutomation_updatedAt
+   219→  BEFORE UPDATE ON "WorkflowAutomation"
+   220→  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+   221→
+   222→-- ============================================
+   223→-- Realtime subscriptions (optional)
+   224→-- ============================================
+   225→-- Uncomment to enable realtime for these tables:
+   226→-- ALTER PUBLICATION supabase_realtime ADD TABLE "CommunicationProvider";
+   227→-- ALTER PUBLICATION supabase_realtime ADD TABLE "Contact";
+   228→-- ALTER PUBLICATION supabase_realtime ADD TABLE "Form";
+   229→-- ALTER PUBLICATION supabase_realtime ADD TABLE "FormResponse";
+   230→-- ALTER PUBLICATION supabase_realtime ADD TABLE "WorkflowAutomation";
+   231→-- ALTER PUBLICATION supabase_realtime ADD TABLE "TriggerExecution";
+   232→`;
+   233→
+   234→// ── Table existence check ──────────────────────────────────────────────────
+   235→
+   236→const TABLES_TO_CHECK = [
+   237→  'CommunicationProvider',
+   238→  'Contact',
+   239→  'Form',
+   240→  'FormResponse',
+   241→  'WorkflowAutomation',
+   242→  'TriggerExecution',
+   243→  'SubscriptionPlan',
+   244→  'PlatformMetric',
+   245→  'SecurityEvent',
+   246→  'AuditLogEntry',
+   247→];
+   248→
+   249→async function checkTableExists(tableName: string): Promise<boolean> {
+   250→  const client = getAdminClient();
+   251→  const { error } = await client.from(tableName).select('id').limit(1);
+   252→  if (error) {
+   253→    const msg = error.message || '';
+   254→    // PostgREST errors that indicate the table doesn't exist:
+   255→    // - "does not exist" (PostgreSQL standard)
+   256→    // - "Could not find the table ... in the schema cache" (PostgREST cache miss)
+   257→    // - error code 42P01 (undefined_table)
+   258→    if (
+   259→      msg.includes('does not exist') ||
+   260→      msg.includes('schema cache') ||
+   261→      msg.includes('Could not find') ||
+   262→      error.code === '42P01'
+   263→    ) {
+   264→      return false;
+   265→    }
+   266→    // Other errors (e.g., RLS, empty result) mean table exists
+   267→    return true;
+   268→  }
+   269→  return true;
+   270→}
+   271→
+   272→// ── Seed data helpers (reused from seed script) ───────────────────────────
+   273→
+   274→async function getFirstTenant(): Promise<{ id: string; name: string } | null> {
+   275→  const client = getAdminClient();
+   276→  const { data, error } = await client
+   277→    .from('Tenant')
+   278→    .select('id, name')
+   279→    .limit(1)
+   280→    .single();
+   281→  if (error || !data) return null;
+   282→  return data as { id: string; name: string };
+   283→}
+   284→
+   285→async function getFirstWorkspace(tenantId: string): Promise<string | null> {
+   286→  const client = getAdminClient();
+   287→  const { data, error } = await client
+   288→    .from('Workspace')
+   289→    .select('id')
+   290→    .eq('tenantId', tenantId)
+   291→    .limit(1)
+   292→    .single();
+   293→  if (error || !data) return null;
+   294→  return data.id as string;
+   295→}
+   296→
+   297→async function getFirstUser(tenantId: string): Promise<string | null> {
+   298→  const client = getAdminClient();
+   299→  const { data, error } = await client
+   300→    .from('User')
+   301→    .select('id')
+   302→    .eq('tenantId', tenantId)
+   303→    .limit(1)
+   304→    .single();
+   305→  if (error || !data) return null;
+   306→  return data.id as string;
+   307→}
+   308→
+   309→async function seedCommunicationProviders(tenantId: string, workspaceId: string | null): Promise<unknown[]> {
+   310→  const client = getAdminClient();
+   311→  const providers = [
+   312→    {
+   313→      id: crypto.randomUUID(),
+   314→      name: 'WhatsApp (Meta Cloud API)',
+   315→      type: 'whatsapp',
+   316→      provider: 'meta_cloud_api',
+   317→      status: 'active',
+   318→      configJson: JSON.stringify({ phoneNumberId: 'demo_phone_id', businessAccountId: 'demo_biz_id', accessToken: 'demo_token' }),
+   319→      isDefault: true,
+   320→      sendingEnabled: true,
+   321→      dailyLimit: 1000,
+   322→      monthlyLimit: 30000,
+   323→      tenantId,
+   324→      workspaceId,
+   325→    },
+   326→    {
+   327→      id: crypto.randomUUID(),
+   328→      name: 'SMS (Twilio)',
+   329→      type: 'sms',
+   330→      provider: 'twilio',
+   331→      status: 'active',
+   332→      configJson: JSON.stringify({ accountSid: 'demo_sid', authToken: 'demo_token', fromNumber: '+1234567890' }),
+   333→      isDefault: false,
+   334→      sendingEnabled: true,
+   335→      dailyLimit: 500,
+   336→      monthlyLimit: 15000,
+   337→      tenantId,
+   338→      workspaceId,
+   339→    },
+   340→    {
+   341→      id: crypto.randomUUID(),
+   342→      name: 'Email (Amazon SES)',
+   343→      type: 'email',
+   344→      provider: 'amazon_ses',
+   345→      status: 'active',
+   346→      configJson: JSON.stringify({ region: 'us-east-1', accessKey: 'demo_key', secretKey: 'demo_secret', fromEmail: 'noreply@serviceos.demo' }),
+   347→      isDefault: false,
+   348→      sendingEnabled: true,
+   349→      dailyLimit: 5000,
+   350→      monthlyLimit: 100000,
+   351→      tenantId,
+   352→      workspaceId,
+   353→    },
+   354→    {
+   355→      id: crypto.randomUUID(),
+   356→      name: 'Email (SendGrid)',
+   357→      type: 'email',
+   358→      provider: 'sendgrid',
+   359→      status: 'inactive',
+   360→      configJson: JSON.stringify({ apiKey: 'demo_key', fromEmail: 'noreply@serviceos.demo', fromName: 'ServiceOS' }),
+   361→      isDefault: false,
+   362→      sendingEnabled: false,
+   363→      dailyLimit: 1000,
+   364→      monthlyLimit: 40000,
+   365→      tenantId,
+   366→      workspaceId,
+   367→    },
+   368→    {
+   369→      id: crypto.randomUUID(),
+   370→      name: 'WhatsApp (360Dialog)',
+   371→      type: 'whatsapp',
+   372→      provider: '360dialog',
+   373→      status: 'inactive',
+   374→      configJson: JSON.stringify({ apiKey: 'demo_key', namespace: 'demo_ns' }),
+   375→      isDefault: false,
+   376→      sendingEnabled: false,
+   377→      dailyLimit: 500,
+   378→      monthlyLimit: 15000,
+   379→      tenantId,
+   380→      workspaceId,
+   381→    },
+   382→  ];
+   383→
+   384→  const results: unknown[] = [];
+   385→  for (const provider of providers) {
+   386→    const { data, error } = await client
+   387→      .from('CommunicationProvider')
+   388→      .insert(provider)
+   389→      .select()
+   390→      .single();
+   391→    if (error) {
+   392→      console.error(`[Seed] Error inserting CommunicationProvider "${provider.name}":`, error.message);
+   393→    } else {
+   394→      results.push(data);
+   395→    }
+   396→  }
+   397→  return results;
+   398→}
+   399→
+   400→async function seedContacts(tenantId: string, workspaceId: string | null): Promise<unknown[]> {
+   401→  const client = getAdminClient();
+   402→  const contacts = [
+   403→    { id: crypto.randomUUID(), name: 'John Smith', email: 'john.smith@acmecorp.com', phone: '+14155551001', company: 'Acme Corp', tags: 'vip,business', tenantId, workspaceId },
+   404→    { id: crypto.randomUUID(), name: 'Sarah Johnson', email: 'sarah.j@gmail.com', phone: '+14155551002', company: 'TechStart Inc', tags: 'lead,tech', tenantId, workspaceId },
+   405→    { id: crypto.randomUUID(), name: 'Michael Chen', email: 'm.chen@dragonind.com', phone: '+14155551003', company: 'Dragon Industries', tags: 'business,enterprise', tenantId, workspaceId },
+   406→    { id: crypto.randomUUID(), name: 'Emily Davis', email: 'emily.davis@homerenov.com', phone: '+14155551004', company: 'Home Renovations LLC', tags: 'customer,repeat', tenantId, workspaceId },
+   407→    { id: crypto.randomUUID(), name: 'Robert Wilson', email: 'rwilson@globalfreight.com', phone: '+14155551005', company: 'Global Freight Co', tags: 'business,logistics', tenantId, workspaceId },
+   408→    { id: crypto.randomUUID(), name: 'Lisa Anderson', email: 'lisa.a@propertyplus.com', phone: '+14155551006', company: 'Property Plus', tags: 'customer,property', tenantId, workspaceId },
+   409→    { id: crypto.randomUUID(), name: 'David Martinez', email: 'david.m@cleanpro.com', phone: '+14155551007', company: 'CleanPro Services', tags: 'vendor,cleaning', tenantId, workspaceId },
+   410→    { id: crypto.randomUUID(), name: 'Jennifer Lee', email: 'j.lee@startuphub.io', phone: '+14155551008', company: 'StartupHub', tags: 'lead,tech', tenantId, workspaceId },
+   411→    { id: crypto.randomUUID(), name: 'James Brown', email: 'jbrown@blueocean.net', phone: '+14155551009', company: 'Blue Ocean Ventures', tags: 'investor,vip', tenantId, workspaceId },
+   412→    { id: crypto.randomUUID(), name: 'Amanda Taylor', email: 'amanda.t@healthfirst.org', phone: '+14155551010', company: 'HealthFirst Org', tags: 'healthcare,business', tenantId, workspaceId },
+   413→    { id: crypto.randomUUID(), name: 'Chris Nguyen', email: 'chris.n@cloud9solutions.com', phone: '+14155551011', company: 'Cloud9 Solutions', tags: 'tech,partner', tenantId, workspaceId },
+   414→    { id: crypto.randomUUID(), name: 'Patricia White', email: 'pwhite@greenearth.com', phone: '+14155551012', company: 'Green Earth', tags: 'sustainability,customer', tenantId, workspaceId },
+   415→    { id: crypto.randomUUID(), name: 'Daniel Harris', email: 'dharris@apexlogistics.com', phone: '+14155551013', company: 'Apex Logistics', tags: 'logistics,business', tenantId, workspaceId },
+   416→    { id: crypto.randomUUID(), name: 'Maria Garcia', email: 'maria.g@fiestacatering.com', phone: '+14155551014', company: 'Fiesta Catering', tags: 'food,vendor', tenantId, workspaceId },
+   417→    { id: crypto.randomUUID(), name: 'Kevin Thompson', email: 'k.thompson@urbandev.com', phone: '+14155551015', company: 'Urban Development Corp', tags: 'real-estate,enterprise', tenantId, workspaceId },
+   418→  ];
+   419→
+   420→  const results: unknown[] = [];
+   421→  for (const contact of contacts) {
+   422→    const { data, error } = await client
+   423→      .from('Contact')
+   424→      .insert(contact)
+   425→      .select()
+   426→      .single();
+   427→    if (error) {
+   428→      console.error(`[Seed] Error inserting Contact "${contact.name}":`, error.message);
+   429→    } else {
+   430→      results.push(data);
+   431→    }
+   432→  }
+   433→  return results;
+   434→}
+   435→
+   436→async function seedForms(tenantId: string, workspaceId: string | null, userId: string | null): Promise<{ id: string }[]> {
+   437→  const client = getAdminClient();
+   438→  const forms = [
+   439→    {
+   440→      id: crypto.randomUUID(),
+   441→      name: 'Lead Capture Form',
+   442→      description: 'Capture new leads from website visitors with contact details and service interest',
+   443→      type: 'lead_capture',
+   444→      status: 'active',
+   445→      fieldsJson: JSON.stringify([
+   446→        { id: 'f1', name: 'fullName', label: 'Full Name', type: 'text', required: true },
+   447→        { id: 'f2', name: 'email', label: 'Email', type: 'email', required: true },
+   448→        { id: 'f3', name: 'phone', label: 'Phone Number', type: 'tel', required: true },
+   449→        { id: 'f4', name: 'service', label: 'Service Interested In', type: 'select', options: ['Plumbing', 'Electrical', 'Cleaning', 'HVAC', 'Other'] },
+   450→        { id: 'f5', name: 'message', label: 'Message', type: 'textarea' },
+   451→      ]),
+   452→      submissionActions: JSON.stringify(['create_lead', 'send_whatsapp']),
+   453→      fieldMappingJson: JSON.stringify({ fullName: 'name', email: 'email', phone: 'phone', message: 'description' }),
+   454→      welcomeMessage: 'Welcome! Tell us how we can help you today.',
+   455→      completionMessage: 'Thank you! We\'ll get back to you shortly.',
+   456→      slug: 'lead-capture',
+   457→      submissions: 47,
+   458→      conversionRate: 0.23,
+   459→      tenantId,
+   460→      workspaceId,
+   461→      createdById: userId,
+   462→    },
+   463→    {
+   464→      id: crypto.randomUUID(),
+   465→      name: 'Booking Form',
+   466→      description: 'Book appointments and schedule service visits',
+   467→      type: 'booking',
+   468→      status: 'active',
+   469→      fieldsJson: JSON.stringify([
+   470→        { id: 'f1', name: 'fullName', label: 'Full Name', type: 'text', required: true },
+   471→        { id: 'f2', name: 'phone', label: 'Phone Number', type: 'tel', required: true },
+   472→        { id: 'f3', name: 'date', label: 'Preferred Date', type: 'date', required: true },
+   473→        { id: 'f4', name: 'time', label: 'Preferred Time', type: 'time', required: true },
+   474→        { id: 'f5', name: 'address', label: 'Service Address', type: 'text', required: true },
+   475→        { id: 'f6', name: 'service', label: 'Service Type', type: 'select', options: ['Plumbing', 'Electrical', 'Cleaning', 'HVAC'] },
+   476→      ]),
+   477→      submissionActions: JSON.stringify(['create_lead', 'create_booking', 'send_whatsapp']),
+   478→      fieldMappingJson: JSON.stringify({ fullName: 'name', phone: 'phone', address: 'address' }),
+   479→      welcomeMessage: 'Book your service appointment now!',
+   480→      completionMessage: 'Your booking has been received. We\'ll confirm shortly!',
+   481→      slug: 'booking',
+   482→      submissions: 32,
+   483→      conversionRate: 0.38,
+   484→      tenantId,
+   485→      workspaceId,
+   486→      createdById: userId,
+   487→    },
+   488→    {
+   489→      id: crypto.randomUUID(),
+   490→      name: 'Feedback Form',
+   491→      description: 'Collect customer feedback and satisfaction ratings after service completion',
+   492→      type: 'feedback',
+   493→      status: 'active',
+   494→      fieldsJson: JSON.stringify([
+   495→        { id: 'f1', name: 'name', label: 'Your Name', type: 'text', required: true },
+   496→        { id: 'f2', name: 'rating', label: 'How would you rate our service?', type: 'rating', required: true },
+   497→        { id: 'f3', name: 'comments', label: 'Additional Comments', type: 'textarea' },
+   498→        { id: 'f4', name: 'recommend', label: 'Would you recommend us?', type: 'select', options: ['Yes', 'Maybe', 'No'] },
+   499→      ]),
+   500→      submissionActions: JSON.stringify(['store_response']),
+   501→      fieldMappingJson: JSON.stringify({ name: 'respondentName' }),
+   502→      welcomeMessage: 'We value your feedback!',
+   503→      completionMessage: 'Thank you for your feedback!',
+   504→      slug: 'feedback',
+   505→      submissions: 18,
+   506→      conversionRate: 0.65,
+   507→      tenantId,
+   508→      workspaceId,
+   509→      createdById: userId,
+   510→    },
+   511→    {
+   512→      id: crypto.randomUUID(),
+   513→      name: 'Survey Form',
+   514→      description: 'Customer satisfaction survey with detailed questions about service quality',
+   515→      type: 'survey',
+   516→      status: 'active',
+   517→      fieldsJson: JSON.stringify([
+   518→        { id: 'f1', name: 'name', label: 'Your Name', type: 'text', required: true },
+   519→        { id: 'f2', name: 'satisfaction', label: 'Overall Satisfaction (1-10)', type: 'number', required: true },
+   520→        { id: 'f3', name: 'timeliness', label: 'Was the service timely?', type: 'select', options: ['Very Timely', 'On Time', 'Slightly Late', 'Very Late'] },
+   521→        { id: 'f4', name: 'professionalism', label: 'Rate our professionalism (1-10)', type: 'number' },
+   522→        { id: 'f5', name: 'suggestions', label: 'Suggestions for improvement', type: 'textarea' },
+   523→      ]),
+   524→      submissionActions: JSON.stringify(['store_response']),
+   525→      fieldMappingJson: JSON.stringify({ name: 'respondentName' }),
+   526→      welcomeMessage: 'Help us improve our services!',
+   527→      completionMessage: 'Thanks for completing our survey!',
+   528→      slug: 'survey',
+   529→      submissions: 12,
+   530→      conversionRate: 0.42,
+   531→      tenantId,
+   532→      workspaceId,
+   533→      createdById: userId,
+   534→    },
+   535→    {
+   536→      id: crypto.randomUUID(),
+   537→      name: 'Quote Request Form',
+   538→      description: 'Request a detailed quote for services needed',
+   539→      type: 'quote_request',
+   540→      status: 'active',
+   541→      fieldsJson: JSON.stringify([
+   542→        { id: 'f1', name: 'fullName', label: 'Full Name', type: 'text', required: true },
+   543→        { id: 'f2', name: 'email', label: 'Email', type: 'email', required: true },
+   544→        { id: 'f3', name: 'phone', label: 'Phone Number', type: 'tel', required: true },
+   545→        { id: 'f4', name: 'serviceType', label: 'Service Needed', type: 'select', options: ['Plumbing', 'Electrical', 'Cleaning', 'HVAC', 'Painting', 'Landscaping', 'Other'], required: true },
+   546→        { id: 'f5', name: 'description', label: 'Describe your needs', type: 'textarea', required: true },
+   547→        { id: 'f6', name: 'budget', label: 'Estimated Budget', type: 'select', options: ['Under $500', '$500-$1000', '$1000-$5000', '$5000+'] },
+   548→        { id: 'f7', name: 'urgency', label: 'How urgent?', type: 'select', options: ['ASAP', 'This Week', 'This Month', 'Flexible'] },
+   549→      ]),
+   550→      submissionActions: JSON.stringify(['create_lead', 'create_quote', 'send_whatsapp', 'send_email']),
+   551→      fieldMappingJson: JSON.stringify({ fullName: 'name', email: 'email', phone: 'phone', description: 'description' }),
+   552→      welcomeMessage: 'Get a free quote for your project!',
+   553→      completionMessage: 'Your quote request has been submitted. We\'ll respond within 24 hours!',
+   554→      slug: 'quote-request',
+   555→      submissions: 25,
+   556→      conversionRate: 0.31,
+   557→      tenantId,
+   558→      workspaceId,
+   559→      createdById: userId,
+   560→    },
+   561→  ];
+   562→
+   563→  const results: { id: string }[] = [];
+   564→  for (const form of forms) {
+   565→    const { data, error } = await client
+   566→      .from('Form')
+   567→      .insert(form)
+   568→      .select('id')
+   569→      .single();
+   570→    if (error) {
+   571→      console.error(`[Seed] Error inserting Form "${form.name}":`, error.message);
+   572→    } else {
+   573→      results.push(data as { id: string });
+   574→    }
+   575→  }
+   576→  return results;
+   577→}
+   578→
+   579→async function seedFormResponses(forms: { id: string }[], tenantId: string): Promise<unknown[]> {
+   580→  const client = getAdminClient();
+   581→  const sources = ['direct', 'whatsapp', 'embed', 'wordpress', 'webhook'];
+   582→  const responses = [
+   583→    { formId: forms[0]?.id, dataJson: JSON.stringify({ fullName: 'Alice Cooper', email: 'alice@example.com', phone: '+15550001', service: 'Plumbing', message: 'Leaky faucet in kitchen' }), respondent: 'alice@example.com', respondentName: 'Alice Cooper', source: 'direct', tenantId },
+   584→    { formId: forms[0]?.id, dataJson: JSON.stringify({ fullName: 'Bob Builder', email: 'bob@example.com', phone: '+15550002', service: 'Electrical', message: 'Need outlet installation' }), respondent: '+15550002', respondentName: 'Bob Builder', source: 'whatsapp', tenantId },
+   585→    { formId: forms[1]?.id, dataJson: JSON.stringify({ fullName: 'Carol Danvers', phone: '+15550003', date: '2025-02-15', time: '10:00', address: '123 Main St', service: 'Cleaning' }), respondent: '+15550003', respondentName: 'Carol Danvers', source: 'embed', tenantId },
+   586→    { formId: forms[1]?.id, dataJson: JSON.stringify({ fullName: 'Dave Wilson', phone: '+15550004', date: '2025-02-16', time: '14:00', address: '456 Oak Ave', service: 'HVAC' }), respondent: '+15550004', respondentName: 'Dave Wilson', source: 'direct', tenantId },
+   587→    { formId: forms[2]?.id, dataJson: JSON.stringify({ name: 'Eve Taylor', rating: 5, comments: 'Excellent service!', recommend: 'Yes' }), respondent: 'eve@example.com', respondentName: 'Eve Taylor', source: 'direct', tenantId },
+   588→    { formId: forms[2]?.id, dataJson: JSON.stringify({ name: 'Frank Miller', rating: 4, comments: 'Good work, slightly late', recommend: 'Yes' }), respondent: '+15550006', respondentName: 'Frank Miller', source: 'whatsapp', tenantId },
+   589→    { formId: forms[3]?.id, dataJson: JSON.stringify({ name: 'Grace Lee', satisfaction: 9, timeliness: 'On Time', professionalism: 8, suggestions: 'Better communication about arrival times' }), respondent: 'grace@example.com', respondentName: 'Grace Lee', source: 'embed', tenantId },
+   590→    { formId: forms[4]?.id, dataJson: JSON.stringify({ fullName: 'Henry Ford', email: 'henry@example.com', phone: '+15550008', serviceType: 'Landscaping', description: 'Full backyard redesign', budget: '$5000+', urgency: 'This Month' }), respondent: 'henry@example.com', respondentName: 'Henry Ford', source: 'wordpress', tenantId },
+   591→    { formId: forms[4]?.id, dataJson: JSON.stringify({ fullName: 'Ivy Chen', email: 'ivy@example.com', phone: '+15550009', serviceType: 'Plumbing', description: 'Bathroom renovation - need full pipe replacement', budget: '$1000-$5000', urgency: 'This Week' }), respondent: '+15550009', respondentName: 'Ivy Chen', source: 'webhook', tenantId },
+   592→    { formId: forms[0]?.id, dataJson: JSON.stringify({ fullName: 'Jack Brown', email: 'jack@example.com', phone: '+15550010', service: 'HVAC', message: 'AC not cooling properly' }), respondent: '+15550010', respondentName: 'Jack Brown', source: 'direct', tenantId },
+   593→  ];
+   594→
+   595→  const results: unknown[] = [];
+   596→  for (const response of responses) {
+   597→    if (!response.formId) continue;
+   598→    const { data, error } = await client
+   599→      .from('FormResponse')
+   600→      .insert({ id: crypto.randomUUID(), ...response })
+   601→      .select()
+   602→      .single();
+   603→    if (error) {
+   604→      console.error(`[Seed] Error inserting FormResponse:`, error.message);
+   605→    } else {
+   606→      results.push(data);
+   607→    }
+   608→  }
+   609→  return results;
+   610→}
+   611→
+   612→async function seedWorkflowAutomations(tenantId: string, workspaceId: string | null, userId: string | null): Promise<{ id: string }[]> {
+   613→  const client = getAdminClient();
+   614→  const automations = [
+   615→    {
+   616→      id: crypto.randomUUID(),
+   617→      name: 'New Lead WhatsApp Notification',
+   618→      description: 'Send a WhatsApp notification to the owner whenever a new lead is created',
+   619→      triggerType: 'lead.created',
+   620→      triggerConfigJson: JSON.stringify({ immediate: true }),
+   621→      conditionsJson: JSON.stringify([]),
+   622→      actionsJson: JSON.stringify([{ type: 'send_whatsapp', config: { template: 'new_lead_alert', to: 'owner' } }]),
+   623→      active: true,
+   624→      executionCount: 156,
+   625→      lastExecutedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+   626→      lastExecutionStatus: 'success',
+   627→      tagsJson: JSON.stringify(['notification', 'whatsapp', 'leads']),
+   628→      tenantId,
+   629→      workspaceId,
+   630→      createdById: userId,
+   631→    },
+   632→    {
+   633→      id: crypto.randomUUID(),
+   634→      name: 'Auto-assign High Priority Leads',
+   635→      description: 'Automatically assign leads marked as high priority to the best available technician',
+   636→      triggerType: 'lead.created',
+   637→      triggerConfigJson: JSON.stringify({ immediate: true }),
+   638→      conditionsJson: JSON.stringify([{ field: 'priority', operator: 'equals', value: 'high' }]),
+   639→      actionsJson: JSON.stringify([{ type: 'assign_lead', config: { strategy: 'best_match' } }, { type: 'send_whatsapp', config: { template: 'lead_assigned', to: 'assignee' } }]),
+   640→      active: true,
+   641→      executionCount: 43,
+   642→      lastExecutedAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
+   643→      lastExecutionStatus: 'success',
+   644→      tagsJson: JSON.stringify(['automation', 'assignment', 'priority']),
+   645→      tenantId,
+   646→      workspaceId,
+   647→      createdById: userId,
+   648→    },
+   649→    {
+   650→      id: crypto.randomUUID(),
+   651→      name: 'Invoice Overdue Reminder',
+   652→      description: 'Send a reminder when an invoice is overdue by more than 3 days',
+   653→      triggerType: 'invoice.overdue',
+   654→      triggerConfigJson: JSON.stringify({ delayDays: 3 }),
+   655→      conditionsJson: JSON.stringify([{ field: 'status', operator: 'equals', value: 'overdue' }]),
+   656→      actionsJson: JSON.stringify([{ type: 'send_email', config: { template: 'invoice_overdue_reminder' } }, { type: 'send_whatsapp', config: { template: 'payment_reminder', to: 'customer' } }]),
+   657→      active: true,
+   658→      executionCount: 28,
+   659→      lastExecutedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+   660→      lastExecutionStatus: 'success',
+   661→      tagsJson: JSON.stringify(['invoice', 'reminder', 'payment']),
+   662→      tenantId,
+   663→      workspaceId,
+   664→      createdById: userId,
+   665→    },
+   666→    {
+   667→      id: crypto.randomUUID(),
+   668→      name: 'Job Completion Follow-up',
+   669→      description: 'Send a follow-up message and review request 24 hours after job completion',
+   670→      triggerType: 'job.completed',
+   671→      triggerConfigJson: JSON.stringify({ delayHours: 24 }),
+   672→      conditionsJson: JSON.stringify([]),
+   673→      actionsJson: JSON.stringify([{ type: 'send_whatsapp', config: { template: 'job_completion_followup', to: 'customer' } }, { type: 'send_email', config: { template: 'review_request' } }]),
+   674→      active: true,
+   675→      executionCount: 89,
+   676→      lastExecutedAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
+   677→      lastExecutionStatus: 'success',
+   678→      tagsJson: JSON.stringify(['follow-up', 'review', 'completion']),
+   679→      tenantId,
+   680→      workspaceId,
+   681→      createdById: userId,
+   682→    },
+   683→    {
+   684→      id: crypto.randomUUID(),
+   685→      name: 'New Customer Welcome Message',
+   686→      description: 'Send a welcome WhatsApp message when a new customer is created',
+   687→      triggerType: 'customer.created',
+   688→      triggerConfigJson: JSON.stringify({ immediate: true }),
+   689→      conditionsJson: JSON.stringify([]),
+   690→      actionsJson: JSON.stringify([{ type: 'send_whatsapp', config: { template: 'welcome_customer', to: 'customer' } }]),
+   691→      active: true,
+   692→      executionCount: 67,
+   693→      lastExecutedAt: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
+   694→      lastExecutionStatus: 'success',
+   695→      tagsJson: JSON.stringify(['welcome', 'onboarding', 'whatsapp']),
+   696→      tenantId,
+   697→      workspaceId,
+   698→      createdById: userId,
+   699→    },
+   700→  ];
+   701→
+   702→  const results: { id: string }[] = [];
+   703→  for (const automation of automations) {
+   704→    const { data, error } = await client
+   705→      .from('WorkflowAutomation')
+   706→      .insert(automation)
+   707→      .select('id')
+   708→      .single();
+   709→    if (error) {
+   710→      console.error(`[Seed] Error inserting WorkflowAutomation "${automation.name}":`, error.message);
+   711→    } else {
+   712→      results.push(data as { id: string });
+   713→    }
+   714→  }
+   715→  return results;
+   716→}
+   717→
+   718→async function seedTriggerExecutions(automations: { id: string }[], tenantId: string): Promise<unknown[]> {
+   719→  const client = getAdminClient();
+   720→  const executions = [
+   721→    { id: crypto.randomUUID(), automationId: automations[0]?.id, triggerEvent: 'lead.created', triggerPayload: JSON.stringify({ leadId: 'demo_lead_1', leadName: 'Alice Cooper', source: 'website' }), conditionsMet: true, actionsResultsJson: JSON.stringify([{ type: 'send_whatsapp', status: 'sent', messageId: 'wamid_demo_1' }]), status: 'success', durationMs: 245, tenantId, createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString() },
+   722→    { id: crypto.randomUUID(), automationId: automations[0]?.id, triggerEvent: 'lead.created', triggerPayload: JSON.stringify({ leadId: 'demo_lead_2', leadName: 'Bob Builder', source: 'whatsapp' }), conditionsMet: true, actionsResultsJson: JSON.stringify([{ type: 'send_whatsapp', status: 'sent', messageId: 'wamid_demo_2' }]), status: 'success', durationMs: 189, tenantId, createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString() },
+   723→    { id: crypto.randomUUID(), automationId: automations[1]?.id, triggerEvent: 'lead.created', triggerPayload: JSON.stringify({ leadId: 'demo_lead_3', leadName: 'Urgent Client', priority: 'high' }), conditionsMet: true, actionsResultsJson: JSON.stringify([{ type: 'assign_lead', status: 'assigned', assigneeId: 'demo_emp_1' }, { type: 'send_whatsapp', status: 'sent' }]), status: 'success', durationMs: 412, tenantId, createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString() },
+   724→    { id: crypto.randomUUID(), automationId: automations[1]?.id, triggerEvent: 'lead.created', triggerPayload: JSON.stringify({ leadId: 'demo_lead_4', leadName: 'Medium Priority Client', priority: 'medium' }), conditionsMet: false, actionsResultsJson: JSON.stringify([]), status: 'success', durationMs: 15, tenantId, createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString() },
+   725→    { id: crypto.randomUUID(), automationId: automations[2]?.id, triggerEvent: 'invoice.overdue', triggerPayload: JSON.stringify({ invoiceId: 'demo_inv_1', invoiceNumber: 'INV-001', amount: 1500, daysOverdue: 5 }), conditionsMet: true, actionsResultsJson: JSON.stringify([{ type: 'send_email', status: 'sent' }, { type: 'send_whatsapp', status: 'sent' }]), status: 'success', durationMs: 678, tenantId, createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() },
+   726→    { id: crypto.randomUUID(), automationId: automations[2]?.id, triggerEvent: 'invoice.overdue', triggerPayload: JSON.stringify({ invoiceId: 'demo_inv_2', invoiceNumber: 'INV-002', amount: 750, daysOverdue: 7 }), conditionsMet: true, actionsResultsJson: JSON.stringify([{ type: 'send_email', status: 'sent' }, { type: 'send_whatsapp', status: 'failed', error: 'Number not on WhatsApp' }]), status: 'partial', durationMs: 834, tenantId, createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString() },
+   727→    { id: crypto.randomUUID(), automationId: automations[3]?.id, triggerEvent: 'job.completed', triggerPayload: JSON.stringify({ jobId: 'demo_job_1', jobTitle: 'Plumbing Repair', customerName: 'Carol Danvers' }), conditionsMet: true, actionsResultsJson: JSON.stringify([{ type: 'send_whatsapp', status: 'delivered' }, { type: 'send_email', status: 'sent' }]), status: 'success', durationMs: 356, tenantId, createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString() },
+   728→    { id: crypto.randomUUID(), automationId: automations[4]?.id, triggerEvent: 'customer.created', triggerPayload: JSON.stringify({ customerId: 'demo_cust_1', customerName: 'Dave Wilson', phone: '+15550004' }), conditionsMet: true, actionsResultsJson: JSON.stringify([{ type: 'send_whatsapp', status: 'delivered', messageId: 'wamid_demo_welcome' }]), status: 'success', durationMs: 198, tenantId, createdAt: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString() },
+   729→  ];
+   730→
+   731→  const results: unknown[] = [];
+   732→  for (const execution of executions) {
+   733→    if (!execution.automationId) continue;
+   734→    const { data, error } = await client
+   735→      .from('TriggerExecution')
+   736→      .insert(execution)
+   737→      .select()
+   738→      .single();
+   739→    if (error) {
+   740→      console.error(`[Seed] Error inserting TriggerExecution:`, error.message);
+   741→    } else {
+   742→      results.push(data);
+   743→    }
+   744→  }
+   745→  return results;
+   746→}
+   747→
+   748→async function seedSubscriptionPlans(): Promise<unknown[]> {
+   749→  const client = getAdminClient();
+   750→  const plans = [
+   751→    {
+   752→      id: crypto.randomUUID(),
+   753→      name: 'starter',
+   754→      displayName: 'Starter',
+   755→      description: 'Perfect for small businesses getting started with service management',
+   756→      price: 29,
+   757→      currency: 'USD',
+   758→      billingCycle: 'monthly',
+   759→      featuresJson: JSON.stringify({ maxUsers: 3, maxJobs: 100, maxWorkflows: 5, whatsapp: true, email: true, sms: false, ai: false, customDomain: false, whiteLabel: false }),
+   760→      limitsJson: JSON.stringify({ seats: 3, aiQuota: 50, whatsappQuota: 500, emailQuota: 2000, smsQuota: 0, storageMb: 512 }),
+   761→      isActive: true,
+   762→      sortOrder: 1,
+   763→    },
+   764→    {
+   765→      id: crypto.randomUUID(),
+   766→      name: 'professional',
+   767→      displayName: 'Professional',
+   768→      description: 'For growing businesses that need advanced automation and AI features',
+   769→      price: 79,
+   770→      currency: 'USD',
+   771→      billingCycle: 'monthly',
+   772→      featuresJson: JSON.stringify({ maxUsers: 15, maxJobs: 1000, maxWorkflows: 25, whatsapp: true, email: true, sms: true, ai: true, customDomain: true, whiteLabel: false }),
+   773→      limitsJson: JSON.stringify({ seats: 15, aiQuota: 500, whatsappQuota: 2000, emailQuota: 10000, smsQuota: 500, storageMb: 5120 }),
+   774→      isActive: true,
+   775→      sortOrder: 2,
+   776→    },
+   777→    {
+   778→      id: crypto.randomUUID(),
+   779→      name: 'enterprise',
+   780→      displayName: 'Enterprise',
+   781→      description: 'For large organizations with custom branding and unlimited scale',
+   782→      price: 199,
+   783→      currency: 'USD',
+   784→      billingCycle: 'monthly',
+   785→      featuresJson: JSON.stringify({ maxUsers: -1, maxJobs: -1, maxWorkflows: -1, whatsapp: true, email: true, sms: true, ai: true, customDomain: true, whiteLabel: true, prioritySupport: true, sla: '99.9%' }),
+   786→      limitsJson: JSON.stringify({ seats: -1, aiQuota: -1, whatsappQuota: -1, emailQuota: -1, smsQuota: -1, storageMb: -1 }),
+   787→      isActive: true,
+   788→      sortOrder: 3,
+   789→    },
+   790→    {
+   791→      id: crypto.randomUUID(),
+   792→      name: 'trial',
+   793→      displayName: 'Free Trial',
+   794→      description: '14-day free trial with full Professional features',
+   795→      price: 0,
+   796→      currency: 'USD',
+   797→      billingCycle: 'monthly',
+   798→      featuresJson: JSON.stringify({ maxUsers: 5, maxJobs: 50, maxWorkflows: 10, whatsapp: true, email: true, sms: false, ai: true, customDomain: false, whiteLabel: false, trialDays: 14 }),
+   799→      limitsJson: JSON.stringify({ seats: 5, aiQuota: 100, whatsappQuota: 200, emailQuota: 500, smsQuota: 0, storageMb: 256, trialDays: 14 }),
+   800→      isActive: true,
+   801→      sortOrder: 0,
+   802→    },
+   803→  ];
+   804→
+   805→  const results: unknown[] = [];
+   806→  for (const plan of plans) {
+   807→    const { data, error } = await client
+   808→      .from('SubscriptionPlan')
+   809→      .insert(plan)
+   810→      .select()
+   811→      .single();
+   812→    if (error) {
+   813→      console.error(`[Seed] Error inserting SubscriptionPlan "${plan.name}":`, error.message);
+   814→    } else {
+   815→      results.push(data);
+   816→    }
+   817→  }
+   818→  return results;
+   819→}
+   820→
+   821→async function seedPlatformMetrics(): Promise<unknown[]> {
+   822→  const client = getAdminClient();
+   823→  const now = new Date();
+   824→  const metrics = [
+   825→    { id: crypto.randomUUID(), metric: 'total_tenants', value: 5, dimensionsJson: JSON.stringify({ tier: 'all' }), recordedAt: new Date(now.getTime() - 0 * 3600000).toISOString() },
+   826→    { id: crypto.randomUUID(), metric: 'total_users', value: 21, dimensionsJson: JSON.stringify({ tier: 'all' }), recordedAt: new Date(now.getTime() - 0 * 3600000).toISOString() },
+   827→    { id: crypto.randomUUID(), metric: 'total_leads', value: 10, dimensionsJson: JSON.stringify({ tier: 'all' }), recordedAt: new Date(now.getTime() - 0 * 3600000).toISOString() },
+   828→    { id: crypto.randomUUID(), metric: 'active_subscriptions', value: 4, dimensionsJson: JSON.stringify({ status: 'active' }), recordedAt: new Date(now.getTime() - 0 * 3600000).toISOString() },
+   829→    { id: crypto.randomUUID(), metric: 'mrr', value: 11325, dimensionsJson: JSON.stringify({ currency: 'USD' }), recordedAt: new Date(now.getTime() - 0 * 3600000).toISOString() },
+   830→    { id: crypto.randomUUID(), metric: 'total_tenants', value: 4, dimensionsJson: JSON.stringify({ tier: 'all' }), recordedAt: new Date(now.getTime() - 24 * 3600000).toISOString() },
+   831→    { id: crypto.randomUUID(), metric: 'total_users', value: 18, dimensionsJson: JSON.stringify({ tier: 'all' }), recordedAt: new Date(now.getTime() - 24 * 3600000).toISOString() },
+   832→    { id: crypto.randomUUID(), metric: 'mrr', value: 9800, dimensionsJson: JSON.stringify({ currency: 'USD' }), recordedAt: new Date(now.getTime() - 24 * 3600000).toISOString() },
+   833→    { id: crypto.randomUUID(), metric: 'churn_rate', value: 0.03, dimensionsJson: JSON.stringify({ period: 'monthly' }), recordedAt: new Date(now.getTime() - 0 * 3600000).toISOString() },
+   834→    { id: crypto.randomUUID(), metric: 'ai_api_calls', value: 1250, dimensionsJson: JSON.stringify({ provider: 'openai' }), recordedAt: new Date(now.getTime() - 0 * 3600000).toISOString() },
+   835→  ];
+   836→
+   837→  const results: unknown[] = [];
+   838→  for (const m of metrics) {
+   839→    const { data, error } = await client
+   840→      .from('PlatformMetric')
+   841→      .insert(m)
+   842→      .select()
+   843→      .single();
+   844→    if (error) {
+   845→      console.error(`[Seed] Error inserting PlatformMetric "${m.metric}":`, error.message);
+   846→    } else {
+   847→      results.push(data);
+   848→    }
+   849→  }
+   850→  return results;
+   851→}
+   852→
+   853→async function seedSecurityEvents(): Promise<unknown[]> {
+   854→  const client = getAdminClient();
+   855→  const now = new Date();
+   856→  const events = [
+   857→    { id: crypto.randomUUID(), eventType: 'login_success', severity: 'info', ip: '192.168.1.100', userAgent: 'Mozilla/5.0', metadataJson: JSON.stringify({ method: 'email' }), createdAt: new Date(now.getTime() - 2 * 3600000).toISOString() },
+   858→    { id: crypto.randomUUID(), eventType: 'login_failed', severity: 'warning', ip: '10.0.0.55', userAgent: 'curl/7.81.0', metadataJson: JSON.stringify({ method: 'email', reason: 'invalid_password' }), createdAt: new Date(now.getTime() - 4 * 3600000).toISOString() },
+   859→    { id: crypto.randomUUID(), eventType: 'permission_escalation_attempt', severity: 'critical', ip: '203.0.113.42', userAgent: 'Python-urllib/3.9', metadataJson: JSON.stringify({ fromRole: 'viewer', toRole: 'superadmin' }), createdAt: new Date(now.getTime() - 6 * 3600000).toISOString() },
+   860→    { id: crypto.randomUUID(), eventType: 'api_key_created', severity: 'info', ip: '192.168.1.100', userAgent: 'Mozilla/5.0', metadataJson: JSON.stringify({ keyName: 'production-api' }), createdAt: new Date(now.getTime() - 12 * 3600000).toISOString() },
+   861→    { id: crypto.randomUUID(), eventType: 'tenant_suspended', severity: 'warning', metadataJson: JSON.stringify({ reason: 'payment_overdue' }), createdAt: new Date(now.getTime() - 24 * 3600000).toISOString() },
+   862→    { id: crypto.randomUUID(), eventType: 'brute_force_detected', severity: 'critical', ip: '198.51.100.77', metadataJson: JSON.stringify({ attempts: 50, window: '5min' }), createdAt: new Date(now.getTime() - 48 * 3600000).toISOString() },
+   863→    { id: crypto.randomUUID(), eventType: 'data_export', severity: 'info', ip: '192.168.1.100', userAgent: 'Mozilla/5.0', metadataJson: JSON.stringify({ resourceType: 'leads', recordCount: 500 }), createdAt: new Date(now.getTime() - 72 * 3600000).toISOString() },
+   864→    { id: crypto.randomUUID(), eventType: 'mfa_enabled', severity: 'info', ip: '192.168.1.101', userAgent: 'Mozilla/5.0', metadataJson: JSON.stringify({ method: 'totp' }), createdAt: new Date(now.getTime() - 96 * 3600000).toISOString() },
+   865→  ];
+   866→
+   867→  const results: unknown[] = [];
+   868→  for (const event of events) {
+   869→    const { data, error } = await client
+   870→      .from('SecurityEvent')
+   871→      .insert(event)
+   872→      .select()
+   873→      .single();
+   874→    if (error) {
+   875→      console.error(`[Seed] Error inserting SecurityEvent "${event.eventType}":`, error.message);
+   876→    } else {
+   877→      results.push(data);
+   878→    }
+   879→  }
+   880→  return results;
+   881→}
+   882→
+   883→async function seedAuditLogEntries(): Promise<unknown[]> {
+   884→  const client = getAdminClient();
+   885→  const now = new Date();
+   886→  const entries = [
+   887→    { id: crypto.randomUUID(), action: 'tenant.create', resourceType: 'Tenant', ip: '192.168.1.100', userAgent: 'Mozilla/5.0', metadataJson: JSON.stringify({ tenantName: 'Acme Services' }), createdAt: new Date(now.getTime() - 1 * 3600000).toISOString() },
+   888→    { id: crypto.randomUUID(), action: 'user.promote', resourceType: 'User', ip: '192.168.1.100', userAgent: 'Mozilla/5.0', metadataJson: JSON.stringify({ fromRole: 'viewer', toRole: 'admin' }), createdAt: new Date(now.getTime() - 3 * 3600000).toISOString() },
+   889→    { id: crypto.randomUUID(), action: 'feature_flag.toggle', resourceType: 'FeatureFlag', ip: '192.168.1.100', userAgent: 'Mozilla/5.0', metadataJson: JSON.stringify({ flagKey: 'ai_assistant', enabled: true }), createdAt: new Date(now.getTime() - 5 * 3600000).toISOString() },
+   890→    { id: crypto.randomUUID(), action: 'subscription.update', resourceType: 'Subscription', ip: '10.0.0.1', userAgent: 'Stripe-Webhook/1.0', metadataJson: JSON.stringify({ plan: 'enterprise', billingCycle: 'annual' }), createdAt: new Date(now.getTime() - 8 * 3600000).toISOString() },
+   891→    { id: crypto.randomUUID(), action: 'tenant.suspend', resourceType: 'Tenant', ip: '10.0.0.1', userAgent: 'System/1.0', metadataJson: JSON.stringify({ reason: 'payment_overdue', daysOverdue: 30 }), createdAt: new Date(now.getTime() - 24 * 3600000).toISOString() },
+   892→    { id: crypto.randomUUID(), action: 'menu_item.reorder', resourceType: 'MenuItemConfig', ip: '192.168.1.100', userAgent: 'Mozilla/5.0', metadataJson: JSON.stringify({ menuKey: 'sidebar', itemsCount: 12 }), createdAt: new Date(now.getTime() - 48 * 3600000).toISOString() },
+   893→    { id: crypto.randomUUID(), action: 'settings.update', resourceType: 'Tenant', ip: '192.168.1.101', userAgent: 'Mozilla/5.0', metadataJson: JSON.stringify({ changedFields: ['whatsappConfig', 'currency'] }), createdAt: new Date(now.getTime() - 72 * 3600000).toISOString() },
+   894→    { id: crypto.randomUUID(), action: 'api_key.rotate', resourceType: 'ApiKey', ip: '192.168.1.100', userAgent: 'Mozilla/5.0', metadataJson: JSON.stringify({ keyPrefix: 'sos_prod_' }), createdAt: new Date(now.getTime() - 96 * 3600000).toISOString() },
+   895→  ];
+   896→
+   897→  const results: unknown[] = [];
+   898→  for (const entry of entries) {
+   899→    const { data, error } = await client
+   900→      .from('AuditLogEntry')
+   901→      .insert(entry)
+   902→      .select()
+   903→      .single();
+   904→    if (error) {
+   905→      console.error(`[Seed] Error inserting AuditLogEntry "${entry.action}":`, error.message);
+   906→    } else {
+   907→      results.push(data);
+   908→    }
+   909→  }
+   910→  return results;
+   911→}
+   912→
+   913→async function createUserAccounts(tenantId: string, workspaceId: string | null): Promise<unknown[]> {
+   914→  // Dynamic import for bcryptjs (server-side only)
+   915→  const bcrypt = await import('bcryptjs');
+   916→  const client = getAdminClient();
+   917→
+   918→  const roles = ['owner', 'admin', 'manager', 'technician', 'dispatcher', 'viewer'];
+   919→  const results: unknown[] = [];
+   920→
+   921→  for (const role of roles) {
+   922→    for (const num of [1, 2]) {
+   923→      const email = `${role}${num}@serviceos-demo.com`;
+   924→      const plainPassword = `${role.charAt(0).toUpperCase() + role.slice(1)}${num}@123`;
+   925→      const passwordHash = await bcrypt.hash(plainPassword, 10);
+   926→      const name = `${role.charAt(0).toUpperCase() + role.slice(1)} User ${num}`;
+   927→
+   928→      const { data, error } = await client
+   929→        .from('User')
+   930→        .insert({
+   931→          id: crypto.randomUUID(),
+   932→          email,
+   933→          name,
+   934→          passwordHash,
+   935→          role,
+   936→          authProvider: 'email',
+   937→          isActive: true,
+   938→          tenantId,
+   939→          workspaceId,
+   940→          updatedAt: new Date().toISOString(),
+   941→        })
+   942→        .select()
+   943→        .single();
+   944→
+   945→      if (error) {
+   946→        console.error(`[Seed] Error inserting User "${email}":`, error.message);
+   947→      } else {
+   948→        results.push(data);
+   949→      }
+   950→    }
+   951→  }
+   952→
+   953→  return results;
+   954→}
+   955→
+   956→// ── Main handler ───────────────────────────────────────────────────────────
+   957→
+   958→export async function POST(request: NextRequest) {
+   959→  try {
+   960→    if (!supabaseUrl || !supabaseServiceKey) {
+   961→      return NextResponse.json(
+   962→        { error: 'Supabase credentials not configured' },
+   963→        { status: 500 }
+   964→      );
+   965→    }
+   966→
+   967→    const body = await request.json().catch(() => ({}));
+   968→    const action = body.action || 'create';
+   969→
+   970→    // ── CREATE action: Check tables & return SQL ──────────────────────────
+   971→    if (action === 'create') {
+   972→      const tableStatus: Record<string, boolean> = {};
+   973→      for (const table of TABLES_TO_CHECK) {
+   974→        tableStatus[table] = await checkTableExists(table);
+   975→      }
+   976→
+   977→      const allExist = Object.values(tableStatus).every(Boolean);
+   978→      const missingTables = Object.entries(tableStatus)
+   979→        .filter(([, exists]) => !exists)
+   980→        .map(([name]) => name);
+   981→
+   982→      return NextResponse.json({
+   983→        success: true,
+   984→        allTablesExist: allExist,
+   985→        tableStatus,
+   986→        missingTables,
+   987→        message: allExist
+   988→          ? 'All required tables exist in Supabase!'
+   989→          : `Missing tables: ${missingTables.join(', ')}. Run the SQL migration script in the Supabase SQL Editor.`,
+   990→        sqlMigration: allExist ? null : SQL_MIGRATION,
+   991→      });
+   992→    }
+   993→
+   994→    // ── SEED action: Seed all tables ──────────────────────────────────────
+   995→    if (action === 'seed') {
+   996→      const tenant = await getFirstTenant();
+   997→      if (!tenant) {
+   998→        return NextResponse.json(
+   999→          { error: 'No tenant found in Supabase. Please create a tenant first.' },
+  1000→          { status: 400 }
+  1001→        );
+  1002→      }
+  1003→
+  1004→      const workspaceId = await getFirstWorkspace(tenant.id);
+  1005→      const userId = await getFirstUser(tenant.id);
+  1006→
+  1007→      // Verify all tables exist before seeding
+  1008→      for (const table of TABLES_TO_CHECK) {
+  1009→        const exists = await checkTableExists(table);
+  1010→        if (!exists) {
+  1011→          return NextResponse.json(
+  1012→            { error: `Table "${table}" does not exist. Run the 'create' action first to get the SQL migration.` },
+  1013→            { status: 400 }
+  1014→          );
+  1015→        }
+  1016→      }
+  1017→
+  1018→      const communicationProviders = await seedCommunicationProviders(tenant.id, workspaceId);
+  1019→      const contacts = await seedContacts(tenant.id, workspaceId);
+  1020→      const forms = await seedForms(tenant.id, workspaceId, userId);
+  1021→      const formResponses = await seedFormResponses(forms, tenant.id);
+  1022→      const automations = await seedWorkflowAutomations(tenant.id, workspaceId, userId);
+  1023→      const triggerExecutions = await seedTriggerExecutions(automations, tenant.id);
+  1024→      const subscriptionPlans = await seedSubscriptionPlans();
+  1025→      const platformMetrics = await seedPlatformMetrics();
+  1026→      const securityEvents = await seedSecurityEvents();
+  1027→      const auditLogEntries = await seedAuditLogEntries();
+  1028→
+  1029→      return NextResponse.json({
+  1030→        success: true,
+  1031→        message: 'Seed data inserted successfully!',
+  1032→        tenant: { id: tenant.id, name: tenant.name },
+  1033→        counts: {
+  1034→          communicationProviders: communicationProviders.length,
+  1035→          contacts: contacts.length,
+  1036→          forms: forms.length,
+  1037→          formResponses: formResponses.length,
+  1038→          workflowAutomations: automations.length,
+  1039→          triggerExecutions: triggerExecutions.length,
+  1040→          subscriptionPlans: subscriptionPlans.length,
+  1041→          platformMetrics: platformMetrics.length,
+  1042→          securityEvents: securityEvents.length,
+  1043→          auditLogEntries: auditLogEntries.length,
+  1044→        },
+  1045→      });
+  1046→    }
+  1047→
+  1048→    // ── CREATE-USERS action: Create user accounts ─────────────────────────
+  1049→    if (action === 'create-users') {
+  1050→      const tenant = await getFirstTenant();
+  1051→      if (!tenant) {
+  1052→        return NextResponse.json(
+  1053→          { error: 'No tenant found in Supabase. Please create a tenant first.' },
+  1054→          { status: 400 }
+  1055→        );
+  1056→      }
+  1057→
+  1058→      const workspaceId = await getFirstWorkspace(tenant.id);
+  1059→      const users = await createUserAccounts(tenant.id, workspaceId);
+  1060→
+  1061→      const roles = ['owner', 'admin', 'manager', 'technician', 'dispatcher', 'viewer'];
+  1062→      const credentials = roles.flatMap(role => [1, 2].map(num => ({
+  1063→        email: `${role}${num}@serviceos-demo.com`,
+  1064→        password: `${role.charAt(0).toUpperCase() + role.slice(1)}${num}@123`,
+  1065→        role,
+  1066→      })));
+  1067→
+  1068→      return NextResponse.json({
+  1069→        success: true,
+  1070→        message: `${users.length} user accounts created!`,
+  1071→        tenant: { id: tenant.id, name: tenant.name },
+  1072→        userCount: users.length,
+  1073→        credentials,
+  1074→      });
+  1075→    }
+  1076→
+  1077→    return NextResponse.json(
+  1078→      { error: 'Invalid action. Use "create", "seed", or "create-users".' },
+  1079→      { status: 400 }
+  1080→    );
+  1081→  } catch (err) {
+  1082→    console.error('[SetupSupabaseTables] Error:', err);
+  1083→    return NextResponse.json(
+  1084→      { error: 'Internal server error', details: err instanceof Error ? err.message : String(err) },
+  1085→      { status: 500 }
+  1086→    );
+  1087→  }
+  1088→}
+  1089→
+  1090→// ── GET handler: Return the SQL migration script ───────────────────────────
+  1091→
+  1092→export async function GET() {
+  1093→  return NextResponse.json({
+  1094→    message: 'Use POST with action: "create" | "seed" | "create-users"',
+  1095→    tables: TABLES_TO_CHECK,
+  1096→    sqlMigrationPreview: SQL_MIGRATION.substring(0, 500) + '... (use POST action=create for full SQL)',
+  1097→  });
+  1098→}
+  1099→

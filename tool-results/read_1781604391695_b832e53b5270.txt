@@ -1,0 +1,1983 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback, useMemo } from 'react';
+     4→import { toast } from 'sonner';
+     5→import { useQueryClient } from '@tanstack/react-query';
+     6→import { cn } from '@/lib/utils';
+     7→import { useAppStore } from '@/store/app-store';
+     8→import {
+     9→  useTenants,
+    10→  useSubscriptions,
+    11→  useFeatureFlags,
+    12→  useMenuItems,
+    13→  useGlobalMenuItems,
+    14→  useToggleFeatureFlag,
+    15→  useToggleMenuItem,
+    16→  useUsers,
+    17→  useSaasStats,
+    18→} from '@/hooks/queries/use-supabase-queries';
+    19→
+    20→import {
+    21→  Building2, Users, DollarSign, CreditCard, TrendingUp, TrendingDown,
+    22→  Search, Loader2, ShieldCheck, ShieldAlert, Shield, Eye, Ban, Play,
+    23→  Menu, ToggleLeft, ToggleRight, Flag, Settings2, Pause, PlayCircle,
+    24→  LayoutDashboard, UsersRound, Megaphone, ShoppingCart, MessageSquare,
+    25→  Bot, Workflow, Radio, Wallet, BookOpen, Cpu, ChevronDown,
+    26→  CheckCircle2, XCircle, AlertTriangle, ArrowUpDown, RefreshCw,
+    27→  Plus, Trash2, Edit3, FileText, Clock, Activity, Globe,
+    28→  BarChart3, UserCog, Zap, Calendar, Target, Briefcase,
+    29→  Filter, Key, Store, FileInput, Receipt, Settings,
+    30→} from 'lucide-react';
+    31→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    32→import { Button } from '@/components/ui/button';
+    33→import { Badge } from '@/components/ui/badge';
+    34→import { Input } from '@/components/ui/input';
+    35→import { Label } from '@/components/ui/label';
+    36→import { Separator } from '@/components/ui/separator';
+    37→import { Switch } from '@/components/ui/switch';
+    38→import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+    39→import { ScrollArea } from '@/components/ui/scroll-area';
+    40→import {
+    41→  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+    42→} from '@/components/ui/table';
+    43→import {
+    44→  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+    45→} from '@/components/ui/dialog';
+    46→import {
+    47→  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+    48→} from '@/components/ui/select';
+    49→import { Skeleton } from '@/components/ui/skeleton';
+    50→import { Textarea } from '@/components/ui/textarea';
+    51→import { Progress } from '@/components/ui/progress';
+    52→import { formatCurrency as formatCurrencyShared } from '@/lib/currency';
+    53→import { useBaseCurrency } from '@/hooks/use-base-currency';
+    54→
+    55→// ─── Types ───────────────────────────────────────────────────────────────────
+    56→
+    57→interface PlatformStats {
+    58→  totalTenants: number;
+    59→  activeTenants: number;
+    60→  suspendedTenants: number;
+    61→  trialTenants: number;
+    62→  totalUsers: number;
+    63→  activeUsers: number;
+    64→  totalRevenue: number;
+    65→  mrr: number;
+    66→  arr: number;
+    67→  avgChurnRate: number;
+    68→  activeSubscriptions: number;
+    69→  communication: { totalConversations: number; activeConversations: number };
+    70→  healthMetrics: { metric: string; value: number; dimensions: Record<string, unknown>; recordedAt: string }[];
+    71→  recentSecurityEvents: { id: string; eventType: string; severity: string; userId: string; tenantId: string; ip: string; createdAt: string }[];
+    72→  recentAuditLogs: { id: string; userId: string; tenantId: string | null; action: string; resourceType: string; resourceId: string; ip: string; createdAt: string }[];
+    73→  trends: { tenants: number; users: number; revenue: number; subscriptions: number };
+    74→}
+    75→
+    76→interface Tenant {
+    77→  id: string;
+    78→  name: string;
+    79→  slug: string;
+    80→  email: string;
+    81→  phone: string;
+    82→  plan: string;
+    83→  planStatus: string;
+    84→  industry: string;
+    85→  country: string;
+    86→  currency: string;
+    87→  onboardingCompleted: boolean;
+    88→  suspendedAt: string | null;
+    89→  suspensionReason: string | null;
+    90→  mrr: number;
+    91→  arr: number;
+    92→  createdAt: string;
+    93→  userCount: number;
+    94→  subscriptionStatus: string | null;
+    95→}
+    96→
+    97→interface Subscription {
+    98→  id: string;
+    99→  tenantId: string;
+   100→  tenantName: string;
+   101→  tenantEmail: string;
+   102→  plan: string;
+   103→  status: string;
+   104→  amount: number;
+   105→  currency: string;
+   106→  billingCycle: string;
+   107→  startDate: string | null;
+   108→  endDate: string | null;
+   109→  pausedDate: string | null;
+   110→  pauseReason: string | null;
+   111→  seatCount: number;
+   112→  aiQuota: number;
+   113→  aiUsageCount: number;
+   114→  whatsappQuota: number;
+   115→  whatsappUsageCount: number;
+   116→  createdAt: string | null;
+   117→}
+   118→
+   119→interface FeatureFlagDef {
+   120→  key: string;
+   121→  label: string;
+   122→  description: string;
+   123→  enabled: boolean;
+   124→  config?: Record<string, unknown>;
+   125→}
+   126→
+   127→interface MenuItemDef {
+   128→  id: string;
+   129→  key: string;
+   130→  label: string;
+   131→  icon?: string;
+   132→  section: string;
+   133→  enabled: boolean;
+   134→  sortOrder?: number;
+   135→}
+   136→
+   137→interface UserRecord {
+   138→  id: string;
+   139→  name: string;
+   140→  email: string;
+   141→  phone?: string | null;
+   142→  role: string;
+   143→  isActive: boolean;
+   144→  avatar?: string | null;
+   145→  authProvider?: string | null;
+   146→  lastLoginAt?: string | null;
+   147→  tenantId?: string | null;
+   148→  tenantName?: string | null;
+   149→  createdAt: string;
+   150→}
+   151→
+   152→interface AuditLog {
+   153→  id: string;
+   154→  userId: string | null;
+   155→  tenantId: string | null;
+   156→  action: string;
+   157→  resourceType: string | null;
+   158→  resourceId: string | null;
+   159→  ip: string | null;
+   160→  metadata?: Record<string, unknown>;
+   161→  createdAt: string | null;
+   162→}
+   163→
+   164→// ─── Constants ───────────────────────────────────────────────────────────────
+   165→
+   166→const MENU_SECTIONS = [
+   167→  { key: 'CRM', label: 'CRM', icon: UsersRound, color: 'emerald' },
+   168→  { key: 'Communication', label: 'Communication', icon: MessageSquare, color: 'sky' },
+   169→  { key: 'Marketing', label: 'Marketing', icon: Megaphone, color: 'amber' },
+   170→  { key: 'Automation', label: 'Automation', icon: Bot, color: 'violet' },
+   171→  { key: 'Operations', label: 'Operations', icon: LayoutDashboard, color: 'orange' },
+   172→  { key: 'Finance', label: 'Finance', icon: Wallet, color: 'teal' },
+   173→  { key: 'System', label: 'System', icon: Settings2, color: 'slate' },
+   174→  { key: 'Portals', label: 'Portals', icon: Globe, color: 'rose' },
+   175→  { key: 'AI & More', label: 'AI & More', icon: Cpu, color: 'indigo' },
+   176→] as const;
+   177→
+   178→const DEFAULT_MENU_ITEMS: { key: string; label: string; section: string }[] = [
+   179→  // CRM
+   180→  { key: 'leads', label: 'Leads', section: 'CRM' },
+   181→  { key: 'contacts', label: 'Contacts', section: 'CRM' },
+   182→  { key: 'customers', label: 'Customers', section: 'CRM' },
+   183→  { key: 'customer360', label: 'Customer 360', section: 'CRM' },
+   184→  { key: 'salesPipeline', label: 'Sales Pipeline', section: 'CRM' },
+   185→  // Communication
+   186→  { key: 'omnichannel', label: 'Omnichannel', section: 'Communication' },
+   187→  { key: 'broadcast', label: 'Broadcast', section: 'Communication' },
+   188→  { key: 'marketingTemplates', label: 'Marketing Templates', section: 'Communication' },
+   189→  // Marketing
+   190→  { key: 'campaigns', label: 'Campaigns', section: 'Marketing' },
+   191→  { key: 'segments', label: 'Segments', section: 'Marketing' },
+   192→  { key: 'retargeting', label: 'Retargeting', section: 'Marketing' },
+   193→  { key: 'marketingAnalytics', label: 'Analytics', section: 'Marketing' },
+   194→  // Automation
+   195→  { key: 'workflows', label: 'Workflows', section: 'Automation' },
+   196→  { key: 'triggers', label: 'Triggers', section: 'Automation' },
+   197→  { key: 'variables', label: 'Variables', section: 'Automation' },
+   198→  { key: 'executions', label: 'Executions', section: 'Automation' },
+   199→  { key: 'formBuilder', label: 'Form Builder', section: 'Automation' },
+   200→  { key: 'workflowAutomations', label: 'Workflow Automations', section: 'Automation' },
+   201→  // Operations
+   202→  { key: 'booking', label: 'Booking', section: 'Operations' },
+   203→  { key: 'calendar', label: 'Calendar', section: 'Operations' },
+   204→  { key: 'jobs', label: 'Jobs', section: 'Operations' },
+   205→  { key: 'dispatch', label: 'Dispatch', section: 'Operations' },
+   206→  { key: 'employees', label: 'Employees', section: 'Operations' },
+   207→  // Finance
+   208→  { key: 'quotes', label: 'Quotes', section: 'Finance' },
+   209→  { key: 'invoices', label: 'Invoices', section: 'Finance' },
+   210→  { key: 'billing', label: 'Billing', section: 'Finance' },
+   211→  // System
+   212→  { key: 'credentials', label: 'Credentials', section: 'System' },
+   213→  { key: 'integrations', label: 'Integrations', section: 'System' },
+   214→  { key: 'settings', label: 'Settings', section: 'System' },
+   215→  { key: 'auditLogs', label: 'Audit Logs', section: 'System' },
+   216→  { key: 'reports', label: 'Reports', section: 'System' },
+   217→  // Portals
+   218→  { key: 'customerPortal', label: 'Customer Portal', section: 'Portals' },
+   219→  { key: 'employeePortal', label: 'Employee Portal', section: 'Portals' },
+   220→  // AI & More
+   221→  { key: 'aiAssistant', label: 'AI Assistant', section: 'AI & More' },
+   222→  { key: 'chatbotBuilder', label: 'Chatbot Builder', section: 'AI & More' },
+   223→  { key: 'serviceCatalog', label: 'Service Catalog', section: 'AI & More' },
+   224→  { key: 'communicationProviders', label: 'Providers', section: 'AI & More' },
+   225→  { key: 'reviews', label: 'Reviews', section: 'AI & More' },
+   226→];
+   227→
+   228→const FEATURE_DEFINITIONS = [
+   229→  { key: 'whatsapp_crm', label: 'WhatsApp CRM', description: 'Manage WhatsApp conversations and customer relationships' },
+   230→  { key: 'ai_assistant', label: 'AI Assistant', description: 'AI-powered assistant for customer support and automation' },
+   231→  { key: 'campaigns', label: 'Campaigns', description: 'Create and manage marketing campaigns' },
+   232→  { key: 'workflows', label: 'Workflows', description: 'Automate business processes with custom workflows' },
+   233→  { key: 'chatbot_builder', label: 'Chatbot Builder', description: 'Build and deploy custom chatbots' },
+   234→  { key: 'form_builder', label: 'Form Builder', description: 'Create custom forms and surveys' },
+   235→  { key: 'omnichannel', label: 'Omnichannel', description: 'Unified communication across multiple channels' },
+   236→  { key: 'sales_pipeline', label: 'Sales Pipeline', description: 'Manage deals and sales pipeline stages' },
+   237→  { key: 'journey_automation', label: 'Journey Automation', description: 'Create automated customer journey workflows' },
+   238→  { key: 'knowledge_base', label: 'Knowledge Base', description: 'Build and manage a knowledge base for support' },
+   239→  { key: 'marketplace', label: 'Marketplace', description: 'Access integrations and templates marketplace' },
+   240→  { key: 'custom_domains', label: 'Custom Domains', description: 'Use custom domains for portals and forms' },
+   241→  { key: 'api_access', label: 'API Access', description: 'Full REST API access for integrations' },
+   242→  { key: 'bulk_operations', label: 'Bulk Operations', description: 'Perform bulk import, export, and operations' },
+   243→  { key: 'advanced_analytics', label: 'Advanced Analytics', description: 'Detailed analytics with custom reports and dashboards' },
+   244→];
+   245→
+   246→const PLAN_AMOUNTS: Record<string, number> = {
+   247→  trial: 0, starter: 29, growth: 79, pro: 149, enterprise: 0,
+   248→};
+   249→
+   250→// ─── Helpers ─────────────────────────────────────────────────────────────────
+   251→
+   252→function formatDate(dateStr: string | null | undefined): string {
+   253→  if (!dateStr) return '—';
+   254→  try {
+   255→    return new Date(dateStr).toLocaleDateString('en-US', {
+   256→      month: 'short', day: 'numeric', year: 'numeric',
+   257→    });
+   258→  } catch { return dateStr; }
+   259→}
+   260→
+   261→function formatDateTime(dateStr: string | null | undefined): string {
+   262→  if (!dateStr) return '—';
+   263→  try {
+   264→    return new Date(dateStr).toLocaleString('en-US', {
+   265→      month: 'short', day: 'numeric', year: 'numeric',
+   266→      hour: '2-digit', minute: '2-digit',
+   267→    });
+   268→  } catch { return dateStr; }
+   269→}
+   270→
+   271→function getStatusBadge(status: string) {
+   272→  const map: Record<string, string> = {
+   273→    active: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+   274→    trial: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+   275→    suspended: 'bg-red-500/10 text-red-400 border-red-500/20',
+   276→    paused: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+   277→    cancelled: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
+   278→    expired: 'bg-red-500/10 text-red-400 border-red-500/20',
+   279→  };
+   280→  return map[status] || map.trial;
+   281→}
+   282→
+   283→function getPlanBadge(plan: string) {
+   284→  const map: Record<string, string> = {
+   285→    trial: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
+   286→    starter: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
+   287→    growth: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+   288→    pro: 'bg-teal-500/10 text-teal-400 border-teal-500/20',
+   289→    professional: 'bg-teal-500/10 text-teal-400 border-teal-500/20',
+   290→    enterprise: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
+   291→  };
+   292→  return map[plan] || map.trial;
+   293→}
+   294→
+   295→function getSeverityBadge(severity: string) {
+   296→  const map: Record<string, string> = {
+   297→    critical: 'bg-red-500/10 text-red-400 border-red-500/20',
+   298→    high: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+   299→    medium: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+   300→    low: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
+   301→  };
+   302→  return map[severity] || map.low;
+   303→}
+   304→
+   305→// ─── Skeleton Components ─────────────────────────────────────────────────────
+   306→
+   307→function KPISkeleton({ count = 5 }: { count?: number }) {
+   308→  return (
+   309→    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+   310→      {Array.from({ length: count }).map((_, i) => (
+   311→        <Card key={i} className="bg-slate-900 border-slate-800">
+   312→          <CardContent className="p-4">
+   313→            <div className="flex items-center gap-3">
+   314→              <Skeleton className="size-10 rounded-lg bg-slate-800" />
+   315→              <div className="flex-1 space-y-2">
+   316→                <Skeleton className="h-3 w-20 bg-slate-800" />
+   317→                <Skeleton className="h-6 w-16 bg-slate-800" />
+   318→              </div>
+   319→            </div>
+   320→          </CardContent>
+   321→        </Card>
+   322→      ))}
+   323→    </div>
+   324→  );
+   325→}
+   326→
+   327→function TableSkeleton({ rows = 5 }: { rows?: number }) {
+   328→  return (
+   329→    <Card className="bg-slate-900 border-slate-800">
+   330→      <CardContent className="p-4 space-y-3">
+   331→        {Array.from({ length: rows }).map((_, i) => (
+   332→          <div key={i} className="flex items-center gap-4">
+   333→            <Skeleton className="h-4 w-32 bg-slate-800" />
+   334→            <Skeleton className="h-4 w-16 bg-slate-800" />
+   335→            <Skeleton className="h-4 w-20 bg-slate-800" />
+   336→            <Skeleton className="h-4 w-16 bg-slate-800" />
+   337→            <Skeleton className="h-4 w-24 ml-auto bg-slate-800" />
+   338→          </div>
+   339→        ))}
+   340→      </CardContent>
+   341→    </Card>
+   342→  );
+   343→}
+   344→
+   345→// ═══════════════════════════════════════════════════════════════════════════════
+   346→// MAIN COMPONENT
+   347→// ═══════════════════════════════════════════════════════════════════════════════
+   348→
+   349→export function SuperAdminView() {
+   350→  const { baseCurrency } = useBaseCurrency();
+   351→  const [activeTab, setActiveTab] = useState('dashboard');
+   352→  const { auth, setCurrentView } = useAppStore();
+   353→  const queryClient = useQueryClient();
+   354→  const toggleFeatureFlagMutation = useToggleFeatureFlag();
+   355→  const toggleMenuItemMutation = useToggleMenuItem();
+   356→
+   357→  // Guard: Only superadmin users can access this view
+   358→  const isSuperAdmin = !!(auth.user?.isSuperAdmin || auth.user?.role === 'superadmin' || auth.user?.role === 'super_admin' || (auth.user?.role === 'admin' && !auth.user?.tenantId));
+   359→  if (!isSuperAdmin) {
+   360→    return (
+   361→      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
+   362→        <ShieldAlert className="size-16 text-red-400 opacity-50" />
+   363→        <h2 className="text-xl font-semibold text-white">Access Denied</h2>
+   364→        <p className="text-slate-400">You do not have permission to access the Super Admin panel.</p>
+   365→        <Button variant="outline" onClick={() => setCurrentView('dashboard')} className="mt-2">
+   366→          Go to Dashboard
+   367→        </Button>
+   368→      </div>
+   369→    );
+   370→  }
+   371→
+   372→  // ─── Data Hooks ───────────────────────────────────────────────────────────
+   373→  const { data: statsData, isLoading: statsLoading, refetch: refetchStats } = useSaasStats();
+   374→  const { data: tenantsData, isLoading: tenantsLoading, refetch: refetchTenants } = useTenants();
+   375→  const { data: subscriptionsData, isLoading: subsLoading } = useSubscriptions();
+   376→  const { data: usersData, isLoading: usersLoading } = useUsers();
+   377→
+   378→  // Feature flags state
+   379→  const [selectedTenantForFlags, setSelectedTenantForFlags] = useState<string>('');
+   380→  const { data: flagsData, isLoading: flagsLoading } = useFeatureFlags(selectedTenantForFlags || undefined);
+   381→
+   382→  // Menu items state
+   383→  const [selectedTenantForMenu, setSelectedTenantForMenu] = useState<string>('');
+   384→  const [menuScope, setMenuScope] = useState<'global' | 'tenant'>('global');
+   385→  const { data: menuData, isLoading: menuLoading } = useMenuItems(selectedTenantForMenu);
+   386→  const { data: globalMenuData, isLoading: globalMenuLoading } = useGlobalMenuItems();
+   387→
+   388→  // Derived data
+   389→  const tenants: Tenant[] = useMemo(() => {
+   390→    if (!tenantsData) return [];
+   391→    const arr = Array.isArray(tenantsData) ? tenantsData : (tenantsData as Record<string, unknown>)?.tenants || [];
+   392→    return arr as Tenant[];
+   393→  }, [tenantsData]);
+   394→
+   395→  const subscriptions: Subscription[] = useMemo(() => {
+   396→    if (!subscriptionsData) return [];
+   397→    const arr = Array.isArray(subscriptionsData) ? subscriptionsData : (subscriptionsData as Record<string, unknown>)?.subscriptions || [];
+   398→    return arr as Subscription[];
+   399→  }, [subscriptionsData]);
+   400→
+   401→  const users: UserRecord[] = useMemo(() => {
+   402→    if (!usersData) return [];
+   403→    const arr = Array.isArray(usersData) ? usersData : (usersData as Record<string, unknown>)?.users || [];
+   404→    return arr as UserRecord[];
+   405→  }, [usersData]);
+   406→
+   407→  const featureFlags: FeatureFlagDef[] = useMemo(() => {
+   408→    if (!flagsData) return FEATURE_DEFINITIONS.map((d) => ({ ...d, enabled: false }));
+   409→    const arr = Array.isArray(flagsData) ? flagsData : (flagsData as Record<string, unknown>)?.flags || [];
+   410→    // Merge with definitions to ensure all features appear
+   411→    return FEATURE_DEFINITIONS.map((def) => {
+   412→      const existing = (arr as FeatureFlagDef[]).find((f) => f.key === def.key);
+   413→      return { ...def, enabled: existing?.enabled ?? false, config: existing?.config };
+   414→    });
+   415→  }, [flagsData]);
+   416→
+   417→  const menuItems: MenuItemDef[] = useMemo(() => {
+   418→    if (menuScope === 'global') {
+   419→      if (!globalMenuData) return DEFAULT_MENU_ITEMS.map((item, i) => ({ ...item, id: `default_${item.key}`, enabled: true, sortOrder: i }));
+   420→      const arr = Array.isArray(globalMenuData) ? globalMenuData : (globalMenuData as Record<string, unknown>)?.items || [];
+   421→      return arr as MenuItemDef[];
+   422→    }
+   423→    if (!menuData) return DEFAULT_MENU_ITEMS.map((item, i) => ({ ...item, id: `default_${item.key}`, enabled: true, sortOrder: i }));
+   424→    const arr = Array.isArray(menuData) ? menuData : (menuData as Record<string, unknown>)?.items || [];
+   425→    return arr as MenuItemDef[];
+   426→  }, [menuData, globalMenuData, menuScope]);
+   427→
+   428→  // Auto-select first tenant for feature flags
+   429→  useEffect(() => {
+   430→    if (tenants.length > 0 && !selectedTenantForFlags) {
+   431→      setSelectedTenantForFlags(tenants[0].id);
+   432→    }
+   433→  }, [tenants, selectedTenantForFlags]);
+   434→
+   435→  // Auto-select first tenant for menu items only when in tenant scope
+   436→  useEffect(() => {
+   437→    if (menuScope === 'tenant' && tenants.length > 0 && !selectedTenantForMenu) {
+   438→      setSelectedTenantForMenu(tenants[0].id);
+   439→    }
+   440→  }, [tenants, selectedTenantForMenu, menuScope]);
+   441→
+   442→  // ═══════════════════════════════════════════════════════════════════════════
+   443→  // 1. DASHBOARD TAB
+   444→  // ═══════════════════════════════════════════════════════════════════════════
+   445→
+   446→  function DashboardTab() {
+   447→    // Use statsData from the parent hook (useSaasStats → /api/superadmin/stats)
+   448→    const stats = (statsData as PlatformStats) || null;
+   449→    const loading = statsLoading;
+   450→
+   451→    const handleRefresh = useCallback(() => {
+   452→      refetchStats();
+   453→      refetchTenants();
+   454→    }, [refetchStats, refetchTenants]);
+   455→
+   456→    // Tenant growth chart data (from tenants by month)
+   457→    const tenantGrowthData = useMemo(() => {
+   458→      if (!tenants.length) return [];
+   459→      const months: Record<string, number> = {};
+   460→      const now = new Date();
+   461→      for (let i = 5; i >= 0; i--) {
+   462→        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+   463→        const key = d.toLocaleDateString('en-US', { month: 'short' });
+   464→        months[key] = 0;
+   465→      }
+   466→      tenants.forEach((t) => {
+   467→        try {
+   468→          const d = new Date(t.createdAt);
+   469→          const key = d.toLocaleDateString('en-US', { month: 'short' });
+   470→          if (key in months) months[key]++;
+   471→        } catch { /* ignore */ }
+   472→      });
+   473→      return Object.entries(months).map(([month, count]) => ({ month, count }));
+   474→    }, [tenants]);
+   475→
+   476→    const maxGrowth = Math.max(...tenantGrowthData.map((d) => d.count), 1);
+   477→
+   478→    // Recent signups (last 5 tenants)
+   479→    const recentSignups = useMemo(() =>
+   480→      [...tenants].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5),
+   481→    [tenants]);
+   482→
+   483→    // Platform alerts
+   484→    const alerts = useMemo(() => {
+   485→      const list: { type: 'warning' | 'error' | 'info'; message: string; tenant?: string }[] = [];
+   486→      tenants.filter((t) => t.planStatus === 'suspended').forEach((t) => {
+   487→        list.push({ type: 'error', message: `Tenant "${t.name}" is suspended`, tenant: t.name });
+   488→      });
+   489→      tenants.filter((t) => t.planStatus === 'trial').forEach((t) => {
+   490→        list.push({ type: 'warning', message: `Tenant "${t.name}" is on trial`, tenant: t.name });
+   491→      });
+   492→      if (list.length === 0) {
+   493→        list.push({ type: 'info', message: 'No active alerts. Platform is healthy.' });
+   494→      }
+   495→      return list;
+   496→    }, [tenants]);
+   497→
+   498→    if (loading) return <KPISkeleton count={5} />;
+   499→
+   500→    const kpiCards = [
+   501→      { label: 'Total Tenants', value: stats?.totalTenants ?? 0, icon: Building2, trend: stats?.trends?.tenants, color: 'emerald' },
+   502→      { label: 'Active Users', value: stats?.activeUsers ?? stats?.totalUsers ?? 0, icon: Users, trend: stats?.trends?.users, color: 'sky' },
+   503→      { label: 'MRR', value: formatCurrencyShared(stats?.mrr ?? 0, baseCurrency), icon: DollarSign, trend: stats?.trends?.revenue, color: 'emerald', isFormatted: true },
+   504→      { label: 'ARR', value: formatCurrencyShared(stats?.arr ?? 0, baseCurrency), icon: TrendingUp, trend: null, color: 'teal', isFormatted: true },
+   505→      { label: 'Churn Rate', value: `${stats?.avgChurnRate ?? 0}%`, icon: TrendingDown, trend: null, color: stats?.avgChurnRate && stats.avgChurnRate > 5 ? 'red' : 'emerald', isFormatted: true },
+   506→    ];
+   507→
+   508→    return (
+   509→      <div className="space-y-6">
+   510→        {/* KPI Cards */}
+   511→        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+   512→          {kpiCards.map((card) => {
+   513→            const Icon = card.icon;
+   514→            const colorMap: Record<string, string> = {
+   515→              emerald: 'bg-emerald-500/10 text-emerald-400',
+   516→              sky: 'bg-sky-500/10 text-sky-400',
+   517→              teal: 'bg-teal-500/10 text-teal-400',
+   518→              red: 'bg-red-500/10 text-red-400',
+   519→            };
+   520→            return (
+   521→              <Card key={card.label} className="bg-slate-900 border-slate-800 hover:border-slate-700 transition-colors">
+   522→                <CardContent className="p-4">
+   523→                  <div className="flex items-center gap-3">
+   524→                    <div className={cn('size-10 rounded-lg flex items-center justify-center shrink-0', colorMap[card.color])}>
+   525→                      <Icon className="size-5" />
+   526→                    </div>
+   527→                    <div className="min-w-0 flex-1">
+   528→                      <p className="text-xs text-slate-400 truncate">{card.label}</p>
+   529→                      <div className="flex items-baseline gap-2">
+   530→                        <p className="text-xl font-bold text-white">{card.value}</p>
+   531→                        {card.trend !== null && card.trend !== undefined && (
+   532→                          <span className={cn(
+   533→                            'inline-flex items-center text-[10px] font-medium',
+   534→                            card.trend >= 0 ? 'text-emerald-400' : 'text-red-400',
+   535→                          )}>
+   536→                            {card.trend >= 0 ? <TrendingUp className="size-3 mr-0.5" /> : <TrendingDown className="size-3 mr-0.5" />}
+   537→                            {Math.abs(card.trend)}%
+   538→                          </span>
+   539→                        )}
+   540→                      </div>
+   541→                    </div>
+   542→                  </div>
+   543→                </CardContent>
+   544→              </Card>
+   545→            );
+   546→          })}
+   547→        </div>
+   548→
+   549→        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+   550→          {/* Tenant Growth Chart */}
+   551→          <Card className="bg-slate-900 border-slate-800 lg:col-span-2">
+   552→            <CardHeader className="pb-2">
+   553→              <CardTitle className="text-sm font-medium text-white">Tenant Growth</CardTitle>
+   554→              <CardDescription className="text-xs text-slate-400">New tenants per month</CardDescription>
+   555→            </CardHeader>
+   556→            <CardContent>
+   557→              <div className="flex items-end gap-2 h-40">
+   558→                {tenantGrowthData.map((d) => (
+   559→                  <div key={d.month} className="flex-1 flex flex-col items-center gap-1">
+   560→                    <span className="text-[10px] text-slate-400">{d.count}</span>
+   561→                    <div
+   562→                      className="w-full bg-emerald-500/20 rounded-t-md transition-all hover:bg-emerald-500/30 min-h-[4px]"
+   563→                      style={{ height: `${Math.max((d.count / maxGrowth) * 120, 4)}px` }}
+   564→                    />
+   565→                    <span className="text-[10px] text-slate-500">{d.month}</span>
+   566→                  </div>
+   567→                ))}
+   568→              </div>
+   569→            </CardContent>
+   570→          </Card>
+   571→
+   572→          {/* Recent Signups */}
+   573→          <Card className="bg-slate-900 border-slate-800">
+   574→            <CardHeader className="pb-2">
+   575→              <CardTitle className="text-sm font-medium text-white">Recent Signups</CardTitle>
+   576→            </CardHeader>
+   577→            <CardContent>
+   578→              <div className="space-y-3 max-h-48 overflow-y-auto">
+   579→                {recentSignups.length === 0 ? (
+   580→                  <p className="text-sm text-slate-500 text-center py-4">No tenants yet</p>
+   581→                ) : recentSignups.map((t) => (
+   582→                  <div key={t.id} className="flex items-center gap-3">
+   583→                    <div className="size-8 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
+   584→                      <Building2 className="size-3.5 text-emerald-400" />
+   585→                    </div>
+   586→                    <div className="min-w-0 flex-1">
+   587→                      <p className="text-sm font-medium text-white truncate">{t.name}</p>
+   588→                      <p className="text-[10px] text-slate-400">{formatDate(t.createdAt)}</p>
+   589→                    </div>
+   590→                    <Badge variant="outline" className={cn('text-[10px] capitalize', getPlanBadge(t.plan))}>
+   591→                      {t.plan}
+   592→                    </Badge>
+   593→                  </div>
+   594→                ))}
+   595→              </div>
+   596→            </CardContent>
+   597→          </Card>
+   598→        </div>
+   599→
+   600→        {/* Platform Alerts */}
+   601→        <Card className="bg-slate-900 border-slate-800">
+   602→          <CardHeader className="pb-2">
+   603→            <div className="flex items-center justify-between">
+   604→              <CardTitle className="text-sm font-medium text-white">Platform Alerts</CardTitle>
+   605→              <Button variant="ghost" size="sm" onClick={handleRefresh} className="h-7 text-xs text-slate-400 hover:text-white">
+   606→                <RefreshCw className="size-3 mr-1" /> Refresh
+   607→              </Button>
+   608→            </div>
+   609→          </CardHeader>
+   610→          <CardContent>
+   611→            <div className="space-y-2">
+   612→              {alerts.map((alert, i) => (
+   613→                <div key={i} className={cn(
+   614→                  'flex items-center gap-3 p-3 rounded-lg border',
+   615→                  alert.type === 'error' ? 'bg-red-500/5 border-red-500/20' :
+   616→                  alert.type === 'warning' ? 'bg-amber-500/5 border-amber-500/20' :
+   617→                  'bg-sky-500/5 border-sky-500/20',
+   618→                )}>
+   619→                  {alert.type === 'error' ? <ShieldAlert className="size-4 text-red-400 shrink-0" /> :
+   620→                   alert.type === 'warning' ? <AlertTriangle className="size-4 text-amber-400 shrink-0" /> :
+   621→                   <CheckCircle2 className="size-4 text-sky-400 shrink-0" />}
+   622→                  <span className="text-sm text-slate-300">{alert.message}</span>
+   623→                </div>
+   624→              ))}
+   625→            </div>
+   626→          </CardContent>
+   627→        </Card>
+   628→      </div>
+   629→    );
+   630→  }
+   631→
+   632→  // ═══════════════════════════════════════════════════════════════════════════
+   633→  // 2. TENANT MANAGEMENT TAB
+   634→  // ═══════════════════════════════════════════════════════════════════════════
+   635→
+   636→  function TenantsTab() {
+   637→    const [search, setSearch] = useState('');
+   638→    const [planFilter, setPlanFilter] = useState('all');
+   639→    const [statusFilter, setStatusFilter] = useState('all');
+   640→    const [suspendDialog, setSuspendDialog] = useState<{ tenant: Tenant; action: 'suspend' | 'reactivate' | 'delete' } | null>(null);
+   641→    const [suspendReason, setSuspendReason] = useState('');
+   642→    const [saving, setSaving] = useState(false);
+   643→    const [viewTenant, setViewTenant] = useState<Tenant | null>(null);
+   644→    const [editPlanDialog, setEditPlanDialog] = useState<Tenant | null>(null);
+   645→    const [newPlan, setNewPlan] = useState('');
+   646→    const [createDialog, setCreateDialog] = useState(false);
+   647→    const [newTenantForm, setNewTenantForm] = useState({ name: '', email: '', plan: 'starter', ownerName: '', password: '' });
+   648→    const [creating, setCreating] = useState(false);
+   649→
+   650→    const filteredTenants = useMemo(() => {
+   651→      return tenants.filter((t) => {
+   652→        const matchesSearch = !search || t.name.toLowerCase().includes(search.toLowerCase()) || t.email.toLowerCase().includes(search.toLowerCase());
+   653→        const matchesPlan = planFilter === 'all' || t.plan === planFilter;
+   654→        const matchesStatus = statusFilter === 'all' || t.planStatus === statusFilter || (statusFilter === 'suspended' && t.suspendedAt);
+   655→        return matchesSearch && matchesPlan && matchesStatus;
+   656→      });
+   657→    }, [tenants, search, planFilter, statusFilter]);
+   658→
+   659→    const handleAction = async () => {
+   660→      if (!suspendDialog) return;
+   661→      if (suspendDialog.action === 'suspend' && !suspendReason.trim()) {
+   662→        toast.error('Please provide a reason for suspension');
+   663→        return;
+   664→      }
+   665→      setSaving(true);
+   666→      try {
+   667→        const endpoint = suspendDialog.action === 'delete'
+   668→          ? `/api/superadmin/tenants/${suspendDialog.tenant.id}`
+   669→          : `/api/superadmin/tenants/${suspendDialog.tenant.id}`;
+   670→        const method = suspendDialog.action === 'delete' ? 'DELETE' : 'PATCH';
+   671→        const body = suspendDialog.action === 'suspend'
+   672→          ? { status: 'suspended', reason: suspendReason.trim() }
+   673→          : suspendDialog.action === 'reactivate'
+   674→          ? { status: 'active' }
+   675→          : undefined;
+   676→
+   677→        const res = await fetch(endpoint, {
+   678→          method,
+   679→          headers: { 'Content-Type': 'application/json' },
+   680→          body: body ? JSON.stringify(body) : undefined,
+   681→        });
+   682→        if (res.ok) {
+   683→          toast.success(`Tenant ${suspendDialog.action === 'delete' ? 'deleted' : suspendDialog.action === 'suspend' ? 'suspended' : 'reactivated'} successfully`);
+   684→          refetchTenants();
+   685→        } else {
+   686→          const data = await res.json();
+   687→          toast.error(data.error || `Failed to ${suspendDialog.action} tenant`);
+   688→        }
+   689→      } catch {
+   690→        toast.error('Network error');
+   691→      } finally {
+   692→        setSaving(false);
+   693→        setSuspendDialog(null);
+   694→        setSuspendReason('');
+   695→      }
+   696→    };
+   697→
+   698→    const handleEditPlan = async () => {
+   699→      if (!editPlanDialog || !newPlan) return;
+   700→      setSaving(true);
+   701→      try {
+   702→        const res = await fetch(`/api/superadmin/tenants/${editPlanDialog.id}`, {
+   703→          method: 'PATCH',
+   704→          headers: { 'Content-Type': 'application/json' },
+   705→          body: JSON.stringify({ plan: newPlan }),
+   706→        });
+   707→        if (res.ok) {
+   708→          toast.success(`Plan updated to ${newPlan}`);
+   709→          refetchTenants();
+   710→        } else {
+   711→          toast.error('Failed to update plan');
+   712→        }
+   713→      } catch {
+   714→        toast.error('Network error');
+   715→      } finally {
+   716→        setSaving(false);
+   717→        setEditPlanDialog(null);
+   718→      }
+   719→    };
+   720→
+   721→    const handleCreateTenant = async () => {
+   722→      if (!newTenantForm.name.trim() || !newTenantForm.email.trim()) {
+   723→        toast.error('Name and email are required');
+   724→        return;
+   725→      }
+   726→      setCreating(true);
+   727→      try {
+   728→        const res = await fetch('/api/superadmin/tenants', {
+   729→          method: 'POST',
+   730→          headers: { 'Content-Type': 'application/json' },
+   731→          body: JSON.stringify(newTenantForm),
+   732→        });
+   733→        if (res.ok) {
+   734→          toast.success('Tenant created successfully');
+   735→          setCreateDialog(false);
+   736→          setNewTenantForm({ name: '', email: '', plan: 'starter', ownerName: '', password: '' });
+   737→          refetchTenants();
+   738→        } else {
+   739→          const data = await res.json();
+   740→          toast.error(data.error || 'Failed to create tenant');
+   741→        }
+   742→      } catch {
+   743→        toast.error('Network error');
+   744→      } finally {
+   745→        setCreating(false);
+   746→      }
+   747→    };
+   748→
+   749→    return (
+   750→      <div className="space-y-4">
+   751→        {/* Search, Filters, Create */}
+   752→        <div className="flex flex-col sm:flex-row gap-3">
+   753→          <div className="relative flex-1">
+   754→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+   755→            <Input
+   756→              placeholder="Search tenants..."
+   757→              className="pl-9 bg-slate-900 border-slate-800 text-white placeholder:text-slate-500"
+   758→              value={search}
+   759→              onChange={(e) => setSearch(e.target.value)}
+   760→            />
+   761→          </div>
+   762→          <Select value={planFilter} onValueChange={setPlanFilter}>
+   763→            <SelectTrigger className="w-full sm:w-[130px] bg-slate-900 border-slate-800 text-white">
+   764→              <SelectValue placeholder="Plan" />
+   765→            </SelectTrigger>
+   766→            <SelectContent>
+   767→              <SelectItem value="all">All Plans</SelectItem>
+   768→              <SelectItem value="starter">Starter</SelectItem>
+   769→              <SelectItem value="growth">Growth</SelectItem>
+   770→              <SelectItem value="pro">Pro</SelectItem>
+   771→              <SelectItem value="enterprise">Enterprise</SelectItem>
+   772→            </SelectContent>
+   773→          </Select>
+   774→          <Select value={statusFilter} onValueChange={setStatusFilter}>
+   775→            <SelectTrigger className="w-full sm:w-[130px] bg-slate-900 border-slate-800 text-white">
+   776→              <SelectValue placeholder="Status" />
+   777→            </SelectTrigger>
+   778→            <SelectContent>
+   779→              <SelectItem value="all">All Status</SelectItem>
+   780→              <SelectItem value="active">Active</SelectItem>
+   781→              <SelectItem value="trial">Trial</SelectItem>
+   782→              <SelectItem value="suspended">Suspended</SelectItem>
+   783→            </SelectContent>
+   784→          </Select>
+   785→          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setCreateDialog(true)}>
+   786→            <Plus className="size-4 mr-1.5" /> New Tenant
+   787→          </Button>
+   788→        </div>
+   789→
+   790→        {/* Table */}
+   791→        {tenantsLoading ? <TableSkeleton /> : filteredTenants.length === 0 ? (
+   792→          <Card className="bg-slate-900 border-slate-800 border-dashed">
+   793→            <CardContent className="flex flex-col items-center justify-center py-16 text-slate-500">
+   794→              <Building2 className="size-14 mb-4 opacity-30" />
+   795→              <p className="text-lg font-medium">No tenants found</p>
+   796→            </CardContent>
+   797→          </Card>
+   798→        ) : (
+   799→          <Card className="bg-slate-900 border-slate-800">
+   800→            <ScrollArea className="max-h-96">
+   801→              <Table>
+   802→                <TableHeader>
+   803→                  <TableRow className="border-slate-800 hover:bg-transparent">
+   804→                    <TableHead className="text-slate-400">Name</TableHead>
+   805→                    <TableHead className="text-slate-400">Plan</TableHead>
+   806→                    <TableHead className="text-slate-400">Status</TableHead>
+   807→                    <TableHead className="text-slate-400 text-right">MRR</TableHead>
+   808→                    <TableHead className="text-slate-400 text-center">Users</TableHead>
+   809→                    <TableHead className="text-slate-400">Created</TableHead>
+   810→                    <TableHead className="text-slate-400 text-right">Actions</TableHead>
+   811→                  </TableRow>
+   812→                </TableHeader>
+   813→                <TableBody>
+   814→                  {filteredTenants.map((tenant) => (
+   815→                    <TableRow key={tenant.id} className="border-slate-800 hover:bg-slate-800/50">
+   816→                      <TableCell className="font-medium text-white">{tenant.name}</TableCell>
+   817→                      <TableCell>
+   818→                        <Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadge(tenant.plan))}>
+   819→                          {tenant.plan}
+   820→                        </Badge>
+   821→                      </TableCell>
+   822→                      <TableCell>
+   823→                        <Badge variant="outline" className={cn('capitalize text-[10px]', getStatusBadge(tenant.suspendedAt ? 'suspended' : tenant.planStatus))}>
+   824→                          {tenant.suspendedAt ? 'suspended' : tenant.planStatus}
+   825→                        </Badge>
+   826→                      </TableCell>
+   827→                      <TableCell className="text-right text-slate-300">{formatCurrencyShared(tenant.mrr, baseCurrency)}</TableCell>
+   828→                      <TableCell className="text-center text-slate-300">{tenant.userCount}</TableCell>
+   829→                      <TableCell className="text-slate-400 text-sm">{formatDate(tenant.createdAt)}</TableCell>
+   830→                      <TableCell className="text-right">
+   831→                        <div className="flex items-center justify-end gap-1">
+   832→                          <Button variant="ghost" size="sm" className="h-7 px-2 text-slate-400 hover:text-white" onClick={() => setViewTenant(tenant)}>
+   833→                            <Eye className="size-3.5" />
+   834→                          </Button>
+   835→                          <Button variant="ghost" size="sm" className="h-7 px-2 text-slate-400 hover:text-emerald-400" onClick={() => { setEditPlanDialog(tenant); setNewPlan(tenant.plan); }}>
+   836→                            <Edit3 className="size-3.5" />
+   837→                          </Button>
+   838→                          {tenant.suspendedAt || tenant.planStatus === 'suspended' ? (
+   839→                            <Button variant="ghost" size="sm" className="h-7 px-2 text-emerald-400 hover:text-emerald-300" onClick={() => { setSuspendReason(''); setSuspendDialog({ tenant, action: 'reactivate' }); }}>
+   840→                              <Play className="size-3.5" />
+   841→                            </Button>
+   842→                          ) : (
+   843→                            <Button variant="ghost" size="sm" className="h-7 px-2 text-red-400 hover:text-red-300" onClick={() => { setSuspendReason(''); setSuspendDialog({ tenant, action: 'suspend' }); }}>
+   844→                              <Ban className="size-3.5" />
+   845→                            </Button>
+   846→                          )}
+   847→                          <Button variant="ghost" size="sm" className="h-7 px-2 text-red-400 hover:text-red-300" onClick={() => setSuspendDialog({ tenant, action: 'delete' })}>
+   848→                            <Trash2 className="size-3.5" />
+   849→                          </Button>
+   850→                        </div>
+   851→                      </TableCell>
+   852→                    </TableRow>
+   853→                  ))}
+   854→                </TableBody>
+   855→              </Table>
+   856→            </ScrollArea>
+   857→          </Card>
+   858→        )}
+   859→
+   860→        {/* Suspend/Reactivate/Delete Dialog */}
+   861→        <Dialog open={!!suspendDialog} onOpenChange={(open) => { if (!open) setSuspendDialog(null); }}>
+   862→          <DialogContent className="bg-slate-900 border-slate-800 text-white">
+   863→            <DialogHeader>
+   864→              <DialogTitle className="flex items-center gap-2">
+   865→                {suspendDialog?.action === 'suspend' ? <><Ban className="size-5 text-red-400" /> Suspend Tenant</> :
+   866→                 suspendDialog?.action === 'delete' ? <><Trash2 className="size-5 text-red-400" /> Delete Tenant</> :
+   867→                 <><Play className="size-5 text-emerald-400" /> Reactivate Tenant</>}
+   868→              </DialogTitle>
+   869→              <DialogDescription className="text-slate-400">
+   870→                {suspendDialog?.action === 'suspend' ? `Suspend "${suspendDialog?.tenant.name}"? They will lose access.` :
+   871→                 suspendDialog?.action === 'delete' ? `Delete "${suspendDialog?.tenant.name}"? This is a soft delete.` :
+   872→                 `Reactivate "${suspendDialog?.tenant.name}"? They will regain access.`}
+   873→              </DialogDescription>
+   874→            </DialogHeader>
+   875→            {suspendDialog?.action === 'suspend' && (
+   876→              <div className="space-y-2">
+   877→                <Label className="text-slate-300">Reason for suspension *</Label>
+   878→                <Textarea
+   879→                  placeholder="Enter reason..."
+   880→                  value={suspendReason}
+   881→                  onChange={(e) => setSuspendReason(e.target.value)}
+   882→                  className="bg-slate-800 border-slate-700 text-white"
+   883→                  rows={3}
+   884→                />
+   885→              </div>
+   886→            )}
+   887→            <DialogFooter className="gap-2">
+   888→              <Button variant="outline" onClick={() => setSuspendDialog(null)} className="border-slate-700 text-slate-300">Cancel</Button>
+   889→              {suspendDialog?.action === 'suspend' ? (
+   890→                <Button variant="destructive" onClick={handleAction} disabled={!suspendReason.trim() || saving}>
+   891→                  {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Ban className="size-4 mr-1.5" />} Suspend
+   892→                </Button>
+   893→              ) : suspendDialog?.action === 'delete' ? (
+   894→                <Button variant="destructive" onClick={handleAction} disabled={saving}>
+   895→                  {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Trash2 className="size-4 mr-1.5" />} Delete
+   896→                </Button>
+   897→              ) : (
+   898→                <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleAction} disabled={saving}>
+   899→                  {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Play className="size-4 mr-1.5" />} Reactivate
+   900→                </Button>
+   901→              )}
+   902→            </DialogFooter>
+   903→          </DialogContent>
+   904→        </Dialog>
+   905→
+   906→        {/* View Tenant Details Dialog */}
+   907→        <Dialog open={!!viewTenant} onOpenChange={(open) => { if (!open) setViewTenant(null); }}>
+   908→          <DialogContent className="bg-slate-900 border-slate-800 text-white sm:max-w-lg">
+   909→            <DialogHeader>
+   910→              <DialogTitle className="flex items-center gap-2">
+   911→                <Building2 className="size-5 text-emerald-400" /> Tenant Details
+   912→              </DialogTitle>
+   913→            </DialogHeader>
+   914→            {viewTenant && (
+   915→              <div className="space-y-4">
+   916→                <div className="grid grid-cols-2 gap-4">
+   917→                  <div><p className="text-xs text-slate-400">Name</p><p className="font-medium">{viewTenant.name}</p></div>
+   918→                  <div><p className="text-xs text-slate-400">Email</p><p className="font-medium">{viewTenant.email || '—'}</p></div>
+   919→                  <div><p className="text-xs text-slate-400">Plan</p><Badge variant="outline" className={cn('capitalize text-xs', getPlanBadge(viewTenant.plan))}>{viewTenant.plan}</Badge></div>
+   920→                  <div><p className="text-xs text-slate-400">Status</p><Badge variant="outline" className={cn('capitalize text-xs', getStatusBadge(viewTenant.suspendedAt ? 'suspended' : viewTenant.planStatus))}>{viewTenant.suspendedAt ? 'suspended' : viewTenant.planStatus}</Badge></div>
+   921→                  <div><p className="text-xs text-slate-400">MRR</p><p className="font-medium">{formatCurrencyShared(viewTenant.mrr, baseCurrency)}</p></div>
+   922→                  <div><p className="text-xs text-slate-400">Users</p><p className="font-medium">{viewTenant.userCount}</p></div>
+   923→                  <div><p className="text-xs text-slate-400">Industry</p><p className="font-medium">{viewTenant.industry || '—'}</p></div>
+   924→                  <div><p className="text-xs text-slate-400">Created</p><p className="font-medium">{formatDate(viewTenant.createdAt)}</p></div>
+   925→                </div>
+   926→                {viewTenant.suspensionReason && (
+   927→                  <div className="p-3 rounded-lg bg-red-500/5 border border-red-500/20">
+   928→                    <p className="text-xs text-red-400 font-medium">Suspension Reason</p>
+   929→                    <p className="text-sm text-slate-300 mt-1">{viewTenant.suspensionReason}</p>
+   930→                  </div>
+   931→                )}
+   932→              </div>
+   933→            )}
+   934→            <DialogFooter>
+   935→              <Button variant="outline" onClick={() => setViewTenant(null)} className="border-slate-700 text-slate-300">Close</Button>
+   936→            </DialogFooter>
+   937→          </DialogContent>
+   938→        </Dialog>
+   939→
+   940→        {/* Edit Plan Dialog */}
+   941→        <Dialog open={!!editPlanDialog} onOpenChange={(open) => { if (!open) setEditPlanDialog(null); }}>
+   942→          <DialogContent className="bg-slate-900 border-slate-800 text-white sm:max-w-md">
+   943→            <DialogHeader>
+   944→              <DialogTitle className="flex items-center gap-2">
+   945→                <Edit3 className="size-5 text-emerald-400" /> Change Plan
+   946→              </DialogTitle>
+   947→              <DialogDescription className="text-slate-400">Change plan for {editPlanDialog?.name}</DialogDescription>
+   948→            </DialogHeader>
+   949→            <Select value={newPlan} onValueChange={setNewPlan}>
+   950→              <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+   951→                <SelectValue placeholder="Select plan" />
+   952→              </SelectTrigger>
+   953→              <SelectContent>
+   954→                <SelectItem value="trial">Trial</SelectItem>
+   955→                <SelectItem value="starter">Starter ($29/mo)</SelectItem>
+   956→                <SelectItem value="growth">Growth ($79/mo)</SelectItem>
+   957→                <SelectItem value="pro">Pro ($149/mo)</SelectItem>
+   958→                <SelectItem value="enterprise">Enterprise (Custom)</SelectItem>
+   959→              </SelectContent>
+   960→            </Select>
+   961→            <DialogFooter className="gap-2">
+   962→              <Button variant="outline" onClick={() => setEditPlanDialog(null)} className="border-slate-700 text-slate-300">Cancel</Button>
+   963→              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleEditPlan} disabled={saving || !newPlan}>
+   964→                {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <CheckCircle2 className="size-4 mr-1.5" />} Save
+   965→              </Button>
+   966→            </DialogFooter>
+   967→          </DialogContent>
+   968→        </Dialog>
+   969→
+   970→        {/* Create Tenant Dialog */}
+   971→        <Dialog open={createDialog} onOpenChange={setCreateDialog}>
+   972→          <DialogContent className="bg-slate-900 border-slate-800 text-white sm:max-w-md">
+   973→            <DialogHeader>
+   974→              <DialogTitle className="flex items-center gap-2">
+   975→                <Plus className="size-5 text-emerald-400" /> Create New Tenant
+   976→              </DialogTitle>
+   977→            </DialogHeader>
+   978→            <div className="space-y-3">
+   979→              <div><Label className="text-slate-300">Company Name *</Label><Input className="bg-slate-800 border-slate-700 text-white mt-1" value={newTenantForm.name} onChange={(e) => setNewTenantForm((p) => ({ ...p, name: e.target.value }))} placeholder="Acme Corp" /></div>
+   980→              <div><Label className="text-slate-300">Owner Email *</Label><Input className="bg-slate-800 border-slate-700 text-white mt-1" type="email" value={newTenantForm.email} onChange={(e) => setNewTenantForm((p) => ({ ...p, email: e.target.value }))} placeholder="admin@acme.com" /></div>
+   981→              <div><Label className="text-slate-300">Owner Name</Label><Input className="bg-slate-800 border-slate-700 text-white mt-1" value={newTenantForm.ownerName} onChange={(e) => setNewTenantForm((p) => ({ ...p, ownerName: e.target.value }))} placeholder="John Doe" /></div>
+   982→              <div><Label className="text-slate-300">Password</Label><Input className="bg-slate-800 border-slate-700 text-white mt-1" type="password" value={newTenantForm.password} onChange={(e) => setNewTenantForm((p) => ({ ...p, password: e.target.value }))} placeholder="••••••••" /></div>
+   983→              <div><Label className="text-slate-300">Plan</Label>
+   984→                <Select value={newTenantForm.plan} onValueChange={(v) => setNewTenantForm((p) => ({ ...p, plan: v }))}>
+   985→                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white mt-1"><SelectValue /></SelectTrigger>
+   986→                  <SelectContent>
+   987→                    <SelectItem value="trial">Trial</SelectItem>
+   988→                    <SelectItem value="starter">Starter</SelectItem>
+   989→                    <SelectItem value="growth">Growth</SelectItem>
+   990→                    <SelectItem value="pro">Pro</SelectItem>
+   991→                    <SelectItem value="enterprise">Enterprise</SelectItem>
+   992→                  </SelectContent>
+   993→                </Select>
+   994→              </div>
+   995→            </div>
+   996→            <DialogFooter className="gap-2">
+   997→              <Button variant="outline" onClick={() => setCreateDialog(false)} className="border-slate-700 text-slate-300">Cancel</Button>
+   998→              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreateTenant} disabled={creating || !newTenantForm.name.trim() || !newTenantForm.email.trim()}>
+   999→                {creating ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Plus className="size-4 mr-1.5" />} Create
+  1000→              </Button>
+  1001→            </DialogFooter>
+  1002→          </DialogContent>
+  1003→        </Dialog>
+  1004→      </div>
+  1005→    );
+  1006→  }
+  1007→
+  1008→  // ═══════════════════════════════════════════════════════════════════════════
+  1009→  // 3. SUBSCRIPTION MANAGEMENT TAB
+  1010→  // ═══════════════════════════════════════════════════════════════════════════
+  1011→
+  1012→  function SubscriptionsTab() {
+  1013→    const [statusFilter, setStatusFilter] = useState('all');
+  1014→    const [actionDialog, setActionDialog] = useState<{ sub: Subscription; action: 'pause' | 'resume' | 'cancel' | 'change_plan' } | null>(null);
+  1015→    const [actionReason, setActionReason] = useState('');
+  1016→    const [newPlan, setNewPlan] = useState('');
+  1017→    const [saving, setSaving] = useState(false);
+  1018→
+  1019→    const filteredSubs = useMemo(() => {
+  1020→      if (statusFilter === 'all') return subscriptions;
+  1021→      return subscriptions.filter((s) => s.status === statusFilter);
+  1022→    }, [subscriptions, statusFilter]);
+  1023→
+  1024→    // Plan distribution
+  1025→    const planDistribution = useMemo(() => {
+  1026→      const dist: Record<string, number> = {};
+  1027→      subscriptions.forEach((s) => { dist[s.plan] = (dist[s.plan] || 0) + 1; });
+  1028→      return dist;
+  1029→    }, [subscriptions]);
+  1030→
+  1031→    const totalSubs = subscriptions.length;
+  1032→    const maxDist = Math.max(...Object.values(planDistribution), 1);
+  1033→
+  1034→    const handleAction = async () => {
+  1035→      if (!actionDialog) return;
+  1036→      setSaving(true);
+  1037→      try {
+  1038→        const res = await fetch('/api/superadmin/subscriptions', {
+  1039→          method: 'PATCH',
+  1040→          headers: { 'Content-Type': 'application/json' },
+  1041→          body: JSON.stringify({
+  1042→            subscriptionId: actionDialog.sub.id,
+  1043→            action: actionDialog.action,
+  1044→            reason: actionReason.trim() || undefined,
+  1045→            newPlan: actionDialog.action === 'change_plan' ? newPlan : undefined,
+  1046→          }),
+  1047→        });
+  1048→        if (res.ok) {
+  1049→          toast.success(`Subscription ${actionDialog.action === 'pause' ? 'paused' : actionDialog.action === 'resume' ? 'resumed' : actionDialog.action === 'cancel' ? 'cancelled' : 'plan changed'} successfully`);
+  1050→        } else {
+  1051→          const data = await res.json();
+  1052→          toast.error(data.error || 'Failed to update subscription');
+  1053→        }
+  1054→      } catch {
+  1055→        toast.error('Network error');
+  1056→      } finally {
+  1057→        setSaving(false);
+  1058→        setActionDialog(null);
+  1059→        setActionReason('');
+  1060→        setNewPlan('');
+  1061→      }
+  1062→    };
+  1063→
+  1064→    return (
+  1065→      <div className="space-y-6">
+  1066→        {/* Stats */}
+  1067→        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+  1068→          {[
+  1069→            { label: 'Active', value: subscriptions.filter((s) => s.status === 'active').length, icon: CheckCircle2, color: 'emerald' },
+  1070→            { label: 'Trial', value: subscriptions.filter((s) => s.status === 'trial').length, icon: Clock, color: 'amber' },
+  1071→            { label: 'Paused', value: subscriptions.filter((s) => s.status === 'paused').length, icon: Pause, color: 'sky' },
+  1072→            { label: 'Cancelled', value: subscriptions.filter((s) => s.status === 'cancelled').length, icon: XCircle, color: 'red' },
+  1073→          ].map((stat) => {
+  1074→            const Icon = stat.icon;
+  1075→            const colorMap: Record<string, string> = { emerald: 'text-emerald-400', amber: 'text-amber-400', sky: 'text-sky-400', red: 'text-red-400' };
+  1076→            return (
+  1077→              <Card key={stat.label} className="bg-slate-900 border-slate-800">
+  1078→                <CardContent className="p-4 flex items-center gap-3">
+  1079→                  <Icon className={cn('size-5', colorMap[stat.color])} />
+  1080→                  <div>
+  1081→                    <p className="text-xs text-slate-400">{stat.label}</p>
+  1082→                    <p className={cn('text-xl font-bold', colorMap[stat.color])}>{stat.value}</p>
+  1083→                  </div>
+  1084→                </CardContent>
+  1085→              </Card>
+  1086→            );
+  1087→          })}
+  1088→        </div>
+  1089→
+  1090→        {/* Plan Distribution + Table */}
+  1091→        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  1092→          <Card className="bg-slate-900 border-slate-800">
+  1093→            <CardHeader className="pb-2">
+  1094→              <CardTitle className="text-sm font-medium text-white">Plan Distribution</CardTitle>
+  1095→            </CardHeader>
+  1096→            <CardContent>
+  1097→              <div className="space-y-3">
+  1098→                {Object.entries(planDistribution).map(([plan, count]) => (
+  1099→                  <div key={plan} className="space-y-1">
+  1100→                    <div className="flex items-center justify-between">
+  1101→                      <span className="text-xs text-slate-300 capitalize">{plan}</span>
+  1102→                      <span className="text-xs text-slate-400">{count} ({totalSubs > 0 ? Math.round((count / totalSubs) * 100) : 0}%)</span>
+  1103→                    </div>
+  1104→                    <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
+  1105→                      <div className="h-full rounded-full bg-emerald-500/60 transition-all" style={{ width: `${(count / maxDist) * 100}%` }} />
+  1106→                    </div>
+  1107→                  </div>
+  1108→                ))}
+  1109→              </div>
+  1110→            </CardContent>
+  1111→          </Card>
+  1112→
+  1113→          <Card className="bg-slate-900 border-slate-800 lg:col-span-2">
+  1114→            <CardHeader className="pb-2">
+  1115→              <div className="flex items-center justify-between">
+  1116→                <div>
+  1117→                  <CardTitle className="text-sm font-medium text-white">All Subscriptions</CardTitle>
+  1118→                  <CardDescription className="text-xs text-slate-400">{filteredSubs.length} found</CardDescription>
+  1119→                </div>
+  1120→                <Select value={statusFilter} onValueChange={setStatusFilter}>
+  1121→                  <SelectTrigger className="w-[130px] bg-slate-800 border-slate-700 text-white text-xs">
+  1122→                    <Filter className="size-3 mr-1" /><SelectValue />
+  1123→                  </SelectTrigger>
+  1124→                  <SelectContent>
+  1125→                    <SelectItem value="all">All</SelectItem>
+  1126→                    <SelectItem value="active">Active</SelectItem>
+  1127→                    <SelectItem value="trial">Trial</SelectItem>
+  1128→                    <SelectItem value="paused">Paused</SelectItem>
+  1129→                    <SelectItem value="cancelled">Cancelled</SelectItem>
+  1130→                  </SelectContent>
+  1131→                </Select>
+  1132→              </div>
+  1133→            </CardHeader>
+  1134→            <CardContent>
+  1135→              <ScrollArea className="max-h-80">
+  1136→                <Table>
+  1137→                  <TableHeader>
+  1138→                    <TableRow className="border-slate-800 hover:bg-transparent">
+  1139→                      <TableHead className="text-slate-400">Tenant</TableHead>
+  1140→                      <TableHead className="text-slate-400">Plan</TableHead>
+  1141→                      <TableHead className="text-slate-400">Status</TableHead>
+  1142→                      <TableHead className="text-slate-400 text-right">Amount</TableHead>
+  1143→                      <TableHead className="text-slate-400 text-right">Actions</TableHead>
+  1144→                    </TableRow>
+  1145→                  </TableHeader>
+  1146→                  <TableBody>
+  1147→                    {filteredSubs.map((sub) => (
+  1148→                      <TableRow key={sub.id} className="border-slate-800 hover:bg-slate-800/50">
+  1149→                        <TableCell className="font-medium text-white">{sub.tenantName}</TableCell>
+  1150→                        <TableCell><Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadge(sub.plan))}>{sub.plan}</Badge></TableCell>
+  1151→                        <TableCell><Badge variant="outline" className={cn('capitalize text-[10px]', getStatusBadge(sub.status))}>{sub.status}</Badge></TableCell>
+  1152→                        <TableCell className="text-right text-slate-300">{formatCurrencyShared(sub.amount, baseCurrency)}</TableCell>
+  1153→                        <TableCell className="text-right">
+  1154→                          <div className="flex items-center justify-end gap-1">
+  1155→                            {sub.status === 'active' && (
+  1156→                              <Button variant="ghost" size="sm" className="h-7 px-2 text-amber-400 hover:text-amber-300" onClick={() => { setActionReason(''); setActionDialog({ sub, action: 'pause' }); }}>
+  1157→                                <Pause className="size-3.5" />
+  1158→                              </Button>
+  1159→                            )}
+  1160→                            {sub.status === 'paused' && (
+  1161→                              <Button variant="ghost" size="sm" className="h-7 px-2 text-emerald-400 hover:text-emerald-300" onClick={() => setActionDialog({ sub, action: 'resume' })}>
+  1162→                                <PlayCircle className="size-3.5" />
+  1163→                              </Button>
+  1164→                            )}
+  1165→                            {(sub.status === 'active' || sub.status === 'paused') && (
+  1166→                              <>
+  1167→                                <Button variant="ghost" size="sm" className="h-7 px-2 text-sky-400 hover:text-sky-300" onClick={() => { setNewPlan(sub.plan); setActionDialog({ sub, action: 'change_plan' }); }}>
+  1168→                                  <Edit3 className="size-3.5" />
+  1169→                                </Button>
+  1170→                                <Button variant="ghost" size="sm" className="h-7 px-2 text-red-400 hover:text-red-300" onClick={() => setActionDialog({ sub, action: 'cancel' })}>
+  1171→                                  <XCircle className="size-3.5" />
+  1172→                                </Button>
+  1173→                              </>
+  1174→                            )}
+  1175→                          </div>
+  1176→                        </TableCell>
+  1177→                      </TableRow>
+  1178→                    ))}
+  1179→                  </TableBody>
+  1180→                </Table>
+  1181→              </ScrollArea>
+  1182→            </CardContent>
+  1183→          </Card>
+  1184→        </div>
+  1185→
+  1186→        {/* Wallet/Credit View */}
+  1187→        <Card className="bg-slate-900 border-slate-800">
+  1188→          <CardHeader className="pb-2">
+  1189→            <CardTitle className="text-sm font-medium text-white">Usage Overview (View Only)</CardTitle>
+  1190→          </CardHeader>
+  1191→          <CardContent>
+  1192→            <ScrollArea className="max-h-48">
+  1193→              <Table>
+  1194→                <TableHeader>
+  1195→                  <TableRow className="border-slate-800 hover:bg-transparent">
+  1196→                    <TableHead className="text-slate-400">Tenant</TableHead>
+  1197→                    <TableHead className="text-slate-400 text-center">AI Usage</TableHead>
+  1198→                    <TableHead className="text-slate-400 text-center">WhatsApp</TableHead>
+  1199→                    <TableHead className="text-slate-400 text-center">Seats</TableHead>
+  1200→                  </TableRow>
+  1201→                </TableHeader>
+  1202→                <TableBody>
+  1203→                  {subscriptions.slice(0, 10).map((sub) => (
+  1204→                    <TableRow key={sub.id} className="border-slate-800 hover:bg-slate-800/50">
+  1205→                      <TableCell className="text-white text-sm">{sub.tenantName}</TableCell>
+  1206→                      <TableCell className="text-center">
+  1207→                        <div className="flex items-center justify-center gap-2">
+  1208→                          <Progress value={sub.aiQuota > 0 ? (sub.aiUsageCount / sub.aiQuota) * 100 : 0} className="h-1.5 w-16" />
+  1209→                          <span className="text-[10px] text-slate-400">{sub.aiUsageCount}/{sub.aiQuota}</span>
+  1210→                        </div>
+  1211→                      </TableCell>
+  1212→                      <TableCell className="text-center">
+  1213→                        <div className="flex items-center justify-center gap-2">
+  1214→                          <Progress value={sub.whatsappQuota > 0 ? (sub.whatsappUsageCount / sub.whatsappQuota) * 100 : 0} className="h-1.5 w-16" />
+  1215→                          <span className="text-[10px] text-slate-400">{sub.whatsappUsageCount}/{sub.whatsappQuota}</span>
+  1216→                        </div>
+  1217→                      </TableCell>
+  1218→                      <TableCell className="text-center text-slate-300 text-sm">{sub.seatCount}</TableCell>
+  1219→                    </TableRow>
+  1220→                  ))}
+  1221→                </TableBody>
+  1222→              </Table>
+  1223→            </ScrollArea>
+  1224→          </CardContent>
+  1225→        </Card>
+  1226→
+  1227→        {/* Action Dialog */}
+  1228→        <Dialog open={!!actionDialog} onOpenChange={(open) => { if (!open) setActionDialog(null); }}>
+  1229→          <DialogContent className="bg-slate-900 border-slate-800 text-white sm:max-w-md">
+  1230→            <DialogHeader>
+  1231→              <DialogTitle>
+  1232→                {actionDialog?.action === 'pause' ? 'Pause Subscription' :
+  1233→                 actionDialog?.action === 'resume' ? 'Resume Subscription' :
+  1234→                 actionDialog?.action === 'cancel' ? 'Cancel Subscription' : 'Change Plan'}
+  1235→              </DialogTitle>
+  1236→              <DialogDescription className="text-slate-400">
+  1237→                For tenant: {actionDialog?.sub.tenantName}
+  1238→              </DialogDescription>
+  1239→            </DialogHeader>
+  1240→            {(actionDialog?.action === 'pause' || actionDialog?.action === 'cancel') && (
+  1241→              <div className="space-y-2">
+  1242→                <Label className="text-slate-300">Reason *</Label>
+  1243→                <Textarea className="bg-slate-800 border-slate-700 text-white" value={actionReason} onChange={(e) => setActionReason(e.target.value)} rows={2} placeholder="Enter reason..." />
+  1244→              </div>
+  1245→            )}
+  1246→            {actionDialog?.action === 'change_plan' && (
+  1247→              <Select value={newPlan} onValueChange={setNewPlan}>
+  1248→                <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
+  1249→                <SelectContent>
+  1250→                  <SelectItem value="trial">Trial</SelectItem>
+  1251→                  <SelectItem value="starter">Starter ($29/mo)</SelectItem>
+  1252→                  <SelectItem value="growth">Growth ($79/mo)</SelectItem>
+  1253→                  <SelectItem value="pro">Pro ($149/mo)</SelectItem>
+  1254→                  <SelectItem value="enterprise">Enterprise</SelectItem>
+  1255→                </SelectContent>
+  1256→              </Select>
+  1257→            )}
+  1258→            <DialogFooter className="gap-2">
+  1259→              <Button variant="outline" onClick={() => setActionDialog(null)} className="border-slate-700 text-slate-300">Cancel</Button>
+  1260→              <Button className={cn(actionDialog?.action === 'cancel' ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700')} onClick={handleAction} disabled={saving}>
+  1261→                {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : null} Confirm
+  1262→              </Button>
+  1263→            </DialogFooter>
+  1264→          </DialogContent>
+  1265→        </Dialog>
+  1266→      </div>
+  1267→    );
+  1268→  }
+  1269→
+  1270→  // ═══════════════════════════════════════════════════════════════════════════
+  1271→  // 4. FEATURE FLAGS TAB
+  1272→  // ═══════════════════════════════════════════════════════════════════════════
+  1273→
+  1274→  function FeatureFlagsTab() {
+  1275→    const [localFlags, setLocalFlags] = useState<FeatureFlagDef[]>([]);
+  1276→    const [saving, setSaving] = useState(false);
+  1277→
+  1278→    useEffect(() => {
+  1279→      setLocalFlags(featureFlags);
+  1280→    }, [featureFlags]);
+  1281→
+  1282→    const handleToggle = (key: string) => {
+  1283→      const flag = localFlags.find((f) => f.key === key);
+  1284→      if (!flag || !selectedTenantForFlags) return;
+  1285→
+  1286→      const newEnabled = !flag.enabled;
+  1287→      setLocalFlags((prev) => prev.map((f) => f.key === key ? { ...f, enabled: newEnabled } : f));
+  1288→
+  1289→      toggleFeatureFlagMutation.mutate(
+  1290→        { tenantId: selectedTenantForFlags, featureKey: key, enabled: newEnabled },
+  1291→        {
+  1292→          onError: () => {
+  1293→            setLocalFlags((prev) => prev.map((f) => f.key === key ? { ...f, enabled: !newEnabled } : f));
+  1294→            toast.error('Failed to toggle feature flag');
+  1295→          },
+  1296→          onSuccess: () => {
+  1297→            toast.success(`${flag.label} ${newEnabled ? 'enabled' : 'disabled'}`);
+  1298→          },
+  1299→        },
+  1300→      );
+  1301→    };
+  1302→
+  1303→    const handleEnableAll = () => {
+  1304→      if (!selectedTenantForFlags) return;
+  1305→      setLocalFlags((prev) => prev.map((f) => ({ ...f, enabled: true })));
+  1306→      // Save all
+  1307→      setSaving(true);
+  1308→      fetch('/api/superadmin/feature-flags', {
+  1309→        method: 'POST',
+  1310→        headers: { 'Content-Type': 'application/json' },
+  1311→        body: JSON.stringify({ tenantId: selectedTenantForFlags, flags: localFlags.map((f) => ({ key: f.key, enabled: true })) }),
+  1312→      }).then(() => { toast.success('All features enabled'); setSaving(false); }).catch(() => { toast.error('Failed'); setSaving(false); });
+  1313→    };
+  1314→
+  1315→    const handleDisableAll = () => {
+  1316→      if (!selectedTenantForFlags) return;
+  1317→      setLocalFlags((prev) => prev.map((f) => ({ ...f, enabled: false })));
+  1318→      setSaving(true);
+  1319→      fetch('/api/superadmin/feature-flags', {
+  1320→        method: 'POST',
+  1321→        headers: { 'Content-Type': 'application/json' },
+  1322→        body: JSON.stringify({ tenantId: selectedTenantForFlags, flags: localFlags.map((f) => ({ key: f.key, enabled: false })) }),
+  1323→      }).then(() => { toast.success('All features disabled'); setSaving(false); }).catch(() => { toast.error('Failed'); setSaving(false); });
+  1324→    };
+  1325→
+  1326→    const enabledCount = localFlags.filter((f) => f.enabled).length;
+  1327→
+  1328→    return (
+  1329→      <div className="flex flex-col lg:flex-row gap-6">
+  1330→        {/* Left Panel */}
+  1331→        <div className="w-full lg:w-64 shrink-0 space-y-4">
+  1332→          <Card className="bg-slate-900 border-slate-800">
+  1333→            <CardHeader className="pb-3"><CardTitle className="text-sm text-white">Select Tenant</CardTitle></CardHeader>
+  1334→            <CardContent className="pt-0">
+  1335→              <Select value={selectedTenantForFlags} onValueChange={setSelectedTenantForFlags}>
+  1336→                <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue placeholder="Choose tenant..." /></SelectTrigger>
+  1337→                <SelectContent>
+  1338→                  {tenants.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+  1339→                </SelectContent>
+  1340→              </Select>
+  1341→            </CardContent>
+  1342→          </Card>
+  1343→          <div className="space-y-2">
+  1344→            <Button variant="outline" size="sm" className="w-full text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10" onClick={handleEnableAll} disabled={!selectedTenantForFlags || saving}>
+  1345→              <ToggleRight className="size-4 mr-1.5" /> Enable All
+  1346→            </Button>
+  1347→            <Button variant="outline" size="sm" className="w-full border-slate-700 text-slate-300 hover:bg-slate-800" onClick={handleDisableAll} disabled={!selectedTenantForFlags || saving}>
+  1348→              <ToggleLeft className="size-4 mr-1.5" /> Disable All
+  1349→            </Button>
+  1350→          </div>
+  1351→          <Separator className="bg-slate-800" />
+  1352→          <div className="text-sm text-slate-400 space-y-1">
+  1353→            <p className="font-medium text-white">Summary</p>
+  1354→            <p>Enabled: <span className="text-emerald-400">{enabledCount}</span>/{localFlags.length}</p>
+  1355→          </div>
+  1356→        </div>
+  1357→
+  1358→        {/* Right Panel - Flags Grid */}
+  1359→        <div className="flex-1 min-w-0">
+  1360→          {flagsLoading ? (
+  1361→            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  1362→              {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-lg bg-slate-800" />)}
+  1363→            </div>
+  1364→          ) : (
+  1365→            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+  1366→              {localFlags.map((flag) => (
+  1367→                <div key={flag.key} className={cn(
+  1368→                  'flex flex-col gap-2 rounded-lg border p-4 transition-all',
+  1369→                  flag.enabled
+  1370→                    ? 'bg-emerald-500/5 border-emerald-500/20'
+  1371→                    : 'bg-slate-900 border-slate-800 opacity-60',
+  1372→                )}>
+  1373→                  <div className="flex items-center justify-between">
+  1374→                    <div className="flex items-center gap-2">
+  1375→                      <Flag className={cn('size-4', flag.enabled ? 'text-emerald-400' : 'text-slate-500')} />
+  1376→                      <span className="text-sm font-medium text-white">{flag.label}</span>
+  1377→                    </div>
+  1378→                    <Switch
+  1379→                      checked={flag.enabled}
+  1380→                      onCheckedChange={() => handleToggle(flag.key)}
+  1381→                      disabled={!selectedTenantForFlags}
+  1382→                    />
+  1383→                  </div>
+  1384→                  <p className="text-xs text-slate-400 line-clamp-2">{flag.description}</p>
+  1385→                </div>
+  1386→              ))}
+  1387→            </div>
+  1388→          )}
+  1389→        </div>
+  1390→      </div>
+  1391→    );
+  1392→  }
+  1393→
+  1394→  // ═══════════════════════════════════════════════════════════════════════════
+  1395→  // 5. MENU ITEMS TAB
+  1396→  // ═══════════════════════════════════════════════════════════════════════════
+  1397→
+  1398→  function MenuItemsTab() {
+  1399→    const [localItems, setLocalItems] = useState<MenuItemDef[]>([]);
+  1400→    const [saving, setSaving] = useState(false);
+  1401→
+  1402→    useEffect(() => {
+  1403→      setLocalItems(menuItems);
+  1404→    }, [menuItems]);
+  1405→
+  1406→    const effectiveTenantId = menuScope === 'global' ? undefined : selectedTenantForMenu;
+  1407→
+  1408→    const handleToggle = (itemKey: string) => {
+  1409→      const item = localItems.find((i) => i.key === itemKey);
+  1410→      if (!item) return;
+  1411→      if (menuScope === 'tenant' && !selectedTenantForMenu) {
+  1412→        toast.error('Please select a tenant first');
+  1413→        return;
+  1414→      }
+  1415→
+  1416→      const newEnabled = !item.enabled;
+  1417→      setLocalItems((prev) => prev.map((i) => i.key === itemKey ? { ...i, enabled: newEnabled } : i));
+  1418→
+  1419→      toggleMenuItemMutation.mutate(
+  1420→        { tenantId: effectiveTenantId, menuKey: itemKey, enabled: newEnabled, scope: menuScope },
+  1421→        {
+  1422→          onError: (err: Error) => {
+  1423→            setLocalItems((prev) => prev.map((i) => i.key === itemKey ? { ...i, enabled: !newEnabled } : i));
+  1424→            toast.error(`Failed to toggle menu item: ${err.message || 'Unknown error'}`);
+  1425→          },
+  1426→          onSuccess: () => {
+  1427→            toast.success(`${item.label} ${newEnabled ? 'enabled' : 'disabled'} ${menuScope === 'global' ? 'globally' : 'for tenant'}`);
+  1428→          },
+  1429→        },
+  1430→      );
+  1431→    };
+  1432→
+  1433→    const handleBulkToggle = (sectionKey: string, enabled: boolean) => {
+  1434→      if (menuScope === 'tenant' && !selectedTenantForMenu) {
+  1435→        toast.error('Please select a tenant first');
+  1436→        return;
+  1437→      }
+  1438→      setLocalItems((prev) => prev.map((i) => i.section === sectionKey ? { ...i, enabled } : i));
+  1439→      const sectionItems = localItems.filter((i) => i.section === sectionKey);
+  1440→      fetch('/api/superadmin/menu-items', {
+  1441→        method: 'POST',
+  1442→        credentials: 'same-origin',
+  1443→        headers: { 'Content-Type': 'application/json' },
+  1444→        body: JSON.stringify({
+  1445→          tenantId: effectiveTenantId,
+  1446→          scope: menuScope,
+  1447→          items: sectionItems.map((i) => ({ key: i.key, enabled, label: i.label, icon: i.icon, section: i.section })),
+  1448→        }),
+  1449→      }).then((res) => {
+  1450→        if (!res.ok) return res.json().then((d: { error?: string }) => { throw new Error(d.error || 'Failed'); });
+  1451→        toast.success(`${sectionKey} ${enabled ? 'enabled' : 'disabled'}`);
+  1452→        // Invalidate queries to refresh state
+  1453→        queryClient.invalidateQueries({ queryKey: ['globalMenuItems'] });
+  1454→        queryClient.invalidateQueries({ queryKey: ['menuItems'] });
+  1455→      }).catch((err: Error) => toast.error(`Failed: ${err.message}`));
+  1456→    };
+  1457→
+  1458→    const handleEnableAll = () => {
+  1459→      if (menuScope === 'tenant' && !selectedTenantForMenu) {
+  1460→        toast.error('Please select a tenant first');
+  1461→        return;
+  1462→      }
+  1463→      setLocalItems((prev) => prev.map((i) => ({ ...i, enabled: true })));
+  1464→      setSaving(true);
+  1465→      fetch('/api/superadmin/menu-items', {
+  1466→        method: 'POST',
+  1467→        credentials: 'same-origin',
+  1468→        headers: { 'Content-Type': 'application/json' },
+  1469→        body: JSON.stringify({ tenantId: effectiveTenantId, scope: menuScope, items: localItems.map((i) => ({ key: i.key, enabled: true })) }),
+  1470→      }).then((res) => {
+  1471→        if (!res.ok) return res.json().then((d: { error?: string }) => { throw new Error(d.error || 'Failed'); });
+  1472→        toast.success('All menu items enabled');
+  1473→        queryClient.invalidateQueries({ queryKey: ['globalMenuItems'] });
+  1474→        queryClient.invalidateQueries({ queryKey: ['menuItems'] });
+  1475→        setSaving(false);
+  1476→      }).catch((err: Error) => { toast.error(`Failed: ${err.message}`); setSaving(false); });
+  1477→    };
+  1478→
+  1479→    const handleDisableAll = () => {
+  1480→      if (menuScope === 'tenant' && !selectedTenantForMenu) {
+  1481→        toast.error('Please select a tenant first');
+  1482→        return;
+  1483→      }
+  1484→      setLocalItems((prev) => prev.map((i) => ({ ...i, enabled: false })));
+  1485→      setSaving(true);
+  1486→      fetch('/api/superadmin/menu-items', {
+  1487→        method: 'POST',
+  1488→        credentials: 'same-origin',
+  1489→        headers: { 'Content-Type': 'application/json' },
+  1490→        body: JSON.stringify({ tenantId: effectiveTenantId, scope: menuScope, items: localItems.map((i) => ({ key: i.key, enabled: false })) }),
+  1491→      }).then((res) => {
+  1492→        if (!res.ok) return res.json().then((d: { error?: string }) => { throw new Error(d.error || 'Failed'); });
+  1493→        toast.success('All menu items disabled');
+  1494→        queryClient.invalidateQueries({ queryKey: ['globalMenuItems'] });
+  1495→        queryClient.invalidateQueries({ queryKey: ['menuItems'] });
+  1496→        setSaving(false);
+  1497→      }).catch((err: Error) => { toast.error(`Failed: ${err.message}`); setSaving(false); });
+  1498→    };
+  1499→
+  1500→    // Group by section
+  1501→    const itemsBySection = useMemo(() => {
+  1502→      const sections: Record<string, MenuItemDef[]> = {};
+  1503→      MENU_SECTIONS.forEach((s) => { sections[s.key] = []; });
+  1504→      localItems.forEach((item) => {
+  1505→        const sectionKey = item.section || 'System';
+  1506→        if (!sections[sectionKey]) sections[sectionKey] = [];
+  1507→        sections[sectionKey].push(item);
+  1508→      });
+  1509→      return sections;
+  1510→    }, [localItems]);
+  1511→
+  1512→    const isLoading = menuScope === 'global' ? globalMenuLoading : menuLoading;
+  1513→
+  1514→    return (
+  1515→      <div className="flex flex-col lg:flex-row gap-6">
+  1516→        {/* Left Panel */}
+  1517→        <div className="w-full lg:w-64 shrink-0 space-y-4">
+  1518→          {/* Scope Selector */}
+  1519→          <Card className="bg-slate-900 border-slate-800">
+  1520→            <CardHeader className="pb-3"><CardTitle className="text-sm text-white">Menu Visibility Scope</CardTitle></CardHeader>
+  1521→            <CardContent className="pt-0 space-y-3">
+  1522→              <div className="flex gap-2">
+  1523→                <Button
+  1524→                  variant={menuScope === 'global' ? 'default' : 'outline'}
+  1525→                  size="sm"
+  1526→                  className={cn(
+  1527→                    'flex-1 text-xs',
+  1528→                    menuScope === 'global'
+  1529→                      ? 'bg-red-600 hover:bg-red-700 text-white'
+  1530→                      : 'border-slate-700 text-slate-300 hover:bg-slate-800'
+  1531→                  )}
+  1532→                  onClick={() => setMenuScope('global')}
+  1533→                >
+  1534→                  <Shield className="size-3.5 mr-1.5" /> Global
+  1535→                </Button>
+  1536→                <Button
+  1537→                  variant={menuScope === 'tenant' ? 'default' : 'outline'}
+  1538→                  size="sm"
+  1539→                  className={cn(
+  1540→                    'flex-1 text-xs',
+  1541→                    menuScope === 'tenant'
+  1542→                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+  1543→                      : 'border-slate-700 text-slate-300 hover:bg-slate-800'
+  1544→                  )}
+  1545→                  onClick={() => setMenuScope('tenant')}
+  1546→                >
+  1547→                  <Building2 className="size-3.5 mr-1.5" /> Tenant
+  1548→                </Button>
+  1549→              </div>
+  1550→              {menuScope === 'global' && (
+  1551→                <div className="p-2 rounded-lg bg-red-500/5 border border-red-500/20">
+  1552→                  <p className="text-[11px] text-red-400 font-medium">Global changes affect ALL tenants</p>
+  1553→                </div>
+  1554→              )}
+  1555→              {menuScope === 'tenant' && (
+  1556→                <Select value={selectedTenantForMenu} onValueChange={setSelectedTenantForMenu}>
+  1557→                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue placeholder="Choose tenant..." /></SelectTrigger>
+  1558→                  <SelectContent>
+  1559→                    {tenants.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+  1560→                  </SelectContent>
+  1561→                </Select>
+  1562→              )}
+  1563→            </CardContent>
+  1564→          </Card>
+  1565→          <div className="space-y-2">
+  1566→            <Button variant="outline" size="sm" className="w-full text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10" onClick={handleEnableAll} disabled={(menuScope === 'tenant' && !selectedTenantForMenu) || saving}>
+  1567→              <ToggleRight className="size-4 mr-1.5" /> Enable All
+  1568→            </Button>
+  1569→            <Button variant="outline" size="sm" className="w-full border-slate-700 text-slate-300 hover:bg-slate-800" onClick={handleDisableAll} disabled={(menuScope === 'tenant' && !selectedTenantForMenu) || saving}>
+  1570→              <ToggleLeft className="size-4 mr-1.5" /> Disable All
+  1571→            </Button>
+  1572→          </div>
+  1573→          <Separator className="bg-slate-800" />
+  1574→          <div className="text-sm text-slate-400 space-y-1">
+  1575→            <p className="font-medium text-white">Summary</p>
+  1576→            <p>Enabled: <span className="text-emerald-400">{localItems.filter((i) => i.enabled).length}</span>/{localItems.length}</p>
+  1577→            <p>Scope: <span className={menuScope === 'global' ? 'text-red-400' : 'text-emerald-400'}>{menuScope === 'global' ? 'All Tenants' : 'Per-Tenant'}</span></p>
+  1578→          </div>
+  1579→        </div>
+  1580→
+  1581→        {/* Right Panel - Menu Items by Section */}
+  1582→        <div className="flex-1 min-w-0">
+  1583→          {isLoading ? (
+  1584→            <div className="space-y-6">
+  1585→              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-lg bg-slate-800" />)}
+  1586→            </div>
+  1587→          ) : (
+  1588→            <ScrollArea className="max-h-[calc(100vh-300px)]">
+  1589→              <div className="space-y-4">
+  1590→                {MENU_SECTIONS.map((section) => {
+  1591→                  const items = itemsBySection[section.key] || [];
+  1592→                  if (items.length === 0) return null;
+  1593→                  const SectionIcon = section.icon;
+  1594→                  return (
+  1595→                    <Card key={section.key} className="bg-slate-900 border-slate-800">
+  1596→                      <CardHeader className="pb-2">
+  1597→                        <div className="flex items-center justify-between">
+  1598→                          <div className="flex items-center gap-2">
+  1599→                            <SectionIcon className="size-4 text-emerald-400" />
+  1600→                            <CardTitle className="text-sm text-white">{section.label}</CardTitle>
+  1601→                            <Badge variant="secondary" className="text-[10px] h-5 bg-slate-800 text-slate-300">
+  1602→                              {items.filter((i) => i.enabled).length}/{items.length}
+  1603→                            </Badge>
+  1604→                          </div>
+  1605→                          <div className="flex items-center gap-2">
+  1606→                            <Button variant="ghost" size="sm" className="h-7 text-xs text-emerald-400 hover:text-emerald-300" onClick={() => handleBulkToggle(section.key, true)}>Enable All</Button>
+  1607→                            <Button variant="ghost" size="sm" className="h-7 text-xs text-slate-400 hover:text-slate-300" onClick={() => handleBulkToggle(section.key, false)}>Disable All</Button>
+  1608→                          </div>
+  1609→                        </div>
+  1610→                      </CardHeader>
+  1611→                      <CardContent className="pt-0">
+  1612→                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+  1613→                          {items.map((item) => (
+  1614→                            <div key={item.id || item.key} className={cn(
+  1615→                              'flex flex-col items-center justify-center gap-2 rounded-lg border p-3 transition-all',
+  1616→                              item.enabled
+  1617→                                ? 'border-emerald-500/20 bg-emerald-500/5'
+  1618→                                : 'border-slate-800 bg-slate-900/50 opacity-60',
+  1619→                            )}>
+  1620→                              <span className="text-xs font-medium text-center text-white truncate w-full">{item.label}</span>
+  1621→                              <Switch checked={item.enabled} onCheckedChange={() => handleToggle(item.key)} disabled={menuScope === 'tenant' && !selectedTenantForMenu} className="scale-75" />
+  1622→                            </div>
+  1623→                          ))}
+  1624→                        </div>
+  1625→                      </CardContent>
+  1626→                    </Card>
+  1627→                  );
+  1628→                })}
+  1629→              </div>
+  1630→            </ScrollArea>
+  1631→          )}
+  1632→        </div>
+  1633→      </div>
+  1634→    );
+  1635→  }
+  1636→
+  1637→  // ═══════════════════════════════════════════════════════════════════════════
+  1638→  // 6. USERS TAB
+  1639→  // ═══════════════════════════════════════════════════════════════════════════
+  1640→
+  1641→  function UsersTab() {
+  1642→    const [search, setSearch] = useState('');
+  1643→    const [roleFilter, setRoleFilter] = useState('all');
+  1644→    const [actionDialog, setActionDialog] = useState<{ user: UserRecord; action: 'activate' | 'deactivate' | 'change_role' } | null>(null);
+  1645→    const [newRole, setNewRole] = useState('');
+  1646→    const [saving, setSaving] = useState(false);
+  1647→
+  1648→    const filteredUsers = useMemo(() => {
+  1649→      return users.filter((u) => {
+  1650→        const q = search.toLowerCase();
+  1651→        const matchesSearch = !search || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || (u.tenantName || '').toLowerCase().includes(q);
+  1652→        const matchesRole = roleFilter === 'all' || u.role === roleFilter;
+  1653→        return matchesSearch && matchesRole;
+  1654→      });
+  1655→    }, [users, search, roleFilter]);
+  1656→
+  1657→    const handleAction = async () => {
+  1658→      if (!actionDialog) return;
+  1659→      setSaving(true);
+  1660→      try {
+  1661→        const res = await fetch('/api/admin/users', {
+  1662→          method: 'PUT',
+  1663→          headers: { 'Content-Type': 'application/json' },
+  1664→          body: JSON.stringify({
+  1665→            id: actionDialog.user.id,
+  1666→            action: actionDialog.action === 'activate' ? 'unlock' : actionDialog.action === 'deactivate' ? 'lock' : 'change_role',
+  1667→            role: actionDialog.action === 'change_role' ? newRole : undefined,
+  1668→          }),
+  1669→        });
+  1670→        if (res.ok) {
+  1671→          toast.success(`User ${actionDialog.action === 'activate' ? 'activated' : actionDialog.action === 'deactivate' ? 'deactivated' : 'role changed'} successfully`);
+  1672→        } else {
+  1673→          toast.error('Failed to update user');
+  1674→        }
+  1675→      } catch {
+  1676→        toast.error('Network error');
+  1677→      } finally {
+  1678→        setSaving(false);
+  1679→        setActionDialog(null);
+  1680→      }
+  1681→    };
+  1682→
+  1683→    const roleColors: Record<string, string> = {
+  1684→      owner: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+  1685→      admin: 'text-teal-400 bg-teal-500/10 border-teal-500/20',
+  1686→      manager: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+  1687→      employee: 'text-slate-400 bg-slate-500/10 border-slate-500/20',
+  1688→      technician: 'text-sky-400 bg-sky-500/10 border-sky-500/20',
+  1689→      superadmin: 'text-red-400 bg-red-500/10 border-red-500/20',
+  1690→    };
+  1691→
+  1692→    return (
+  1693→      <div className="space-y-4">
+  1694→        <div className="flex flex-col sm:flex-row gap-3">
+  1695→          <div className="relative flex-1">
+  1696→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+  1697→            <Input className="pl-9 bg-slate-900 border-slate-800 text-white placeholder:text-slate-500" placeholder="Search users..." value={search} onChange={(e) => setSearch(e.target.value)} />
+  1698→          </div>
+  1699→          <Select value={roleFilter} onValueChange={setRoleFilter}>
+  1700→            <SelectTrigger className="w-full sm:w-[130px] bg-slate-900 border-slate-800 text-white"><SelectValue placeholder="Role" /></SelectTrigger>
+  1701→            <SelectContent>
+  1702→              <SelectItem value="all">All Roles</SelectItem>
+  1703→              <SelectItem value="owner">Owner</SelectItem>
+  1704→              <SelectItem value="admin">Admin</SelectItem>
+  1705→              <SelectItem value="manager">Manager</SelectItem>
+  1706→              <SelectItem value="employee">Employee</SelectItem>
+  1707→            </SelectContent>
+  1708→          </Select>
+  1709→        </div>
+  1710→
+  1711→        {usersLoading ? <TableSkeleton /> : filteredUsers.length === 0 ? (
+  1712→          <Card className="bg-slate-900 border-slate-800 border-dashed">
+  1713→            <CardContent className="flex flex-col items-center justify-center py-16 text-slate-500">
+  1714→              <Users className="size-14 mb-4 opacity-30" /><p className="text-lg font-medium">No users found</p>
+  1715→            </CardContent>
+  1716→          </Card>
+  1717→        ) : (
+  1718→          <Card className="bg-slate-900 border-slate-800">
+  1719→            <ScrollArea className="max-h-96">
+  1720→              <Table>
+  1721→                <TableHeader>
+  1722→                  <TableRow className="border-slate-800 hover:bg-transparent">
+  1723→                    <TableHead className="text-slate-400">Name</TableHead>
+  1724→                    <TableHead className="text-slate-400">Email</TableHead>
+  1725→                    <TableHead className="text-slate-400">Role</TableHead>
+  1726→                    <TableHead className="text-slate-400">Status</TableHead>
+  1727→                    <TableHead className="text-slate-400">Tenant</TableHead>
+  1728→                    <TableHead className="text-slate-400 text-right">Actions</TableHead>
+  1729→                  </TableRow>
+  1730→                </TableHeader>
+  1731→                <TableBody>
+  1732→                  {filteredUsers.map((user) => (
+  1733→                    <TableRow key={user.id} className="border-slate-800 hover:bg-slate-800/50">
+  1734→                      <TableCell className="font-medium text-white">{user.name}</TableCell>
+  1735→                      <TableCell className="text-slate-400">{user.email}</TableCell>
+  1736→                      <TableCell>
+  1737→                        <Badge variant="outline" className={cn('capitalize text-[10px]', roleColors[user.role] || roleColors.employee)}>
+  1738→                          {user.role}
+  1739→                        </Badge>
+  1740→                      </TableCell>
+  1741→                      <TableCell>
+  1742→                        <Badge variant="outline" className={cn('text-[10px]', user.isActive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20')}>
+  1743→                          {user.isActive ? 'Active' : 'Inactive'}
+  1744→                        </Badge>
+  1745→                      </TableCell>
+  1746→                      <TableCell className="text-slate-400 text-sm">{user.tenantName || '—'}</TableCell>
+  1747→                      <TableCell className="text-right">
+  1748→                        <div className="flex items-center justify-end gap-1">
+  1749→                          {user.isActive ? (
+  1750→                            <Button variant="ghost" size="sm" className="h-7 px-2 text-red-400 hover:text-red-300" onClick={() => setActionDialog({ user, action: 'deactivate' })}>
+  1751→                              <Ban className="size-3.5" />
+  1752→                            </Button>
+  1753→                          ) : (
+  1754→                            <Button variant="ghost" size="sm" className="h-7 px-2 text-emerald-400 hover:text-emerald-300" onClick={() => setActionDialog({ user, action: 'activate' })}>
+  1755→                              <CheckCircle2 className="size-3.5" />
+  1756→                            </Button>
+  1757→                          )}
+  1758→                          <Button variant="ghost" size="sm" className="h-7 px-2 text-sky-400 hover:text-sky-300" onClick={() => { setNewRole(user.role); setActionDialog({ user, action: 'change_role' }); }}>
+  1759→                            <UserCog className="size-3.5" />
+  1760→                          </Button>
+  1761→                        </div>
+  1762→                      </TableCell>
+  1763→                    </TableRow>
+  1764→                  ))}
+  1765→                </TableBody>
+  1766→              </Table>
+  1767→            </ScrollArea>
+  1768→          </Card>
+  1769→        )}
+  1770→
+  1771→        {/* Action Dialog */}
+  1772→        <Dialog open={!!actionDialog} onOpenChange={(open) => { if (!open) setActionDialog(null); }}>
+  1773→          <DialogContent className="bg-slate-900 border-slate-800 text-white sm:max-w-md">
+  1774→            <DialogHeader>
+  1775→              <DialogTitle>
+  1776→                {actionDialog?.action === 'activate' ? 'Activate User' : actionDialog?.action === 'deactivate' ? 'Deactivate User' : 'Change Role'}
+  1777→              </DialogTitle>
+  1778→              <DialogDescription className="text-slate-400">User: {actionDialog?.user.name} ({actionDialog?.user.email})</DialogDescription>
+  1779→            </DialogHeader>
+  1780→            {actionDialog?.action === 'change_role' && (
+  1781→              <Select value={newRole} onValueChange={setNewRole}>
+  1782→                <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
+  1783→                <SelectContent>
+  1784→                  <SelectItem value="owner">Owner</SelectItem>
+  1785→                  <SelectItem value="admin">Admin</SelectItem>
+  1786→                  <SelectItem value="manager">Manager</SelectItem>
+  1787→                  <SelectItem value="employee">Employee</SelectItem>
+  1788→                </SelectContent>
+  1789→              </Select>
+  1790→            )}
+  1791→            <DialogFooter className="gap-2">
+  1792→              <Button variant="outline" onClick={() => setActionDialog(null)} className="border-slate-700 text-slate-300">Cancel</Button>
+  1793→              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleAction} disabled={saving}>
+  1794→                {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : null} Confirm
+  1795→              </Button>
+  1796→            </DialogFooter>
+  1797→          </DialogContent>
+  1798→        </Dialog>
+  1799→      </div>
+  1800→    );
+  1801→  }
+  1802→
+  1803→  // ═══════════════════════════════════════════════════════════════════════════
+  1804→  // 7. AUDIT LOGS TAB
+  1805→  // ═══════════════════════════════════════════════════════════════════════════
+  1806→
+  1807→  function AuditLogsTab() {
+  1808→    const [logs, setLogs] = useState<AuditLog[]>([]);
+  1809→    const [loading, setLoading] = useState(true);
+  1810→    const [actionFilter, setActionFilter] = useState('');
+  1811→    const [tenantFilter, setTenantFilter] = useState('');
+  1812→    const [userFilter, setUserFilter] = useState('');
+  1813→
+  1814→    const fetchLogs = useCallback(async () => {
+  1815→      setLoading(true);
+  1816→      try {
+  1817→        const params = new URLSearchParams();
+  1818→        if (actionFilter) params.set('action', actionFilter);
+  1819→        if (tenantFilter) params.set('tenantId', tenantFilter);
+  1820→        if (userFilter) params.set('userId', userFilter);
+  1821→        const res = await fetch(`/api/superadmin/audit-logs?${params.toString()}`);
+  1822→        if (res.ok) {
+  1823→          const data = await res.json();
+  1824→          setLogs(Array.isArray(data.auditLogs) ? data.auditLogs : []);
+  1825→        } else {
+  1826→          setLogs([]);
+  1827→        }
+  1828→      } catch {
+  1829→        setLogs([]);
+  1830→      } finally {
+  1831→        setLoading(false);
+  1832→      }
+  1833→    }, [actionFilter, tenantFilter, userFilter]);
+  1834→
+  1835→    useEffect(() => { fetchLogs(); }, [fetchLogs]);
+  1836→
+  1837→    return (
+  1838→      <div className="space-y-4">
+  1839→        <div className="flex flex-col sm:flex-row gap-3">
+  1840→          <Input className="bg-slate-900 border-slate-800 text-white placeholder:text-slate-500" placeholder="Filter by action..." value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} />
+  1841→          <Select value={tenantFilter} onValueChange={setTenantFilter}>
+  1842→            <SelectTrigger className="w-full sm:w-[180px] bg-slate-900 border-slate-800 text-white"><SelectValue placeholder="All Tenants" /></SelectTrigger>
+  1843→            <SelectContent>
+  1844→              <SelectItem value="all">All Tenants</SelectItem>
+  1845→              {tenants.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+  1846→            </SelectContent>
+  1847→          </Select>
+  1848→          <Button variant="outline" size="sm" onClick={fetchLogs} className="border-slate-700 text-slate-300 h-9">
+  1849→            <RefreshCw className="size-3.5 mr-1.5" /> Refresh
+  1850→          </Button>
+  1851→        </div>
+  1852→
+  1853→        {loading ? <TableSkeleton /> : logs.length === 0 ? (
+  1854→          <Card className="bg-slate-900 border-slate-800 border-dashed">
+  1855→            <CardContent className="flex flex-col items-center justify-center py-16 text-slate-500">
+  1856→              <FileText className="size-14 mb-4 opacity-30" /><p className="text-lg font-medium">No audit logs found</p>
+  1857→            </CardContent>
+  1858→          </Card>
+  1859→        ) : (
+  1860→          <Card className="bg-slate-900 border-slate-800">
+  1861→            <ScrollArea className="max-h-96">
+  1862→              <Table>
+  1863→                <TableHeader>
+  1864→                  <TableRow className="border-slate-800 hover:bg-transparent">
+  1865→                    <TableHead className="text-slate-400">Action</TableHead>
+  1866→                    <TableHead className="text-slate-400">Resource</TableHead>
+  1867→                    <TableHead className="text-slate-400">User ID</TableHead>
+  1868→                    <TableHead className="text-slate-400">Tenant</TableHead>
+  1869→                    <TableHead className="text-slate-400">IP</TableHead>
+  1870→                    <TableHead className="text-slate-400">When</TableHead>
+  1871→                  </TableRow>
+  1872→                </TableHeader>
+  1873→                <TableBody>
+  1874→                  {logs.map((log) => (
+  1875→                    <TableRow key={log.id} className="border-slate-800 hover:bg-slate-800/50">
+  1876→                      <TableCell>
+  1877→                        <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-400 border-sky-500/20">
+  1878→                          {log.action}
+  1879→                        </Badge>
+  1880→                      </TableCell>
+  1881→                      <TableCell className="text-slate-300 text-sm">
+  1882→                        {log.resourceType ? `${log.resourceType}${log.resourceId ? ` #${log.resourceId.slice(0, 8)}` : ''}` : '—'}
+  1883→                      </TableCell>
+  1884→                      <TableCell className="text-slate-400 text-xs font-mono">{log.userId ? log.userId.slice(0, 8) + '...' : '—'}</TableCell>
+  1885→                      <TableCell className="text-slate-400 text-xs font-mono">{log.tenantId ? log.tenantId.slice(0, 8) + '...' : '—'}</TableCell>
+  1886→                      <TableCell className="text-slate-400 text-xs font-mono">{log.ip || '—'}</TableCell>
+  1887→                      <TableCell className="text-slate-400 text-xs">{formatDateTime(log.createdAt)}</TableCell>
+  1888→                    </TableRow>
+  1889→                  ))}
+  1890→                </TableBody>
+  1891→              </Table>
+  1892→            </ScrollArea>
+  1893→          </Card>
+  1894→        )}
+  1895→      </div>
+  1896→    );
+  1897→  }
+  1898→
+  1899→  // ═══════════════════════════════════════════════════════════════════════════
+  1900→  // Fallback stats helper
+  1901→  // ═══════════════════════════════════════════════════════════════════════════
+  1902→
+  1903→  function getFallbackStats(): PlatformStats {
+  1904→    return {
+  1905→      totalTenants: tenants.length, activeTenants: tenants.filter((t) => t.planStatus === 'active').length,
+  1906→      suspendedTenants: tenants.filter((t) => t.planStatus === 'suspended').length, trialTenants: tenants.filter((t) => t.planStatus === 'trial').length,
+  1907→      totalUsers: users.length, activeUsers: users.filter((u) => u.isActive).length,
+  1908→      totalRevenue: tenants.reduce((s, t) => s + t.mrr, 0), mrr: tenants.reduce((s, t) => s + t.mrr, 0),
+  1909→      arr: tenants.reduce((s, t) => s + t.arr, 0), avgChurnRate: 0, activeSubscriptions: subscriptions.length,
+  1910→      communication: { totalConversations: 0, activeConversations: 0 },
+  1911→      healthMetrics: [], recentSecurityEvents: [], recentAuditLogs: [],
+  1912→      trends: { tenants: 0, users: 0, revenue: 0, subscriptions: 0 },
+  1913→    };
+  1914→  }
+  1915→
+  1916→  // ═══════════════════════════════════════════════════════════════════════════
+  1917→  // RENDER
+  1918→  // ═══════════════════════════════════════════════════════════════════════════
+  1919→
+  1920→  return (
+  1921→    <div className="space-y-6 max-w-7xl mx-auto">
+  1922→      {/* Header */}
+  1923→      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+  1924→        <div className="flex items-center gap-3">
+  1925→          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600 shrink-0">
+  1926→            <ShieldCheck className="size-5 text-white" />
+  1927→          </div>
+  1928→          <div className="min-w-0">
+  1929→            <div className="flex items-center gap-2">
+  1930→              <h1 className="text-xl font-bold text-white truncate">Super Admin Portal</h1>
+  1931→              <Badge className="bg-red-500/10 text-red-400 border-red-500/20 text-[10px]">Admin</Badge>
+  1932→            </div>
+  1933→            <p className="text-sm text-slate-400">Platform-wide management &amp; analytics</p>
+  1934→          </div>
+  1935→        </div>
+  1936→        <div className="flex items-center gap-2">
+  1937→          <Button variant="outline" size="sm" onClick={() => { refetchStats(); refetchTenants(); }} className="min-h-[36px] border-slate-700 text-slate-300 hover:text-white">
+  1938→            <RefreshCw className="size-4 mr-1.5" /> Refresh
+  1939→          </Button>
+  1940→          <Badge variant="outline" className="text-xs px-3 py-1 border-emerald-500/30 text-emerald-400 bg-emerald-500/5">
+  1941→            <span className="size-1.5 bg-emerald-500 rounded-full mr-1.5 animate-pulse" /> Live
+  1942→          </Badge>
+  1943→        </div>
+  1944→      </div>
+  1945→
+  1946→      {/* Tabs */}
+  1947→      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+  1948→        <TabsList className="flex flex-wrap h-auto gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
+  1949→          <TabsTrigger value="dashboard" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
+  1950→            <BarChart3 className="size-3.5" /><span className="hidden sm:inline">Dashboard</span>
+  1951→          </TabsTrigger>
+  1952→          <TabsTrigger value="tenants" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
+  1953→            <Building2 className="size-3.5" /><span className="hidden sm:inline">Tenants</span>
+  1954→          </TabsTrigger>
+  1955→          <TabsTrigger value="subscriptions" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
+  1956→            <CreditCard className="size-3.5" /><span className="hidden sm:inline">Subscriptions</span>
+  1957→          </TabsTrigger>
+  1958→          <TabsTrigger value="feature-flags" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
+  1959→            <Flag className="size-3.5" /><span className="hidden sm:inline">Features</span>
+  1960→          </TabsTrigger>
+  1961→          <TabsTrigger value="menu-items" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
+  1962→            <Menu className="size-3.5" /><span className="hidden sm:inline">Menu Items</span>
+  1963→          </TabsTrigger>
+  1964→          <TabsTrigger value="users" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
+  1965→            <UserCog className="size-3.5" /><span className="hidden sm:inline">Users</span>
+  1966→          </TabsTrigger>
+  1967→          <TabsTrigger value="audit-logs" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
+  1968→            <FileText className="size-3.5" /><span className="hidden sm:inline">Audit Logs</span>
+  1969→          </TabsTrigger>
+  1970→        </TabsList>
+  1971→
+  1972→        <TabsContent value="dashboard"><DashboardTab /></TabsContent>
+  1973→        <TabsContent value="tenants"><TenantsTab /></TabsContent>
+  1974→        <TabsContent value="subscriptions"><SubscriptionsTab /></TabsContent>
+  1975→        <TabsContent value="feature-flags"><FeatureFlagsTab /></TabsContent>
+  1976→        <TabsContent value="menu-items"><MenuItemsTab /></TabsContent>
+  1977→        <TabsContent value="users"><UsersTab /></TabsContent>
+  1978→        <TabsContent value="audit-logs"><AuditLogsTab /></TabsContent>
+  1979→      </Tabs>
+  1980→    </div>
+  1981→  );
+  1982→}
+  1983→

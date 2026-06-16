@@ -169,6 +169,185 @@ CREATE INDEX IF NOT EXISTS "TriggerExecution_status_idx" ON "TriggerExecution"("
 CREATE INDEX IF NOT EXISTS "TriggerExecution_tenantId_idx" ON "TriggerExecution"("tenantId");
 CREATE INDEX IF NOT EXISTS "TriggerExecution_createdAt_idx" ON "TriggerExecution"("createdAt");
 
+-- 7. OtpVerification
+CREATE TABLE IF NOT EXISTS "OtpVerification" (
+  "id" TEXT PRIMARY KEY DEFAULT substring(replace(gen_random_uuid()::text, '-', ''), 1, 25),
+  "phone" TEXT NOT NULL,
+  "otpCode" TEXT NOT NULL,
+  "channel" TEXT NOT NULL DEFAULT 'whatsapp',
+  "verified" BOOLEAN NOT NULL DEFAULT false,
+  "expiresAt" TIMESTAMPTZ NOT NULL,
+  "verifiedAt" TIMESTAMPTZ,
+  "attempts" INTEGER NOT NULL DEFAULT 0,
+  "tenantId" TEXT,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS "OtpVerification_phone_idx" ON "OtpVerification"("phone");
+CREATE INDEX IF NOT EXISTS "OtpVerification_otpCode_idx" ON "OtpVerification"("otpCode");
+CREATE INDEX IF NOT EXISTS "OtpVerification_expiresAt_idx" ON "OtpVerification"("expiresAt");
+
+-- 8. PlatformAuthSettings (singleton)
+CREATE TABLE IF NOT EXISTS "PlatformAuthSettings" (
+  "id" TEXT PRIMARY KEY DEFAULT 'platform',
+  "emailPasswordEnabled" BOOLEAN NOT NULL DEFAULT true,
+  "smsOtpEnabled" BOOLEAN NOT NULL DEFAULT false,
+  "smsOtpProvider" TEXT,
+  "smsOtpConfigJson" TEXT NOT NULL DEFAULT '{}',
+  "whatsappOtpEnabled" BOOLEAN NOT NULL DEFAULT false,
+  "whatsappOtpProvider" TEXT,
+  "whatsappOtpAccessToken" TEXT,
+  "whatsappOtpPhoneNumberId" TEXT,
+  "whatsappOtpBusinessId" TEXT,
+  "whatsappOtpTemplate" TEXT,
+  "whatsappOtpConfigJson" TEXT NOT NULL DEFAULT '{}',
+  "googleEnabled" BOOLEAN NOT NULL DEFAULT false,
+  "googleClientId" TEXT,
+  "googleClientSecret" TEXT,
+  "twoFactorEnabled" BOOLEAN NOT NULL DEFAULT false,
+  "twoFactorMethods" TEXT NOT NULL DEFAULT '[]',
+  "otpLength" INTEGER NOT NULL DEFAULT 6,
+  "otpExpirySeconds" INTEGER NOT NULL DEFAULT 300,
+  "maxOtpAttempts" INTEGER NOT NULL DEFAULT 3,
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- 9. IntegrationConnection
+CREATE TABLE IF NOT EXISTS "IntegrationConnection" (
+  "id" TEXT PRIMARY KEY DEFAULT substring(replace(gen_random_uuid()::text, '-', ''), 1, 25),
+  "provider" TEXT NOT NULL,
+  "name" TEXT NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'disconnected',
+  "storeUrl" TEXT,
+  "accessToken" TEXT,
+  "apiSecret" TEXT,
+  "scopesJson" TEXT NOT NULL DEFAULT '[]',
+  "configJson" TEXT NOT NULL DEFAULT '{}',
+  "syncSettingsJson" TEXT NOT NULL DEFAULT '{}',
+  "lastSyncAt" TIMESTAMPTZ,
+  "lastSyncStatus" TEXT,
+  "lastError" TEXT,
+  "totalSyncedOrders" INTEGER NOT NULL DEFAULT 0,
+  "totalSyncedProducts" INTEGER NOT NULL DEFAULT 0,
+  "totalSyncedCustomers" INTEGER NOT NULL DEFAULT 0,
+  "webhookUrl" TEXT,
+  "webhookVerified" BOOLEAN NOT NULL DEFAULT false,
+  "tenantId" TEXT,
+  "workspaceId" TEXT,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS "IntegrationConnection_provider_idx" ON "IntegrationConnection"("provider");
+CREATE INDEX IF NOT EXISTS "IntegrationConnection_status_idx" ON "IntegrationConnection"("status");
+CREATE INDEX IF NOT EXISTS "IntegrationConnection_tenantId_idx" ON "IntegrationConnection"("tenantId");
+CREATE INDEX IF NOT EXISTS "IntegrationConnection_lastSyncAt_idx" ON "IntegrationConnection"("lastSyncAt");
+
+-- 10. EcommerceOrder
+CREATE TABLE IF NOT EXISTS "EcommerceOrder" (
+  "id" TEXT PRIMARY KEY DEFAULT substring(replace(gen_random_uuid()::text, '-', ''), 1, 25),
+  "externalOrderId" TEXT NOT NULL,
+  "orderNumber" TEXT,
+  "status" TEXT NOT NULL DEFAULT 'pending',
+  "financialStatus" TEXT,
+  "fulfillmentStatus" TEXT,
+  "customerId" TEXT,
+  "customerEmail" TEXT,
+  "customerName" TEXT,
+  "customerPhone" TEXT,
+  "subtotal" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "total" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "currency" TEXT NOT NULL DEFAULT 'USD',
+  "discountTotal" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "taxTotal" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "shippingTotal" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "itemsJson" TEXT NOT NULL DEFAULT '[]',
+  "shippingAddress" TEXT,
+  "billingAddress" TEXT,
+  "tagsJson" TEXT NOT NULL DEFAULT '[]',
+  "notes" TEXT,
+  "couponCode" TEXT,
+  "orderedAt" TIMESTAMPTZ,
+  "fulfilledAt" TIMESTAMPTZ,
+  "cancelledAt" TIMESTAMPTZ,
+  "refundedAt" TIMESTAMPTZ,
+  "rawDataJson" TEXT NOT NULL DEFAULT '{}',
+  "integrationId" TEXT NOT NULL REFERENCES "IntegrationConnection"("id") ON DELETE CASCADE,
+  "tenantId" TEXT,
+  "workspaceId" TEXT,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "EcommerceOrder_integrationId_externalOrderId_key" ON "EcommerceOrder"("integrationId", "externalOrderId");
+CREATE INDEX IF NOT EXISTS "EcommerceOrder_status_idx" ON "EcommerceOrder"("status");
+CREATE INDEX IF NOT EXISTS "EcommerceOrder_financialStatus_idx" ON "EcommerceOrder"("financialStatus");
+CREATE INDEX IF NOT EXISTS "EcommerceOrder_customerId_idx" ON "EcommerceOrder"("customerId");
+CREATE INDEX IF NOT EXISTS "EcommerceOrder_tenantId_idx" ON "EcommerceOrder"("tenantId");
+CREATE INDEX IF NOT EXISTS "EcommerceOrder_orderedAt_idx" ON "EcommerceOrder"("orderedAt");
+CREATE INDEX IF NOT EXISTS "EcommerceOrder_integrationId_idx" ON "EcommerceOrder"("integrationId");
+
+-- 11. EcommerceProduct
+CREATE TABLE IF NOT EXISTS "EcommerceProduct" (
+  "id" TEXT PRIMARY KEY DEFAULT substring(replace(gen_random_uuid()::text, '-', ''), 1, 25),
+  "externalProductId" TEXT NOT NULL,
+  "title" TEXT NOT NULL,
+  "description" TEXT,
+  "status" TEXT NOT NULL DEFAULT 'active',
+  "productType" TEXT,
+  "vendor" TEXT,
+  "tagsJson" TEXT NOT NULL DEFAULT '[]',
+  "price" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "compareAtPrice" DOUBLE PRECISION,
+  "costPrice" DOUBLE PRECISION,
+  "currency" TEXT NOT NULL DEFAULT 'USD',
+  "sku" TEXT,
+  "barcode" TEXT,
+  "inventoryQuantity" INTEGER NOT NULL DEFAULT 0,
+  "weight" DOUBLE PRECISION,
+  "weightUnit" TEXT NOT NULL DEFAULT 'kg',
+  "imagesJson" TEXT NOT NULL DEFAULT '[]',
+  "variantsJson" TEXT NOT NULL DEFAULT '[]',
+  "optionsJson" TEXT NOT NULL DEFAULT '[]',
+  "seoTitle" TEXT,
+  "seoDescription" TEXT,
+  "rawDataJson" TEXT NOT NULL DEFAULT '{}',
+  "integrationId" TEXT NOT NULL REFERENCES "IntegrationConnection"("id") ON DELETE CASCADE,
+  "tenantId" TEXT,
+  "workspaceId" TEXT,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS "EcommerceProduct_integrationId_externalProductId_key" ON "EcommerceProduct"("integrationId", "externalProductId");
+CREATE INDEX IF NOT EXISTS "EcommerceProduct_status_idx" ON "EcommerceProduct"("status");
+CREATE INDEX IF NOT EXISTS "EcommerceProduct_tenantId_idx" ON "EcommerceProduct"("tenantId");
+CREATE INDEX IF NOT EXISTS "EcommerceProduct_sku_idx" ON "EcommerceProduct"("sku");
+CREATE INDEX IF NOT EXISTS "EcommerceProduct_productType_idx" ON "EcommerceProduct"("productType");
+CREATE INDEX IF NOT EXISTS "EcommerceProduct_integrationId_idx" ON "EcommerceProduct"("integrationId");
+
+-- 12. EcommerceSyncLog
+CREATE TABLE IF NOT EXISTS "EcommerceSyncLog" (
+  "id" TEXT PRIMARY KEY DEFAULT substring(replace(gen_random_uuid()::text, '-', ''), 1, 25),
+  "syncType" TEXT NOT NULL,
+  "entity" TEXT NOT NULL,
+  "status" TEXT NOT NULL,
+  "recordsTotal" INTEGER NOT NULL DEFAULT 0,
+  "recordsSynced" INTEGER NOT NULL DEFAULT 0,
+  "recordsFailed" INTEGER NOT NULL DEFAULT 0,
+  "errorsJson" TEXT NOT NULL DEFAULT '[]',
+  "durationMs" INTEGER,
+  "integrationId" TEXT NOT NULL REFERENCES "IntegrationConnection"("id") ON DELETE CASCADE,
+  "tenantId" TEXT,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS "EcommerceSyncLog_entity_idx" ON "EcommerceSyncLog"("entity");
+CREATE INDEX IF NOT EXISTS "EcommerceSyncLog_status_idx" ON "EcommerceSyncLog"("status");
+CREATE INDEX IF NOT EXISTS "EcommerceSyncLog_tenantId_idx" ON "EcommerceSyncLog"("tenantId");
+CREATE INDEX IF NOT EXISTS "EcommerceSyncLog_integrationId_idx" ON "EcommerceSyncLog"("integrationId");
+CREATE INDEX IF NOT EXISTS "EcommerceSyncLog_createdAt_idx" ON "EcommerceSyncLog"("createdAt");
+
 -- ============================================
 -- Row Level Security (RLS) Policies
 -- ============================================
@@ -180,6 +359,12 @@ ALTER TABLE "Form" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "FormResponse" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "WorkflowAutomation" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "TriggerExecution" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "OtpVerification" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "PlatformAuthSettings" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "IntegrationConnection" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "EcommerceOrder" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "EcommerceProduct" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "EcommerceSyncLog" ENABLE ROW LEVEL SECURITY;
 
 -- Service role can do everything (using service role key bypasses RLS, but add policy for clarity)
 CREATE POLICY "Service role full access on CommunicationProvider" ON "CommunicationProvider" FOR ALL USING (true) WITH CHECK (true);
@@ -188,6 +373,12 @@ CREATE POLICY "Service role full access on Form" ON "Form" FOR ALL USING (true) 
 CREATE POLICY "Service role full access on FormResponse" ON "FormResponse" FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access on WorkflowAutomation" ON "WorkflowAutomation" FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access on TriggerExecution" ON "TriggerExecution" FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access on OtpVerification" ON "OtpVerification" FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access on PlatformAuthSettings" ON "PlatformAuthSettings" FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access on IntegrationConnection" ON "IntegrationConnection" FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access on EcommerceOrder" ON "EcommerceOrder" FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access on EcommerceProduct" ON "EcommerceProduct" FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access on EcommerceSyncLog" ON "EcommerceSyncLog" FOR ALL USING (true) WITH CHECK (true);
 
 -- Auto-update updatedAt trigger
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -219,6 +410,26 @@ CREATE TRIGGER set_WorkflowAutomation_updatedAt
   BEFORE UPDATE ON "WorkflowAutomation"
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS set_IntegrationConnection_updatedAt ON "IntegrationConnection";
+CREATE TRIGGER set_IntegrationConnection_updatedAt
+  BEFORE UPDATE ON "IntegrationConnection"
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS set_EcommerceOrder_updatedAt ON "EcommerceOrder";
+CREATE TRIGGER set_EcommerceOrder_updatedAt
+  BEFORE UPDATE ON "EcommerceOrder"
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS set_EcommerceProduct_updatedAt ON "EcommerceProduct";
+CREATE TRIGGER set_EcommerceProduct_updatedAt
+  BEFORE UPDATE ON "EcommerceProduct"
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS set_PlatformAuthSettings_updatedAt ON "PlatformAuthSettings";
+CREATE TRIGGER set_PlatformAuthSettings_updatedAt
+  BEFORE UPDATE ON "PlatformAuthSettings"
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- ============================================
 -- Realtime subscriptions (optional)
 -- ============================================
@@ -229,6 +440,12 @@ CREATE TRIGGER set_WorkflowAutomation_updatedAt
 -- ALTER PUBLICATION supabase_realtime ADD TABLE "FormResponse";
 -- ALTER PUBLICATION supabase_realtime ADD TABLE "WorkflowAutomation";
 -- ALTER PUBLICATION supabase_realtime ADD TABLE "TriggerExecution";
+-- ALTER PUBLICATION supabase_realtime ADD TABLE "OtpVerification";
+-- ALTER PUBLICATION supabase_realtime ADD TABLE "PlatformAuthSettings";
+-- ALTER PUBLICATION supabase_realtime ADD TABLE "IntegrationConnection";
+-- ALTER PUBLICATION supabase_realtime ADD TABLE "EcommerceOrder";
+-- ALTER PUBLICATION supabase_realtime ADD TABLE "EcommerceProduct";
+-- ALTER PUBLICATION supabase_realtime ADD TABLE "EcommerceSyncLog";
 `;
 
 // ── Table existence check ──────────────────────────────────────────────────
@@ -240,6 +457,12 @@ const TABLES_TO_CHECK = [
   'FormResponse',
   'WorkflowAutomation',
   'TriggerExecution',
+  'OtpVerification',
+  'PlatformAuthSettings',
+  'IntegrationConnection',
+  'EcommerceOrder',
+  'EcommerceProduct',
+  'EcommerceSyncLog',
   'SubscriptionPlan',
   'PlatformMetric',
   'SecurityEvent',

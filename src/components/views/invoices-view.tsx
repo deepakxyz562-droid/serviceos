@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   FileText,
   Plus,
@@ -25,6 +25,7 @@ import {
   ChevronDown,
   CalendarDays,
   Receipt,
+  Globe,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -53,7 +54,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
-import { useCompanyCurrency } from '@/hooks/use-company-currency';
+import { formatCurrency, convertCurrency, CURRENCIES as SHARED_CURRENCIES, currencySymbol, getExchangeRate } from '@/lib/currency';
 
 // ============================================================
 // Types
@@ -121,6 +122,7 @@ const CUSTOMERS = [
   { id: 'c8', name: 'Joshi Home Care' },
 ];
 
+const VIEW_CURRENCY_OPTIONS = ['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD'];
 
 const MOCK_INVOICES: Invoice[] = [
   {
@@ -341,6 +343,15 @@ function calcTotal(subtotal: number, taxPercent: number, discount: number): numb
   return subtotal + tax - discount;
 }
 
+/**
+ * Convert an amount from the invoice's original currency to the view currency.
+ * Uses the stored exchange rate if available, otherwise uses current rates.
+ */
+function convertToViewCurrency(amount: number, invoice: Invoice, viewCurrency: string): number {
+  const invoiceCurrency = invoice.currency || 'INR';
+  return convertCurrency(amount, invoiceCurrency, viewCurrency, invoice.exchangeRate);
+}
+
 // ============================================================
 // Component
 // ============================================================
@@ -366,8 +377,31 @@ export function InvoicesView() {
   const [form, setForm] = useState<InvoiceFormData>(EMPTY_FORM());
   const [saving, setSaving] = useState(false);
 
-  // Currency from hook
-  const { currency, format, symbol } = useCompanyCurrency();
+  // Currency state
+  const [viewCurrency, setViewCurrency] = useState<string>('INR');
+  const [baseCurrency, setBaseCurrency] = useState<string>('INR');
+  const baseCurrencyFetched = useRef(false);
+
+  // Fetch tenant base currency on mount
+  useEffect(() => {
+    if (baseCurrencyFetched.current) return;
+    baseCurrencyFetched.current = true;
+
+    fetch('/api/settings/currency')
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to fetch');
+        return res.json();
+      })
+      .then((data) => {
+        if (data?.baseCurrency) {
+          setBaseCurrency(data.baseCurrency);
+          setViewCurrency(data.baseCurrency);
+        }
+      })
+      .catch(() => {
+        // Silently use default INR
+      });
+  }, []);
 
   // ============================================================
   // Filtered & sorted invoices
@@ -416,13 +450,13 @@ export function InvoicesView() {
   // ============================================================
 
   const stats = useMemo(() => {
-    const totalRevenue = invoices.reduce((s, i) => s + i.total, 0);
-    const paidAmount = invoices.filter((i) => i.status === 'paid').reduce((s, i) => s + i.total, 0);
-    const sentAmount = invoices.filter((i) => i.status === 'sent').reduce((s, i) => s + i.total, 0);
-    const overdueAmount = invoices.filter((i) => i.status === 'overdue').reduce((s, i) => s + i.total, 0);
+    const totalRevenue = invoices.reduce((s, i) => s + convertToViewCurrency(i.total, i, viewCurrency), 0);
+    const paidAmount = invoices.filter((i) => i.status === 'paid').reduce((s, i) => s + convertToViewCurrency(i.total, i, viewCurrency), 0);
+    const sentAmount = invoices.filter((i) => i.status === 'sent').reduce((s, i) => s + convertToViewCurrency(i.total, i, viewCurrency), 0);
+    const overdueAmount = invoices.filter((i) => i.status === 'overdue').reduce((s, i) => s + convertToViewCurrency(i.total, i, viewCurrency), 0);
     const draftCount = invoices.filter((i) => i.status === 'draft').length;
     return { totalRevenue, paidAmount, sentAmount, overdueAmount, draftCount };
-  }, [invoices]);
+  }, [invoices, viewCurrency]);
 
   // ============================================================
   // Handlers
@@ -508,9 +542,9 @@ export function InvoicesView() {
         dueDate: form.dueDate,
         createdAt: new Date().toISOString().split('T')[0],
         notes: form.notes,
-        currency: currency,
+        currency: baseCurrency,
         exchangeRate: 1,
-        baseCurrency: currency,
+        baseCurrency: baseCurrency,
         baseAmount: total,
       };
       setInvoices((prev) => [newInvoice, ...prev]);
@@ -575,6 +609,18 @@ export function InvoicesView() {
     );
   };
 
+  /**
+   * Format a monetary amount from an invoice in the current view currency.
+   * Handles conversion from the invoice's original currency to the view currency.
+   */
+  const fmtCurrency = (amount: number, invoice?: Invoice) => {
+    if (invoice && invoice.currency && invoice.currency !== viewCurrency) {
+      const converted = convertToViewCurrency(amount, invoice, viewCurrency);
+      return formatCurrency(converted, viewCurrency);
+    }
+    return formatCurrency(amount, viewCurrency);
+  };
+
   // ============================================================
   // Render
   // ============================================================
@@ -593,6 +639,30 @@ export function InvoicesView() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {/* View Currency Selector */}
+          <div className="flex items-center gap-1.5">
+            <Globe className="size-3.5 text-muted-foreground" />
+            <Select value={viewCurrency} onValueChange={setViewCurrency}>
+              <SelectTrigger className="h-8 w-[90px] text-xs">
+                <SelectValue>
+                  <span className="flex items-center gap-1">
+                    <span className="text-xs">{currencySymbol(viewCurrency)}</span>
+                    <span>{viewCurrency}</span>
+                  </span>
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {VIEW_CURRENCY_OPTIONS.map((code) => (
+                  <SelectItem key={code} value={code}>
+                    <span className="flex items-center gap-1.5">
+                      <span className="font-medium">{currencySymbol(code)}</span>
+                      <span>{code}</span>
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={openCreateDialog}>
             <Plus className="size-4 mr-1.5" /> Create Invoice
           </Button>
@@ -602,10 +672,10 @@ export function InvoicesView() {
       {/* ── Stats ────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { title: 'Total Revenue', value: format(stats.totalRevenue), icon: DollarSign, color: 'text-emerald-500', bg: 'bg-emerald-50' },
-          { title: 'Pending', value: format(stats.sentAmount), icon: Clock, color: 'text-blue-500', bg: 'bg-blue-50' },
-          { title: 'Paid', value: format(stats.paidAmount), icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-50' },
-          { title: 'Overdue', value: format(stats.overdueAmount), icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-50' },
+          { title: 'Total Revenue', value: formatCurrency(stats.totalRevenue, viewCurrency), icon: DollarSign, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+          { title: 'Pending', value: formatCurrency(stats.sentAmount, viewCurrency), icon: Clock, color: 'text-blue-500', bg: 'bg-blue-50' },
+          { title: 'Paid', value: formatCurrency(stats.paidAmount, viewCurrency), icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-50' },
+          { title: 'Overdue', value: formatCurrency(stats.overdueAmount, viewCurrency), icon: AlertCircle, color: 'text-red-500', bg: 'bg-red-50' },
         ].map((stat) => {
           const Icon = stat.icon;
           return (
@@ -700,13 +770,13 @@ export function InvoicesView() {
                       </TableCell>
                       <TableCell className="text-sm">{invoice.customer}</TableCell>
                       <TableCell className="text-right text-sm font-medium">
-                        {format(invoice.subtotal)}
+                        {fmtCurrency(invoice.subtotal, invoice)}
                       </TableCell>
                       <TableCell className="text-right text-sm text-muted-foreground hidden md:table-cell">
                         {invoice.taxPercent}%
                       </TableCell>
                       <TableCell className="text-right text-sm font-semibold hidden lg:table-cell">
-                        {format(invoice.total)}
+                        {fmtCurrency(invoice.total, invoice)}
                       </TableCell>
                       <TableCell>{renderStatusBadge(invoice.status)}</TableCell>
                       <TableCell className="text-sm text-muted-foreground hidden sm:table-cell">
@@ -820,7 +890,7 @@ export function InvoicesView() {
                   <div className="grid grid-cols-[1fr_70px_90px_90px_32px] gap-2 text-xs font-medium text-muted-foreground px-1">
                     <span>Description</span>
                     <span>Qty</span>
-                    <span>Rate ({symbol})</span>
+                    <span>Rate ({currencySymbol(viewCurrency)})</span>
                     <span className="text-right">Amount</span>
                     <span></span>
                   </div>
@@ -851,7 +921,7 @@ export function InvoicesView() {
                         className="h-8 text-sm"
                       />
                       <div className="text-right text-sm font-medium pr-1">
-                        {format(item.quantity * item.rate)}
+                        {formatCurrency(item.quantity * item.rate, viewCurrency)}
                       </div>
                       <Button
                         variant="ghost"
@@ -874,7 +944,7 @@ export function InvoicesView() {
                 <div className="w-full max-w-xs space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Subtotal</span>
-                    <span className="font-medium">{format(formSubtotal)}</span>
+                    <span className="font-medium">{formatCurrency(formSubtotal, viewCurrency)}</span>
                   </div>
                   <div className="flex justify-between items-center gap-3 text-sm">
                     <span className="text-muted-foreground">Tax</span>
@@ -888,7 +958,7 @@ export function InvoicesView() {
                         className="h-7 w-16 text-sm text-right"
                       />
                       <span className="text-muted-foreground">%</span>
-                      <span className="font-medium ml-2">{format(formTax)}</span>
+                      <span className="font-medium ml-2">{formatCurrency(formTax, viewCurrency)}</span>
                     </div>
                   </div>
                   <div className="flex justify-between items-center gap-3 text-sm">
@@ -901,13 +971,13 @@ export function InvoicesView() {
                         onChange={(e) => setForm((prev) => ({ ...prev, discount: parseFloat(e.target.value) || 0 }))}
                         className="h-7 w-20 text-sm text-right"
                       />
-                      <span className="font-medium ml-2">-{format(form.discount)}</span>
+                      <span className="font-medium ml-2">-{formatCurrency(form.discount, viewCurrency)}</span>
                     </div>
                   </div>
                   <Separator />
                   <div className="flex justify-between text-base font-bold">
                     <span>Total</span>
-                    <span className="text-emerald-700">{format(formTotal)}</span>
+                    <span className="text-emerald-700">{formatCurrency(formTotal, viewCurrency)}</span>
                   </div>
                 </div>
               </div>
@@ -977,15 +1047,18 @@ export function InvoicesView() {
                     </div>
                   )}
 
-                  {/* Currency Info */}
-                  {selectedInvoice.currency && selectedInvoice.currency !== currency && (
+                  {/* Exchange Rate Note */}
+                  {selectedInvoice.currency && selectedInvoice.currency !== viewCurrency && (
                     <div className="rounded-lg border bg-amber-50 border-amber-200 p-3 text-sm">
                       <div className="flex items-center gap-2 font-medium text-amber-800">
-                        <Receipt className="size-4" />
-                        Currency Info
+                        <Globe className="size-4" />
+                        Currency Conversion
                       </div>
                       <p className="mt-1 text-amber-700">
-                        Invoice currency: {selectedInvoice.currency} · Displayed in: {currency}
+                        Original: {formatCurrency(selectedInvoice.total, selectedInvoice.currency)} {selectedInvoice.currency} → Viewed in: {fmtCurrency(selectedInvoice.total, selectedInvoice)} {viewCurrency}
+                      </p>
+                      <p className="mt-0.5 text-xs text-amber-600">
+                        Rate: 1 {viewCurrency} = {getExchangeRate(viewCurrency, selectedInvoice.currency).toFixed(2)} {selectedInvoice.currency}
                       </p>
                     </div>
                   )}
@@ -1010,9 +1083,9 @@ export function InvoicesView() {
                             <TableRow key={item.id}>
                               <TableCell className="text-sm py-2">{item.description}</TableCell>
                               <TableCell className="text-sm py-2 text-right">{item.quantity}</TableCell>
-                              <TableCell className="text-sm py-2 text-right">{format(item.rate)}</TableCell>
+                              <TableCell className="text-sm py-2 text-right">{fmtCurrency(item.rate, selectedInvoice)}</TableCell>
                               <TableCell className="text-sm py-2 text-right font-medium">
-                                {format(item.quantity * item.rate)}
+                                {fmtCurrency(item.quantity * item.rate, selectedInvoice)}
                               </TableCell>
                             </TableRow>
                           ))}
@@ -1026,22 +1099,22 @@ export function InvoicesView() {
                     <div className="w-full max-w-xs space-y-1.5">
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Subtotal</span>
-                        <span>{format(selectedInvoice.subtotal)}</span>
+                        <span>{fmtCurrency(selectedInvoice.subtotal, selectedInvoice)}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Tax ({selectedInvoice.taxPercent}%)</span>
-                        <span>{format(selectedInvoice.subtotal * selectedInvoice.taxPercent / 100)}</span>
+                        <span>{fmtCurrency(selectedInvoice.subtotal * selectedInvoice.taxPercent / 100, selectedInvoice)}</span>
                       </div>
                       {selectedInvoice.discount > 0 && (
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">Discount</span>
-                          <span>-{format(selectedInvoice.discount)}</span>
+                          <span>-{fmtCurrency(selectedInvoice.discount, selectedInvoice)}</span>
                         </div>
                       )}
                       <Separator />
                       <div className="flex justify-between text-base font-bold">
                         <span>Total</span>
-                        <span className="text-emerald-700">{format(selectedInvoice.total)}</span>
+                        <span className="text-emerald-700">{fmtCurrency(selectedInvoice.total, selectedInvoice)}</span>
                       </div>
                     </div>
                   </div>

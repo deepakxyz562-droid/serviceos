@@ -49,7 +49,8 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
-import { useCompanyCurrency } from '@/hooks/use-company-currency';
+import { formatCurrency as formatCurrencyShared } from '@/lib/currency';
+import { useBaseCurrency } from '@/hooks/use-base-currency';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -346,7 +347,7 @@ function TableSkeleton({ rows = 5 }: { rows?: number }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export function SuperAdminView() {
-  const { currency, format, formatCompact, symbol } = useCompanyCurrency();
+  const { baseCurrency } = useBaseCurrency();
   const [activeTab, setActiveTab] = useState('dashboard');
   const { auth, setCurrentView } = useAppStore();
   const queryClient = useQueryClient();
@@ -499,8 +500,8 @@ export function SuperAdminView() {
     const kpiCards = [
       { label: 'Total Tenants', value: stats?.totalTenants ?? 0, icon: Building2, trend: stats?.trends?.tenants, color: 'emerald' },
       { label: 'Active Users', value: stats?.activeUsers ?? stats?.totalUsers ?? 0, icon: Users, trend: stats?.trends?.users, color: 'sky' },
-      { label: 'MRR', value: format(stats?.mrr ?? 0), icon: DollarSign, trend: stats?.trends?.revenue, color: 'emerald', isFormatted: true },
-      { label: 'ARR', value: format(stats?.arr ?? 0), icon: TrendingUp, trend: null, color: 'teal', isFormatted: true },
+      { label: 'MRR', value: formatCurrencyShared(stats?.mrr ?? 0, baseCurrency), icon: DollarSign, trend: stats?.trends?.revenue, color: 'emerald', isFormatted: true },
+      { label: 'ARR', value: formatCurrencyShared(stats?.arr ?? 0, baseCurrency), icon: TrendingUp, trend: null, color: 'teal', isFormatted: true },
       { label: 'Churn Rate', value: `${stats?.avgChurnRate ?? 0}%`, icon: TrendingDown, trend: null, color: stats?.avgChurnRate && stats.avgChurnRate > 5 ? 'red' : 'emerald', isFormatted: true },
     ];
 
@@ -823,7 +824,7 @@ export function SuperAdminView() {
                           {tenant.suspendedAt ? 'suspended' : tenant.planStatus}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right text-slate-300">{format(tenant.mrr)}</TableCell>
+                      <TableCell className="text-right text-slate-300">{formatCurrencyShared(tenant.mrr, baseCurrency)}</TableCell>
                       <TableCell className="text-center text-slate-300">{tenant.userCount}</TableCell>
                       <TableCell className="text-slate-400 text-sm">{formatDate(tenant.createdAt)}</TableCell>
                       <TableCell className="text-right">
@@ -917,7 +918,7 @@ export function SuperAdminView() {
                   <div><p className="text-xs text-slate-400">Email</p><p className="font-medium">{viewTenant.email || '—'}</p></div>
                   <div><p className="text-xs text-slate-400">Plan</p><Badge variant="outline" className={cn('capitalize text-xs', getPlanBadge(viewTenant.plan))}>{viewTenant.plan}</Badge></div>
                   <div><p className="text-xs text-slate-400">Status</p><Badge variant="outline" className={cn('capitalize text-xs', getStatusBadge(viewTenant.suspendedAt ? 'suspended' : viewTenant.planStatus))}>{viewTenant.suspendedAt ? 'suspended' : viewTenant.planStatus}</Badge></div>
-                  <div><p className="text-xs text-slate-400">MRR</p><p className="font-medium">{format(viewTenant.mrr)}</p></div>
+                  <div><p className="text-xs text-slate-400">MRR</p><p className="font-medium">{formatCurrencyShared(viewTenant.mrr, baseCurrency)}</p></div>
                   <div><p className="text-xs text-slate-400">Users</p><p className="font-medium">{viewTenant.userCount}</p></div>
                   <div><p className="text-xs text-slate-400">Industry</p><p className="font-medium">{viewTenant.industry || '—'}</p></div>
                   <div><p className="text-xs text-slate-400">Created</p><p className="font-medium">{formatDate(viewTenant.createdAt)}</p></div>
@@ -1148,7 +1149,7 @@ export function SuperAdminView() {
                         <TableCell className="font-medium text-white">{sub.tenantName}</TableCell>
                         <TableCell><Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadge(sub.plan))}>{sub.plan}</Badge></TableCell>
                         <TableCell><Badge variant="outline" className={cn('capitalize text-[10px]', getStatusBadge(sub.status))}>{sub.status}</Badge></TableCell>
-                        <TableCell className="text-right text-slate-300">{format(sub.amount)}</TableCell>
+                        <TableCell className="text-right text-slate-300">{formatCurrencyShared(sub.amount, baseCurrency)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
                             {sub.status === 'active' && (
@@ -1896,6 +1897,490 @@ export function SuperAdminView() {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // Authentication Settings Tab
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function AuthenticationTab() {
+    const [authSettings, setAuthSettings] = useState<{
+      emailPasswordEnabled: boolean;
+      smsOtpEnabled: boolean;
+      smsOtpProvider: string | null;
+      smsOtpConfigJson: string;
+      whatsappOtpEnabled: boolean;
+      whatsappOtpProvider: string | null;
+      whatsappOtpAccessToken: string | null;
+      whatsappOtpPhoneNumberId: string | null;
+      whatsappOtpBusinessId: string | null;
+      whatsappOtpTemplate: string | null;
+      whatsappOtpConfigJson: string;
+      googleEnabled: boolean;
+      googleClientId: string | null;
+      googleClientSecret: string | null;
+      twoFactorEnabled: boolean;
+      twoFactorMethods: string;
+      otpLength: number;
+      otpExpirySeconds: number;
+      maxOtpAttempts: number;
+    } | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [showSecrets, setShowSecrets] = useState(false);
+
+    const fetchSettings = useCallback(async () => {
+      setLoading(true);
+      try {
+        const res = await fetch('/api/superadmin/auth-settings');
+        if (res.ok) {
+          const data = await res.json();
+          setAuthSettings(data);
+        }
+      } catch {
+        toast.error('Failed to fetch auth settings');
+      } finally {
+        setLoading(false);
+      }
+    }, []);
+
+    useEffect(() => { fetchSettings(); }, [fetchSettings]);
+
+    const handleSave = async () => {
+      if (!authSettings) return;
+      setSaving(true);
+      try {
+        const res = await fetch('/api/superadmin/auth-settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(authSettings),
+        });
+        if (res.ok) {
+          toast.success('Authentication settings saved successfully');
+        } else {
+          const err = await res.json();
+          toast.error(err.error || 'Failed to save settings');
+        }
+      } catch {
+        toast.error('Failed to save settings');
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    const updateField = (field: string, value: unknown) => {
+      setAuthSettings((prev) => prev ? { ...prev, [field]: value } : prev);
+    };
+
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="size-8 animate-spin text-emerald-500" />
+        </div>
+      );
+    }
+
+    if (!authSettings) {
+      return (
+        <Card className="bg-slate-900 border-slate-800 border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-16 text-slate-500">
+            <Shield className="size-14 mb-4 opacity-30" />
+            <p className="text-lg font-medium">Failed to load auth settings</p>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Authentication Settings</h2>
+            <p className="text-sm text-slate-400">Configure platform-wide authentication methods</p>
+          </div>
+          <Button
+            onClick={handleSave}
+            disabled={saving}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+          >
+            {saving ? <Loader2 className="size-4 animate-spin" /> : <Zap className="size-4" />}
+            Save Settings
+          </Button>
+        </div>
+
+        {/* Email + Password */}
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center size-9 rounded-lg bg-blue-500/10">
+                  <Key className="size-4 text-blue-400" />
+                </div>
+                <div>
+                  <CardTitle className="text-base text-white">Email + Password</CardTitle>
+                  <CardDescription className="text-slate-400">Standard email/password authentication</CardDescription>
+                </div>
+              </div>
+              <Switch
+                checked={authSettings.emailPasswordEnabled}
+                onCheckedChange={(v) => updateField('emailPasswordEnabled', v)}
+              />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-xs text-slate-500">
+              Email + Password is the default authentication method for all users. It is always recommended to keep this enabled as a fallback.
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* WhatsApp OTP */}
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-500/10">
+                  <MessageSquare className="size-4 text-emerald-400" />
+                </div>
+                <div>
+                  <CardTitle className="text-base text-white">WhatsApp OTP</CardTitle>
+                  <CardDescription className="text-slate-400">Login via WhatsApp OTP verification</CardDescription>
+                </div>
+              </div>
+              <Switch
+                checked={authSettings.whatsappOtpEnabled}
+                onCheckedChange={(v) => updateField('whatsappOtpEnabled', v)}
+              />
+            </div>
+          </CardHeader>
+          {authSettings.whatsappOtpEnabled && (
+            <CardContent className="space-y-4">
+              <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700/50">
+                <p className="text-xs text-slate-400 mb-3">
+                  The WhatsApp OTP provider is configured once at the platform level and used for all customer and employee authentication. This is separate from business WhatsApp messaging.
+                </p>
+                <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-500/10 rounded-md px-3 py-2">
+                  <AlertTriangle className="size-3.5 shrink-0" />
+                  <span>This configuration is for platform authentication only, not customer communications.</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm text-slate-300">Provider</Label>
+                  <Select
+                    value={authSettings.whatsappOtpProvider || ''}
+                    onValueChange={(v) => updateField('whatsappOtpProvider', v)}
+                  >
+                    <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                      <SelectValue placeholder="Select provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="meta_cloud_api">Meta Cloud API</SelectItem>
+                      <SelectItem value="twilio_whatsapp">Twilio WhatsApp</SelectItem>
+                      <SelectItem value="messagebird">MessageBird</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm text-slate-300">OTP Template Name</Label>
+                  <Input
+                    placeholder="e.g., login_otp"
+                    value={authSettings.whatsappOtpTemplate || ''}
+                    onChange={(e) => updateField('whatsappOtpTemplate', e.target.value)}
+                    className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm text-slate-300">Access Token</Label>
+                  <div className="relative">
+                    <Input
+                      type={showSecrets ? 'text' : 'password'}
+                      placeholder="EAAxxxxxxxxxxxxx"
+                      value={authSettings.whatsappOtpAccessToken || ''}
+                      onChange={(e) => updateField('whatsappOtpAccessToken', e.target.value)}
+                      className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 pr-10"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-slate-400 hover:text-white"
+                      onClick={() => setShowSecrets(!showSecrets)}
+                    >
+                      {showSecrets ? <Eye className="size-3.5" /> : <Eye className="size-3.5" />}
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm text-slate-300">Phone Number ID</Label>
+                  <Input
+                    placeholder="e.g., 123456789012345"
+                    value={authSettings.whatsappOtpPhoneNumberId || ''}
+                    onChange={(e) => updateField('whatsappOtpPhoneNumberId', e.target.value)}
+                    className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm text-slate-300">WhatsApp Business ID</Label>
+                  <Input
+                    placeholder="e.g., 123456789012345"
+                    value={authSettings.whatsappOtpBusinessId || ''}
+                    onChange={(e) => updateField('whatsappOtpBusinessId', e.target.value)}
+                    className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          )}
+        </Card>
+
+        {/* SMS OTP */}
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center size-9 rounded-lg bg-violet-500/10">
+                  <Globe className="size-4 text-violet-400" />
+                </div>
+                <div>
+                  <CardTitle className="text-base text-white">SMS OTP</CardTitle>
+                  <CardDescription className="text-slate-400">Login via SMS OTP verification</CardDescription>
+                </div>
+              </div>
+              <Switch
+                checked={authSettings.smsOtpEnabled}
+                onCheckedChange={(v) => updateField('smsOtpEnabled', v)}
+              />
+            </div>
+          </CardHeader>
+          {authSettings.smsOtpEnabled && (
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm text-slate-300">SMS Provider</Label>
+                  <Select
+                    value={authSettings.smsOtpProvider || ''}
+                    onValueChange={(v) => updateField('smsOtpProvider', v)}
+                  >
+                    <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                      <SelectValue placeholder="Select provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="twilio">Twilio</SelectItem>
+                      <SelectItem value="messagebird">MessageBird</SelectItem>
+                      <SelectItem value="vonage">Vonage</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500">
+                Additional SMS provider configuration (API keys, sender IDs, etc.) can be added in the provider config JSON field below.
+              </p>
+              <div className="space-y-2">
+                <Label className="text-sm text-slate-300">Provider Config (JSON)</Label>
+                <Textarea
+                  placeholder='{"accountSid": "...", "authToken": "...", "from": "+1234567890"}'
+                  value={authSettings.smsOtpConfigJson || '{}'}
+                  onChange={(e) => updateField('smsOtpConfigJson', e.target.value)}
+                  className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 font-mono text-xs min-h-[80px]"
+                />
+              </div>
+            </CardContent>
+          )}
+        </Card>
+
+        {/* Google OAuth */}
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center size-9 rounded-lg bg-red-500/10">
+                  <Globe className="size-4 text-red-400" />
+                </div>
+                <div>
+                  <CardTitle className="text-base text-white">Google Login</CardTitle>
+                  <CardDescription className="text-slate-400">Sign in with Google OAuth</CardDescription>
+                </div>
+              </div>
+              <Switch
+                checked={authSettings.googleEnabled}
+                onCheckedChange={(v) => updateField('googleEnabled', v)}
+              />
+            </div>
+          </CardHeader>
+          {authSettings.googleEnabled && (
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-sm text-slate-300">Google Client ID</Label>
+                  <Input
+                    placeholder="xxxxxxxxxxxx.apps.googleusercontent.com"
+                    value={authSettings.googleClientId || ''}
+                    onChange={(e) => updateField('googleClientId', e.target.value)}
+                    className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm text-slate-300">Google Client Secret</Label>
+                  <div className="relative">
+                    <Input
+                      type={showSecrets ? 'text' : 'password'}
+                      placeholder="GOCSPX-xxxxxxxxxxxxxxxx"
+                      value={authSettings.googleClientSecret || ''}
+                      onChange={(e) => updateField('googleClientSecret', e.target.value)}
+                      className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          )}
+        </Card>
+
+        {/* Two-Factor Authentication */}
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center justify-center size-9 rounded-lg bg-amber-500/10">
+                  <ShieldCheck className="size-4 text-amber-400" />
+                </div>
+                <div>
+                  <CardTitle className="text-base text-white">Two-Factor Authentication</CardTitle>
+                  <CardDescription className="text-slate-400">Extra security layer after password verification</CardDescription>
+                </div>
+              </div>
+              <Switch
+                checked={authSettings.twoFactorEnabled}
+                onCheckedChange={(v) => updateField('twoFactorEnabled', v)}
+              />
+            </div>
+          </CardHeader>
+          {authSettings.twoFactorEnabled && (
+            <CardContent className="space-y-4">
+              <p className="text-xs text-slate-400">
+                When enabled, users can optionally enable 2FA for their account. Select which 2FA methods are available.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { id: 'app', label: 'Authenticator App', icon: Key, desc: 'Google Authenticator, Authy' },
+                  { id: 'sms', label: 'SMS OTP', icon: Globe, desc: 'OTP via SMS', disabled: !authSettings.smsOtpEnabled },
+                  { id: 'whatsapp', label: 'WhatsApp OTP', icon: MessageSquare, desc: 'OTP via WhatsApp', disabled: !authSettings.whatsappOtpEnabled },
+                  { id: 'email', label: 'Email OTP', icon: Key, desc: 'OTP via Email' },
+                ].map((method) => {
+                  const methods: string[] = (() => { try { return JSON.parse(authSettings.twoFactorMethods || '[]'); } catch { return []; } })();
+                  const isActive = methods.includes(method.id);
+                  return (
+                    <button
+                      key={method.id}
+                      onClick={() => {
+                        if (method.disabled) return;
+                        const current = (() => { try { return JSON.parse(authSettings.twoFactorMethods || '[]'); } catch { return []; } })();
+                        const updated = isActive
+                          ? current.filter((m: string) => m !== method.id)
+                          : [...current, method.id];
+                        updateField('twoFactorMethods', JSON.stringify(updated));
+                      }}
+                      disabled={method.disabled}
+                      className={cn(
+                        'flex flex-col items-center gap-2 p-4 rounded-lg border transition-all text-center',
+                        method.disabled
+                          ? 'border-slate-800 bg-slate-900/50 opacity-40 cursor-not-allowed'
+                          : isActive
+                            ? 'border-emerald-500/50 bg-emerald-500/10 cursor-pointer'
+                            : 'border-slate-700 bg-slate-800/50 hover:border-slate-600 cursor-pointer'
+                      )}
+                    >
+                      <method.icon className={cn('size-5', method.disabled ? 'text-slate-600' : isActive ? 'text-emerald-400' : 'text-slate-400')} />
+                      <span className={cn('text-sm font-medium', method.disabled ? 'text-slate-600' : isActive ? 'text-emerald-300' : 'text-slate-300')}>
+                        {method.label}
+                      </span>
+                      <span className="text-[10px] text-slate-500">{method.desc}</span>
+                      {method.disabled && <span className="text-[10px] text-amber-500">Enable provider first</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </CardContent>
+          )}
+        </Card>
+
+        {/* OTP Settings */}
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center size-9 rounded-lg bg-cyan-500/10">
+                <Settings className="size-4 text-cyan-400" />
+              </div>
+              <div>
+                <CardTitle className="text-base text-white">OTP Configuration</CardTitle>
+                <CardDescription className="text-slate-400">General OTP settings for all OTP-based auth methods</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label className="text-sm text-slate-300">OTP Length</Label>
+                <Select
+                  value={String(authSettings.otpLength)}
+                  onValueChange={(v) => updateField('otpLength', parseInt(v))}
+                >
+                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="4">4 digits</SelectItem>
+                    <SelectItem value="6">6 digits</SelectItem>
+                    <SelectItem value="8">8 digits</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm text-slate-300">OTP Expiry (seconds)</Label>
+                <Select
+                  value={String(authSettings.otpExpirySeconds)}
+                  onValueChange={(v) => updateField('otpExpirySeconds', parseInt(v))}
+                >
+                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="120">2 minutes</SelectItem>
+                    <SelectItem value="300">5 minutes</SelectItem>
+                    <SelectItem value="600">10 minutes</SelectItem>
+                    <SelectItem value="900">15 minutes</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm text-slate-300">Max OTP Attempts</Label>
+                <Select
+                  value={String(authSettings.maxOtpAttempts)}
+                  onValueChange={(v) => updateField('maxOtpAttempts', parseInt(v))}
+                >
+                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="3">3 attempts</SelectItem>
+                    <SelectItem value="5">5 attempts</SelectItem>
+                    <SelectItem value="10">10 attempts</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // Fallback stats helper
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1966,6 +2451,9 @@ export function SuperAdminView() {
           <TabsTrigger value="audit-logs" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
             <FileText className="size-3.5" /><span className="hidden sm:inline">Audit Logs</span>
           </TabsTrigger>
+          <TabsTrigger value="authentication" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
+            <Shield className="size-3.5" /><span className="hidden sm:inline">Authentication</span>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="dashboard"><DashboardTab /></TabsContent>
@@ -1975,6 +2463,7 @@ export function SuperAdminView() {
         <TabsContent value="menu-items"><MenuItemsTab /></TabsContent>
         <TabsContent value="users"><UsersTab /></TabsContent>
         <TabsContent value="audit-logs"><AuditLogsTab /></TabsContent>
+        <TabsContent value="authentication"><AuthenticationTab /></TabsContent>
       </Tabs>
     </div>
   );

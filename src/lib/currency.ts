@@ -1,15 +1,15 @@
 // ============================================================
-// Company Currency Utility
+// Multi-Currency Utility
 // ============================================================
-// Centralized currency formatting and metadata.
+// Centralized currency formatting, conversion, and metadata.
+// All views should use these utilities instead of hardcoded formatters.
 //
-// Design Principles (V1 — Simple):
-// 1. One Company → One Currency
-// 2. If company sets USD → CRM, Dashboard, Quotes, Invoices,
-//    Reports, Customer Portal, Employee Portal all use USD
-// 3. No workspace switching, no view currency, no multi-currency UI
-// 4. Conversion functions kept for invoice/quote APIs that need
-//    to lock rates at creation time
+// Design Principles (per user recommendation):
+// 1. Store the original transaction currency
+// 2. Store the exchange rate used when the document was created
+// 3. Store the converted amount in base currency
+// 4. Allow users to view reports in another currency using conversion
+// 5. Never simply replace ₹ with $ — always show with proper conversion
 // ============================================================
 
 // ─── Currency Metadata ──────────────────────────────────────
@@ -104,11 +104,12 @@ export function formatCurrencyCompact(amount: number, currencyCode: string = 'US
   return `${sym}${amount.toFixed(0)}`;
 }
 
-// ─── Conversion (kept for invoice/quote APIs) ───────────────
+// ─── Conversion ─────────────────────────────────────────────
 
 /**
- * Exchange rate table — rates relative to USD.
+ * Exchange rate table — keyed as `${FROM}_${TO}` → rate.
  * In production, this would be fetched from an external API.
+ * For now, we provide sensible defaults relative to USD.
  */
 const RATES_TO_USD: Record<string, number> = {
   USD: 1,
@@ -132,14 +133,19 @@ const RATES_TO_USD: Record<string, number> = {
 /** Get the rate FROM → TO (how many TO units per 1 FROM unit) */
 export function getExchangeRate(from: string, to: string): number {
   if (from === to) return 1;
-  const fromToUsd = RATES_TO_USD[from] ?? 1;
-  const toToUsd = RATES_TO_USD[to] ?? 1;
+  const fromToUsd = RATES_TO_USD[from] ?? 1;  // 1 FROM = X USD
+  const toToUsd = RATES_TO_USD[to] ?? 1;      // 1 TO = Y USD
+  // We want: amount_in_FROM * rate = amount_in_TO
+  // amount_in_FROM * fromToUsd = amount_in_USD
+  // amount_in_USD / toToUsd = amount_in_TO
+  // So rate = fromToUsd / toToUsd
   return fromToUsd / toToUsd;
 }
 
 /**
  * Convert an amount from one currency to another.
- * Used by invoice/quote APIs to lock rates at creation time.
+ * Uses stored exchange rate if provided (for historical accuracy),
+ * otherwise falls back to current rates.
  */
 export function convertCurrency(
   amount: number,
@@ -154,7 +160,7 @@ export function convertCurrency(
 
 /**
  * Get the full exchange rate table relative to a base currency.
- * Used by the currency exchange rates API.
+ * Useful for the Settings UI "Exchange Rates" display.
  */
 export function getExchangeRateTable(baseCurrency: string = 'USD'): { code: string; name: string; symbol: string; rate: number }[] {
   return CURRENCIES.map((c) => ({
@@ -163,4 +169,54 @@ export function getExchangeRateTable(baseCurrency: string = 'USD'): { code: stri
     symbol: c.symbol,
     rate: getExchangeRate(baseCurrency, c.code),
   }));
+}
+
+// ─── Currency Settings Interface ────────────────────────────
+
+export interface CurrencySettings {
+  baseCurrency: string;          // e.g. 'INR'
+  multiCurrencyEnabled: boolean; // Allow multi-currency transactions
+  autoExchangeRates: boolean;    // Auto-fetch exchange rates
+  supportedCurrencies: string[]; // Currencies available for selection
+  rateSource: string;            // 'manual' | 'auto'
+  lastRateUpdate: string | null; // ISO timestamp
+}
+
+export const DEFAULT_CURRENCY_SETTINGS: CurrencySettings = {
+  baseCurrency: 'INR',
+  multiCurrencyEnabled: true,
+  autoExchangeRates: true,
+  supportedCurrencies: ['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD'],
+  rateSource: 'auto',
+  lastRateUpdate: null,
+};
+
+// ─── View Currency Display Helper ───────────────────────────
+
+/**
+ * Given a transaction amount with its stored currency and exchange rate,
+ * return a formatted string in the requested view currency.
+ * Also returns the original amount display for comparison.
+ */
+export function formatWithConversion(params: {
+  amount: number;
+  transactionCurrency: string;
+  baseCurrency: string;
+  viewCurrency: string;
+  exchangeRate?: number;
+}): { formatted: string; original: string; rate: number } {
+  const { amount, transactionCurrency, baseCurrency, viewCurrency, exchangeRate } = params;
+
+  const original = formatCurrency(amount, transactionCurrency);
+
+  if (transactionCurrency === viewCurrency) {
+    return { formatted: original, original, rate: 1 };
+  }
+
+  // Convert: transaction currency → base currency → view currency
+  const rate = exchangeRate ?? getExchangeRate(transactionCurrency, viewCurrency);
+  const converted = amount * rate;
+  const formatted = formatCurrency(converted, viewCurrency);
+
+  return { formatted, original, rate };
 }

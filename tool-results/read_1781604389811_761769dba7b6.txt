@@ -1,0 +1,2002 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback } from 'react';
+     4→import {
+     5→  Building2,
+     6→  Users as UsersIcon,
+     7→  Shield,
+     8→  Plug,
+     9→  CreditCard,
+    10→  Globe,
+    11→  KeyRound,
+    12→  Bell,
+    13→  Zap,
+    14→  Plus,
+    15→  Trash2,
+    16→  TestTube2,
+    17→  CheckCircle2,
+    18→  XCircle,
+    19→  Clock,
+    20→  Loader2,
+    21→  ArrowRight,
+    22→  Copy,
+    23→  Download,
+    24→  Link2,
+    25→  Eye,
+    26→  EyeOff,
+    27→  FileCode,
+    28→  Phone,
+    29→  MessageCircle,
+    30→  Save,
+    31→  Mail,
+    32→  MapPin,
+    33→  UserPlus,
+    34→  MoreHorizontal,
+    35→  ExternalLink,
+    36→  Check,
+    37→  Crown,
+    38→
+    39→  Sparkles,
+    40→  Pencil,
+    41→  MessageSquare,
+    42→} from 'lucide-react';
+    43→import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+    44→import { Button } from '@/components/ui/button';
+    45→import { Input } from '@/components/ui/input';
+    46→import { Label } from '@/components/ui/label';
+    47→import { Switch } from '@/components/ui/switch';
+    48→import { Separator } from '@/components/ui/separator';
+    49→import { Badge } from '@/components/ui/badge';
+    50→import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+    51→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    52→import { ScrollArea } from '@/components/ui/scroll-area';
+    53→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    54→import { Textarea } from '@/components/ui/textarea';
+    55→import { useAppStore } from '@/store/app-store';
+    56→import { toast } from 'sonner';
+    57→import { formatCurrency, currencySymbol, getExchangeRateTable, CURRENCIES as SHARED_CURRENCIES } from '@/lib/currency';
+    58→import { invalidateCurrencyCache } from '@/hooks/use-base-currency';
+    59→
+    60→// ─── Event Webhook Types ──────────────────────────────────────────────────
+    61→
+    62→interface EventWebhook {
+    63→  id: string;
+    64→  name: string;
+    65→  event: string;
+    66→  url: string;
+    67→  method: string;
+    68→  headersJson: string;
+    69→  active: boolean;
+    70→  retryOnFail: boolean;
+    71→  maxRetries: number;
+    72→  timeoutMs: number;
+    73→  lastTriggered: string | null;
+    74→  lastStatus: string | null;
+    75→  lastError: string | null;
+    76→  failCount: number;
+    77→  workspaceId: string | null;
+    78→  createdAt: string;
+    79→}
+    80→
+    81→interface EventType {
+    82→  value: string;
+    83→  label: string;
+    84→  description: string;
+    85→  icon: string;
+    86→}
+    87→
+    88→// ─── WordPress Integration Types ──────────────────────────────────────────
+    89→
+    90→interface WpEndpointConfig {
+    91→  id: string;
+    92→  name: string;
+    93→  endpointId: string;
+    94→  apiKeyPrefix: string;
+    95→  source: string;
+    96→  active: boolean;
+    97→  totalReceived: number;
+    98→  lastReceived: string | null;
+    99→  lastError: string | null;
+   100→  sendWhatsApp: boolean;
+   101→  webhookUrl: string;
+   102→  apiUrl: string;
+   103→  createdAt: string;
+   104→  _count?: { logs: number };
+   105→}
+   106→
+   107→const EVENT_COLORS: Record<string, string> = {
+   108→  'job.created': 'bg-emerald-100 text-emerald-700 border-emerald-200',
+   109→  'job.assigned': 'bg-teal-100 text-teal-700 border-teal-200',
+   110→  'job.accepted': 'bg-sky-100 text-sky-700 border-sky-200',
+   111→  'job.started': 'bg-amber-100 text-amber-700 border-amber-200',
+   112→  'job.completed': 'bg-green-100 text-green-700 border-green-200',
+   113→  'job.cancelled': 'bg-red-100 text-red-700 border-red-200',
+   114→  'job.rejected': 'bg-orange-100 text-orange-700 border-orange-200',
+   115→};
+   116→
+   117→const WP_FORM_PLUGINS = [
+   118→  { name: 'Contact Form 7', slug: 'cf7' },
+   119→  { name: 'WPForms', slug: 'wpforms' },
+   120→  { name: 'Gravity Forms', slug: 'gravity' },
+   121→  { name: 'Fluent Forms', slug: 'fluent' },
+   122→  { name: 'Elementor Forms', slug: 'elementor' },
+   123→];
+   124→
+   125→const INDUSTRIES = [
+   126→  'Home Services',
+   127→  'HVAC',
+   128→  'Plumbing',
+   129→  'Electrical',
+   130→  'Cleaning',
+   131→  'Landscaping',
+   132→  'Pest Control',
+   133→  'Roofing',
+   134→  'Painting',
+   135→  'Moving',
+   136→  'Real Estate',
+   137→  'Healthcare',
+   138→  'Legal',
+   139→  'Education',
+   140→  'Technology',
+   141→  'Other',
+   142→];
+   143→
+   144→const CURRENCIES = [
+   145→  { value: 'INR', label: 'INR (₹) — Indian Rupee' },
+   146→  { value: 'USD', label: 'USD ($) — US Dollar' },
+   147→  { value: 'EUR', label: 'EUR (€) — Euro' },
+   148→  { value: 'GBP', label: 'GBP (£) — British Pound' },
+   149→  { value: 'AUD', label: 'AUD (A$) — Australian Dollar' },
+   150→  { value: 'CAD', label: 'CAD (C$) — Canadian Dollar' },
+   151→  { value: 'SGD', label: 'SGD (S$) — Singapore Dollar' },
+   152→  { value: 'AED', label: 'AED (د.إ) — UAE Dirham' },
+   153→  { value: 'SAR', label: 'SAR (﷼) — Saudi Riyal' },
+   154→  { value: 'ZAR', label: 'ZAR (R) — South African Rand' },
+   155→  { value: 'JPY', label: 'JPY (¥) — Japanese Yen' },
+   156→  { value: 'CNY', label: 'CNY (¥) — Chinese Yuan' },
+   157→  { value: 'MYR', label: 'MYR (RM) — Malaysian Ringgit' },
+   158→  { value: 'THB', label: 'THB (฿) — Thai Baht' },
+   159→  { value: 'NGN', label: 'NGN (₦) — Nigerian Naira' },
+   160→  { value: 'BRL', label: 'BRL (R$) — Brazilian Real' },
+   161→];
+   162→
+   163→// ─── Component ────────────────────────────────────────────────────────────────
+   164→
+   165→export function SettingsView() {
+   166→  const { darkMode, toggleDarkMode } = useAppStore();
+   167→
+   168→  // ─── Company Profile State ─────────────────────────────────────────────
+   169→  const [tenantId, setTenantId] = useState<string | null>(null);
+   170→  const [companyForm, setCompanyForm] = useState({
+   171→    name: '',
+   172→    industry: '',
+   173→    currency: 'INR',
+   174→    phone: '',
+   175→    email: '',
+   176→    whatsappPhone: '',
+   177→    street: '',
+   178→    city: '',
+   179→    state: '',
+   180→    pincode: '',
+   181→    country: '',
+   182→  });
+   183→  const [emailNotifications, setEmailNotifications] = useState(true);
+   184→  const [executionAlerts, setExecutionAlerts] = useState(true);
+   185→  const [saving, setSaving] = useState(false);
+   186→  const [tenantLoading, setTenantLoading] = useState(true);
+   187→
+   188→  // Event webhooks state
+   189→  const [webhooks, setWebhooks] = useState<EventWebhook[]>([]);
+   190→  const [eventTypes, setEventTypes] = useState<EventType[]>([]);
+   191→  const [webhookLoading, setWebhookLoading] = useState(true);
+   192→  const [showAddWebhook, setShowAddWebhook] = useState(false);
+   193→  const [testingWebhook, setTestingWebhook] = useState<string | null>(null);
+   194→  const [webhookForm, setWebhookForm] = useState({
+   195→    name: '',
+   196→    event: 'job.created',
+   197→    url: '',
+   198→    method: 'POST',
+   199→    active: true,
+   200→  });
+   201→
+   202→  // ─── WordPress Integration State ─────────────────────────────────────────
+   203→  const [wpEndpoints, setWpEndpoints] = useState<WpEndpointConfig[]>([]);
+   204→  const [wpLoading, setWpLoading] = useState(true);
+   205→  const [wpGenerating, setWpGenerating] = useState(false);
+   206→  const [wpNewConfig, setWpNewConfig] = useState<{
+   207→    api_url: string;
+   208→    api_key: string;
+   209→    webhook_url: string;
+   210→    endpoint_id: string;
+   211→  } | null>(null);
+   212→  const [wpTesting, setWpTesting] = useState(false);
+   213→  const [wpShowApiKey, setWpShowApiKey] = useState(false);
+   214→
+   215→  // ─── WhatsApp Business Phone State ─────────────────────────────────────
+   216→  const [whatsappPhone, setWhatsappPhone] = useState('');
+   217→  const [whatsappPhoneSaving, setWhatsappPhoneSaving] = useState(false);
+   218→  const [notifyOwner, setNotifyOwner] = useState(true);
+   219→  const [ownerTemplate, setOwnerTemplate] = useState('🎯 New Lead from Website!\n\nName: {{name}}\nPhone: {{phone}}\nEmail: {{email}}\nService: {{serviceType}}\nMessage: {{description}}\n\nFollow up promptly!');
+   220→  const [notifyCustomer, setNotifyCustomer] = useState(true);
+   221→  const [customerTemplate, setCustomerTemplate] = useState('Thank you for contacting us, {{name}}! 🙏\n\nWe have received your inquiry about {{serviceType}}. Our team will contact you shortly.\n\n— {{companyName}}');
+   222→  const [whatsappSettingsSaving, setWhatsappSettingsSaving] = useState(false);
+   223→  const [editingFieldMapping, setEditingFieldMapping] = useState(false);
+   224→
+   225→  // ─── Users State ──────────────────────────────────────────────────────
+   226→  const [users, setUsers] = useState<Array<{
+   227→    id: string;
+   228→    name: string;
+   229→    email: string;
+   230→    role: string;
+   231→    phone: string | null;
+   232→    isActive: boolean;
+   233→    lastLoginAt: string | null;
+   234→    createdAt: string;
+   235→  }>>([]);
+   236→  const [usersLoading, setUsersLoading] = useState(true);
+   237→  const [showInviteUser, setShowInviteUser] = useState(false);
+   238→  const [inviteForm, setInviteForm] = useState({ name: '', email: '', role: 'agent' });
+   239→  const [inviting, setInviting] = useState(false);
+   240→
+   241→  // ─── Roles State ──────────────────────────────────────────────────────
+   242→  const [roles] = useState([
+   243→    { id: 'owner', name: 'Owner', description: 'Full access to all features and settings', users: 1, color: 'bg-amber-100 text-amber-700 border-amber-200' },
+   244→    { id: 'admin', name: 'Admin', description: 'Manage users, settings, and all operations', users: 0, color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+   245→    { id: 'manager', name: 'Manager', description: 'Manage jobs, leads, and team operations', users: 0, color: 'bg-blue-100 text-blue-700 border-blue-200' },
+   246→    { id: 'agent', name: 'Agent', description: 'Handle assigned jobs and leads', users: 0, color: 'bg-sky-100 text-sky-700 border-sky-200' },
+   247→    { id: 'viewer', name: 'Viewer', description: 'Read-only access to dashboards and reports', users: 0, color: 'bg-slate-100 text-slate-600 border-slate-200' },
+   248→  ]);
+   249→
+   250→  // ─── Workspace URL State ──────────────────────────────────────────────
+   251→  const [workspaceSlug, setWorkspaceSlug] = useState('');
+   252→  const [customDomain, setCustomDomain] = useState('');
+   253→  const [savingWorkspace, setSavingWorkspace] = useState(false);
+   254→
+   255→  // ─── Billing State ────────────────────────────────────────────────────
+   256→  const [billingPlan, setBillingPlan] = useState('starter');
+   257→  const [planStatus, setPlanStatus] = useState('trial');
+   258→  const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
+   259→
+   260→  // ─── Currency/Locales State ──────────────────────────────────────────
+   261→  const [currencySettings, setCurrencySettings] = useState({
+   262→    baseCurrency: 'INR',
+   263→    multiCurrencyEnabled: true,
+   264→    autoExchangeRates: true,
+   265→    supportedCurrencies: ['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD'],
+   266→    rateSource: 'auto',
+   267→    lastRateUpdate: null as string | null,
+   268→  });
+   269→  const [exchangeRates, setExchangeRates] = useState<any[]>([]);
+   270→  const [currencyLoading, setCurrencyLoading] = useState(false);
+   271→  const [currencySaving, setCurrencySaving] = useState(false);
+   272→
+   273→  // ─── Fetch tenant data ──────────────────────────────────────────────────
+   274→  const fetchTenantData = useCallback(async () => {
+   275→    setTenantLoading(true);
+   276→    try {
+   277→      const authRes = await fetch('/api/auth/me?XTransformPort=3000');
+   278→      if (authRes.ok) {
+   279→        const authData = await authRes.json();
+   280→        const tenant = authData.tenant;
+   281→        if (tenant) {
+   282→          setTenantId(tenant.id);
+   283→          setBillingPlan(tenant.plan || 'starter');
+   284→          setPlanStatus(tenant.planStatus || 'trial');
+   285→          setTrialEndsAt(tenant.trialEndsAt || null);
+   286→          setWorkspaceSlug(tenant.slug || '');
+   287→
+   288→          // Parse address if it's a JSON string or a simple string
+   289→          let street = '';
+   290→          let city = '';
+   291→          let state = '';
+   292→          let pincode = '';
+   293→          let country = tenant.country || '';
+   294→
+   295→          if (tenant.address) {
+   296→            try {
+   297→              const addr = JSON.parse(tenant.address);
+   298→              street = addr.street || '';
+   299→              city = addr.city || '';
+   300→              state = addr.state || '';
+   301→              pincode = addr.pincode || '';
+   302→              country = addr.country || country;
+   303→            } catch {
+   304→              street = tenant.address;
+   305→            }
+   306→          }
+   307→
+   308→          setCompanyForm({
+   309→            name: tenant.name || '',
+   310→            industry: tenant.industry || '',
+   311→            currency: tenant.currency || 'INR',
+   312→            phone: tenant.phone || '',
+   313→            email: tenant.email || '',
+   314→            whatsappPhone: tenant.whatsappPhone || '',
+   315→            street,
+   316→            city,
+   317→            state,
+   318→            pincode,
+   319→            country,
+   320→          });
+   321→
+   322→          setWhatsappPhone(tenant.whatsappPhone || '');
+   323→
+   324→          // Load WhatsApp notification settings from settingsJson
+   325→          try {
+   326→            const settings = tenant.settingsJson ? JSON.parse(tenant.settingsJson) : {};
+   327→            if (settings.notifyOwner !== undefined) setNotifyOwner(settings.notifyOwner);
+   328→            if (settings.ownerTemplate) setOwnerTemplate(settings.ownerTemplate);
+   329→            if (settings.notifyCustomer !== undefined) setNotifyCustomer(settings.notifyCustomer);
+   330→            if (settings.customerTemplate) setCustomerTemplate(settings.customerTemplate);
+   331→          } catch {}
+   332→        }
+   333→      }
+   334→    } catch {
+   335→      // silently fail
+   336→    } finally {
+   337→      setTenantLoading(false);
+   338→    }
+   339→  }, []);
+   340→
+   341→  const fetchWebhooks = useCallback(async () => {
+   342→    try {
+   343→      const res = await fetch('/api/event-webhooks');
+   344→      if (res.ok) {
+   345→        const data = await res.json();
+   346→        setWebhooks(data.webhooks || []);
+   347→        setEventTypes(data.eventTypes || []);
+   348→      }
+   349→    } catch {
+   350→      // silently fail
+   351→    } finally {
+   352→      setWebhookLoading(false);
+   353→    }
+   354→  }, []);
+   355→
+   356→  const fetchWpEndpoints = useCallback(async () => {
+   357→    setWpLoading(true);
+   358→    try {
+   359→      const res = await fetch('/api/wordpress/config');
+   360→      if (res.ok) {
+   361→        const data = await res.json();
+   362→        setWpEndpoints(data.endpoints || []);
+   363→      }
+   364→    } catch {
+   365→      // silently fail
+   366→    } finally {
+   367→      setWpLoading(false);
+   368→    }
+   369→  }, []);
+   370→
+   371→  const fetchUsers = useCallback(async () => {
+   372→    setUsersLoading(true);
+   373→    try {
+   374→      const res = await fetch('/api/users?XTransformPort=3000');
+   375→      if (res.ok) {
+   376→        const data = await res.json();
+   377→        setUsers(data.users || []);
+   378→      }
+   379→    } catch {
+   380→      // silently fail
+   381→    } finally {
+   382→      setUsersLoading(false);
+   383→    }
+   384→  }, []);
+   385→
+   386→  useEffect(() => {
+   387→    fetchTenantData();
+   388→    fetchWebhooks();
+   389→    fetchWpEndpoints();
+   390→    fetchUsers();
+   391→  }, [fetchTenantData, fetchWebhooks, fetchWpEndpoints, fetchUsers]);
+   392→
+   393→  // ─── Save Company Profile ─────────────────────────────────────────────
+   394→  const handleSaveCompany = async () => {
+   395→    if (!tenantId) {
+   396→      toast.error('No tenant found. Complete onboarding first.');
+   397→      return;
+   398→    }
+   399→    setSaving(true);
+   400→    try {
+   401→      const addressObj = {
+   402→        street: companyForm.street,
+   403→        city: companyForm.city,
+   404→        state: companyForm.state,
+   405→        pincode: companyForm.pincode,
+   406→        country: companyForm.country,
+   407→      };
+   408→
+   409→      const res = await fetch(`/api/tenants/${tenantId}?XTransformPort=3000`, {
+   410→        method: 'PUT',
+   411→        headers: { 'Content-Type': 'application/json' },
+   412→        body: JSON.stringify({
+   413→          name: companyForm.name,
+   414→          industry: companyForm.industry,
+   415→          currency: companyForm.currency,
+   416→          phone: companyForm.phone,
+   417→          email: companyForm.email,
+   418→          whatsappPhone: companyForm.whatsappPhone,
+   419→          address: JSON.stringify(addressObj),
+   420→          country: companyForm.country,
+   421→          settingsJson: JSON.stringify({
+   422→            emailNotifications,
+   423→            executionAlerts,
+   424→          }),
+   425→        }),
+   426→      });
+   427→      if (res.ok) {
+   428→        invalidateCurrencyCache(); // Currency may have changed – invalidate cache so other views pick up the change
+   429→        toast.success('Company profile saved successfully');
+   430→      } else {
+   431→        const err = await res.json();
+   432→        toast.error(err.error || 'Failed to save company profile');
+   433→      }
+   434→    } catch {
+   435→      toast.error('Network error saving company profile');
+   436→    } finally {
+   437→      setSaving(false);
+   438→    }
+   439→  };
+   440→
+   441→  // Save WhatsApp phone number
+   442→  const handleSaveWhatsappPhone = async () => {
+   443→    setWhatsappPhoneSaving(true);
+   444→    try {
+   445→      const authRes = await fetch('/api/auth/me?XTransformPort=3000');
+   446→      if (!authRes.ok) {
+   447→        toast.error('Not authenticated');
+   448→        return;
+   449→      }
+   450→      const authData = await authRes.json();
+   451→      const tid = authData.tenant?.id;
+   452→      if (!tid) {
+   453→        toast.error('No tenant found. Complete onboarding first.');
+   454→        return;
+   455→      }
+   456→      const res = await fetch(`/api/tenants/${tid}?XTransformPort=3000`, {
+   457→        method: 'PUT',
+   458→        headers: { 'Content-Type': 'application/json' },
+   459→        body: JSON.stringify({ whatsappPhone }),
+   460→      });
+   461→      if (res.ok) {
+   462→        toast.success('WhatsApp business number saved successfully');
+   463→      } else {
+   464→        toast.error('Failed to save WhatsApp number');
+   465→      }
+   466→    } catch {
+   467→      toast.error('Network error saving WhatsApp number');
+   468→    } finally {
+   469→      setWhatsappPhoneSaving(false);
+   470→    }
+   471→  };
+   472→
+   473→  // ─── Save WhatsApp Settings ────────────────────────────────────────────
+   474→  const handleSaveWhatsappSettings = async () => {
+   475→    setWhatsappSettingsSaving(true);
+   476→    try {
+   477→      const authRes = await fetch('/api/auth/me?XTransformPort=3000');
+   478→      if (!authRes.ok) { toast.error('Not authenticated'); return; }
+   479→      const authData = await authRes.json();
+   480→      const tid = authData.tenant?.id;
+   481→      if (!tid) { toast.error('No tenant found'); return; }
+   482→      const res = await fetch(`/api/tenants/${tid}?XTransformPort=3000`, {
+   483→        method: 'PUT',
+   484→        headers: { 'Content-Type': 'application/json' },
+   485→        body: JSON.stringify({
+   486→          whatsappPhone,
+   487→          settingsJson: JSON.stringify({
+   488→            emailNotifications,
+   489→            executionAlerts,
+   490→            notifyOwner,
+   491→            ownerTemplate,
+   492→            notifyCustomer,
+   493→            customerTemplate,
+   494→          }),
+   495→        }),
+   496→      });
+   497→      if (res.ok) { toast.success('WhatsApp notification settings saved'); }
+   498→      else { toast.error('Failed to save settings'); }
+   499→    } catch { toast.error('Network error'); }
+   500→    finally { setWhatsappSettingsSaving(false); }
+   501→  };
+   502→
+   503→  // ─── AI Generate Template ──────────────────────────────────────────────
+   504→  const handleAiGenerate = async (type: 'owner' | 'customer') => {
+   505→    try {
+   506→      const res = await fetch('/api/whatsapp/generate-template?XTransformPort=3000', {
+   507→        method: 'POST',
+   508→        headers: { 'Content-Type': 'application/json' },
+   509→        body: JSON.stringify({ type }),
+   510→      });
+   511→      if (res.ok) {
+   512→        const data = await res.json();
+   513→        if (type === 'owner') setOwnerTemplate(data.template);
+   514→        else setCustomerTemplate(data.template);
+   515→        toast.success('Template generated with AI');
+   516→      } else {
+   517→        toast.error('Failed to generate template');
+   518→      }
+   519→    } catch {
+   520→      toast.error('AI generation failed');
+   521→    }
+   522→  };
+   523→
+   524→  // ─── WordPress: Generate & Configure ─────────────────────────────────────
+   525→  const handleGenerateWpConfig = async () => {
+   526→    setWpGenerating(true);
+   527→    try {
+   528→      const res = await fetch('/api/wordpress/config', {
+   529→        method: 'POST',
+   530→        headers: { 'Content-Type': 'application/json' },
+   531→        body: JSON.stringify({
+   532→          name: 'WordPress Lead Capture',
+   533→          sendWhatsApp: true,
+   534→        }),
+   535→      });
+   536→      if (res.ok) {
+   537→        const data = await res.json();
+   538→        setWpNewConfig(data.config);
+   539→        setWpShowApiKey(true);
+   540→        toast.success('WordPress integration configured! Copy your credentials below.');
+   541→        fetchWpEndpoints();
+   542→      } else {
+   543→        const err = await res.json();
+   544→        toast.error(err.error || 'Failed to generate config');
+   545→      }
+   546→    } catch {
+   547→      toast.error('Network error');
+   548→    } finally {
+   549→      setWpGenerating(false);
+   550→    }
+   551→  };
+   552→
+   553→  // ─── WordPress: Test Connection ──────────────────────────────────────────
+   554→  const handleTestWpConnection = async () => {
+   555→    if (!wpNewConfig?.api_key) {
+   556→      toast.error('Generate a config first');
+   557→      return;
+   558→    }
+   559→    setWpTesting(true);
+   560→    try {
+   561→      const res = await fetch('/api/wordpress/test', {
+   562→        method: 'POST',
+   563→        headers: { 'Content-Type': 'application/json' },
+   564→        body: JSON.stringify({ api_key: wpNewConfig.api_key }),
+   565→      });
+   566→      const data = await res.json();
+   567→      if (data.success) {
+   568→        toast.success('Connection successful! ServiceOS is ready to receive leads.');
+   569→      } else {
+   570→        toast.error(data.error || 'Connection failed');
+   571→      }
+   572→    } catch {
+   573→      toast.error('Test failed');
+   574→    } finally {
+   575→      setWpTesting(false);
+   576→    }
+   577→  };
+   578→
+   579→  // ─── WordPress: Delete Endpoint ──────────────────────────────────────────
+   580→  const handleDeleteWpEndpoint = async (id: string) => {
+   581→    try {
+   582→      const res = await fetch(`/api/wordpress/config?id=${id}`, { method: 'DELETE' });
+   583→      if (res.ok) {
+   584→        toast.success('WordPress endpoint deleted');
+   585→        fetchWpEndpoints();
+   586→        if (wpNewConfig && wpEndpoints.find(e => e.id === id)) {
+   587→          setWpNewConfig(null);
+   588→        }
+   589→      }
+   590→    } catch {
+   591→      toast.error('Failed to delete');
+   592→    }
+   593→  };
+   594→
+   595→  // ─── Copy helper ─────────────────────────────────────────────────────────
+   596→  const copyToClipboard = (text: string, label?: string) => {
+   597→    navigator.clipboard.writeText(text);
+   598→    toast.success(`${label || 'Value'} copied to clipboard`);
+   599→  };
+   600→
+   601→  const handleAddWebhook = async () => {
+   602→    if (!webhookForm.name || !webhookForm.url) {
+   603→      toast.error('Name and URL are required');
+   604→      return;
+   605→    }
+   606→    try {
+   607→      const res = await fetch('/api/event-webhooks', {
+   608→        method: 'POST',
+   609→        headers: { 'Content-Type': 'application/json' },
+   610→        body: JSON.stringify(webhookForm),
+   611→      });
+   612→      if (res.ok) {
+   613→        toast.success('Event webhook created');
+   614→        setShowAddWebhook(false);
+   615→        setWebhookForm({ name: '', event: 'job.created', url: '', method: 'POST', active: true });
+   616→        fetchWebhooks();
+   617→      } else {
+   618→        const err = await res.json();
+   619→        toast.error(err.error || 'Failed to create webhook');
+   620→      }
+   621→    } catch {
+   622→      toast.error('Network error');
+   623→    }
+   624→  };
+   625→
+   626→  const handleDeleteWebhook = async (id: string) => {
+   627→    try {
+   628→      const res = await fetch(`/api/event-webhooks/${id}`, { method: 'DELETE' });
+   629→      if (res.ok) {
+   630→        toast.success('Webhook deleted');
+   631→        fetchWebhooks();
+   632→      }
+   633→    } catch {
+   634→      toast.error('Failed to delete');
+   635→    }
+   636→  };
+   637→
+   638→  const handleToggleWebhook = async (id: string, active: boolean) => {
+   639→    try {
+   640→      const res = await fetch(`/api/event-webhooks/${id}`, {
+   641→        method: 'PUT',
+   642→        headers: { 'Content-Type': 'application/json' },
+   643→        body: JSON.stringify({ active }),
+   644→      });
+   645→      if (res.ok) {
+   646→        toast.success(active ? 'Webhook enabled' : 'Webhook disabled');
+   647→        fetchWebhooks();
+   648→      }
+   649→    } catch {
+   650→      toast.error('Failed to update');
+   651→    }
+   652→  };
+   653→
+   654→  const handleTestWebhook = async (event: string) => {
+   655→    setTestingWebhook(event);
+   656→    try {
+   657→      const res = await fetch('/api/event-webhooks/test', {
+   658→        method: 'POST',
+   659→        headers: { 'Content-Type': 'application/json' },
+   660→        body: JSON.stringify({ event }),
+   661→      });
+   662→      const data = await res.json();
+   663→      if (data.successCount > 0) {
+   664→        toast.success(`Test sent: ${data.successCount} webhook(s) triggered`);
+   665→      } else if (data.totalWebhooks === 0) {
+   666→        toast.info('No active webhooks configured for this event');
+   667→      } else {
+   668→        toast.error('All webhooks failed — check the URLs');
+   669→      }
+   670→    } catch {
+   671→      toast.error('Test failed');
+   672→    } finally {
+   673→      setTestingWebhook(null);
+   674→    }
+   675→  };
+   676→
+   677→  // ─── Invite User ──────────────────────────────────────────────────────
+   678→  const handleInviteUser = async () => {
+   679→    if (!inviteForm.name || !inviteForm.email) {
+   680→      toast.error('Name and email are required');
+   681→      return;
+   682→    }
+   683→    setInviting(true);
+   684→    try {
+   685→      const res = await fetch('/api/users?XTransformPort=3000', {
+   686→        method: 'POST',
+   687→        headers: { 'Content-Type': 'application/json' },
+   688→        body: JSON.stringify(inviteForm),
+   689→      });
+   690→      if (res.ok) {
+   691→        toast.success('User invited successfully');
+   692→        setShowInviteUser(false);
+   693→        setInviteForm({ name: '', email: '', role: 'agent' });
+   694→        fetchUsers();
+   695→      } else {
+   696→        const err = await res.json();
+   697→        toast.error(err.error || 'Failed to invite user');
+   698→      }
+   699→    } catch {
+   700→      toast.error('Network error');
+   701→    } finally {
+   702→      setInviting(false);
+   703→    }
+   704→  };
+   705→
+   706→  // ─── Save Workspace URL ───────────────────────────────────────────────
+   707→  const handleSaveWorkspace = async () => {
+   708→    setSavingWorkspace(true);
+   709→    try {
+   710→      if (!tenantId) {
+   711→        toast.error('No tenant found');
+   712→        return;
+   713→      }
+   714→      const res = await fetch(`/api/tenants/${tenantId}?XTransformPort=3000`, {
+   715→        method: 'PUT',
+   716→        headers: { 'Content-Type': 'application/json' },
+   717→        body: JSON.stringify({ slug: workspaceSlug }),
+   718→      });
+   719→      if (res.ok) {
+   720→        toast.success('Workspace URL updated successfully');
+   721→      } else {
+   722→        const err = await res.json();
+   723→        toast.error(err.error || 'Failed to update workspace URL');
+   724→      }
+   725→    } catch {
+   726→      toast.error('Network error');
+   727→    } finally {
+   728→      setSavingWorkspace(false);
+   729→    }
+   730→  };
+   731→
+   732→  const getRoleBadgeColor = (role: string) => {
+   733→    switch (role) {
+   734→      case 'owner': return 'bg-amber-100 text-amber-700 border-amber-200';
+   735→      case 'admin': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+   736→      case 'manager': return 'bg-blue-100 text-blue-700 border-blue-200';
+   737→      case 'agent': return 'bg-sky-100 text-sky-700 border-sky-200';
+   738→      default: return 'bg-slate-100 text-slate-600 border-slate-200';
+   739→    }
+   740→  };
+   741→
+   742→  // ─── Currency Settings Handlers ────────────────────────────────────────
+   743→  const fetchCurrencySettings = useCallback(async () => {
+   744→    setCurrencyLoading(true);
+   745→    try {
+   746→      const res = await fetch('/api/settings/currency?XTransformPort=3000');
+   747→      if (res.ok) {
+   748→        const data = await res.json();
+   749→        if (data.currencySettings) {
+   750→          setCurrencySettings({
+   751→            baseCurrency: data.baseCurrency || data.currencySettings.baseCurrency || 'INR',
+   752→            multiCurrencyEnabled: data.currencySettings.multiCurrencyEnabled ?? true,
+   753→            autoExchangeRates: data.currencySettings.autoExchangeRates ?? true,
+   754→            supportedCurrencies: data.currencySettings.supportedCurrencies || ['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD'],
+   755→            rateSource: data.currencySettings.rateSource || 'auto',
+   756→            lastRateUpdate: data.currencySettings.lastRateUpdate || null,
+   757→          });
+   758→        }
+   759→      }
+   760→    } catch {
+   761→      // silently fail
+   762→    } finally {
+   763→      setCurrencyLoading(false);
+   764→    }
+   765→  }, []);
+   766→
+   767→  const fetchExchangeRates = useCallback(async (base: string) => {
+   768→    try {
+   769→      const res = await fetch(`/api/currency/exchange-rates?base=${base}&XTransformPort=3000`);
+   770→      if (res.ok) {
+   771→        const data = await res.json();
+   772→        if (data.rates) {
+   773→          setExchangeRates(data.rates);
+   774→        } else {
+   775→          // Fallback: use local utility
+   776→          setExchangeRates(getExchangeRateTable(base));
+   777→        }
+   778→      } else {
+   779→        // Fallback: use local utility
+   780→        setExchangeRates(getExchangeRateTable(base));
+   781→      }
+   782→    } catch {
+   783→      // Fallback: use local utility
+   784→      setExchangeRates(getExchangeRateTable(base));
+   785→    }
+   786→  }, []);
+   787→
+   788→  const handleSaveCurrencySettings = async () => {
+   789→    setCurrencySaving(true);
+   790→    try {
+   791→      const res = await fetch('/api/settings/currency?XTransformPort=3000', {
+   792→        method: 'PUT',
+   793→        headers: { 'Content-Type': 'application/json' },
+   794→        body: JSON.stringify({
+   795→          baseCurrency: currencySettings.baseCurrency,
+   796→          currencySettings,
+   797→        }),
+   798→      });
+   799→      if (res.ok) {
+   800→        invalidateCurrencyCache(); // Invalidate cache so other views pick up the change
+   801→        toast.success('Currency settings saved successfully');
+   802→      } else {
+   803→        const err = await res.json();
+   804→        toast.error(err.error || 'Failed to save currency settings');
+   805→      }
+   806→    } catch {
+   807→      toast.error('Network error saving currency settings');
+   808→    } finally {
+   809→      setCurrencySaving(false);
+   810→    }
+   811→  };
+   812→
+   813→  const handleRefreshRates = async () => {
+   814→    setCurrencyLoading(true);
+   815→    try {
+   816→      await fetchExchangeRates(currencySettings.baseCurrency);
+   817→      setCurrencySettings({
+   818→        ...currencySettings,
+   819→        lastRateUpdate: new Date().toISOString(),
+   820→      });
+   821→      toast.success('Exchange rates refreshed');
+   822→    } catch {
+   823→      toast.error('Failed to refresh exchange rates');
+   824→    } finally {
+   825→      setCurrencyLoading(false);
+   826→    }
+   827→  };
+   828→
+   829→  // Fetch currency settings on mount
+   830→  useEffect(() => {
+   831→    fetchCurrencySettings();
+   832→  }, [fetchCurrencySettings]);
+   833→
+   834→  // Fetch exchange rates when base currency changes
+   835→  useEffect(() => {
+   836→    if (currencySettings.baseCurrency) {
+   837→      fetchExchangeRates(currencySettings.baseCurrency);
+   838→    }
+   839→  }, [currencySettings.baseCurrency, fetchExchangeRates]);
+   840→
+   841→  return (
+   842→    <div className="max-w-4xl mx-auto">
+   843→      <Tabs defaultValue="company" className="space-y-6">
+   844→        <TabsList className="bg-muted/50 p-1 rounded-xl h-auto flex-wrap">
+   845→          <TabsTrigger value="company" className="gap-1.5 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 py-2">
+   846→            <Building2 className="size-4" />
+   847→            <span className="hidden sm:inline">Company Profile</span>
+   848→            <span className="sm:hidden">Company</span>
+   849→          </TabsTrigger>
+   850→          <TabsTrigger value="users" className="gap-1.5 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 py-2">
+   851→            <UsersIcon className="size-4" />
+   852→            <span className="hidden sm:inline">Users</span>
+   853→            <span className="sm:hidden">Users</span>
+   854→          </TabsTrigger>
+   855→          <TabsTrigger value="roles" className="gap-1.5 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 py-2">
+   856→            <Shield className="size-4" />
+   857→            <span className="hidden sm:inline">Roles</span>
+   858→            <span className="sm:hidden">Roles</span>
+   859→          </TabsTrigger>
+   860→          <TabsTrigger value="integrations" className="gap-1.5 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 py-2">
+   861→            <Plug className="size-4" />
+   862→            <span className="hidden sm:inline">Integrations</span>
+   863→            <span className="sm:hidden">Apps</span>
+   864→          </TabsTrigger>
+   865→          <TabsTrigger value="billing" className="gap-1.5 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 py-2">
+   866→            <CreditCard className="size-4" />
+   867→            <span className="hidden sm:inline">Billing</span>
+   868→            <span className="sm:hidden">Bill</span>
+   869→          </TabsTrigger>
+   870→          <TabsTrigger value="workspace" className="gap-1.5 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 py-2">
+   871→            <Globe className="size-4" />
+   872→            <span className="hidden sm:inline">Workspace URL</span>
+   873→            <span className="sm:hidden">URL</span>
+   874→          </TabsTrigger>
+   875→          <TabsTrigger value="localization" className="gap-1.5 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 py-2">
+   876→            <Globe className="size-4" />
+   877→            <span className="hidden sm:inline">Localization</span>
+   878→            <span className="sm:hidden">Local</span>
+   879→          </TabsTrigger>
+   880→        </TabsList>
+   881→
+   882→        {/* ═══════════════════════════════════════════════════════════════════
+   883→            Company Profile Tab
+   884→            ═══════════════════════════════════════════════════════════════════ */}
+   885→        <TabsContent value="company" className="space-y-6">
+   886→          {tenantLoading ? (
+   887→            <div className="flex items-center justify-center py-12 text-muted-foreground">
+   888→              <Loader2 className="size-5 animate-spin mr-2" /> Loading company profile...
+   889→            </div>
+   890→          ) : (
+   891→            <>
+   892→              {/* Company Information */}
+   893→              <Card>
+   894→                <CardHeader>
+   895→                  <div className="flex items-center gap-3">
+   896→                    <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+   897→                      <Building2 className="size-4 text-emerald-600" />
+   898→                    </div>
+   899→                    <div>
+   900→                      <CardTitle className="text-base">Company Information</CardTitle>
+   901→                      <CardDescription>Update your company details and contact information</CardDescription>
+   902→                    </div>
+   903→                  </div>
+   904→                </CardHeader>
+   905→                <CardContent className="space-y-4">
+   906→                  <div className="space-y-2">
+   907→                    <Label className="text-sm font-medium">Company Name</Label>
+   908→                    <Input
+   909→                      placeholder="Your Company Name"
+   910→                      value={companyForm.name}
+   911→                      onChange={(e) => setCompanyForm({ ...companyForm, name: e.target.value })}
+   912→                    />
+   913→                  </div>
+   914→                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   915→                    <div className="space-y-2">
+   916→                      <Label className="text-sm font-medium">Industry</Label>
+   917→                      <Select value={companyForm.industry} onValueChange={(v) => setCompanyForm({ ...companyForm, industry: v })}>
+   918→                        <SelectTrigger>
+   919→                          <SelectValue placeholder="Select industry" />
+   920→                        </SelectTrigger>
+   921→                        <SelectContent>
+   922→                          {INDUSTRIES.map((ind) => (
+   923→                            <SelectItem key={ind} value={ind}>{ind}</SelectItem>
+   924→                          ))}
+   925→                        </SelectContent>
+   926→                      </Select>
+   927→                    </div>
+   928→                    <div className="space-y-2">
+   929→                      <Label className="text-sm font-medium">Currency</Label>
+   930→                      <Select value={companyForm.currency} onValueChange={(v) => setCompanyForm({ ...companyForm, currency: v })}>
+   931→                        <SelectTrigger>
+   932→                          <SelectValue placeholder="Select currency" />
+   933→                        </SelectTrigger>
+   934→                        <SelectContent>
+   935→                          {CURRENCIES.map((c) => (
+   936→                            <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+   937→                          ))}
+   938→                        </SelectContent>
+   939→                      </Select>
+   940→                    </div>
+   941→                  </div>
+   942→                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   943→                    <div className="space-y-2">
+   944→                      <Label className="text-sm font-medium flex items-center gap-1.5">
+   945→                        <Phone className="size-3.5" /> Phone
+   946→                      </Label>
+   947→                      <Input
+   948→                        placeholder="+91 98765 43210"
+   949→                        value={companyForm.phone}
+   950→                        onChange={(e) => setCompanyForm({ ...companyForm, phone: e.target.value })}
+   951→                      />
+   952→                    </div>
+   953→                    <div className="space-y-2">
+   954→                      <Label className="text-sm font-medium flex items-center gap-1.5">
+   955→                        <Mail className="size-3.5" /> Email
+   956→                      </Label>
+   957→                      <Input
+   958→                        type="email"
+   959→                        placeholder="company@example.com"
+   960→                        value={companyForm.email}
+   961→                        onChange={(e) => setCompanyForm({ ...companyForm, email: e.target.value })}
+   962→                      />
+   963→                    </div>
+   964→                  </div>
+   965→                  <div className="space-y-2">
+   966→                    <Label className="text-sm font-medium flex items-center gap-1.5">
+   967→                      <MessageCircle className="size-3.5" /> WhatsApp Number
+   968→                    </Label>
+   969→                    <Input
+   970→                      placeholder="+91 98765 43210"
+   971→                      value={companyForm.whatsappPhone}
+   972→                      onChange={(e) => setCompanyForm({ ...companyForm, whatsappPhone: e.target.value })}
+   973→                    />
+   974→                    <p className="text-xs text-muted-foreground">
+   975→                      Used for lead notifications and customer communications
+   976→                    </p>
+   977→                  </div>
+   978→                </CardContent>
+   979→              </Card>
+   980→
+   981→              {/* Business Address */}
+   982→              <Card>
+   983→                <CardHeader>
+   984→                  <div className="flex items-center gap-3">
+   985→                    <div className="flex items-center justify-center size-9 rounded-lg bg-muted">
+   986→                      <MapPin className="size-4 text-emerald-500" />
+   987→                    </div>
+   988→                    <div>
+   989→                      <CardTitle className="text-base">Business Address</CardTitle>
+   990→                      <CardDescription>Your company&apos;s physical address</CardDescription>
+   991→                    </div>
+   992→                  </div>
+   993→                </CardHeader>
+   994→                <CardContent className="space-y-4">
+   995→                  <div className="space-y-2">
+   996→                    <Label className="text-sm font-medium">Street Address</Label>
+   997→                    <Input
+   998→                      placeholder="123 Main Street, Suite 100"
+   999→                      value={companyForm.street}
+  1000→                      onChange={(e) => setCompanyForm({ ...companyForm, street: e.target.value })}
+  1001→                    />
+  1002→                  </div>
+  1003→                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+  1004→                    <div className="space-y-2">
+  1005→                      <Label className="text-sm font-medium">City</Label>
+  1006→                      <Input
+  1007→                        placeholder="Mumbai"
+  1008→                        value={companyForm.city}
+  1009→                        onChange={(e) => setCompanyForm({ ...companyForm, city: e.target.value })}
+  1010→                      />
+  1011→                    </div>
+  1012→                    <div className="space-y-2">
+  1013→                      <Label className="text-sm font-medium">State</Label>
+  1014→                      <Input
+  1015→                        placeholder="Maharashtra"
+  1016→                        value={companyForm.state}
+  1017→                        onChange={(e) => setCompanyForm({ ...companyForm, state: e.target.value })}
+  1018→                      />
+  1019→                    </div>
+  1020→                    <div className="space-y-2">
+  1021→                      <Label className="text-sm font-medium">Pincode</Label>
+  1022→                      <Input
+  1023→                        placeholder="400001"
+  1024→                        value={companyForm.pincode}
+  1025→                        onChange={(e) => setCompanyForm({ ...companyForm, pincode: e.target.value })}
+  1026→                      />
+  1027→                    </div>
+  1028→                  </div>
+  1029→                </CardContent>
+  1030→              </Card>
+  1031→
+  1032→              {/* Preferences */}
+  1033→              <Card>
+  1034→                <CardHeader>
+  1035→                  <div className="flex items-center gap-3">
+  1036→                    <div className="flex items-center justify-center size-9 rounded-lg bg-muted">
+  1037→                      <Bell className="size-4 text-emerald-500" />
+  1038→                    </div>
+  1039→                    <div>
+  1040→                      <CardTitle className="text-base">Preferences</CardTitle>
+  1041→                      <CardDescription>Customize your application experience</CardDescription>
+  1042→                    </div>
+  1043→                  </div>
+  1044→                </CardHeader>
+  1045→                <CardContent className="space-y-4">
+  1046→                  <div className="flex items-center justify-between">
+  1047→                    <div>
+  1048→                      <Label className="text-sm font-medium">Dark Mode</Label>
+  1049→                      <p className="text-xs text-muted-foreground">Toggle dark mode theme</p>
+  1050→                    </div>
+  1051→                    <Switch checked={darkMode} onCheckedChange={toggleDarkMode} />
+  1052→                  </div>
+  1053→                  <Separator />
+  1054→                  <div className="flex items-center justify-between">
+  1055→                    <div>
+  1056→                      <Label className="text-sm font-medium">Email Notifications</Label>
+  1057→                      <p className="text-xs text-muted-foreground">Get notified about workflow failures and updates</p>
+  1058→                    </div>
+  1059→                    <Switch checked={emailNotifications} onCheckedChange={setEmailNotifications} />
+  1060→                  </div>
+  1061→                  <Separator />
+  1062→                  <div className="flex items-center justify-between">
+  1063→                    <div>
+  1064→                      <Label className="text-sm font-medium">Execution Alerts</Label>
+  1065→                      <p className="text-xs text-muted-foreground">Notify when workflow executions finish</p>
+  1066→                    </div>
+  1067→                    <Switch checked={executionAlerts} onCheckedChange={setExecutionAlerts} />
+  1068→                  </div>
+  1069→                </CardContent>
+  1070→              </Card>
+  1071→
+  1072→              {/* Save Changes Button */}
+  1073→              <div className="flex justify-end">
+  1074→                <Button
+  1075→                  className="bg-emerald-600 hover:bg-emerald-700 gap-1.5 px-6"
+  1076→                  onClick={handleSaveCompany}
+  1077→                  disabled={saving}
+  1078→                >
+  1079→                  {saving ? (
+  1080→                    <Loader2 className="size-4 animate-spin" />
+  1081→                  ) : (
+  1082→                    <Save className="size-4" />
+  1083→                  )}
+  1084→                  Save Changes
+  1085→                </Button>
+  1086→              </div>
+  1087→            </>
+  1088→          )}
+  1089→        </TabsContent>
+  1090→
+  1091→        {/* ═══════════════════════════════════════════════════════════════════
+  1092→            Users Tab
+  1093→            ═══════════════════════════════════════════════════════════════════ */}
+  1094→        <TabsContent value="users" className="space-y-6">
+  1095→          <Card>
+  1096→            <CardHeader>
+  1097→              <div className="flex items-center justify-between">
+  1098→                <div className="flex items-center gap-3">
+  1099→                  <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+  1100→                    <UsersIcon className="size-4 text-emerald-600" />
+  1101→                  </div>
+  1102→                  <div>
+  1103→                    <CardTitle className="text-base">Team Members</CardTitle>
+  1104→                    <CardDescription>Manage your team and invite new members</CardDescription>
+  1105→                  </div>
+  1106→                </div>
+  1107→                <Button
+  1108→                  size="sm"
+  1109→                  className="bg-emerald-600 hover:bg-emerald-700 gap-1.5"
+  1110→                  onClick={() => setShowInviteUser(true)}
+  1111→                >
+  1112→                  <UserPlus className="size-3.5" /> Invite User
+  1113→                </Button>
+  1114→              </div>
+  1115→            </CardHeader>
+  1116→            <CardContent>
+  1117→              {usersLoading ? (
+  1118→                <div className="flex items-center justify-center py-8 text-muted-foreground">
+  1119→                  <Loader2 className="size-5 animate-spin mr-2" /> Loading users...
+  1120→                </div>
+  1121→              ) : users.length === 0 ? (
+  1122→                <div className="text-center py-8 text-muted-foreground">
+  1123→                  <UsersIcon className="size-8 mx-auto mb-2 opacity-20" />
+  1124→                  <p className="text-sm font-medium">No team members found</p>
+  1125→                  <p className="text-xs">Invite users to your workspace</p>
+  1126→                </div>
+  1127→              ) : (
+  1128→                <ScrollArea className="max-h-96">
+  1129→                  <div className="space-y-2">
+  1130→                    {users.map((user) => (
+  1131→                      <div key={user.id} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors">
+  1132→                        <div className="flex items-center justify-center size-9 rounded-full bg-muted shrink-0">
+  1133→                          <span className="text-sm font-medium text-muted-foreground">
+  1134→                            {user.name?.charAt(0)?.toUpperCase() || '?'}
+  1135→                          </span>
+  1136→                        </div>
+  1137→                        <div className="flex-1 min-w-0">
+  1138→                          <div className="flex items-center gap-2 mb-0.5">
+  1139→                            <span className="font-medium text-sm truncate">{user.name}</span>
+  1140→                            <Badge variant="outline" className={`${getRoleBadgeColor(user.role)} text-[10px] shrink-0 capitalize`}>
+  1141→                              {user.role}
+  1142→                            </Badge>
+  1143→                            {!user.isActive && (
+  1144→                              <Badge variant="outline" className="text-[10px] bg-red-50 text-red-600 border-red-200 shrink-0">
+  1145→                                Inactive
+  1146→                              </Badge>
+  1147→                            )}
+  1148→                          </div>
+  1149→                          <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+  1150→                          {user.lastLoginAt && (
+  1151→                            <p className="text-[10px] text-muted-foreground mt-0.5">
+  1152→                              Last login: {new Date(user.lastLoginAt).toLocaleDateString()}
+  1153→                            </p>
+  1154→                          )}
+  1155→                        </div>
+  1156→                        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+  1157→                          <MoreHorizontal className="size-4" />
+  1158→                        </Button>
+  1159→                      </div>
+  1160→                    ))}
+  1161→                  </div>
+  1162→                </ScrollArea>
+  1163→              )}
+  1164→            </CardContent>
+  1165→          </Card>
+  1166→
+  1167→          {/* Invite User Dialog */}
+  1168→          <Dialog open={showInviteUser} onOpenChange={setShowInviteUser}>
+  1169→            <DialogContent className="max-w-md">
+  1170→              <DialogHeader>
+  1171→                <DialogTitle>Invite Team Member</DialogTitle>
+  1172→                <DialogDescription>Send an invitation to join your workspace</DialogDescription>
+  1173→              </DialogHeader>
+  1174→              <div className="space-y-4 py-2">
+  1175→                <div className="space-y-2">
+  1176→                  <Label>Full Name</Label>
+  1177→                  <Input
+  1178→                    placeholder="John Doe"
+  1179→                    value={inviteForm.name}
+  1180→                    onChange={(e) => setInviteForm({ ...inviteForm, name: e.target.value })}
+  1181→                  />
+  1182→                </div>
+  1183→                <div className="space-y-2">
+  1184→                  <Label>Email Address</Label>
+  1185→                  <Input
+  1186→                    type="email"
+  1187→                    placeholder="john@example.com"
+  1188→                    value={inviteForm.email}
+  1189→                    onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+  1190→                  />
+  1191→                </div>
+  1192→                <div className="space-y-2">
+  1193→                  <Label>Role</Label>
+  1194→                  <Select value={inviteForm.role} onValueChange={(v) => setInviteForm({ ...inviteForm, role: v })}>
+  1195→                    <SelectTrigger>
+  1196→                      <SelectValue />
+  1197→                    </SelectTrigger>
+  1198→                    <SelectContent>
+  1199→                      <SelectItem value="admin">Admin</SelectItem>
+  1200→                      <SelectItem value="manager">Manager</SelectItem>
+  1201→                      <SelectItem value="agent">Agent</SelectItem>
+  1202→                      <SelectItem value="viewer">Viewer</SelectItem>
+  1203→                    </SelectContent>
+  1204→                  </Select>
+  1205→                </div>
+  1206→              </div>
+  1207→              <DialogFooter>
+  1208→                <Button variant="outline" onClick={() => setShowInviteUser(false)}>Cancel</Button>
+  1209→                <Button
+  1210→                  className="bg-emerald-600 hover:bg-emerald-700"
+  1211→                  onClick={handleInviteUser}
+  1212→                  disabled={!inviteForm.name || !inviteForm.email || inviting}
+  1213→                >
+  1214→                  {inviting ? <Loader2 className="size-4 animate-spin mr-1" /> : <UserPlus className="size-4 mr-1" />}
+  1215→                  Send Invite
+  1216→                </Button>
+  1217→              </DialogFooter>
+  1218→            </DialogContent>
+  1219→          </Dialog>
+  1220→        </TabsContent>
+  1221→
+  1222→        {/* ═══════════════════════════════════════════════════════════════════
+  1223→            Roles Tab
+  1224→            ═══════════════════════════════════════════════════════════════════ */}
+  1225→        <TabsContent value="roles" className="space-y-6">
+  1226→          <Card>
+  1227→            <CardHeader>
+  1228→              <div className="flex items-center gap-3">
+  1229→                <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+  1230→                  <Shield className="size-4 text-emerald-600" />
+  1231→                </div>
+  1232→                <div>
+  1233→                  <CardTitle className="text-base">Roles &amp; Permissions</CardTitle>
+  1234→                  <CardDescription>Define access levels for team members</CardDescription>
+  1235→                </div>
+  1236→              </div>
+  1237→            </CardHeader>
+  1238→            <CardContent className="space-y-3">
+  1239→              {roles.map((role) => (
+  1240→                <div key={role.id} className="flex items-center gap-3 p-4 rounded-lg border hover:bg-muted/30 transition-colors">
+  1241→                  <div className="flex items-center justify-center size-9 rounded-lg bg-muted shrink-0">
+  1242→                    {role.id === 'owner' ? (
+  1243→                      <Crown className="size-4 text-amber-600" />
+  1244→                    ) : (
+  1245→                      <Shield className="size-4 text-muted-foreground" />
+  1246→                    )}
+  1247→                  </div>
+  1248→                  <div className="flex-1 min-w-0">
+  1249→                    <div className="flex items-center gap-2 mb-0.5">
+  1250→                      <span className="font-medium text-sm">{role.name}</span>
+  1251→                      <Badge variant="outline" className={`${role.color} text-[10px] shrink-0`}>
+  1252→                        {role.users} member{role.users !== 1 ? 's' : ''}
+  1253→                      </Badge>
+  1254→                    </div>
+  1255→                    <p className="text-xs text-muted-foreground">{role.description}</p>
+  1256→                  </div>
+  1257→                  <Button variant="outline" size="sm" className="shrink-0 text-xs gap-1">
+  1258→                    Edit Permissions
+  1259→                  </Button>
+  1260→                </div>
+  1261→              ))}
+  1262→            </CardContent>
+  1263→          </Card>
+  1264→
+  1265→          {/* Permissions Matrix */}
+  1266→          <Card>
+  1267→            <CardHeader>
+  1268→              <div className="flex items-center gap-3">
+  1269→                <div className="flex items-center justify-center size-9 rounded-lg bg-muted">
+  1270→                  <Shield className="size-4 text-emerald-500" />
+  1271→                </div>
+  1272→                <div>
+  1273→                  <CardTitle className="text-base">Permission Matrix</CardTitle>
+  1274→                  <CardDescription>Overview of permissions by role</CardDescription>
+  1275→                </div>
+  1276→              </div>
+  1277→            </CardHeader>
+  1278→            <CardContent>
+  1279→              <ScrollArea className="max-h-80">
+  1280→                <div className="overflow-x-auto">
+  1281→                  <table className="w-full text-xs">
+  1282→                    <thead>
+  1283→                      <tr className="border-b">
+  1284→                        <th className="text-left py-2 px-3 font-medium text-muted-foreground">Permission</th>
+  1285→                        <th className="text-center py-2 px-3 font-medium text-muted-foreground">Owner</th>
+  1286→                        <th className="text-center py-2 px-3 font-medium text-muted-foreground">Admin</th>
+  1287→                        <th className="text-center py-2 px-3 font-medium text-muted-foreground">Manager</th>
+  1288→                        <th className="text-center py-2 px-3 font-medium text-muted-foreground">Agent</th>
+  1289→                        <th className="text-center py-2 px-3 font-medium text-muted-foreground">Viewer</th>
+  1290→                      </tr>
+  1291→                    </thead>
+  1292→                    <tbody>
+  1293→                      {[
+  1294→                        { name: 'Manage Users', perms: [true, true, false, false, false] },
+  1295→                        { name: 'Manage Roles', perms: [true, true, false, false, false] },
+  1296→                        { name: 'Company Settings', perms: [true, true, false, false, false] },
+  1297→                        { name: 'Billing & Plans', perms: [true, true, false, false, false] },
+  1298→                        { name: 'Create Leads', perms: [true, true, true, true, false] },
+  1299→                        { name: 'Assign Leads', perms: [true, true, true, false, false] },
+  1300→                        { name: 'Create Jobs', perms: [true, true, true, true, false] },
+  1301→                        { name: 'Dispatch Jobs', perms: [true, true, true, false, false] },
+  1302→                        { name: 'View Reports', perms: [true, true, true, true, true] },
+  1303→                        { name: 'Export Data', perms: [true, true, true, false, false] },
+  1304→                        { name: 'Manage Invoices', perms: [true, true, true, false, false] },
+  1305→                        { name: 'Manage Workflows', perms: [true, true, true, false, false] },
+  1306→                        { name: 'API Access', perms: [true, true, false, false, false] },
+  1307→                      ].map((row) => (
+  1308→                        <tr key={row.name} className="border-b last:border-0">
+  1309→                          <td className="py-2 px-3 font-medium">{row.name}</td>
+  1310→                          {row.perms.map((has, i) => (
+  1311→                            <td key={i} className="text-center py-2 px-3">
+  1312→                              {has ? (
+  1313→                                <Check className="size-3.5 text-emerald-500 mx-auto" />
+  1314→                              ) : (
+  1315→                                <span className="text-muted-foreground/30">—</span>
+  1316→                              )}
+  1317→                            </td>
+  1318→                          ))}
+  1319→                        </tr>
+  1320→                      ))}
+  1321→                    </tbody>
+  1322→                  </table>
+  1323→                </div>
+  1324→              </ScrollArea>
+  1325→            </CardContent>
+  1326→          </Card>
+  1327→
+  1328→          {/* Security Settings */}
+  1329→          <Card>
+  1330→            <CardHeader>
+  1331→              <div className="flex items-center gap-3">
+  1332→                <div className="flex items-center justify-center size-9 rounded-lg bg-muted">
+  1333→                  <KeyRound className="size-4 text-emerald-500" />
+  1334→                </div>
+  1335→                <div>
+  1336→                  <CardTitle className="text-base">Security</CardTitle>
+  1337→                  <CardDescription>Security and access control settings</CardDescription>
+  1338→                </div>
+  1339→              </div>
+  1340→            </CardHeader>
+  1341→            <CardContent className="space-y-4">
+  1342→              <div className="flex items-center justify-between">
+  1343→                <div>
+  1344→                  <Label className="text-sm font-medium">Two-Factor Authentication</Label>
+  1345→                  <p className="text-xs text-muted-foreground">Require 2FA for account access</p>
+  1346→                </div>
+  1347→                <Switch />
+  1348→              </div>
+  1349→              <Separator />
+  1350→              <div className="space-y-2">
+  1351→                <Label className="text-sm font-medium">Session Timeout</Label>
+  1352→                <Input placeholder="30 minutes" defaultValue="30" className="max-w-xs" type="number" />
+  1353→                <p className="text-xs text-muted-foreground">Minutes of inactivity before session expires</p>
+  1354→              </div>
+  1355→            </CardContent>
+  1356→          </Card>
+  1357→        </TabsContent>
+  1358→
+  1359→        {/* ═══════════════════════════════════════════════════════════════════
+  1360→            Integrations Tab
+  1361→            ═══════════════════════════════════════════════════════════════════ */}
+  1362→        <TabsContent value="integrations" className="space-y-6">
+  1363→          {/* ─── Card 1: WordPress / CRM Integration ─────────────────────────── */}
+  1364→          <Card className="border-emerald-200 dark:border-emerald-800">
+  1365→            <CardHeader>
+  1366→              <div className="flex items-center justify-between">
+  1367→                <div className="flex items-center gap-3">
+  1368→                  <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+  1369→                    <Plug className="size-4 text-emerald-600" />
+  1370→                  </div>
+  1371→                  <div>
+  1372→                    <CardTitle className="text-base">WordPress / CRM Integration</CardTitle>
+  1373→                    <CardDescription>Connect WordPress forms to capture leads directly</CardDescription>
+  1374→                  </div>
+  1375→                </div>
+  1376→                <Button
+  1377→                  size="sm"
+  1378→                  className="bg-emerald-600 hover:bg-emerald-700 gap-1.5"
+  1379→                  onClick={handleGenerateWpConfig}
+  1380→                  disabled={wpGenerating}
+  1381→                >
+  1382→                  {wpGenerating ? (
+  1383→                    <Loader2 className="size-3.5 animate-spin" />
+  1384→                  ) : (
+  1385→                    <Zap className="size-3.5" />
+  1386→                  )}
+  1387→                  Generate
+  1388→                </Button>
+  1389→              </div>
+  1390→
+  1391→              {/* Lead Capture Flow diagram */}
+  1392→              <div className="mt-3 p-3 rounded-lg bg-muted/50 border text-xs text-muted-foreground">
+  1393→                <div className="flex items-center gap-1.5 font-medium text-foreground mb-1.5">
+  1394→                  <ArrowRight className="size-3" /> Lead Capture Flow
+  1395→                </div>
+  1396→                <div className="flex items-center gap-1 flex-wrap">
+  1397→                  <span className="px-1.5 py-0.5 bg-background rounded border text-[10px] font-medium">WordPress Form</span>
+  1398→                  <ArrowRight className="size-3" />
+  1399→                  <span className="px-1.5 py-0.5 bg-background rounded border text-[10px] font-medium">ServiceOS API</span>
+  1400→                  <ArrowRight className="size-3" />
+  1401→                  <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[10px] font-medium">Lead Created</span>
+  1402→                  <ArrowRight className="size-3" />
+  1403→                  <span className="px-1.5 py-0.5 bg-background rounded border text-[10px] font-medium">WhatsApp Sent</span>
+  1404→                </div>
+  1405→              </div>
+  1406→
+  1407→              {/* Supported form plugins */}
+  1408→              <div className="mt-2 flex flex-wrap gap-1.5">
+  1409→                {WP_FORM_PLUGINS.map((fp) => (
+  1410→                  <Badge key={fp.slug} variant="outline" className="text-[10px] bg-background">
+  1411→                    {fp.name}
+  1412→                  </Badge>
+  1413→                ))}
+  1414→              </div>
+  1415→            </CardHeader>
+  1416→            <CardContent className="space-y-5">
+  1417→              {/* Newly generated config display */}
+  1418→              {wpNewConfig && (
+  1419→                <div className="p-4 rounded-lg border-2 border-emerald-300 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-950/20 space-y-4">
+  1420→                  <div className="flex items-center gap-2">
+  1421→                    <CheckCircle2 className="size-5 text-emerald-600" />
+  1422→                    <span className="font-semibold text-emerald-700 dark:text-emerald-400 text-sm">Integration Configured!</span>
+  1423→                    <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px]" variant="outline">New</Badge>
+  1424→                  </div>
+  1425→                  <p className="text-xs text-muted-foreground">Copy these values into your WordPress plugin settings. The API Key is shown only once.</p>
+  1426→
+  1427→                  {/* API URL */}
+  1428→                  <div className="space-y-1.5">
+  1429→                    <Label className="text-xs font-medium flex items-center gap-1.5">
+  1430→                      <Globe className="size-3" /> API URL
+  1431→                    </Label>
+  1432→                    <div className="flex items-center gap-2">
+  1433→                      <code className="text-xs font-mono bg-white dark:bg-gray-900 px-3 py-1.5 rounded border flex-1 truncate">
+  1434→                        {wpNewConfig.api_url}
+  1435→                      </code>
+  1436→                      <Button variant="outline" size="sm" className="shrink-0 gap-1" onClick={() => copyToClipboard(wpNewConfig.api_url, 'API URL')}>
+  1437→                        <Copy className="size-3" /> Copy
+  1438→                      </Button>
+  1439→                    </div>
+  1440→                  </div>
+  1441→
+  1442→                  {/* API Key */}
+  1443→                  <div className="space-y-1.5">
+  1444→                    <Label className="text-xs font-medium flex items-center gap-1.5">
+  1445→                      <KeyRound className="size-3" /> API Key
+  1446→                      <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200">Show once</Badge>
+  1447→                    </Label>
+  1448→                    <div className="flex items-center gap-2">
+  1449→                      <code className="text-xs font-mono bg-white dark:bg-gray-900 px-3 py-1.5 rounded border flex-1 truncate">
+  1450→                        {wpShowApiKey ? wpNewConfig.api_key : wpNewConfig.api_key.slice(0, 12) + '••••••••••••••••'}
+  1451→                      </code>
+  1452→                      <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8" onClick={() => setWpShowApiKey(!wpShowApiKey)}>
+  1453→                        {wpShowApiKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+  1454→                      </Button>
+  1455→                      <Button variant="outline" size="sm" className="shrink-0 gap-1" onClick={() => copyToClipboard(wpNewConfig.api_key, 'API Key')}>
+  1456→                        <Copy className="size-3" /> Copy
+  1457→                      </Button>
+  1458→                    </div>
+  1459→                  </div>
+  1460→
+  1461→                  {/* Webhook URL */}
+  1462→                  <div className="space-y-1.5">
+  1463→                    <Label className="text-xs font-medium flex items-center gap-1.5">
+  1464→                      <Link2 className="size-3" /> Webhook URL
+  1465→                      <Badge variant="outline" className="text-[9px] bg-sky-50 text-sky-700 border-sky-200">Universal</Badge>
+  1466→                    </Label>
+  1467→                    <div className="flex items-center gap-2">
+  1468→                      <code className="text-xs font-mono bg-white dark:bg-gray-900 px-3 py-1.5 rounded border flex-1 truncate">
+  1469→                        {wpNewConfig.webhook_url}
+  1470→                      </code>
+  1471→                      <Button variant="outline" size="sm" className="shrink-0 gap-1" onClick={() => copyToClipboard(wpNewConfig.webhook_url, 'Webhook URL')}>
+  1472→                        <Copy className="size-3" /> Copy
+  1473→                      </Button>
+  1474→                    </div>
+  1475→                  </div>
+  1476→
+  1477→                  {/* Actions */}
+  1478→                  <div className="flex items-center gap-2 pt-1">
+  1479→                    <Button
+  1480→                      variant="outline"
+  1481→                      size="sm"
+  1482→                      className="gap-1.5"
+  1483→                      onClick={handleTestWpConnection}
+  1484→                      disabled={wpTesting}
+  1485→                    >
+  1486→                      {wpTesting ? <Loader2 className="size-3 animate-spin" /> : <TestTube2 className="size-3" />}
+  1487→                      Test Connection
+  1488→                    </Button>
+  1489→                    <a
+  1490→                      href="/downloads/serviceos-crm-lead-capture.php"
+  1491→                      download="serviceos-crm-lead-capture.php"
+  1492→                      className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded-md border bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
+  1493→                    >
+  1494→                      <Download className="size-3" /> Download Plugin
+  1495→                    </a>
+  1496→                  </div>
+  1497→                </div>
+  1498→              )}
+  1499→
+  1500→              {/* WordPress Plugin download row */}
+  1501→              {!wpNewConfig && (
+  1502→                <div className="flex items-center gap-3 p-3 rounded-lg border border-dashed bg-muted/30">
+  1503→                  <FileCode className="size-5 text-muted-foreground shrink-0" />
+  1504→                  <div className="flex-1 min-w-0">
+  1505→                    <p className="text-sm font-medium">WordPress Plugin</p>
+  1506→                  </div>
+  1507→                  <a
+  1508→                    href="/downloads/serviceos-crm-lead-capture.php"
+  1509→                    download="serviceos-crm-lead-capture.php"
+  1510→                    className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded-md border bg-background hover:bg-accent hover:text-accent-foreground transition-colors shrink-0"
+  1511→                  >
+  1512→                    <Download className="size-3" /> Download
+  1513→                  </a>
+  1514→                </div>
+  1515→              )}
+  1516→
+  1517→              {/* Active Endpoints */}
+  1518→              {wpLoading ? (
+  1519→                <div className="flex items-center justify-center py-6 text-muted-foreground">
+  1520→                  <Loader2 className="size-4 animate-spin mr-2" /> Loading endpoints...
+  1521→                </div>
+  1522→              ) : wpEndpoints.length > 0 ? (
+  1523→                <div className="space-y-2">
+  1524→                  <Separator />
+  1525→                  <p className="text-xs font-medium text-muted-foreground">Active Endpoints</p>
+  1526→                  {wpEndpoints.map((ep) => (
+  1527→                    <div key={ep.id} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors">
+  1528→                      <div className="flex-1 min-w-0">
+  1529→                        <div className="flex items-center gap-2 mb-1">
+  1530→                          <span className="font-medium text-sm truncate">{ep.name}</span>
+  1531→                          <Badge className={ep.active ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'} variant="outline">
+  1532→                            <span className="text-[10px]">{ep.active ? 'Active' : 'Inactive'}</span>
+  1533→                          </Badge>
+  1534→                        </div>
+  1535→                        <span className="text-xs text-muted-foreground font-mono truncate block">{ep.apiUrl}</span>
+  1536→                      </div>
+  1537→                      <Button
+  1538→                        variant="ghost"
+  1539→                        size="icon"
+  1540→                        className="h-7 w-7 text-red-400 hover:text-red-600 shrink-0"
+  1541→                        onClick={() => handleDeleteWpEndpoint(ep.id)}
+  1542→                      >
+  1543→                        <Trash2 className="size-3.5" />
+  1544→                      </Button>
+  1545→                    </div>
+  1546→                  ))}
+  1547→                </div>
+  1548→              ) : null}
+  1549→
+  1550→              {/* Auto-Mapped Form Fields */}
+  1551→              <div>
+  1552→                <Separator className="mb-3" />
+  1553→                <div className="flex items-center justify-between mb-2">
+  1554→                  <p className="text-xs font-medium text-muted-foreground">Auto-Mapped Form Fields</p>
+  1555→                  <Button
+  1556→                    variant="ghost"
+  1557→                    size="sm"
+  1558→                    className="h-6 gap-1 text-xs"
+  1559→                    onClick={() => setEditingFieldMapping(!editingFieldMapping)}
+  1560→                  >
+  1561→                    <Pencil className="size-3" />
+  1562→                    {editingFieldMapping ? 'Done' : 'Edit'}
+  1563→                  </Button>
+  1564→                </div>
+  1565→                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+  1566→                  {[
+  1567→                    { field: 'name', source: 'your-name' },
+  1568→                    { field: 'phone', source: 'your-phone' },
+  1569→                    { field: 'email', source: 'your-email' },
+  1570→                    { field: 'serviceType', source: 'your-subject' },
+  1571→                    { field: 'description', source: 'your-message' },
+  1572→                    { field: 'address', source: 'your-address' },
+  1573→                  ].map((fm) => (
+  1574→                    <div key={fm.field} className="flex items-center gap-2 p-2 rounded-md border text-xs">
+  1575→                      <Badge variant="outline" className="text-[9px] bg-emerald-50 text-emerald-700 border-emerald-200 shrink-0">
+  1576→                        {fm.field}
+  1577→                      </Badge>
+  1578→                      <span className="text-muted-foreground">←</span>
+  1579→                      <span className="text-muted-foreground truncate">{fm.source}</span>
+  1580→                    </div>
+  1581→                  ))}
+  1582→                </div>
+  1583→              </div>
+  1584→            </CardContent>
+  1585→          </Card>
+  1586→
+  1587→          {/* ─── Card 2: WhatsApp Notifications ──────────────────────────────── */}
+  1588→          <Card className="border-emerald-200 dark:border-emerald-800">
+  1589→            <CardHeader>
+  1590→              <div className="flex items-center gap-3">
+  1591→                <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+  1592→                  <MessageSquare className="size-4 text-emerald-600" />
+  1593→                </div>
+  1594→                <div>
+  1595→                  <CardTitle className="text-base">WhatsApp Notifications</CardTitle>
+  1596→                  <CardDescription>Configure WhatsApp messages for WordPress form submissions</CardDescription>
+  1597→                </div>
+  1598→              </div>
+  1599→
+  1600→              {/* Notification Flow diagram */}
+  1601→              <div className="mt-3 p-3 rounded-lg bg-muted/50 border text-xs text-muted-foreground">
+  1602→                <div className="flex items-center gap-1.5 font-medium text-foreground mb-1.5">
+  1603→                  <ArrowRight className="size-3" /> Notification Flow
+  1604→                </div>
+  1605→                <div className="flex items-center gap-1 flex-wrap">
+  1606→                  <span className="px-1.5 py-0.5 bg-background rounded border text-[10px] font-medium">Form Submit</span>
+  1607→                  <ArrowRight className="size-3" />
+  1608→                  <span className="px-1.5 py-0.5 bg-background rounded border text-[10px] font-medium">Lead Created</span>
+  1609→                  <ArrowRight className="size-3" />
+  1610→                  <span className="px-1.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[10px] font-medium">Owner WhatsApp</span>
+  1611→                  <span className="text-[10px] text-muted-foreground mx-1">+</span>
+  1612→                  <span className="px-1.5 py-0.5 bg-sky-50 text-sky-700 border border-sky-200 rounded text-[10px] font-medium">Customer WhatsApp</span>
+  1613→                </div>
+  1614→              </div>
+  1615→            </CardHeader>
+  1616→            <CardContent className="space-y-5">
+  1617→              {/* Section 1: Notify Business Owner */}
+  1618→              <div className="space-y-3">
+  1619→                <div className="flex items-center justify-between">
+  1620→                  <div className="flex items-center gap-2">
+  1621→                    <MessageSquare className="size-4 text-emerald-600" />
+  1622→                    <div>
+  1623→                      <Label className="text-sm font-medium">Notify Business Owner</Label>
+  1624→                      <p className="text-xs text-muted-foreground">Send a WhatsApp notification to the business owner when a new lead arrives</p>
+  1625→                    </div>
+  1626→                  </div>
+  1627→                  <Switch checked={notifyOwner} onCheckedChange={setNotifyOwner} />
+  1628→                </div>
+  1629→
+  1630→                {notifyOwner && (
+  1631→                  <div className="ml-6 pl-4 border-l-2 border-emerald-200 dark:border-emerald-800 space-y-3">
+  1632→                    <div className="space-y-1.5">
+  1633→                      <Label className="text-xs font-medium flex items-center gap-1.5">
+  1634→                        <Phone className="size-3" /> Owner WhatsApp Number
+  1635→                      </Label>
+  1636→                      <Input
+  1637→                        placeholder="+91 98765 43210"
+  1638→                        value={whatsappPhone}
+  1639→                        onChange={(e) => setWhatsappPhone(e.target.value)}
+  1640→                      />
+  1641→                    </div>
+  1642→                    <div className="space-y-1.5">
+  1643→                      <div className="flex items-center justify-between">
+  1644→                        <Label className="text-xs font-medium">Owner Message Template</Label>
+  1645→                        <Button
+  1646→                          variant="ghost"
+  1647→                          size="sm"
+  1648→                          className="h-6 gap-1 text-xs text-emerald-600 hover:text-emerald-700"
+  1649→                          onClick={() => handleAiGenerate('owner')}
+  1650→                        >
+  1651→                          <Sparkles className="size-3" /> AI Generate
+  1652→                        </Button>
+  1653→                      </div>
+  1654→                      <Textarea
+  1655→                        rows={8}
+  1656→                        value={ownerTemplate}
+  1657→                        onChange={(e) => setOwnerTemplate(e.target.value)}
+  1658→                        className="text-xs font-mono"
+  1659→                      />
+  1660→                      <p className="text-[10px] text-muted-foreground">
+  1661→                        Available variables: {'{{name}}'}, {'{{phone}}'}, {'{{email}}'}, {'{{serviceType}}'}, {'{{description}}'}, {'{{address}}'}
+  1662→                      </p>
+  1663→                    </div>
+  1664→                  </div>
+  1665→                )}
+  1666→              </div>
+  1667→
+  1668→              <Separator />
+  1669→
+  1670→              {/* Section 2: Auto-Reply to Customer */}
+  1671→              <div className="space-y-3">
+  1672→                <div className="flex items-center justify-between">
+  1673→                  <div className="flex items-center gap-2">
+  1674→                    <MessageSquare className="size-4 text-sky-600" />
+  1675→                    <div>
+  1676→                      <Label className="text-sm font-medium">Auto-Reply to Customer</Label>
+  1677→                      <p className="text-xs text-muted-foreground">Automatically send a WhatsApp reply to the customer who submitted the form</p>
+  1678→                    </div>
+  1679→                  </div>
+  1680→                  <Switch checked={notifyCustomer} onCheckedChange={setNotifyCustomer} />
+  1681→                </div>
+  1682→
+  1683→                {notifyCustomer && (
+  1684→                  <div className="ml-6 pl-4 border-l-2 border-sky-200 dark:border-sky-800 space-y-3">
+  1685→                    <div className="space-y-1.5">
+  1686→                      <div className="flex items-center justify-between">
+  1687→                        <Label className="text-xs font-medium">Customer Message Template</Label>
+  1688→                        <Button
+  1689→                          variant="ghost"
+  1690→                          size="sm"
+  1691→                          className="h-6 gap-1 text-xs text-sky-600 hover:text-sky-700"
+  1692→                          onClick={() => handleAiGenerate('customer')}
+  1693→                        >
+  1694→                          <Sparkles className="size-3" /> AI Generate
+  1695→                        </Button>
+  1696→                      </div>
+  1697→                      <Textarea
+  1698→                        rows={6}
+  1699→                        value={customerTemplate}
+  1700→                        onChange={(e) => setCustomerTemplate(e.target.value)}
+  1701→                        className="text-xs font-mono"
+  1702→                      />
+  1703→                      <p className="text-[10px] text-muted-foreground">
+  1704→                        Available variables: {'{{name}}'}, {'{{phone}}'}, {'{{serviceType}}'}, {'{{description}}'}, {'{{companyName}}'}
+  1705→                      </p>
+  1706→                    </div>
+  1707→                  </div>
+  1708→                )}
+  1709→              </div>
+  1710→
+  1711→              {/* Save button */}
+  1712→              <div className="flex justify-end">
+  1713→                <Button
+  1714→                  className="bg-emerald-600 hover:bg-emerald-700 gap-1.5 min-w-[160px]"
+  1715→                  onClick={handleSaveWhatsappSettings}
+  1716→                  disabled={whatsappSettingsSaving}
+  1717→                >
+  1718→                  {whatsappSettingsSaving ? (
+  1719→                    <Loader2 className="size-4 animate-spin" />
+  1720→                  ) : (
+  1721→                    <Save className="size-4" />
+  1722→                  )}
+  1723→                  Save WhatsApp Settings
+  1724→                </Button>
+  1725→              </div>
+  1726→            </CardContent>
+  1727→          </Card>
+  1728→
+  1729→          {/* ─── Card 3: Event Webhooks ───────────────────────────────────────── */}
+  1730→          <Card>
+  1731→            <CardHeader>
+  1732→              <div className="flex items-center justify-between">
+  1733→                <div className="flex items-center gap-3">
+  1734→                  <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+  1735→                    <Zap className="size-4 text-emerald-600" />
+  1736→                  </div>
+  1737→                  <div>
+  1738→                    <CardTitle className="text-base">Event Webhooks</CardTitle>
+  1739→                    <CardDescription>Configure n8n / Zapier webhooks on job events</CardDescription>
+  1740→                  </div>
+  1741→                </div>
+  1742→                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 gap-1.5" onClick={() => setShowAddWebhook(true)}>
+  1743→                  <Plus className="size-3.5" /> Add Webhook
+  1744→                </Button>
+  1745→              </div>
+  1746→
+  1747→              {/* Flow diagram */}
+  1748→              <div className="mt-3 p-3 rounded-lg bg-muted/50 border text-xs text-muted-foreground">
+  1749→                <div className="flex items-center gap-1.5 font-medium text-foreground mb-1">
+  1750→                  <Zap className="size-3" /> How it works
+  1751→                </div>
+  1752→                <div className="flex items-center gap-1 flex-wrap">
+  1753→                  <span className="px-1.5 py-0.5 bg-background rounded border text-[10px] font-medium">Job Event</span>
+  1754→                  <ArrowRight className="size-3" />
+  1755→                  <span className="px-1.5 py-0.5 bg-background rounded border text-[10px] font-medium">Save to DB</span>
+  1756→                  <ArrowRight className="size-3" />
+  1757→                  <span className="px-1.5 py-0.5 bg-background rounded border text-[10px] font-medium">POST to n8n</span>
+  1758→                  <ArrowRight className="size-3" />
+  1759→                  <span className="px-1.5 py-0.5 bg-background rounded border text-[10px] font-medium">WhatsApp</span>
+  1760→                </div>
+  1761→              </div>
+  1762→            </CardHeader>
+  1763→            <CardContent>
+  1764→              {webhookLoading ? (
+  1765→                <div className="flex items-center justify-center py-8 text-muted-foreground">
+  1766→                  <Loader2 className="size-5 animate-spin mr-2" /> Loading webhooks...
+  1767→                </div>
+  1768→              ) : webhooks.length === 0 ? (
+  1769→                <div className="text-center py-8 text-muted-foreground">
+  1770→                  <Zap className="size-8 mx-auto mb-2 opacity-20" />
+  1771→                  <p className="text-sm font-medium">No event webhooks configured</p>
+  1772→                  <p className="text-xs">Add a webhook URL to trigger n8n workflows when job events occur</p>
+  1773→                </div>
+  1774→              ) : (
+  1775→                <ScrollArea className="max-h-96">
+  1776→                  <div className="space-y-2">
+  1777→                    {webhooks.map((wh) => (
+  1778→                      <div key={wh.id} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors">
+  1779→                        <div className="flex-1 min-w-0">
+  1780→                          <div className="flex items-center gap-2 mb-1">
+  1781→                            <span className="font-medium text-sm truncate">{wh.name}</span>
+  1782→                            <Badge variant="outline" className={`${EVENT_COLORS[wh.event] || 'bg-gray-100 text-gray-600'} text-[10px] shrink-0`}>
+  1783→                              {wh.event.replace('job.', '')}
+  1784→                            </Badge>
+  1785→                            {wh.active ? (
+  1786→                              <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px] shrink-0" variant="outline">
+  1787→                                <CheckCircle2 className="size-2.5 mr-0.5" /> Active
+  1788→                              </Badge>
+  1789→                            ) : (
+  1790→                              <Badge className="bg-slate-100 text-slate-500 border-slate-200 text-[10px] shrink-0" variant="outline">
+  1791→                                Disabled
+  1792→                              </Badge>
+  1793→                            )}
+  1794→                          </div>
+  1795→                          <p className="text-xs text-muted-foreground font-mono truncate">{wh.url}</p>
+  1796→                          {wh.lastTriggered && (
+  1797→                            <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
+  1798→                              <Clock className="size-2.5" />
+  1799→                              Last: {new Date(wh.lastTriggered).toLocaleString()}
+  1800→                              {wh.lastStatus === 'success' && <CheckCircle2 className="size-2.5 text-emerald-500" />}
+  1801→                              {wh.lastStatus === 'failed' && <XCircle className="size-2.5 text-red-500" />}
+  1802→                              {wh.failCount > 0 && <span className="text-red-500">({wh.failCount} failures)</span>}
+  1803→                            </div>
+  1804→                          )}
+  1805→                        </div>
+  1806→                        <div className="flex items-center gap-1 shrink-0">
+  1807→                          <Button
+  1808→                            variant="ghost"
+  1809→                            size="icon"
+  1810→                            className="h-7 w-7"
+  1811→                            onClick={() => handleTestWebhook(wh.event)}
+  1812→                            disabled={testingWebhook === wh.event}
+  1813→                            title="Test this webhook"
+  1814→                          >
+  1815→                            {testingWebhook === wh.event ? (
+  1816→                              <Loader2 className="size-3.5 animate-spin" />
+  1817→                            ) : (
+  1818→                              <TestTube2 className="size-3.5" />
+  1819→                            )}
+  1820→                          </Button>
+  1821→                          <Switch
+  1822→                            checked={wh.active}
+  1823→                            onCheckedChange={(checked) => handleToggleWebhook(wh.id, checked)}
+  1824→                            className="scale-75"
+  1825→                          />
+  1826→                          <Button
+  1827→                            variant="ghost"
+  1828→                            size="icon"
+  1829→                            className="h-7 w-7 text-red-400 hover:text-red-600"
+  1830→                            onClick={() => handleDeleteWebhook(wh.id)}
+  1831→                          >
+  1832→                            <Trash2 className="size-3.5" />
+  1833→                          </Button>
+  1834→                        </div>
+  1835→                      </div>
+  1836→                    ))}
+  1837→                  </div>
+  1838→                </ScrollArea>
+  1839→              )}
+  1840→
+  1841→              {/* Available Events */}
+  1842→              {eventTypes.length > 0 && (
+  1843→                <div className="mt-4">
+  1844→                  <Separator className="mb-3" />
+  1845→                  <p className="text-xs font-medium text-muted-foreground mb-2">Available Events</p>
+  1846→                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+  1847→                    {eventTypes.map((et) => (
+  1848→                      <button
+  1849→                        key={et.value}
+  1850→                        className="flex items-center gap-2 p-2 rounded-md border text-xs hover:bg-muted/50 transition-colors text-left"
+  1851→                        onClick={() => {
+  1852→                          setWebhookForm({ ...webhookForm, event: et.value, name: `n8n - ${et.label}` });
+  1853→                          setShowAddWebhook(true);
+  1854→                        }}
+  1855→                      >
+  1856→                        <Badge variant="outline" className={`${EVENT_COLORS[et.value] || ''} text-[9px] shrink-0`}>
+  1857→                          {et.value.replace('job.', '')}
+  1858→                        </Badge>
+  1859→                        <span className="truncate">{et.description}</span>
+  1860→                      </button>
+  1861→                    ))}
+  1862→                  </div>
+  1863→                </div>
+  1864→              )}
+  1865→            </CardContent>
+  1866→          </Card>
+  1867→
+  1868→          {/* Add Webhook Dialog */}
+  1869→          <Dialog open={showAddWebhook} onOpenChange={setShowAddWebhook}>
+  1870→            <DialogContent className="max-w-lg">
+  1871→              <DialogHeader>
+  1872→                <DialogTitle>Add Event Webhook</DialogTitle>
+  1873→                <DialogDescription>Configure a webhook URL (e.g., n8n workflow) that fires when a job event occurs</DialogDescription>
+  1874→              </DialogHeader>
+  1875→              <div className="space-y-4 py-2">
+  1876→                <div className="space-y-2">
+  1877→                  <Label>Webhook Name</Label>
+  1878→                  <Input
+  1879→                    placeholder="e.g., n8n - Job Created → WhatsApp Employee"
+  1880→                    value={webhookForm.name}
+  1881→                    onChange={(e) => setWebhookForm({ ...webhookForm, name: e.target.value })}
+  1882→                  />
+  1883→                </div>
+  1884→                <div className="space-y-2">
+  1885→                  <Label>Event Trigger</Label>
+  1886→                  <Select value={webhookForm.event} onValueChange={(v) => setWebhookForm({ ...webhookForm, event: v })}>
+  1887→                    <SelectTrigger><SelectValue /></SelectTrigger>
+  1888→                    <SelectContent>
+  1889→                      {eventTypes.map((et) => (
+  1890→                        <SelectItem key={et.value} value={et.value}>
+  1891→                          {et.label} — {et.description}
+  1892→                        </SelectItem>
+  1893→                      ))}
+  1894→                    </SelectContent>
+  1895→                  </Select>
+  1896→                </div>
+  1897→                <div className="space-y-2">
+  1898→                  <Label>Webhook URL</Label>
+  1899→                  <Input
+  1900→                    placeholder="https://n8n.yourdomain.com/webhook/abc123"
+  1901→                    value={webhookForm.url}
+  1902→                    onChange={(e) => setWebhookForm({ ...webhookForm, url: e.target.value })}
+  1903→                  />
+  1904→                  <p className="text-[10px] text-muted-foreground">
+  1905→                    The URL from your n8n workflow webhook trigger. ServiceOS will POST job data here when the event fires.
+  1906→                  </p>
+  1907→                </div>
+  1908→                <div className="flex items-center justify-between">
+  1909→                  <div>
+  1910→                    <Label className="text-sm">Active</Label>
+  1911→                    <p className="text-[10px] text-muted-foreground">Enable this webhook immediately</p>
+  1912→                  </div>
+  1913→                  <Switch
+  1914→                    checked={webhookForm.active}
+  1915→                    onCheckedChange={(checked) => setWebhookForm({ ...webhookForm, active: checked })}
+  1916→                  />
+  1917→                </div>
+  1918→              </div>
+  1919→              <DialogFooter>
+  1920→                <Button variant="outline" onClick={() => setShowAddWebhook(false)}>Cancel</Button>
+  1921→                <Button
+  1922→                  className="bg-emerald-600 hover:bg-emerald-700"
+  1923→                  onClick={handleAddWebhook}
+  1924→                  disabled={!webhookForm.name || !webhookForm.url}
+  1925→                >
+  1926→                  Create Webhook
+  1927→                </Button>
+  1928→              </DialogFooter>
+  1929→            </DialogContent>
+  1930→          </Dialog>
+  1931→        </TabsContent>
+  1932→
+  1933→        {/* ═══════════════════════════════════════════════════════════════════
+  1934→            Billing Tab
+  1935→            ═══════════════════════════════════════════════════════════════════ */}
+  1936→        <TabsContent value="billing" className="space-y-6">
+  1937→          {/* Current Plan */}
+  1938→          <Card>
+  1939→            <CardHeader>
+  1940→              <div className="flex items-center gap-3">
+  1941→                <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
+  1942→                  <CreditCard className="size-4 text-emerald-600" />
+  1943→                </div>
+  1944→                <div>
+  1945→                  <CardTitle className="text-base">Subscription Plan</CardTitle>
+  1946→                  <CardDescription>Manage your subscription and billing</CardDescription>
+  1947→                </div>
+  1948→              </div>
+  1949→            </CardHeader>
+  1950→            <CardContent className="space-y-4">
+  1951→              {/* Current Plan Banner */}
+  1952→              <div className="p-4 rounded-lg border-2 border-emerald-300 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-950/20">
+  1953→                <div className="flex items-center justify-between mb-2">
+  1954→                  <div className="flex items-center gap-2">
+  1955→                    <Crown className="size-5 text-emerald-600" />
+  1956→                    <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+  1957→                      {billingPlan === 'pro' ? 'Pro' : billingPlan === 'growth' ? 'Growth' : billingPlan === 'enterprise' ? 'Enterprise' : 'Starter'} Plan
+  1958→                    </span>
+  1959→                  </div>
+  1960→                  <Badge className={`${planStatus === 'active' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : planStatus === 'trial' ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-red-100 text-red-700 border-red-200'} text-[10px]`} variant="outline">
+  1961→                    {planStatus === 'active' ? 'Active' : planStatus === 'trial' ? 'Trial' : planStatus === 'past_due' ? 'Past Due' : planStatus}
+  1962→                  </Badge>
+  1963→                </div>
+  1964→                {trialEndsAt && planStatus === 'trial' && (
+  1965→                  <p className="text-xs text-muted-foreground">
+  1966→                    Trial ends on {new Date(trialEndsAt).toLocaleDateString()}
+  1967→                  </p>
+  1968→                )}
+  1969→              </div>
+  1970→
+  1971→              {/* Plan Cards */}
+  1972→              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+  1973→                {[
+  1974→                  { id: 'starter', name: 'Starter', price: 'Free', features: ['Up to 3 users', '50 leads/month', 'Basic reporting', 'Email support'], current: billingPlan === 'starter' },
+  1975→                  { id: 'growth', name: 'Growth', price: '$29/mo', features: ['Up to 15 users', '500 leads/month', 'Advanced reporting', 'Priority support', 'WhatsApp integration'], current: billingPlan === 'growth' },
+  1976→                  { id: 'pro', name: 'Pro', price: '$79/mo', features: ['Unlimited users', 'Unlimited leads', 'Custom workflows', 'API access', 'White-label', 'Dedicated support'], current: billingPlan === 'pro' },
+  1977→                  { id: 'enterprise', name: 'Enterprise', price: 'Custom', features: ['Everything in Pro', 'Custom integrations', 'SLA guarantee', 'On-premise option', 'Training sessions'], current: billingPlan === 'enterprise' },
+  1978→                ].map((plan) => (
+  1979→                  <div key={plan.id} className={`p-4 rounded-lg border-2 transition-colors ${plan.current ? 'border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20' : 'border-border hover:border-emerald-200'}`}>
+  1980→                    <div className="flex items-center justify-between mb-2">
+  1981→                      <span className="font-semibold text-sm">{plan.name}</span>
+  1982→                      {plan.current && (
+  1983→                        <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[9px]" variant="outline">
+  1984→                          Current
+  1985→                        </Badge>
+  1986→                      )}
+  1987→                    </div>
+  1988→                    <p className="text-lg font-bold text-emerald-600 mb-3">{plan.price}</p>
+  1989→                    <ul className="space-y-1.5 mb-4">
+  1990→                      {plan.features.map((f) => (
+  1991→                        <li key={f} className="text-xs text-muted-foreground flex items-center gap-1.5">
+  1992→                          <Check className="size-3 text-emerald-500 shrink-0" />
+  1993→                          {f}
+  1994→                        </li>
+  1995→                      ))}
+  1996→                    </ul>
+  1997→                    <Button
+  1998→                      variant={plan.current ? 'outline' : 'default'}
+  1999→                      size="sm"
+  2000→                      className={`w-full ${plan.current ? '' : 'bg-emerald-600 hover:bg-emerald-700'}`}
+
+[showing lines 1-2000 of 2478; use offset=2001 with limit to continue reading]

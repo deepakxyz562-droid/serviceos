@@ -122,6 +122,39 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
   const [loginTab, setLoginTab] = useState<LoginTab>('business');
   const [isLoading, setIsLoading] = useState(false);
 
+  // Auth methods state — fetched from backend
+  const [authMethods, setAuthMethods] = useState<{
+    emailPassword: boolean;
+    whatsappOtp: boolean;
+    google: boolean;
+    smsOtp: boolean;
+    twoFactor: boolean;
+    tenantWhatsappOtp: { customer: boolean; employee: boolean; employee2fa: boolean };
+  }>({
+    emailPassword: true,
+    whatsappOtp: false,
+    google: false,
+    smsOtp: false,
+    twoFactor: false,
+    tenantWhatsappOtp: { customer: false, employee: false, employee2fa: false },
+  });
+
+  // Fetch auth methods on mount
+  useEffect(() => {
+    async function fetchAuthMethods() {
+      try {
+        const res = await fetch('/api/auth/methods?XTransformPort=3000');
+        if (res.ok) {
+          const data = await res.json();
+          setAuthMethods(data);
+        }
+      } catch {
+        // Silently fail — defaults will be used
+      }
+    }
+    fetchAuthMethods();
+  }, []);
+
   // Business Login state
   const [businessTab, setBusinessTab] = useState<BusinessTab>('login');
   const [loginEmail, setLoginEmail] = useState('');
@@ -957,7 +990,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
             transition={{ delay: 0.1, duration: 0.4 }}
             className="mb-6"
           >
-            <div className="flex rounded-xl bg-slate-100 p-1.5 gap-1.5">
+            <div className={`flex rounded-xl bg-slate-100 p-1.5 gap-1.5 ${authMethods.whatsappOtp && authMethods.tenantWhatsappOtp.customer ? '' : 'hidden'}`}>
               {/* Business Login Tab */}
               <button
                 type="button"

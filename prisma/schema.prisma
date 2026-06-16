@@ -1154,6 +1154,40 @@ model OtpVerification {
   @@index([expiresAt])
 }
 
+// ==========================================
+// PLATFORM AUTH SETTINGS (Super Admin)
+// ==========================================
+
+model PlatformAuthSettings {
+  id                          String   @id @default("platform")  // singleton
+  // Email + Password (always enabled, kept for reference)
+  emailPasswordEnabled        Boolean  @default(true)
+  // SMS OTP
+  smsOtpEnabled               Boolean  @default(false)
+  smsOtpProvider              String?  // e.g. "twilio", "messagebird"
+  smsOtpConfigJson            String   @default("{}")  // provider-specific config (accountSid, authToken, etc.)
+  // WhatsApp OTP
+  whatsappOtpEnabled          Boolean  @default(false)
+  whatsappOtpProvider         String?  // e.g. "meta_cloud_api", "twilio_whatsapp"
+  whatsappOtpAccessToken      String?
+  whatsappOtpPhoneNumberId    String?
+  whatsappOtpBusinessId       String?
+  whatsappOtpTemplate         String?  // template name e.g. "login_otp"
+  whatsappOtpConfigJson       String   @default("{}")  // extra provider config
+  // Google OAuth
+  googleEnabled               Boolean  @default(false)
+  googleClientId              String?
+  googleClientSecret          String?
+  // Two-Factor Authentication
+  twoFactorEnabled            Boolean  @default(false)
+  twoFactorMethods            String   @default("[]")  // JSON array of enabled methods: ["app", "sms", "whatsapp", "email"]
+  // General
+  otpLength                   Int      @default(6)
+  otpExpirySeconds           Int      @default(300)  // 5 minutes
+  maxOtpAttempts              Int      @default(3)
+  updatedAt                   DateTime @updatedAt
+}
+
 model IntegrationConfig {
   id              String   @id @default(cuid())
   name            String   // e.g., "n8n", "Zapier", "Custom Webhook"

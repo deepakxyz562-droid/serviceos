@@ -113,9 +113,6 @@ const TABLE_MAP: Record<string, string> = {
   document: 'Document',
   invitation: 'Invitation',
   knowledgeArticle: 'KnowledgeArticle',
-  leadDiscovery: 'LeadDiscovery',
-  leadDiscoverySearch: 'LeadDiscoverySearch',
-  reviewRequest: 'ReviewRequest',
   conversationAssignment: 'ConversationAssignment',
   conversationExport: 'ConversationExport',
   conversationLabel: 'ConversationLabel',
@@ -126,6 +123,11 @@ const TABLE_MAP: Record<string, string> = {
   securityEvent: 'SecurityEvent',
   auditLogEntry: 'AuditLogEntry',
   otpVerification: 'OtpVerification',
+  platformAuthSettings: 'PlatformAuthSettings',
+  integrationConnection: 'IntegrationConnection',
+  ecommerceOrder: 'EcommerceOrder',
+  ecommerceProduct: 'EcommerceProduct',
+  ecommerceSyncLog: 'EcommerceSyncLog',
 };
 
 // Known missing tables in Supabase (return empty results gracefully)
