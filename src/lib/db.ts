@@ -1,8 +1,14 @@
 import { PrismaClient } from '@prisma/client'
 import { shouldUseSupabaseDB, supabaseDb } from './supabase-db'
 
+// Bump this when the Prisma schema gains new models so the dev server's
+// global PrismaClient singleton is recreated (picks up the new models
+// without requiring a full process restart).
+const PRISMA_SCHEMA_VERSION = '2026-06-17-payment-method'
+
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
+  __prismaSchemaVersion?: string
 }
 
 function createPrismaClient() {
@@ -42,10 +48,31 @@ if (useSupabase) {
   console.log('[DB]   - SUPABASE_SERVICE_ROLE_KEY=eyJ...')
 }
 
+// In development, invalidate the global PrismaClient singleton when the
+// schema version changes so newly added models are picked up without a
+// full server restart.
+const shouldRecreate =
+  !useSupabase &&
+  process.env.NODE_ENV !== 'production' &&
+  (globalForPrisma.__prismaSchemaVersion !== PRISMA_SCHEMA_VERSION || !globalForPrisma.prisma)
+
+if (shouldRecreate && globalForPrisma.prisma) {
+  console.log('[DB] 🔄 Prisma schema version changed — recreating PrismaClient')
+  try {
+    void globalForPrisma.prisma.$disconnect()
+  } catch {
+    // ignore
+  }
+  globalForPrisma.prisma = undefined
+}
+
 // Export either Prisma client or Supabase adapter
 // Both provide the same db.model.method() interface
 export const db = useSupabase
   ? supabaseDb as unknown as PrismaClient
   : (globalForPrisma.prisma ?? createPrismaClient())
 
-if (!useSupabase && process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db as PrismaClient
+if (!useSupabase && process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = db as PrismaClient
+  globalForPrisma.__prismaSchemaVersion = PRISMA_SCHEMA_VERSION
+}

@@ -152,7 +152,14 @@ export function AcceptInvitation({ token, onAuthSuccess, onBackToLanding }: Acce
   }, [token]);
 
   useEffect(() => {
-    verifyToken();
+    let cancelled = false;
+    (async () => {
+      if (cancelled) return;
+      await verifyToken();
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [verifyToken]);
 
   // ─── Handle form submission ───────────────────────────────────────────────

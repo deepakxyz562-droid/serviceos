@@ -276,7 +276,7 @@ export function ContactsView() {
       });
       setFieldMapping(mapping);
     } else {
-      // For xlsx/xls, send to API for parsing
+      // For xlsx/xls, send to API for server-side parsing
       const formData = new FormData();
       formData.append('file', file);
       try {
@@ -286,8 +286,12 @@ export function ContactsView() {
           setImportHeaders(data.headers || []);
           setImportPreview(data.preview || []);
           setFieldMapping(data.mapping || {});
+          if (data.totalRows) {
+            toast.info(`Found ${data.totalRows} rows in file`);
+          }
         } else {
-          toast.error('Failed to parse file. Please use CSV format.');
+          const errData = await res.json().catch(() => ({}));
+          toast.error(errData.error || 'Failed to parse file. Please use CSV or XLSX format.');
         }
       } catch {
         toast.error('Failed to parse file');
@@ -297,12 +301,20 @@ export function ContactsView() {
 
   const handleImport = async () => {
     if (importPreview.length === 0) return;
+
+    // Validate that at least one column is mapped to 'name'
+    const hasNameMapping = Object.values(fieldMapping).includes('name');
+    if (!hasNameMapping) {
+      toast.error('Please map at least one column to the "Name" field. The name field is required.');
+      return;
+    }
+
     setImporting(true);
     try {
-      // For CSV, map fields on client side and send JSON
       const ext = importFile?.name.split('.').pop()?.toLowerCase();
 
       if (ext === 'csv') {
+        // CSV: map on client side, send JSON
         const text = await importFile!.text();
         const allRows = parseCSV(text);
         const mappedContacts = allRows.map(row => {
@@ -313,6 +325,12 @@ export function ContactsView() {
           });
           return contact;
         }).filter(c => c.name);
+
+        if (mappedContacts.length === 0) {
+          toast.error('No rows with a valid name found after mapping. Please check your column mapping.');
+          setImporting(false);
+          return;
+        }
 
         const res = await fetch('/api/contacts/import', {
           method: 'POST',
@@ -325,9 +343,11 @@ export function ContactsView() {
           toast.success(`Imported ${stats.imported} contacts`);
           fetchContacts();
         } else {
-          toast.error('Import failed');
+          const errData = await res.json().catch(() => ({}));
+          toast.error(errData.error || 'Import failed');
         }
       } else {
+        // XLSX/XLS: send file to server with mapping
         const formData = new FormData();
         if (importFile) formData.append('file', importFile);
         formData.append('mapping', JSON.stringify(fieldMapping));
@@ -338,7 +358,8 @@ export function ContactsView() {
           toast.success(`Imported ${stats.imported} contacts`);
           fetchContacts();
         } else {
-          toast.error('Import failed');
+          const errData = await res.json().catch(() => ({}));
+          toast.error(errData.error || 'Import failed');
         }
       }
     } catch {

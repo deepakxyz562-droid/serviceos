@@ -22,6 +22,10 @@ const SaaSOnboarding = dynamic(
   () => import('@/components/onboarding/saas-onboarding').then(m => ({ default: m.SaaSOnboarding })),
   { ssr: false, loading: () => <ViewLoader /> }
 );
+const ActivationPage = dynamic(
+  () => import('@/components/auth/activation-page').then(m => ({ default: m.ActivationPage })),
+  { ssr: false, loading: () => <ViewLoader /> }
+);
 const AppLayout = dynamic(
   () => import('@/components/layout/app-layout').then(m => ({ default: m.AppLayout })),
   { ssr: false, loading: () => <ViewLoader /> }
@@ -73,6 +77,7 @@ export default function HomePage() {
   const [unauthView, setUnauthView] = useState<UnauthView>('landing');
   const [googleOnboarding, setGoogleOnboarding] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activationToken, setActivationToken] = useState<string | null>(null);
 
   // Handle Google OAuth callback URL parameters
   const [googleOnboardingData, setGoogleOnboardingData] = useState<{ email: string; name: string; avatar: string }>({ email: '', name: '', avatar: '' });
@@ -85,6 +90,15 @@ export default function HomePage() {
       const googleLogin = params.get('google_login');
       const googleOnboardingParam = params.get('google_onboarding');
       const authError = params.get('auth_error');
+      const activateToken = params.get('activate');
+
+      // ── Activation flow: customer clicked a magic link in their email ──
+      if (activateToken) {
+        setActivationToken(activateToken);
+        // Clean the URL so a refresh doesn't re-trigger activation
+        window.history.replaceState({}, '', window.location.pathname);
+        return;
+      }
 
       if (authError) {
         toast.error('Authentication failed', {
@@ -299,6 +313,27 @@ export default function HomePage() {
   // Don't render anything until client-side mounted
   if (isLoading) {
     return <ViewLoader />;
+  }
+
+  // ── Activation flow: customer is setting up their portal password ──
+  if (activationToken) {
+    return (
+      <>
+        <ActivationPage
+          token={activationToken}
+          onAuthSuccess={(user, tenant) => {
+            setActivationToken(null);
+            handleAuthSuccess(user, tenant);
+          }}
+          onBackToLanding={() => {
+            setActivationToken(null);
+            setUnauthView('auth');
+          }}
+        />
+        <PWAInstallBanner />
+        <IOSInstallBanner />
+      </>
+    );
   }
 
   // Show error state

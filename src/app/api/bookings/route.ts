@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // GET /api/bookings — List bookings with filters
 export async function GET(request: NextRequest) {
   try {
-    const user = await getAuthUser(request);
+    const user = await getAuthUser();
     if (!user || !user.tenantId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
@@ -29,6 +29,16 @@ export async function GET(request: NextRequest) {
       tenantId: user.tenantId,
     };
 
+    // ── Customer scoping: a customer can only ever see their own bookings ──
+    if (user.role === 'customer') {
+      const ownCustomerId = user.id.startsWith('cust_')
+        ? user.id.slice(5)
+        : user.id;
+      where.customerId = ownCustomerId;
+    } else if (customerId) {
+      where.customerId = customerId;
+    }
+
     if (status) {
       const statuses = status.split(',');
       if (statuses.length === 1) {
@@ -38,7 +48,6 @@ export async function GET(request: NextRequest) {
       }
     }
     if (employeeId) where.employeeId = employeeId;
-    if (customerId) where.customerId = customerId;
     if (serviceId) where.serviceId = serviceId;
     if (source) where.source = source;
 
@@ -93,9 +102,16 @@ export async function GET(request: NextRequest) {
 }
 
 // POST /api/bookings — Create booking
+//
+// When the authenticated user is a customer (role === 'customer'), the
+// customerId / customerName / customerEmail / customerPhone are forced to the
+// customer's own record (the JWT id is stored as `cust_<customerId>`). This
+// prevents a customer from creating bookings under another customer's name.
+// Customer-initiated bookings are always created with source='website' and
+// status='pending' (the business must confirm them).
 export async function POST(request: NextRequest) {
   try {
-    const user = await getAuthUser(request);
+    const user = await getAuthUser();
     if (!user || !user.tenantId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
@@ -128,19 +144,58 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Auto-confirm if source is manual
-    const initialStatus = source === 'manual' ? 'confirmed' : 'pending';
+    // ── Customer-initiated booking: lock the customer fields to self ──
+    let resolvedCustomerId = customerId || null;
+    let resolvedCustomerName = customerName || null;
+    let resolvedCustomerPhone = customerPhone || null;
+    let resolvedCustomerEmail = customerEmail || null;
+    let resolvedSource = source || 'manual';
+    let resolvedWorkspaceId = workspaceId || user.workspaceId;
+
+    if (user.role === 'customer') {
+      const ownCustomerId = user.id.startsWith('cust_')
+        ? user.id.slice(5)
+        : user.id;
+      // Fetch the customer's own record to populate name/phone/email
+      const ownCustomer = await db.customer.findFirst({
+        where: {
+          id: ownCustomerId,
+          workspace: { tenantId: user.tenantId },
+        },
+        select: { id: true, name: true, phone: true, email: true, workspaceId: true },
+      });
+      if (!ownCustomer) {
+        return NextResponse.json(
+          { error: 'Your customer profile could not be found.' },
+          { status: 404 }
+        );
+      }
+      resolvedCustomerId = ownCustomer.id;
+      resolvedCustomerName = ownCustomer.name;
+      resolvedCustomerPhone = ownCustomer.phone;
+      resolvedCustomerEmail = ownCustomer.email || null;
+      resolvedSource = 'website'; // customers always create website-source bookings
+      resolvedWorkspaceId = ownCustomer.workspaceId || user.workspaceId;
+    }
+
+    // Auto-confirm only for admin/owner manual bookings; customers always start pending
+    const initialStatus =
+      user.role === 'customer'
+        ? 'pending'
+        : resolvedSource === 'manual'
+        ? 'confirmed'
+        : 'pending';
 
     const booking = await db.booking.create({
       data: {
         title,
         description: description || null,
         status: initialStatus,
-        source: source || 'manual',
-        customerId: customerId || null,
-        customerName: customerName || null,
-        customerPhone: customerPhone || null,
-        customerEmail: customerEmail || null,
+        source: resolvedSource,
+        customerId: resolvedCustomerId,
+        customerName: resolvedCustomerName,
+        customerPhone: resolvedCustomerPhone,
+        customerEmail: resolvedCustomerEmail,
         employeeId: employeeId || null,
         serviceId: serviceId || null,
         branchId: branchId || null,
@@ -151,7 +206,7 @@ export async function POST(request: NextRequest) {
         notes: notes || null,
         confirmedAt: initialStatus === 'confirmed' ? new Date() : null,
         tenantId: user.tenantId,
-        workspaceId: workspaceId || user.workspaceId,
+        workspaceId: resolvedWorkspaceId,
         metadataJson: metadataJson || '{}',
       },
       include: {

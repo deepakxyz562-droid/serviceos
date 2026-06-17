@@ -58,6 +58,7 @@ model Tenant {
   workflowAutomations WorkflowAutomation[]
   menuItemConfigs   MenuItemConfig[]
   featureFlags      FeatureFlag[]
+  invitations       Invitation[]
 
   @@index([slug])
   @@index([plan])
@@ -137,6 +138,7 @@ model User {
   notifications Notification[]
   employeeAccount Employee?
   employeeStatusLogs EmployeeStatusLog[]
+  sentInvitations Invitation[]
 
   @@index([email])
   @@index([tenantId])
@@ -448,6 +450,7 @@ model Workspace {
   contactLists  ContactList[]
   folders       Folder[]
   webhookSources WebhookSource[]
+  invitations   Invitation[]
 
   @@index([tenantId])
 }
@@ -661,6 +664,10 @@ model Employee {
   notificationLogs NotificationLog[]
   bookings        Booking[]
   documents       Document[]
+  invitations     Invitation[]
+
+  // ── Enterprise Invitation Management ──
+  invitationStatus  String  @default("none") // none | pending | accepted | suspended
 
   @@index([role])
   @@index([status])
@@ -668,6 +675,7 @@ model Employee {
   @@index([lastSeenAt])
   @@index([currentJobId])
   @@index([userId])
+  @@index([invitationStatus])
 }
 
 model EmployeeStatusLog {
@@ -730,6 +738,18 @@ model Customer {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
+  // ── Portal Account Auth (Email/Phone + Password with auto tenant discovery) ──
+  passwordHash                String?   // bcrypt hash — set when customer activates their portal account
+  activationToken             String?   @unique  // magic-link token for first-time password setup
+  activationTokenExpiresAt    DateTime? // expiry for activation link (default 7d)
+  activatedAt                 DateTime? // when customer first set their password
+  lastLoginAt                 DateTime? // last successful portal login
+  invitationSentAt            DateTime? // when owner last sent/resent the invitation
+
+  // ── Enterprise Portal Access Management ──
+  portalEnabled               Boolean  @default(false)  // owner toggled portal on (most customers don't need portal)
+  invitationStatus            String   @default("none") // none | pending | accepted | disabled
+
   workspace Workspace? @relation(fields: [workspaceId], references: [id])
   jobs      Job[]
   invoices  Invoice[]
@@ -740,9 +760,46 @@ model Customer {
   journeys             CustomerJourney[]
   portalSessions       CustomerPortalSession[]
   documents            Document[]
+  invitations          Invitation[]
+  paymentMethods       PaymentMethod[]
 
   @@index([phone])
+  @@index([email])
   @@index([workspaceId])
+  @@index([portalEnabled])
+  @@index([invitationStatus])
+}
+
+// ==========================================
+// CUSTOMER PAYMENT METHODS
+// ==========================================
+
+model PaymentMethod {
+  id            String   @id @default(cuid())
+  customerId    String
+  tenantId      String?
+  workspaceId   String?
+  type          String   @default("card")  // card | upi | bank
+  brand         String?                     // Visa, Mastercard, Amex, RuPay, etc.
+  last4         String?                     // last 4 digits of card / last 4 of UPI handle
+  expMonth      Int?
+  expYear       Int?
+  holderName    String?
+  upiId         String?                     // for UPI type
+  bankName      String?                     // for bank type
+  isDefault     Boolean  @default(false)
+  // Mock token — in production this would come from Stripe/Razorpay/etc.
+  // We never store raw card numbers; only the token + last4.
+  tokenJson     String   @default("{}")
+  metadataJson  String   @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([tenantId])
+  @@index([isDefault])
 }
 
 model Resource {
@@ -1954,6 +2011,43 @@ model MarketplaceTemplate {
 }
 
 // --- Module 17: Enterprise Features ---
+
+// ── Invitation (employee + customer portal invitations) ──
+// Backs /api/invitations/* and /api/employees/[id]/invite, /api/customers/[id]/portal/enable.
+// Fixes a pre-existing bug where /api/invitations/* referenced db.invitation but no model existed.
+model Invitation {
+  id            String    @id @default(cuid())
+  token         String    @unique
+  email         String
+  name          String?
+  role          String    // employee | customer (the target portal role)
+  phone         String?
+  status        String    @default("pending") // pending | accepted | cancelled | expired
+  message       String?
+  invitedById   String?
+  tenantId      String?
+  workspaceId   String?
+  employeeId    String?   @unique  // set when inviting an employee
+  customerId    String?   @unique  // set when inviting a customer to portal
+  acceptedAt    DateTime?
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tenant      Tenant?     @relation(fields: [tenantId], references: [id])
+  workspace   Workspace?  @relation(fields: [workspaceId], references: [id])
+  invitedBy   User?       @relation(fields: [invitedById], references: [id])
+  employee    Employee?   @relation(fields: [employeeId], references: [id])
+  customer    Customer?   @relation(fields: [customerId], references: [id])
+
+  @@index([token])
+  @@index([email])
+  @@index([status])
+  @@index([tenantId])
+  @@index([employeeId])
+  @@index([customerId])
+  @@index([expiresAt])
+}
 
 model RolePermission {
   id          String   @id @default(cuid())

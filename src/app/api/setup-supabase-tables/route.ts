@@ -446,6 +446,144 @@ CREATE TRIGGER set_PlatformAuthSettings_updatedAt
 -- ALTER PUBLICATION supabase_realtime ADD TABLE "EcommerceOrder";
 -- ALTER PUBLICATION supabase_realtime ADD TABLE "EcommerceProduct";
 -- ALTER PUBLICATION supabase_realtime ADD TABLE "EcommerceSyncLog";
+
+-- ============================================
+-- Customer: Modern auth columns (Email/Phone + Password + invitation-based activation)
+-- Backports Prisma schema additions for the new authentication architecture
+-- (Single Domain + Email/Phone Login + Invitation-Based Account Activation + Auto Tenant Discovery)
+-- ============================================
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "passwordHash" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "activationToken" TEXT;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "activationTokenExpiresAt" TIMESTAMP(3);
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "activatedAt" TIMESTAMP(3);
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "lastLoginAt" TIMESTAMP(3);
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "invitationSentAt" TIMESTAMP(3);
+
+-- Unique constraint on activationToken (magic-link lookup must be unique)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'Customer_activationToken_key' AND contype = 'u'
+  ) THEN
+    ALTER TABLE "Customer" ADD CONSTRAINT "Customer_activationToken_key" UNIQUE ("activationToken");
+  END IF;
+END$$;
+
+-- Index on email for fast tenant-discovery lookups (multi-company resolver)
+CREATE INDEX IF NOT EXISTS "Customer_email_idx" ON "Customer"("email");
+
+-- ============================================
+-- Enterprise Portal Access Management: Invitation table + new columns
+-- Backports the Prisma schema additions for invitation-based customer/employee
+-- portal activation. All statements are idempotent — safe to re-run.
+-- ============================================
+
+-- Customer: portalEnabled (owner toggled portal on) + invitationStatus (lifecycle)
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "portalEnabled" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Customer" ADD COLUMN IF NOT EXISTS "invitationStatus" TEXT NOT NULL DEFAULT 'none';
+
+-- Employee: invitationStatus lifecycle
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "invitationStatus" TEXT NOT NULL DEFAULT 'none';
+
+-- Invitation table (magic-link invitations for customers and employees)
+CREATE TABLE IF NOT EXISTS "Invitation" (
+  "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid(),
+  "token" TEXT NOT NULL UNIQUE,
+  "email" TEXT NOT NULL,
+  "name" TEXT,
+  "role" TEXT NOT NULL,
+  "phone" TEXT,
+  "status" TEXT NOT NULL DEFAULT 'pending',
+  "message" TEXT,
+  "invitedById" TEXT,
+  "tenantId" TEXT,
+  "workspaceId" TEXT,
+  "employeeId" TEXT UNIQUE,
+  "customerId" TEXT UNIQUE,
+  "acceptedAt" TIMESTAMP(3),
+  "expiresAt" TIMESTAMP(3) NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now()
+);
+
+-- Invitation unique constraints (re-asserted idempotently for pre-existing tables)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'Invitation_token_key' AND contype = 'u'
+  ) THEN
+    ALTER TABLE "Invitation" ADD CONSTRAINT "Invitation_token_key" UNIQUE ("token");
+  END IF;
+END$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'Invitation_employeeId_key' AND contype = 'u'
+  ) THEN
+    ALTER TABLE "Invitation" ADD CONSTRAINT "Invitation_employeeId_key" UNIQUE ("employeeId");
+  END IF;
+END$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'Invitation_customerId_key' AND contype = 'u'
+  ) THEN
+    ALTER TABLE "Invitation" ADD CONSTRAINT "Invitation_customerId_key" UNIQUE ("customerId");
+  END IF;
+END$$;
+
+-- Invitation foreign keys
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Invitation_tenantId_fkey' AND contype = 'f') THEN
+    ALTER TABLE "Invitation" ADD CONSTRAINT "Invitation_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id");
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Invitation_workspaceId_fkey' AND contype = 'f') THEN
+    ALTER TABLE "Invitation" ADD CONSTRAINT "Invitation_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id");
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Invitation_invitedById_fkey' AND contype = 'f') THEN
+    ALTER TABLE "Invitation" ADD CONSTRAINT "Invitation_invitedById_fkey" FOREIGN KEY ("invitedById") REFERENCES "User"("id") ON DELETE SET NULL;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Invitation_employeeId_fkey' AND contype = 'f') THEN
+    ALTER TABLE "Invitation" ADD CONSTRAINT "Invitation_employeeId_fkey" FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'Invitation_customerId_fkey' AND contype = 'f') THEN
+    ALTER TABLE "Invitation" ADD CONSTRAINT "Invitation_customerId_fkey" FOREIGN KEY ("customerId") REFERENCES "Customer"("id") ON DELETE CASCADE;
+  END IF;
+END $$;
+
+-- Customer new-column indexes
+CREATE INDEX IF NOT EXISTS "Customer_portalEnabled_idx" ON "Customer"("portalEnabled");
+CREATE INDEX IF NOT EXISTS "Customer_invitationStatus_idx" ON "Customer"("invitationStatus");
+
+-- Employee new-column index
+CREATE INDEX IF NOT EXISTS "Employee_invitationStatus_idx" ON "Employee"("invitationStatus");
+
+-- Invitation indexes (matching @@index directives in the Prisma schema)
+CREATE INDEX IF NOT EXISTS "Invitation_token_idx" ON "Invitation"("token");
+CREATE INDEX IF NOT EXISTS "Invitation_email_idx" ON "Invitation"("email");
+CREATE INDEX IF NOT EXISTS "Invitation_status_idx" ON "Invitation"("status");
+CREATE INDEX IF NOT EXISTS "Invitation_tenantId_idx" ON "Invitation"("tenantId");
+CREATE INDEX IF NOT EXISTS "Invitation_employeeId_idx" ON "Invitation"("employeeId");
+CREATE INDEX IF NOT EXISTS "Invitation_customerId_idx" ON "Invitation"("customerId");
+CREATE INDEX IF NOT EXISTS "Invitation_expiresAt_idx" ON "Invitation"("expiresAt");
 `;
 
 // ── Table existence check ──────────────────────────────────────────────────

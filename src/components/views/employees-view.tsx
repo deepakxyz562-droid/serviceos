@@ -8,6 +8,7 @@ import {
   Users, UserPlus, Shield, Clock, CheckCircle2, UserCheck,
   Search, Phone, MapPin, Star, Briefcase, Loader2,
   Trash2, Pencil, MoreVertical, UserX,
+  Mail, KeyRound,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,8 +19,11 @@ import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { InvitationLinkDialog } from '@/components/employees/invitation-link-dialog';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -36,7 +40,62 @@ interface Employee {
   completedJobs: number;
   whatsappId: string | null;
   createdAt: string;
+  invitationStatus?: string; // none | pending | accepted | suspended
+  userId?: string | null;
+  invitationExpiresAt?: string | null;
   [key: string]: unknown;
+}
+
+// ─── Invitation status helpers ──────────────────────────────────────────────
+
+type InvitationStatus = 'none' | 'pending' | 'accepted' | 'suspended';
+
+function normalizeInvitationStatus(status: unknown): InvitationStatus {
+  if (status === 'pending' || status === 'accepted' || status === 'suspended') return status;
+  return 'none';
+}
+
+function getInvitationBadge(status: InvitationStatus): { label: string; className: string; dot: string } {
+  switch (status) {
+    case 'pending':
+      return {
+        label: 'Invited',
+        className: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-900/50',
+        dot: 'bg-amber-500',
+      };
+    case 'accepted':
+      return {
+        label: 'Active',
+        className: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-900/50',
+        dot: 'bg-emerald-500',
+      };
+    case 'suspended':
+      return {
+        label: 'Suspended',
+        className: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-900/50',
+        dot: 'bg-red-500',
+      };
+    case 'none':
+    default:
+      return {
+        label: 'No Account',
+        className: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800/40 dark:text-slate-300 dark:border-slate-700',
+        dot: 'bg-slate-400',
+      };
+  }
+}
+
+function formatExpiry(expiresAt?: string | null): string {
+  if (!expiresAt) return '';
+  try {
+    const date = new Date(expiresAt);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString(undefined, {
+      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  } catch {
+    return '';
+  }
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -103,6 +162,22 @@ export function EmployeesView() {
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Invitation / portal state
+  const [sendInviteOnCreate, setSendInviteOnCreate] = useState(true);
+  const [inviteDialog, setInviteDialog] = useState<{
+    open: boolean;
+    url: string;
+    expiresAt?: string | null;
+    name?: string;
+  }>({ open: false, url: '' });
+  const [resetDialog, setResetDialog] = useState<{
+    open: boolean;
+    url: string;
+    expiresAt?: string | null;
+    name?: string;
+  }>({ open: false, url: '' });
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
   // Form state
   const [formName, setFormName] = useState('');
@@ -171,6 +246,7 @@ export function EmployeesView() {
     setFormLocation('');
     setFormWhatsappId('');
     setFormSkills('');
+    setSendInviteOnCreate(true);
   };
 
   const populateFormForEdit = (emp: Employee) => {
@@ -218,10 +294,16 @@ export function EmployeesView() {
       });
 
       if (res.ok) {
+        const created = await res.json().catch(() => null);
         toast.success('Employee added successfully');
         setShowAddDialog(false);
         resetForm();
         fetchEmployees();
+
+        // Optionally send invitation link immediately after creation.
+        if (sendInviteOnCreate && created?.id) {
+          await sendInviteForEmployee(created.id, created.name);
+        }
       } else {
         const data = await res.json();
         toast.error(data.error || 'Failed to add employee');
@@ -297,6 +379,122 @@ export function EmployeesView() {
     setEditingEmployee(emp);
     populateFormForEdit(emp);
     setShowEditDialog(true);
+  };
+
+  // ─── Invitation / portal actions ────────────────────────────────────────
+
+  const updateEmployeeInState = useCallback(
+    (id: string, patch: Partial<Employee>) => {
+      setEmployees((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
+    },
+    [],
+  );
+
+  const sendInviteForEmployee = useCallback(async (id: string, name?: string) => {
+    setActionLoadingId(id);
+    try {
+      const res = await fetch(`/api/employees/${id}/invite?XTransformPort=3000`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.success) {
+        toast.success('Invitation link generated');
+        setInviteDialog({
+          open: true,
+          url: data.inviteUrl || '',
+          expiresAt: data.expiresAt ?? null,
+          name: name ?? data?.employee?.name,
+        });
+        // Optimistically update status to pending.
+        updateEmployeeInState(id, {
+          invitationStatus: 'pending',
+          userId: data?.employee?.userId ?? data?.employee?.id ?? null,
+          invitationExpiresAt: data.expiresAt ?? null,
+        });
+      } else {
+        toast.error(data?.error || 'Failed to generate invitation link');
+      }
+    } catch {
+      toast.error('Network error generating invitation link');
+    } finally {
+      setActionLoadingId(null);
+    }
+  }, [updateEmployeeInState]);
+
+  const handleSendInvite = (emp: Employee) => {
+    void sendInviteForEmployee(emp.id, emp.name);
+  };
+
+  const handleResetPassword = async (emp: Employee) => {
+    setActionLoadingId(emp.id);
+    try {
+      const res = await fetch(`/api/employees/${emp.id}/reset-password?XTransformPort=3000`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.success) {
+        toast.success('Password reset link generated');
+        setResetDialog({
+          open: true,
+          url: data.resetUrl || '',
+          expiresAt: data.expiresAt ?? null,
+          name: emp.name,
+        });
+      } else {
+        toast.error(data?.error || 'Failed to generate reset link');
+      }
+    } catch {
+      toast.error('Network error generating reset link');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleSuspend = async (emp: Employee) => {
+    setActionLoadingId(emp.id);
+    try {
+      const res = await fetch(`/api/employees/${emp.id}/suspend?XTransformPort=3000`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ suspended: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.success) {
+        toast.success(`${emp.name} has been suspended`);
+        updateEmployeeInState(emp.id, { invitationStatus: 'suspended' });
+      } else {
+        toast.error(data?.error || 'Failed to suspend employee');
+      }
+    } catch {
+      toast.error('Network error suspending employee');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleReactivate = async (emp: Employee) => {
+    setActionLoadingId(emp.id);
+    try {
+      const res = await fetch(`/api/employees/${emp.id}/suspend?XTransformPort=3000`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ suspended: false }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.success) {
+        toast.success(`${emp.name} has been reactivated`);
+        // A reactivated user returns to the 'accepted' state.
+        updateEmployeeInState(emp.id, { invitationStatus: 'accepted' });
+      } else {
+        toast.error(data?.error || 'Failed to reactivate employee');
+      }
+    } catch {
+      toast.error('Network error reactivating employee');
+    } finally {
+      setActionLoadingId(null);
+    }
   };
 
   // ─── Shared form content ───────────────────────────────────────────────
@@ -505,6 +703,11 @@ export function EmployeesView() {
               if (Array.isArray(parsed)) skills = parsed;
             } catch { /* ignore */ }
 
+            const invitationStatus = normalizeInvitationStatus(emp.invitationStatus);
+            const invitationBadge = getInvitationBadge(invitationStatus);
+            const expiryLabel = formatExpiry(emp.invitationExpiresAt);
+            const isActionBusy = actionLoadingId === emp.id;
+
             return (
               <Card key={emp.id} className="transition-all hover:shadow-md">
                 <CardContent className="p-4 space-y-3">
@@ -540,6 +743,45 @@ export function EmployeesView() {
                         <DropdownMenuItem onClick={() => openEditDialog(emp)}>
                           <Pencil className="size-3 mr-2" /> Edit
                         </DropdownMenuItem>
+
+                        {/* Invitation / portal actions */}
+                        {(invitationStatus === 'none' || invitationStatus === 'pending') && (
+                          <DropdownMenuItem
+                            onClick={() => handleSendInvite(emp)}
+                            disabled={isActionBusy}
+                          >
+                            <Mail className="size-3 mr-2" />
+                            {invitationStatus === 'pending' ? 'Resend Invitation' : 'Send Invitation'}
+                          </DropdownMenuItem>
+                        )}
+                        {(invitationStatus === 'accepted' || invitationStatus === 'suspended') && (
+                          <DropdownMenuItem
+                            onClick={() => handleResetPassword(emp)}
+                            disabled={isActionBusy}
+                          >
+                            <KeyRound className="size-3 mr-2" /> Reset Password
+                          </DropdownMenuItem>
+                        )}
+                        {invitationStatus === 'accepted' && (
+                          <DropdownMenuItem
+                            onClick={() => handleSuspend(emp)}
+                            disabled={isActionBusy}
+                            className="text-amber-600 focus:text-amber-700"
+                          >
+                            <UserX className="size-3 mr-2" /> Suspend
+                          </DropdownMenuItem>
+                        )}
+                        {invitationStatus === 'suspended' && (
+                          <DropdownMenuItem
+                            onClick={() => handleReactivate(emp)}
+                            disabled={isActionBusy}
+                            className="text-emerald-600 focus:text-emerald-700"
+                          >
+                            <UserCheck className="size-3 mr-2" /> Reactivate
+                          </DropdownMenuItem>
+                        )}
+
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-red-600"
                           onClick={() => setShowDeleteDialog(emp.id)}
@@ -550,12 +792,33 @@ export function EmployeesView() {
                     </DropdownMenu>
                   </div>
 
-                  {/* Status Badge */}
-                  <div className="flex items-center gap-2">
+                  {/* Status Badges */}
+                  <div className="flex items-center gap-2 flex-wrap">
                     <Badge variant="outline" className={cn(getStatusColor(emp.status), 'text-[10px]')}>
                       <span className={cn('size-1.5 rounded-full mr-1', getStatusDot(emp.status))} />
                       {emp.status.replace('_', ' ')}
                     </Badge>
+                    {invitationStatus === 'pending' && expiryLabel ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Badge variant="outline" className={cn('text-[10px] cursor-help', invitationBadge.className)}>
+                            <span className={cn('size-1.5 rounded-full mr-1', invitationBadge.dot)} />
+                            {invitationBadge.label}
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <span>Expires: {expiryLabel}</span>
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <Badge variant="outline" className={cn('text-[10px]', invitationBadge.className)}>
+                        <span className={cn('size-1.5 rounded-full mr-1', invitationBadge.dot)} />
+                        {invitationBadge.label}
+                      </Badge>
+                    )}
+                    {isActionBusy && (
+                      <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                    )}
                   </div>
 
                   {/* Info */}
@@ -614,6 +877,28 @@ export function EmployeesView() {
             <DialogDescription>Add a new team member to your organization.</DialogDescription>
           </DialogHeader>
           {formContent}
+
+          {/* Invitation checkbox */}
+          <div className="rounded-md border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/60 dark:bg-emerald-900/10 px-3 py-2.5">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <Checkbox
+                checked={sendInviteOnCreate}
+                onCheckedChange={(checked) => setSendInviteOnCreate(checked === true)}
+                className="mt-0.5 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+              />
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium flex items-center gap-1.5">
+                  <Mail className="size-3.5 text-emerald-600" />
+                  Send invitation email to set up account
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Generates a secure link the employee can use to set their password.
+                  You can resend or revoke it later.
+                </p>
+              </div>
+            </label>
+          </div>
+
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setShowAddDialog(false)}>Cancel</Button>
             <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleAdd} disabled={!formName.trim() || !formPhone.trim() || saving}>
@@ -657,6 +942,26 @@ export function EmployeesView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Invitation Link Dialog (send / resend invite) */}
+      <InvitationLinkDialog
+        open={inviteDialog.open}
+        onClose={() => setInviteDialog((s) => ({ ...s, open: false }))}
+        inviteUrl={inviteDialog.url}
+        expiresAt={inviteDialog.expiresAt}
+        employeeName={inviteDialog.name}
+        role="employee"
+      />
+
+      {/* Reset Password Link Dialog (reuses the same invitation-link UI) */}
+      <InvitationLinkDialog
+        open={resetDialog.open}
+        onClose={() => setResetDialog((s) => ({ ...s, open: false }))}
+        inviteUrl={resetDialog.url}
+        expiresAt={resetDialog.expiresAt}
+        employeeName={resetDialog.name}
+        role="employee"
+      />
     </div>
   );
 }

@@ -42,23 +42,62 @@ interface Segment {
   isDefault: boolean;
   color?: string;
   icon?: string;
+  lastCalculated?: string | null;
+  createdAt: string;
+}
+
+interface SegmentMember {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  company: string | null;
+  tags: string | null;
   createdAt: string;
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const FILTER_FIELDS = [
-  { value: 'service_type', label: 'Service Type' },
-  { value: 'city', label: 'City' },
-  { value: 'country', label: 'Country' },
-  { value: 'customer_tags', label: 'Customer Tags' },
-  { value: 'revenue', label: 'Revenue ($)' },
-  { value: 'last_booking', label: 'Last Booking (days)' },
-  { value: 'last_message', label: 'Last Message (days)' },
-  { value: 'campaign_engagement', label: 'Campaign Engagement (%)' },
-  { value: 'source', label: 'Lead Source' },
-  { value: 'lead_status', label: 'Lead Status' },
+  // ─── Contact fields (work with imported contacts) ───
+  { value: 'contact_tags', label: 'Contact Tags', group: 'Contacts' },
+  { value: 'contact_company', label: 'Company', group: 'Contacts' },
+  { value: 'contact_name', label: 'Contact Name', group: 'Contacts' },
+  { value: 'contact_email', label: 'Email', group: 'Contacts' },
+  { value: 'contact_phone', label: 'Phone', group: 'Contacts' },
+  { value: 'contact_source', label: 'Source (Imported/Manual)', group: 'Contacts' },
+  // ─── Legacy fields ───
+  { value: 'customer_tags', label: 'Customer Tags (legacy)', group: 'Legacy' },
+  { value: 'service_type', label: 'Service Type (tags)', group: 'Legacy' },
+  { value: 'lead_status', label: 'Lead Status (tags)', group: 'Legacy' },
+  { value: 'source', label: 'Lead Source (legacy)', group: 'Legacy' },
+  { value: 'city', label: 'City (→ company)', group: 'Legacy' },
+  { value: 'country', label: 'Country (→ company)', group: 'Legacy' },
+  { value: 'revenue', label: 'Revenue ($)', group: 'Other' },
+  { value: 'last_booking', label: 'Last Booking (days)', group: 'Other' },
+  { value: 'last_message', label: 'Last Message (days)', group: 'Other' },
+  { value: 'campaign_engagement', label: 'Campaign Engagement (%)', group: 'Other' },
 ];
+
+// Operators available for each field type
+const CONTACT_FIELD_OPERATORS: Record<string, string[]> = {
+  contact_tags: ['equals', 'not_equals', 'contains'],
+  contact_company: ['equals', 'not_equals', 'contains'],
+  contact_name: ['equals', 'contains'],
+  contact_email: ['equals', 'contains'],
+  contact_phone: ['contains', 'equals'],
+  contact_source: ['equals'],
+  customer_tags: ['equals', 'contains'],
+  service_type: ['equals', 'contains'],
+  lead_status: ['equals', 'contains'],
+  source: ['equals'],
+  city: ['equals', 'contains'],
+  country: ['equals', 'contains'],
+  revenue: ['greater_than', 'less_than'],
+  last_booking: ['more_than'],
+  last_message: ['more_than'],
+  campaign_engagement: ['greater_than', 'less_than'],
+};
 
 const OPERATORS = [
   { value: 'equals', label: 'Equals' },
@@ -80,10 +119,14 @@ export function SegmentsView() {
   const [selectedSegment, setSelectedSegment] = useState<Segment | null>(null);
   const [showMembersDialog, setShowMembersDialog] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  // Segment members state
+  const [segmentMembers, setSegmentMembers] = useState<SegmentMember[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersTotal, setMembersTotal] = useState(0);
 
   const [createForm, setCreateForm] = useState({
     name: '', description: '', matchLogic: 'and',
-    filters: [{ id: 'f-new-1', field: 'service_type', operator: 'equals', value: '' }] as FilterRow[],
+    filters: [{ id: 'f-new-1', field: 'contact_tags', operator: 'contains', value: '' }] as FilterRow[],
   });
 
   // ── Load segments from API ──
@@ -161,10 +204,47 @@ export function SegmentsView() {
     }
   };
 
+  // ── Load segment members (evaluate the segment) ──
+  const loadMembers = useCallback(async (segmentId: string) => {
+    setMembersLoading(true);
+    try {
+      const res = await fetch(`/api/segments/${segmentId}/members?limit=100`);
+      if (res.ok) {
+        const result = await res.json();
+        setSegmentMembers(result.data || []);
+        setMembersTotal(result.pagination?.total || 0);
+        // Update the segment's memberCount in the local state
+        setSegments(prev => prev.map(s =>
+          s.id === segmentId
+            ? { ...s, memberCount: result.pagination?.total || 0, lastCalculated: result.evaluatedAt }
+            : s
+        ));
+      } else {
+        toast.error('Failed to load segment members');
+        setSegmentMembers([]);
+        setMembersTotal(0);
+      }
+    } catch {
+      toast.error('Failed to evaluate segment');
+      setSegmentMembers([]);
+      setMembersTotal(0);
+    } finally {
+      setMembersLoading(false);
+    }
+  }, []);
+
+  const handleViewMembers = (segment: Segment) => {
+    setSelectedSegment(segment);
+    setShowMembersDialog(true);
+    setSegmentMembers([]);
+    setMembersTotal(0);
+    loadMembers(segment.id);
+  };
+
   const addFilterRow = () => {
     setCreateForm(prev => ({
       ...prev,
-      filters: [...prev.filters, { id: `f-${Date.now()}`, field: 'service_type', operator: 'equals', value: '' }],
+      filters: [...prev.filters, { id: `f-${Date.now()}`, field: 'contact_tags', operator: 'contains', value: '' }],
     }));
   };
 
@@ -259,6 +339,18 @@ export function SegmentsView() {
         <Card className="p-4"><div className="flex items-center gap-2"><Filter className="size-4 text-purple-600" /><div><p className="text-xs text-muted-foreground">Dynamic</p><p className="text-lg font-bold">{segments.filter(s => s.type === 'dynamic').length}</p></div></div></Card>
       </div>
 
+      {/* Tip: How to segment imported contacts */}
+      <div className="rounded-lg bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 p-3 text-xs text-emerald-700 dark:text-emerald-400">
+        <p className="font-medium flex items-center gap-1.5">
+          <Filter className="size-3.5" /> Tip: Segment your imported contacts
+        </p>
+        <p className="mt-1 text-emerald-600 dark:text-emerald-500">
+          After importing contacts with tags (e.g., &ldquo;VIP&rdquo;) or company names, create a segment
+          using the <span className="font-medium">Contact Tags</span> or <span className="font-medium">Company</span> filter
+          to group them. Click the eye icon on any segment to see matching contacts.
+        </p>
+      </div>
+
       {/* Search */}
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -292,7 +384,7 @@ export function SegmentsView() {
                       <p className="text-xs text-muted-foreground mt-0.5">{segment.description || 'No description'}</p>
                     </div>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setSelectedSegment(segment); setShowMembersDialog(true); }}>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleViewMembers(segment)}>
                         <Eye className="size-3.5" />
                       </Button>
                       {!segment.isDefault && (
@@ -363,10 +455,39 @@ export function SegmentsView() {
                   <Plus className="size-3 mr-1" /> Add Filter
                 </Button>
               </div>
-              {createForm.filters.map((filter, idx) => (
+              {createForm.filters.map((filter, idx) => {
+                // Operators available for this field
+                const allowedOps = CONTACT_FIELD_OPERATORS[filter.field] || ['equals', 'contains'];
+                const availableOps = OPERATORS.filter(o => allowedOps.includes(o.value));
+                // Placeholder hint based on field
+                const placeholderMap: Record<string, string> = {
+                  contact_tags: 'e.g., VIP, Lead',
+                  contact_company: 'e.g., Acme Corp',
+                  contact_name: 'e.g., John',
+                  contact_email: 'e.g., @gmail.com',
+                  contact_phone: 'e.g., 987654',
+                  contact_source: 'imported or manual',
+                  customer_tags: 'e.g., VIP',
+                  service_type: 'e.g., Plumbing',
+                  lead_status: 'e.g., New',
+                  source: 'imported or manual',
+                  city: 'e.g., Mumbai',
+                  country: 'e.g., India',
+                  revenue: 'e.g., 5000',
+                  last_booking: 'e.g., 30',
+                  last_message: 'e.g., 7',
+                  campaign_engagement: 'e.g., 50',
+                };
+                return (
                 <div key={filter.id} className="flex items-center gap-2">
                   {idx > 0 && <Badge variant="secondary" className="text-[9px] shrink-0">{createForm.matchLogic.toUpperCase()}</Badge>}
-                  <Select value={filter.field} onValueChange={v => updateFilterRow(filter.id, 'field', v)}>
+                  <Select value={filter.field} onValueChange={v => {
+                    // When field changes, reset operator to first valid one
+                    const newOps = CONTACT_FIELD_OPERATORS[v] || ['equals'];
+                    const op = newOps.includes(filter.operator) ? filter.operator : newOps[0];
+                    updateFilterRow(filter.id, 'field', v);
+                    updateFilterRow(filter.id, 'operator', op);
+                  }}>
                     <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {FILTER_FIELDS.map(f => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
@@ -375,17 +496,23 @@ export function SegmentsView() {
                   <Select value={filter.operator} onValueChange={v => updateFilterRow(filter.id, 'operator', v)}>
                     <SelectTrigger className="h-8 text-xs w-32"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {OPERATORS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                      {availableOps.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  <Input className="h-8 text-xs" placeholder="Value" value={filter.value} onChange={e => updateFilterRow(filter.id, 'value', e.target.value)} />
+                  <Input
+                    className="h-8 text-xs"
+                    placeholder={placeholderMap[filter.field] || 'Value'}
+                    value={filter.value}
+                    onChange={e => updateFilterRow(filter.id, 'value', e.target.value)}
+                  />
                   {createForm.filters.length > 1 && (
                     <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0" onClick={() => removeFilterRow(filter.id)}>
                       <X className="size-3" />
                     </Button>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
           <DialogFooter>
@@ -398,30 +525,91 @@ export function SegmentsView() {
         </DialogContent>
       </Dialog>
 
-      {/* Members Dialog */}
+      {/* Members Dialog — shows actual matching contacts */}
       <Dialog open={showMembersDialog} onOpenChange={setShowMembersDialog}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{selectedSegment?.name} - Members</DialogTitle>
-            <DialogDescription>{selectedSegment?.memberCount || 0} customers in this segment</DialogDescription>
+            <DialogTitle>{selectedSegment?.name} — Members</DialogTitle>
+            <DialogDescription>
+              {membersTotal} contact{membersTotal !== 1 ? 's' : ''} matched
+              {selectedSegment?.lastCalculated && (
+                <span className="text-[10px] ml-2 text-muted-foreground/70">
+                  (evaluated {new Date(selectedSegment.lastCalculated).toLocaleString()})
+                </span>
+              )}
+            </DialogDescription>
           </DialogHeader>
-          {selectedSegment && selectedSegment.memberCount > 0 ? (
-            <ScrollArea className="max-h-96">
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  Member list will be calculated dynamically when the segment is evaluated.
-                  <br />
-                  <span className="font-medium">{selectedSegment.memberCount} members matched</span>
+
+          {membersLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="size-6 animate-spin text-emerald-600" />
+              <span className="ml-2 text-sm text-muted-foreground">Evaluating segment…</span>
+            </div>
+          ) : segmentMembers.length > 0 ? (
+            <>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <p className="text-xs text-muted-foreground">
+                  Showing {segmentMembers.length} of {membersTotal} members
                 </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => selectedSegment && loadMembers(selectedSegment.id)}
+                >
+                  <Loader2 className="size-3 mr-1" /> Refresh
+                </Button>
               </div>
-            </ScrollArea>
+              <ScrollArea className="max-h-[60vh] rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs">Name</TableHead>
+                      <TableHead className="text-xs">Email</TableHead>
+                      <TableHead className="text-xs">Phone</TableHead>
+                      <TableHead className="text-xs">Company</TableHead>
+                      <TableHead className="text-xs">Tags</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {segmentMembers.map(m => (
+                      <TableRow key={m.id}>
+                        <TableCell className="text-xs font-medium">{m.name}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{m.email || '—'}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{m.phone || '—'}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{m.company || '—'}</TableCell>
+                        <TableCell className="text-xs">
+                          {m.tags ? (
+                            <div className="flex flex-wrap gap-1">
+                              {m.tags.split(',').map(t => t.trim()).filter(Boolean).slice(0, 3).map((t, i) => (
+                                <Badge key={i} variant="secondary" className="text-[9px] h-4">{t}</Badge>
+                              ))}
+                            </div>
+                          ) : '—'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </>
           ) : (
             <div className="text-center py-8">
               <Users className="size-8 mx-auto mb-2 text-muted-foreground opacity-30" />
-              <p className="text-sm text-muted-foreground">No members yet. This segment needs to be evaluated.</p>
-              <Button variant="outline" size="sm" className="mt-3" onClick={() => { setShowMembersDialog(false); toast.info('Segment evaluation will run automatically'); }}>
-                Evaluate Now
-              </Button>
+              <p className="text-sm text-muted-foreground">No members matched this segment.</p>
+              <p className="text-xs text-muted-foreground/70 mt-1">
+                Try adjusting the filter rules or import more contacts.
+              </p>
+              {selectedSegment && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3"
+                  onClick={() => loadMembers(selectedSegment.id)}
+                >
+                  <Loader2 className="size-3.5 mr-1.5" /> Re-evaluate
+                </Button>
+              )}
             </div>
           )}
         </DialogContent>

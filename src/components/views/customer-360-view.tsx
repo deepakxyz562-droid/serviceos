@@ -23,11 +23,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useAppStore } from '@/store/app-store';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   useCustomers,
   useCustomer360,
   useBookings,
 } from '@/hooks/queries/use-supabase-queries';
+import { queryKeys } from '@/hooks/queries/use-supabase-queries';
+import { PortalAccessPanel } from '@/components/customers/portal-access-panel';
 import { formatCurrency as formatCurrencyShared } from '@/lib/currency';
 import { useBaseCurrency } from '@/hooks/use-base-currency';
 
@@ -480,6 +483,7 @@ type SortOption = 'name' | 'recent' | 'value';
 export function Customer360View() {
   const { auth } = useAppStore();
   const { baseCurrency } = useBaseCurrency();
+  const queryClient = useQueryClient();
   const tenantId = auth?.tenant?.id;
 
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
@@ -797,6 +801,48 @@ export function Customer360View() {
                               <Tag className="size-2 mr-1" />
                               {primaryTag}
                             </Badge>
+                            {/* Portal-access badge */}
+                            {(c as any).invitationStatus === 'pending' && (
+                              <Badge
+                                variant="outline"
+                                className="text-[9px] px-1.5 py-0 bg-amber-50 text-amber-700 border-amber-200"
+                              >
+                                <span className="inline-block size-1.5 rounded-full bg-amber-500 mr-1" />
+                                Invited
+                              </Badge>
+                            )}
+                            {(c as any).invitationStatus === 'accepted' && (
+                              <Badge
+                                variant="outline"
+                                className="text-[9px] px-1.5 py-0 bg-emerald-50 text-emerald-700 border-emerald-200"
+                              >
+                                <span className="inline-block size-1.5 rounded-full bg-emerald-500 mr-1" />
+                                Portal
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+                        {/* Show portal badge even when no primary tag exists */}
+                        {!primaryTag && (c as any).invitationStatus === 'pending' && (
+                          <div className="mt-2.5 flex flex-wrap gap-1">
+                            <Badge
+                              variant="outline"
+                              className="text-[9px] px-1.5 py-0 bg-amber-50 text-amber-700 border-amber-200"
+                            >
+                              <span className="inline-block size-1.5 rounded-full bg-amber-500 mr-1" />
+                              Invited
+                            </Badge>
+                          </div>
+                        )}
+                        {!primaryTag && (c as any).invitationStatus === 'accepted' && (
+                          <div className="mt-2.5 flex flex-wrap gap-1">
+                            <Badge
+                              variant="outline"
+                              className="text-[9px] px-1.5 py-0 bg-emerald-50 text-emerald-700 border-emerald-200"
+                            >
+                              <span className="inline-block size-1.5 rounded-full bg-emerald-500 mr-1" />
+                              Portal
+                            </Badge>
                           </div>
                         )}
                       </CardContent>
@@ -1026,6 +1072,32 @@ export function Customer360View() {
                         </span>
                       </div>
                     </div>
+                  )}
+
+                  {/* Customer Portal Access — embedded management panel */}
+                  {c && (
+                    <PortalAccessPanel
+                      customer={{
+                        id: (c as any).id,
+                        name: (c as any).name,
+                        email: (c as any).email,
+                        phone: (c as any).phone,
+                        portalEnabled: (c as any).portalEnabled,
+                        invitationStatus: (c as any).invitationStatus,
+                        activatedAt: (c as any).activatedAt,
+                        lastLoginAt: (c as any).lastLoginAt,
+                        invitationSentAt: (c as any).invitationSentAt,
+                      }}
+                      onUpdate={() => {
+                        // Refresh customer 360 + customer list so portal badge/state stays in sync
+                        if (selectedCustomerId) {
+                          queryClient.invalidateQueries({ queryKey: queryKeys.customer360(selectedCustomerId) });
+                          queryClient.invalidateQueries({ queryKey: queryKeys.customer(selectedCustomerId) });
+                        }
+                        queryClient.invalidateQueries({ queryKey: ['customers'] });
+                      }}
+                      variant="compact"
+                    />
                   )}
                 </div>
               </div>
