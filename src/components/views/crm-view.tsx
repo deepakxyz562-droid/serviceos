@@ -5,6 +5,7 @@ import {
   Users, Search, Plus, Phone, Mail, MapPin, Star, Briefcase,
   MoreHorizontal, Pencil, Trash2, Eye, MessageCircle, Contact,
   RefreshCw, TrendingUp, UserCheck, Clock, ArrowUpDown,
+  Send, Copy, Check, UserPlus, RotateCw, Ban,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -41,6 +42,10 @@ interface Customer {
   whatsappId?: string;
   createdAt: string;
   updatedAt: string;
+  // Portal / invitation fields (returned by /api/customers)
+  portalEnabled?: boolean;
+  invitationStatus?: string; // 'none' | 'pending' | 'accepted' | 'disabled'
+  activatedAt?: string | null;
 }
 
 interface Employee {
@@ -119,6 +124,12 @@ export function CrmView() {
   const [showCustomerDetail, setShowCustomerDetail] = useState(false);
   const [customerSort, setCustomerSort] = useState<'name' | 'createdAt'>('name');
   const [customerSortDir, setCustomerSortDir] = useState<'asc' | 'desc'>('asc');
+
+  // ─── Customer Portal Invitation State ──────────────────────────────────
+  const [inviteCustomer, setInviteCustomer] = useState<Customer | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [inviteCopied, setInviteCopied] = useState(false);
 
   // ─── Employees State ────────────────────────────────────────────────────
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -211,6 +222,68 @@ export function CrmView() {
       }
     } catch {
       toast.error('Network error');
+    }
+  };
+
+  // ─── Customer Portal Invitation Handlers ────────────────────────────────
+  // POST /api/customers/[id]/portal/enable  → generates activation link
+  // POST /api/customers/[id]/portal/resend  → regenerates link
+  // POST /api/customers/[id]/portal/disable → revokes portal access
+  const API_SUFFIX = '?XTransformPort=3000';
+
+  const handleSendInvite = async (customer: Customer) => {
+    setInviteCustomer(customer);
+    setInviteUrl(null);
+    setInviteCopied(false);
+    setInviteLoading(true);
+    try {
+      const endpoint =
+        customer.invitationStatus === 'pending'
+          ? `/api/customers/${customer.id}/portal/resend${API_SUFFIX}`
+          : `/api/customers/${customer.id}/portal/enable${API_SUFFIX}`;
+      const res = await fetch(endpoint, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success && data.activationUrl) {
+        setInviteUrl(data.activationUrl);
+        toast.success(`Invitation link generated for ${customer.name}`);
+        fetchCustomers(); // refresh invitationStatus in the table
+      } else {
+        toast.error(data.error || 'Failed to generate invitation link');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  const handleDisablePortal = async (customer: Customer) => {
+    try {
+      const res = await fetch(
+        `/api/customers/${customer.id}/portal/disable${API_SUFFIX}`,
+        { method: 'POST' }
+      );
+      if (res.ok) {
+        toast.success(`Portal access disabled for ${customer.name}`);
+        fetchCustomers();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || 'Failed to disable portal access');
+      }
+    } catch {
+      toast.error('Network error');
+    }
+  };
+
+  const copyInviteUrl = async () => {
+    if (!inviteUrl) return;
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setInviteCopied(true);
+      toast.success('Invitation link copied to clipboard');
+      setTimeout(() => setInviteCopied(false), 2000);
+    } catch {
+      toast.error('Could not copy link');
     }
   };
 
@@ -458,6 +531,7 @@ export function CrmView() {
                       <TableHead>Phone</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Address</TableHead>
+                      <TableHead>Portal</TableHead>
                       <TableHead>
                         <button className="flex items-center gap-1 hover:text-foreground" onClick={() => handleSort('createdAt')}>
                           Added <ArrowUpDown className="size-3" />
@@ -509,6 +583,25 @@ export function CrmView() {
                             </span>
                           ) : '--'}
                         </TableCell>
+                        <TableCell className="text-xs">
+                          {customer.invitationStatus === 'accepted' ? (
+                            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 text-[10px]">
+                              <Check className="size-2.5 mr-1" /> Active
+                            </Badge>
+                          ) : customer.invitationStatus === 'pending' ? (
+                            <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 text-[10px]">
+                              <Clock className="size-2.5 mr-1" /> Pending
+                            </Badge>
+                          ) : customer.invitationStatus === 'disabled' ? (
+                            <Badge className="bg-red-100 text-red-700 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-300 text-[10px]">
+                              <Ban className="size-2.5 mr-1" /> Disabled
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                              <UserPlus className="size-2.5 mr-1" /> Not invited
+                            </Badge>
+                          )}
+                        </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
                           {formatDate(customer.createdAt)}
                         </TableCell>
@@ -526,6 +619,23 @@ export function CrmView() {
                               <DropdownMenuItem onClick={() => openEditCustomer(customer)}>
                                 <Pencil className="size-3.5 mr-2" /> Edit
                               </DropdownMenuItem>
+                              {/* Customer portal invitation actions */}
+                              {customer.invitationStatus === 'accepted' ? (
+                                <DropdownMenuItem
+                                  variant="destructive"
+                                  onClick={() => handleDisablePortal(customer)}
+                                >
+                                  <Ban className="size-3.5 mr-2" /> Disable Portal
+                                </DropdownMenuItem>
+                              ) : customer.invitationStatus === 'pending' ? (
+                                <DropdownMenuItem onClick={() => handleSendInvite(customer)}>
+                                  <RotateCw className="size-3.5 mr-2" /> Resend Invitation
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem onClick={() => handleSendInvite(customer)}>
+                                  <UserPlus className="size-3.5 mr-2" /> Send Invitation
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem
                                 variant="destructive"
                                 onClick={() => handleDeleteCustomer(customer.id)}
@@ -542,6 +652,118 @@ export function CrmView() {
               </ScrollArea>
             </Card>
           )}
+
+          {/* Customer Portal Invitation Dialog */}
+          <Dialog
+            open={!!inviteCustomer}
+            onOpenChange={(open) => {
+              if (!open) {
+                setInviteCustomer(null);
+                setInviteUrl(null);
+                setInviteCopied(false);
+              }
+            }}
+          >
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Send className="size-5 text-emerald-600" />
+                  Send Portal Invitation
+                </DialogTitle>
+                <DialogDescription>
+                  Generate a secure activation link for{' '}
+                  <span className="font-medium text-foreground">
+                    {inviteCustomer?.name}
+                  </span>
+                  . The customer uses this link to set their password and
+                  access the customer portal.
+                </DialogDescription>
+              </DialogHeader>
+
+              {inviteCustomer?.email ? (
+                <div className="text-sm text-muted-foreground flex items-center gap-2">
+                  <Mail className="size-4" />
+                  <span>{inviteCustomer.email}</span>
+                </div>
+              ) : (
+                <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/30 p-3 text-xs text-amber-800 dark:text-amber-200">
+                  This customer has no email address. You can still generate a
+                  link, but you&apos;ll need to share it with them manually
+                  (e.g. via WhatsApp).
+                </div>
+              )}
+
+              {inviteLoading ? (
+                <div className="flex items-center justify-center py-6">
+                  <RefreshCw className="size-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : inviteUrl ? (
+                <div className="space-y-3">
+                  <div className="rounded-md border bg-muted/40 p-3">
+                    <div className="text-xs font-medium text-muted-foreground mb-1.5">
+                      Activation Link
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <code className="flex-1 text-xs break-all leading-relaxed">
+                        {inviteUrl}
+                      </code>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 shrink-0"
+                        onClick={copyInviteUrl}
+                      >
+                        {inviteCopied ? (
+                          <>
+                            <Check className="size-3.5 mr-1" /> Copied
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="size-3.5 mr-1" /> Copy
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    The link expires in 7 days. The customer must set a password
+                    on first visit. After activation, they can sign in at{' '}
+                    <code className="text-foreground">/{'{slug}'}/customer</code>.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-md border border-red-200 bg-red-50 dark:border-red-900/60 dark:bg-red-950/30 p-3 text-sm text-red-800 dark:text-red-200">
+                  Could not generate the activation link. Please try again.
+                </div>
+              )}
+
+              <DialogFooter className="gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setInviteCustomer(null);
+                    setInviteUrl(null);
+                    setInviteCopied(false);
+                  }}
+                >
+                  Close
+                </Button>
+                {inviteUrl && (
+                  <Button onClick={copyInviteUrl} className="bg-emerald-600 hover:bg-emerald-700">
+                    {inviteCopied ? (
+                      <>
+                        <Check className="size-4 mr-1" /> Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="size-4 mr-1" /> Copy Link
+                      </>
+                    )}
+                  </Button>
+                )}
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {/* Add/Edit Customer Dialog */}
           <Dialog open={showAddCustomer} onOpenChange={setShowAddCustomer}>

@@ -80,9 +80,23 @@ export async function POST(
       },
     })
 
-    // Build the reset URL
+    // Build the reset URL — include the company slug.
     const baseUrl = getAppUrl()
-    const resetUrl = `${baseUrl}/accept-invite?token=${token}`
+    let tenantSlug: string | null = null
+    if (tenantId) {
+      try {
+        const tenant = await db.tenant.findUnique({
+          where: { id: tenantId },
+          select: { slug: true },
+        })
+        tenantSlug = tenant?.slug || null
+      } catch {
+        // ignore — fall back to slug-less URL
+      }
+    }
+    const resetUrl = tenantSlug
+      ? `${baseUrl}/${tenantSlug}/accept-invite?token=${token}&mode=reset`
+      : `${baseUrl}/accept-invite?token=${token}&mode=reset`
 
     return NextResponse.json({
       success: true,

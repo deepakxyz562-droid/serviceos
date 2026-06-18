@@ -29,6 +29,13 @@ export async function POST(
         email: true,
         portalEnabled: true,
         invitationStatus: true,
+        workspace: {
+          select: {
+            tenant: {
+              select: { slug: true },
+            },
+          },
+        },
       },
     })
 
@@ -51,8 +58,12 @@ export async function POST(
       },
     })
 
+    // Build the activation URL — must include the company slug.
     const baseUrl = getAppUrl()
-    const activationUrl = `${baseUrl}/accept-invite?token=${token}`
+    const slug = customer.workspace?.tenant?.slug
+    const activationUrl = slug
+      ? `${baseUrl}/${slug}/accept-invite?token=${token}`
+      : `${baseUrl}/accept-invite?token=${token}`
 
     return NextResponse.json({
       success: true,

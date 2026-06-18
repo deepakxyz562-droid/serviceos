@@ -75,6 +75,7 @@ async function bulkImportContacts(
   let imported = 0;
   let duplicates = 0;
   let skipped = 0;
+  let firstError: string | null = null;
 
   for (const contactData of contacts) {
     const name = (contactData.name as string)?.trim();
@@ -109,9 +110,40 @@ async function bulkImportContacts(
         },
       });
       imported++;
-    } catch {
+    } catch (err) {
+      // Capture the first error message so we can surface it to the caller.
+      // Without this, a misconfigured backend (e.g. a missing `Contact` table
+      // in Supabase) would silently skip every row and return imported:0,
+      // which is very hard to diagnose.
+      if (!firstError) {
+        firstError =
+          err instanceof Error
+            ? err.message
+            : typeof err === 'string'
+              ? err
+              : 'Unknown database error during contact create';
+      }
       skipped++;
     }
+  }
+
+  // If we skipped every single row AND captured a database error, the backend
+  // is almost certainly misconfigured (e.g. the `Contact` table is missing in
+  // Supabase). Surface a 500 with the real error so the caller can fix it,
+  // instead of a misleading 200 with imported:0.
+  if (imported === 0 && skipped === contacts.length && firstError) {
+    console.error('[contacts/import] All rows failed. First error:', firstError);
+    return NextResponse.json(
+      {
+        error: 'Import failed: no contacts could be saved.',
+        detail: firstError,
+        total: contacts.length,
+        imported,
+        duplicates,
+        skipped,
+      },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({
@@ -119,6 +151,7 @@ async function bulkImportContacts(
     imported,
     duplicates,
     skipped,
+    ...(firstError ? { warning: `${skipped} row(s) skipped. First error: ${firstError}` } : {}),
   });
 }
 

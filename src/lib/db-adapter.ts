@@ -42,6 +42,7 @@ const MODEL_TABLE_MAP: Record<string, string> = {
   customer: 'Customer',
   resource: 'Resource',
   job: 'Job',
+  contact: 'Contact',
   contactList: 'ContactList',
   contactListEntry: 'ContactListEntry',
   webhookSource: 'WebhookSource',

@@ -116,9 +116,24 @@ export async function POST(
       data: { invitationStatus: 'pending' },
     })
 
-    // Build the activation URL
+    // Build the activation URL — include the company slug so the link
+    // matches the /{companySlug}/accept-invite route.
     const baseUrl = getAppUrl()
-    const activationUrl = `${baseUrl}/accept-invite?token=${token}`
+    let tenantSlug: string | null = null
+    if (tenantId) {
+      try {
+        const tenant = await db.tenant.findUnique({
+          where: { id: tenantId },
+          select: { slug: true },
+        })
+        tenantSlug = tenant?.slug || null
+      } catch {
+        // ignore — fall back to slug-less URL
+      }
+    }
+    const activationUrl = tenantSlug
+      ? `${baseUrl}/${tenantSlug}/accept-invite?token=${token}`
+      : `${baseUrl}/accept-invite?token=${token}`
 
     return NextResponse.json({
       success: true,

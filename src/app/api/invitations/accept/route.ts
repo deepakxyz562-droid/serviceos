@@ -22,6 +22,99 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ── Customer portal activation tokens ───────────────────────────────
+    // Customer invitations store the token on Customer.activationToken
+    // (not in the Invitation table). Handle that case here.
+    const customer = await db.customer.findFirst({
+      where: { activationToken: token },
+      include: {
+        workspace: {
+          include: {
+            tenant: {
+              select: { id: true, name: true, slug: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (customer) {
+      // Expired?
+      if (
+        customer.activationTokenExpiresAt &&
+        customer.activationTokenExpiresAt < new Date()
+      ) {
+        return NextResponse.json(
+          { error: 'This activation link has expired. Please request a new one.' },
+          { status: 400 }
+        );
+      }
+
+      // Already used?
+      if (customer.activatedAt && customer.invitationStatus === 'accepted') {
+        return NextResponse.json(
+          { error: 'This activation link has already been used. You can sign in directly.' },
+          { status: 400 }
+        );
+      }
+
+      const passwordHash = await hashPassword(password);
+
+      await db.customer.update({
+        where: { id: customer.id },
+        data: {
+          passwordHash,
+          activatedAt: new Date(),
+          invitationStatus: 'accepted',
+          portalEnabled: true,
+          lastLoginAt: new Date(),
+          // Clear the token so it can't be reused
+          activationToken: null,
+          activationTokenExpiresAt: null,
+          // Update name/phone if provided
+          ...(name ? { name } : {}),
+          ...(phone ? { phone } : {}),
+        },
+      });
+
+      const tenant = customer.workspace?.tenant || null;
+
+      const authUser = {
+        id: `cust_${customer.id}`,
+        email: customer.email || customer.phone || '',
+        name: customer.name,
+        role: 'customer' as const,
+        isSuperAdmin: false,
+        tenantId: tenant?.id || null,
+        workspaceId: customer.workspaceId || null,
+        avatar: null,
+      };
+      const jwtToken = generateToken(authUser);
+
+      const response = NextResponse.json(
+        {
+          user: authUser,
+          tenant: tenant
+            ? {
+                id: tenant.id,
+                name: tenant.name,
+                slug: tenant.slug,
+              }
+            : null,
+          isCustomer: true,
+        },
+        { status: 200 }
+      );
+
+      response.cookies.set({
+        ...COOKIE_OPTIONS,
+        value: jwtToken,
+      });
+
+      return response;
+    }
+
+    // ── Invitation table tokens (employees / admins / resets) ───────────
     // Find the invitation
     const invitation = await db.invitation.findUnique({
       where: { token },
