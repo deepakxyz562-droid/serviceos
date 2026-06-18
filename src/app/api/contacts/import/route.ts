@@ -53,11 +53,27 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle JSON body (from CSV client-side parsing)
-    const body = await request.json();
-    const { contacts: contactData } = body;
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch (parseErr) {
+      console.error('[contacts/import] JSON body parse failed:', parseErr);
+      return NextResponse.json(
+        { error: 'Invalid request body. Expected JSON with a contacts array.' },
+        { status: 400 }
+      );
+    }
+
+    const contactData = (body as { contacts?: unknown })?.contacts;
 
     if (!Array.isArray(contactData) || contactData.length === 0) {
-      return NextResponse.json({ error: 'No contacts provided' }, { status: 400 });
+      return NextResponse.json(
+        {
+          error: 'No contacts provided.',
+          hint: 'Make sure the CSV has a column mapped to "Name" (required). Rows without a name are skipped.',
+        },
+        { status: 400 }
+      );
     }
 
     return await bulkImportContacts(contactData, user.tenantId || 'default', user.workspaceId);
@@ -156,14 +172,100 @@ async function bulkImportContacts(
 }
 
 function parseCSV(text: string): Record<string, string>[] {
-  const lines = text.split(/\r?\n/).filter(Boolean);
-  if (lines.length < 2) return [];
-  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-  return lines.slice(1).map(line => {
-    const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
-    const row: Record<string, string> = {};
-    headers.forEach((h, i) => { row[h] = values[i] || ''; });
-    return row;
+  // Strip a leading UTF-8 BOM if present — many editors add it and it
+  // breaks header matching (the first column would be `\uFEFFname`).
+  const cleaned = text.replace(/^\uFEFF/, '');
+  return parseCSVRobust(cleaned);
+}
+
+/**
+ * RFC-4180-ish CSV parser that handles:
+ *   - quoted fields containing commas, newlines, and escaped quotes ("")
+ *   - both \r\n and \n line endings
+ *   - trailing newline at EOF
+ *
+ * The naive `line.split(',')` approach silently corrupts any row containing
+ * a quoted field with a comma (e.g. `"Smith, John"`), which is the most
+ * common cause of imports returning zero rows / 400 "No contacts provided".
+ */
+function parseCSVRobust(text: string): Record<string, string>[] {
+  const rows: string[][] = [];
+  let currentField = '';
+  let currentRow: string[] = [];
+  let inQuotes = false;
+  let i = 0;
+
+  while (i < text.length) {
+    const ch = text[i];
+
+    if (inQuotes) {
+      if (ch === '"') {
+        // Escaped quote (`""` inside a quoted field) -> literal `"`
+        if (text[i + 1] === '"') {
+          currentField += '"';
+          i += 2;
+          continue;
+        }
+        // End of quoted field
+        inQuotes = false;
+        i++;
+        continue;
+      }
+      // Any character inside quotes (including newlines) is literal
+      currentField += ch;
+      i++;
+      continue;
+    }
+
+    // Not in quotes
+    if (ch === '"') {
+      inQuotes = true;
+      i++;
+      continue;
+    }
+    if (ch === ',') {
+      currentRow.push(currentField);
+      currentField = '';
+      i++;
+      continue;
+    }
+    if (ch === '\r') {
+      // Treat \r\n as a single line break
+      if (text[i + 1] === '\n') i++;
+      currentRow.push(currentField);
+      rows.push(currentRow);
+      currentField = '';
+      currentRow = [];
+      i++;
+      continue;
+    }
+    if (ch === '\n') {
+      currentRow.push(currentField);
+      rows.push(currentRow);
+      currentField = '';
+      currentRow = [];
+      i++;
+      continue;
+    }
+    currentField += ch;
+    i++;
+  }
+
+  // Flush the last field/row if the file doesn't end with a newline
+  if (currentField.length > 0 || currentRow.length > 0) {
+    currentRow.push(currentField);
+    rows.push(currentRow);
+  }
+
+  // Drop empty rows (e.g. blank line at EOF)
+  const nonEmpty = rows.filter(r => r.some(v => v.trim() !== ''));
+  if (nonEmpty.length < 2) return [];
+
+  const headers = nonEmpty[0].map(h => h.trim());
+  return nonEmpty.slice(1).map(row => {
+    const obj: Record<string, string> = {};
+    headers.forEach((h, idx) => { obj[h] = (row[idx] ?? '').trim(); });
+    return obj;
   });
 }
 

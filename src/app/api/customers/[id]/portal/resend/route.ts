@@ -7,7 +7,7 @@ import { getAuthUser, getAppUrl } from '@/lib/auth'
 // Regenerates the activation link for a customer whose portal is enabled but
 // who hasn't activated yet (or who needs a password reset).
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -59,7 +59,7 @@ export async function POST(
     })
 
     // Build the activation URL — must include the company slug.
-    const baseUrl = getAppUrl()
+    const baseUrl = getAppUrl(request)
     const slug = customer.workspace?.tenant?.slug
     const activationUrl = slug
       ? `${baseUrl}/${slug}/accept-invite?token=${token}`

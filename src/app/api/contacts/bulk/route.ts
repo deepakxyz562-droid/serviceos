@@ -179,8 +179,33 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error in bulk operation:', error);
+
+    // Extract a useful message from Prisma errors so the caller can diagnose
+    // schema mismatches (e.g. a missing table/column in the production DB).
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === 'string'
+          ? error
+          : 'Unknown error';
+
+    // Detect common Prisma "table/column does not exist" errors so we can
+    // give an actionable hint about running db:push against the production DB.
+    const isSchemaError =
+      /does not exist|Unknown column|no such table|no such column|relation .* does not exist/i.test(
+        message
+      );
+
     return NextResponse.json(
-      { error: 'Failed to perform bulk operation' },
+      {
+        error: 'Failed to perform bulk operation.',
+        detail: message,
+        ...(isSchemaError
+          ? {
+              hint: 'The database schema appears to be out of sync. Run `bun run db:push` against the production database (point DATABASE_URL at Supabase, push, then revert) to sync missing tables/columns.',
+            }
+          : {}),
+      },
       { status: 500 }
     );
   }

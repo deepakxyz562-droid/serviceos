@@ -8,7 +8,7 @@ import { getAppUrl } from '@/lib/auth'
 // Enables customer portal access and generates a magic-link activation token.
 // The customer uses the link to set their password and activate their account.
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -64,7 +64,7 @@ export async function POST(
 
     // Build the activation URL — must include the company slug because the
     // accept-invite route is /{companySlug}/accept-invite.
-    const baseUrl = getAppUrl()
+    const baseUrl = getAppUrl(request)
     const slug = customer.workspace?.tenant?.slug
     const activationUrl = slug
       ? `${baseUrl}/${slug}/accept-invite?token=${token}`

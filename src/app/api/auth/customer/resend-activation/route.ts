@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate a fresh activation token for each matched customer
-    const appUrl = getAppUrl();
+    const appUrl = getAppUrl(request);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     // For demo/dev mode, we return the link for the FIRST matched customer so

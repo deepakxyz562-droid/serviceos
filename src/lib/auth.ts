@@ -87,11 +87,33 @@ export function getTokenName(): string {
 }
 
 /**
- * Get the application URL from environment variables.
- * Used for generating invitation links and other absolute URLs.
+ * Get the application URL.
+ *
+ * Resolution order:
+ *   1. NEXT_PUBLIC_APP_URL / APP_URL env var (explicit, preferred for production)
+ *   2. The origin of the incoming request (derived from Host / X-Forwarded-* headers)
+ *   3. http://localhost:3000 (local dev fallback)
+ *
+ * Pass the NextRequest whenever you have one so the URL is correct even when
+ * the env var is not configured (e.g. on Netlify if NEXT_PUBLIC_APP_URL is
+ * missing). This makes invitation/activation links work out of the box.
  */
-export function getAppUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'http://localhost:3000';
+export function getAppUrl(request?: { headers: { get(name: string): string | null } }): string {
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
+  if (envUrl) return envUrl.replace(/\/$/, '');
+
+  if (request) {
+    const headers = request.headers;
+    const forwardedProto = headers.get('x-forwarded-proto');
+    const forwardedHost = headers.get('x-forwarded-host');
+    const host = forwardedHost || headers.get('host');
+    if (host) {
+      const proto = forwardedProto || (host.startsWith('localhost') ? 'http' : 'https');
+      return `${proto}://${host}`;
+    }
+  }
+
+  return 'http://localhost:3000';
 }
 
 // In HTTPS-through-proxy setups, Node sees HTTP internally,

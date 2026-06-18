@@ -7,7 +7,7 @@ import { getAuthUser, getAppUrl } from '@/lib/auth'
 // Generates a password-reset link for an employee. Works by creating a new
 // invitation (the accept-invite flow lets them set a new password).
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -81,7 +81,7 @@ export async function POST(
     })
 
     // Build the reset URL — include the company slug.
-    const baseUrl = getAppUrl()
+    const baseUrl = getAppUrl(request)
     let tenantSlug: string | null = null
     if (tenantId) {
       try {

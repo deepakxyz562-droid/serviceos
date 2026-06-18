@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const appUrl = getAppUrl();
+    const appUrl = getAppUrl(request);
     const resolvedSlug = slug || tenant?.slug || 'default';
     const resetUrl = `${appUrl}/${resolvedSlug}/accept-invite?token=${token}&mode=reset`;
 

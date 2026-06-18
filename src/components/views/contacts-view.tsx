@@ -558,7 +558,10 @@ export function ContactsView() {
         fetchContacts();
       } else {
         const err = await res.json().catch(() => ({}));
-        toast.error(err.error || 'Bulk action failed');
+        const msg = err?.error || 'Bulk action failed';
+        const detail = err?.detail ? ` (${err.detail})` : '';
+        const hint = err?.hint ? ` — ${err.hint}` : '';
+        toast.error(`${msg}${detail}${hint}`, { duration: 8000 });
       }
     } catch {
       toast.error('Bulk action failed');
@@ -684,14 +687,63 @@ export function ContactsView() {
   ];
 
   const parseCSV = (text: string): Record<string, string>[] => {
-    const lines = text.split(/\r?\n/).filter(Boolean);
-    if (lines.length < 2) return [];
-    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-    return lines.slice(1).map(line => {
-      const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
-      const row: Record<string, string> = {};
-      headers.forEach((h, i) => { row[h] = values[i] || ''; });
-      return row;
+    // Strip a leading UTF-8 BOM if present — many editors add it and it
+    // breaks header matching (the first column would be `\uFEFFname`).
+    const cleaned = text.replace(/^\uFEFF/, '');
+
+    // RFC-4180-ish parser that handles quoted fields containing commas,
+    // newlines, and escaped quotes (""). The naive `line.split(',')` approach
+    // silently corrupts any row containing `"Smith, John"`, which is the most
+    // common cause of imports returning zero rows / 400 "No contacts provided".
+    const rows: string[][] = [];
+    let currentField = '';
+    let currentRow: string[] = [];
+    let inQuotes = false;
+    const src = cleaned;
+
+    for (let i = 0; i < src.length; i++) {
+      const ch = src[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (src[i + 1] === '"') { currentField += '"'; i++; continue; }
+          inQuotes = false;
+          continue;
+        }
+        currentField += ch;
+        continue;
+      }
+      if (ch === '"') { inQuotes = true; continue; }
+      if (ch === ',') { currentRow.push(currentField); currentField = ''; continue; }
+      if (ch === '\r') {
+        if (src[i + 1] === '\n') i++;
+        currentRow.push(currentField);
+        rows.push(currentRow);
+        currentField = '';
+        currentRow = [];
+        continue;
+      }
+      if (ch === '\n') {
+        currentRow.push(currentField);
+        rows.push(currentRow);
+        currentField = '';
+        currentRow = [];
+        continue;
+      }
+      currentField += ch;
+    }
+    if (currentField.length > 0 || currentRow.length > 0) {
+      currentRow.push(currentField);
+      rows.push(currentRow);
+    }
+
+    const nonEmpty = rows.filter(r => r.some(v => v.trim() !== ''));
+    if (nonEmpty.length < 2) return [];
+
+    const headers = nonEmpty[0].map(h => h.trim());
+    return nonEmpty.slice(1).map(row => {
+      const obj: Record<string, string> = {};
+      headers.forEach((h, idx) => { obj[h] = (row[idx] ?? '').trim(); });
+      return obj;
     });
   };
 
@@ -764,6 +816,12 @@ export function ContactsView() {
           return contact;
         }).filter(c => c.name);
 
+        if (mappedContacts.length === 0) {
+          toast.error('No rows with a mapped "Name" field. Please map at least one column to Name in the field mapping above.');
+          setImporting(false);
+          return;
+        }
+
         const res = await fetch('/api/contacts/import', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -775,7 +833,10 @@ export function ContactsView() {
           toast.success(`Imported ${stats.imported} contacts`);
           fetchContacts();
         } else {
-          toast.error('Import failed');
+          const err = await res.json().catch(() => ({}));
+          const msg = err?.error || 'Import failed';
+          const hint = err?.hint ? ` — ${err.hint}` : '';
+          toast.error(`${msg}${hint}`);
         }
       } else {
         const formData = new FormData();
@@ -788,11 +849,15 @@ export function ContactsView() {
           toast.success(`Imported ${stats.imported} contacts`);
           fetchContacts();
         } else {
-          toast.error('Import failed');
+          const err = await res.json().catch(() => ({}));
+          const msg = err?.error || 'Import failed';
+          const hint = err?.hint ? ` — ${err.hint}` : '';
+          toast.error(`${msg}${hint}`);
         }
       }
-    } catch {
-      toast.error('Import failed');
+    } catch (e) {
+      console.error('Import failed', e);
+      toast.error('Import failed — please check the file format and try again.');
     } finally {
       setImporting(false);
     }

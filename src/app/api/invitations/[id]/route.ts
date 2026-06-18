@@ -138,7 +138,7 @@ export async function POST(
     });
 
     // Build the invite URL
-    const appUrl = getAppUrl();
+    const appUrl = getAppUrl(request);
     const inviteUrl = `${appUrl}/?invite=${newToken}`;
 
     return NextResponse.json({
