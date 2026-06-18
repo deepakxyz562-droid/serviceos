@@ -257,7 +257,11 @@ export async function notifyEmployeeJobAssigned(
     jobId: job.id as string,
     employeeId: employee.id as string,
     customerId: (job.customerId as string) || undefined,
-    tenantId: (job.tenantId as string) || (employee.workspaceId as string) || undefined,
+    // NOTE: NotificationLog.tenantId is a FK to Tenant. Job has `workspaceId`,
+    // not `tenantId`, so `job.tenantId` is always undefined here. Do NOT fall
+    // back to `employee.workspaceId` — that is a Workspace ID, not a Tenant ID,
+    // and would violate the FK constraint (Prisma P2003) and abort the log.
+    tenantId: (job.tenantId as string) || undefined,
   })
 }
 
@@ -288,7 +292,7 @@ export async function notifyEmployeeJobStarted(
     jobId: job.id as string,
     employeeId: employee.id as string,
     customerId: (job.customerId as string) || undefined,
-    tenantId: (job.tenantId as string) || (employee.workspaceId as string) || undefined,
+    tenantId: (job.tenantId as string) || undefined,
   })
 }
 
@@ -318,7 +322,7 @@ export async function notifyEmployeeJobCompleted(
     jobId: job.id as string,
     employeeId: employee.id as string,
     customerId: (job.customerId as string) || undefined,
-    tenantId: (job.tenantId as string) || (employee.workspaceId as string) || undefined,
+    tenantId: (job.tenantId as string) || undefined,
   })
 }
 
@@ -395,15 +399,26 @@ export async function notifyCustomerJobCompleted(
   const customerPhone = (job.customerPhone as string) || ''
   if (!customerPhone) return
 
-  // Try to find tenant name for the signature
+  // Try to find tenant name for the signature.
+  // Job has `workspaceId` (not `tenantId`), so resolve via the Workspace row.
   let tenantName = 'ServiceOS'
-  if (job.tenantId) {
-    try {
-      const tenant = await db.tenant.findUnique({ where: { id: job.tenantId as string } })
-      if (tenant?.name) tenantName = tenant.name
-    } catch {
-      // fallback to default
+  try {
+    const wid = (job.tenantId as string) || (job.workspaceId as string)
+    if (wid) {
+      // Could be either a tenant id or a workspace id — try tenant first, then workspace
+      const tenant = await db.tenant.findUnique({ where: { id: wid } })
+      if (tenant?.name) {
+        tenantName = tenant.name
+      } else {
+        const workspace = await db.workspace.findUnique({
+          where: { id: wid },
+          include: { tenant: true },
+        })
+        if (workspace?.tenant?.name) tenantName = workspace.tenant.name
+      }
     }
+  } catch {
+    // fallback to default
   }
 
   const jobNumber = getJobNumber(job)

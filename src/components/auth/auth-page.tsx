@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
@@ -24,14 +25,7 @@ import {
   Hammer,
   Leaf,
   MessageSquare,
-  ArrowLeft,
-  ShieldCheck,
-  RefreshCw,
-  KeyRound,
-  AlertCircle,
-  CheckCircle2,
-  HardHat,
-  Copy,
+  Search,
 } from 'lucide-react';
 
 import { Card, CardContent } from '@/components/ui/card';
@@ -46,12 +40,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-  InputOTPSeparator,
-} from '@/components/ui/input-otp';
+import { CompanyFinder } from './company-finder';
 
 interface AuthPageProps {
   onAuthSuccess: (user: any, tenant: any) => void;
@@ -60,21 +49,8 @@ interface AuthPageProps {
 }
 
 // Tab state
-type LoginTab = 'business' | 'employee' | 'customer';
+type LoginTab = 'business' | 'customer';
 type BusinessTab = 'login' | 'register';
-type CustomerStep = 'credentials' | 'company' | 'otp';
-type CustomerMode = 'password' | 'otp';
-
-interface CompanyInfo {
-  customerId: string;
-  customerName: string;
-  tenantId: string | null;
-  tenantName: string | null;
-  tenantSlug: string | null;
-  workspaceName: string | null;
-  industry: string | null;
-  logo: string | null;
-}
 
 const INDUSTRIES = [
   { value: 'plumbing', label: 'Plumbing' },
@@ -135,6 +111,8 @@ const tabContentVariants = {
 };
 
 export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
+  const router = useRouter();
+
   // Top-level tab
   const [loginTab, setLoginTab] = useState<LoginTab>('business');
   const [isLoading, setIsLoading] = useState(false);
@@ -152,50 +130,10 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
   const [regIndustry, setRegIndustry] = useState('');
   const [regPhone, setRegPhone] = useState('');
 
-  // Employee Login state
-  const [empEmail, setEmpEmail] = useState('');
-  const [empPassword, setEmpPassword] = useState('');
-
-  // Customer Login state (Email/Phone + Password flow)
-  const [customerMode, setCustomerMode] = useState<CustomerMode>('password');
-  const [customerStep, setCustomerStep] = useState<CustomerStep>('credentials');
-  const [customerIdentifier, setCustomerIdentifier] = useState(''); // email OR phone
-  const [customerPassword, setCustomerPassword] = useState('');
-  const [customerCompanies, setCustomerCompanies] = useState<CompanyInfo[]>([]);
-  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
-  const [activationLink, setActivationLink] = useState<string | null>(null);
-
-  // Customer OTP state (fallback)
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [otpValue, setOtpValue] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [resendTimer, setResendTimer] = useState(0);
-  const [simulatedOtp, setSimulatedOtp] = useState<string | null>(null);
-
-  // Resend timer countdown
-  useEffect(() => {
-    if (resendTimer <= 0) return;
-    const timer = setTimeout(() => setResendTimer(prev => prev - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [resendTimer]);
-
   // ─── Tab Switch Handler ───
   const handleTabSwitch = (tab: LoginTab) => {
     if (tab === loginTab) return;
     setLoginTab(tab);
-    // Reset customer state when switching tabs
-    if (tab === 'customer') {
-      setCustomerStep('credentials');
-      setCustomerMode('password');
-      setCustomerIdentifier('');
-      setCustomerPassword('');
-      setCustomerCompanies([]);
-      setSelectedTenantId(null);
-      setActivationLink(null);
-      setOtpValue('');
-      setOtpSent(false);
-      setSimulatedOtp(null);
-    }
   };
 
   // ─── Business Login Handler ───
@@ -272,237 +210,6 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
       onAuthSuccess(data.user, data.tenant);
     } catch {
       toast.error('Something went wrong. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // ─── Employee Login Handler ───
-  const handleEmployeeLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!empEmail || !empPassword) {
-      toast.error('Please fill in all fields');
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const res = await fetch('/api/auth/login?XTransformPort=3000', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: empEmail, password: empPassword }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || 'Login failed');
-        return;
-      }
-      if (data.user.role !== 'employee') {
-        toast.error('This login is for employees only. Please use the Business tab for admin/owner accounts.');
-        setIsLoading(false);
-        return;
-      }
-      localStorage.setItem('serviceos_auth', JSON.stringify({
-        isAuthenticated: true,
-        user: data.user,
-        tenant: data.tenant || null,
-        token: data.token,
-      }));
-      toast.success('Welcome to your employee portal!');
-      onAuthSuccess(data.user, data.tenant);
-    } catch {
-      toast.error('Something went wrong. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // ─── Customer Login (Email/Phone + Password) ───
-  const handleCustomerLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!customerIdentifier || !customerPassword) {
-      toast.error('Please enter your email/phone and password');
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const res = await fetch('/api/auth/customer/login?XTransformPort=3000', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          identifier: customerIdentifier,
-          password: customerPassword,
-          tenantId: customerStep === 'company' ? selectedTenantId : null,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        // Multi-company → switch to company picker
-        if (res.status === 409 && data.multiCompany) {
-          setCustomerCompanies(data.companies || []);
-          setCustomerStep('company');
-          toast.info('Multiple companies found — please select one.');
-          return;
-        }
-        // Account not activated → offer to send activation link
-        if (res.status === 403 && data.needsActivation) {
-          toast.error(data.error || 'Account not activated');
-          return;
-        }
-        toast.error(data.error || 'Login failed');
-        return;
-      }
-      localStorage.setItem('serviceos_auth', JSON.stringify({
-        isAuthenticated: true,
-        user: data.user,
-        tenant: data.tenant || null,
-        token: data.token,
-        portalToken: data.portalToken,
-        isCustomer: true,
-      }));
-      toast.success('Welcome back!');
-      onAuthSuccess(data.user, data.tenant);
-    } catch {
-      toast.error('Something went wrong. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // ─── Customer: Request Activation Link (Forgot Password / First-time) ───
-  const handleRequestActivation = async () => {
-    if (!customerIdentifier) {
-      toast.error('Please enter your email or phone first');
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const res = await fetch('/api/auth/customer/resend-activation?XTransformPort=3000', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: customerIdentifier }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || 'Failed to send activation link');
-        return;
-      }
-      if (data.devMode && data.inviteUrl) {
-        setActivationLink(data.inviteUrl);
-        toast.success('Demo Mode: Activation link generated.', {
-          description: 'Click the link below to set your password.',
-          duration: 8000,
-        });
-      } else {
-        toast.success(data.message || 'If an account exists, an activation link has been sent.');
-      }
-    } catch {
-      toast.error('Failed to send activation link');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // ─── Send OTP Handler (WhatsApp fallback) ───
-  const handleSendOtp = async () => {
-    if (!customerPhone || customerPhone.replace(/\D/g, '').length < 10) {
-      toast.error('Please enter a valid 10-digit mobile number');
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const res = await fetch('/api/auth/customer/send-otp?XTransformPort=3000', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: customerPhone }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || 'Failed to send OTP');
-        return;
-      }
-      setOtpSent(true);
-      setResendTimer(30);
-      setCustomerStep('otp');
-
-      if (data.simulated && data.otpCode) {
-        setSimulatedOtp(data.otpCode);
-        toast.success(`Demo Mode: Your OTP is ${data.otpCode}`, { duration: 8000 });
-      } else {
-        toast.success('OTP sent to your WhatsApp!', { description: `Check WhatsApp on ${data.phone}` });
-      }
-    } catch {
-      toast.error('Failed to send OTP. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // ─── Verify OTP Handler ───
-  const handleVerifyOtp = async () => {
-    if (otpValue.length !== 6) {
-      toast.error('Please enter the 6-digit OTP');
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const res = await fetch('/api/auth/customer/verify-otp?XTransformPort=3000', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: customerPhone, otpCode: otpValue }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || 'Verification failed');
-        return;
-      }
-      localStorage.setItem('serviceos_auth', JSON.stringify({
-        isAuthenticated: true,
-        user: data.user,
-        tenant: data.tenant || null,
-        token: data.token,
-        portalToken: data.portalToken,
-        isCustomer: true,
-      }));
-
-      if (data.isNewCustomer) {
-        toast.success('Welcome! Your customer portal is ready.');
-      } else {
-        toast.success('Welcome back!');
-      }
-      onAuthSuccess(data.user, data.tenant);
-    } catch {
-      toast.error('Verification failed. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // ─── Resend OTP Handler ───
-  const handleResendOtp = async () => {
-    if (resendTimer > 0) return;
-    setIsLoading(true);
-    try {
-      const res = await fetch('/api/auth/customer/send-otp?XTransformPort=3000', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: customerPhone }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data.error || 'Failed to resend OTP');
-        return;
-      }
-      setResendTimer(30);
-      setOtpValue('');
-
-      if (data.simulated && data.otpCode) {
-        setSimulatedOtp(data.otpCode);
-        toast.success(`Demo Mode: Your OTP is ${data.otpCode}`, { duration: 8000 });
-      } else {
-        toast.success('New OTP sent to your WhatsApp!');
-      }
-    } catch {
-      toast.error('Failed to resend OTP.');
     } finally {
       setIsLoading(false);
     }
@@ -735,101 +442,17 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
     </div>
   );
 
-  // ─── Render: Employee Tab Content ───
-  const renderEmployeeContent = () => (
+  // ─── Render: Customer Tab Content (Company Finder) ───
+  const renderCustomerCompanyFinder = () => (
     <motion.div
-      key="employee-content"
+      key="customer-finder"
       variants={tabContentVariants}
       initial="enter"
       animate="center"
       exit="exit"
       className="w-full"
     >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.1, duration: 0.4 }}
-        className="flex justify-center mb-6"
-      >
-        <div className="w-16 h-16 rounded-2xl bg-amber-50 border-2 border-amber-200 flex items-center justify-center">
-          <HardHat className="w-8 h-8 text-amber-600" />
-        </div>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2, duration: 0.4 }}
-      >
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight text-center mb-1">
-          Employee Portal
-        </h2>
-        <p className="text-slate-500 text-sm text-center mb-6">
-          Sign in with your company email and password
-        </p>
-
-        <form onSubmit={handleEmployeeLogin} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="emp-email" className="text-slate-700">Email</Label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <Input
-                id="emp-email"
-                type="email"
-                placeholder="mike@abccompany.com"
-                value={empEmail}
-                onChange={(e) => setEmpEmail(e.target.value)}
-                className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-amber-500 focus-visible:ring-amber-500/20"
-                autoComplete="email"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="emp-password" className="text-slate-700">Password</Label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <Input
-                id="emp-password"
-                type="password"
-                placeholder="Enter your password"
-                value={empPassword}
-                onChange={(e) => setEmpPassword(e.target.value)}
-                className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-amber-500 focus-visible:ring-amber-500/20"
-                autoComplete="current-password"
-              />
-            </div>
-          </div>
-
-          <Button
-            type="submit"
-            disabled={isLoading}
-            className="w-full h-10 bg-amber-600 hover:bg-amber-700 text-white font-medium cursor-pointer"
-          >
-            {isLoading ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> Signing in...</>
-            ) : 'Sign In'}
-          </Button>
-
-          <p className="text-center text-xs text-slate-400 pt-2">
-            Don&apos;t have an employee account? Ask your manager to send you an invitation.
-          </p>
-        </form>
-      </motion.div>
-    </motion.div>
-  );
-
-  // ─── Render: Customer Tab Content (Credentials Step — Email/Phone + Password) ───
-  const renderCustomerCredentialsStep = () => (
-    <motion.div
-      key="customer-credentials"
-      variants={tabContentVariants}
-      initial="enter"
-      animate="center"
-      exit="exit"
-      className="w-full"
-    >
-      {/* Customer icon */}
+      {/* Search icon */}
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -837,7 +460,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
         className="flex justify-center mb-6"
       >
         <div className="w-16 h-16 rounded-2xl bg-teal-50 border-2 border-teal-200 flex items-center justify-center">
-          <User className="w-8 h-8 text-teal-600" />
+          <Search className="w-8 h-8 text-teal-600" />
         </div>
       </motion.div>
 
@@ -847,417 +470,36 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
         transition={{ delay: 0.2, duration: 0.4 }}
         className="space-y-4"
       >
-        <div className="text-center mb-2">
+        <div className="space-y-1.5 text-center">
           <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Customer Portal
+            Find your company
           </h2>
-          <p className="text-slate-500 text-sm mt-1.5">
-            Sign in with your email or phone and password
+          <p className="text-sm text-slate-500">
+            Search for your service provider to access your customer portal.
           </p>
         </div>
 
-        {/* Mode switcher: Password | WhatsApp OTP */}
-        {customerMode === 'password' && (
-          <form onSubmit={handleCustomerLogin} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="customer-identifier" className="text-slate-700">
-                Email or Mobile Number
-              </Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <Input
-                  id="customer-identifier"
-                  type="text"
-                  placeholder="john@gmail.com  or  98765 43210"
-                  value={customerIdentifier}
-                  onChange={(e) => setCustomerIdentifier(e.target.value)}
-                  className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-teal-500 focus-visible:ring-teal-500/20"
-                  autoComplete="username"
-                />
-              </div>
-              <p className="text-xs text-slate-400">
-                We&apos;ll automatically find the company you belong to
-              </p>
-            </div>
+        <CompanyFinder
+          onSelect={(slug) => router.push(`/${slug}/customer`)}
+          autoFocus
+          placeholder="Search by company name…"
+        />
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="customer-password" className="text-slate-700">Password</Label>
-                <button
-                  type="button"
-                  onClick={handleRequestActivation}
-                  disabled={isLoading || !customerIdentifier}
-                  className="text-xs text-teal-600 hover:text-teal-700 font-medium hover:underline transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Forgot / Need activation?
-                </button>
-              </div>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <Input
-                  id="customer-password"
-                  type="password"
-                  placeholder="Enter your password"
-                  value={customerPassword}
-                  onChange={(e) => setCustomerPassword(e.target.value)}
-                  className="pl-10 h-10 bg-white border-slate-200 focus-visible:border-teal-500 focus-visible:ring-teal-500/20"
-                  autoComplete="current-password"
-                />
-              </div>
-            </div>
-
-            <Button
-              type="submit"
-              disabled={isLoading || !customerIdentifier || !customerPassword}
-              className="w-full h-10 bg-teal-600 hover:bg-teal-700 text-white font-medium cursor-pointer"
-            >
-              {isLoading ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> Signing in...</>
-              ) : 'Sign In'}
-            </Button>
-          </form>
-        )}
-
-        {/* Activation link panel (dev/demo mode) */}
-        {activationLink && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-lg bg-emerald-50 border border-emerald-200 p-4 space-y-2"
-          >
-            <div className="flex items-center gap-2">
-              <KeyRound className="w-4 h-4 text-emerald-600" />
-              <p className="text-sm font-semibold text-emerald-800">Your Activation Link</p>
-            </div>
-            <p className="text-xs text-emerald-700">
-              Click the link below to set your password and activate your portal account.
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3.5 flex items-start gap-2.5">
+          <Building2 className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+          <div className="text-xs text-slate-500 space-y-1">
+            <p className="font-medium text-slate-700">How it works</p>
+            <p>
+              Type your service provider&apos;s name, pick your company, then
+              sign in with the email and password your provider set up for you.
             </p>
-            <div className="flex gap-2">
-              <a
-                href={activationLink}
-                className="flex-1 text-center text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-md py-2 px-3 transition-colors"
-              >
-                Activate My Account →
-              </a>
-              <button
-                type="button"
-                onClick={() => {
-                  navigator.clipboard?.writeText(activationLink);
-                  toast.success('Link copied to clipboard');
-                }}
-                className="text-xs font-medium text-emerald-700 bg-white border border-emerald-200 hover:bg-emerald-50 rounded-md py-2 px-3 transition-colors flex items-center gap-1"
-              >
-                <Copy className="w-3.5 h-3.5" />
-                Copy
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Divider */}
-        <div className="relative py-1">
-          <div className="absolute inset-0 flex items-center"><Separator className="w-full" /></div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-white px-3 text-slate-400 font-medium">or</span>
           </div>
         </div>
 
-        {/* OTP mode toggle */}
-        {customerMode === 'password' ? (
-          <button
-            type="button"
-            onClick={() => {
-              setCustomerMode('otp');
-              setCustomerStep('credentials');
-              setActivationLink(null);
-            }}
-            className="w-full flex items-center justify-center gap-2 text-sm text-slate-600 hover:text-teal-700 font-medium py-2 transition-colors"
-          >
-            <MessageSquare className="w-4 h-4 text-green-500" />
-            Login with WhatsApp OTP instead
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => {
-              setCustomerMode('password');
-              setCustomerStep('credentials');
-              setOtpValue('');
-              setOtpSent(false);
-              setSimulatedOtp(null);
-            }}
-            className="w-full flex items-center justify-center gap-2 text-sm text-slate-600 hover:text-teal-700 font-medium py-2 transition-colors"
-          >
-            <Lock className="w-4 h-4 text-slate-400" />
-            Use Email / Phone + Password instead
-          </button>
-        )}
-
-        {/* WhatsApp OTP form (when in OTP mode) */}
-        {customerMode === 'otp' && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="space-y-4 pt-2"
-          >
-            <div className="space-y-2">
-              <Label htmlFor="customer-phone-otp" className="text-slate-700">
-                Mobile Number
-              </Label>
-              <div className="flex gap-2">
-                <div className="flex-shrink-0 w-[88px] h-10 rounded-md border border-slate-200 bg-white flex items-center justify-center gap-1.5 px-3 text-sm font-medium text-slate-600">
-                  🇮🇳 +91
-                </div>
-                <Input
-                  id="customer-phone-otp"
-                  type="tel"
-                  placeholder="98765 43210"
-                  value={customerPhone}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/[^\d\s]/g, '');
-                    if (val.replace(/\s/g, '').length <= 10) {
-                      setCustomerPhone(val);
-                    }
-                  }}
-                  className="flex-1 h-10 bg-white border-slate-200 focus-visible:border-teal-500 focus-visible:ring-teal-500/20 text-base tracking-wider"
-                  maxLength={12}
-                  autoFocus
-                />
-              </div>
-              <p className="text-xs text-slate-400">
-                Enter your 10-digit mobile number
-              </p>
-            </div>
-
-            <Button
-              type="button"
-              onClick={handleSendOtp}
-              disabled={isLoading || customerPhone.replace(/\s/g, '').length < 10}
-              className="w-full h-11 bg-green-600 hover:bg-green-700 text-white font-medium cursor-pointer text-base"
-            >
-              {isLoading ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> Sending OTP...</>
-              ) : (
-                <>
-                  <MessageSquare className="w-4 h-4 mr-1.5" />
-                  Send OTP via WhatsApp
-                </>
-              )}
-            </Button>
-
-            <p className="text-center text-xs text-slate-400 mt-2">
-              We&apos;ll send a 6-digit code to your WhatsApp number
-            </p>
-          </motion.div>
-        )}
-
-        <p className="text-center text-xs text-slate-400 pt-2">
-          Don&apos;t have an account yet? Ask your service provider to send you a portal invitation.
+        <p className="text-center text-xs text-slate-400">
+          Don&apos;t know your company link? Ask your service provider to send
+          you an invitation.
         </p>
-      </motion.div>
-    </motion.div>
-  );
-
-  // ─── Render: Customer Tab Content (Company Picker Step) ───
-  const renderCustomerCompanyStep = () => (
-    <motion.div
-      key="customer-company"
-      variants={tabContentVariants}
-      initial="enter"
-      animate="center"
-      exit="exit"
-      className="w-full"
-    >
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="mb-6"
-      >
-        <button
-          onClick={() => {
-            setCustomerStep('credentials');
-            setSelectedTenantId(null);
-          }}
-          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors mb-4"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back
-        </button>
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-          Select Company
-        </h2>
-        <p className="text-slate-500 text-sm mt-1.5">
-          Your email belongs to multiple companies. Choose which one you want to log in to.
-        </p>
-      </motion.div>
-
-      <div className="space-y-3">
-        {customerCompanies.map((company) => (
-          <button
-            key={company.customerId}
-            type="button"
-            onClick={() => setSelectedTenantId(company.tenantId)}
-            className={`w-full flex items-center gap-3 p-4 rounded-xl border-2 transition-all text-left cursor-pointer ${
-              selectedTenantId === company.tenantId
-                ? 'border-teal-500 bg-teal-50'
-                : 'border-slate-200 bg-white hover:border-teal-300 hover:bg-teal-50/30'
-            }`}
-          >
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-teal-400 to-emerald-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-              {(company.tenantName || company.workspaceName || 'C').charAt(0).toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-semibold text-slate-900 truncate">
-                {company.tenantName || company.workspaceName || 'Unknown Company'}
-              </p>
-              {company.industry && (
-                <p className="text-xs text-slate-500 capitalize">{company.industry.replace('-', ' ')}</p>
-              )}
-            </div>
-            {selectedTenantId === company.tenantId && (
-              <CheckCircle2 className="w-5 h-5 text-teal-600 flex-shrink-0" />
-            )}
-          </button>
-        ))}
-      </div>
-
-      <Button
-        type="button"
-        onClick={handleCustomerLogin}
-        disabled={isLoading || !selectedTenantId}
-        className="w-full h-10 bg-teal-600 hover:bg-teal-700 text-white font-medium cursor-pointer mt-6"
-      >
-        {isLoading ? (
-          <><Loader2 className="w-4 h-4 animate-spin" /> Signing in...</>
-        ) : 'Continue'}
-      </Button>
-    </motion.div>
-  );
-
-  // ─── Render: Customer Tab Content (OTP Step) ───
-  const renderCustomerOtpStep = () => (
-    <motion.div
-      key="customer-otp"
-      variants={tabContentVariants}
-      initial="enter"
-      animate="center"
-      exit="exit"
-      className="w-full"
-    >
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="mb-6"
-      >
-        <button
-          onClick={() => {
-            setCustomerStep('credentials');
-            setOtpValue('');
-          }}
-          className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors mb-4"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back
-        </button>
-        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-          Verify OTP
-        </h2>
-        <p className="text-slate-500 text-sm mt-1.5">
-          Enter the 6-digit code sent to{' '}
-          <span className="font-semibold text-slate-700">
-            +91 {customerPhone}
-          </span>
-        </p>
-      </motion.div>
-
-      {/* Shield icon */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.1, duration: 0.4 }}
-        className="flex justify-center mb-6"
-      >
-        <div className="w-14 h-14 rounded-2xl bg-teal-50 border-2 border-teal-200 flex items-center justify-center">
-          <ShieldCheck className="w-7 h-7 text-teal-600" />
-        </div>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2, duration: 0.4 }}
-        className="space-y-6"
-      >
-        {/* OTP Input */}
-        <div className="flex flex-col items-center gap-2">
-          <InputOTP
-            maxLength={6}
-            value={otpValue}
-            onChange={setOtpValue}
-          >
-            <InputOTPGroup>
-              <InputOTPSlot index={0} className="h-14 w-12 text-xl font-semibold border-2 border-slate-200 data-[active=true]:border-teal-500 data-[active=true]:ring-teal-500/20" />
-              <InputOTPSlot index={1} className="h-14 w-12 text-xl font-semibold border-2 border-slate-200 data-[active=true]:border-teal-500 data-[active=true]:ring-teal-500/20" />
-              <InputOTPSlot index={2} className="h-14 w-12 text-xl font-semibold border-2 border-slate-200 data-[active=true]:border-teal-500 data-[active=true]:ring-teal-500/20" />
-            </InputOTPGroup>
-            <InputOTPSeparator />
-            <InputOTPGroup>
-              <InputOTPSlot index={3} className="h-14 w-12 text-xl font-semibold border-2 border-slate-200 data-[active=true]:border-teal-500 data-[active=true]:ring-teal-500/20" />
-              <InputOTPSlot index={4} className="h-14 w-12 text-xl font-semibold border-2 border-slate-200 data-[active=true]:border-teal-500 data-[active=true]:ring-teal-500/20" />
-              <InputOTPSlot index={5} className="h-14 w-12 text-xl font-semibold border-2 border-slate-200 data-[active=true]:border-teal-500 data-[active=true]:ring-teal-500/20" />
-            </InputOTPGroup>
-          </InputOTP>
-
-          {/* Simulated OTP hint */}
-          {simulatedOtp && (
-            <motion.div
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-2 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700 font-medium"
-            >
-              Demo Mode — OTP: <span className="font-bold text-amber-900">{simulatedOtp}</span>
-            </motion.div>
-          )}
-        </div>
-
-        {/* Verify Button */}
-        <Button
-          type="button"
-          onClick={handleVerifyOtp}
-          disabled={isLoading || otpValue.length !== 6}
-          className="w-full h-11 bg-teal-600 hover:bg-teal-700 text-white font-medium cursor-pointer text-base"
-        >
-          {isLoading ? (
-            <><Loader2 className="w-4 h-4 animate-spin" /> Verifying...</>
-          ) : (
-            <>
-              <ShieldCheck className="w-4 h-4 mr-1.5" />
-              Verify & Login
-            </>
-          )}
-        </Button>
-
-        {/* Resend OTP */}
-        <div className="text-center">
-          {resendTimer > 0 ? (
-            <p className="text-sm text-slate-500">
-              Resend OTP in{' '}
-              <span className="font-semibold text-slate-700">{resendTimer}s</span>
-            </p>
-          ) : (
-            <button
-              type="button"
-              onClick={handleResendOtp}
-              disabled={isLoading}
-              className="inline-flex items-center gap-1.5 text-sm text-teal-600 hover:text-teal-700 font-semibold hover:underline transition-colors cursor-pointer"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Resend OTP
-            </button>
-          )}
-        </div>
       </motion.div>
     </motion.div>
   );
@@ -1418,7 +660,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
             </span>
           </motion.div>
 
-          {/* ─── Login Tabs — Business | Employee | Customer ─── */}
+          {/* ─── Prominent Login Tabs ─── */}
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1430,42 +672,28 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
               <button
                 type="button"
                 onClick={() => handleTabSwitch('business')}
-                className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 px-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer ${
+                className={`flex-1 flex items-center justify-center gap-2.5 py-3 px-4 rounded-lg text-sm font-semibold transition-all duration-200 cursor-pointer ${
                   loginTab === 'business'
                     ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200'
                     : 'text-slate-500 hover:text-slate-700 hover:bg-white/50 border border-transparent'
                 }`}
               >
-                <Building2 className={`w-4 h-4 ${loginTab === 'business' ? 'text-emerald-600' : 'text-slate-400'}`} />
-                <span>Business</span>
-              </button>
-
-              {/* Employee Login Tab */}
-              <button
-                type="button"
-                onClick={() => handleTabSwitch('employee')}
-                className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 px-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer ${
-                  loginTab === 'employee'
-                    ? 'bg-white text-amber-700 shadow-sm border border-amber-200'
-                    : 'text-slate-500 hover:text-slate-700 hover:bg-white/50 border border-transparent'
-                }`}
-              >
-                <HardHat className={`w-4 h-4 ${loginTab === 'employee' ? 'text-amber-600' : 'text-slate-400'}`} />
-                <span>Employee</span>
+                <Building2 className={`w-4.5 h-4.5 ${loginTab === 'business' ? 'text-emerald-600' : 'text-slate-400'}`} />
+                <span>Business Login</span>
               </button>
 
               {/* Customer Login Tab */}
               <button
                 type="button"
                 onClick={() => handleTabSwitch('customer')}
-                className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 px-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer ${
+                className={`flex-1 flex items-center justify-center gap-2.5 py-3 px-4 rounded-lg text-sm font-semibold transition-all duration-200 cursor-pointer ${
                   loginTab === 'customer'
                     ? 'bg-white text-teal-700 shadow-sm border border-teal-200'
                     : 'text-slate-500 hover:text-slate-700 hover:bg-white/50 border border-transparent'
                 }`}
               >
-                <User className={`w-4 h-4 ${loginTab === 'customer' ? 'text-teal-600' : 'text-slate-400'}`} />
-                <span>Customer</span>
+                <MessageSquare className={`w-4.5 h-4.5 ${loginTab === 'customer' ? 'text-teal-600' : 'text-slate-400'}`} />
+                <span>Customer Login</span>
               </button>
             </div>
           </motion.div>
@@ -1483,10 +711,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
                 {renderBusinessContent()}
               </motion.div>
             )}
-            {loginTab === 'employee' && renderEmployeeContent()}
-            {loginTab === 'customer' && customerStep === 'credentials' && renderCustomerCredentialsStep()}
-            {loginTab === 'customer' && customerStep === 'company' && renderCustomerCompanyStep()}
-            {loginTab === 'customer' && customerStep === 'otp' && renderCustomerOtpStep()}
+            {loginTab === 'customer' && renderCustomerCompanyFinder()}
           </AnimatePresence>
 
           {/* Footer */}

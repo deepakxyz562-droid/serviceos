@@ -87,6 +87,15 @@ const viewLabels: Record<ViewType, string> = {
   documentCenter: 'Document Center',
   triggers: 'CRM Triggers',
   superadmin: 'Super Admin',
+  // Audience
+  groups: 'Groups',
+  tags: 'Tags',
+  contactImports: 'Contact Imports',
+  contactExports: 'Contact Exports',
+  audienceAnalytics: 'Audience Analytics',
+  emailCampaigns: 'Email Campaigns',
+  emailProviders: 'Email Providers',
+  emailTemplates: 'Email Templates',
 };
 
 // ─── Component ──────────────────────────────────────────────────────────────

@@ -13,7 +13,6 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const employeeId = searchParams.get('employeeId');
-    const customerId = searchParams.get('customerId');
     const serviceId = searchParams.get('serviceId');
     const source = searchParams.get('source');
     const dateFrom = searchParams.get('dateFrom');
@@ -29,14 +28,11 @@ export async function GET(request: NextRequest) {
       tenantId: user.tenantId,
     };
 
-    // ── Customer scoping: a customer can only ever see their own bookings ──
+    // Customers can only see their own bookings
     if (user.role === 'customer') {
-      const ownCustomerId = user.id.startsWith('cust_')
-        ? user.id.slice(5)
-        : user.id;
-      where.customerId = ownCustomerId;
-    } else if (customerId) {
-      where.customerId = customerId;
+      where.customerId = user.id;
+    } else if (searchParams.get('customerId')) {
+      where.customerId = searchParams.get('customerId');
     }
 
     if (status) {
@@ -102,13 +98,6 @@ export async function GET(request: NextRequest) {
 }
 
 // POST /api/bookings — Create booking
-//
-// When the authenticated user is a customer (role === 'customer'), the
-// customerId / customerName / customerEmail / customerPhone are forced to the
-// customer's own record (the JWT id is stored as `cust_<customerId>`). This
-// prevents a customer from creating bookings under another customer's name.
-// Customer-initiated bookings are always created with source='website' and
-// status='pending' (the business must confirm them).
 export async function POST(request: NextRequest) {
   try {
     const user = await getAuthUser();
@@ -144,58 +133,45 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── Customer-initiated booking: lock the customer fields to self ──
-    let resolvedCustomerId = customerId || null;
-    let resolvedCustomerName = customerName || null;
-    let resolvedCustomerPhone = customerPhone || null;
-    let resolvedCustomerEmail = customerEmail || null;
-    let resolvedSource = source || 'manual';
-    let resolvedWorkspaceId = workspaceId || user.workspaceId;
+    // Customers can only create bookings for themselves
+    let finalCustomerId = customerId || null;
+    let finalCustomerName = customerName || null;
+    let finalCustomerPhone = customerPhone || null;
+    let finalCustomerEmail = customerEmail || null;
+    let finalSource = source || 'manual';
 
     if (user.role === 'customer') {
-      const ownCustomerId = user.id.startsWith('cust_')
-        ? user.id.slice(5)
-        : user.id;
-      // Fetch the customer's own record to populate name/phone/email
-      const ownCustomer = await db.customer.findFirst({
-        where: {
-          id: ownCustomerId,
-          workspace: { tenantId: user.tenantId },
-        },
-        select: { id: true, name: true, phone: true, email: true, workspaceId: true },
+      // Lock to the customer's own record
+      const customer = await db.customer.findUnique({
+        where: { id: user.id },
+        select: { id: true, name: true, phone: true, email: true },
       });
-      if (!ownCustomer) {
+      if (!customer) {
         return NextResponse.json(
-          { error: 'Your customer profile could not be found.' },
+          { error: 'Customer profile not found' },
           { status: 404 }
         );
       }
-      resolvedCustomerId = ownCustomer.id;
-      resolvedCustomerName = ownCustomer.name;
-      resolvedCustomerPhone = ownCustomer.phone;
-      resolvedCustomerEmail = ownCustomer.email || null;
-      resolvedSource = 'website'; // customers always create website-source bookings
-      resolvedWorkspaceId = ownCustomer.workspaceId || user.workspaceId;
+      finalCustomerId = customer.id;
+      finalCustomerName = customer.name;
+      finalCustomerPhone = customer.phone;
+      finalCustomerEmail = customer.email || null;
+      finalSource = 'website'; // customers always create website-source bookings
     }
 
-    // Auto-confirm only for admin/owner manual bookings; customers always start pending
-    const initialStatus =
-      user.role === 'customer'
-        ? 'pending'
-        : resolvedSource === 'manual'
-        ? 'confirmed'
-        : 'pending';
+    // Auto-confirm if source is manual
+    const initialStatus = finalSource === 'manual' ? 'confirmed' : 'pending';
 
     const booking = await db.booking.create({
       data: {
         title,
         description: description || null,
         status: initialStatus,
-        source: resolvedSource,
-        customerId: resolvedCustomerId,
-        customerName: resolvedCustomerName,
-        customerPhone: resolvedCustomerPhone,
-        customerEmail: resolvedCustomerEmail,
+        source: finalSource,
+        customerId: finalCustomerId,
+        customerName: finalCustomerName,
+        customerPhone: finalCustomerPhone,
+        customerEmail: finalCustomerEmail,
         employeeId: employeeId || null,
         serviceId: serviceId || null,
         branchId: branchId || null,
@@ -206,7 +182,7 @@ export async function POST(request: NextRequest) {
         notes: notes || null,
         confirmedAt: initialStatus === 'confirmed' ? new Date() : null,
         tenantId: user.tenantId,
-        workspaceId: resolvedWorkspaceId,
+        workspaceId: workspaceId || user.workspaceId,
         metadataJson: metadataJson || '{}',
       },
       include: {

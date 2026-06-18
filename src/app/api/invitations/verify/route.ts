@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       where: { token },
       include: {
         tenant: {
-          select: { id: true, name: true, slug: true, logo: true },
+          select: { id: true, name: true, slug: true },
         },
       },
     });
@@ -65,9 +65,6 @@ export async function GET(request: NextRequest) {
         role: invitation.role,
         tenantName: invitation.tenant?.name,
         tenantSlug: invitation.tenant?.slug,
-        tenantLogo: invitation.tenant?.logo,
-        isCustomer: invitation.role === 'customer',
-        isReset: false, // callers can infer reset mode from URL ?mode=reset
       },
     });
   } catch (error) {

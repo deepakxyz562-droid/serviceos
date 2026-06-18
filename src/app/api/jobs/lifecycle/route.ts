@@ -147,10 +147,17 @@ export async function POST(request: NextRequest) {
         }
 
         // Send WhatsApp notification to customer
+        // NOTE: notifyCustomerJobAssigned(job, employee) uses `employee.name` for
+        // the "Technician:" field — so we MUST pass the assigned employee here,
+        // NOT the customer. Falling back to updatedJob.assigneeName/Phone covers
+        // the resource-only assignment case (no Employee row).
         try {
-          const customer = job.customerPhone ? { name: job.customerName, phone: job.customerPhone } : null
-          if (customer) {
-            await notifyCustomerJobAssigned(updatedJob, customer)
+          if (job.customerPhone) {
+            const technician =
+              employee
+                ? { id: employee.id, name: employee.name, phone: employee.phone }
+                : { name: updatedJob.assigneeName, phone: updatedJob.assigneePhone }
+            await notifyCustomerJobAssigned(updatedJob, technician)
           }
         } catch (e) {
           console.error('Failed to send customer assignment notification:', e)

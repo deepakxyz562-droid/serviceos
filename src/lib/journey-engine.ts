@@ -1012,7 +1012,7 @@ export const JourneyEngine = {
    * This creates a Job record in 'pending' status and links it to the lead.
    *
    * @param leadId - The lead ID to create a journey for
-   * @param tenantId - Optional tenant/workspace ID
+   * @param tenantId - Optional tenant ID (used to resolve the workspace)
    * @returns The new CustomerJourney
    */
   async createJourney(leadId: string, tenantId?: string): Promise<CustomerJourney> {
@@ -1031,6 +1031,21 @@ export const JourneyEngine = {
       if (existingJourney) return existingJourney
     }
 
+    // Resolve a workspace ID for the new Job. The Job model has only
+    // `workspaceId` (no `tenantId` column), so we must NOT pass a tenantId here.
+    // Prefer the lead's customer's workspace; otherwise look up the first
+    // workspace for the tenant.
+    let workspaceId: string | undefined = undefined
+    if (lead.customer?.workspaceId) {
+      workspaceId = lead.customer.workspaceId
+    } else if (tenantId) {
+      const ws = await db.workspace.findFirst({
+        where: { tenantId },
+        select: { id: true },
+      })
+      workspaceId = ws?.id || undefined
+    }
+
     // Create a new job for this lead
     const job = await db.job.create({
       data: {
@@ -1043,7 +1058,7 @@ export const JourneyEngine = {
         customerPhone: lead.phone,
         customerId: lead.customerId,
         serviceId: lead.serviceId,
-        workspaceId: tenantId || lead.tenantId,
+        workspaceId,
         notificationLogJson: JSON.stringify([
           {
             action: 'journey_stage_change',

@@ -47,10 +47,11 @@ import {
 import { useAppStore } from '@/store/app-store';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { formatCurrency, formatCurrencyCompact, currencySymbol } from '@/lib/currency';
+
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useRealtime } from '@/hooks/use-realtime';
-import { useBaseCurrency } from '@/hooks/use-base-currency';
+import { useCompanyCurrency } from '@/hooks/use-company-currency';
+
 import {
   AreaChart,
   Area,
@@ -393,8 +394,8 @@ export function DashboardView() {
   const [ecommerceRecentOrders, setEcommerceRecentOrders] = useState<EcommerceRecentOrder[]>([]);
   const [ecommerceLoading, setEcommerceLoading] = useState(true);
 
-  // Base currency
-  const { baseCurrency } = useBaseCurrency();
+  // Company currency
+  const { currency, format, formatCompact, symbol, isLoading: currencyLoading } = useCompanyCurrency();
 
   // Real-time connection
   const { connected: realtimeConnected } = useRealtime({
@@ -701,7 +702,7 @@ export function DashboardView() {
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-muted-foreground font-medium">Monthly Revenue</p>
-                    <p className="text-2xl font-bold mt-1">{formatCurrencyCompact(stats.monthlyRevenue.amount, baseCurrency)}</p>
+                    <p className="text-2xl font-bold mt-1">{formatCompact(stats.monthlyRevenue.amount)}</p>
                     <div className="flex items-center gap-1 mt-1">
                       {stats.monthlyRevenue.trend >= 0 ? (
                         <TrendingUp className="size-3.5 text-emerald-500" />
@@ -805,7 +806,7 @@ export function DashboardView() {
                       </p>
                       <p className={cn('text-2xl font-bold mt-0.5', colors.text)}>{stage.count}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {formatCurrencyCompact(stage.value, baseCurrency)}
+                        {formatCompact(stage.value)}
                       </p>
                     </div>
                     {idx < displayPipeline.length - 1 && (
@@ -862,7 +863,7 @@ export function DashboardView() {
                     tick={{ fontSize: 11, fill: '#94a3b8' }}
                     axisLine={false}
                     tickLine={false}
-                    tickFormatter={(v: number) => `${currencySymbol(baseCurrency)}${(v / 1000).toFixed(0)}k`}
+                    tickFormatter={(v: number) => `${symbol}${(v / 1000).toFixed(0)}k`}
                   />
                   <Tooltip
                     contentStyle={{
@@ -871,7 +872,7 @@ export function DashboardView() {
                       boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
                       fontSize: '12px',
                     }}
-                    formatter={(value: number) => [formatCurrencyCompact(value, baseCurrency), 'Revenue']}
+                    formatter={(value: number) => [formatCompact(value), 'Revenue']}
                   />
                   <Area
                     type="monotone"
@@ -1175,7 +1176,7 @@ export function DashboardView() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right font-medium text-sm">
-                          {formatCurrencyCompact(lead.value, baseCurrency)}
+                          {formatCompact(lead.value)}
                         </TableCell>
                         <TableCell className="text-right text-xs text-muted-foreground hidden sm:table-cell">
                           {formatShortDate(lead.date)}
@@ -1640,11 +1641,11 @@ export function DashboardView() {
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-muted-foreground font-medium">Revenue Today</p>
-                    <p className="text-2xl font-bold mt-1">{formatCurrencyCompact(ecommerceStats.revenueToday, baseCurrency)}</p>
+                    <p className="text-2xl font-bold mt-1">{formatCompact(ecommerceStats.revenueToday)}</p>
                     <div className="flex items-center gap-1 mt-1">
                       <TrendingUp className="size-3.5 text-emerald-500" />
                       <span className="text-xs font-medium text-emerald-600">
-                        {formatCurrencyCompact(ecommerceStats.totalRevenue, baseCurrency)} total
+                        {formatCompact(ecommerceStats.totalRevenue)} total
                       </span>
                     </div>
                   </div>
@@ -1682,7 +1683,7 @@ export function DashboardView() {
                 <div className="flex items-center justify-between">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-muted-foreground font-medium">Avg Order Value</p>
-                    <p className="text-2xl font-bold mt-1">{formatCurrencyCompact(ecommerceStats.avgOrderValue, baseCurrency)}</p>
+                    <p className="text-2xl font-bold mt-1">{formatCompact(ecommerceStats.avgOrderValue)}</p>
                     <div className="flex items-center gap-1 mt-1">
                       <TrendingUp className="size-3.5 text-emerald-500" />
                       <span className="text-xs font-medium text-emerald-600">
@@ -1794,7 +1795,7 @@ export function DashboardView() {
                               </div>
                             </TableCell>
                             <TableCell className="text-center text-sm">{product.totalQty}</TableCell>
-                            <TableCell className="text-right text-sm font-medium">{formatCurrency(product.revenue, baseCurrency)}</TableCell>
+                            <TableCell className="text-right text-sm font-medium">{format(product.revenue)}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -1867,7 +1868,7 @@ export function DashboardView() {
                                 {order.status}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-right text-sm font-medium">{formatCurrency(order.total, baseCurrency)}</TableCell>
+                            <TableCell className="text-right text-sm font-medium">{format(order.total)}</TableCell>
                             <TableCell className="hidden sm:table-cell">
                               <Badge variant="outline" className="text-[10px] px-1.5 py-0 capitalize">
                                 {order.integration?.provider || '—'}

@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
     const {
       name,
       phone,
+      email,
       role,
       skills,
       status,
@@ -68,6 +69,7 @@ export async function POST(request: NextRequest) {
       data: {
         name,
         phone,
+        email: email || null,
         role: role || 'driver',
         skills: skills ? JSON.stringify(skills) : '[]',
         status: status || 'available',

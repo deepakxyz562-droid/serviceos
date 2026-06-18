@@ -122,7 +122,31 @@ _Do not share this code with anyone._`;
       message: otpMessage,
     });
 
-    console.log(`[OTP] Sent to ${normalizedPhone}, WhatsApp result:`, sendResult.simulated ? 'SIMULATED' : 'SENT');
+    console.log(
+      `[OTP] Sent to ${normalizedPhone}, WhatsApp result:`,
+      sendResult.simulated
+        ? 'SIMULATED'
+        : sendResult.success
+          ? 'SENT'
+          : `FAILED: ${sendResult.error || 'unknown error'}`
+    );
+
+    // If a real send was attempted and FAILED, surface the error to the client
+    // instead of falsely reporting success. This is critical so the UI can tell
+    // the user the message was NOT delivered (e.g. recipient not in Meta test
+    // number allow-list, invalid token, etc.).
+    if (!sendResult.simulated && !sendResult.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            sendResult.error ||
+            'Failed to send WhatsApp message. Please try again.',
+          simulated: false,
+        },
+        { status: 502 }
+      );
+    }
 
     return NextResponse.json({
       success: true,

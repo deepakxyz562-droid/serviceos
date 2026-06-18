@@ -512,7 +512,7 @@ function HeroSection({ onGetStarted }: { onGetStarted: () => void }) {
             <Button
               variant="outline"
               size="lg"
-              className="border-white/20 text-white hover:bg-white/10 hover:text-white px-8 h-12 text-base"
+              className="bg-transparent border-white/20 text-white hover:bg-white/10 hover:text-white hover:border-white/40 px-8 h-12 text-base"
             >
               <Play className="w-4 h-4 mr-2" />
               Watch Demo

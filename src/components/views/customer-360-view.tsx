@@ -23,16 +23,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useAppStore } from '@/store/app-store';
-import { useQueryClient } from '@tanstack/react-query';
 import {
   useCustomers,
   useCustomer360,
   useBookings,
 } from '@/hooks/queries/use-supabase-queries';
-import { queryKeys } from '@/hooks/queries/use-supabase-queries';
-import { PortalAccessPanel } from '@/components/customers/portal-access-panel';
-import { formatCurrency as formatCurrencyShared } from '@/lib/currency';
-import { useBaseCurrency } from '@/hooks/use-base-currency';
+import { useCompanyCurrency } from '@/hooks/use-company-currency';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -482,8 +478,7 @@ type SortOption = 'name' | 'recent' | 'value';
 
 export function Customer360View() {
   const { auth } = useAppStore();
-  const { baseCurrency } = useBaseCurrency();
-  const queryClient = useQueryClient();
+  const { currency, format, formatCompact, symbol } = useCompanyCurrency();
   const tenantId = auth?.tenant?.id;
 
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
@@ -801,48 +796,6 @@ export function Customer360View() {
                               <Tag className="size-2 mr-1" />
                               {primaryTag}
                             </Badge>
-                            {/* Portal-access badge */}
-                            {(c as any).invitationStatus === 'pending' && (
-                              <Badge
-                                variant="outline"
-                                className="text-[9px] px-1.5 py-0 bg-amber-50 text-amber-700 border-amber-200"
-                              >
-                                <span className="inline-block size-1.5 rounded-full bg-amber-500 mr-1" />
-                                Invited
-                              </Badge>
-                            )}
-                            {(c as any).invitationStatus === 'accepted' && (
-                              <Badge
-                                variant="outline"
-                                className="text-[9px] px-1.5 py-0 bg-emerald-50 text-emerald-700 border-emerald-200"
-                              >
-                                <span className="inline-block size-1.5 rounded-full bg-emerald-500 mr-1" />
-                                Portal
-                              </Badge>
-                            )}
-                          </div>
-                        )}
-                        {/* Show portal badge even when no primary tag exists */}
-                        {!primaryTag && (c as any).invitationStatus === 'pending' && (
-                          <div className="mt-2.5 flex flex-wrap gap-1">
-                            <Badge
-                              variant="outline"
-                              className="text-[9px] px-1.5 py-0 bg-amber-50 text-amber-700 border-amber-200"
-                            >
-                              <span className="inline-block size-1.5 rounded-full bg-amber-500 mr-1" />
-                              Invited
-                            </Badge>
-                          </div>
-                        )}
-                        {!primaryTag && (c as any).invitationStatus === 'accepted' && (
-                          <div className="mt-2.5 flex flex-wrap gap-1">
-                            <Badge
-                              variant="outline"
-                              className="text-[9px] px-1.5 py-0 bg-emerald-50 text-emerald-700 border-emerald-200"
-                            >
-                              <span className="inline-block size-1.5 rounded-full bg-emerald-500 mr-1" />
-                              Portal
-                            </Badge>
                           </div>
                         )}
                       </CardContent>
@@ -1033,7 +986,7 @@ export function Customer360View() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-emerald-500 shadow-sm">
                       <p className="text-lg font-extrabold text-emerald-500">
-                        {formatCurrencyShared(stats.totalRevenue, baseCurrency)}
+                        {format(stats.totalRevenue)}
                       </p>
                       <p className="text-[10px] text-muted-foreground font-medium">Revenue</p>
                     </div>
@@ -1068,36 +1021,10 @@ export function Customer360View() {
                           <span className="text-xs text-destructive font-semibold">Outstanding Balance</span>
                         </div>
                         <span className="text-sm font-extrabold text-destructive">
-                          {formatCurrencyShared(stats.outstandingBalance, baseCurrency)}
+                          {format(stats.outstandingBalance)}
                         </span>
                       </div>
                     </div>
-                  )}
-
-                  {/* Customer Portal Access — embedded management panel */}
-                  {c && (
-                    <PortalAccessPanel
-                      customer={{
-                        id: (c as any).id,
-                        name: (c as any).name,
-                        email: (c as any).email,
-                        phone: (c as any).phone,
-                        portalEnabled: (c as any).portalEnabled,
-                        invitationStatus: (c as any).invitationStatus,
-                        activatedAt: (c as any).activatedAt,
-                        lastLoginAt: (c as any).lastLoginAt,
-                        invitationSentAt: (c as any).invitationSentAt,
-                      }}
-                      onUpdate={() => {
-                        // Refresh customer 360 + customer list so portal badge/state stays in sync
-                        if (selectedCustomerId) {
-                          queryClient.invalidateQueries({ queryKey: queryKeys.customer360(selectedCustomerId) });
-                          queryClient.invalidateQueries({ queryKey: queryKeys.customer(selectedCustomerId) });
-                        }
-                        queryClient.invalidateQueries({ queryKey: ['customers'] });
-                      }}
-                      variant="compact"
-                    />
                   )}
                 </div>
               </div>
@@ -1128,7 +1055,7 @@ export function Customer360View() {
                 />
                 <KpiCard
                   label="Total Revenue"
-                  value={formatCurrencyShared(stats.totalRevenue, baseCurrency)}
+                  value={format(stats.totalRevenue)}
                   icon={DollarSign}
                   accent="text-emerald-400"
                   borderColor="border-l-emerald-500"
@@ -1152,7 +1079,7 @@ export function Customer360View() {
                 />
                 <KpiCard
                   label="Outstanding"
-                  value={formatCurrencyShared(stats.outstandingBalance, baseCurrency)}
+                  value={format(stats.outstandingBalance)}
                   icon={AlertCircle}
                   accent={stats.outstandingBalance > 0 ? 'text-red-400' : 'text-muted-foreground'}
                   borderColor="border-l-red-500"
@@ -1270,11 +1197,11 @@ export function Customer360View() {
                         <div className="bg-card rounded-xl p-3 border border-border shadow-sm">
                           <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Last 30 Days</p>
                           <p className="text-lg font-extrabold text-emerald-500 mt-1">
-                            {formatCurrencyShared(invoices.filter(i => {
+                            {format(invoices.filter(i => {
                               if (!i.paidAt) return false;
                               const diff = Date.now() - new Date(i.paidAt).getTime();
                               return diff < 30 * 24 * 60 * 60 * 1000 && i.status === 'paid';
-                            }).reduce((s, i) => s + (i.total || 0), 0), baseCurrency)}
+                            }).reduce((s, i) => s + (i.total || 0), 0))}
                           </p>
                           <p className="text-[10px] text-muted-foreground">Revenue</p>
                         </div>
@@ -1798,7 +1725,7 @@ export function Customer360View() {
                                       </div>
                                       <div className="flex items-center gap-2 shrink-0">
                                         <span className="text-sm font-bold text-emerald-400">
-                                          {formatCurrencyShared(inv.total, baseCurrency)}
+                                          {format(inv.total)}
                                         </span>
                                         <Badge
                                           variant="outline"
@@ -1845,7 +1772,7 @@ export function Customer360View() {
                                       </div>
                                       <div className="flex items-center gap-2 shrink-0">
                                         <span className="text-sm font-bold text-amber-400">
-                                          {formatCurrencyShared(inv.total, baseCurrency)}
+                                          {format(inv.total)}
                                         </span>
                                         <Badge
                                           variant="outline"
@@ -1891,7 +1818,7 @@ export function Customer360View() {
                                       </div>
                                       <div className="flex items-center gap-2 shrink-0">
                                         <span className="text-sm font-bold text-red-400">
-                                          {formatCurrencyShared(inv.total, baseCurrency)}
+                                          {format(inv.total)}
                                         </span>
                                         <Badge
                                           variant="outline"
@@ -1937,7 +1864,7 @@ export function Customer360View() {
                                       </div>
                                       <div className="flex items-center gap-2 shrink-0">
                                         <span className="text-sm font-bold text-muted-foreground">
-                                          {formatCurrencyShared(inv.total, baseCurrency)}
+                                          {format(inv.total)}
                                         </span>
                                         <Badge
                                           variant="outline"
@@ -1981,11 +1908,11 @@ export function Customer360View() {
                               <p className="text-[10px] text-muted-foreground font-medium">Total Orders</p>
                             </div>
                             <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-emerald-500 shadow-sm">
-                              <p className="text-lg font-extrabold text-emerald-500">{formatCurrencyShared(ecommerceStats.totalSpent, baseCurrency)}</p>
+                              <p className="text-lg font-extrabold text-emerald-500">{format(ecommerceStats.totalSpent)}</p>
                               <p className="text-[10px] text-muted-foreground font-medium">Total Spent</p>
                             </div>
                             <div className="bg-card rounded-xl p-3 text-center border-t-2 border-t-sky-500 shadow-sm">
-                              <p className="text-lg font-extrabold text-foreground">{formatCurrencyShared(ecommerceStats.avgOrderValue, baseCurrency)}</p>
+                              <p className="text-lg font-extrabold text-foreground">{format(ecommerceStats.avgOrderValue)}</p>
                               <p className="text-[10px] text-muted-foreground font-medium">Avg Order Value</p>
                             </div>
                           </div>
@@ -2008,7 +1935,7 @@ export function Customer360View() {
                                       </div>
                                     </div>
                                     <div className="text-right shrink-0">
-                                      <p className="text-sm font-semibold text-foreground">{formatCurrencyShared(order.total || 0, baseCurrency)}</p>
+                                      <p className="text-sm font-semibold text-foreground">{format(order.total || 0)}</p>
                                       <p className="text-[10px] text-muted-foreground">{order.orderedAt ? new Date(order.orderedAt).toLocaleDateString() : ''}</p>
                                     </div>
                                   </div>

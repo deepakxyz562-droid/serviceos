@@ -8,7 +8,7 @@ import {
   Users, UserPlus, Shield, Clock, CheckCircle2, UserCheck,
   Search, Phone, MapPin, Star, Briefcase, Loader2,
   Trash2, Pencil, MoreVertical, UserX,
-  Mail, KeyRound,
+  Mail, Send, KeyRound, Power, Globe, Copy, ExternalLink, AlertCircle,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -21,9 +21,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { InvitationLinkDialog } from '@/components/employees/invitation-link-dialog';
+import { authFetch } from '@/lib/client-auth';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -31,6 +29,7 @@ interface Employee {
   id: string;
   name: string;
   phone: string;
+  email?: string | null;
   role: string;
   status: string;
   avatar: string | null;
@@ -39,63 +38,10 @@ interface Employee {
   rating: number;
   completedJobs: number;
   whatsappId: string | null;
-  createdAt: string;
-  invitationStatus?: string; // none | pending | accepted | suspended
   userId?: string | null;
-  invitationExpiresAt?: string | null;
+  invitationStatus?: string;
+  createdAt: string;
   [key: string]: unknown;
-}
-
-// ─── Invitation status helpers ──────────────────────────────────────────────
-
-type InvitationStatus = 'none' | 'pending' | 'accepted' | 'suspended';
-
-function normalizeInvitationStatus(status: unknown): InvitationStatus {
-  if (status === 'pending' || status === 'accepted' || status === 'suspended') return status;
-  return 'none';
-}
-
-function getInvitationBadge(status: InvitationStatus): { label: string; className: string; dot: string } {
-  switch (status) {
-    case 'pending':
-      return {
-        label: 'Invited',
-        className: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-900/50',
-        dot: 'bg-amber-500',
-      };
-    case 'accepted':
-      return {
-        label: 'Active',
-        className: 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-900/50',
-        dot: 'bg-emerald-500',
-      };
-    case 'suspended':
-      return {
-        label: 'Suspended',
-        className: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-900/50',
-        dot: 'bg-red-500',
-      };
-    case 'none':
-    default:
-      return {
-        label: 'No Account',
-        className: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800/40 dark:text-slate-300 dark:border-slate-700',
-        dot: 'bg-slate-400',
-      };
-  }
-}
-
-function formatExpiry(expiresAt?: string | null): string {
-  if (!expiresAt) return '';
-  try {
-    const date = new Date(expiresAt);
-    if (Number.isNaN(date.getTime())) return '';
-    return date.toLocaleString(undefined, {
-      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-    });
-  } catch {
-    return '';
-  }
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -127,6 +73,28 @@ function getStatusDot(status: string): string {
     offline: 'fill-slate-400 text-slate-400',
   };
   return map[status] || 'fill-gray-400 text-gray-400';
+}
+
+function apiUrl(path: string) {
+  return `${path}?XTransformPort=3000`;
+}
+
+function getInvitationBadge(status?: string) {
+  if (!status || status === 'none') return null;
+  const config: Record<string, { label: string; className: string }> = {
+    pending: { label: 'Invited', className: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800' },
+    accepted: { label: 'Portal', className: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800' },
+    suspended: { label: 'Suspended', className: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800' },
+    disabled: { label: 'Disabled', className: 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-950/40 dark:text-slate-400 dark:border-slate-800' },
+  };
+  const c = config[status];
+  if (!c) return null;
+  return (
+    <Badge variant="outline" className={cn('text-[10px]', c.className)}>
+      <span className="size-1.5 rounded-full bg-current mr-1" />
+      {c.label}
+    </Badge>
+  );
 }
 
 const ROLE_OPTIONS = [
@@ -163,25 +131,15 @@ export function EmployeesView() {
   const [showDeleteDialog, setShowDeleteDialog] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Invitation / portal state
-  const [sendInviteOnCreate, setSendInviteOnCreate] = useState(true);
-  const [inviteDialog, setInviteDialog] = useState<{
-    open: boolean;
-    url: string;
-    expiresAt?: string | null;
-    name?: string;
-  }>({ open: false, url: '' });
-  const [resetDialog, setResetDialog] = useState<{
-    open: boolean;
-    url: string;
-    expiresAt?: string | null;
-    name?: string;
-  }>({ open: false, url: '' });
-  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  // Invitation/portal management state
+  const [inviteResult, setInviteResult] = useState<{ url: string; email: string; message: string; mode: 'invite' | 'reset' } | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   // Form state
   const [formName, setFormName] = useState('');
   const [formPhone, setFormPhone] = useState('');
+  const [formEmail, setFormEmail] = useState('');
   const [formRole, setFormRole] = useState('driver');
   const [formStatus, setFormStatus] = useState('available');
   const [formLocation, setFormLocation] = useState('');
@@ -215,6 +173,90 @@ export function EmployeesView() {
     fetchEmployees();
   }, [fetchEmployees]);
 
+  // ─── Invitation / Portal Management Handlers ────────────────────────────
+
+  const handleSendInvite = async (emp: Employee) => {
+    if (!emp.email) {
+      toast.error('Employee has no email address. Add an email first.');
+      return;
+    }
+    setInviteLoading(true);
+    try {
+      const res = await authFetch(apiUrl(`/api/employees/${emp.id}/invite`), {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send invitation');
+      setInviteResult({
+        url: data.activationUrl,
+        email: data.email,
+        message: data.message,
+        mode: 'invite',
+      });
+      toast.success('Invitation link generated!');
+      fetchEmployees();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to send invitation');
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (emp: Employee) => {
+    if (!emp.email) {
+      toast.error('Employee has no email address.');
+      return;
+    }
+    if (!emp.userId) {
+      toast.error('Employee has no user account. Send an invitation first.');
+      return;
+    }
+    setInviteLoading(true);
+    try {
+      const res = await authFetch(apiUrl(`/api/employees/${emp.id}/reset-password`), {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to reset password');
+      setInviteResult({
+        url: data.resetUrl,
+        email: data.email,
+        message: data.message,
+        mode: 'reset',
+      });
+      toast.success('Password reset link generated!');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to reset password');
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  const handleSuspendToggle = async (emp: Employee) => {
+    setActionLoading(true);
+    try {
+      const res = await authFetch(apiUrl(`/api/employees/${emp.id}/suspend`), {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update status');
+      toast.success(data.message);
+      fetchEmployees();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to update status');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      toast.success('Copied to clipboard');
+    }
+  };
+
+
   // ─── Computed ───────────────────────────────────────────────────────────
 
   const filteredEmployees = useMemo(() => {
@@ -241,17 +283,18 @@ export function EmployeesView() {
   const resetForm = () => {
     setFormName('');
     setFormPhone('');
+    setFormEmail('');
     setFormRole('driver');
     setFormStatus('available');
     setFormLocation('');
     setFormWhatsappId('');
     setFormSkills('');
-    setSendInviteOnCreate(true);
   };
 
   const populateFormForEdit = (emp: Employee) => {
     setFormName(emp.name);
     setFormPhone(emp.phone);
+    setFormEmail(emp.email || '');
     setFormRole(emp.role);
     setFormStatus(emp.status);
     setFormLocation(emp.location || '');
@@ -284,6 +327,7 @@ export function EmployeesView() {
         body: JSON.stringify({
           name: formName.trim(),
           phone: formPhone.trim(),
+          email: formEmail.trim() || undefined,
           role: formRole,
           status: formStatus,
           location: formLocation.trim() || undefined,
@@ -294,16 +338,10 @@ export function EmployeesView() {
       });
 
       if (res.ok) {
-        const created = await res.json().catch(() => null);
         toast.success('Employee added successfully');
         setShowAddDialog(false);
         resetForm();
         fetchEmployees();
-
-        // Optionally send invitation link immediately after creation.
-        if (sendInviteOnCreate && created?.id) {
-          await sendInviteForEmployee(created.id, created.name);
-        }
       } else {
         const data = await res.json();
         toast.error(data.error || 'Failed to add employee');
@@ -333,6 +371,7 @@ export function EmployeesView() {
         body: JSON.stringify({
           name: formName.trim(),
           phone: formPhone.trim(),
+          email: formEmail.trim() || undefined,
           role: formRole,
           status: formStatus,
           location: formLocation.trim() || undefined,
@@ -381,122 +420,6 @@ export function EmployeesView() {
     setShowEditDialog(true);
   };
 
-  // ─── Invitation / portal actions ────────────────────────────────────────
-
-  const updateEmployeeInState = useCallback(
-    (id: string, patch: Partial<Employee>) => {
-      setEmployees((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)));
-    },
-    [],
-  );
-
-  const sendInviteForEmployee = useCallback(async (id: string, name?: string) => {
-    setActionLoadingId(id);
-    try {
-      const res = await fetch(`/api/employees/${id}/invite?XTransformPort=3000`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data?.success) {
-        toast.success('Invitation link generated');
-        setInviteDialog({
-          open: true,
-          url: data.inviteUrl || '',
-          expiresAt: data.expiresAt ?? null,
-          name: name ?? data?.employee?.name,
-        });
-        // Optimistically update status to pending.
-        updateEmployeeInState(id, {
-          invitationStatus: 'pending',
-          userId: data?.employee?.userId ?? data?.employee?.id ?? null,
-          invitationExpiresAt: data.expiresAt ?? null,
-        });
-      } else {
-        toast.error(data?.error || 'Failed to generate invitation link');
-      }
-    } catch {
-      toast.error('Network error generating invitation link');
-    } finally {
-      setActionLoadingId(null);
-    }
-  }, [updateEmployeeInState]);
-
-  const handleSendInvite = (emp: Employee) => {
-    void sendInviteForEmployee(emp.id, emp.name);
-  };
-
-  const handleResetPassword = async (emp: Employee) => {
-    setActionLoadingId(emp.id);
-    try {
-      const res = await fetch(`/api/employees/${emp.id}/reset-password?XTransformPort=3000`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data?.success) {
-        toast.success('Password reset link generated');
-        setResetDialog({
-          open: true,
-          url: data.resetUrl || '',
-          expiresAt: data.expiresAt ?? null,
-          name: emp.name,
-        });
-      } else {
-        toast.error(data?.error || 'Failed to generate reset link');
-      }
-    } catch {
-      toast.error('Network error generating reset link');
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const handleSuspend = async (emp: Employee) => {
-    setActionLoadingId(emp.id);
-    try {
-      const res = await fetch(`/api/employees/${emp.id}/suspend?XTransformPort=3000`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ suspended: true }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data?.success) {
-        toast.success(`${emp.name} has been suspended`);
-        updateEmployeeInState(emp.id, { invitationStatus: 'suspended' });
-      } else {
-        toast.error(data?.error || 'Failed to suspend employee');
-      }
-    } catch {
-      toast.error('Network error suspending employee');
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const handleReactivate = async (emp: Employee) => {
-    setActionLoadingId(emp.id);
-    try {
-      const res = await fetch(`/api/employees/${emp.id}/suspend?XTransformPort=3000`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ suspended: false }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data?.success) {
-        toast.success(`${emp.name} has been reactivated`);
-        // A reactivated user returns to the 'accepted' state.
-        updateEmployeeInState(emp.id, { invitationStatus: 'accepted' });
-      } else {
-        toast.error(data?.error || 'Failed to reactivate employee');
-      }
-    } catch {
-      toast.error('Network error reactivating employee');
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
   // ─── Shared form content ───────────────────────────────────────────────
 
   const formContent = (
@@ -511,6 +434,13 @@ export function EmployeesView() {
       <div className="space-y-2">
         <Label>Phone Number *</Label>
         <Input placeholder="e.g., +919876543210" value={formPhone} onChange={e => setFormPhone(e.target.value)} />
+      </div>
+
+      {/* Email */}
+      <div className="space-y-2">
+        <Label>Email</Label>
+        <Input type="email" placeholder="e.g., john@example.com" value={formEmail} onChange={e => setFormEmail(e.target.value)} />
+        <p className="text-xs text-muted-foreground">Required to send portal invitations</p>
       </div>
 
       {/* Role & Status */}
@@ -703,11 +633,6 @@ export function EmployeesView() {
               if (Array.isArray(parsed)) skills = parsed;
             } catch { /* ignore */ }
 
-            const invitationStatus = normalizeInvitationStatus(emp.invitationStatus);
-            const invitationBadge = getInvitationBadge(invitationStatus);
-            const expiryLabel = formatExpiry(emp.invitationExpiresAt);
-            const isActionBusy = actionLoadingId === emp.id;
-
             return (
               <Card key={emp.id} className="transition-all hover:shadow-md">
                 <CardContent className="p-4 space-y-3">
@@ -743,44 +668,58 @@ export function EmployeesView() {
                         <DropdownMenuItem onClick={() => openEditDialog(emp)}>
                           <Pencil className="size-3 mr-2" /> Edit
                         </DropdownMenuItem>
-
-                        {/* Invitation / portal actions */}
-                        {(invitationStatus === 'none' || invitationStatus === 'pending') && (
+                        <DropdownMenuSeparator />
+                        {/* Invitation actions */}
+                        {(!emp.invitationStatus || emp.invitationStatus === 'none') && (
                           <DropdownMenuItem
                             onClick={() => handleSendInvite(emp)}
-                            disabled={isActionBusy}
+                            disabled={inviteLoading || actionLoading}
                           >
-                            <Mail className="size-3 mr-2" />
-                            {invitationStatus === 'pending' ? 'Resend Invitation' : 'Send Invitation'}
+                            <Send className="size-3 mr-2" /> Send Invitation
                           </DropdownMenuItem>
                         )}
-                        {(invitationStatus === 'accepted' || invitationStatus === 'suspended') && (
+                        {emp.invitationStatus === 'pending' && (
+                          <DropdownMenuItem
+                            onClick={() => handleSendInvite(emp)}
+                            disabled={inviteLoading || actionLoading}
+                          >
+                            <Send className="size-3 mr-2" /> Resend Invitation
+                          </DropdownMenuItem>
+                        )}
+                        {emp.invitationStatus === 'accepted' && (
                           <DropdownMenuItem
                             onClick={() => handleResetPassword(emp)}
-                            disabled={isActionBusy}
+                            disabled={inviteLoading || actionLoading || !emp.userId}
                           >
                             <KeyRound className="size-3 mr-2" /> Reset Password
                           </DropdownMenuItem>
                         )}
-                        {invitationStatus === 'accepted' && (
+                        {emp.invitationStatus === 'pending' && (
                           <DropdownMenuItem
-                            onClick={() => handleSuspend(emp)}
-                            disabled={isActionBusy}
-                            className="text-amber-600 focus:text-amber-700"
+                            onClick={() => handleResetPassword(emp)}
+                            disabled={inviteLoading || actionLoading || !emp.userId}
                           >
-                            <UserX className="size-3 mr-2" /> Suspend
+                            <Mail className="size-3 mr-2" /> Reset Password
                           </DropdownMenuItem>
                         )}
-                        {invitationStatus === 'suspended' && (
+                        {emp.invitationStatus === 'accepted' && (
                           <DropdownMenuItem
-                            onClick={() => handleReactivate(emp)}
-                            disabled={isActionBusy}
-                            className="text-emerald-600 focus:text-emerald-700"
+                            onClick={() => handleSuspendToggle(emp)}
+                            disabled={inviteLoading || actionLoading}
+                            className="text-amber-600"
                           >
-                            <UserCheck className="size-3 mr-2" /> Reactivate
+                            <Power className="size-3 mr-2" /> Suspend
                           </DropdownMenuItem>
                         )}
-
+                        {emp.invitationStatus === 'suspended' && (
+                          <DropdownMenuItem
+                            onClick={() => handleSuspendToggle(emp)}
+                            disabled={inviteLoading || actionLoading}
+                            className="text-emerald-600"
+                          >
+                            <Power className="size-3 mr-2" /> Reactivate
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           className="text-red-600"
@@ -792,33 +731,13 @@ export function EmployeesView() {
                     </DropdownMenu>
                   </div>
 
-                  {/* Status Badges */}
+                  {/* Status Badge */}
                   <div className="flex items-center gap-2 flex-wrap">
                     <Badge variant="outline" className={cn(getStatusColor(emp.status), 'text-[10px]')}>
                       <span className={cn('size-1.5 rounded-full mr-1', getStatusDot(emp.status))} />
                       {emp.status.replace('_', ' ')}
                     </Badge>
-                    {invitationStatus === 'pending' && expiryLabel ? (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Badge variant="outline" className={cn('text-[10px] cursor-help', invitationBadge.className)}>
-                            <span className={cn('size-1.5 rounded-full mr-1', invitationBadge.dot)} />
-                            {invitationBadge.label}
-                          </Badge>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <span>Expires: {expiryLabel}</span>
-                        </TooltipContent>
-                      </Tooltip>
-                    ) : (
-                      <Badge variant="outline" className={cn('text-[10px]', invitationBadge.className)}>
-                        <span className={cn('size-1.5 rounded-full mr-1', invitationBadge.dot)} />
-                        {invitationBadge.label}
-                      </Badge>
-                    )}
-                    {isActionBusy && (
-                      <Loader2 className="size-3 animate-spin text-muted-foreground" />
-                    )}
+                    {getInvitationBadge(emp.invitationStatus)}
                   </div>
 
                   {/* Info */}
@@ -827,6 +746,12 @@ export function EmployeesView() {
                       <Phone className="size-3 shrink-0" />
                       <span className="truncate">{emp.phone}</span>
                     </div>
+                    {emp.email && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Mail className="size-3 shrink-0" />
+                        <span className="truncate">{emp.email}</span>
+                      </div>
+                    )}
                     {emp.location && (
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <MapPin className="size-3 shrink-0" />
@@ -877,28 +802,6 @@ export function EmployeesView() {
             <DialogDescription>Add a new team member to your organization.</DialogDescription>
           </DialogHeader>
           {formContent}
-
-          {/* Invitation checkbox */}
-          <div className="rounded-md border border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/60 dark:bg-emerald-900/10 px-3 py-2.5">
-            <label className="flex items-start gap-3 cursor-pointer">
-              <Checkbox
-                checked={sendInviteOnCreate}
-                onCheckedChange={(checked) => setSendInviteOnCreate(checked === true)}
-                className="mt-0.5 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
-              />
-              <div className="space-y-0.5">
-                <p className="text-sm font-medium flex items-center gap-1.5">
-                  <Mail className="size-3.5 text-emerald-600" />
-                  Send invitation email to set up account
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Generates a secure link the employee can use to set their password.
-                  You can resend or revoke it later.
-                </p>
-              </div>
-            </label>
-          </div>
-
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setShowAddDialog(false)}>Cancel</Button>
             <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleAdd} disabled={!formName.trim() || !formPhone.trim() || saving}>
@@ -943,25 +846,58 @@ export function EmployeesView() {
         </DialogContent>
       </Dialog>
 
-      {/* Invitation Link Dialog (send / resend invite) */}
-      <InvitationLinkDialog
-        open={inviteDialog.open}
-        onClose={() => setInviteDialog((s) => ({ ...s, open: false }))}
-        inviteUrl={inviteDialog.url}
-        expiresAt={inviteDialog.expiresAt}
-        employeeName={inviteDialog.name}
-        role="employee"
-      />
-
-      {/* Reset Password Link Dialog (reuses the same invitation-link UI) */}
-      <InvitationLinkDialog
-        open={resetDialog.open}
-        onClose={() => setResetDialog((s) => ({ ...s, open: false }))}
-        inviteUrl={resetDialog.url}
-        expiresAt={resetDialog.expiresAt}
-        employeeName={resetDialog.name}
-        role="employee"
-      />
+      {/* Invitation Link Dialog */}
+      <Dialog open={!!inviteResult} onOpenChange={(open) => { if (!open) setInviteResult(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Globe className="size-5 text-teal-600" />
+              {inviteResult?.mode === 'reset' ? 'Password Reset Link' : 'Invitation Link'}
+            </DialogTitle>
+            <DialogDescription>
+              {inviteResult?.message}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="rounded-lg bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800 p-3">
+              <p className="text-xs font-medium text-teal-700 dark:text-teal-300 mb-1">
+                {inviteResult?.mode === 'reset' ? 'Reset Link' : 'Activation Link'}
+              </p>
+              <p className="text-xs font-mono text-teal-900 dark:text-teal-100 break-all">
+                {inviteResult?.url}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => inviteResult && copyToClipboard(inviteResult.url)}
+              >
+                <Copy className="size-3.5 mr-1.5" /> Copy Link
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => inviteResult && window.open(inviteResult.url, '_blank')}
+              >
+                <ExternalLink className="size-3.5 mr-1.5" /> Open
+              </Button>
+            </div>
+            <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/30 p-3 rounded-lg">
+              <AlertCircle className="size-3.5 shrink-0 mt-0.5" />
+              <span>
+                Share this link with {inviteResult?.email}. The link expires in {inviteResult?.mode === 'reset' ? '2 hours' : '7 days'}.
+                {inviteResult?.mode === 'invite' && ' They will set their own password on first login.'}
+              </span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setInviteResult(null)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -4,8 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Users, Search, Plus, Phone, Mail, MapPin, Star, Briefcase,
   MoreHorizontal, Pencil, Trash2, Eye, MessageCircle, Contact,
-  RefreshCw, TrendingUp, UserCheck, Clock, ArrowUpDown, Send, Copy, KeyRound,
-  Globe, Power, ShieldOff, AlertCircle,
+  RefreshCw, TrendingUp, UserCheck, Clock, ArrowUpDown,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -16,16 +15,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -36,14 +25,10 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAppStore } from '@/store/app-store';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
-import { PortalAccessPanel } from '@/components/customers/portal-access-panel';
-import { PortalInviteDialog } from '@/components/customers/portal-invite-dialog';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -56,12 +41,6 @@ interface Customer {
   whatsappId?: string;
   createdAt: string;
   updatedAt: string;
-  // ── Customer-portal access fields (optional for backwards-compat) ──
-  portalEnabled?: boolean;
-  invitationStatus?: string; // none | pending | accepted | disabled
-  activatedAt?: string | null;
-  lastLoginAt?: string | null;
-  invitationSentAt?: string | null;
 }
 
 interface Employee {
@@ -140,24 +119,6 @@ export function CrmView() {
   const [showCustomerDetail, setShowCustomerDetail] = useState(false);
   const [customerSort, setCustomerSort] = useState<'name' | 'createdAt'>('name');
   const [customerSortDir, setCustomerSortDir] = useState<'asc' | 'desc'>('asc');
-
-  // ─── Portal Access State (row-level quick actions) ─────────────────────
-  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
-  const [inviteLoading, setInviteLoading] = useState(false);
-  const [inviteError, setInviteError] = useState<string | null>(null);
-  const [inviteResult, setInviteResult] = useState<{
-    url: string;
-    customerName: string;
-    customerEmail: string | null;
-    alreadyActivated: boolean;
-    expiresAt: string;
-    companyName?: string | null;
-    mode: 'invite' | 'reset';
-  } | null>(null);
-
-  // ─── Disable Portal Confirmation State ─────────────────────────────────
-  const [disableConfirmCustomer, setDisableConfirmCustomer] = useState<Customer | null>(null);
-  const [disableLoading, setDisableLoading] = useState(false);
 
   // ─── Employees State ────────────────────────────────────────────────────
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -263,135 +224,6 @@ export function CrmView() {
     });
     setShowAddCustomer(true);
   };
-
-  // ─── Portal Access Actions (row-level quick actions) ───────────────────
-  const handleEnablePortal = async (customer: Customer) => {
-    if (!customer.email) {
-      toast.error('This customer has no email address. Please edit the customer and add an email first.');
-      return;
-    }
-    setInviteLoading(true);
-    setInviteError(null);
-    setInviteResult(null);
-    setInviteDialogOpen(true);
-    try {
-      const res = await fetch(`/api/customers/${customer.id}/portal/enable?XTransformPort=3000`, {
-        method: 'POST',
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        const msg = data?.error || 'Failed to enable portal';
-        setInviteError(msg);
-        toast.error(msg);
-        setInviteDialogOpen(false);
-        return;
-      }
-      setInviteResult({
-        url: data.inviteUrl,
-        customerName: data.customer?.name || customer.name,
-        customerEmail: data.customer?.email || customer.email || null,
-        alreadyActivated: !!data.alreadyActivated,
-        expiresAt: data.expiresAt,
-        companyName: data.company?.name || null,
-        mode: 'invite',
-      });
-      toast.success('Portal enabled. Share the invitation link!');
-      fetchCustomers();
-    } catch {
-      setInviteError('Network error — failed to enable portal');
-      toast.error('Network error — failed to enable portal');
-      setInviteDialogOpen(false);
-    } finally {
-      setInviteLoading(false);
-    }
-  };
-
-  const handleResendPortal = async (customer: Customer) => {
-    if (!customer.email) {
-      toast.error('This customer has no email address. Please edit the customer and add an email first.');
-      return;
-    }
-    setInviteLoading(true);
-    setInviteError(null);
-    setInviteResult(null);
-    setInviteDialogOpen(true);
-    try {
-      const res = await fetch(`/api/customers/${customer.id}/portal/resend?XTransformPort=3000`, {
-        method: 'POST',
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        const msg = data?.error || 'Failed to resend invitation';
-        setInviteError(msg);
-        toast.error(msg);
-        setInviteDialogOpen(false);
-        return;
-      }
-      setInviteResult({
-        url: data.inviteUrl,
-        customerName: data.customer?.name || customer.name,
-        customerEmail: data.customer?.email || customer.email || null,
-        alreadyActivated: !!data.alreadyActivated,
-        expiresAt: data.expiresAt,
-        companyName: data.company?.name || null,
-        mode: 'invite',
-      });
-      toast.success('Invitation link regenerated.');
-      fetchCustomers();
-    } catch {
-      setInviteError('Network error — failed to resend invitation');
-      toast.error('Network error — failed to resend invitation');
-      setInviteDialogOpen(false);
-    } finally {
-      setInviteLoading(false);
-    }
-  };
-
-  const handleConfirmDisablePortal = (customer: Customer) => {
-    setDisableConfirmCustomer(customer);
-  };
-
-  const handleDisablePortal = async () => {
-    if (!disableConfirmCustomer) return;
-    setDisableLoading(true);
-    try {
-      const res = await fetch(`/api/customers/${disableConfirmCustomer.id}/portal/disable?XTransformPort=3000`, {
-        method: 'POST',
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        toast.error(data?.error || 'Failed to disable portal');
-        return;
-      }
-      toast.success('Customer portal disabled.');
-      setDisableConfirmCustomer(null);
-      fetchCustomers();
-    } catch {
-      toast.error('Network error — failed to disable portal');
-    } finally {
-      setDisableLoading(false);
-    }
-  };
-
-  /**
-   * Returns the badge configuration for a customer's portal access state,
-   * or null when no badge should be rendered.
-   */
-  function getPortalBadge(c: Customer): { label: string; dotClass: string; textClass: string } | null {
-    if (!c.email) return null;
-    const status = c.invitationStatus;
-    if (status === 'pending') {
-      return { label: 'Invited', dotClass: 'bg-amber-500', textClass: 'text-amber-700' };
-    }
-    if (status === 'accepted') {
-      return { label: 'Portal', dotClass: 'bg-emerald-500', textClass: 'text-emerald-700' };
-    }
-    if (c.portalEnabled === true && status !== 'disabled') {
-      // Enabled but pending — show Invited pill (still amber)
-      return { label: 'Invited', dotClass: 'bg-amber-500', textClass: 'text-amber-700' };
-    }
-    return null;
-  }
 
   // ─── Employee CRUD ──────────────────────────────────────────────────────
   const handleSaveEmployee = async () => {
@@ -631,7 +463,6 @@ export function CrmView() {
                           Added <ArrowUpDown className="size-3" />
                         </button>
                       </TableHead>
-                      <TableHead className="text-center">Portal</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -681,35 +512,6 @@ export function CrmView() {
                         <TableCell className="text-xs text-muted-foreground">
                           {formatDate(customer.createdAt)}
                         </TableCell>
-                        <TableCell className="text-center" onClick={e => e.stopPropagation()}>
-                          {(() => {
-                            const portalBadge = getPortalBadge(customer);
-                            if (!portalBadge) {
-                              // Faint dot for customers with no portal access / no email
-                              return (
-                                <span
-                                  className="inline-block size-1.5 rounded-full bg-slate-300"
-                                  title="No portal access"
-                                  aria-label="No portal access"
-                                />
-                              );
-                            }
-                            return (
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  'text-[9px] h-5 px-1.5 gap-1 bg-background',
-                                  portalBadge.textClass,
-                                  portalBadge.dotClass.includes('amber') && 'border-amber-200',
-                                  portalBadge.dotClass.includes('emerald') && 'border-emerald-200'
-                                )}
-                              >
-                                <span className={cn('inline-block size-1.5 rounded-full', portalBadge.dotClass)} />
-                                {portalBadge.label}
-                              </Badge>
-                            );
-                          })()}
-                        </TableCell>
                         <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -724,30 +526,6 @@ export function CrmView() {
                               <DropdownMenuItem onClick={() => openEditCustomer(customer)}>
                                 <Pencil className="size-3.5 mr-2" /> Edit
                               </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              {/* Portal access quick actions */}
-                              {!customer.portalEnabled && (
-                                <DropdownMenuItem
-                                  onClick={() => handleEnablePortal(customer)}
-                                  disabled={!customer.email}
-                                >
-                                  <Power className="size-3.5 mr-2" /> Enable Portal
-                                </DropdownMenuItem>
-                              )}
-                              {customer.portalEnabled && customer.invitationStatus === 'pending' && (
-                                <DropdownMenuItem onClick={() => handleResendPortal(customer)}>
-                                  <Send className="size-3.5 mr-2" /> Resend Invitation
-                                </DropdownMenuItem>
-                              )}
-                              {customer.portalEnabled && (
-                                <DropdownMenuItem
-                                  variant="destructive"
-                                  onClick={() => handleConfirmDisablePortal(customer)}
-                                >
-                                  <ShieldOff className="size-3.5 mr-2" /> Disable Portal
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 variant="destructive"
                                 onClick={() => handleDeleteCustomer(customer.id)}
@@ -845,24 +623,6 @@ export function CrmView() {
                       <span>Added {formatDate(selectedCustomer.createdAt)}</span>
                     </div>
                   </div>
-
-                  {/* Customer Portal Access panel — embedded management */}
-                  <PortalAccessPanel
-                    customer={{
-                      id: selectedCustomer.id,
-                      name: selectedCustomer.name,
-                      email: selectedCustomer.email,
-                      phone: selectedCustomer.phone,
-                      portalEnabled: selectedCustomer.portalEnabled,
-                      invitationStatus: selectedCustomer.invitationStatus,
-                      activatedAt: selectedCustomer.activatedAt,
-                      lastLoginAt: selectedCustomer.lastLoginAt,
-                      invitationSentAt: selectedCustomer.invitationSentAt,
-                    }}
-                    onUpdate={fetchCustomers}
-                    variant="compact"
-                  />
-
                   <div className="flex gap-2 pt-2">
                     <Button variant="outline" size="sm" className="flex-1" onClick={() => { setShowCustomerDetail(false); openEditCustomer(selectedCustomer); }}>
                       <Pencil className="size-3.5 mr-1" /> Edit
@@ -1319,70 +1079,6 @@ export function CrmView() {
           </Dialog>
         </TabsContent>
       </Tabs>
-
-      {/* ─── Portal Invite / Reset Link Dialog (row-level quick actions) ───── */}
-      <PortalInviteDialog
-        open={inviteDialogOpen}
-        onClose={() => {
-          setInviteDialogOpen(false);
-          setInviteResult(null);
-          setInviteError(null);
-        }}
-        inviteUrl={inviteResult?.url ?? null}
-        expiresAt={inviteResult?.expiresAt ?? null}
-        customerName={inviteResult?.customerName ?? null}
-        companyName={inviteResult?.companyName ?? null}
-        alreadyActivated={inviteResult?.alreadyActivated ?? false}
-        mode={inviteResult?.mode ?? 'invite'}
-        loading={inviteLoading}
-        loadingLabel={inviteResult?.mode === 'reset' ? 'Generating reset link…' : 'Generating invitation link…'}
-        error={!inviteLoading && !inviteResult ? (inviteError || 'Failed to generate invitation. Please try again.') : null}
-      />
-
-      {/* ─── Disable Portal Confirmation Dialog (row-level) ───────────────── */}
-      <AlertDialog
-        open={!!disableConfirmCustomer}
-        onOpenChange={(open) => {
-          if (!open && !disableLoading) {
-            setDisableConfirmCustomer(null);
-          }
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <ShieldOff className="size-4 text-red-600" />
-              Disable customer portal?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {disableConfirmCustomer && (
-                <>
-                  This will prevent{' '}
-                  <span className="font-medium text-foreground">
-                    {disableConfirmCustomer.name}
-                  </span>{' '}
-                  from logging in to the customer portal, but their data (bookings, jobs,
-                  invoices, conversations) is preserved. They can be re-enabled later.
-                  Continue?
-                </>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={disableLoading}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-red-600 hover:bg-red-700 text-white"
-              disabled={disableLoading}
-              onClick={(e) => {
-                e.preventDefault();
-                handleDisablePortal();
-              }}
-            >
-              {disableLoading ? 'Disabling…' : 'Yes, disable portal'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

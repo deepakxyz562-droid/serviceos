@@ -45,6 +45,16 @@ export async function GET(request: NextRequest) {
       type: form.type,
       status: form.status,
       slug: form.slug,
+      // Include the JSON-encoded config so the Form Builder list view can
+      // render action badges, fields preview, etc. without an extra round-trip.
+      fieldsJson: form.fieldsJson,
+      submissionActions: form.submissionActions,
+      fieldMappingJson: form.fieldMappingJson,
+      welcomeMessage: form.welcomeMessage,
+      completionMessage: form.completionMessage,
+      whatsappOwnerTemplate: form.whatsappOwnerTemplate,
+      whatsappUserTemplate: form.whatsappUserTemplate,
+      whatsappAiGenerated: form.whatsappAiGenerated,
       submissions: form.submissions,
       conversionRate: form.conversionRate,
       tenantId: form.tenantId,

@@ -123,23 +123,6 @@ export async function POST(request: NextRequest) {
           status: 'available',
           name: user.name || undefined,
           phone: user.phone || undefined,
-          invitationStatus: 'accepted',
-        },
-      });
-    }
-
-    // Customer portal activation: set passwordHash + activatedAt + invitationStatus
-    if (invitation.customerId) {
-      await db.customer.update({
-        where: { id: invitation.customerId },
-        data: {
-          passwordHash,
-          activatedAt: new Date(),
-          activationToken: null,
-          activationTokenExpiresAt: null,
-          invitationStatus: 'accepted',
-          portalEnabled: true,
-          lastLoginAt: new Date(),
         },
       });
     }
@@ -150,45 +133,32 @@ export async function POST(request: NextRequest) {
       : null;
 
     // Fetch the tenant
-    const tenant = await db.tenant.findUnique({
-      where: { id: invitation.tenantId || undefined },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        plan: true,
-        planStatus: true,
-        onboardingCompleted: true,
-        onboardingStep: true,
-      },
-    });
+    const tenant = invitation.tenantId
+      ? await db.tenant.findUnique({
+          where: { id: invitation.tenantId },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            plan: true,
+            planStatus: true,
+            onboardingCompleted: true,
+            onboardingStep: true,
+          },
+        })
+      : null;
 
     // Generate JWT token
-    let authUser: any;
-    if (invitation.customerId) {
-      // Customer portal auth — synthesize a customer-scoped token
-      authUser = {
-        id: `cust_${invitation.customerId}`,
-        email: invitation.email,
-        name: name || invitation.name,
-        role: 'customer',
-        isSuperAdmin: false,
-        tenantId: invitation.tenantId,
-        workspaceId: invitation.workspaceId,
-        avatar: null,
-      };
-    } else {
-      authUser = {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        isSuperAdmin: user.isSuperAdmin || false,
-        tenantId: user.tenantId,
-        workspaceId: user.workspaceId,
-        avatar: user.avatar,
-      };
-    }
+    const authUser = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      isSuperAdmin: user.isSuperAdmin || false,
+      tenantId: user.tenantId,
+      workspaceId: user.workspaceId,
+      avatar: user.avatar,
+    };
     const jwtToken = generateToken(authUser);
 
     // Build the response

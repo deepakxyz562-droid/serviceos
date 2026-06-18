@@ -18,7 +18,9 @@ import {
   Settings, Plus, Send, Mail, Smartphone, MessageSquare,
   Wifi, WifiOff, AlertCircle, CheckCircle2, Loader2,
   Trash2, Shield, Key, Globe, Pencil,
+  ShieldCheck, Megaphone, RefreshCw,
 } from 'lucide-react';
+import { useAppStore } from '@/store/app-store';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -46,6 +48,40 @@ interface CommunicationProvider {
   config: ProviderConfig;
   createdAt: string;
 }
+
+// ─── Email Channel Status (two-section panel) ────────────────────────────────
+
+interface EmailStatusMarketingProvider {
+  id: string;
+  name: string;
+  providerType: string;
+  usageType: string;
+  isDefault: boolean;
+  status: string;
+  fromEmail: string;
+  fromName: string;
+  totalSent: number;
+  lastUsedAt: string | null;
+}
+
+interface EmailChannelStatus {
+  systemEmail: {
+    managed: 'platform';
+    connected: boolean;
+    source: 'emailProvider' | 'env-smtp' | 'env-resend' | 'simulated' | string | null;
+    providerId: string | null;
+    providerName: string | null;
+    providerType: string | null;
+    simulated: boolean;
+  };
+  marketingEmail: {
+    connected: boolean;
+    defaultProviderId: string | null;
+    providers: EmailStatusMarketingProvider[];
+  };
+}
+
+const MARKETING_PROVIDER_CHIPS = ['SMTP', 'Resend', 'SendGrid', 'Amazon SES', 'Mailgun', 'Brevo'];
 
 // ─── Provider Configurations ─────────────────────────────────────────────────
 
@@ -255,6 +291,36 @@ export function CommunicationProvidersView() {
   useEffect(() => {
     fetchProviders();
   }, [fetchProviders]);
+
+  // ─── Email Channel Status (two-section panel) ──────────────────────────
+
+  const [emailStatus, setEmailStatus] = useState<EmailChannelStatus | null>(null);
+  const [statusLoading, setStatusLoading] = useState(true);
+  const [statusError, setStatusError] = useState<string | null>(null);
+
+  const setActiveView = useAppStore((s) => s.setActiveView);
+
+  const fetchEmailStatus = useCallback(async () => {
+    setStatusLoading(true);
+    setStatusError(null);
+    try {
+      const res = await fetch('/api/email-providers/status');
+      if (res.ok) {
+        const data = (await res.json()) as EmailChannelStatus;
+        setEmailStatus(data);
+      } else {
+        setStatusError('Failed to load email channel status');
+      }
+    } catch {
+      setStatusError('Network error loading status');
+    } finally {
+      setStatusLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchEmailStatus();
+  }, [fetchEmailStatus]);
 
   // ─── Computed ───────────────────────────────────────────────────────────
 
@@ -729,6 +795,221 @@ export function CommunicationProvidersView() {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
+      {/* Email Channel Status Panel (System Email + Marketing Email) */}
+      <section className="space-y-3" aria-label="Email Channel Status">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h3 className="text-base font-semibold flex items-center gap-2">
+              <Mail className="size-4 text-emerald-600" />
+              Email Channel Status
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Two separate channels: one for transactional email, one for your campaigns.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchEmailStatus}
+            disabled={statusLoading}
+          >
+            <RefreshCw className={cn('size-4 mr-1.5', statusLoading && 'animate-spin')} />
+            Refresh
+          </Button>
+        </div>
+
+        {statusLoading ? (
+          <div className="grid gap-4 md:grid-cols-2">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <Card key={i}>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="size-10 rounded-full" />
+                    <div className="space-y-1.5">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-3 w-48" />
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Skeleton className="h-12 w-full rounded-md" />
+                  <Skeleton className="h-3 w-2/3" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : statusError ? (
+          <Card>
+            <CardContent className="p-4 flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <AlertCircle className="size-4 text-amber-600" />
+                <span>Unable to load status — {statusError}</span>
+              </div>
+              <Button variant="outline" size="sm" onClick={fetchEmailStatus}>
+                <RefreshCw className="size-4 mr-1.5" /> Retry
+              </Button>
+            </CardContent>
+          </Card>
+        ) : emailStatus ? (
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* ── Card 1: System Email (transactional, platform-managed) ── */}
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center justify-center size-10 rounded-full bg-emerald-100 dark:bg-emerald-900/40 shrink-0">
+                      <ShieldCheck className="size-5 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <CardTitle className="text-base">System Email</CardTitle>
+                      <p className="text-xs text-muted-foreground">
+                        Password resets, invitations, booking & invoice alerts
+                      </p>
+                    </div>
+                  </div>
+                  <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-800 shrink-0">
+                    <ShieldCheck className="size-3 mr-0.5" /> Managed By Platform
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="rounded-md border bg-muted/40 p-3">
+                  {emailStatus.systemEmail.simulated || !emailStatus.systemEmail.connected ? (
+                    <p className="text-sm">
+                      <span className="font-medium text-amber-700 dark:text-amber-400">Simulated</span>{' '}
+                      <span className="text-muted-foreground">
+                        (configure <code className="px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-[11px]">RESEND_API_KEY</code> or SMTP env)
+                      </span>
+                    </p>
+                  ) : emailStatus.systemEmail.source === 'emailProvider' && emailStatus.systemEmail.providerName ? (
+                    <p className="text-sm">
+                      <span className="font-medium">{emailStatus.systemEmail.providerName}</span>{' '}
+                      <span className="text-muted-foreground">
+                        via {emailStatus.systemEmail.providerType?.toUpperCase() || 'Provider'}
+                      </span>
+                    </p>
+                  ) : emailStatus.systemEmail.source === 'env-smtp' ? (
+                    <p className="text-sm">
+                      <span className="font-medium">Environment SMTP</span>{' '}
+                      <span className="text-muted-foreground">(SMTP_HOST / SMTP_USER env)</span>
+                    </p>
+                  ) : emailStatus.systemEmail.source === 'env-resend' ? (
+                    <p className="text-sm">
+                      <span className="font-medium">Resend</span>{' '}
+                      <span className="text-muted-foreground">(RESEND_API_KEY env)</span>
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Connected</p>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  This channel is managed by the platform. You cannot reconfigure it.
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* ── Card 2: Marketing Email (tenant's own campaign channel) ── */}
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center justify-center size-10 rounded-full bg-teal-100 dark:bg-teal-900/40 shrink-0">
+                      <Megaphone className="size-5 text-teal-600 dark:text-teal-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <CardTitle className="text-base">Marketing Email</CardTitle>
+                      <p className="text-xs text-muted-foreground">
+                        Newsletters, promotions & bulk campaigns
+                      </p>
+                    </div>
+                  </div>
+                  {emailStatus.marketingEmail.connected ? (
+                    <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-800 shrink-0">
+                      <CheckCircle2 className="size-3 mr-0.5" /> Connected
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-800 shrink-0">
+                      <AlertCircle className="size-3 mr-0.5" /> Not Connected
+                    </Badge>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {emailStatus.marketingEmail.connected ? (
+                  <div className="space-y-2">
+                    {emailStatus.marketingEmail.providers.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        {emailStatus.marketingEmail.providers.length} provider
+                        {emailStatus.marketingEmail.providers.length === 1 ? '' : 's'} connected
+                      </p>
+                    )}
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                      {emailStatus.marketingEmail.providers.map((p) => (
+                        <div
+                          key={p.id}
+                          className="flex items-start justify-between gap-2 rounded-md border bg-muted/40 p-2.5"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium truncate">{p.name}</span>
+                              {p.isDefault && (
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px] bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-800"
+                                >
+                                  Default
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {p.fromEmail || '—'}
+                            </p>
+                          </div>
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] uppercase shrink-0"
+                          >
+                            {p.providerType}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Connect your own email provider to send campaigns. Bulk email is sent through your domain to protect platform deliverability.
+                    </p>
+                    <Button
+                      className="bg-emerald-600 hover:bg-emerald-700"
+                      size="sm"
+                      onClick={() => setActiveView('emailProviders')}
+                    >
+                      <Plus className="size-4 mr-1.5" /> Connect Provider
+                    </Button>
+                  </div>
+                )}
+
+                {/* Supported provider type chips */}
+                <div className="pt-1">
+                  <p className="text-[11px] text-muted-foreground mb-1.5">Supported providers</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {MARKETING_PROVIDER_CHIPS.map((name) => (
+                      <span
+                        key={name}
+                        className="inline-flex items-center rounded-md border bg-muted/40 px-2 py-0.5 text-[10px] text-muted-foreground"
+                      >
+                        {name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        ) : null}
+      </section>
+
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">

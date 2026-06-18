@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, Fragment } from 'react';
 import {
   FileInput, Plus, Search, Trash2, Eye, Copy,
   GripVertical, BarChart3,
@@ -14,7 +14,7 @@ import {
   Hash, CalendarDays, Type, AlignLeft,
   CircleDot, Paperclip, LinkIcon, Gauge,
   EyeOff, MoreVertical, TrendingUp, Target,
-  MessageSquare, UserPlus,
+  MessageSquare, UserPlus, AlertCircle,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { authFetch } from '@/lib/api';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -163,225 +164,6 @@ const CRM_FIELDS = [
 ];
 
 const VARIABLE_HINTS = '{{name}}, {{phone}}, {{service}}, {{message}}, {{email}}, {{date}}';
-
-// ─── Mock Data ──────────────────────────────────────────────────────────────
-
-const MOCK_FORMS: FormItem[] = [
-  {
-    id: 'f1',
-    name: 'Lead Capture Form',
-    description: 'Capture new leads from website and WhatsApp',
-    type: 'lead_capture',
-    status: 'active',
-    fields: [
-      { id: 'ff1', label: 'Full Name', type: 'text', required: true, placeholder: 'Enter your full name' },
-      { id: 'ff2', label: 'Phone Number', type: 'phone', required: true, placeholder: '+1 (555) 000-0000' },
-      { id: 'ff3', label: 'Email Address', type: 'email', required: false, placeholder: 'you@email.com' },
-      { id: 'ff4', label: 'Service Needed', type: 'select', required: true, options: ['Deep Cleaning', 'Regular Cleaning', 'Plumbing', 'Electrical', 'Packing', 'Other'] },
-      { id: 'ff5', label: 'Message', type: 'textarea', required: false, placeholder: 'Describe what you need...' },
-    ],
-    submissionActions: {
-      primary: 'create_lead',
-      additional: { sendWhatsAppOwner: true, sendWhatsAppUser: true, sendEmail: false, addToCampaign: false, notifySalesTeam: true, callWebhook: false },
-      whatsappOwnerTemplate: 'New lead received!\nName: {{name}}\nPhone: {{phone}}\nService: {{service}}\nMessage: {{message}}',
-      whatsappUserTemplate: 'Hi {{name}}! Thanks for reaching out. We received your request for {{service}} and will get back to you shortly!',
-      aiGenerateUserMessage: false,
-      webhookUrl: '',
-    },
-    fieldMappings: [
-      { formFieldId: 'ff1', crmField: 'Lead.Name' },
-      { formFieldId: 'ff2', crmField: 'Lead.Phone' },
-      { formFieldId: 'ff3', crmField: 'Lead.Email' },
-      { formFieldId: 'ff4', crmField: 'Lead.ServiceType' },
-      { formFieldId: 'ff5', crmField: 'Lead.Description' },
-    ],
-    welcomeMessage: 'Hi! Tell us about what you need and we\'ll get back to you within 1 hour!',
-    completionMessage: 'Thanks for reaching out! We\'ll contact you shortly.',
-    whatsappOwnerTemplate: 'New lead received!\nName: {{name}}\nPhone: {{phone}}\nService: {{service}}',
-    whatsappUserTemplate: 'Hi {{name}}! Thanks for reaching out about {{service}}.',
-    aiGenerateUserMessage: false,
-    slug: 'lead-capture-01',
-    submissions: 234,
-    conversionRate: 34,
-    createdAt: '2025-01-15',
-  },
-  {
-    id: 'f2',
-    name: 'Booking Request Form',
-    description: 'Allow customers to book services online',
-    type: 'booking',
-    status: 'active',
-    fields: [
-      { id: 'ff10', label: 'Name', type: 'text', required: true, placeholder: 'Your name' },
-      { id: 'ff11', label: 'Phone', type: 'phone', required: true, placeholder: '+1 (555) 000-0000' },
-      { id: 'ff12', label: 'Service Type', type: 'select', required: true, options: ['Deep Cleaning', 'Regular Cleaning', 'Office Cleaning'] },
-      { id: 'ff13', label: 'Preferred Date', type: 'date', required: true },
-      { id: 'ff14', label: 'Address', type: 'textarea', required: true, placeholder: 'Service address' },
-    ],
-    submissionActions: {
-      primary: 'create_booking',
-      additional: { sendWhatsAppOwner: true, sendWhatsAppUser: true, sendEmail: true, addToCampaign: false, notifySalesTeam: false, callWebhook: false },
-      whatsappOwnerTemplate: 'New booking request!\nName: {{name}}\nPhone: {{phone}}\nService: {{service}}\nDate: {{date}}',
-      whatsappUserTemplate: 'Hi {{name}}! Your booking for {{service}} on {{date}} has been received. We\'ll confirm shortly!',
-      aiGenerateUserMessage: true,
-      webhookUrl: '',
-    },
-    fieldMappings: [
-      { formFieldId: 'ff10', crmField: 'Customer.Name' },
-      { formFieldId: 'ff11', crmField: 'Customer.Phone' },
-      { formFieldId: 'ff14', crmField: 'Job.Address' },
-    ],
-    welcomeMessage: 'Book your service in just a few steps!',
-    completionMessage: 'Your booking is confirmed! We\'ll send a reminder 24 hours before.',
-    whatsappOwnerTemplate: 'New booking!\nName: {{name}}\nService: {{service}}',
-    whatsappUserTemplate: 'Your booking for {{service}} is confirmed!',
-    aiGenerateUserMessage: true,
-    slug: 'booking-req-02',
-    submissions: 156,
-    conversionRate: 52,
-    createdAt: '2025-02-01',
-  },
-  {
-    id: 'f3',
-    name: 'Feedback Survey',
-    description: 'Collect customer feedback after service completion',
-    type: 'feedback',
-    status: 'active',
-    fields: [
-      { id: 'ff20', label: 'Overall Rating', type: 'rating', required: true },
-      { id: 'ff21', label: 'Satisfied?', type: 'checkbox', required: true },
-      { id: 'ff22', label: 'Comments', type: 'textarea', required: false, placeholder: 'Tell us more...' },
-    ],
-    submissionActions: {
-      primary: 'store_only',
-      additional: { sendWhatsAppOwner: false, sendWhatsAppUser: true, sendEmail: false, addToCampaign: false, notifySalesTeam: false, callWebhook: false },
-      whatsappOwnerTemplate: '',
-      whatsappUserTemplate: 'Thank you for your feedback, {{name}}! We appreciate your time.',
-      aiGenerateUserMessage: true,
-      webhookUrl: '',
-    },
-    fieldMappings: [],
-    welcomeMessage: 'How did we do? Your feedback helps us improve!',
-    completionMessage: 'Thank you for your feedback!',
-    whatsappOwnerTemplate: '',
-    whatsappUserTemplate: 'Thanks for your feedback!',
-    aiGenerateUserMessage: true,
-    slug: 'feedback-survey-03',
-    submissions: 89,
-    conversionRate: 67,
-    createdAt: '2025-03-01',
-  },
-  {
-    id: 'f4',
-    name: 'Quote Request',
-    description: 'Collect quote requests from potential customers',
-    type: 'quote_request',
-    status: 'inactive',
-    fields: [
-      { id: 'ff30', label: 'Company Name', type: 'text', required: true },
-      { id: 'ff31', label: 'Contact Phone', type: 'phone', required: true },
-      { id: 'ff32', label: 'Email', type: 'email', required: true },
-      { id: 'ff33', label: 'Service Description', type: 'textarea', required: true },
-      { id: 'ff34', label: 'Budget Range', type: 'select', required: false, options: ['$100-$500', '$500-$1000', '$1000-$5000', '$5000+'] },
-    ],
-    submissionActions: {
-      primary: 'create_quote',
-      additional: { sendWhatsAppOwner: true, sendWhatsAppUser: false, sendEmail: true, addToCampaign: true, notifySalesTeam: true, callWebhook: false },
-      whatsappOwnerTemplate: 'New quote request!\nCompany: {{name}}\nService: {{service}}',
-      whatsappUserTemplate: '',
-      aiGenerateUserMessage: false,
-      webhookUrl: '',
-    },
-    fieldMappings: [
-      { formFieldId: 'ff30', crmField: 'Lead.Name' },
-      { formFieldId: 'ff31', crmField: 'Lead.Phone' },
-      { formFieldId: 'ff32', crmField: 'Lead.Email' },
-    ],
-    welcomeMessage: 'Get a free quote for your project!',
-    completionMessage: 'We\'ll prepare your quote and send it within 24 hours.',
-    whatsappOwnerTemplate: 'New quote request from {{name}}!',
-    whatsappUserTemplate: '',
-    aiGenerateUserMessage: false,
-    slug: 'quote-request-04',
-    submissions: 42,
-    conversionRate: 28,
-    createdAt: '2025-03-10',
-  },
-  {
-    id: 'f5',
-    name: 'Job Application',
-    description: 'Accept job applications from potential employees',
-    type: 'job_request',
-    status: 'active',
-    fields: [
-      { id: 'ff40', label: 'Full Name', type: 'text', required: true },
-      { id: 'ff41', label: 'Phone', type: 'phone', required: true },
-      { id: 'ff42', label: 'Email', type: 'email', required: true },
-      { id: 'ff43', label: 'Position', type: 'select', required: true, options: ['Cleaner', 'Plumber', 'Electrician', 'Driver', 'Supervisor'] },
-      { id: 'ff44', label: 'Experience (years)', type: 'number', required: true },
-      { id: 'ff45', label: 'Resume', type: 'file', required: false },
-    ],
-    submissionActions: {
-      primary: 'custom_action',
-      additional: { sendWhatsAppOwner: true, sendWhatsAppUser: true, sendEmail: true, addToCampaign: false, notifySalesTeam: false, callWebhook: true },
-      whatsappOwnerTemplate: 'New job application!\nName: {{name}}\nPosition: {{service}}',
-      whatsappUserTemplate: 'Hi {{name}}! We received your application for {{service}}. We\'ll be in touch!',
-      aiGenerateUserMessage: false,
-      webhookUrl: 'https://hr-system.example.com/webhook/applications',
-    },
-    fieldMappings: [
-      { formFieldId: 'ff40', crmField: 'Lead.Name' },
-      { formFieldId: 'ff41', crmField: 'Lead.Phone' },
-    ],
-    welcomeMessage: 'Join our team! Fill out the application below.',
-    completionMessage: 'Thanks for applying! We\'ll review your application and get back to you.',
-    whatsappOwnerTemplate: 'New job application from {{name}}!',
-    whatsappUserTemplate: 'Thanks for your application, {{name}}!',
-    aiGenerateUserMessage: false,
-    slug: 'job-application-05',
-    submissions: 78,
-    conversionRate: 15,
-    createdAt: '2025-02-20',
-  },
-];
-
-const MOCK_RESPONSES: FormResponse[] = [
-  {
-    id: 'r1', formId: 'f1', respondentName: 'Alex Rivera', respondentPhone: '+1 555-0101',
-    data: { 'Full Name': 'Alex Rivera', 'Phone Number': '+1 555-0101', 'Email Address': 'alex@email.com', 'Service Needed': 'Cleaning', 'Message': 'Need deep clean for 3BR apartment' },
-    submittedAt: '2 hours ago', source: 'whatsapp', leadId: 'lead-101', actionsResults: { createLead: 'Lead #101 created', sendWhatsApp: 'Sent to owner' },
-  },
-  {
-    id: 'r2', formId: 'f1', respondentName: 'Maria Santos', respondentPhone: '+1 555-0102',
-    data: { 'Full Name': 'Maria Santos', 'Phone Number': '+1 555-0102', 'Service Needed': 'Plumbing', 'Message': 'Kitchen faucet leaking' },
-    submittedAt: '5 hours ago', source: 'direct', leadId: 'lead-102', actionsResults: { createLead: 'Lead #102 created', sendWhatsApp: 'Sent to owner' },
-  },
-  {
-    id: 'r3', formId: 'f1', respondentName: 'James Wilson', respondentPhone: '+1 555-0103',
-    data: { 'Full Name': 'James Wilson', 'Phone Number': '+1 555-0103', 'Service Needed': 'Electrical', 'Message': '' },
-    submittedAt: '1 day ago', source: 'embed', leadId: 'lead-103', actionsResults: { createLead: 'Lead #103 created', sendWhatsApp: 'Sent to owner', notifySales: 'Sales team notified' },
-  },
-  {
-    id: 'r4', formId: 'f2', respondentName: 'Sarah Chen', respondentPhone: '+1 555-0104',
-    data: { 'Name': 'Sarah Chen', 'Phone': '+1 555-0104', 'Service Type': 'Deep Cleaning', 'Preferred Date': '2025-03-20', 'Address': '456 Oak Ave' },
-    submittedAt: '3 hours ago', source: 'whatsapp', jobId: 'job-201', actionsResults: { createBooking: 'Booking #201 created', sendWhatsApp: 'Owner & user notified' },
-  },
-  {
-    id: 'r5', formId: 'f2', respondentName: 'Tom Baker', respondentPhone: '+1 555-0105',
-    data: { 'Name': 'Tom Baker', 'Phone': '+1 555-0105', 'Service Type': 'Office Cleaning', 'Preferred Date': '2025-03-22', 'Address': '789 Business Blvd' },
-    submittedAt: '1 day ago', source: 'direct', actionsResults: { createBooking: 'Booking #202 created' },
-  },
-  {
-    id: 'r6', formId: 'f3', respondentName: 'Emily Davis', respondentPhone: '+1 555-0106',
-    data: { 'Overall Rating': '5', 'Satisfied?': 'Yes', 'Comments': 'Excellent service!' },
-    submittedAt: '6 hours ago', source: 'whatsapp', actionsResults: {},
-  },
-  {
-    id: 'r7', formId: 'f5', respondentName: 'Mike Johnson', respondentPhone: '+1 555-0107',
-    data: { 'Full Name': 'Mike Johnson', 'Phone': '+1 555-0107', 'Email': 'mike@email.com', 'Position': 'Cleaner', 'Experience (years)': '3' },
-    submittedAt: '12 hours ago', source: 'embed', actionsResults: { customAction: 'Application forwarded to HR' },
-  },
-];
 
 // ─── Helper: Checkbox icon ──────────────────────────────────────────────────
 
@@ -531,8 +313,164 @@ function getDefaultMappings(fields: FormField[], type: FormType): CRMFieldMappin
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
+// ─── API ↔ FormItem transformation helpers ──────────────────────────────────
+// The DB stores fields/actions/mappings as JSON strings; the FormItem interface
+// uses parsed objects. These helpers convert between the two shapes.
+
+interface ApiForm {
+  id: string;
+  name: string;
+  description?: string | null;
+  type: string;
+  status: string;
+  slug?: string | null;
+  fieldsJson?: string;
+  submissionActions?: string;
+  fieldMappingJson?: string;
+  welcomeMessage?: string;
+  completionMessage?: string;
+  whatsappOwnerTemplate?: string;
+  whatsappUserTemplate?: string;
+  whatsappAiGenerated?: boolean;
+  submissions?: number;
+  conversionRate?: number;
+  createdAt?: string;
+  responseCount?: number;
+}
+
+function safeJsonParse<T>(str: string | null | undefined, fallback: T): T {
+  if (!str) return fallback;
+  try { return JSON.parse(str) as T; } catch { return fallback; }
+}
+
+function apiFormToFormItem(api: ApiForm): FormItem {
+  const fields = safeJsonParse<FormField[]>(api.fieldsJson, []);
+  const rawActions = safeJsonParse<Partial<SubmissionActions>>(api.submissionActions, {});
+  const mappings = safeJsonParse<CRMFieldMapping[]>(api.fieldMappingJson, []);
+
+  // The DB submissionActions may be either:
+  //  - the modern shape: { primary, additional, ... } (saved by this view)
+  //  - a legacy array of action strings: ['create_lead', 'send_whatsapp', ...] (saved by the API route)
+  // We normalize both to the SubmissionActions interface.
+  let submissionActions: SubmissionActions;
+  if (Array.isArray(rawActions as unknown)) {
+    const arr = (rawActions as unknown) as string[];
+    submissionActions = {
+      primary: (arr.find(a => ['create_lead', 'create_customer', 'create_booking', 'create_job', 'create_quote', 'trigger_workflow'].includes(a)) as PrimaryAction) || 'store_only',
+      additional: {
+        sendWhatsAppOwner: arr.includes('send_whatsapp'),
+        sendWhatsAppUser: arr.includes('send_whatsapp'),
+        sendEmail: arr.includes('send_email'),
+        addToCampaign: false,
+        notifySalesTeam: false,
+        callWebhook: arr.includes('call_webhook'),
+      },
+      whatsappOwnerTemplate: api.whatsappOwnerTemplate || '',
+      whatsappUserTemplate: api.whatsappUserTemplate || '',
+      aiGenerateUserMessage: api.whatsappAiGenerated || false,
+      webhookUrl: '',
+    };
+  } else {
+    submissionActions = {
+      primary: rawActions.primary || 'store_only',
+      additional: {
+        sendWhatsAppOwner: rawActions.additional?.sendWhatsAppOwner ?? false,
+        sendWhatsAppUser: rawActions.additional?.sendWhatsAppUser ?? false,
+        sendEmail: rawActions.additional?.sendEmail ?? false,
+        addToCampaign: rawActions.additional?.addToCampaign ?? false,
+        notifySalesTeam: rawActions.additional?.notifySalesTeam ?? false,
+        callWebhook: rawActions.additional?.callWebhook ?? false,
+      },
+      whatsappOwnerTemplate: api.whatsappOwnerTemplate || rawActions.whatsappOwnerTemplate || '',
+      whatsappUserTemplate: api.whatsappUserTemplate || rawActions.whatsappUserTemplate || '',
+      aiGenerateUserMessage: api.whatsappAiGenerated ?? rawActions.aiGenerateUserMessage ?? false,
+      webhookUrl: rawActions.webhookUrl || '',
+    };
+  }
+
+  return {
+    id: api.id,
+    name: api.name,
+    description: api.description || undefined,
+    type: api.type as FormType,
+    status: (api.status === 'active' || api.status === 'inactive' || api.status === 'archived' ? api.status : 'inactive') as FormStatus,
+    fields,
+    submissionActions,
+    fieldMappings: mappings,
+    welcomeMessage: api.welcomeMessage || '',
+    completionMessage: api.completionMessage || '',
+    whatsappOwnerTemplate: api.whatsappOwnerTemplate || '',
+    whatsappUserTemplate: api.whatsappUserTemplate || '',
+    aiGenerateUserMessage: api.whatsappAiGenerated || false,
+    slug: api.slug || undefined,
+    submissions: api.submissions ?? api.responseCount ?? 0,
+    conversionRate: api.conversionRate ?? 0,
+    createdAt: api.createdAt ? new Date(api.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+  };
+}
+
+// Build the payload for POST/PUT /api/forms from the editor state
+function buildApiPayload(formData: {
+  name: string;
+  description: string;
+  type: FormType;
+  status: FormStatus;
+  fields: FormField[];
+  submissionActions: SubmissionActions;
+  fieldMappings: CRMFieldMapping[];
+  welcomeMessage: string;
+  completionMessage: string;
+}) {
+  // Convert the modern SubmissionActions shape into the array format the API
+  // route expects (matches the action switch in /api/forms/[id]/submit).
+  const actionArray: string[] = [];
+  switch (formData.submissionActions.primary) {
+    case 'create_lead': actionArray.push('create_lead'); break;
+    case 'create_customer': actionArray.push('create_customer'); break;
+    case 'create_booking': actionArray.push('create_booking'); break;
+    case 'create_job': actionArray.push('create_job'); break;
+    case 'create_quote': actionArray.push('create_quote'); break;
+    case 'trigger_workflow': actionArray.push('trigger_workflow'); break;
+    case 'store_only': actionArray.push('store_response'); break;
+    case 'custom_action': actionArray.push('store_response'); break;
+  }
+  if (formData.submissionActions.additional.sendWhatsAppOwner || formData.submissionActions.additional.sendWhatsAppUser) {
+    actionArray.push('send_whatsapp');
+  }
+  if (formData.submissionActions.additional.sendEmail) actionArray.push('send_email');
+  if (formData.submissionActions.additional.callWebhook) actionArray.push('call_webhook');
+
+  return {
+    name: formData.name,
+    description: formData.description || null,
+    type: formData.type,
+    status: formData.status,
+    fieldsJson: JSON.stringify(formData.fields.filter(f => f.label.trim())),
+    submissionActions: JSON.stringify(actionArray),
+    fieldMappingJson: JSON.stringify(
+      formData.fieldMappings
+        .filter(m => m.crmField)
+        .reduce((acc, m) => {
+          // Convert "Lead.Name" → { "Name": "Lead.Name" } style mapping (label-based)
+          const parts = m.crmField.split('.');
+          const key = parts[parts.length - 1];
+          acc[key] = m.crmField;
+          return acc;
+        }, {} as Record<string, string>)
+    ),
+    welcomeMessage: formData.welcomeMessage,
+    completionMessage: formData.completionMessage,
+    whatsappOwnerTemplate: formData.submissionActions.whatsappOwnerTemplate,
+    whatsappUserTemplate: formData.submissionActions.whatsappUserTemplate,
+    whatsappAiGenerated: formData.submissionActions.aiGenerateUserMessage,
+  };
+}
+
 export function FormBuilderView() {
-  const [forms, setForms] = useState<FormItem[]>(MOCK_FORMS);
+  const [forms, setForms] = useState<FormItem[]>([]);
+  const [formsLoading, setFormsLoading] = useState(true);
+  const [formsError, setFormsError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedForm, setSelectedForm] = useState<FormItem | null>(null);
@@ -542,6 +480,11 @@ export function FormBuilderView() {
   const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<FormItem | null>(null);
   const [expandedResponse, setExpandedResponse] = useState<string | null>(null);
+
+  // Responses dialog state (fetched from API)
+  const [responses, setResponses] = useState<FormResponse[]>([]);
+  const [responsesLoading, setResponsesLoading] = useState(false);
+  const [responsesError, setResponsesError] = useState<string | null>(null);
 
   // Create/Edit form state
   const [editMode, setEditMode] = useState(false);
@@ -581,6 +524,31 @@ export function FormBuilderView() {
   const totalSubmissions = forms.reduce((s, f) => s + f.submissions, 0);
   const avgConversion = forms.length > 0 ? Math.round(forms.reduce((s, f) => s + f.conversionRate, 0) / forms.length) : 0;
   const activeForms = forms.filter(f => f.status === 'active').length;
+
+  // ─── Fetch forms from API ────────────────────────────────────────────────
+  const fetchForms = useCallback(async () => {
+    setFormsLoading(true);
+    setFormsError(null);
+    try {
+      const res = await authFetch('/api/forms');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Failed to load forms (HTTP ${res.status})`);
+      }
+      const data = await res.json();
+      const apiForms: ApiForm[] = data.forms || [];
+      setForms(apiForms.map(apiFormToFormItem));
+    } catch (err) {
+      setFormsError(err instanceof Error ? err.message : 'Failed to load forms');
+      setForms([]);
+    } finally {
+      setFormsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchForms();
+  }, [fetchForms]);
 
   // ─── Handlers ─────────────────────────────────────────────────────────────
 
@@ -625,55 +593,61 @@ export function FormBuilderView() {
     const hasFields = formData.fields.some(f => f.label.trim());
     if (!hasFields) { toast.error('At least one field with a label is required'); return; }
 
-    const cleanFields = formData.fields.filter(f => f.label.trim());
-    const cleanMappings = formData.fieldMappings.filter(m => m.crmField);
+    setSaving(true);
+    try {
+      const payload = buildApiPayload(formData);
 
-    if (editMode && editFormId) {
-      const updated: FormItem = {
-        ...forms.find(f => f.id === editFormId)!,
-        name: formData.name,
-        description: formData.description,
-        type: formData.type,
-        status: formData.status,
-        fields: cleanFields,
-        submissionActions: formData.submissionActions,
-        fieldMappings: cleanMappings,
-        welcomeMessage: formData.welcomeMessage,
-        completionMessage: formData.completionMessage,
-      };
-      setForms(prev => prev.map(f => f.id === editFormId ? updated : f));
-      toast.success('Form updated');
-    } else {
-      const newForm: FormItem = {
-        id: `f-${Date.now()}`,
-        name: formData.name,
-        description: formData.description,
-        type: formData.type,
-        status: formData.status,
-        fields: cleanFields,
-        submissionActions: formData.submissionActions,
-        fieldMappings: cleanMappings,
-        welcomeMessage: formData.welcomeMessage || 'Welcome! Please fill out this form.',
-        completionMessage: formData.completionMessage || 'Thank you for your submission!',
-        whatsappOwnerTemplate: formData.submissionActions.whatsappOwnerTemplate,
-        whatsappUserTemplate: formData.submissionActions.whatsappUserTemplate,
-        aiGenerateUserMessage: formData.submissionActions.aiGenerateUserMessage,
-        slug: formData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
-        submissions: 0,
-        conversionRate: 0,
-        createdAt: new Date().toISOString().split('T')[0],
-      };
-      setForms(prev => [newForm, ...prev]);
-      toast.success('Form created');
+      if (editMode && editFormId) {
+        const res = await authFetch(`/api/forms/${editFormId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `Failed to update form (HTTP ${res.status})`);
+        }
+        const data = await res.json();
+        const updated = apiFormToFormItem(data.form as ApiForm);
+        setForms(prev => prev.map(f => f.id === editFormId ? updated : f));
+        toast.success('Form updated');
+      } else {
+        const res = await authFetch('/api/forms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error || `Failed to create form (HTTP ${res.status})`);
+        }
+        const data = await res.json();
+        const newForm = apiFormToFormItem(data.form as ApiForm);
+        setForms(prev => [newForm, ...prev]);
+        toast.success('Form created');
+      }
+      setShowCreateDialog(false);
+      resetFormData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save form');
+    } finally {
+      setSaving(false);
     }
-    setShowCreateDialog(false);
-    resetFormData();
   };
 
-  const handleDelete = (form: FormItem) => {
-    setForms(prev => prev.filter(f => f.id !== form.id));
-    setShowDeleteConfirm(null);
-    toast.success('Form deleted');
+  const handleDelete = async (form: FormItem) => {
+    try {
+      const res = await authFetch(`/api/forms/${form.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Failed to delete form (HTTP ${res.status})`);
+      }
+      setForms(prev => prev.filter(f => f.id !== form.id));
+      setShowDeleteConfirm(null);
+      toast.success('Form deleted');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete form');
+    }
   };
 
   // Field operations
@@ -745,6 +719,64 @@ export function FormBuilderView() {
     });
   };
 
+  // Format an ISO date as a short relative time string (e.g. "2h ago", "3d ago")
+  function formatRelativeTime(iso: string): string {
+    try {
+      const date = new Date(iso);
+      const diffMs = Date.now() - date.getTime();
+      const sec = Math.floor(diffMs / 1000);
+      if (sec < 60) return 'just now';
+      const min = Math.floor(sec / 60);
+      if (min < 60) return `${min}m ago`;
+      const hr = Math.floor(min / 60);
+      if (hr < 24) return `${hr}h ago`;
+      const day = Math.floor(hr / 24);
+      if (day < 30) return `${day}d ago`;
+      return date.toLocaleDateString();
+    } catch {
+      return iso;
+    }
+  }
+
+  // Fetch real responses for the selected form from the API
+  const fetchResponses = useCallback(async (formId: string) => {
+    setResponsesLoading(true);
+    setResponsesError(null);
+    setResponses([]);
+    try {
+      const res = await authFetch(`/api/forms/${formId}/responses`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Failed to load responses (HTTP ${res.status})`);
+      }
+      const data = await res.json();
+      const raw: Array<{
+        id: string; formId: string; dataJson?: string; respondent?: string | null;
+        respondentName?: string | null; source?: string; leadId?: string | null;
+        customerId?: string | null; jobId?: string | null; quoteId?: string | null;
+        bookingId?: string | null; actionsResultsJson?: string; createdAt?: string;
+      }> = data.responses || [];
+      setResponses(raw.map(r => ({
+        id: r.id,
+        formId: r.formId,
+        respondentName: r.respondentName || undefined,
+        respondentPhone: r.respondent || undefined,
+        data: safeJsonParse<Record<string, string>>(r.dataJson, {}),
+        submittedAt: formatRelativeTime(r.createdAt || new Date().toISOString()),
+        source: r.source || 'direct',
+        leadId: r.leadId || undefined,
+        customerId: r.customerId || undefined,
+        jobId: r.jobId || r.bookingId || undefined,
+        quoteId: r.quoteId || undefined,
+        actionsResults: safeJsonParse<Record<string, string>>(r.actionsResultsJson, {}),
+      })));
+    } catch (err) {
+      setResponsesError(err instanceof Error ? err.message : 'Failed to load responses');
+    } finally {
+      setResponsesLoading(false);
+    }
+  }, []);
+
   const handleSendWhatsApp = async () => {
     if (!waPhone.trim()) { toast.error('Phone number is required'); return; }
     setWaSending(true);
@@ -760,13 +792,31 @@ export function FormBuilderView() {
     }
   };
 
-  const getFormLink = (form: FormItem) => `https://app.serviceos.io/form/${form.slug || form.id}`;
+  // Origin of the current deployment (dev: http://localhost:3000, prod: https://wonderful-narwhal-8acec7.netlify.app, etc.)
+  // Safe for SSR — falls back to '' on the server.
+  const siteOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+
+  // The hosted form route is /f/[slug] (see src/app/f/[slug]/page.tsx).
+  // Previously this pointed to a non-existent https://app.serviceos.io/form/{slug} — wrong domain + wrong path.
+  const getFormLink = (form: FormItem) => {
+    const slug = form.slug || form.id;
+    return `${siteOrigin}/f/${slug}`;
+  };
+
+  // Relative path used by window.open() so we don't hardcode a host
+  const getFormPath = (form: FormItem) => `/f/${form.slug || form.id}`;
 
   const getEmbedScript = (form: FormItem) =>
-    `<script src="https://app.serviceos.io/embed.js" data-form-id="${form.id}" data-tenant="default"></script>`;
+    `<script src="${siteOrigin}/embed.js" data-form-id="${form.id}" data-tenant="default"></script>`;
 
   const getEmbedIframe = (form: FormItem) =>
     `<iframe src="${getFormLink(form)}" width="100%" height="600" frameborder="0" style="border-radius:8px;"></iframe>`;
+
+  // Open the hosted form in a new tab so users can directly test/preview it
+  const openFormLink = (form: FormItem) => {
+    const path = getFormPath(form);
+    if (path) window.open(path, '_blank', 'noopener,noreferrer');
+  };
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -816,33 +866,60 @@ export function FormBuilderView() {
       </div>
 
       {/* ─── Forms Grid ────────────────────────────────────────────────────── */}
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-        {filteredForms.map(form => {
-          const actionBadges = getActionBadges(form.submissionActions);
-          return (
-            <Card key={form.id} className="hover:shadow-md transition-all">
-              <CardContent className="p-4 space-y-3">
-                {/* Header */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <h4 className="font-semibold text-sm truncate">{form.name}</h4>
-                    {form.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{form.description}</p>}
-                    <div className="flex items-center gap-1.5 mt-1.5">
-                      <Badge className={`${getTypeColor(form.type)} text-[10px] border`}>{FORM_TYPES.find(t => t.value === form.type)?.label || form.type}</Badge>
-                      <Badge variant="outline" className={`${getStatusColor(form.status)} text-[10px]`}>{form.status}</Badge>
-                    </div>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0">
-                        <MoreVertical className="size-3.5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleOpenEdit(form)}>
-                        <Pencil className="size-3.5 mr-2" /> Edit
+      {formsLoading ? (
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map(i => (
+            <Card key={i}>
+              <CardContent className="p-4 space-y-3 animate-pulse">
+                <div className="h-4 bg-muted rounded w-3/4" />
+                <div className="h-3 bg-muted rounded w-full" />
+                <div className="flex gap-2 mt-2">
+                  <div className="h-5 bg-muted rounded w-16" />
+                  <div className="h-5 bg-muted rounded w-16" />
+                </div>
+                <div className="h-8 bg-muted rounded w-full mt-3" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : formsError ? (
+        <div className="text-center py-12">
+          <AlertCircle className="size-12 mx-auto text-red-500 mb-4" />
+          <h3 className="text-lg font-medium mb-1">Failed to load forms</h3>
+          <p className="text-muted-foreground mb-4 text-sm">{formsError}</p>
+          <Button variant="outline" onClick={fetchForms}>
+            <Loader2 className="size-4 mr-2" /> Retry
+          </Button>
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+            {filteredForms.map(form => {
+              const actionBadges = getActionBadges(form.submissionActions);
+              return (
+                <Card key={form.id} className="hover:shadow-md transition-all">
+                  <CardContent className="p-4 space-y-3">
+                    {/* Header */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <h4 className="font-semibold text-sm truncate">{form.name}</h4>
+                        {form.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{form.description}</p>}
+                        <div className="flex items-center gap-1.5 mt-1.5">
+                          <Badge className={`${getTypeColor(form.type)} text-[10px] border`}>{FORM_TYPES.find(t => t.value === form.type)?.label || form.type}</Badge>
+                          <Badge variant="outline" className={`${getStatusColor(form.status)} text-[10px]`}>{form.status}</Badge>
+                        </div>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0">
+                            <MoreVertical className="size-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleOpenEdit(form)}>
+                            <Pencil className="size-3.5 mr-2" /> Edit
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => { setSelectedForm(form); setShowResponsesDialog(true); }}>
+                      <DropdownMenuItem onClick={() => { setSelectedForm(form); setShowResponsesDialog(true); fetchResponses(form.id); }}>
                         <Eye className="size-3.5 mr-2" /> Responses
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => { setSelectedForm(form); setShowPreviewDialog(true); }}>
@@ -891,7 +968,7 @@ export function FormBuilderView() {
                   <Button variant="outline" size="sm" className="flex-1 h-7 text-xs" onClick={() => handleOpenEdit(form)}>
                     <Pencil className="size-3 mr-1" /> Edit
                   </Button>
-                  <Button variant="outline" size="sm" className="flex-1 h-7 text-xs" onClick={() => { setSelectedForm(form); setShowResponsesDialog(true); }}>
+                  <Button variant="outline" size="sm" className="flex-1 h-7 text-xs" onClick={() => { setSelectedForm(form); setShowResponsesDialog(true); fetchResponses(form.id); }}>
                     <Eye className="size-3 mr-1" /> Responses
                   </Button>
                   <Button variant="outline" size="sm" className="flex-1 h-7 text-xs" onClick={() => { setSelectedForm(form); setShowPreviewDialog(true); }}>
@@ -925,6 +1002,8 @@ export function FormBuilderView() {
             <Plus className="size-4 mr-1.5" /> Create Form
           </Button>
         </div>
+      )}
+        </>
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════════
@@ -1484,6 +1563,9 @@ export function FormBuilderView() {
                       <Copy className="size-3.5" />
                     </Button>
                   </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Preview only — the actual link will use the unique slug generated when the form is saved. Open the share dialog from the form list to get the real link.
+                  </p>
                 </div>
 
                 {/* Script Embed */}
@@ -1520,9 +1602,16 @@ export function FormBuilderView() {
             </ScrollArea>
 
             <DialogFooter className="px-6 py-3 border-t">
-              <Button variant="outline" onClick={() => { setShowCreateDialog(false); resetFormData(); }}>Cancel</Button>
-              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSave} disabled={!formData.name.trim()}>
-                {editMode ? 'Save Changes' : 'Create Form'}
+              <Button variant="outline" onClick={() => { setShowCreateDialog(false); resetFormData(); }} disabled={saving}>Cancel</Button>
+              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSave} disabled={!formData.name.trim() || saving}>
+                {saving ? (
+                  <>
+                    <Loader2 className="size-4 mr-2 animate-spin" />
+                    {editMode ? 'Saving...' : 'Creating...'}
+                  </>
+                ) : (
+                  editMode ? 'Save Changes' : 'Create Form'
+                )}
               </Button>
             </DialogFooter>
           </Tabs>
@@ -1540,10 +1629,36 @@ export function FormBuilderView() {
               {selectedForm?.name} — Responses
             </DialogTitle>
             <DialogDescription>
-              {MOCK_RESPONSES.filter(r => r.formId === selectedForm?.id).length} responses received
+              {responsesLoading ? 'Loading responses…' : `${responses.length} response${responses.length === 1 ? '' : 's'} received`}
             </DialogDescription>
           </DialogHeader>
           <ScrollArea className="flex-1 -mx-6 px-6">
+            {responsesError ? (
+              <div className="text-center py-10">
+                <AlertCircle className="size-10 mx-auto text-red-500 mb-3" />
+                <p className="text-sm text-muted-foreground mb-3">{responsesError}</p>
+                <Button variant="outline" size="sm" onClick={() => selectedForm && fetchResponses(selectedForm.id)}>
+                  <Loader2 className="size-3.5 mr-2" /> Retry
+                </Button>
+              </div>
+            ) : responsesLoading ? (
+              <div className="space-y-2 py-2">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="h-10 bg-muted/50 rounded animate-pulse" />
+                ))}
+              </div>
+            ) : responses.length === 0 ? (
+              <div className="text-center py-10">
+                <FileInput className="size-10 mx-auto text-muted-foreground/50 mb-3" />
+                <p className="text-sm font-medium mb-1">No responses yet</p>
+                <p className="text-xs text-muted-foreground mb-4">Share your form's direct link to start collecting responses.</p>
+                {selectedForm && (
+                  <Button variant="outline" size="sm" onClick={() => { setShowResponsesDialog(false); setSelectedForm(selectedForm); setShowEmbedDialog(true); }}>
+                    <ExternalLink className="size-3.5 mr-2" /> Get Direct Link
+                  </Button>
+                )}
+              </div>
+            ) : (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1555,9 +1670,9 @@ export function FormBuilderView() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {MOCK_RESPONSES.filter(r => r.formId === selectedForm?.id).map(response => (
-                  <>
-                    <TableRow key={response.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setExpandedResponse(expandedResponse === response.id ? null : response.id)}>
+                {responses.map(response => (
+                  <Fragment key={response.id}>
+                    <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => setExpandedResponse(expandedResponse === response.id ? null : response.id)}>
                       <TableCell>
                         <div>
                           <p className="text-xs font-medium">{response.respondentName || 'Unknown'}</p>
@@ -1635,17 +1750,11 @@ export function FormBuilderView() {
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </Fragment>
                 ))}
-                {MOCK_RESPONSES.filter(r => r.formId === selectedForm?.id).length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                      No responses yet
-                    </TableCell>
-                  </TableRow>
-                )}
               </TableBody>
             </Table>
+            )}
           </ScrollArea>
         </DialogContent>
       </Dialog>
@@ -1750,10 +1859,16 @@ export function FormBuilderView() {
                 <Label className="text-sm font-semibold">Direct Link</Label>
                 <div className="flex gap-2">
                   <Input readOnly className="text-xs font-mono" value={getFormLink(selectedForm)} />
-                  <Button variant="outline" size="sm" className="shrink-0" onClick={() => handleCopy(getFormLink(selectedForm), 'Direct link')}>
+                  <Button variant="outline" size="sm" className="shrink-0" onClick={() => openFormLink(selectedForm)} title="Open form in new tab">
+                    <ExternalLink className="size-3.5" />
+                  </Button>
+                  <Button variant="outline" size="sm" className="shrink-0" onClick={() => handleCopy(getFormLink(selectedForm), 'Direct link')} title="Copy link">
                     <Copy className="size-3.5" />
                   </Button>
                 </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Share this link on WhatsApp, SMS, email, or social media. Anyone with the link can fill the form — no login required.
+                </p>
               </div>
 
               {/* Script Embed */}

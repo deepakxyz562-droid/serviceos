@@ -1,10 +1,11 @@
 import { PrismaClient } from '@prisma/client'
 import { shouldUseSupabaseDB, supabaseDb } from './supabase-db'
 
-// Bump this when the Prisma schema gains new models so the dev server's
-// global PrismaClient singleton is recreated (picks up the new models
-// without requiring a full process restart).
-const PRISMA_SCHEMA_VERSION = '2026-06-17-payment-method'
+// Bump this when the Prisma schema changes and the dev server's cached
+// PrismaClient singleton needs to be recreated. Without this, the global
+// singleton keeps the OLD client (missing new fields/models) even after
+// `prisma db push` regenerates the @prisma/client package.
+const PRISMA_SCHEMA_VERSION = '2025-06-19-invoice-tenantid'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
@@ -48,26 +49,23 @@ if (useSupabase) {
   console.log('[DB]   - SUPABASE_SERVICE_ROLE_KEY=eyJ...')
 }
 
-// In development, invalidate the global PrismaClient singleton when the
-// schema version changes so newly added models are picked up without a
-// full server restart.
-const shouldRecreate =
-  !useSupabase &&
-  process.env.NODE_ENV !== 'production' &&
-  (globalForPrisma.__prismaSchemaVersion !== PRISMA_SCHEMA_VERSION || !globalForPrisma.prisma)
+// Export either Prisma client or Supabase adapter
+// Both provide the same db.model.method() interface
 
-if (shouldRecreate && globalForPrisma.prisma) {
-  console.log('[DB] 🔄 Prisma schema version changed — recreating PrismaClient')
+// Invalidate the cached singleton if the schema version changed (dev hot-reload)
+if (
+  !useSupabase &&
+  globalForPrisma.prisma &&
+  globalForPrisma.__prismaSchemaVersion !== PRISMA_SCHEMA_VERSION
+) {
   try {
-    void globalForPrisma.prisma.$disconnect()
+    globalForPrisma.prisma.$disconnect()
   } catch {
     // ignore
   }
   globalForPrisma.prisma = undefined
 }
 
-// Export either Prisma client or Supabase adapter
-// Both provide the same db.model.method() interface
 export const db = useSupabase
   ? supabaseDb as unknown as PrismaClient
   : (globalForPrisma.prisma ?? createPrismaClient())

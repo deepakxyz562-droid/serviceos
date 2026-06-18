@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import {
   Plus,
   KeyRound,
@@ -22,16 +22,6 @@ import {
   MessageSquare,
   Save,
   Loader2,
-  FlaskConical,
-  Sparkles,
-  Wind,
-  Zap,
-  MessageCircle,
-  Search as SearchIcon,
-  Waves,
-  Smile,
-  Gift,
-  Brain,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -64,14 +54,6 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import {
-  getCreateFields,
-  getFieldLabel,
-  isSensitiveField,
-  maskValue,
-} from '@/lib/credential-fields';
-import { ProviderCatalog } from '@/components/credentials/provider-catalog';
-import type { AiProvider } from '@/lib/ai-providers';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -88,55 +70,56 @@ interface CredentialItem {
   isActive: boolean;
 }
 
-/**
- * Normalize an API-returned credential record into the shape the UI expects.
- *
- * The backend stores everything (including an optional `_serviceName`
- * metadata field) inside `encryptedData`. The API returns `data` already
- * masked/decrypted; we just split `_serviceName` back out so the rest of
- * the UI can treat `data` as pure credential fields.
- */
-function normalizeCredential(c: any): CredentialItem {
-  const data: Record<string, string> = {};
-  let serviceName = '';
-  for (const [k, v] of Object.entries(c.data || {})) {
-    if (k === '_serviceName') {
-      serviceName = String(v ?? '');
-    } else {
-      data[k] = v == null ? '' : String(v);
-    }
-  }
-  return {
-    id: c.id,
-    name: c.name,
-    type: c.type,
-    serviceName: serviceName || 'Custom',
-    data,
-    lastUsedAt: c.lastUsedAt ?? null,
-    expiresAt: c.expiresAt ?? null,
-    createdAt: c.createdAt,
-    updatedAt: c.updatedAt,
-    isActive: c.isActive ?? true,
-  };
-}
+// ─── Mock Data ──────────────────────────────────────────────────────────────
+
+const MOCK_CREDENTIALS: CredentialItem[] = [
+  {
+    id: 'cred1', name: 'WhatsApp Business API', type: 'whatsapp', serviceName: 'Meta / WhatsApp',
+    data: { phoneNumberId: '1234567890', businessAccountId: 'BIZ-9876', apiKey: 'wh_api_k8f2j9d7s3m1n5p0q4r6', webhookVerifyToken: 'verify_token_xyz789' },
+    lastUsedAt: '2025-03-13T14:30:00Z', expiresAt: null, createdAt: '2025-01-15T10:00:00Z', updatedAt: '2025-03-10T14:30:00Z', isActive: true,
+  },
+  {
+    id: 'cred2', name: 'Stripe Payment Gateway', type: 'apiKey', serviceName: 'Stripe',
+    data: { secretKey: 'sk_live_4eC39HqLyjWDarjtT1zdp7dc', publishableKey: 'pk_live_1234567890abcdef' },
+    lastUsedAt: '2025-03-13T12:00:00Z', expiresAt: null, createdAt: '2025-01-20T08:00:00Z', updatedAt: '2025-02-15T09:00:00Z', isActive: true,
+  },
+  {
+    id: 'cred3', name: 'Google OAuth Integration', type: 'oAuth2', serviceName: 'Google Cloud',
+    data: { clientId: '103697710141-q4l7vubq2dalip21qb31pdo9jemf8uk4.apps.googleusercontent.com', clientSecret: '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', refreshToken: '1//0g7h8i9j0k1l2m3n4o5p6q7r8s9t0u' },
+    lastUsedAt: '2025-03-12T16:00:00Z', expiresAt: '2025-12-31T23:59:59Z', createdAt: '2025-02-01T12:00:00Z', updatedAt: '2025-03-01T10:00:00Z', isActive: true,
+  },
+  {
+    id: 'cred4', name: 'SMTP Email Server', type: 'httpBasic', serviceName: 'SendGrid',
+    data: { host: 'smtp.sendgrid.net', port: '587', username: 'apikey', password: 'SG.abc123def456ghi789jkl012mno345pqr678stu901vwx234yz' },
+    lastUsedAt: '2025-03-11T09:00:00Z', expiresAt: null, createdAt: '2025-02-10T14:00:00Z', updatedAt: '2025-02-10T14:00:00Z', isActive: true,
+  },
+  {
+    id: 'cred5', name: 'Database Connection', type: 'dbConnection', serviceName: 'PostgreSQL / Supabase',
+    data: { host: 'db.supabase.co', port: '5432', database: 'serviceos_prod', username: 'admin', password: 'Pr0d$ecureP@ssw0rd!2025', sslMode: 'require' },
+    lastUsedAt: '2025-03-13T14:00:00Z', expiresAt: null, createdAt: '2025-01-10T08:00:00Z', updatedAt: '2025-03-05T11:00:00Z', isActive: true,
+  },
+  {
+    id: 'cred6', name: 'AWS S3 Storage', type: 'awsIam', serviceName: 'Amazon Web Services',
+    data: { accessKeyId: 'AKIA5F2J9D7S3M1N5P0Q', secretAccessKey: 'r7s8t9u0v1w2x3y4z5a6b7c8d9e0f1g2', region: 'us-east-1', bucket: 'serviceos-uploads' },
+    lastUsedAt: '2025-03-10T11:00:00Z', expiresAt: null, createdAt: '2025-03-01T09:00:00Z', updatedAt: '2025-03-01T09:00:00Z', isActive: true,
+  },
+  {
+    id: 'cred7', name: 'Slack Webhook (Expired)', type: 'httpBearer', serviceName: 'Slack',
+    data: { token: 'xoxb-1234567890-1234567890123-AbCdEfGhIjKlMnOpQrStUvWxYz' },
+    lastUsedAt: '2025-02-28T10:00:00Z', expiresAt: '2025-03-01T00:00:00Z', createdAt: '2024-12-01T10:00:00Z', updatedAt: '2025-02-01T09:00:00Z', isActive: false,
+  },
+  {
+    id: 'cred8', name: 'SSH Server Access', type: 'sshKey', serviceName: 'DigitalOcean',
+    data: { host: '192.168.1.100', port: '22', username: 'deploy', privateKey: '-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA...\n-----END RSA PRIVATE KEY-----' },
+    lastUsedAt: '2025-03-08T15:00:00Z', expiresAt: null, createdAt: '2025-01-25T08:00:00Z', updatedAt: '2025-01-25T08:00:00Z', isActive: true,
+  },
+];
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const typeConfig: Record<string, { icon: React.ElementType; label: string; color: string; bgColor: string }> = {
   whatsapp: { icon: MessageSquare, label: 'WhatsApp Business API', color: 'text-emerald-600', bgColor: 'bg-emerald-50 border-emerald-200' },
   apiKey: { icon: KeyRound, label: 'API Key', color: 'text-emerald-600', bgColor: 'bg-emerald-50 border-emerald-200' },
-  // ─── AI providers (Phase 4) ────────────────────────────────────────────
-  openai: { icon: Brain, label: 'OpenAI', color: 'text-emerald-700', bgColor: 'bg-emerald-50 border-emerald-200' },
-  anthropic: { icon: Sparkles, label: 'Anthropic Claude', color: 'text-orange-600', bgColor: 'bg-orange-50 border-orange-200' },
-  gemini: { icon: Sparkles, label: 'Google Gemini', color: 'text-blue-600', bgColor: 'bg-blue-50 border-blue-200' },
-  mistral: { icon: Wind, label: 'Mistral AI', color: 'text-orange-600', bgColor: 'bg-orange-50 border-orange-200' },
-  groq: { icon: Zap, label: 'Groq', color: 'text-orange-700', bgColor: 'bg-orange-50 border-orange-200' },
-  cohere: { icon: MessageCircle, label: 'Cohere', color: 'text-pink-600', bgColor: 'bg-pink-50 border-pink-200' },
-  perplexity: { icon: SearchIcon, label: 'Perplexity', color: 'text-teal-600', bgColor: 'bg-teal-50 border-teal-200' },
-  deepseek: { icon: Waves, label: 'DeepSeek', color: 'text-indigo-600', bgColor: 'bg-indigo-50 border-indigo-200' },
-  huggingface: { icon: Smile, label: 'Hugging Face', color: 'text-yellow-600', bgColor: 'bg-yellow-50 border-yellow-200' },
-  platform_ai: { icon: Gift, label: 'Platform AI (Free)', color: 'text-pink-600', bgColor: 'bg-pink-50 border-pink-200' },
-  // ─── Other credential types ────────────────────────────────────────────
   httpBasic: { icon: Shield, label: 'Basic Auth', color: 'text-teal-600', bgColor: 'bg-teal-50 border-teal-200' },
   httpBearer: { icon: KeyRound, label: 'Bearer Token', color: 'text-cyan-600', bgColor: 'bg-cyan-50 border-cyan-200' },
   oAuth2: { icon: Globe, label: 'OAuth 2.0', color: 'text-amber-600', bgColor: 'bg-amber-50 border-amber-200' },
@@ -166,16 +149,26 @@ function formatRelative(dateStr: string) {
   return formatDate(dateStr);
 }
 
+function maskValue(value: string): string {
+  if (value.length <= 8) return '••••••••';
+  return value.slice(0, 4) + '••••••••' + value.slice(-4);
+}
+
 function isExpired(expiresAt: string | null): boolean {
   if (!expiresAt) return false;
   return new Date(expiresAt) < new Date();
 }
 
+function isSensitiveField(field: string): boolean {
+  const lower = field.toLowerCase();
+  return lower.includes('key') || lower.includes('secret') || lower.includes('password') || lower.includes('token') || lower.includes('private');
+}
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function CredentialsView() {
-  const [credentials, setCredentials] = useState<CredentialItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [credentials, setCredentials] = useState<CredentialItem[]>(MOCK_CREDENTIALS);
+  const [loading] = useState(false);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -189,8 +182,6 @@ export function CredentialsView() {
   const [newCredType, setNewCredType] = useState('whatsapp');
   const [newCredService, setNewCredService] = useState('');
   const [newCredFields, setNewCredFields] = useState<Record<string, string>>({});
-  const [creating, setCreating] = useState(false);
-  const [testingCreate, setTestingCreate] = useState(false);
 
   // Edit form state (used in detail dialog edit mode)
   const [editCredId, setEditCredId] = useState<string | null>(null);
@@ -200,29 +191,6 @@ export function CredentialsView() {
   const [editCredFields, setEditCredFields] = useState<Record<string, string>>({});
   const [editRevealedFields, setEditRevealedFields] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
-  const [testingEdit, setTestingEdit] = useState(false);
-
-  // ─── Fetch credentials on mount ─────────────────────────────────────────
-  const fetchCredentials = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/credentials');
-      if (!res.ok) throw new Error(`Failed to load credentials (${res.status})`);
-      const json = await res.json();
-      const list: CredentialItem[] = (json.credentials || []).map(normalizeCredential);
-      setCredentials(list);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to load credentials';
-      toast.error(msg);
-      setCredentials([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchCredentials();
-  }, [fetchCredentials]);
 
   // Stats
   const stats = {
@@ -232,21 +200,11 @@ export function CredentialsView() {
     types: new Set(credentials.map(c => c.type)).size,
   };
 
-  // AI provider credential types — when `typeFilter === 'ai'` we want to
-  // show all of these at once (plus `platform_ai`).
-  const AI_TYPE_VALUES = [
-    'apiKey', 'openai', 'anthropic', 'huggingface',
-    'gemini', 'mistral', 'groq', 'cohere', 'perplexity', 'deepseek',
-    'platform_ai',
-  ];
-
   const filtered = credentials.filter((c) => {
     if (search && !c.name.toLowerCase().includes(search.toLowerCase()) &&
         !c.serviceName.toLowerCase().includes(search.toLowerCase()) &&
         !c.type.toLowerCase().includes(search.toLowerCase())) return false;
-    if (typeFilter === 'all') return true;
-    if (typeFilter === 'ai') return AI_TYPE_VALUES.includes(c.type);
-    if (c.type !== typeFilter) return false;
+    if (typeFilter !== 'all' && c.type !== typeFilter) return false;
     return true;
   });
 
@@ -267,173 +225,54 @@ export function CredentialsView() {
     return editRevealedFields[fieldKey] || false;
   };
 
-  const resetCreateForm = () => {
+  const handleCreate = () => {
+    if (!newCredName.trim()) { toast.error('Credential name is required'); return; }
+    const newCred: CredentialItem = {
+      id: `cred-${Date.now()}`, name: newCredName.trim(), type: newCredType,
+      serviceName: newCredService.trim() || 'Custom', data: { ...newCredFields },
+      lastUsedAt: null, expiresAt: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), isActive: true,
+    };
+    setCredentials(prev => [newCred, ...prev]);
+    setDialogOpen(false);
     setNewCredName('');
     setNewCredType('whatsapp');
     setNewCredService('');
     setNewCredFields({});
+    toast.success('Credential created');
   };
 
-  const handleCreate = async () => {
-    if (!newCredName.trim()) { toast.error('Credential name is required'); return; }
-    setCreating(true);
-    try {
-      const data: Record<string, string> = { ...newCredFields };
-      if (newCredService.trim()) data._serviceName = newCredService.trim();
-      const res = await fetch('/api/credentials', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newCredName.trim(), type: newCredType, data }),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || `Failed to create credential (${res.status})`);
-      }
-      const created = normalizeCredential(await res.json());
-      setCredentials(prev => [created, ...prev]);
-      setDialogOpen(false);
-      resetCreateForm();
-      toast.success('Credential created');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to create credential';
-      toast.error(msg);
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const handleTestCreate = async () => {
-    if (testingCreate) return;
-    setTestingCreate(true);
-    try {
-      const res = await fetch('/api/credentials/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newCredName.trim(),
-          type: newCredType,
-          data: { ...newCredFields },
-        }),
-      });
-      const j = await res.json().catch(() => ({}));
-      if (j.success) {
-        toast.success(j.message || 'Credential test passed', { description: j.details ? JSON.stringify(j.details).slice(0, 200) : undefined });
-      } else {
-        toast.error(j.message || 'Credential test failed', { description: j.details ? JSON.stringify(j.details).slice(0, 200) : undefined });
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Credential test failed';
-      toast.error(msg);
-    } finally {
-      setTestingCreate(false);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    try {
-      const res = await fetch(`/api/credentials/${id}`, { method: 'DELETE' });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || `Failed to delete credential (${res.status})`);
-      }
-      setCredentials(prev => prev.filter(c => c.id !== id));
-      // If the deleted credential was open in the detail dialog, close it.
-      if (selectedCred?.id === id) {
-        setDetailDialogOpen(false);
-        setSelectedCred(null);
-        setIsDetailEditMode(false);
-      }
-      toast.success('Credential deleted');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to delete credential';
-      toast.error(msg);
-    }
+  const handleDelete = (id: string) => {
+    setCredentials(prev => prev.filter(c => c.id !== id));
+    toast.success('Credential deleted');
   };
 
   const openEdit = (cred: CredentialItem) => {
     setEditCredId(cred.id);
     setEditCredName(cred.name);
     setEditCredType(cred.type);
-    setEditCredService(cred.serviceName === 'Custom' ? '' : cred.serviceName);
-    // Pre-fill non-sensitive fields with their real values from the server.
-    // For sensitive fields, leave empty so the user can type a new value
-    // (or leave blank to keep the existing value — handled by the PUT route).
-    const fields: Record<string, string> = {};
-    for (const [key, value] of Object.entries(cred.data)) {
-      fields[key] = isSensitiveField(key) ? '' : value;
-    }
-    setEditCredFields(fields);
+    setEditCredService(cred.serviceName);
+    setEditCredFields({ ...cred.data });
     setEditRevealedFields({});
   };
 
-  const handleEditSave = async () => {
+  const handleEditSave = () => {
     if (!editCredName.trim()) { toast.error('Credential name is required'); return; }
-    if (!editCredId) return;
     setSaving(true);
-    try {
-      const data: Record<string, string> = { ...editCredFields };
-      if (editCredService.trim()) data._serviceName = editCredService.trim();
-      const res = await fetch(`/api/credentials/${editCredId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editCredName.trim(), data }),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || `Failed to update credential (${res.status})`);
-      }
-      const updated = normalizeCredential(await res.json());
-      setCredentials(prev => prev.map(c => (c.id === editCredId ? updated : c)));
-      setSelectedCred(updated);
+    
+    // Simulate save
+    setTimeout(() => {
+      setCredentials(prev => prev.map(c =>
+        c.id === editCredId
+          ? { ...c, name: editCredName.trim(), serviceName: editCredService.trim() || c.serviceName, data: { ...editCredFields }, updatedAt: new Date().toISOString() }
+          : c
+      ));
       setSaving(false);
       setIsDetailEditMode(false);
       setEditCredId(null);
+      // Update selectedCred to reflect changes in detail view
+      setSelectedCred(prev => prev ? { ...prev, name: editCredName.trim(), serviceName: editCredService.trim() || prev.serviceName, data: { ...editCredFields }, updatedAt: new Date().toISOString() } : null);
       toast.success('Credential updated');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to update credential';
-      toast.error(msg);
-      setSaving(false);
-    }
-  };
-
-  const handleTestEdit = async () => {
-    if (testingEdit || !editCredId) return;
-    // We can't test from the edit dialog directly because the API only
-    // returns masked sensitive values. If the user just typed new sensitive
-    // values, we test those; otherwise we tell them to use the test button
-    // from the create flow.
-    const hasNewSensitive = Object.entries(editCredFields).some(
-      ([k, v]) => isSensitiveField(k) && v.trim() !== '' && !v.startsWith('••••')
-    );
-    if (!hasNewSensitive) {
-      toast.message('Enter a new sensitive value to test, or test from the create dialog.', {
-        description: 'Saved secrets cannot be re-tested from the edit form.',
-      });
-      return;
-    }
-    setTestingEdit(true);
-    try {
-      const res = await fetch('/api/credentials/test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: editCredName.trim(),
-          type: editCredType,
-          data: { ...editCredFields },
-        }),
-      });
-      const j = await res.json().catch(() => ({}));
-      if (j.success) {
-        toast.success(j.message || 'Credential test passed', { description: j.details ? JSON.stringify(j.details).slice(0, 200) : undefined });
-      } else {
-        toast.error(j.message || 'Credential test failed', { description: j.details ? JSON.stringify(j.details).slice(0, 200) : undefined });
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Credential test failed';
-      toast.error(msg);
-    } finally {
-      setTestingEdit(false);
-    }
+    }, 500);
   };
 
   const handleCopy = (value: string) => {
@@ -446,11 +285,51 @@ export function CredentialsView() {
     setDetailDialogOpen(true);
   };
 
-  // Dynamic fields for create dialog based on type — uses the shared helper
-  // from `@/lib/credential-fields`. Re-derived on each render from
-  // `newCredType`, so the create dialog re-renders when the user picks a
-  // different credential type.
-  const createFields = getCreateFields(newCredType);
+  // Dynamic fields for create dialog based on type
+  const getCreateFields = (): string[] => {
+    switch (newCredType) {
+      case 'whatsapp': return ['phoneNumberId', 'businessAccountId', 'apiKey', 'webhookVerifyToken'];
+      case 'apiKey': return ['apiKey'];
+      case 'httpBasic': return ['username', 'password'];
+      case 'httpBearer': return ['token'];
+      case 'oAuth2': return ['clientId', 'clientSecret', 'refreshToken'];
+      case 'dbConnection': return ['host', 'port', 'database', 'username', 'password', 'sslMode'];
+      case 'sshKey': return ['host', 'port', 'username', 'privateKey'];
+      case 'awsIam': return ['accessKeyId', 'secretAccessKey', 'region'];
+      case 'googleServiceAccount': return ['clientEmail', 'privateKey', 'projectId'];
+      default: return ['key'];
+    }
+  };
+
+  // Field display labels
+  const getFieldLabel = (field: string): string => {
+    const labels: Record<string, string> = {
+      phoneNumberId: 'Phone Number ID',
+      businessAccountId: 'Business Account ID',
+      apiKey: 'API Key',
+      webhookVerifyToken: 'Webhook Verify Token',
+      secretKey: 'Secret Key',
+      publishableKey: 'Publishable Key',
+      clientId: 'Client ID',
+      clientSecret: 'Client Secret',
+      refreshToken: 'Refresh Token',
+      host: 'Host',
+      port: 'Port',
+      database: 'Database',
+      username: 'Username',
+      password: 'Password',
+      sslMode: 'SSL Mode',
+      accessKeyId: 'Access Key ID',
+      secretAccessKey: 'Secret Access Key',
+      region: 'Region',
+      bucket: 'Bucket',
+      token: 'Token',
+      privateKey: 'Private Key',
+      clientEmail: 'Client Email',
+      projectId: 'Project ID',
+    };
+    return labels[field] || field.replace(/([A-Z])/g, ' $1').trim();
+  };
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -465,7 +344,7 @@ export function CredentialsView() {
             <p className="text-sm text-muted-foreground">Manage API keys, tokens, and connection secrets</p>
           </div>
         </div>
-        <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => { resetCreateForm(); setDialogOpen(true); }}>
+        <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => { setNewCredType('whatsapp'); setDialogOpen(true); }}>
           <Plus className="size-4 mr-1.5" /> New Credential
         </Button>
       </div>
@@ -493,26 +372,11 @@ export function CredentialsView() {
         })}
       </div>
 
-      {/* AI Provider Catalog — Phase 5: discover supported providers,
-          see pricing, jump straight into creating a credential. */}
-      <ProviderCatalog onAddCredential={(p: AiProvider) => {
-        // Pre-fill the create-credential dialog with this provider's
-        // type + service name and open it. The user just needs to paste
-        // their API key.
-        setNewCredType(p.id);
-        setNewCredService(p.id === 'platform_ai' ? 'Platform AI' : p.name);
-        setNewCredName(p.id === 'platform_ai' ? 'Platform AI (Free tier)' : `${p.name} API Key`);
-        setNewCredFields({});
-        setDialogOpen(true);
-      }} />
-
       {/* Filters */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <Tabs value={typeFilter} onValueChange={setTypeFilter}>
-          <TabsList className="flex-wrap h-auto">
+          <TabsList>
             <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
-            <TabsTrigger value="ai" className="text-xs">AI Providers</TabsTrigger>
-            <TabsTrigger value="platform_ai" className="text-xs">Platform AI</TabsTrigger>
             <TabsTrigger value="whatsapp" className="text-xs">WhatsApp</TabsTrigger>
             <TabsTrigger value="apiKey" className="text-xs">API Key</TabsTrigger>
             <TabsTrigger value="oAuth2" className="text-xs">OAuth</TabsTrigger>
@@ -538,7 +402,7 @@ export function CredentialsView() {
           <KeyRound className="size-12 mx-auto text-muted-foreground/50 mb-4" />
           <h3 className="text-lg font-medium mb-1">No credentials found</h3>
           <p className="text-muted-foreground mb-4">{search ? 'Try adjusting your search' : 'Add a credential to connect to external services'}</p>
-          <Button className="gap-2 bg-emerald-600 hover:bg-emerald-700" onClick={() => { resetCreateForm(); setDialogOpen(true); }}>
+          <Button className="gap-2 bg-emerald-600 hover:bg-emerald-700" onClick={() => setDialogOpen(true)}>
             <Plus className="size-4" /> New Credential
           </Button>
         </div>
@@ -667,57 +531,7 @@ export function CredentialsView() {
                 <p className="text-emerald-600">Find these in your Meta Business Settings → WhatsApp → API Setup</p>
               </div>
             )}
-            {newCredType === 'platform_ai' && (
-              <div className="rounded-lg bg-pink-50 border border-pink-200 p-3 text-xs text-pink-700 space-y-1">
-                <p className="font-medium flex items-center gap-1.5">
-                  <Gift className="size-3.5" /> Platform AI — Free Tier
-                </p>
-                <p className="text-pink-600">
-                  No API key required. Uses the server-side Z.AI SDK with
-                  platform-managed billing. Perfect for trying out AI nodes
-                  without your own provider key.
-                </p>
-                <p className="text-[10px] text-pink-500 italic">
-                  Free tier: 100 calls/month. Just give the credential a name and click Create.
-                </p>
-              </div>
-            )}
-            {/* For AI provider types, show a "Get API Key" hint with a link
-                to the provider's dashboard so the user can grab a key. */}
-            {['openai', 'anthropic', 'gemini', 'mistral', 'groq', 'cohere', 'perplexity', 'deepseek', 'huggingface'].includes(newCredType) && (
-              (() => {
-                const providerLinks: Record<string, string> = {
-                  openai: 'https://platform.openai.com/api-keys',
-                  anthropic: 'https://console.anthropic.com/settings/keys',
-                  gemini: 'https://aistudio.google.com/app/apikey',
-                  mistral: 'https://console.mistral.ai/api-keys',
-                  groq: 'https://console.groq.com/keys',
-                  cohere: 'https://dashboard.cohere.com/api-keys',
-                  perplexity: 'https://www.perplexity.ai/settings/api',
-                  deepseek: 'https://platform.deepseek.com/api_keys',
-                  huggingface: 'https://huggingface.co/settings/tokens',
-                };
-                const url = providerLinks[newCredType];
-                if (!url) return null;
-                return (
-                  <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-700 flex items-start justify-between gap-2">
-                    <div>
-                      <p className="font-medium mb-0.5">Need an API key?</p>
-                      <p className="text-amber-600">Get one from the {typeConfig[newCredType]?.label} dashboard.</p>
-                    </div>
-                    <a
-                      href={url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[11px] font-medium text-amber-700 hover:text-amber-800 underline shrink-0 mt-0.5"
-                    >
-                      Get Key →
-                    </a>
-                  </div>
-                );
-              })()
-            )}
-            {createFields.map(field => (
+            {getCreateFields().map(field => (
               <div key={field} className="space-y-2">
                 <Label className="text-xs">{getFieldLabel(field)}</Label>
                 {isSensitiveField(field) ? (
@@ -741,29 +555,8 @@ export function CredentialsView() {
             ))}
           </div>
           <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={handleTestCreate}
-              disabled={testingCreate || !newCredName.trim()}
-            >
-              {testingCreate ? (
-                <><Loader2 className="size-4 mr-1.5 animate-spin" /> Testing...</>
-              ) : (
-                <><FlaskConical className="size-4 mr-1.5" /> Test</>
-              )}
-            </Button>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button
-              className="bg-emerald-600 hover:bg-emerald-700"
-              onClick={handleCreate}
-              disabled={!newCredName.trim() || creating}
-            >
-              {creating ? (
-                <><Loader2 className="size-4 mr-1.5 animate-spin" /> Creating...</>
-              ) : (
-                <><Plus className="size-4 mr-1.5" /> Create</>
-              )}
-            </Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreate} disabled={!newCredName.trim()}>Create</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -822,7 +615,7 @@ export function CredentialsView() {
                           <div className="relative">
                             <Input
                               type={sensitive && !revealed ? 'password' : 'text'}
-                              placeholder={sensitive ? 'Enter new value to change, leave blank to keep existing' : `Enter ${getFieldLabel(field).toLowerCase()}...`}
+                              placeholder={`Enter ${getFieldLabel(field).toLowerCase()}...`}
                               value={editCredFields[field] || ''}
                               onChange={e => setEditCredFields(prev => ({ ...prev, [field]: e.target.value }))}
                               className={cn(sensitive && 'pr-9')}
@@ -844,17 +637,6 @@ export function CredentialsView() {
                 </div>
               </div>
               <DialogFooter className="gap-2">
-                <Button
-                  variant="outline"
-                  onClick={handleTestEdit}
-                  disabled={testingEdit || !editCredName.trim()}
-                >
-                  {testingEdit ? (
-                    <><Loader2 className="size-4 mr-1.5 animate-spin" /> Testing...</>
-                  ) : (
-                    <><FlaskConical className="size-4 mr-1.5" /> Test</>
-                  )}
-                </Button>
                 <Button variant="outline" onClick={() => setIsDetailEditMode(false)}>Cancel</Button>
                 <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleEditSave} disabled={!editCredName.trim() || saving}>
                   {saving ? <><Loader2 className="size-4 mr-1.5 animate-spin" /> Saving...</> : <><Save className="size-4 mr-1.5" /> Save Changes</>}

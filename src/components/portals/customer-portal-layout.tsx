@@ -56,6 +56,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -87,6 +97,12 @@ import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTheme } from 'next-themes';
+import { toast } from 'sonner';
+import { lazy, Suspense } from 'react';
+
+// Lazy-load dialogs to keep the initial bundle small
+const NewBookingDialog = lazy(() => import('./new-booking-dialog').then(m => ({ default: m.NewBookingDialog })));
+const AddPaymentMethodDialog = lazy(() => import('./add-payment-method-dialog').then(m => ({ default: m.AddPaymentMethodDialog })));
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -161,15 +177,52 @@ const RECENT_ACTIVITY = [
 // ─── Helper Functions ───────────────────────────────────────────────────────
 
 function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
+}
+
+function apiUrl(path: string) {
+  return `${path}?XTransformPort=3000`;
+}
+
+function formatBookingDate(dateStr: string | Date | null | undefined): string {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function formatBookingTime(dateStr: string | Date | null | undefined): string {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  return d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
+function formatExpiry(month: number | null, year: number | null): string {
+  if (!month || !year) return '';
+  return `${String(month).padStart(2, '0')}/${String(year).slice(-2)}`;
+}
+
+function getPaymentBrandVisual(brand: string | null, type: string): { gradient: string; label: string } {
+  if (type === 'upi') return { gradient: 'from-purple-600 to-purple-800', label: 'UPI' };
+  if (type === 'bank') return { gradient: 'from-slate-600 to-slate-800', label: brand || 'Bank' };
+  switch (brand) {
+    case 'Visa': return { gradient: 'from-blue-600 to-blue-800', label: 'Visa' };
+    case 'Mastercard': return { gradient: 'from-orange-500 to-red-600', label: 'Mastercard' };
+    case 'Amex': return { gradient: 'from-teal-500 to-teal-700', label: 'Amex' };
+    case 'Discover': return { gradient: 'from-amber-500 to-orange-600', label: 'Discover' };
+    case 'RuPay': return { gradient: 'from-emerald-600 to-green-700', label: 'RuPay' };
+    default: return { gradient: 'from-slate-500 to-slate-700', label: brand || 'Card' };
+  }
 }
 
 function getBookingStatusBadge(status: string) {
   const config: Record<string, { label: string; className: string }> = {
+    pending: { label: 'Pending', className: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800' },
+    confirmed: { label: 'Confirmed', className: 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-400 dark:border-teal-800' },
     upcoming: { label: 'Upcoming', className: 'bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-400 dark:border-teal-800' },
     in_progress: { label: 'In Progress', className: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800' },
     completed: { label: 'Completed', className: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800' },
     cancelled: { label: 'Cancelled', className: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800' },
+    no_show: { label: 'No Show', className: 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950/40 dark:text-gray-400 dark:border-gray-800' },
   };
   const c = config[status] || { label: status, className: 'bg-gray-50 text-gray-700 border-gray-200' };
   return <Badge variant="outline" className={cn('text-xs font-medium', c.className)}>{c.label}</Badge>;
@@ -315,6 +368,7 @@ function CustomerHeader({
   const viewTitle: Record<CustomerView, string> = {
     dashboard: 'Dashboard',
     bookings: 'Bookings',
+    orders: 'Orders',
     invoices: 'Invoices',
     payments: 'Payments',
     messages: 'Messages',
@@ -386,9 +440,55 @@ function CustomerHeader({
   );
 }
 
+// ─── Types for real data ────────────────────────────────────────────────────
+
+interface BookingItem {
+  id: string;
+  title: string;
+  description?: string | null;
+  status: string;
+  source: string;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  serviceId?: string | null;
+  address?: string | null;
+  scheduledAt?: string | null;
+  scheduledEndTime?: string | null;
+  duration: number;
+  notes?: string | null;
+  employee?: { id: string; name: string; phone: string; avatar?: string | null } | null;
+  createdAt: string;
+}
+
+interface PaymentMethodItem {
+  id: string;
+  type: string;
+  brand: string | null;
+  last4: string | null;
+  expMonth: number | null;
+  expYear: number | null;
+  holderName: string | null;
+  upiId: string | null;
+  bankName: string | null;
+  isDefault: boolean;
+  createdAt: string;
+}
+
 // ─── Sub-Views ──────────────────────────────────────────────────────────────
 
-function DashboardView() {
+function DashboardView({ onNewBooking, customerName, bookings, bookingsLoading }: {
+  onNewBooking: () => void;
+  customerName: string;
+  bookings: BookingItem[];
+  bookingsLoading: boolean;
+}) {
+  const activeBookings = bookings.filter(b => ['pending', 'confirmed', 'in_progress'].includes(b.status));
+  const upcomingBookings = bookings
+    .filter(b => ['pending', 'confirmed'].includes(b.status) && b.scheduledAt && new Date(b.scheduledAt) > new Date())
+    .sort((a, b) => new Date(a.scheduledAt!).getTime() - new Date(b.scheduledAt!).getTime())
+    .slice(0, 3);
+
   return (
     <div className="space-y-6">
       {/* Welcome Card */}
@@ -396,10 +496,10 @@ function DashboardView() {
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl font-bold text-foreground">Welcome back, Rajesh! 👋</h2>
+              <h2 className="text-xl font-bold text-foreground">Welcome back, {customerName.split(' ')[0]}! 👋</h2>
               <p className="text-muted-foreground mt-1">Here&apos;s what&apos;s happening with your services today.</p>
             </div>
-            <Button className="bg-teal-600 hover:bg-teal-700 text-white self-start">
+            <Button onClick={onNewBooking} className="bg-teal-600 hover:bg-teal-700 text-white self-start">
               <CalendarCheck className="size-4 mr-2" />
               New Booking
             </Button>
@@ -414,9 +514,13 @@ function DashboardView() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground font-medium">Active Bookings</p>
-                <p className="text-3xl font-bold text-foreground mt-1">2</p>
+                {bookingsLoading ? (
+                  <Skeleton className="h-8 w-16 mt-1" />
+                ) : (
+                  <p className="text-3xl font-bold text-foreground mt-1">{activeBookings.length}</p>
+                )}
                 <p className="text-xs text-teal-600 dark:text-teal-400 font-medium mt-1 flex items-center gap-1">
-                  <ArrowUpRight className="size-3" /> 1 upcoming
+                  <ArrowUpRight className="size-3" /> {upcomingBookings.length} upcoming
                 </p>
               </div>
               <div className="size-12 rounded-xl bg-teal-50 dark:bg-teal-950/40 flex items-center justify-center">
@@ -430,14 +534,18 @@ function DashboardView() {
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground font-medium">Pending Invoices</p>
-                <p className="text-3xl font-bold text-foreground mt-1">$509.99</p>
-                <p className="text-xs text-amber-600 dark:text-amber-400 font-medium mt-1 flex items-center gap-1">
-                  <AlertCircle className="size-3" /> 1 overdue
+                <p className="text-sm text-muted-foreground font-medium">Completed Services</p>
+                {bookingsLoading ? (
+                  <Skeleton className="h-8 w-16 mt-1" />
+                ) : (
+                  <p className="text-3xl font-bold text-foreground mt-1">{bookings.filter(b => b.status === 'completed').length}</p>
+                )}
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-1 flex items-center gap-1">
+                  <CheckCircle2 className="size-3" /> All time
                 </p>
               </div>
-              <div className="size-12 rounded-xl bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center">
-                <Receipt className="size-6 text-amber-600 dark:text-amber-400" />
+              <div className="size-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center">
+                <CheckCircle2 className="size-6 text-emerald-600 dark:text-emerald-400" />
               </div>
             </div>
           </CardContent>
@@ -447,49 +555,97 @@ function DashboardView() {
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground font-medium">Total Spent</p>
-                <p className="text-3xl font-bold text-foreground mt-1">$1,820</p>
-                <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mt-1 flex items-center gap-1">
-                  <TrendingUp className="size-3" /> This year
+                <p className="text-sm text-muted-foreground font-medium">Payment Methods</p>
+                <p className="text-3xl font-bold text-foreground mt-1">—</p>
+                <p className="text-xs text-muted-foreground font-medium mt-1 flex items-center gap-1">
+                  <CreditCard className="size-3" /> See Payments
                 </p>
               </div>
-              <div className="size-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center">
-                <CreditCard className="size-6 text-emerald-600 dark:text-emerald-400" />
+              <div className="size-12 rounded-xl bg-purple-50 dark:bg-purple-950/40 flex items-center justify-center">
+                <CreditCard className="size-6 text-purple-600 dark:text-purple-400" />
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Recent Activity */}
+      {/* Upcoming Bookings */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Recent Activity</CardTitle>
+          <CardTitle className="text-base">Upcoming Bookings</CardTitle>
         </CardHeader>
         <CardContent className="pt-0">
-          <div className="space-y-4">
-            {RECENT_ACTIVITY.map((item) => {
-              const Icon = item.icon;
-              return (
-                <div key={item.id} className="flex items-start gap-3">
-                  <div className={cn('mt-0.5', item.color)}>
-                    <Icon className="size-4" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-foreground">{item.text}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{item.time}</p>
+          {bookingsLoading ? (
+            <div className="space-y-3">
+              {[1, 2].map(i => (
+                <div key={i} className="flex items-center gap-3">
+                  <Skeleton className="size-10 rounded-lg" />
+                  <div className="flex-1 space-y-1">
+                    <Skeleton className="h-4 w-1/3" />
+                    <Skeleton className="h-3 w-1/2" />
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          ) : upcomingBookings.length === 0 ? (
+            <div className="text-center py-8">
+              <CalendarCheck className="size-10 text-muted-foreground/40 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">No upcoming bookings</p>
+              <Button onClick={onNewBooking} variant="outline" size="sm" className="mt-3 text-teal-600 border-teal-200 hover:bg-teal-50">
+                <Plus className="size-4 mr-1.5" />
+                Book a Service
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {upcomingBookings.map(booking => (
+                <div key={booking.id} className="flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors">
+                  <div className="size-10 rounded-lg bg-teal-50 dark:bg-teal-950/40 flex items-center justify-center shrink-0">
+                    <CalendarCheck className="size-5 text-teal-600 dark:text-teal-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-foreground truncate">{booking.title}</p>
+                      {getBookingStatusBadge(booking.status)}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                      <Calendar className="size-3" />
+                      {formatBookingDate(booking.scheduledAt)} at {formatBookingTime(booking.scheduledAt)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
   );
 }
 
-function BookingsView() {
+function BookingsView({ bookings, loading, error, onNewBooking, onRetry }: {
+  bookings: BookingItem[];
+  loading: boolean;
+  error: string | null;
+  onNewBooking: () => void;
+  onRetry: () => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const filtered = bookings.filter(b => {
+    const matchesSearch = !search ||
+      b.title.toLowerCase().includes(search.toLowerCase()) ||
+      (b.description?.toLowerCase().includes(search.toLowerCase()) ?? false);
+    const matchesStatus = statusFilter === 'all' || b.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const activeStatuses = ['pending', 'confirmed', 'in_progress'];
+  const active = filtered.filter(b => activeStatuses.includes(b.status));
+  const past = filtered.filter(b => !activeStatuses.includes(b.status));
+
   return (
     <div className="space-y-6">
       {/* Header Actions */}
@@ -500,54 +656,178 @@ function BookingsView() {
         <div className="flex items-center gap-2">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-            <Input placeholder="Search bookings..." className="pl-9 w-48" />
+            <Input
+              placeholder="Search bookings..."
+              className="pl-9 w-48"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
           </div>
-          <Button className="bg-teal-600 hover:bg-teal-700 text-white">
+          <Button onClick={onNewBooking} className="bg-teal-600 hover:bg-teal-700 text-white">
             <Plus className="size-4 mr-2" />
             New Booking
           </Button>
         </div>
       </div>
 
-      {/* Booking Cards */}
-      <div className="space-y-3">
-        {PLACEHOLDER_BOOKINGS.map((booking) => (
-          <Card key={booking.id} className="hover:shadow-md transition-shadow">
-            <CardContent className="p-4 sm:p-5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <h3 className="font-semibold text-foreground">{booking.service}</h3>
-                    {getBookingStatusBadge(booking.status)}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="size-3.5" />
-                      {booking.date} at {booking.time}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <MapPin className="size-3.5" />
-                      {booking.address}
-                    </span>
-                    {booking.assignee !== '--' && (
-                      <span className="flex items-center gap-1">
-                        <UserCircle className="size-3.5" />
-                        {booking.assignee}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground font-mono">{booking.id}</span>
-                  <Button variant="ghost" size="icon" className="size-8">
-                    <MoreVertical className="size-4" />
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+      {/* Status filter pills */}
+      <div className="flex flex-wrap gap-2">
+        {['all', 'pending', 'confirmed', 'in_progress', 'completed', 'cancelled'].map(s => (
+          <button
+            key={s}
+            onClick={() => setStatusFilter(s)}
+            className={cn(
+              'px-3 py-1 rounded-full text-xs font-medium transition-colors',
+              statusFilter === s
+                ? 'bg-teal-600 text-white'
+                : 'bg-muted text-muted-foreground hover:bg-muted/80'
+            )}
+          >
+            {s === 'in_progress' ? 'In Progress' : s.charAt(0).toUpperCase() + s.slice(1)}
+          </button>
         ))}
       </div>
+
+      {/* Error state */}
+      {error && (
+        <Card className="border-red-200 dark:border-red-800">
+          <CardContent className="p-6 text-center">
+            <AlertCircle className="size-10 text-red-500 mx-auto mb-2" />
+            <p className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>
+            <Button variant="outline" size="sm" onClick={onRetry}>Retry</Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Loading state */}
+      {loading && (
+        <div className="space-y-3">
+          {[1, 2, 3].map(i => (
+            <Card key={i}>
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="size-10 rounded-lg" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-1/3" />
+                    <Skeleton className="h-3 w-1/2" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && !error && filtered.length === 0 && (
+        <Card className="border-dashed">
+          <CardContent className="p-8 text-center">
+            <CalendarCheck className="size-12 text-muted-foreground/40 mx-auto mb-3" />
+            <h3 className="text-base font-semibold text-foreground mb-1">No bookings yet</h3>
+            <p className="text-sm text-muted-foreground mb-4">Book a service to get started.</p>
+            <Button onClick={onNewBooking} className="bg-teal-600 hover:bg-teal-700 text-white">
+              <Plus className="size-4 mr-2" />
+              Book a Service
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Active bookings */}
+      {!loading && !error && active.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Active</h3>
+          {active.map(booking => (
+            <Card key={booking.id} className="hover:shadow-md transition-shadow">
+              <CardContent className="p-4 sm:p-5">
+                <button
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full text-left"
+                  onClick={() => setExpandedId(expandedId === booking.id ? null : booking.id)}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <h3 className="font-semibold text-foreground">{booking.title}</h3>
+                      {getBookingStatusBadge(booking.status)}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="size-3.5" />
+                        {formatBookingDate(booking.scheduledAt)} at {formatBookingTime(booking.scheduledAt)}
+                      </span>
+                      {booking.address && (
+                        <span className="flex items-center gap-1">
+                          <MapPin className="size-3.5" />
+                          <span className="truncate max-w-[200px]">{booking.address}</span>
+                        </span>
+                      )}
+                      {booking.employee && (
+                        <span className="flex items-center gap-1">
+                          <UserCircle className="size-3.5" />
+                          {booking.employee.name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground font-mono">{booking.id.slice(-8)}</span>
+                    {expandedId === booking.id ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
+                  </div>
+                </button>
+                {expandedId === booking.id && (booking.description || booking.notes) && (
+                  <div className="mt-3 pt-3 border-t border-border space-y-2 text-sm">
+                    {booking.description && (
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground uppercase">Description</p>
+                        <p className="text-foreground">{booking.description}</p>
+                      </div>
+                    )}
+                    {booking.notes && (
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground uppercase">Notes</p>
+                        <p className="text-foreground">{booking.notes}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Past bookings */}
+      {!loading && !error && past.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Past</h3>
+          {past.map(booking => (
+            <Card key={booking.id} className="opacity-75 hover:opacity-100 transition-opacity">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <h3 className="font-semibold text-foreground">{booking.title}</h3>
+                      {getBookingStatusBadge(booking.status)}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="size-3.5" />
+                        {formatBookingDate(booking.scheduledAt)} at {formatBookingTime(booking.scheduledAt)}
+                      </span>
+                      {booking.employee && (
+                        <span className="flex items-center gap-1">
+                          <UserCircle className="size-3.5" />
+                          {booking.employee.name}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <span className="text-xs text-muted-foreground font-mono">{booking.id.slice(-8)}</span>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -990,110 +1270,215 @@ function InvoicesView() {
   );
 }
 
-function PaymentsView() {
+function PaymentsView({ paymentMethods, loading, error, onAddMethod, onRetry, onDataChange }: {
+  paymentMethods: PaymentMethodItem[];
+  loading: boolean;
+  error: string | null;
+  onAddMethod: () => void;
+  onRetry: () => void;
+  onDataChange: () => void;
+}) {
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const handleSetDefault = async (id: string) => {
+    setActionLoading(true);
+    try {
+      const res = await fetch(apiUrl(`/api/customer/payment-methods/${id}`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ isDefault: true }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to set default');
+      }
+      toast.success('Default payment method updated.');
+      onDataChange();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteId) return;
+    setActionLoading(true);
+    try {
+      const res = await fetch(apiUrl(`/api/customer/payment-methods/${deleteId}`), {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to delete');
+      }
+      toast.success('Payment method removed.');
+      setDeleteId(null);
+      onDataChange();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Something went wrong');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Saved Payment Methods */}
       <div>
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base font-semibold text-foreground">Saved Payment Methods</h3>
-          <Button variant="outline" size="sm" className="text-teal-600 border-teal-200 hover:bg-teal-50 dark:text-teal-400 dark:border-teal-800 dark:hover:bg-teal-950/30">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onAddMethod}
+            className="text-teal-600 border-teal-200 hover:bg-teal-50 dark:text-teal-400 dark:border-teal-800 dark:hover:bg-teal-950/30"
+          >
             <Plus className="size-4 mr-1.5" />
             Add Method
           </Button>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <Card className="border-teal-200 dark:border-teal-800">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="size-8 rounded bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center">
-                    <CreditCard className="size-4 text-white" />
-                  </div>
-                  <span className="text-sm font-medium text-foreground">Visa</span>
-                </div>
-                <Badge variant="outline" className="text-[10px] bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-400 dark:border-teal-800">Default</Badge>
-              </div>
-              <p className="text-sm font-mono text-muted-foreground mb-1">•••• •••• •••• 4242</p>
-              <p className="text-xs text-muted-foreground">Expires 12/2027</p>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="size-8 rounded bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center">
-                    <CreditCard className="size-4 text-white" />
-                  </div>
-                  <span className="text-sm font-medium text-foreground">Mastercard</span>
-                </div>
-              </div>
-              <p className="text-sm font-mono text-muted-foreground mb-1">•••• •••• •••• 8888</p>
-              <p className="text-xs text-muted-foreground">Expires 06/2026</p>
+        {/* Error state */}
+        {error && (
+          <Card className="border-red-200 dark:border-red-800">
+            <CardContent className="p-6 text-center">
+              <AlertCircle className="size-10 text-red-500 mx-auto mb-2" />
+              <p className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>
+              <Button variant="outline" size="sm" onClick={onRetry}>Retry</Button>
             </CardContent>
           </Card>
+        )}
 
-          <Card className="border-dashed border-2 flex items-center justify-center min-h-[120px] hover:border-teal-300 dark:hover:border-teal-700 transition-colors cursor-pointer">
-            <CardContent className="p-4 flex flex-col items-center gap-2">
-              <Plus className="size-6 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground">Add Payment Method</span>
+        {/* Loading state */}
+        {loading && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[1, 2].map(i => (
+              <Card key={i}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="size-8 rounded" />
+                      <Skeleton className="h-4 w-16" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-4 w-32 mb-2" />
+                  <Skeleton className="h-3 w-24" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!loading && !error && paymentMethods.length === 0 && (
+          <Card className="border-dashed">
+            <CardContent className="p-8 text-center">
+              <CreditCard className="size-12 text-muted-foreground/40 mx-auto mb-3" />
+              <h3 className="text-base font-semibold text-foreground mb-1">No payment methods</h3>
+              <p className="text-sm text-muted-foreground mb-4">Add a card or UPI ID for faster checkout.</p>
+              <Button onClick={onAddMethod} className="bg-teal-600 hover:bg-teal-700 text-white">
+                <Plus className="size-4 mr-2" />
+                Add Payment Method
+              </Button>
             </CardContent>
           </Card>
-        </div>
+        )}
+
+        {/* Payment method cards */}
+        {!loading && !error && paymentMethods.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {paymentMethods.map(pm => {
+              const visual = getPaymentBrandVisual(pm.brand, pm.type);
+              return (
+                <Card key={pm.id} className={cn(pm.isDefault && 'border-teal-200 dark:border-teal-800')}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className={cn('size-8 rounded bg-gradient-to-br flex items-center justify-center', visual.gradient)}>
+                          <CreditCard className="size-4 text-white" />
+                        </div>
+                        <span className="text-sm font-medium text-foreground">{visual.label}</span>
+                      </div>
+                      {pm.isDefault && (
+                        <Badge variant="outline" className="text-[10px] bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-400 dark:border-teal-800">Default</Badge>
+                      )}
+                    </div>
+                    {pm.type === 'upi' ? (
+                      <p className="text-sm font-mono text-muted-foreground mb-1">{pm.upiId}</p>
+                    ) : (
+                      <>
+                        <p className="text-sm font-mono text-muted-foreground mb-1">•••• •••• •••• {pm.last4}</p>
+                        {pm.expMonth && pm.expYear && (
+                          <p className="text-xs text-muted-foreground">Expires {formatExpiry(pm.expMonth, pm.expYear)}</p>
+                        )}
+                      </>
+                    )}
+                    <div className="flex items-center gap-2 mt-3">
+                      {!pm.isDefault && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs text-teal-600 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-950/30"
+                          onClick={() => handleSetDefault(pm.id)}
+                          disabled={actionLoading}
+                        >
+                          Set Default
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
+                        onClick={() => setDeleteId(pm.id)}
+                        disabled={actionLoading}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+
+            {/* Add new tile */}
+            <Card
+              className="border-dashed border-2 flex items-center justify-center min-h-[160px] hover:border-teal-300 dark:hover:border-teal-700 transition-colors cursor-pointer"
+              onClick={onAddMethod}
+            >
+              <CardContent className="p-4 flex flex-col items-center gap-2">
+                <Plus className="size-6 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Add Payment Method</span>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
 
-      <Separator />
-
-      {/* Payment History */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <CardTitle className="text-base">Payment History</CardTitle>
-            <Select defaultValue="all">
-              <SelectTrigger className="w-36 h-8 text-xs">
-                <SelectValue placeholder="Time Range" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Time</SelectItem>
-                <SelectItem value="30d">Last 30 Days</SelectItem>
-                <SelectItem value="90d">Last 90 Days</SelectItem>
-                <SelectItem value="1y">This Year</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs">Payment ID</TableHead>
-                  <TableHead className="text-xs">Date</TableHead>
-                  <TableHead className="text-xs">Method</TableHead>
-                  <TableHead className="text-xs">Invoice</TableHead>
-                  <TableHead className="text-xs text-right">Amount</TableHead>
-                  <TableHead className="text-xs">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {PLACEHOLDER_PAYMENTS.map((payment) => (
-                  <TableRow key={payment.id}>
-                    <TableCell className="font-mono text-xs font-medium">{payment.id}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{payment.date}</TableCell>
-                    <TableCell className="text-xs">{payment.method}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{payment.invoiceId}</TableCell>
-                    <TableCell className="text-xs text-right font-medium">{formatCurrency(payment.amount)}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800">Completed</Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deleteId} onOpenChange={(v) => !v && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove payment method?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. The payment method will be permanently removed from your account.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={actionLoading}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {actionLoading ? 'Removing...' : 'Remove'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -1424,27 +1809,124 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const auth = useAppStore((s) => s.auth);
 
-  const customerName = auth.user?.name || 'Rajesh Kumar';
-  const customerEmail = auth.user?.email || 'rajesh.kumar@email.com';
-  const customerPhone = auth.user?.phone || '+91 98765 43210';
+  // Dialog state
+  const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+
+  // Data state
+  const [bookings, setBookings] = useState<BookingItem[]>([]);
+  const [bookingsLoading, setBookingsLoading] = useState(true);
+  const [bookingsError, setBookingsError] = useState<string | null>(null);
+
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodItem[]>([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [paymentsError, setPaymentsError] = useState<string | null>(null);
+
+  // dataNonce forces a re-fetch when incremented (after creating new data)
+  const [dataNonce, setDataNonce] = useState(0);
+
+  const customerName = auth.user?.name || 'Customer';
+  const customerEmail = auth.user?.email || '';
+  const customerPhone = auth.user?.phone || '';
+
+  // Fetch bookings
+  const fetchBookings = useCallback(async () => {
+    setBookingsLoading(true);
+    setBookingsError(null);
+    try {
+      const res = await fetch(apiUrl('/api/bookings'), { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to load bookings');
+      const data = await res.json();
+      setBookings(data.bookings || data || []);
+    } catch (e) {
+      setBookingsError(e instanceof Error ? e.message : 'Failed to load bookings');
+    } finally {
+      setBookingsLoading(false);
+    }
+  }, []);
+
+  // Fetch payment methods
+  const fetchPaymentMethods = useCallback(async () => {
+    setPaymentsLoading(true);
+    setPaymentsError(null);
+    try {
+      const res = await fetch(apiUrl('/api/customer/payment-methods'), { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to load payment methods');
+      const data = await res.json();
+      setPaymentMethods(data.paymentMethods || []);
+    } catch (e) {
+      setPaymentsError(e instanceof Error ? e.message : 'Failed to load payment methods');
+    } finally {
+      setPaymentsLoading(false);
+    }
+  }, []);
+
+  // Fetch bookings on mount + when dataNonce changes
+  useEffect(() => {
+    fetchBookings();
+  }, [fetchBookings, dataNonce]);
+
+  // Fetch payment methods when payments view is opened + when dataNonce changes
+  useEffect(() => {
+    if (activeView === 'payments') {
+      fetchPaymentMethods();
+    }
+  }, [activeView, fetchPaymentMethods, dataNonce]);
 
   const handleViewChange = (view: CustomerView) => {
     setActiveView(view);
     setMobileSidebarOpen(false);
   };
 
+  const handleNewBooking = () => setBookingDialogOpen(true);
+  const handleAddPayment = () => setPaymentDialogOpen(true);
+
+  const handleBookingSuccess = () => {
+    setDataNonce(n => n + 1);
+    setActiveView('bookings');
+  };
+
+  const handlePaymentSuccess = () => {
+    setDataNonce(n => n + 1);
+    setActiveView('payments');
+  };
+
   const renderContent = () => {
     switch (activeView) {
       case 'dashboard':
-        return <DashboardView />;
+        return (
+          <DashboardView
+            onNewBooking={handleNewBooking}
+            customerName={customerName}
+            bookings={bookings}
+            bookingsLoading={bookingsLoading}
+          />
+        );
       case 'bookings':
-        return <BookingsView />;
+        return (
+          <BookingsView
+            bookings={bookings}
+            loading={bookingsLoading}
+            error={bookingsError}
+            onNewBooking={handleNewBooking}
+            onRetry={fetchBookings}
+          />
+        );
       case 'orders':
         return <OrdersView customerEmail={customerEmail} />;
       case 'invoices':
         return <InvoicesView />;
       case 'payments':
-        return <PaymentsView />;
+        return (
+          <PaymentsView
+            paymentMethods={paymentMethods}
+            loading={paymentsLoading}
+            error={paymentsError}
+            onAddMethod={handleAddPayment}
+            onRetry={fetchPaymentMethods}
+            onDataChange={fetchPaymentMethods}
+          />
+        );
       case 'messages':
         return <MessagesView />;
       case 'reviews':
@@ -1452,7 +1934,14 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
       case 'profile':
         return <ProfileView />;
       default:
-        return <DashboardView />;
+        return (
+          <DashboardView
+            onNewBooking={handleNewBooking}
+            customerName={customerName}
+            bookings={bookings}
+            bookingsLoading={bookingsLoading}
+          />
+        );
     }
   };
 
@@ -1500,6 +1989,22 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
           </div>
         </main>
       </div>
+
+      {/* Lazy-loaded Dialogs */}
+      <Suspense fallback={null}>
+        <NewBookingDialog
+          open={bookingDialogOpen}
+          onOpenChange={setBookingDialogOpen}
+          onSuccess={handleBookingSuccess}
+        />
+      </Suspense>
+      <Suspense fallback={null}>
+        <AddPaymentMethodDialog
+          open={paymentDialogOpen}
+          onOpenChange={setPaymentDialogOpen}
+          onSuccess={handlePaymentSuccess}
+        />
+      </Suspense>
     </div>
   );
 }

@@ -138,7 +138,7 @@ model User {
   notifications Notification[]
   employeeAccount Employee?
   employeeStatusLogs EmployeeStatusLog[]
-  sentInvitations Invitation[]
+  sentInvitations  Invitation[] @relation("InvitationInvitedBy")
 
   @@index([email])
   @@index([tenantId])
@@ -667,7 +667,7 @@ model Employee {
   invitations     Invitation[]
 
   // ── Enterprise Invitation Management ──
-  invitationStatus  String  @default("none") // none | pending | accepted | suspended
+  invitationStatus String   @default("none")  // none | pending | accepted | suspended
 
   @@index([role])
   @@index([status])
@@ -738,17 +738,15 @@ model Customer {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  // ── Portal Account Auth (Email/Phone + Password with auto tenant discovery) ──
-  passwordHash                String?   // bcrypt hash — set when customer activates their portal account
-  activationToken             String?   @unique  // magic-link token for first-time password setup
-  activationTokenExpiresAt    DateTime? // expiry for activation link (default 7d)
-  activatedAt                 DateTime? // when customer first set their password
-  lastLoginAt                 DateTime? // last successful portal login
-  invitationSentAt            DateTime? // when owner last sent/resent the invitation
-
-  // ── Enterprise Portal Access Management ──
-  portalEnabled               Boolean  @default(false)  // owner toggled portal on (most customers don't need portal)
-  invitationStatus            String   @default("none") // none | pending | accepted | disabled
+  // ── Portal Access (Email/Password + invitation-based activation) ──
+  passwordHash                String?
+  activationToken             String?
+  activationTokenExpiresAt    DateTime?
+  activatedAt                 DateTime?
+  lastLoginAt                 DateTime?
+  invitationSentAt            DateTime?
+  portalEnabled               Boolean  @default(false)
+  invitationStatus            String   @default("none")  // none | pending | accepted | disabled
 
   workspace Workspace? @relation(fields: [workspaceId], references: [id])
   jobs      Job[]
@@ -760,46 +758,14 @@ model Customer {
   journeys             CustomerJourney[]
   portalSessions       CustomerPortalSession[]
   documents            Document[]
-  invitations          Invitation[]
   paymentMethods       PaymentMethod[]
+  invitations          Invitation[]
 
   @@index([phone])
   @@index([email])
   @@index([workspaceId])
   @@index([portalEnabled])
   @@index([invitationStatus])
-}
-
-// ==========================================
-// CUSTOMER PAYMENT METHODS
-// ==========================================
-
-model PaymentMethod {
-  id            String   @id @default(cuid())
-  customerId    String
-  tenantId      String?
-  workspaceId   String?
-  type          String   @default("card")  // card | upi | bank
-  brand         String?                     // Visa, Mastercard, Amex, RuPay, etc.
-  last4         String?                     // last 4 digits of card / last 4 of UPI handle
-  expMonth      Int?
-  expYear       Int?
-  holderName    String?
-  upiId         String?                     // for UPI type
-  bankName      String?                     // for bank type
-  isDefault     Boolean  @default(false)
-  // Mock token — in production this would come from Stripe/Razorpay/etc.
-  // We never store raw card numbers; only the token + last4.
-  tokenJson     String   @default("{}")
-  metadataJson  String   @default("{}")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
-
-  @@index([customerId])
-  @@index([tenantId])
-  @@index([isDefault])
 }
 
 model Resource {
@@ -863,6 +829,17 @@ model Job {
   whatsappSessionId  String?
   assignmentStatus   String?
   notificationLogJson String @default("[]")
+  // ── Completion proof (POST /api/jobs/[id]/complete-proof) ──
+  completionNotes      String?
+  completionPhotosJson String   @default("[]")
+  completionSignatureData String?
+  completedAt          DateTime?
+  // ── Payment collection (COD / online / card / upi / bank_transfer) ──
+  paymentMethod     String?
+  paymentStatus     String?
+  amountCollected   Float?
+  collectedAt       DateTime?
+  collectedById     String?
   workspaceId        String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
@@ -1209,40 +1186,6 @@ model OtpVerification {
   @@index([phone])
   @@index([otpCode])
   @@index([expiresAt])
-}
-
-// ==========================================
-// PLATFORM AUTH SETTINGS (Super Admin)
-// ==========================================
-
-model PlatformAuthSettings {
-  id                          String   @id @default("platform")  // singleton
-  // Email + Password (always enabled, kept for reference)
-  emailPasswordEnabled        Boolean  @default(true)
-  // SMS OTP
-  smsOtpEnabled               Boolean  @default(false)
-  smsOtpProvider              String?  // e.g. "twilio", "messagebird"
-  smsOtpConfigJson            String   @default("{}")  // provider-specific config (accountSid, authToken, etc.)
-  // WhatsApp OTP
-  whatsappOtpEnabled          Boolean  @default(false)
-  whatsappOtpProvider         String?  // e.g. "meta_cloud_api", "twilio_whatsapp"
-  whatsappOtpAccessToken      String?
-  whatsappOtpPhoneNumberId    String?
-  whatsappOtpBusinessId       String?
-  whatsappOtpTemplate         String?  // template name e.g. "login_otp"
-  whatsappOtpConfigJson       String   @default("{}")  // extra provider config
-  // Google OAuth
-  googleEnabled               Boolean  @default(false)
-  googleClientId              String?
-  googleClientSecret          String?
-  // Two-Factor Authentication
-  twoFactorEnabled            Boolean  @default(false)
-  twoFactorMethods            String   @default("[]")  // JSON array of enabled methods: ["app", "sms", "whatsapp", "email"]
-  // General
-  otpLength                   Int      @default(6)
-  otpExpirySeconds           Int      @default(300)  // 5 minutes
-  maxOtpAttempts              Int      @default(3)
-  updatedAt                   DateTime @updatedAt
 }
 
 model IntegrationConfig {
@@ -2012,43 +1955,6 @@ model MarketplaceTemplate {
 
 // --- Module 17: Enterprise Features ---
 
-// ── Invitation (employee + customer portal invitations) ──
-// Backs /api/invitations/* and /api/employees/[id]/invite, /api/customers/[id]/portal/enable.
-// Fixes a pre-existing bug where /api/invitations/* referenced db.invitation but no model existed.
-model Invitation {
-  id            String    @id @default(cuid())
-  token         String    @unique
-  email         String
-  name          String?
-  role          String    // employee | customer (the target portal role)
-  phone         String?
-  status        String    @default("pending") // pending | accepted | cancelled | expired
-  message       String?
-  invitedById   String?
-  tenantId      String?
-  workspaceId   String?
-  employeeId    String?   @unique  // set when inviting an employee
-  customerId    String?   @unique  // set when inviting a customer to portal
-  acceptedAt    DateTime?
-  expiresAt     DateTime
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  tenant      Tenant?     @relation(fields: [tenantId], references: [id])
-  workspace   Workspace?  @relation(fields: [workspaceId], references: [id])
-  invitedBy   User?       @relation(fields: [invitedById], references: [id])
-  employee    Employee?   @relation(fields: [employeeId], references: [id])
-  customer    Customer?   @relation(fields: [customerId], references: [id])
-
-  @@index([token])
-  @@index([email])
-  @@index([status])
-  @@index([tenantId])
-  @@index([employeeId])
-  @@index([customerId])
-  @@index([expiresAt])
-}
-
 model RolePermission {
   id          String   @id @default(cuid())
   role        String   // owner, manager, dispatcher, employee, customer, superadmin
@@ -2150,25 +2056,254 @@ model CommunicationProvider {
 }
 
 // ==========================================
-// CONTACTS
+// CONTACTS — Master audience database
+// Enterprise CRM structure: Contacts → Groups → Tags → Segments → Campaigns
 // ==========================================
 
 model Contact {
-  id          String   @id @default(cuid())
-  name        String
-  email       String?
-  phone       String?
-  company     String?
-  tags        String?   // comma separated
-  tenantId    String
-  workspaceId String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(cuid())
+  name            String
+  email           String?
+  phone           String?
+  company         String?
+  // Location (used by Segment rules)
+  city            String?
+  state           String?
+  country         String?
+  zip             String?
+  // Source / lifecycle
+  source          String?  // manual, csv_import, form, whatsapp, ads, api
+  status          String   @default("active")  // active, bounced, unsubscribed, blocked
+  emailVerified   Boolean  @default(false)
+  phoneVerified   Boolean  @default(false)
+  // Extensibility
+  customFieldsJson String  @default("{}")
+  avatarUrl       String?
+  lastActivityAt  DateTime?
+  // LEGACY: kept for backward compatibility. New system uses ContactTag (M2M).
+  tags            String?   // comma separated (legacy)
+  tenantId        String
+  workspaceId     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  contactTags     ContactTag[]
+  contactGroups   ContactGroup[]
 
   @@index([tenantId])
   @@index([email])
   @@index([phone])
   @@index([createdAt])
+  @@index([status])
+  @@index([source])
+  @@index([country])
+  @@index([city])
+}
+
+// ==========================================
+// TAGS — Flexible labels (M2M with Contact)
+// ==========================================
+
+model Tag {
+  id          String   @id @default(cuid())
+  name        String
+  color       String   @default("#10b981")  // emerald default
+  description String?
+  tenantId    String
+  workspaceId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  contacts    ContactTag[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model ContactTag {
+  id          String   @id @default(cuid())
+  contactId   String
+  tagId       String
+  appliedAt   DateTime @default(now())
+  appliedById String?
+
+  contact     Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag         Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, tagId])
+  @@index([contactId])
+  @@index([tagId])
+}
+
+// ==========================================
+// GROUPS — Manual collections (folders for contacts)
+// Supports sub-groups via parentGroupId (self-reference)
+// ==========================================
+
+model Group {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  color           String?
+  icon            String?
+  type            String   @default("manual")  // manual, smart
+  parentGroupId   String?  // for sub-groups (self-reference)
+  smartRulesJson  String   @default("{}")  // used when type = 'smart'
+  memberCount     Int      @default(0)
+  isDefault       Boolean  @default(false)
+  tenantId        String
+  workspaceId     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  parent          Group?          @relation("GroupHierarchy", fields: [parentGroupId], references: [id], onDelete: SetNull)
+  children        Group[]         @relation("GroupHierarchy")
+  contacts        ContactGroup[]
+
+  @@unique([tenantId, name, parentGroupId])
+  @@index([tenantId])
+  @@index([parentGroupId])
+  @@index([type])
+}
+
+model ContactGroup {
+  id          String   @id @default(cuid())
+  contactId   String
+  groupId     String
+  addedAt     DateTime @default(now())
+  addedById   String?
+
+  contact     Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  group       Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, groupId])
+  @@index([contactId])
+  @@index([groupId])
+}
+
+// ==========================================
+// CONTACT IMPORTS / EXPORTS — Job tracking
+// ==========================================
+
+model ContactImport {
+  id              String   @id @default(cuid())
+  fileName        String
+  source          String   @default("csv")  // csv, xlsx, manual
+  totalRows       Int      @default(0)
+  importedCount   Int      @default(0)
+  skippedCount    Int      @default(0)
+  errorCount      Int      @default(0)
+  status          String   @default("pending")  // pending, processing, completed, failed
+  errorJson       String   @default("[]")  // first N errors with row context
+  mappingJson     String   @default("{}")  // column → field mapping
+  autoGroupId     String?  // optional group to auto-assign imported contacts
+  tenantId        String
+  workspaceId     String?
+  createdById     String?
+  createdAt       DateTime @default(now())
+  completedAt     DateTime?
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ContactExport {
+  id              String   @id @default(cuid())
+  format          String   @default("csv")  // csv, xlsx, json
+  filterJson      String   @default("{}")  // the filter that produced this export
+  totalExported   Int      @default(0)
+  fileUrl         String?  // optional stored URL
+  tenantId        String
+  workspaceId     String?
+  createdById     String?
+  createdAt       DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([createdAt])
+}
+
+// ==========================================
+// EMAIL PROVIDERS — Multi-provider platform service
+// Used for: authentication, portal, notifications, workflows, CRM, campaigns, invoices, bookings
+// Provider types: smtp, resend, sendgrid, ses, mailgun, postmark, brevo
+// ==========================================
+
+model EmailProvider {
+  id                  String   @id @default(cuid())
+  name                String   // "AWS SES Production", "Resend Default"
+  providerType        String   // smtp, resend, sendgrid, ses, mailgun, postmark, brevo
+  // Provider-specific config JSON (different fields per type):
+  //   smtp:  { smtpHost, smtpPort, smtpSecure, smtpUser, smtpPass }
+  //   resend: { apiKey }
+  //   sendgrid: { apiKey }
+  //   ses:    { accessKeyId, secretAccessKey, region } (SDK mode) OR smtpHost+smtpUser+smtpPass (SMTP mode)
+  //   mailgun: { apiKey, domain, region }
+  //   postmark: { serverToken }
+  //   brevo:   { apiKey }
+  configJson          String   @default("{}")
+  fromName            String
+  fromEmail           String
+  replyTo             String?
+  // Usage classification — lets the platform route transactional vs marketing to different providers
+  usageType           String   @default("both")  // transactional, marketing, both
+  isDefaultTransactional Boolean @default(false)
+  isDefaultMarketing  Boolean  @default(false)
+  // Platform email (you pay) vs customer's own provider (customer pays)
+  isPlatform          Boolean  @default(false)
+  status              String   @default("active")  // active, paused, error
+  lastTestAt          DateTime?
+  lastTestStatus      String?  // success, failed
+  lastTestError       String?
+  // Stats
+  totalSent           Int      @default(0)
+  totalDelivered      Int      @default(0)
+  totalFailed         Int      @default(0)
+  lastUsedAt          DateTime?
+  tenantId            String
+  workspaceId         String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([providerType])
+  @@index([usageType])
+  @@index([isDefaultTransactional])
+  @@index([isDefaultMarketing])
+}
+
+// ==========================================
+// EMAIL TEMPLATES — Reusable transactional + marketing templates
+// Built-in slugs: portal-invitation, employee-invitation, password-reset,
+//   booking-confirmation, invoice-email, job-assigned, job-completed,
+//   payment-receipt, review-request, lead-welcome, lead-followup, campaign-email
+// ==========================================
+
+model EmailTemplate {
+  id              String   @id @default(cuid())
+  name            String   // "Portal Invitation", "Employee Invitation"
+  slug            String   // "portal-invitation" (used for programmatic lookup)
+  category        String   @default("transactional")  // transactional, marketing, system
+  description     String?
+  subject         String   // supports {{name}}, {{link}}, {{code}}, etc.
+  htmlBody        String   // HTML content with variables
+  textBody        String?  // optional plaintext fallback
+  // Declared variables for editor assistance
+  // [{ "key": "name", "label": "Recipient Name", "required": true, "example": "John" }]
+  variablesJson   String   @default("[]")
+  isBuiltIn       Boolean  @default(false)  // seed templates cannot be deleted (only edited)
+  isDefault       Boolean  @default(false)
+  // null tenantId = global platform template (visible to all tenants)
+  tenantId        String?
+  workspaceId     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([slug, tenantId])
+  @@index([tenantId])
+  @@index([category])
+  @@index([slug])
 }
 
 // ==========================================
@@ -2418,4 +2553,77 @@ model Document {
   @@index([accessLevel])
   @@index([uploadedById])
   @@index([createdAt])
+}
+
+// ==========================================
+// INVITATIONS (Enterprise Portal Access Management)
+// ==========================================
+// Magic-link invitations for customers to activate their portal account
+// and for employees to be onboarded. One Invitation row per outstanding
+// invite — token is the lookup key for the activation link.
+
+model Invitation {
+  id          String   @id @default(cuid())
+  token       String   @unique
+  email       String
+  name        String?
+  role        String                                    // employee | customer
+  phone       String?
+  status      String   @default("pending")              // pending | accepted | cancelled | expired
+  message     String?
+  invitedById String?
+  tenantId    String?
+  workspaceId String?
+  employeeId  String?  @unique
+  customerId  String?  @unique
+  acceptedAt  DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  invitedBy  User?      @relation("InvitationInvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
+  tenant     Tenant?    @relation(fields: [tenantId], references: [id])
+  workspace  Workspace? @relation(fields: [workspaceId], references: [id])
+  employee   Employee?  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  customer   Customer?  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([email])
+  @@index([status])
+  @@index([tenantId])
+  @@index([employeeId])
+  @@index([customerId])
+  @@index([expiresAt])
+}
+
+// ==========================================
+// CUSTOMER PAYMENT METHODS
+// ==========================================
+// Stores tokenized payment methods (card/UPI/bank) for customer self-service.
+// We never store raw card numbers — only the mock token + last4.
+
+model PaymentMethod {
+  id            String   @id @default(cuid())
+  customerId    String
+  tenantId      String?
+  workspaceId   String?
+  type          String   @default("card")  // card | upi | bank
+  brand         String?                     // Visa, Mastercard, Amex, RuPay, etc.
+  last4         String?
+  expMonth      Int?
+  expYear       Int?
+  holderName    String?
+  upiId         String?
+  bankName      String?
+  isDefault     Boolean  @default(false)
+  tokenJson     String   @default("{}")
+  metadataJson  String   @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([tenantId])
+  @@index([isDefault])
 }

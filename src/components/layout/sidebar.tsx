@@ -22,10 +22,6 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
-  Building2,
-  ChevronDown,
-  Check,
-  Plus,
   Crown,
   Globe,
   UserCircle,
@@ -46,7 +42,6 @@ import {
   Send,
   CalendarCheck,
   Calendar,
-  Contact,
   Star,
   BookOpen,
   Receipt,
@@ -57,6 +52,11 @@ import {
   Plug,
   ShoppingBag,
   Package,
+  FolderTree,
+  Tag as TagIcon,
+  Upload,
+  Download,
+  Mail,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -70,28 +70,11 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 
 // ─── Nav item definition ────────────────────────────────────────────────────
@@ -121,10 +104,29 @@ const ownerNavSections: NavSection[] = [
     title: 'CRM',
     items: [
       { view: 'leads', label: 'Leads', icon: Target },
-      { view: 'contacts', label: 'Contacts', icon: Contact },
       { view: 'customers', label: 'Customers', icon: Users },
       { view: 'customer360', label: 'Customer 360', icon: UserCircle, badge: '360' },
       { view: 'salesPipeline', label: 'Pipeline', icon: Kanban },
+    ],
+  },
+  {
+    title: 'Audience',
+    items: [
+      { view: 'contacts', label: 'All Contacts', icon: Users },
+      { view: 'groups', label: 'Groups', icon: FolderTree },
+      { view: 'tags', label: 'Tags', icon: TagIcon },
+      { view: 'segments', label: 'Segments', icon: Filter },
+      { view: 'contactImports', label: 'Imports', icon: Upload },
+      { view: 'contactExports', label: 'Exports', icon: Download },
+      { view: 'audienceAnalytics', label: 'Audience Analytics', icon: BarChart3 },
+    ],
+  },
+  {
+    title: 'Communication Providers',
+    items: [
+      { view: 'emailProviders', label: 'Email Providers', icon: Mail },
+      { view: 'emailTemplates', label: 'Email Templates', icon: FileText },
+      { view: 'emailCampaigns', label: 'Email Campaigns', icon: Send },
     ],
   },
   {
@@ -149,7 +151,6 @@ const ownerNavSections: NavSection[] = [
     title: 'Marketing',
     items: [
       { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
-      { view: 'segments', label: 'Segments', icon: Filter },
       { view: 'retargeting', label: 'Retargeting', icon: RefreshCw },
       { view: 'marketingAnalytics', label: 'Analytics', icon: BarChart3 },
     ],
@@ -238,9 +239,28 @@ const superadminNavSections: NavSection[] = [
     title: 'CRM',
     items: [
       { view: 'leads', label: 'Leads', icon: Target },
-      { view: 'contacts', label: 'Contacts', icon: Users },
       { view: 'customers', label: 'Customers', icon: Users },
       { view: 'salesPipeline', label: 'Sales Pipeline', icon: Kanban },
+    ],
+  },
+  {
+    title: 'Audience',
+    items: [
+      { view: 'contacts', label: 'All Contacts', icon: Users },
+      { view: 'groups', label: 'Groups', icon: FolderTree },
+      { view: 'tags', label: 'Tags', icon: TagIcon },
+      { view: 'segments', label: 'Segments', icon: Filter },
+      { view: 'contactImports', label: 'Imports', icon: Upload },
+      { view: 'contactExports', label: 'Exports', icon: Download },
+      { view: 'audienceAnalytics', label: 'Audience Analytics', icon: BarChart3 },
+    ],
+  },
+  {
+    title: 'Communication Providers',
+    items: [
+      { view: 'emailProviders', label: 'Email Providers', icon: Mail },
+      { view: 'emailTemplates', label: 'Email Templates', icon: FileText },
+      { view: 'emailCampaigns', label: 'Email Campaigns', icon: Send },
     ],
   },
   {
@@ -262,7 +282,6 @@ const superadminNavSections: NavSection[] = [
     title: 'Marketing',
     items: [
       { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
-      { view: 'segments', label: 'Segments', icon: Filter },
       { view: 'retargeting', label: 'Retargeting', icon: RefreshCw },
       { view: 'marketingAnalytics', label: 'Analytics', icon: BarChart3 },
     ],
@@ -291,15 +310,6 @@ const superadminNavSections: NavSection[] = [
   },
 ];
 
-// ─── Workspace interface ────────────────────────────────────────────────────
-
-interface Workspace {
-  id: string;
-  name: string;
-  slug: string;
-  industry?: string;
-}
-
 // ─── HardHat icon (not in lucide) ────────────────────────────────────────
 function HardHat(props: React.SVGProps<SVGSVGElement> & { className?: string }) {
   return (
@@ -326,41 +336,14 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     leftSidebarOpen,
     toggleLeftSidebar,
     setMobileSidebarOpen,
-    currentWorkspaceId,
-    setCurrentWorkspaceId,
-    currentWorkspaceName,
-    setCurrentWorkspaceName,
     auth,
   } = useAppStore();
 
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [newWorkspaceName, setNewWorkspaceName] = useState('');
-  const [creating, setCreating] = useState(false);
   const [disabledMenus, setDisabledMenus] = useState<string[]>([]);
 
   // Compute isSuperAdmin early (needed in effects and rendering)
   const isSuperAdmin = !!(auth.user?.isSuperAdmin || auth.user?.role === 'superadmin' || auth.user?.role === 'super_admin' || (auth.user?.role === 'admin' && !auth.user?.tenantId));
   const isEmployee = auth.user?.role === 'employee';
-
-  useEffect(() => {
-    async function fetchWorkspaces() {
-      try {
-        const res = await fetch('/api/workspaces');
-        if (res.ok) {
-          const data = await res.json();
-          setWorkspaces(data);
-          if (data.length > 0 && !currentWorkspaceId) {
-            setCurrentWorkspaceId(data[0].id);
-            setCurrentWorkspaceName(data[0].name);
-          }
-        }
-      } catch {
-        // Silently fail
-      }
-    }
-    fetchWorkspaces();
-  }, []);
 
   // Fetch menu visibility for non-superadmin users
   useEffect(() => {
@@ -381,33 +364,6 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     }
     fetchMenuVisibility();
   }, [auth.user?.role, auth.user?.tenantId, auth.user?.isSuperAdmin]);
-
-  const handleCreateWorkspace = async () => {
-    if (!newWorkspaceName.trim()) return;
-    setCreating(true);
-    try {
-      const res = await fetch('/api/workspaces', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newWorkspaceName.trim() }),
-      });
-      if (res.ok) {
-        const workspace = await res.json();
-        setWorkspaces((prev) => [...prev, workspace]);
-        setCurrentWorkspaceId(workspace.id);
-        setCurrentWorkspaceName(workspace.name);
-        setCreateDialogOpen(false);
-        setNewWorkspaceName('');
-        toast.success(`Workspace "${workspace.name}" created!`);
-      } else {
-        toast.error('Failed to create workspace');
-      }
-    } catch {
-      toast.error('Failed to create workspace');
-    } finally {
-      setCreating(false);
-    }
-  };
 
   const getUserInitials = () => {
     if (auth.user?.name) {
@@ -529,63 +485,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
         )}
       </div>
 
-      {/* Workspace Switcher - only for non-superadmin */}
-      {!isSuperAdmin && (
-        (isMobile || leftSidebarOpen) ? (
-          <div className="px-3 py-2 border-b border-slate-800/60 shrink-0">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center w-full gap-2 rounded-lg px-2 py-2 text-sm text-slate-300 hover:bg-slate-800/70 transition-colors">
-                  <Building2 className="size-4 text-emerald-400 shrink-0" />
-                  <span className="flex-1 truncate text-left">
-                    {auth.tenant?.name || currentWorkspaceName}
-                  </span>
-                  <ChevronDown className="size-3 text-slate-500 shrink-0" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent side="right" align="start" className="w-56">
-                <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {workspaces.map((ws) => (
-                  <DropdownMenuItem
-                    key={ws.id}
-                    onClick={() => {
-                      setCurrentWorkspaceId(ws.id);
-                      setCurrentWorkspaceName(ws.name);
-                    }}
-                    className="flex items-center gap-2 cursor-pointer"
-                  >
-                    <Building2 className="size-4 text-muted-foreground" />
-                    <span className="flex-1 truncate">{ws.name}</span>
-                    {currentWorkspaceId === ws.id && <Check className="size-4 text-emerald-500" />}
-                  </DropdownMenuItem>
-                ))}
-                {workspaces.length > 0 && <DropdownMenuSeparator />}
-                <DropdownMenuItem
-                  onClick={() => setCreateDialogOpen(true)}
-                  className="flex items-center gap-2 cursor-pointer text-emerald-600 dark:text-emerald-400"
-                >
-                  <Plus className="size-4" />
-                  <span>Create Workspace</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        ) : (
-          <div className="flex justify-center py-2 border-b border-slate-800/60 shrink-0">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button className="flex items-center justify-center w-8 h-8 rounded-lg text-slate-300 hover:bg-slate-800/70 transition-colors">
-                  <Building2 className="size-4 text-emerald-400" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right" sideOffset={8}>
-                {auth.tenant?.name || currentWorkspaceName}
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        )
-      )}
+
 
       {/* Superadmin tenant indicator */}
       {isSuperAdmin && (isMobile || leftSidebarOpen) && (
@@ -698,43 +598,6 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
         )}
       </div>
 
-      {/* Create Workspace Dialog */}
-      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Create New Workspace</DialogTitle>
-            <DialogDescription>
-              Create a new workspace to organize your workflows and team.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <label className="text-sm font-medium mb-2 block">
-              Workspace Name
-            </label>
-            <Input
-              placeholder="e.g., Marketing Team"
-              value={newWorkspaceName}
-              onChange={(e) => setNewWorkspaceName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleCreateWorkspace();
-              }}
-              autoFocus
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleCreateWorkspace}
-              disabled={!newWorkspaceName.trim() || creating}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
-            >
-              {creating ? 'Creating...' : 'Create Workspace'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -43,13 +43,13 @@ export async function GET(
     if (source) where.source = source
 
     const [submissions, total] = await Promise.all([
-      db.formSubmission.findMany({
+      db.formResponse.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
       }),
-      db.formSubmission.count({ where }),
+      db.formResponse.count({ where }),
     ])
 
     // Parse dataJson for each submission safely

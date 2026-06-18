@@ -25,7 +25,6 @@ import { WebhookTriggerPanel } from './webhook-trigger-panel';
 import { HttpRequestTriggerPanel } from './http-request-trigger-panel';
 import { WhatsAppConfigPanel } from './whatsapp-config-panel';
 import { DatabaseConfigPanel } from './database-config-panel';
-import { CredentialPicker } from './credential-picker';
 
 // Wrapper that uses key to reset inner component when selection changes
 export function NodeConfigPanel() {
@@ -187,7 +186,6 @@ function NodeConfigPanelInner({ node }: { node: import('@/types/workflow').Workf
                   property={prop}
                   value={localConfig[prop.name]}
                   onChange={(value) => handleConfigChange(prop.name, value)}
-                  credentialTypes={nodeDef?.credentialTypes}
                 />
               ))}
             </div>
@@ -277,12 +275,10 @@ function PropertyField({
   property,
   value,
   onChange,
-  credentialTypes,
 }: {
   property: NodeProperty;
   value: unknown;
   onChange: (value: unknown) => void;
-  credentialTypes?: string[];
 }) {
   switch (property.type) {
     case 'string':
@@ -449,12 +445,19 @@ function PropertyField({
 
     case 'credentials':
       return (
-        <CredentialPicker
-          property={property}
-          value={value as string}
-          onChange={onChange as (v: string) => void}
-          credentialTypes={credentialTypes}
-        />
+        <div className="space-y-1">
+          <Label className="text-[10px] text-gray-500">{property.displayName}</Label>
+          <Select onValueChange={(v) => onChange(v)}>
+            <SelectTrigger className="h-7 text-xs">
+              <SelectValue placeholder="Select credential..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none" className="text-xs">
+                No credential
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       );
 
     case 'color':

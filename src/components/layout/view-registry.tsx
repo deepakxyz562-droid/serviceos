@@ -79,6 +79,13 @@ const SaaSDashboardView = lazy(() => import('@/components/views/saas-dashboard-v
 const OperationsView = lazy(() => import('@/components/views/operations-view').then(m => ({ default: m.OperationsView })));
 const CrmView = lazy(() => import('@/components/views/crm-view').then(m => ({ default: m.CrmView })));
 
+// Audience
+const GroupsView = lazy(() => import('@/components/views/groups-view').then(m => ({ default: m.GroupsView })));
+const TagsView = lazy(() => import('@/components/views/tags-view').then(m => ({ default: m.TagsView })));
+const ContactImportsView = lazy(() => import('@/components/views/contact-imports-view').then(m => ({ default: m.ContactImportsView })));
+const ContactExportsView = lazy(() => import('@/components/views/contact-exports-view').then(m => ({ default: m.ContactExportsView })));
+const AudienceAnalyticsView = lazy(() => import('@/components/views/audience-analytics-view').then(m => ({ default: m.AudienceAnalyticsView })));
+
 // Super Admin
 const SuperAdminView = lazy(() => import('@/components/views/superadmin-view').then(m => ({ default: m.SuperAdminView })));
 
@@ -155,6 +162,12 @@ const lazyViews: Partial<Record<ViewType, ComponentType>> = {
   documentCenter: DocumentCenterView,
   versionHistory: VersionHistoryView,
   saasDashboard: SaaSDashboardView,
+  // Audience
+  groups: GroupsView,
+  tags: TagsView,
+  contactImports: ContactImportsView,
+  contactExports: ContactExportsView,
+  audienceAnalytics: AudienceAnalyticsView,
   // Super Admin
   superadmin: SuperAdminView,
 };

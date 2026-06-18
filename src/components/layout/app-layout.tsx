@@ -82,6 +82,16 @@ const SaaSDashboardView = lazy(() => import('@/components/views/saas-dashboard-v
 const OperationsView = lazy(() => import('@/components/views/operations-view').then(m => ({ default: m.OperationsView })));
 const CrmView = lazy(() => import('@/components/views/crm-view').then(m => ({ default: m.CrmView })));
 
+// Audience (enterprise CRM: Contacts → Groups → Tags → Segments → Campaigns)
+const GroupsView = lazy(() => import('@/components/views/groups-view').then(m => ({ default: m.GroupsView })));
+const TagsView = lazy(() => import('@/components/views/tags-view').then(m => ({ default: m.TagsView })));
+const ContactImportsView = lazy(() => import('@/components/views/contact-imports-view').then(m => ({ default: m.ContactImportsView })));
+const ContactExportsView = lazy(() => import('@/components/views/contact-exports-view').then(m => ({ default: m.ContactExportsView })));
+const AudienceAnalyticsView = lazy(() => import('@/components/views/audience-analytics-view').then(m => ({ default: m.AudienceAnalyticsView })));
+const EmailCampaignsView = lazy(() => import('@/components/views/email-campaigns-view').then(m => ({ default: m.EmailCampaignsView })));
+const EmailProvidersView = lazy(() => import('@/components/views/email-providers-view').then(m => ({ default: m.EmailProvidersView })));
+const EmailTemplatesView = lazy(() => import('@/components/views/email-templates-view').then(m => ({ default: m.EmailTemplatesView })));
+
 // Super Admin
 const SuperAdminView = lazy(() => import('@/components/views/superadmin-view').then(m => ({ default: m.SuperAdminView })));
 
@@ -150,6 +160,15 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   documentCenter: DocumentCenterView,
   versionHistory: VersionHistoryView,
   saasDashboard: SaaSDashboardView,
+  // Audience
+  groups: GroupsView,
+  tags: TagsView,
+  contactImports: ContactImportsView,
+  contactExports: ContactExportsView,
+  audienceAnalytics: AudienceAnalyticsView,
+  emailCampaigns: EmailCampaignsView,
+  emailProviders: EmailProvidersView,
+  emailTemplates: EmailTemplatesView,
   // Super Admin
   superadmin: SuperAdminView,
 };

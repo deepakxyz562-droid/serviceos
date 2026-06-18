@@ -38,12 +38,22 @@ export async function PUT(
     // Get current deal to check for stage changes
     const currentDeal = await db.deal.findUnique({ where: { id } })
 
+    // Build update data — only include fields that exist on the Deal model.
+    // `changedById` and `stageChangeNote` are NOT Deal fields; they're used
+    // only for the DealStageHistory row below.
     const updateData: Record<string, unknown> = { ...body }
     delete updateData.id
+    delete updateData.changedById
+    delete updateData.stageChangeNote
 
     // Handle date fields
     if (body.expectedCloseDate) updateData.expectedCloseDate = new Date(body.expectedCloseDate)
     if (body.closedAt) updateData.closedAt = new Date(body.closedAt)
+
+    // If stage advanced to won/lost, stamp closedAt
+    if (body.stage === 'won' || body.stage === 'lost') {
+      updateData.closedAt = updateData.closedAt || new Date()
+    }
 
     const deal = await db.deal.update({
       where: { id },

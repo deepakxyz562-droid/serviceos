@@ -1,118 +1,75 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { getAuthUser, getAppUrl } from '@/lib/auth';
-import crypto from 'crypto';
+import { NextRequest, NextResponse } from 'next/server'
+import crypto from 'crypto'
+import { db } from '@/lib/db'
+import { getAuthUser, getAppUrl } from '@/lib/auth'
 
-/**
- * POST /api/customers/[id]/portal/resend
- *
- * Resend the customer portal invitation. Generates a fresh token + invite URL
- * and resets the invitationStatus to 'pending'. Use this when:
- *   - The customer lost the original email
- *   - The previous link expired
- *   - The customer hasn't activated yet
- *
- * The customer's existing passwordHash (if any) is preserved — if they already
- * activated, this just sends them a fresh link to re-set their password.
- */
+// POST /api/customers/[id]/portal/resend
+// Regenerates the activation link for a customer whose portal is enabled but
+// who hasn't activated yet (or who needs a password reset).
 export async function POST(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getAuthUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
-    if (!['owner', 'admin', 'manager'].includes(user.role)) {
+    const user = await getAuthUser()
+    if (!user || !['owner', 'admin', 'manager', 'employee', 'super_admin'].includes(user.role)) {
       return NextResponse.json(
-        { error: 'Only owners and admins can resend invitations' },
+        { error: 'Unauthorized. Only staff can resend invitations.' },
         { status: 403 }
-      );
+      )
     }
 
-    const { id: customerId } = await params;
+    const { id } = await params
 
     const customer = await db.customer.findUnique({
-      where: { id: customerId },
-      include: { workspace: { select: { id: true, tenantId: true } } },
-    });
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        portalEnabled: true,
+        invitationStatus: true,
+      },
+    })
 
     if (!customer) {
-      return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Customer not found' }, { status: 404 })
     }
 
-    if (!customer.email) {
-      return NextResponse.json(
-        { error: 'Customer must have an email to resend invitation' },
-        { status: 400 }
-      );
-    }
-
-    // Cancel prior pending invitations
-    await db.invitation.updateMany({
-      where: { customerId, status: 'pending' },
-      data: { status: 'cancelled' },
-    });
-
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
-    const invitation = await db.invitation.create({
-      data: {
-        token,
-        email: customer.email,
-        name: customer.name,
-        role: 'customer',
-        phone: customer.phone,
-        status: 'pending',
-        invitedById: user.id,
-        tenantId: customer.workspace?.tenantId || user.tenantId,
-        workspaceId: customer.workspaceId || user.workspaceId,
-        customerId,
-        expiresAt,
-      },
-    });
+    // Auto-enable portal if it wasn't already (resend implies they want access)
+    const token = crypto.randomBytes(32).toString('hex')
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
     await db.customer.update({
-      where: { id: customerId },
+      where: { id },
       data: {
         portalEnabled: true,
         invitationStatus: 'pending',
+        invitationSentAt: new Date(),
         activationToken: token,
         activationTokenExpiresAt: expiresAt,
-        invitationSentAt: new Date(),
       },
-    });
+    })
 
-    const tenant = await db.tenant.findUnique({
-      where: { id: invitation.tenantId || undefined },
-      select: { slug: true, name: true },
-    });
-
-    const appUrl = getAppUrl();
-    const slug = tenant?.slug || 'default';
-    const inviteUrl = `${appUrl}/${slug}/accept-invite?token=${token}`;
+    const baseUrl = getAppUrl()
+    const activationUrl = `${baseUrl}/accept-invite?token=${token}`
 
     return NextResponse.json({
       success: true,
-      inviteUrl,
+      portalEnabled: true,
+      invitationStatus: 'pending',
+      activationUrl,
+      token,
       expiresAt: expiresAt.toISOString(),
-      alreadyActivated: !!customer.passwordHash && !!customer.activatedAt,
-      customer: {
-        id: customer.id,
-        name: customer.name,
-        email: customer.email,
-        portalEnabled: true,
-        invitationStatus: 'pending',
-      },
-      company: { name: tenant?.name, slug: tenant?.slug },
-    });
+      message: customer.email
+        ? `New activation link generated for ${customer.email}.`
+        : 'New activation link generated.',
+    })
   } catch (error) {
-    console.error('[Customer Portal Resend Error]', error);
+    console.error('Error resending customer invitation:', error)
     return NextResponse.json(
-      { error: 'Failed to resend customer invitation' },
+      { error: 'Failed to resend invitation' },
       { status: 500 }
-    );
+    )
   }
 }

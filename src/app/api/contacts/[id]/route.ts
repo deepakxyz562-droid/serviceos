@@ -1,177 +1,241 @@
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { applyTagsToContact, addContactToGroups } from '@/lib/contact-links';
 
-// GET /api/contacts/[id] — Get customer by ID
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+type Params = { params: Promise<{ id: string }> };
+
+// GET /api/contacts/[id] — fetch one contact (include tags + groups)
+export async function GET(request: NextRequest, { params }: Params) {
   try {
-    const authUser = await getAuthUser(request);
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const tenantId = user.tenantId || 'default';
     const { id } = await params;
 
-    const customer = await db.customer.findUnique({
-      where: { id },
+    const contact = await db.contact.findFirst({
+      where: { id, tenantId },
       include: {
-        _count: {
-          select: {
-            jobs: true,
-            invoices: true,
-            leads: true,
-          },
-        },
-        jobs: {
-          select: { id: true, title: true, status: true, scheduledAt: true },
-          orderBy: { createdAt: 'desc' },
-          take: 10,
-        },
-        invoices: {
-          select: { id: true, number: true, total: true, status: true, dueDate: true },
-          orderBy: { createdAt: 'desc' },
-          take: 10,
-        },
+        contactTags: { include: { tag: true } },
+        contactGroups: { include: { group: true } },
       },
     });
 
-    if (!customer) {
-      return NextResponse.json(
-        { error: 'Contact not found' },
-        { status: 404 }
-      );
+    if (!contact) {
+      return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
     }
 
-    // Verify workspace isolation if authenticated
-    if (authUser?.workspaceId && customer.workspaceId !== authUser.workspaceId) {
+    // Verify workspace isolation if applicable
+    if (user.workspaceId && contact.workspaceId && contact.workspaceId !== user.workspaceId) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    return NextResponse.json(customer);
+    return NextResponse.json({ data: contact });
   } catch (error) {
     console.error('Error fetching contact:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch contact' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch contact' }, { status: 500 });
   }
 }
 
-// PUT /api/contacts/[id] — Update customer
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+// PUT /api/contacts/[id] — update contact (sync tagIds[] / groupIds[] + new fields)
+export async function PUT(request: NextRequest, { params }: Params) {
   try {
-    const authUser = await getAuthUser(request);
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const tenantId = user.tenantId || 'default';
     const { id } = await params;
-    const body = await request.json();
 
-    // Verify the customer exists
-    const existingCustomer = await db.customer.findUnique({ where: { id } });
-
-    if (!existingCustomer) {
-      return NextResponse.json(
-        { error: 'Contact not found' },
-        { status: 404 }
-      );
+    const existing = await db.contact.findFirst({ where: { id, tenantId } });
+    if (!existing) {
+      return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
     }
 
-    // Verify workspace isolation if authenticated
-    if (authUser?.workspaceId && existingCustomer.workspaceId !== authUser.workspaceId) {
+    if (user.workspaceId && existing.workspaceId && existing.workspaceId !== user.workspaceId) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // Build update data
-    const updateData: Record<string, unknown> = {};
+    const body = await request.json();
+    const {
+      name,
+      email,
+      phone,
+      company,
+      city,
+      state,
+      country,
+      zip,
+      source,
+      status,
+      customFieldsJson,
+      avatarUrl,
+      tags,
+      tagIds,
+      groupIds,
+    } = body as Record<string, unknown>;
 
-    if (body.name !== undefined) updateData.name = body.name;
-    if (body.phone !== undefined) updateData.phone = body.phone;
-    if (body.email !== undefined) updateData.email = body.email || null;
-    if (body.address !== undefined) updateData.address = body.address || null;
-    if (body.whatsappId !== undefined) updateData.whatsappId = body.whatsappId || null;
-
-    // Check for duplicate phone if being updated
-    if (body.phone && body.phone !== existingCustomer.phone && authUser?.workspaceId) {
-      const duplicate = await db.customer.findFirst({
+    // Check for duplicate email (excluding self)
+    if (email && String(email).trim()) {
+      const dup = await db.contact.findFirst({
         where: {
-          phone: body.phone,
-          workspaceId: authUser.workspaceId,
-          id: { not: id },
+          email: String(email).trim(),
+          tenantId,
+          NOT: { id },
         },
       });
-      if (duplicate) {
+      if (dup) {
         return NextResponse.json(
-          { error: 'A customer with this phone number already exists' },
+          { error: 'A contact with this email already exists' },
           { status: 409 }
         );
       }
     }
 
-    const customer = await db.customer.update({
-      where: { id },
-      data: updateData,
+    const validStatuses = ['active', 'bounced', 'unsubscribed', 'blocked'];
+    const finalStatus =
+      status && validStatuses.includes(String(status))
+        ? String(status)
+        : undefined;
+
+    const updateData: Record<string, unknown> = {};
+    if (name !== undefined) updateData.name = String(name).trim();
+    if (email !== undefined) updateData.email = email ? String(email).trim() : null;
+    if (phone !== undefined) updateData.phone = phone ? String(phone).trim() : null;
+    if (company !== undefined)
+      updateData.company = company ? String(company).trim() : null;
+    if (city !== undefined) updateData.city = city ? String(city).trim() : null;
+    if (state !== undefined) updateData.state = state ? String(state).trim() : null;
+    if (country !== undefined)
+      updateData.country = country ? String(country).trim() : null;
+    if (zip !== undefined) updateData.zip = zip ? String(zip).trim() : null;
+    if (source !== undefined)
+      updateData.source = source ? String(source).trim() : null;
+    if (finalStatus !== undefined) updateData.status = finalStatus;
+    if (customFieldsJson !== undefined)
+      updateData.customFieldsJson =
+        customFieldsJson != null ? String(customFieldsJson) : '{}';
+    if (avatarUrl !== undefined)
+      updateData.avatarUrl = avatarUrl ? String(avatarUrl) : null;
+    if (tags !== undefined) updateData.tags = tags ? String(tags).trim() : null;
+
+    const desiredTagIds = Array.isArray(tagIds)
+      ? (tagIds as string[]).map(String).filter(Boolean)
+      : null;
+    const desiredGroupIds = Array.isArray(groupIds)
+      ? (groupIds as string[]).map(String).filter(Boolean)
+      : null;
+
+    await db.$transaction(async (tx) => {
+      await tx.contact.update({ where: { id }, data: updateData });
+
+      // Sync tags: remove ones not in desired, add missing ones
+      if (desiredTagIds !== null) {
+        const validTags = await tx.tag.findMany({
+          where: { id: { in: desiredTagIds }, tenantId },
+          select: { id: true },
+        });
+        const validTagIds = validTags.map((t) => t.id);
+
+        await tx.contactTag.deleteMany({
+          where: { contactId: id, NOT: { tagId: { in: validTagIds } } },
+        });
+        if (validTagIds.length > 0) {
+          await applyTagsToContact(id, validTagIds, user.id, tx);
+        }
+      }
+
+      // Sync groups
+      if (desiredGroupIds !== null) {
+        const validGroups = await tx.group.findMany({
+          where: { id: { in: desiredGroupIds }, tenantId },
+          select: { id: true },
+        });
+        const validGroupIds = validGroups.map((g) => g.id);
+
+        await tx.contactGroup.deleteMany({
+          where: { contactId: id, NOT: { groupId: { in: validGroupIds } } },
+        });
+        if (validGroupIds.length > 0) {
+          await addContactToGroups(id, validGroupIds, user.id, tx);
+        }
+
+        // Sync memberCount for all affected groups (current + previously removed)
+        const affectedGroupIds = Array.from(
+          new Set([...validGroupIds, ...desiredGroupIds])
+        );
+        for (const gid of affectedGroupIds) {
+          const cnt = await tx.contactGroup.count({
+            where: { groupId: gid },
+          });
+          await tx.group
+            .update({ where: { id: gid }, data: { memberCount: cnt } })
+            .catch(() => {
+              /* group may have been deleted already */
+            });
+        }
+      }
     });
 
-    return NextResponse.json(customer);
-  } catch (error) {
-    console.error('Error updating contact:', error);
-    return NextResponse.json(
-      { error: 'Failed to update contact' },
-      { status: 500 }
-    );
-  }
-}
-
-// DELETE /api/contacts/[id] — Delete customer
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const authUser = await getAuthUser(request);
-    const { id } = await params;
-
-    // Verify the customer exists
-    const existingCustomer = await db.customer.findUnique({
+    const refreshed = await db.contact.findUnique({
       where: { id },
       include: {
-        _count: {
-          select: {
-            jobs: true,
-            invoices: true,
-          },
-        },
+        contactTags: { include: { tag: true } },
+        contactGroups: { include: { group: true } },
       },
     });
 
-    if (!existingCustomer) {
-      return NextResponse.json(
-        { error: 'Contact not found' },
-        { status: 404 }
-      );
+    return NextResponse.json({ data: refreshed });
+  } catch (error) {
+    console.error('Error updating contact:', error);
+    return NextResponse.json({ error: 'Failed to update contact' }, { status: 500 });
+  }
+}
+
+// DELETE /api/contacts/[id] — delete contact (cascade removes joins)
+export async function DELETE(request: NextRequest, { params }: Params) {
+  try {
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const tenantId = user.tenantId || 'default';
+    const { id } = await params;
+
+    const existing = await db.contact.findFirst({ where: { id, tenantId } });
+    if (!existing) {
+      return NextResponse.json({ error: 'Contact not found' }, { status: 404 });
     }
 
-    // Verify workspace isolation if authenticated
-    if (authUser?.workspaceId && existingCustomer.workspaceId !== authUser.workspaceId) {
+    if (user.workspaceId && existing.workspaceId && existing.workspaceId !== user.workspaceId) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // Check if customer has active jobs
-    if (existingCustomer._count.jobs > 0) {
-      return NextResponse.json(
-        { error: `Cannot delete contact with ${existingCustomer._count.jobs} job(s). Remove or reassign them first.` },
-        { status: 400 }
-      );
+    // Capture affected groups so we can sync their memberCount after deletion
+    const affectedGroups = await db.contactGroup.findMany({
+      where: { contactId: id },
+      select: { groupId: true },
+    });
+
+    await db.contact.delete({ where: { id } });
+
+    // Sync memberCount for each affected group
+    for (const ag of affectedGroups) {
+      const cnt = await db.contactGroup.count({
+        where: { groupId: ag.groupId },
+      });
+      await db.group
+        .update({ where: { id: ag.groupId }, data: { memberCount: cnt } })
+        .catch(() => {
+          /* group may have been deleted already */
+        });
     }
 
-    await db.customer.delete({ where: { id } });
-
-    return NextResponse.json({ success: true, message: 'Contact deleted' });
+    return NextResponse.json({ data: { id, deleted: true } });
   } catch (error) {
     console.error('Error deleting contact:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete contact' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to delete contact' }, { status: 500 });
   }
 }

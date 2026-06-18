@@ -1,91 +1,73 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { getAuthUser } from '@/lib/auth';
-import crypto from 'crypto';
+import { NextRequest, NextResponse } from 'next/server'
+import crypto from 'crypto'
+import { db } from '@/lib/db'
+import { getAuthUser } from '@/lib/auth'
 
-/**
- * Customer Payment Methods API
- *
- * All endpoints are scoped to the authenticated customer (role === 'customer').
- * The customer's real DB id is derived from the JWT's `id` field which is
- * stored as `cust_<customerId>` by /api/auth/company-login.
- */
+// ── Helpers ─────────────────────────────────────────────────────────────
 
-function extractCustomerId(authUserId: string | undefined): string | null {
-  if (!authUserId) return null;
-  if (authUserId.startsWith('cust_')) return authUserId.slice(5);
-  // Fallback: treat the whole id as a customer id if it's not a User cuid
-  return authUserId;
+function luhnValid(cardNumber: string): boolean {
+  const digits = cardNumber.replace(/\D/g, '')
+  if (digits.length < 13 || digits.length > 19) return false
+  let sum = 0
+  let alt = false
+  for (let i = digits.length - 1; i >= 0; i--) {
+    let n = parseInt(digits[i], 10)
+    if (alt) {
+      n *= 2
+      if (n > 9) n -= 9
+    }
+    sum += n
+    alt = !alt
+  }
+  return sum % 10 === 0
 }
 
 function detectBrand(cardNumber: string): string {
-  const digits = cardNumber.replace(/\D/g, '');
-  if (/^4/.test(digits)) return 'Visa';
-  if (/^(5[1-5]|2[2-7])/.test(digits)) return 'Mastercard';
-  if (/^3[47]/.test(digits)) return 'Amex';
-  if (/^6(?:011|5)/.test(digits)) return 'Discover';
-  if (/^(60|65|81|82|508|352|353|354|355|356|357|358)/.test(digits)) return 'RuPay';
-  if (/^(30[0-5]|3095|36|38|39)/.test(digits)) return 'Diners';
-  return 'Card';
+  const n = cardNumber.replace(/\D/g, '')
+  if (/^4/.test(n)) return 'Visa'
+  if (/^(5[1-5]|2[2-7])/.test(n)) return 'Mastercard'
+  if (/^3[47]/.test(n)) return 'Amex'
+  if (/^6(?:011|5)/.test(n)) return 'Discover'
+  if (/^(60|65|81|82)/.test(n)) return 'RuPay'
+  if (/^3(?:0[0-5]|[68])/.test(n)) return 'Diners'
+  return 'Card'
 }
 
-function luhnValid(cardNumber: string): boolean {
-  const digits = cardNumber.replace(/\D/g, '');
-  if (digits.length < 13 || digits.length > 19) return false;
-  let sum = 0;
-  let shouldDouble = false;
-  for (let i = digits.length - 1; i >= 0; i--) {
-    let d = parseInt(digits[i], 10);
-    if (shouldDouble) {
-      d *= 2;
-      if (d > 9) d -= 9;
-    }
-    sum += d;
-    shouldDouble = !shouldDouble;
-  }
-  return sum % 10 === 0;
-}
-
-// ─── GET /api/customer/payment-methods ─────────────────────────────────────
-// List the authenticated customer's saved payment methods.
-export async function GET(request: NextRequest) {
+// ── GET /api/customer/payment-methods ───────────────────────────────────
+// Lists the authenticated customer's saved payment methods.
+export async function GET() {
   try {
-    const user = await getAuthUser();
+    const user = await getAuthUser()
     if (!user || user.role !== 'customer') {
       return NextResponse.json(
-        { error: 'Customer authentication required.' },
+        { error: 'Customer authentication required' },
         { status: 401 }
-      );
+      )
     }
 
-    const customerId = extractCustomerId(user.id);
-    if (!customerId) {
-      return NextResponse.json(
-        { error: 'Unable to resolve customer account.' },
-        { status: 400 }
-      );
-    }
-
-    // Verify the customer actually exists and belongs to the same tenant
-    const customer = await db.customer.findFirst({
-      where: {
-        id: customerId,
-        ...(user.tenantId ? { workspace: { tenantId: user.tenantId } } : {}),
+    const customer = await db.customer.findUnique({
+      where: { id: user.id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        workspaceId: true,
+        portalEnabled: true,
       },
-      select: { id: true, name: true, email: true, phone: true, address: true },
-    });
+    })
 
     if (!customer) {
       return NextResponse.json(
-        { error: 'Customer record not found.' },
+        { error: 'Customer profile not found' },
         { status: 404 }
-      );
+      )
     }
 
-    const methods = await db.paymentMethod.findMany({
-      where: { customerId },
+    const paymentMethods = await db.paymentMethod.findMany({
+      where: { customerId: user.id },
       orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
-    });
+    })
 
     return NextResponse.json({
       customer: {
@@ -93,196 +75,196 @@ export async function GET(request: NextRequest) {
         name: customer.name,
         email: customer.email,
         phone: customer.phone,
-        address: customer.address,
+        portalEnabled: customer.portalEnabled,
       },
-      paymentMethods: methods,
-    });
+      paymentMethods,
+    })
   } catch (error) {
-    console.error('[GET /api/customer/payment-methods]', error);
+    console.error('Error fetching payment methods:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch payment methods.' },
+      { error: 'Failed to fetch payment methods' },
       { status: 500 }
-    );
+    )
   }
 }
 
-// ─── POST /api/customer/payment-methods ────────────────────────────────────
-// Add a new payment method for the authenticated customer.
-//
-// Body:
-//   type: 'card' | 'upi' | 'bank'
-//   For card: { holderName, cardNumber, expMonth, expYear, cvv, isDefault }
-//   For upi:  { upiId, isDefault }
-//   For bank: { bankName, accountLast4, isDefault }
+// ── POST /api/customer/payment-methods ──────────────────────────────────
+// Adds a new payment method (card or UPI) for the authenticated customer.
+// Card numbers are NEVER stored — only a mock token + last4.
 export async function POST(request: NextRequest) {
   try {
-    const user = await getAuthUser();
+    const user = await getAuthUser()
     if (!user || user.role !== 'customer') {
       return NextResponse.json(
-        { error: 'Customer authentication required.' },
+        { error: 'Customer authentication required' },
         { status: 401 }
-      );
+      )
     }
 
-    const customerId = extractCustomerId(user.id);
-    if (!customerId) {
+    const body = await request.json()
+    const {
+      type,
+      holderName,
+      cardNumber,
+      expMonth,
+      expYear,
+      cvv,
+      upiId,
+      bankName,
+      accountLast4,
+      isDefault,
+    } = body
+
+    if (!type || !['card', 'upi', 'bank'].includes(type)) {
       return NextResponse.json(
-        { error: 'Unable to resolve customer account.' },
+        { error: 'Valid type (card, upi, or bank) is required' },
         { status: 400 }
-      );
+      )
     }
 
-    const customer = await db.customer.findFirst({
-      where: {
-        id: customerId,
-        ...(user.tenantId ? { workspace: { tenantId: user.tenantId } } : {}),
-      },
+    const customer = await db.customer.findUnique({
+      where: { id: user.id },
       select: { id: true, workspaceId: true },
-    });
+    })
 
     if (!customer) {
       return NextResponse.json(
-        { error: 'Customer record not found.' },
+        { error: 'Customer profile not found' },
         { status: 404 }
-      );
+      )
     }
 
-    const body = await request.json();
-    const type = String(body.type || 'card').toLowerCase();
-
-    if (!['card', 'upi', 'bank'].includes(type)) {
-      return NextResponse.json(
-        { error: 'Invalid payment method type. Must be card, upi, or bank.' },
-        { status: 400 }
-      );
-    }
-
-    let brand: string | null = null;
-    let last4: string | null = null;
-    let expMonth: number | null = null;
-    let expYear: number | null = null;
-    let holderName: string | null = null;
-    let upiId: string | null = null;
-    let bankName: string | null = null;
+    let brand: string | null = null
+    let last4: string | null = null
+    let expMonthDb: number | null = null
+    let expYearDb: number | null = null
+    let holderNameDb: string | null = null
+    let upiIdDb: string | null = null
+    let bankNameDb: string | null = null
+    let tokenJson = '{}'
 
     if (type === 'card') {
-      const cardNumber = String(body.cardNumber || '').replace(/\D/g, '');
-      holderName = String(body.holderName || '').trim();
-      const em = Number(body.expMonth);
-      const ey = Number(body.expYear);
+      if (!cardNumber || !holderName) {
+        return NextResponse.json(
+          { error: 'Card number and holder name are required' },
+          { status: 400 }
+        )
+      }
 
-      if (!cardNumber || !luhnValid(cardNumber)) {
+      const cleanNumber = String(cardNumber).replace(/\D/g, '')
+
+      // Luhn validation
+      if (!luhnValid(cleanNumber)) {
         return NextResponse.json(
           { error: 'Please enter a valid card number.' },
           { status: 400 }
-        );
+        )
       }
-      if (!holderName || holderName.length < 2) {
-        return NextResponse.json(
-          { error: 'Cardholder name is required.' },
-          { status: 400 }
-        );
-      }
-      if (!em || em < 1 || em > 12) {
+
+      // Expiry validation
+      const month = parseInt(String(expMonth), 10)
+      const year = parseInt(String(expYear), 10)
+      if (!month || month < 1 || month > 12) {
         return NextResponse.json(
           { error: 'Invalid expiry month.' },
           { status: 400 }
-        );
+        )
       }
-      const fullYear = ey < 100 ? 2000 + ey : ey;
-      if (!fullYear || fullYear < new Date().getFullYear()) {
+      const now = new Date()
+      const expDate = new Date(2000 + year, month, 0, 23, 59, 59)
+      if (expDate < now) {
         return NextResponse.json(
-          { error: 'Card has expired. Please check the expiry year.' },
+          { error: 'Card has expired.' },
           { status: 400 }
-        );
-      }
-      // Future-month validation: if same year, month must be >= current month
-      if (
-        fullYear === new Date().getFullYear() &&
-        em < new Date().getMonth() + 1
-      ) {
-        return NextResponse.json(
-          { error: 'Card has expired. Please check the expiry date.' },
-          { status: 400 }
-        );
+        )
       }
 
-      brand = detectBrand(cardNumber);
-      last4 = cardNumber.slice(-4);
-      expMonth = em;
-      expYear = fullYear;
+      // CVV length check
+      if (cvv && ![3, 4].includes(String(cvv).length)) {
+        return NextResponse.json(
+          { error: 'CVV must be 3 or 4 digits.' },
+          { status: 400 }
+        )
+      }
+
+      brand = detectBrand(cleanNumber)
+      last4 = cleanNumber.slice(-4)
+      expMonthDb = month
+      expYearDb = 2000 + year
+      holderNameDb = holderName
+
+      // Mock tokenization — in production this comes from Stripe/Razorpay
+      const mockToken = `tok_${crypto.randomBytes(12).toString('hex')}`
+      tokenJson = JSON.stringify({ token: mockToken, provider: 'mock' })
     } else if (type === 'upi') {
-      upiId = String(body.upiId || '').trim();
-      if (!upiId || !/^[\w.\-]{2,}@[a-zA-Z]{2,}$/.test(upiId)) {
+      if (!upiId) {
         return NextResponse.json(
-          { error: 'Please enter a valid UPI ID (e.g. name@bank).' },
+          { error: 'UPI ID is required' },
           { status: 400 }
-        );
+        )
       }
-      brand = 'UPI';
-      last4 = upiId.split('@')[0].slice(-4);
-    } else {
-      // bank
-      bankName = String(body.bankName || '').trim();
-      const acctLast4 = String(body.accountLast4 || '').replace(/\D/g, '');
-      if (!bankName) {
+      // UPI ID format: name@bank
+      if (!/^[\w.\-]{2,}@[a-zA-Z]{2,}$/.test(String(upiId))) {
         return NextResponse.json(
-          { error: 'Bank name is required.' },
+          { error: 'Please enter a valid UPI ID (e.g., name@bank).' },
           { status: 400 }
-        );
+        )
       }
-      if (acctLast4.length !== 4) {
+      brand = 'UPI'
+      last4 = String(upiId).split('@')[0].slice(-4)
+      upiIdDb = upiId
+      holderNameDb = holderName || null
+    } else if (type === 'bank') {
+      if (!bankName || !accountLast4) {
         return NextResponse.json(
-          { error: 'Last 4 digits of account number are required.' },
+          { error: 'Bank name and account last 4 are required' },
           { status: 400 }
-        );
+        )
       }
-      brand = 'Bank';
-      last4 = acctLast4;
+      brand = bankName
+      last4 = String(accountLast4).slice(-4)
+      bankNameDb = bankName
+      holderNameDb = holderName || null
     }
 
-    const isDefault = Boolean(body.isDefault);
-
-    // If this is the first method or isDefault, unset others
+    // If this is the first method, auto-default it
     const existingCount = await db.paymentMethod.count({
-      where: { customerId },
-    });
-    const makeDefault = isDefault || existingCount === 0;
-    if (makeDefault) {
+      where: { customerId: user.id },
+    })
+    const shouldBeDefault = isDefault || existingCount === 0
+
+    // If setting as default, unset others
+    if (shouldBeDefault) {
       await db.paymentMethod.updateMany({
-        where: { customerId, isDefault: true },
+        where: { customerId: user.id, isDefault: true },
         data: { isDefault: false },
-      });
+      })
     }
 
-    // Generate a mock payment token (in production this would be from the
-    // payment gateway — we never store raw card numbers).
-    const mockToken = `tok_${crypto.randomBytes(12).toString('hex')}`;
-
-    const method = await db.paymentMethod.create({
+    const paymentMethod = await db.paymentMethod.create({
       data: {
-        customerId,
-        tenantId: user.tenantId || null,
-        workspaceId: customer.workspaceId || user.workspaceId || null,
+        customerId: user.id,
+        tenantId: user.tenantId,
+        workspaceId: customer.workspaceId,
         type,
         brand,
         last4,
-        expMonth,
-        expYear,
-        holderName,
-        upiId,
-        bankName,
-        isDefault: makeDefault,
-        tokenJson: JSON.stringify({ token: mockToken, provider: 'mock' }),
+        expMonth: expMonthDb,
+        expYear: expYearDb,
+        holderName: holderNameDb,
+        upiId: upiIdDb,
+        bankName: bankNameDb,
+        isDefault: shouldBeDefault,
+        tokenJson,
       },
-    });
+    })
 
-    return NextResponse.json({ paymentMethod: method }, { status: 201 });
+    return NextResponse.json(paymentMethod, { status: 201 })
   } catch (error) {
-    console.error('[POST /api/customer/payment-methods]', error);
+    console.error('Error creating payment method:', error)
     return NextResponse.json(
-      { error: 'Failed to save payment method.' },
+      { error: 'Failed to create payment method' },
       { status: 500 }
-    );
+    )
   }
 }

@@ -55,12 +55,16 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
 
+    // rulesJson is a String column — accept array or string, normalize to string
+    const rulesJsonRaw = body.rulesJson ?? '[]'
+    const rulesJsonString = typeof rulesJsonRaw === 'string' ? rulesJsonRaw : JSON.stringify(rulesJsonRaw)
+
     const segment = await db.segment.create({
       data: {
         name: body.name,
         description: body.description,
         type: body.type || 'dynamic',
-        rulesJson: body.rulesJson || '[]',
+        rulesJson: rulesJsonString,
         matchLogic: body.matchLogic || 'and',
         memberCount: body.memberCount || 0,
         lastCalculated: body.lastCalculated ? new Date(body.lastCalculated) : undefined,

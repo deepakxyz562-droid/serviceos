@@ -1,130 +1,140 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { getAuthUser, getAppUrl } from '@/lib/auth';
-import crypto from 'crypto';
+import { NextRequest, NextResponse } from 'next/server'
+import crypto from 'crypto'
+import { db } from '@/lib/db'
+import { getAuthUser, getAppUrl } from '@/lib/auth'
 
-/**
- * POST /api/employees/[id]/invite
- *
- * Generate (or regenerate) an invitation link for an existing Employee record.
- * The Employee must already exist; this endpoint creates/updates:
- *   - a User row (status invited, no passwordHash)
- *   - an Invitation row with a fresh token (7-day expiry)
- *
- * Returns the invite URL the admin should send to the employee.
- */
+// POST /api/employees/[id]/invite
+// Generates an invitation link for an employee to activate their account.
+// Creates (or reuses) a User record + creates an Invitation record.
 export async function POST(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getAuthUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
-    if (!['owner', 'admin', 'manager'].includes(user.role)) {
+    const user = await getAuthUser()
+    if (!user || !['owner', 'admin', 'super_admin'].includes(user.role)) {
       return NextResponse.json(
-        { error: 'Only owners and admins can send invitations' },
+        { error: 'Unauthorized. Only owners/admins can send invitations.' },
         { status: 403 }
-      );
+      )
     }
 
-    const { id: employeeId } = await params;
+    const { id } = await params
 
     const employee = await db.employee.findUnique({
-      where: { id: employeeId },
-      include: { workspace: { select: { id: true, tenantId: true } }, userAccount: true },
-    });
+      where: { id },
+      include: {
+        userAccount: {
+          select: { id: true, email: true, name: true, isActive: true },
+        },
+        workspace: {
+          select: { id: true, tenantId: true },
+        },
+      },
+    })
 
     if (!employee) {
-      return NextResponse.json({ error: 'Employee not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Employee not found' }, { status: 404 })
     }
 
-    if (!employee.email) {
+    // Determine the email to invite
+    const email = employee.email || employee.userAccount?.email
+    if (!email) {
       return NextResponse.json(
-        { error: 'Employee must have an email to receive an invitation' },
+        { error: 'Employee has no email address. Add an email to send an invitation.' },
         { status: 400 }
-      );
+      )
     }
 
-    // Ensure a User account exists (invited, no password yet)
-    let userAccount = employee.userAccount;
-    if (!userAccount) {
-      const existing = await db.user.findUnique({ where: { email: employee.email } });
-      if (existing) {
-        userAccount = existing;
+    // Determine tenantId + workspaceId
+    const tenantId = employee.workspace?.tenantId || user.tenantId
+    const workspaceId = employee.workspaceId || employee.workspace?.id || user.workspaceId
+
+    // Create or reuse the User account
+    let userId = employee.userId
+    if (!userId) {
+      // Check if a user with that email already exists
+      const existingUser = await db.user.findUnique({ where: { email } })
+      if (existingUser) {
+        userId = existingUser.id
+        // Link the employee to the user account
+        await db.employee.update({
+          where: { id },
+          data: { userId: existingUser.id },
+        })
       } else {
-        userAccount = await db.user.create({
+        // Create a new (inactive) user account — they'll set their password via the invitation
+        const newUser = await db.user.create({
           data: {
-            email: employee.email,
+            email,
             name: employee.name,
             phone: employee.phone,
-            role: 'employee',
+            role: employee.role === 'owner' ? 'owner' : 'employee',
             authProvider: 'email',
-            isActive: true,
-            tenantId: employee.workspace?.tenantId || user.tenantId,
-            workspaceId: employee.workspaceId || user.workspaceId,
+            isActive: false, // inactive until they accept the invitation
+            tenantId,
+            workspaceId,
           },
-        });
+        })
+        userId = newUser.id
         await db.employee.update({
-          where: { id: employeeId },
-          data: { userId: userAccount.id },
-        });
+          where: { id },
+          data: { userId: newUser.id },
+        })
       }
     }
 
-    // Invalidate any prior pending invitations for this employee
-    await db.invitation.updateMany({
-      where: { employeeId, status: 'pending' },
-      data: { status: 'cancelled' },
-    });
+    // Delete any existing invitations for this employee (employeeId is unique)
+    await db.invitation.deleteMany({
+      where: { employeeId: id },
+    })
 
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    // Generate a secure token (valid for 7 days)
+    const token = crypto.randomBytes(32).toString('hex')
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
+    // Create the invitation
     const invitation = await db.invitation.create({
       data: {
         token,
-        email: employee.email,
+        email,
         name: employee.name,
         role: 'employee',
         phone: employee.phone,
         status: 'pending',
         invitedById: user.id,
-        tenantId: employee.workspace?.tenantId || user.tenantId,
-        workspaceId: employee.workspaceId || user.workspaceId,
-        employeeId,
+        tenantId,
+        workspaceId,
+        employeeId: id,
         expiresAt,
       },
-    });
+    })
 
+    // Update the employee's invitation status
     await db.employee.update({
-      where: { id: employeeId },
+      where: { id },
       data: { invitationStatus: 'pending' },
-    });
+    })
 
-    const tenant = await db.tenant.findUnique({
-      where: { id: invitation.tenantId || undefined },
-      select: { slug: true, name: true },
-    });
-
-    const appUrl = getAppUrl();
-    const slug = tenant?.slug || 'default';
-    const inviteUrl = `${appUrl}/${slug}/accept-invite?token=${token}`;
+    // Build the activation URL
+    const baseUrl = getAppUrl()
+    const activationUrl = `${baseUrl}/accept-invite?token=${token}`
 
     return NextResponse.json({
       success: true,
-      inviteUrl,
-      expiresAt: expiresAt.toISOString(),
       invitationId: invitation.id,
-      employee: { id: employee.id, name: employee.name, email: employee.email },
-      company: { name: tenant?.name, slug: tenant?.slug },
-    });
+      invitationStatus: 'pending',
+      activationUrl,
+      token,
+      email,
+      expiresAt: expiresAt.toISOString(),
+      message: `Invitation link generated for ${email}. Share it with ${employee.name}.`,
+    })
   } catch (error) {
-    console.error('[Employee Invite Error]', error);
+    console.error('Error sending employee invitation:', error)
     return NextResponse.json(
-      { error: 'Failed to generate employee invitation' },
+      { error: 'Failed to send invitation' },
       { status: 500 }
-    );
+    )
   }
 }

@@ -149,10 +149,20 @@ export async function POST(
         const invoiceCount = await db.invoice.count();
         const invoiceNumber = `INV-${String(invoiceCount + 1).padStart(5, '0')}`;
 
+        // Resolve the tenantId via the workspace (Job has no direct tenantId column)
+        let invoiceTenantId: string | undefined = undefined;
+        if (job.workspaceId) {
+          const ws = await db.workspace.findUnique({
+            where: { id: job.workspaceId },
+            select: { tenantId: true },
+          });
+          invoiceTenantId = ws?.tenantId || undefined;
+        }
+
         await db.invoice.create({
           data: {
             number: invoiceNumber,
-            tenantId: job.workspaceId,
+            tenantId: invoiceTenantId,
             jobId: job.id,
             customerId: job.customerId,
             employeeId: job.assigneeId,

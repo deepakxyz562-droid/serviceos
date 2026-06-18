@@ -1,100 +1,103 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { getAuthUser, getAppUrl } from '@/lib/auth';
-import crypto from 'crypto';
+import { NextRequest, NextResponse } from 'next/server'
+import crypto from 'crypto'
+import { db } from '@/lib/db'
+import { getAuthUser, getAppUrl } from '@/lib/auth'
 
-/**
- * POST /api/employees/[id]/reset-password
- *
- * Generate a password-reset link for an employee. The link points to the
- * company-scoped accept-invite page with a fresh token (the employee's
- * existing passwordHash is NOT cleared here — they can keep using the old
- * password until they set a new one via the link).
- *
- * Returns the reset URL the admin should send to the employee.
- */
+// POST /api/employees/[id]/reset-password
+// Generates a password-reset link for an employee. Works by creating a new
+// invitation (the accept-invite flow lets them set a new password).
 export async function POST(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getAuthUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
-    }
-    if (!['owner', 'admin'].includes(user.role)) {
+    const user = await getAuthUser()
+    if (!user || !['owner', 'admin', 'super_admin'].includes(user.role)) {
       return NextResponse.json(
-        { error: 'Only owners and admins can reset passwords' },
+        { error: 'Unauthorized. Only owners/admins can reset passwords.' },
         { status: 403 }
-      );
+      )
     }
 
-    const { id: employeeId } = await params;
+    const { id } = await params
 
     const employee = await db.employee.findUnique({
-      where: { id: employeeId },
-      include: { workspace: { select: { id: true, tenantId: true } }, userAccount: true },
-    });
+      where: { id },
+      include: {
+        userAccount: {
+          select: { id: true, email: true, isActive: true },
+        },
+        workspace: {
+          select: { id: true, tenantId: true },
+        },
+      },
+    })
 
-    if (!employee || !employee.email) {
+    if (!employee) {
+      return NextResponse.json({ error: 'Employee not found' }, { status: 404 })
+    }
+
+    const email = employee.email || employee.userAccount?.email
+    if (!email) {
       return NextResponse.json(
-        { error: 'Employee not found or has no email' },
-        { status: 404 }
-      );
+        { error: 'Employee has no email address.' },
+        { status: 400 }
+      )
     }
 
     if (!employee.userId) {
       return NextResponse.json(
-        { error: 'Employee has no user account. Send an invitation first.' },
+        { error: 'Employee has no linked user account. Send an invitation first.' },
         { status: 400 }
-      );
+      )
     }
 
-    // Invalidate prior pending invitations
-    await db.invitation.updateMany({
-      where: { employeeId, status: 'pending' },
-      data: { status: 'cancelled' },
-    });
+    const tenantId = employee.workspace?.tenantId || user.tenantId
+    const workspaceId = employee.workspaceId || employee.workspace?.id || user.workspaceId
 
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h for reset
+    // Delete any existing invitations for this employee (employeeId is unique)
+    await db.invitation.deleteMany({
+      where: { employeeId: id },
+    })
 
-    await db.invitation.create({
+    // Generate a new reset token (valid for 2 hours)
+    const token = crypto.randomBytes(32).toString('hex')
+    const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000)
+
+    const invitation = await db.invitation.create({
       data: {
         token,
-        email: employee.email,
+        email,
         name: employee.name,
         role: 'employee',
         phone: employee.phone,
         status: 'pending',
         invitedById: user.id,
-        tenantId: employee.workspace?.tenantId || user.tenantId,
-        workspaceId: employee.workspaceId || user.workspaceId,
-        employeeId,
+        tenantId,
+        workspaceId,
+        employeeId: id,
         expiresAt,
       },
-    });
+    })
 
-    const tenant = await db.tenant.findUnique({
-      where: { id: employee.workspace?.tenantId || user.tenantId || undefined },
-      select: { slug: true, name: true },
-    });
-
-    const appUrl = getAppUrl();
-    const slug = tenant?.slug || 'default';
-    const resetUrl = `${appUrl}/${slug}/accept-invite?token=${token}&mode=reset`;
+    // Build the reset URL
+    const baseUrl = getAppUrl()
+    const resetUrl = `${baseUrl}/accept-invite?token=${token}`
 
     return NextResponse.json({
       success: true,
+      invitationId: invitation.id,
       resetUrl,
+      token,
+      email,
       expiresAt: expiresAt.toISOString(),
-      employee: { id: employee.id, name: employee.name, email: employee.email },
-    });
+      message: `Password reset link generated for ${email}. Valid for 2 hours.`,
+    })
   } catch (error) {
-    console.error('[Employee Reset Password Error]', error);
+    console.error('Error resetting employee password:', error)
     return NextResponse.json(
-      { error: 'Failed to generate password reset link' },
+      { error: 'Failed to reset password' },
       { status: 500 }
-    );
+    )
   }
 }

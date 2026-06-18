@@ -1,163 +1,113 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { getAuthUser } from '@/lib/auth';
+import { NextRequest, NextResponse } from 'next/server'
+import { db } from '@/lib/db'
+import { getAuthUser } from '@/lib/auth'
 
-function extractCustomerId(authUserId: string | undefined): string | null {
-  if (!authUserId) return null;
-  if (authUserId.startsWith('cust_')) return authUserId.slice(5);
-  return authUserId;
-}
-
-// ─── PATCH /api/customer/payment-methods/[id] ──────────────────────────────
-// Update a payment method. Currently supports:
-//   - { isDefault: true }   → set as default (unsets others)
-//   - { isDefault: false }  → unset default (only allowed if another default exists)
+// ── PATCH /api/customer/payment-methods/[id] ────────────────────────────
+// Update a payment method (currently only toggles isDefault).
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getAuthUser();
+    const user = await getAuthUser()
     if (!user || user.role !== 'customer') {
       return NextResponse.json(
-        { error: 'Customer authentication required.' },
+        { error: 'Customer authentication required' },
         { status: 401 }
-      );
+      )
     }
 
-    const customerId = extractCustomerId(user.id);
-    if (!customerId) {
-      return NextResponse.json(
-        { error: 'Unable to resolve customer account.' },
-        { status: 400 }
-      );
-    }
-
-    const { id } = await params;
-    const body = await request.json();
+    const { id } = await params
+    const body = await request.json()
+    const { isDefault } = body
 
     // Verify ownership
     const existing = await db.paymentMethod.findFirst({
-      where: { id, customerId },
-    });
+      where: { id, customerId: user.id },
+    })
+
     if (!existing) {
       return NextResponse.json(
-        { error: 'Payment method not found.' },
+        { error: 'Payment method not found' },
         { status: 404 }
-      );
+      )
     }
 
-    if (body.isDefault === true) {
+    if (isDefault === true) {
       // Unset other defaults
       await db.paymentMethod.updateMany({
-        where: { customerId, isDefault: true, NOT: { id } },
+        where: { customerId: user.id, isDefault: true },
         data: { isDefault: false },
-      });
-      const updated = await db.paymentMethod.update({
-        where: { id },
-        data: { isDefault: true },
-      });
-      return NextResponse.json({ paymentMethod: updated });
+      })
     }
 
-    if (body.isDefault === false) {
-      // Don't allow unsetting the only default if it's the current one
-      const otherCount = await db.paymentMethod.count({
-        where: { customerId, isDefault: false, NOT: { id } },
-      });
-      if (otherCount === 0) {
-        return NextResponse.json(
-          { error: 'At least one payment method must be the default.' },
-          { status: 400 }
-        );
-      }
-      const updated = await db.paymentMethod.update({
-        where: { id },
-        data: { isDefault: false },
-      });
-      // Promote the most recent other method to default
-      const nextDefault = await db.paymentMethod.findFirst({
-        where: { customerId, NOT: { id } },
-        orderBy: { createdAt: 'desc' },
-      });
-      if (nextDefault) {
-        await db.paymentMethod.update({
-          where: { id: nextDefault.id },
-          data: { isDefault: true },
-        });
-      }
-      return NextResponse.json({ paymentMethod: updated });
-    }
+    const updated = await db.paymentMethod.update({
+      where: { id },
+      data: { isDefault: isDefault ?? existing.isDefault },
+    })
 
-    return NextResponse.json(
-      { error: 'No supported fields to update.' },
-      { status: 400 }
-    );
+    return NextResponse.json(updated)
   } catch (error) {
-    console.error('[PATCH /api/customer/payment-methods/[id]]', error);
+    console.error('Error updating payment method:', error)
     return NextResponse.json(
-      { error: 'Failed to update payment method.' },
+      { error: 'Failed to update payment method' },
       { status: 500 }
-    );
+    )
   }
 }
 
-// ─── DELETE /api/customer/payment-methods/[id] ─────────────────────────────
+// ── DELETE /api/customer/payment-methods/[id] ───────────────────────────
+// Remove a payment method. If the deleted method was default, promote the
+// next most recent method to default.
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await getAuthUser();
+    const user = await getAuthUser()
     if (!user || user.role !== 'customer') {
       return NextResponse.json(
-        { error: 'Customer authentication required.' },
+        { error: 'Customer authentication required' },
         { status: 401 }
-      );
+      )
     }
 
-    const customerId = extractCustomerId(user.id);
-    if (!customerId) {
-      return NextResponse.json(
-        { error: 'Unable to resolve customer account.' },
-        { status: 400 }
-      );
-    }
+    const { id } = await params
 
-    const { id } = await params;
-
+    // Verify ownership
     const existing = await db.paymentMethod.findFirst({
-      where: { id, customerId },
-    });
+      where: { id, customerId: user.id },
+    })
+
     if (!existing) {
       return NextResponse.json(
-        { error: 'Payment method not found.' },
+        { error: 'Payment method not found' },
         { status: 404 }
-      );
+      )
     }
 
-    await db.paymentMethod.delete({ where: { id } });
+    await db.paymentMethod.delete({ where: { id } })
 
-    // If we deleted the default, promote the next most-recent to default
+    // If the deleted method was the default, promote the next one
     if (existing.isDefault) {
-      const nextDefault = await db.paymentMethod.findFirst({
-        where: { customerId },
+      const next = await db.paymentMethod.findFirst({
+        where: { customerId: user.id },
         orderBy: { createdAt: 'desc' },
-      });
-      if (nextDefault) {
+      })
+      if (next) {
         await db.paymentMethod.update({
-          where: { id: nextDefault.id },
+          where: { id: next.id },
           data: { isDefault: true },
-        });
+        })
       }
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('[DELETE /api/customer/payment-methods/[id]]', error);
+    console.error('Error deleting payment method:', error)
     return NextResponse.json(
-      { error: 'Failed to delete payment method.' },
+      { error: 'Failed to delete payment method' },
       { status: 500 }
-    );
+    )
   }
 }

@@ -10,7 +10,7 @@ async function getForm(slug: string) {
   try {
     const form = await db.form.findUnique({
       where: { slug },
-      include: { _count: { select: { submissions: true } } },
+      include: { _count: { select: { responses: true } } },
     })
     return form
   } catch {
@@ -30,21 +30,15 @@ export default async function HostedFormPage({ params }: { params: Promise<{ slu
     ? JSON.parse(form.fieldsJson)
     : form.fieldsJson || []
 
-  const settings = typeof form.settingsJson === 'string'
-    ? JSON.parse(form.settingsJson)
-    : form.settingsJson || {}
-
-  const style = typeof form.styleJson === 'string'
-    ? JSON.parse(form.styleJson)
-    : form.styleJson || {}
-
-  const primaryColor = style.primaryColor || '#10b981'
-  const fontFamily = style.fontFamily || 'Inter, sans-serif'
-  const borderRadius = style.borderRadius || 8
-  const successMessage = settings.successMessage || 'Thank you for your submission!'
-  const submitButtonText = settings.submitButtonText || 'Submit'
+  // The Form model doesn't have a settingsJson/styleJson column — use the
+  // actual fields (completionMessage) + sensible defaults for styling.
+  const successMessage = form.completionMessage || 'Thank you for your submission!'
+  const submitButtonText = 'Submit'
+  const primaryColor = '#10b981'
+  const fontFamily = 'Inter, sans-serif'
+  const borderRadius = 8
   const isPaused = form.status === 'paused'
-  const redirectUrl = settings.redirectUrl || ''
+  const redirectUrl = ''
 
   return (
     <div style={{

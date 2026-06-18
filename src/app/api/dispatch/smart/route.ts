@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
     const authUser = await getAuthUser()
     const body = await request.json()
 
-    const { jobId, autoAssign, criteria } = body
+    const { jobId, autoAssign: shouldAutoAssign, criteria } = body
 
     if (!jobId) {
       return NextResponse.json(
@@ -19,8 +19,9 @@ export async function POST(request: NextRequest) {
 
     let result
 
-    if (autoAssign) {
-      // Auto-assign the best match
+    if (shouldAutoAssign) {
+      // Auto-assign the best match (autoAssign is the imported function; the
+      // body field is renamed to shouldAutoAssign to avoid shadowing it)
       result = await autoAssign(jobId)
     } else {
       // Just find the best match without assigning

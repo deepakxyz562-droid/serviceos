@@ -162,7 +162,21 @@ const DEFAULT_MAX_ACTIVE_JOBS = 4
 
 function safeJsonParse(jsonStr: string, fallback: unknown = []): unknown {
   try {
-    return JSON.parse(jsonStr)
+    let parsed: unknown = JSON.parse(jsonStr)
+    // Handle double-encoded JSON strings (e.g. when a string was JSON.stringify'd
+    // twice). Keep parsing until the result is no longer a string that looks
+    // like JSON.
+    let depth = 0
+    while (typeof parsed === 'string' && depth < 3) {
+      try {
+        const next = JSON.parse(parsed)
+        parsed = next
+        depth++
+      } catch {
+        break
+      }
+    }
+    return parsed
   } catch {
     return fallback
   }
