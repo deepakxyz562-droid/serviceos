@@ -3,6 +3,30 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 
+/**
+ * Whether the realtime socket.io server is expected to be reachable.
+ *
+ * The socket.io mini-service runs on port 3003 in local dev. In production on
+ * Netlify (and other serverless hosts) there is no persistent socket server,
+ * so attempting to connect just spams the browser console with WSS errors.
+ *
+ * We detect "production" as any non-localhost origin. This is intentionally
+ * conservative: preview deploys, custom domains, and the Netlify main domain
+ * are all treated as production.
+ */
+function isRealtimeServerAvailable(): boolean {
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname;
+  // localhost and 127.0.0.1 + dev preview origins run the mini-service
+  return (
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host === '0.0.0.0' ||
+    // Allow an explicit opt-in via env (e.g. for self-hosted prod with sockets)
+    process.env.NEXT_PUBLIC_ENABLE_REALTIME === 'true'
+  );
+}
+
 interface UseRealtimeOptions {
   tenantId?: string;
   employeeId?: string;
@@ -55,6 +79,12 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
   useEffect(() => {
     if (!enabled) return;
 
+    // In production (Netlify/serverless) there is no socket.io server to talk
+    // to. Skip the connection entirely so the browser console doesn't fill
+    // with WSS errors. The hook still works — `connected` just stays false
+    // and the emit helpers become no-ops.
+    if (!isRealtimeServerAvailable()) return;
+
     // Prevent duplicate connections
     if (connectionAttemptedRef.current) return;
     connectionAttemptedRef.current = true;
@@ -91,8 +121,10 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
       setConnected(false);
     });
 
-    socket.on('connect_error', (err) => {
-      console.warn('[useRealtime] Connection error:', err.message);
+    // Swallow connect errors silently. On dev environments where the
+    // mini-service is briefly down, this would otherwise spam the console
+    // every second during reconnection.
+    socket.on('connect_error', () => {
       setConnected(false);
     });
 

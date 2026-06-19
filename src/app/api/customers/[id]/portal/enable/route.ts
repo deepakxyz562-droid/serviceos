@@ -62,10 +62,27 @@ export async function POST(
       },
     })
 
-    // Build the activation URL — must include the company slug because the
-    // accept-invite route is /{companySlug}/accept-invite.
+    // Build the activation URL. The canonical route is
+    // /{companySlug}/accept-invite, but a fallback at /accept-invite resolves
+    // the slug from the token and redirects, so links without a slug still work.
     const baseUrl = getAppUrl(request)
-    const slug = customer.workspace?.tenant?.slug
+    // Resolve the tenant slug. Prefer the customer's own workspace→tenant
+    // chain, but fall back to the authenticated staff user's tenantId if the
+    // customer has no workspace (e.g. imported contacts without a workspace).
+    // This matches how /api/employees/[id]/invite resolves the slug and
+    // avoids generating slug-less URLs that would hit the fallback redirect.
+    let slug = customer.workspace?.tenant?.slug || null
+    if (!slug && user.tenantId) {
+      try {
+        const tenant = await db.tenant.findUnique({
+          where: { id: user.tenantId },
+          select: { slug: true },
+        })
+        slug = tenant?.slug || null
+      } catch {
+        // ignore — fall back to slug-less URL (handled by /accept-invite route)
+      }
+    }
     const activationUrl = slug
       ? `${baseUrl}/${slug}/accept-invite?token=${token}`
       : `${baseUrl}/accept-invite?token=${token}`

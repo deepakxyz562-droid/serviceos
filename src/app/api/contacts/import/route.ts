@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 
+// Netlify serverless functions time out at ~26s on the free tier. The import
+// route can process hundreds of rows, so we give Netlify a hint to allow a
+// longer runtime (max 60s on Pro, 26s on Free — the config is a no-op if the
+// plan doesn't support it).
+export const maxDuration = 60;
+
 // POST /api/contacts/import - Import contacts in bulk
 export async function POST(request: NextRequest) {
   try {
@@ -93,44 +99,124 @@ async function bulkImportContacts(
   let skipped = 0;
   let firstError: string | null = null;
 
+  // ── Pre-process & deduplicate in-memory ────────────────────────────────
+  // Normalise every row, drop rows without a name, and dedupe by email within
+  // the batch itself (so a CSV with the same email twice only imports once).
+  const seenEmails = new Set<string>();
+  const toCreate: Array<{
+    name: string;
+    email: string | null;
+    phone: string | null;
+    company: string | null;
+    tags: string | null;
+  }> = [];
+
   for (const contactData of contacts) {
     const name = (contactData.name as string)?.trim();
     if (!name) {
       skipped++;
       continue;
     }
-
     const email = (contactData.email as string)?.trim() || null;
-
-    // Duplicate detection by email
     if (email) {
-      const existing = await db.contact.findFirst({
-        where: { email, tenantId },
-      });
-      if (existing) {
+      if (seenEmails.has(email.toLowerCase())) {
         duplicates++;
         continue;
       }
+      seenEmails.add(email.toLowerCase());
     }
+    toCreate.push({
+      name,
+      email,
+      phone: (contactData.phone as string)?.trim() || null,
+      company: (contactData.company as string)?.trim() || null,
+      tags: (contactData.tags as string)?.trim() || null,
+    });
+  }
 
+  if (toCreate.length === 0) {
+    return NextResponse.json({
+      total: contacts.length,
+      imported: 0,
+      duplicates,
+      skipped,
+    });
+  }
+
+  // ── Batch duplicate detection ──────────────────────────────────────────
+  // Instead of one findFirst per row (N round-trips), do a single findMany
+  // for all emails at once. This is the main perf win for large imports.
+  const emailsToCheck = toCreate
+    .map((c) => c.email)
+    .filter((e): e is string => !!e);
+
+  const existingEmails = new Set<string>();
+  if (emailsToCheck.length > 0) {
     try {
-      await db.contact.create({
-        data: {
-          name,
-          email,
-          phone: (contactData.phone as string)?.trim() || null,
-          company: (contactData.company as string)?.trim() || null,
-          tags: (contactData.tags as string)?.trim() || null,
+      const existing = await db.contact.findMany({
+        where: {
+          tenantId,
+          email: { in: emailsToCheck },
+        },
+        select: { email: true },
+      });
+      for (const c of existing) {
+        if (c.email) existingEmails.add(c.email.toLowerCase());
+      }
+    } catch (err) {
+      // If the duplicate-check query fails, capture the error but continue —
+      // we'll attempt the insert anyway and let the DB reject actual dupes.
+      firstError =
+        err instanceof Error
+          ? err.message
+          : 'Unknown error during duplicate check';
+    }
+  }
+
+  const finalBatch = toCreate.filter((c) => {
+    if (c.email && existingEmails.has(c.email.toLowerCase())) {
+      duplicates++;
+      return false;
+    }
+    return true;
+  });
+
+  if (finalBatch.length === 0) {
+    return NextResponse.json({
+      total: contacts.length,
+      imported: 0,
+      duplicates,
+      skipped,
+    });
+  }
+
+  // ── Batch insert with chunking ─────────────────────────────────────────
+  // createMany sends a single INSERT per chunk instead of one per row.
+  // Chunk size of 100 balances request size against DB limits.
+  const CHUNK_SIZE = 100;
+  for (let i = 0; i < finalBatch.length; i += CHUNK_SIZE) {
+    const chunk = finalBatch.slice(i, i + CHUNK_SIZE);
+    try {
+      const res = await db.contact.createMany({
+        // @ts-expect-error — skipDuplicates is supported by Prisma on Postgres
+        // and silently ignored by the Supabase adapter; it's harmless on SQLite.
+        skipDuplicates: true,
+        data: chunk.map((c) => ({
+          name: c.name,
+          email: c.email,
+          phone: c.phone,
+          company: c.company,
+          tags: c.tags,
           tenantId,
           workspaceId,
-        },
+        })),
       });
-      imported++;
+      imported += res.count ?? chunk.length;
     } catch (err) {
-      // Capture the first error message so we can surface it to the caller.
-      // Without this, a misconfigured backend (e.g. a missing `Contact` table
-      // in Supabase) would silently skip every row and return imported:0,
-      // which is very hard to diagnose.
+      // Fallback: insert rows one-by-one so a single bad row doesn't kill
+      // the whole chunk. This keeps the slow path working for SQLite (where
+      // createMany with skipDuplicates isn't supported) and for any row-level
+      // validation errors.
       if (!firstError) {
         firstError =
           err instanceof Error
@@ -139,7 +225,30 @@ async function bulkImportContacts(
               ? err
               : 'Unknown database error during contact create';
       }
-      skipped++;
+      for (const c of chunk) {
+        try {
+          await db.contact.create({
+            data: {
+              name: c.name,
+              email: c.email,
+              phone: c.phone,
+              company: c.company,
+              tags: c.tags,
+              tenantId,
+              workspaceId,
+            },
+          });
+          imported++;
+        } catch (rowErr) {
+          if (!firstError) {
+            firstError =
+              rowErr instanceof Error
+                ? rowErr.message
+                : 'Unknown database error during contact create';
+          }
+          skipped++;
+        }
+      }
     }
   }
 
@@ -147,7 +256,7 @@ async function bulkImportContacts(
   // is almost certainly misconfigured (e.g. the `Contact` table is missing in
   // Supabase). Surface a 500 with the real error so the caller can fix it,
   // instead of a misleading 200 with imported:0.
-  if (imported === 0 && skipped === contacts.length && firstError) {
+  if (imported === 0 && skipped > 0 && firstError) {
     console.error('[contacts/import] All rows failed. First error:', firstError);
     return NextResponse.json(
       {

@@ -180,8 +180,8 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error in bulk operation:', error);
 
-    // Extract a useful message from Prisma errors so the caller can diagnose
-    // schema mismatches (e.g. a missing table/column in the production DB).
+    // Extract a useful message from Prisma/Supabase errors so the caller can
+    // diagnose schema mismatches (e.g. a missing table/column in the DB).
     const message =
       error instanceof Error
         ? error.message
@@ -189,10 +189,10 @@ export async function POST(request: NextRequest) {
           ? error
           : 'Unknown error';
 
-    // Detect common Prisma "table/column does not exist" errors so we can
-    // give an actionable hint about running db:push against the production DB.
+    // Detect common "table/column does not exist" errors so we can give an
+    // actionable hint about syncing the production DB schema.
     const isSchemaError =
-      /does not exist|Unknown column|no such table|no such column|relation .* does not exist/i.test(
+      /does not exist|Unknown column|no such table|no such column|relation .* does not exist|Could not find/i.test(
         message
       );
 
@@ -200,9 +200,11 @@ export async function POST(request: NextRequest) {
       {
         error: 'Failed to perform bulk operation.',
         detail: message,
+        action,
+        contactIdsCount: contactIds?.length ?? 0,
         ...(isSchemaError
           ? {
-              hint: 'The database schema appears to be out of sync. Run `bun run db:push` against the production database (point DATABASE_URL at Supabase, push, then revert) to sync missing tables/columns.',
+              hint: 'The database schema appears to be out of sync. Run the supabase-migration.sql in the Supabase SQL Editor to create any missing tables/columns.',
             }
           : {}),
       },

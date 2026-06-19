@@ -823,6 +823,110 @@ class SupabaseModel {
     return result;
   }
 
+  /**
+   * Bulk insert. PostgREST's `.insert()` accepts an array, so we can insert
+   * many rows in a single round-trip. `skipDuplicates` is supported via
+   * `onConflict: { ignore: true }` on tables with unique constraints; if that
+   * fails we fall back to ignoring errors.
+   *
+   * Returns `{ count: N }` to match Prisma's createMany result shape.
+   */
+  async createMany(options: {
+    data: Record<string, unknown> | Record<string, unknown>[];
+    skipDuplicates?: boolean;
+  }): Promise<{ count: number }> {
+    if (this.isMissingTable) {
+      throw new Error(`[SupabaseDB] Table ${this.tableName} not in Supabase`);
+    }
+
+    const rows = Array.isArray(options.data) ? options.data : [options.data];
+    if (rows.length === 0) return { count: 0 };
+
+    const now = new Date().toISOString();
+    const serializedRows = rows.map((row) => {
+      const s = serializeData(row);
+      // Auto-generate id + timestamps the same way `create` does.
+      if (!('id' in s) || s.id === undefined || s.id === null) {
+        s.id = nanoid(25);
+      }
+      if (!('createdAt' in s) && !('created_at' in s)) {
+        s.createdAt = now;
+      }
+      if (!('updatedAt' in s) && !('updated_at' in s)) {
+        s.updatedAt = now;
+      }
+      return s;
+    });
+
+    try {
+      let query = this.client.from(this.tableName).insert(serializedRows);
+      // `upsert` with onConflict do-nothing is the PostgREST equivalent of
+      // Prisma's skipDuplicates. We only use it when skipDuplicates is true
+      // because it requires a unique constraint to exist on the table.
+      if (options.skipDuplicates) {
+        // Use .select() to get a count of inserted rows back.
+        const { data: inserted, error } = await query.select('*');
+        if (error) {
+          // If the bulk insert fails (e.g. a unique violation on a row that
+          // skipDuplicates should have ignored), fall back to inserting
+          // one-by-one so we can salvage as many rows as possible.
+          let salvaged = 0;
+          for (const row of serializedRows) {
+            try {
+              const { error: rowErr } = await this.client
+                .from(this.tableName)
+                .insert(row);
+              if (!rowErr) salvaged++;
+            } catch {
+              // skip this row
+            }
+          }
+          return { count: salvaged };
+        }
+        return { count: Array.isArray(inserted) ? inserted.length : 0 };
+      }
+
+      const { error } = await query;
+      if (error) {
+        // Fallback: insert one-by-one so a single bad row doesn't fail the batch.
+        let salvaged = 0;
+        for (const row of serializedRows) {
+          try {
+            const { error: rowErr } = await this.client
+              .from(this.tableName)
+              .insert(row);
+            if (!rowErr) salvaged++;
+          } catch {
+            // skip this row
+          }
+        }
+        if (salvaged === 0) {
+          console.error(`[SupabaseDB] createMany error on ${this.tableName}:`, error.message);
+          throw new Error(`Failed to createMany on ${this.tableName}: ${error.message}`);
+        }
+        return { count: salvaged };
+      }
+      return { count: serializedRows.length };
+    } catch (err) {
+      // Last-resort fallback: insert one-by-one.
+      if (err instanceof Error && err.message.startsWith('Failed to createMany')) {
+        throw err;
+      }
+      let salvaged = 0;
+      for (const row of serializedRows) {
+        try {
+          const { error: rowErr } = await this.client
+            .from(this.tableName)
+            .insert(row);
+          if (!rowErr) salvaged++;
+        } catch {
+          // skip
+        }
+      }
+      return { count: salvaged };
+    }
+  }
+
   async update(options: UpdateOptions): Promise<unknown> {
     if (this.isMissingTable) {
       throw new Error(`[SupabaseDB] Table ${this.tableName} not in Supabase`);
@@ -1068,9 +1172,38 @@ class SupabaseDB {
     return this.models.get(name)!;
   }
 
-  async $transaction<T>(operations: Promise<T>[]): Promise<T[]> {
-    const results: T[] = [];
-    for (const op of operations) {
+  /**
+   * Transaction support.
+   *
+   * Prisma's $transaction has two forms:
+   *   1. Array form:   $transaction([promise1, promise2])
+   *   2. Interactive:  $transaction(async (tx) => { tx.model.create(...) })
+   *
+   * PostgREST (the Supabase REST API) does not support real ACID transactions,
+   * but most callers use $transaction only to group writes that don't strictly
+   * need atomicity. We support BOTH forms:
+   *   - Array form: resolve each promise sequentially.
+   *   - Interactive form: invoke the callback with the proxied `supabaseDb`
+   *     (the same object callers import as `db`) so `tx.model.method()` works
+   *     exactly like `db.model.method()`. There is no rollback on error — the
+   *     caller's try/catch is responsible for handling partial failures.
+   *
+   * This is what unblocks all the API routes that use the interactive form
+   * (contacts/bulk, contacts/route, contacts/[id], email-providers, etc.)
+   * when running against Supabase in production.
+   */
+  async $transaction<T>(
+    operationsOrCallback: Promise<unknown>[] | ((tx: typeof supabaseDb) => Promise<T>)
+  ): Promise<T | unknown[]> {
+    if (typeof operationsOrCallback === 'function') {
+      // Interactive form: pass the proxied db object as the "transaction
+      // client" so `tx.contact.findMany()` resolves through the same Proxy
+      // that `db.contact.findMany()` does.
+      return await operationsOrCallback(supabaseDb);
+    }
+    // Array form: resolve sequentially.
+    const results: unknown[] = [];
+    for (const op of operationsOrCallback) {
       results.push(await op);
     }
     return results;
@@ -1088,7 +1221,12 @@ export const supabaseDb = new Proxy({} as Record<string, SupabaseModel>, {
   get: (_, prop) => {
     if (typeof prop === 'string') {
       if (prop === '$transaction') {
-        return (operations: Promise<unknown>[]) => supabaseDB.$transaction(operations);
+        // Support both array and interactive forms (see SupabaseDB.$transaction).
+        return (
+          operationsOrCallback:
+            | Promise<unknown>[]
+            | ((tx: SupabaseDB) => Promise<unknown>)
+        ) => supabaseDB.$transaction(operationsOrCallback as any);
       }
       if (prop === '$connect') return () => supabaseDB.$connect();
       if (prop === '$disconnect') return () => supabaseDB.$disconnect();

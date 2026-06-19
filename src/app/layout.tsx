@@ -34,15 +34,14 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   icons: {
     icon: [
-      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
-      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
       { url: "/logo.svg", sizes: "any", type: "image/svg+xml" },
+      { url: "/icon.svg", sizes: "any", type: "image/svg+xml" },
     ],
-    apple: [
-      { url: "/apple-touch-icon-180x180.png", sizes: "180x180", type: "image/png" },
-      { url: "/apple-touch-icon-152x152.png", sizes: "152x152", type: "image/png" },
-      { url: "/apple-touch-icon-120x120.png", sizes: "120x120", type: "image/png" },
-    ],
+    // Apple touch icons: we only ship an SVG, but Safari requires a PNG for
+    // apple-touch-icon. Rather than 404 on every page load, we point at the
+    // SVG (Safari will simply skip it if it can't render, instead of logging
+    // a network error for a missing file).
+    apple: [{ url: "/icon.svg", sizes: "180x180", type: "image/svg+xml" }],
   },
   appleWebApp: {
     capable: true,
@@ -75,8 +74,8 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="format-detection" content="telephone=no" />
         <meta name="msapplication-TileColor" content="#10b981" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" />
-        <link rel="apple-touch-startup-image" href="/icon-512x512.png" />
+        <link rel="apple-touch-icon" href="/icon.svg" />
+        <link rel="apple-touch-startup-image" href="/icon.svg" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}

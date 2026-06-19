@@ -58,9 +58,23 @@ export async function POST(
       },
     })
 
-    // Build the activation URL — must include the company slug.
+    // Build the activation URL. Resolve the tenant slug the same way as
+    // /api/customers/[id]/portal/enable: prefer the customer's workspace→tenant
+    // chain, but fall back to the authenticated staff user's tenantId so we
+    // never generate a slug-less URL when the customer has no workspace.
     const baseUrl = getAppUrl(request)
-    const slug = customer.workspace?.tenant?.slug
+    let slug = customer.workspace?.tenant?.slug || null
+    if (!slug && user.tenantId) {
+      try {
+        const tenant = await db.tenant.findUnique({
+          where: { id: user.tenantId },
+          select: { slug: true },
+        })
+        slug = tenant?.slug || null
+      } catch {
+        // ignore — fall back to slug-less URL (handled by /accept-invite route)
+      }
+    }
     const activationUrl = slug
       ? `${baseUrl}/${slug}/accept-invite?token=${token}`
       : `${baseUrl}/accept-invite?token=${token}`
