@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Plus,
   KeyRound,
@@ -70,51 +70,6 @@ interface CredentialItem {
   isActive: boolean;
 }
 
-// ─── Mock Data ──────────────────────────────────────────────────────────────
-
-const MOCK_CREDENTIALS: CredentialItem[] = [
-  {
-    id: 'cred1', name: 'WhatsApp Business API', type: 'whatsapp', serviceName: 'Meta / WhatsApp',
-    data: { phoneNumberId: '1234567890', businessAccountId: 'BIZ-9876', apiKey: 'wh_api_k8f2j9d7s3m1n5p0q4r6', webhookVerifyToken: 'verify_token_xyz789' },
-    lastUsedAt: '2025-03-13T14:30:00Z', expiresAt: null, createdAt: '2025-01-15T10:00:00Z', updatedAt: '2025-03-10T14:30:00Z', isActive: true,
-  },
-  {
-    id: 'cred2', name: 'Stripe Payment Gateway', type: 'apiKey', serviceName: 'Stripe',
-    data: { secretKey: 'sk_live_4eC39HqLyjWDarjtT1zdp7dc', publishableKey: 'pk_live_1234567890abcdef' },
-    lastUsedAt: '2025-03-13T12:00:00Z', expiresAt: null, createdAt: '2025-01-20T08:00:00Z', updatedAt: '2025-02-15T09:00:00Z', isActive: true,
-  },
-  {
-    id: 'cred3', name: 'Google OAuth Integration', type: 'oAuth2', serviceName: 'Google Cloud',
-    data: { clientId: '103697710141-q4l7vubq2dalip21qb31pdo9jemf8uk4.apps.googleusercontent.com', clientSecret: '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', refreshToken: '1//0g7h8i9j0k1l2m3n4o5p6q7r8s9t0u' },
-    lastUsedAt: '2025-03-12T16:00:00Z', expiresAt: '2025-12-31T23:59:59Z', createdAt: '2025-02-01T12:00:00Z', updatedAt: '2025-03-01T10:00:00Z', isActive: true,
-  },
-  {
-    id: 'cred4', name: 'SMTP Email Server', type: 'httpBasic', serviceName: 'SendGrid',
-    data: { host: 'smtp.sendgrid.net', port: '587', username: 'apikey', password: 'SG.abc123def456ghi789jkl012mno345pqr678stu901vwx234yz' },
-    lastUsedAt: '2025-03-11T09:00:00Z', expiresAt: null, createdAt: '2025-02-10T14:00:00Z', updatedAt: '2025-02-10T14:00:00Z', isActive: true,
-  },
-  {
-    id: 'cred5', name: 'Database Connection', type: 'dbConnection', serviceName: 'PostgreSQL / Supabase',
-    data: { host: 'db.supabase.co', port: '5432', database: 'serviceos_prod', username: 'admin', password: 'Pr0d$ecureP@ssw0rd!2025', sslMode: 'require' },
-    lastUsedAt: '2025-03-13T14:00:00Z', expiresAt: null, createdAt: '2025-01-10T08:00:00Z', updatedAt: '2025-03-05T11:00:00Z', isActive: true,
-  },
-  {
-    id: 'cred6', name: 'AWS S3 Storage', type: 'awsIam', serviceName: 'Amazon Web Services',
-    data: { accessKeyId: 'AKIA5F2J9D7S3M1N5P0Q', secretAccessKey: 'r7s8t9u0v1w2x3y4z5a6b7c8d9e0f1g2', region: 'us-east-1', bucket: 'serviceos-uploads' },
-    lastUsedAt: '2025-03-10T11:00:00Z', expiresAt: null, createdAt: '2025-03-01T09:00:00Z', updatedAt: '2025-03-01T09:00:00Z', isActive: true,
-  },
-  {
-    id: 'cred7', name: 'Slack Webhook (Expired)', type: 'httpBearer', serviceName: 'Slack',
-    data: { token: 'xoxb-1234567890-1234567890123-AbCdEfGhIjKlMnOpQrStUvWxYz' },
-    lastUsedAt: '2025-02-28T10:00:00Z', expiresAt: '2025-03-01T00:00:00Z', createdAt: '2024-12-01T10:00:00Z', updatedAt: '2025-02-01T09:00:00Z', isActive: false,
-  },
-  {
-    id: 'cred8', name: 'SSH Server Access', type: 'sshKey', serviceName: 'DigitalOcean',
-    data: { host: '192.168.1.100', port: '22', username: 'deploy', privateKey: '-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA...\n-----END RSA PRIVATE KEY-----' },
-    lastUsedAt: '2025-03-08T15:00:00Z', expiresAt: null, createdAt: '2025-01-25T08:00:00Z', updatedAt: '2025-01-25T08:00:00Z', isActive: true,
-  },
-];
-
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const typeConfig: Record<string, { icon: React.ElementType; label: string; color: string; bgColor: string }> = {
@@ -167,8 +122,8 @@ function isSensitiveField(field: string): boolean {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function CredentialsView() {
-  const [credentials, setCredentials] = useState<CredentialItem[]>(MOCK_CREDENTIALS);
-  const [loading] = useState(false);
+  const [credentials, setCredentials] = useState<CredentialItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -191,6 +146,37 @@ export function CredentialsView() {
   const [editCredFields, setEditCredFields] = useState<Record<string, string>>({});
   const [editRevealedFields, setEditRevealedFields] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
+
+  // ─── Fetch credentials from API ──────────────────────────────────────────
+  const fetchCredentials = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/credentials');
+      if (!res.ok) throw new Error('Failed to load credentials');
+      const json = await res.json();
+      const items: CredentialItem[] = (json.credentials || []).map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        type: c.type,
+        serviceName: (c.data && c.data.serviceName) || c.type,
+        data: c.data || {},
+        lastUsedAt: c.lastUsedAt || null,
+        expiresAt: c.expiresAt || null,
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+        isActive: c.isActive ?? true,
+      }));
+      setCredentials(items);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load credentials');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCredentials();
+  }, [fetchCredentials]);
 
   // Stats
   const stats = {
@@ -225,25 +211,49 @@ export function CredentialsView() {
     return editRevealedFields[fieldKey] || false;
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!newCredName.trim()) { toast.error('Credential name is required'); return; }
-    const newCred: CredentialItem = {
-      id: `cred-${Date.now()}`, name: newCredName.trim(), type: newCredType,
-      serviceName: newCredService.trim() || 'Custom', data: { ...newCredFields },
-      lastUsedAt: null, expiresAt: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), isActive: true,
-    };
-    setCredentials(prev => [newCred, ...prev]);
-    setDialogOpen(false);
-    setNewCredName('');
-    setNewCredType('whatsapp');
-    setNewCredService('');
-    setNewCredFields({});
-    toast.success('Credential created');
+    setSaving(true);
+    try {
+      const res = await fetch('/api/credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newCredName.trim(),
+          type: newCredType,
+          data: { ...newCredFields, serviceName: newCredService.trim() || 'Custom' },
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to create credential');
+      }
+      setDialogOpen(false);
+      setNewCredName('');
+      setNewCredType('whatsapp');
+      setNewCredService('');
+      setNewCredFields({});
+      toast.success('Credential created');
+      await fetchCredentials();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create credential');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleDelete = (id: string) => {
-    setCredentials(prev => prev.filter(c => c.id !== id));
-    toast.success('Credential deleted');
+  const handleDelete = async (id: string) => {
+    try {
+      const res = await fetch(`/api/credentials/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to delete credential');
+      }
+      setCredentials(prev => prev.filter(c => c.id !== id));
+      toast.success('Credential deleted');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete credential');
+    }
   };
 
   const openEdit = (cred: CredentialItem) => {
@@ -255,24 +265,53 @@ export function CredentialsView() {
     setEditRevealedFields({});
   };
 
-  const handleEditSave = () => {
+  const handleEditSave = async () => {
     if (!editCredName.trim()) { toast.error('Credential name is required'); return; }
+    if (!editCredId) { toast.error('No credential selected'); return; }
     setSaving(true);
-    
-    // Simulate save
-    setTimeout(() => {
+    try {
+      // Strip out any masked ('••••') values so we don't overwrite real secrets with the mask.
+      const cleanedFields: Record<string, string> = {};
+      for (const [k, v] of Object.entries(editCredFields)) {
+        if (typeof v === 'string' && v.includes('••••')) continue;
+        cleanedFields[k] = v;
+      }
+      const res = await fetch(`/api/credentials/${editCredId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editCredName.trim(),
+          type: editCredType,
+          data: { ...cleanedFields, serviceName: editCredService.trim() || 'Custom' },
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to update credential');
+      }
+      const updated = await res.json();
       setCredentials(prev => prev.map(c =>
         c.id === editCredId
-          ? { ...c, name: editCredName.trim(), serviceName: editCredService.trim() || c.serviceName, data: { ...editCredFields }, updatedAt: new Date().toISOString() }
+          ? {
+              ...c,
+              name: updated.name || editCredName.trim(),
+              serviceName: editCredService.trim() || c.serviceName,
+              data: updated.data || { ...cleanedFields },
+              updatedAt: updated.updatedAt || new Date().toISOString(),
+            }
           : c
       ));
-      setSaving(false);
       setIsDetailEditMode(false);
       setEditCredId(null);
-      // Update selectedCred to reflect changes in detail view
-      setSelectedCred(prev => prev ? { ...prev, name: editCredName.trim(), serviceName: editCredService.trim() || prev.serviceName, data: { ...editCredFields }, updatedAt: new Date().toISOString() } : null);
+      setSelectedCred(prev => prev
+        ? { ...prev, name: editCredName.trim(), serviceName: editCredService.trim() || prev.serviceName, data: { ...cleanedFields }, updatedAt: new Date().toISOString() }
+        : null);
       toast.success('Credential updated');
-    }, 500);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update credential');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleCopy = (value: string) => {
@@ -288,7 +327,8 @@ export function CredentialsView() {
   // Dynamic fields for create dialog based on type
   const getCreateFields = (): string[] => {
     switch (newCredType) {
-      case 'whatsapp': return ['phoneNumberId', 'businessAccountId', 'apiKey', 'webhookVerifyToken'];
+      // WhatsApp Business API (Meta Cloud API): accessToken + phoneNumberId + wabaId + optional webhookVerifyToken
+      case 'whatsapp': return ['accessToken', 'phoneNumberId', 'wabaId', 'webhookVerifyToken'];
       case 'apiKey': return ['apiKey'];
       case 'httpBasic': return ['username', 'password'];
       case 'httpBearer': return ['token'];
@@ -304,7 +344,9 @@ export function CredentialsView() {
   // Field display labels
   const getFieldLabel = (field: string): string => {
     const labels: Record<string, string> = {
+      accessToken: 'Access Token',
       phoneNumberId: 'Phone Number ID',
+      wabaId: 'WhatsApp Business Account ID',
       businessAccountId: 'Business Account ID',
       apiKey: 'API Key',
       webhookVerifyToken: 'Webhook Verify Token',
@@ -556,7 +598,9 @@ export function CredentialsView() {
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreate} disabled={!newCredName.trim()}>Create</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreate} disabled={!newCredName.trim() || saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

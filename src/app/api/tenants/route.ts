@@ -33,7 +33,25 @@ export async function GET(request: NextRequest) {
         take: limit,
         include: {
           _count: {
-            select: { users: true, employees: true, customers: true, jobs: true },
+            // NOTE: only relations that exist on the Tenant model.
+            // (Previous code referenced `employees`, `customers`, `jobs`
+            // which are NOT direct relations of Tenant — they live under
+            // Workspace/Employee/Customer/Job with their own tenantId.)
+            select: {
+              users: true,
+              workspaces: true,
+              leads: true,
+              invoices: true,
+              subscriptions: true,
+              services: true,
+              reviews: true,
+              notifications: true,
+              quotes: true,
+              conversations: true,
+              forms: true,
+              workflowAutomations: true,
+              invitations: true,
+            },
           },
         },
       }),
@@ -68,13 +86,11 @@ export async function POST(request: NextRequest) {
       plan,
       industry,
       country,
-      timezone,
       currency,
-      domain,
-      logoUrl,
-      primaryColor,
-      accentColor,
-      billingEmail,
+      email,
+      phone,
+      address,
+      whatsappPhone,
     } = body
 
     if (!name) {
@@ -110,14 +126,12 @@ export async function POST(request: NextRequest) {
         slug: generatedSlug,
         plan: plan || 'starter',
         industry: industry ?? null,
-        country: country ?? null,
-        timezone: timezone ?? 'Asia/Kolkata',
-        currency: currency ?? 'INR',
-        domain: domain ?? null,
-        logoUrl: logoUrl ?? null,
-        primaryColor: primaryColor ?? '#10b981',
-        accentColor: accentColor ?? null,
-        billingEmail: billingEmail ?? null,
+        country: country ?? 'US',
+        currency: currency ?? 'USD',
+        email: email ?? null,
+        phone: phone ?? null,
+        address: address ?? null,
+        whatsappPhone: whatsappPhone ?? null,
       },
     })
 

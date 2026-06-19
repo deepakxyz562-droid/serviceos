@@ -60,6 +60,7 @@ export async function GET() {
             address: user.tenant.address,
             country: user.tenant.country,
             currency: user.tenant.currency,
+            whatsappPhone: user.tenant.whatsappPhone,
             plan: user.tenant.plan,
             planStatus: user.tenant.planStatus,
             trialEndsAt: user.tenant.trialEndsAt,

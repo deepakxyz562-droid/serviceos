@@ -56,6 +56,7 @@ import { useAppStore } from '@/store/app-store';
 import { toast } from 'sonner';
 import { CURRENCIES as SHARED_CURRENCIES } from '@/lib/currency';
 import { invalidateCurrencyCache } from '@/hooks/use-company-currency';
+import { authFetch } from '@/lib/api';
 
 // ─── Event Webhook Types ──────────────────────────────────────────────────
 
@@ -141,6 +142,34 @@ const INDUSTRIES = [
   'Other',
 ];
 
+/**
+ * Build the list of industry options to render in the dropdown.
+ * Always includes the tenant's current industry value even if it
+ * doesn't match one of the canonical INDUSTRIES (e.g. legacy
+ * kebab-case values like 'home-services' or 'packers-movers'),
+ * so the <Select> doesn't silently render an empty value.
+ */
+function getIndustryOptions(currentIndustry: string): string[] {
+  if (!currentIndustry) return INDUSTRIES;
+  const lower = currentIndustry.toLowerCase();
+  const exists = INDUSTRIES.some((i) => i.toLowerCase() === lower);
+  return exists ? INDUSTRIES : [...INDUSTRIES, currentIndustry];
+}
+
+/**
+ * Normalize legacy kebab-case industry values to the canonical
+ * display form so the dropdown shows a clean value instead of an
+ * unknown slug. Falls back to the original value if no mapping exists.
+ */
+function normalizeIndustry(value: string): string {
+  if (!value) return '';
+  const map: Record<string, string> = {
+    'home-services': 'Home Services',
+    'packers-movers': 'Moving',
+  };
+  return map[value.toLowerCase()] || value;
+}
+
 const CURRENCIES = [
   { value: 'INR', label: 'INR (₹) — Indian Rupee' },
   { value: 'USD', label: 'USD ($) — US Dollar' },
@@ -167,6 +196,7 @@ export function SettingsView() {
 
   // ─── Company Profile State ─────────────────────────────────────────────
   const [tenantId, setTenantId] = useState<string | null>(null);
+  const [workspaceSlug, setWorkspaceSlug] = useState<string>('');
   const [companyForm, setCompanyForm] = useState({
     name: '',
     industry: '',
@@ -293,7 +323,7 @@ export function SettingsView() {
 
           setCompanyForm({
             name: tenant.name || '',
-            industry: tenant.industry || '',
+            industry: normalizeIndustry(tenant.industry || ''),
             currency: tenant.currency || 'INR',
             phone: tenant.phone || '',
             email: tenant.email || '',
@@ -392,7 +422,7 @@ export function SettingsView() {
         country: companyForm.country,
       };
 
-      const res = await fetch(`/api/tenants/${tenantId}?XTransformPort=3000`, {
+      const res = await authFetch(`/api/tenants/${tenantId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -413,8 +443,11 @@ export function SettingsView() {
       if (res.ok) {
         invalidateCurrencyCache(); // Currency may have changed – invalidate cache so other views pick up the change
         toast.success('Company profile saved successfully');
+        // Re-fetch tenant data so the form reflects the persisted state
+        // (also normalizes industry for the dropdown).
+        await fetchTenantData();
       } else {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
         toast.error(err.error || 'Failed to save company profile');
       }
     } catch {
@@ -774,7 +807,7 @@ export function SettingsView() {
                           <SelectValue placeholder="Select industry" />
                         </SelectTrigger>
                         <SelectContent>
-                          {INDUSTRIES.map((ind) => (
+                          {getIndustryOptions(companyForm.industry).map((ind) => (
                             <SelectItem key={ind} value={ind}>{ind}</SelectItem>
                           ))}
                         </SelectContent>
