@@ -19,8 +19,24 @@ interface BulkBody {
   status?: string;
 }
 
-// POST /api/contacts/bulk — perform bulk operations on contacts
+/**
+ * POST /api/contacts/bulk — perform bulk operations on contacts.
+ *
+ * This route intentionally does NOT use db.$transaction because:
+ *   1. With the Supabase REST adapter, $transaction is not truly atomic —
+ *      each PostgREST call is an independent HTTP request.
+ *   2. The interactive callback form of $transaction can fail in subtle ways
+ *      with the proxy-based adapter.
+ *
+ * Instead, each action is executed directly against `db` with explicit
+ * try/catch blocks. This is simpler, more debuggable, and equally "atomic"
+ * (which is to say: not atomic, but that's the best Supabase REST can do).
+ */
 export async function POST(request: NextRequest) {
+  const step = '[contacts/bulk]';
+  let action: string = 'unknown';
+  let contactIdsCount = 0;
+
   try {
     const user = await getAuthUser();
     if (!user) {
@@ -28,8 +44,21 @@ export async function POST(request: NextRequest) {
     }
     const tenantId = user.tenantId || 'default';
 
-    const body = (await request.json()) as BulkBody;
-    const { action } = body;
+    let body: BulkBody;
+    try {
+      body = (await request.json()) as BulkBody;
+    } catch {
+      return NextResponse.json(
+        { error: 'Invalid JSON body' },
+        { status: 400 }
+      );
+    }
+
+    action = body.action;
+    contactIdsCount = Array.isArray(body.contactIds)
+      ? body.contactIds.length
+      : 0;
+
     const contactIds = Array.isArray(body.contactIds)
       ? body.contactIds.map(String).filter(Boolean)
       : [];
@@ -50,7 +79,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
 
-    // Validate group/tag ownership where applicable
+    // ── Validate group/tag ownership ──────────────────────────────────────
     if (action === 'addToGroup' || action === 'removeFromGroup') {
       if (!body.groupId) {
         return NextResponse.json(
@@ -91,86 +120,115 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Fetch only the contacts that belong to this tenant
+    // ── Fetch only the contacts that belong to this tenant ────────────────
     const owned = await db.contact.findMany({
       where: { id: { in: contactIds }, tenantId },
       select: { id: true },
     });
-    const ownedIds = owned.map((c) => c.id);
+    const ownedIds = owned.map((c: { id: string }) => c.id);
     const skippedCount = contactIds.length - ownedIds.length;
+
+    if (ownedIds.length === 0) {
+      return NextResponse.json({
+        success: 0,
+        failed: 0,
+        skipped: skippedCount,
+      });
+    }
 
     let success = 0;
     let failed = 0;
 
-    await db.$transaction(async (tx) => {
-      if (ownedIds.length === 0) return;
-
-      try {
-        switch (action) {
-          case 'addToGroup': {
-            success = await addContactsToGroup(
-              body.groupId!,
-              ownedIds,
-              user.id,
-              tx
-            );
-            // Sync memberCount for the group
-            const cnt = await tx.contactGroup.count({
+    // ── Execute the action ────────────────────────────────────────────────
+    // Each case has its own try/catch so a failure in one action doesn't
+    // obscure the actual error.
+    try {
+      switch (action) {
+        case 'addToGroup': {
+          // Add contacts to the group (skips existing pairs internally)
+          success = await addContactsToGroup(
+            body.groupId!,
+            ownedIds,
+            user.id,
+            db as any
+          );
+          // Sync memberCount
+          try {
+            const cnt = await db.contactGroup.count({
               where: { groupId: body.groupId! },
             });
-            await tx.group.update({
+            await db.group.update({
               where: { id: body.groupId! },
               data: { memberCount: cnt },
             });
-            break;
+          } catch (syncErr) {
+            // memberCount sync is best-effort — don't fail the whole operation
+            console.warn(`${step} memberCount sync failed:`, syncErr);
           }
-          case 'removeFromGroup': {
-            const res = await tx.contactGroup.deleteMany({
-              where: { groupId: body.groupId!, contactId: { in: ownedIds } },
-            });
-            success = res.count;
-            const cnt = await tx.contactGroup.count({
-              where: { groupId: body.groupId! },
-            });
-            await tx.group.update({
-              where: { id: body.groupId! },
-              data: { memberCount: cnt },
-            });
-            break;
-          }
-          case 'applyTag': {
-            success = await applyTagToContacts(body.tagId!, ownedIds, user.id, tx);
-            break;
-          }
-          case 'removeTag': {
-            const res = await tx.contactTag.deleteMany({
-              where: { tagId: body.tagId!, contactId: { in: ownedIds } },
-            });
-            success = res.count;
-            break;
-          }
-          case 'updateStatus': {
-            const res = await tx.contact.updateMany({
-              where: { id: { in: ownedIds } },
-              data: { status: body.status! },
-            });
-            success = res.count;
-            break;
-          }
-          case 'delete': {
-            const res = await tx.contact.deleteMany({
-              where: { id: { in: ownedIds } },
-            });
-            success = res.count;
-            break;
-          }
+          break;
         }
-      } catch (err) {
-        console.error('Bulk transaction error:', err);
-        failed = ownedIds.length;
-        throw err;
+
+        case 'removeFromGroup': {
+          const res = await db.contactGroup.deleteMany({
+            where: { groupId: body.groupId!, contactId: { in: ownedIds } },
+          });
+          success = res.count;
+          // Sync memberCount
+          try {
+            const cnt = await db.contactGroup.count({
+              where: { groupId: body.groupId! },
+            });
+            await db.group.update({
+              where: { id: body.groupId! },
+              data: { memberCount: cnt },
+            });
+          } catch (syncErr) {
+            console.warn(`${step} memberCount sync failed:`, syncErr);
+          }
+          break;
+        }
+
+        case 'applyTag': {
+          success = await applyTagToContacts(
+            body.tagId!,
+            ownedIds,
+            user.id,
+            db as any
+          );
+          break;
+        }
+
+        case 'removeTag': {
+          const res = await db.contactTag.deleteMany({
+            where: { tagId: body.tagId!, contactId: { in: ownedIds } },
+          });
+          success = res.count;
+          break;
+        }
+
+        case 'updateStatus': {
+          const res = await db.contact.updateMany({
+            where: { id: { in: ownedIds } },
+            data: { status: body.status! },
+          });
+          success = res.count;
+          break;
+        }
+
+        case 'delete': {
+          const res = await db.contact.deleteMany({
+            where: { id: { in: ownedIds } },
+          });
+          success = res.count;
+          break;
+        }
       }
-    });
+    } catch (actionErr) {
+      console.error(`${step} action '${action}' failed:`, actionErr);
+      failed = ownedIds.length;
+      // Re-throw to the outer catch, which will build the error response
+      throw actionErr;
+    }
 
     return NextResponse.json({
       success,
@@ -178,10 +236,8 @@ export async function POST(request: NextRequest) {
       skipped: skippedCount,
     });
   } catch (error) {
-    console.error('Error in bulk operation:', error);
+    console.error(`${step} outer error:`, error);
 
-    // Extract a useful message from Prisma/Supabase errors so the caller can
-    // diagnose schema mismatches (e.g. a missing table/column in the DB).
     const message =
       error instanceof Error
         ? error.message
@@ -189,19 +245,23 @@ export async function POST(request: NextRequest) {
           ? error
           : 'Unknown error';
 
-    // Detect common "table/column does not exist" errors so we can give an
-    // actionable hint about syncing the production DB schema.
+    // Detect common schema-mismatch errors
     const isSchemaError =
       /does not exist|Unknown column|no such table|no such column|relation .* does not exist|Could not find/i.test(
         message
       );
 
+    // Include the error name/code if available for better debugging
+    const errorName =
+      error instanceof Error ? error.constructor.name : 'Error';
+
     return NextResponse.json(
       {
         error: 'Failed to perform bulk operation.',
         detail: message,
+        errorType: errorName,
         action,
-        contactIdsCount: contactIds?.length ?? 0,
+        contactIdsCount,
         ...(isSchemaError
           ? {
               hint: 'The database schema appears to be out of sync. Run the supabase-migration.sql in the Supabase SQL Editor to create any missing tables/columns.',

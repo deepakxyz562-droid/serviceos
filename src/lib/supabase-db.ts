@@ -825,9 +825,13 @@ class SupabaseModel {
 
   /**
    * Bulk insert. PostgREST's `.insert()` accepts an array, so we can insert
-   * many rows in a single round-trip. `skipDuplicates` is supported via
-   * `onConflict: { ignore: true }` on tables with unique constraints; if that
-   * fails we fall back to ignoring errors.
+   * many rows in a single round-trip.
+   *
+   * IMPORTANT: Not all tables have `createdAt` / `updatedAt` columns. For
+   * example, `ContactGroup` has `addedAt` (not `createdAt`) and no
+   * `updatedAt`; `ContactTag` has `appliedAt` and no `updatedAt`. So we
+   * auto-generate only the `id` (always needed), try the insert, and if
+   * PostgREST rejects a column that doesn't exist, we strip it and retry.
    *
    * Returns `{ count: N }` to match Prisma's createMany result shape.
    */
@@ -842,89 +846,119 @@ class SupabaseModel {
     const rows = Array.isArray(options.data) ? options.data : [options.data];
     if (rows.length === 0) return { count: 0 };
 
-    const now = new Date().toISOString();
-    const serializedRows = rows.map((row) => {
+    // Only auto-generate the id. Don't add createdAt/updatedAt because many
+    // tables (ContactGroup, ContactTag, etc.) don't have those columns.
+    // The DB-level DEFAULT clauses handle timestamp defaults (e.g. addedAt
+    // with @default(now()) becomes DEFAULT now() in Postgres).
+    const baseRows = rows.map((row) => {
       const s = serializeData(row);
-      // Auto-generate id + timestamps the same way `create` does.
       if (!('id' in s) || s.id === undefined || s.id === null) {
         s.id = nanoid(25);
-      }
-      if (!('createdAt' in s) && !('created_at' in s)) {
-        s.createdAt = now;
-      }
-      if (!('updatedAt' in s) && !('updated_at' in s)) {
-        s.updatedAt = now;
       }
       return s;
     });
 
-    try {
-      let query = this.client.from(this.tableName).insert(serializedRows);
-      // `upsert` with onConflict do-nothing is the PostgREST equivalent of
-      // Prisma's skipDuplicates. We only use it when skipDuplicates is true
-      // because it requires a unique constraint to exist on the table.
-      if (options.skipDuplicates) {
-        // Use .select() to get a count of inserted rows back.
-        const { data: inserted, error } = await query.select('*');
+    // Attempt the bulk insert. If PostgREST reports that a column doesn't
+    // exist (e.g. the caller passed `createdAt` but the table has no such
+    // column), strip the offending column from ALL rows and retry once.
+    const attemptInsert = async (
+      data: Record<string, unknown>[]
+    ): Promise<{ count: number; error: string | null }> => {
+      try {
+        const { data: inserted, error } = await this.client
+          .from(this.tableName)
+          .insert(data)
+          .select('*');
         if (error) {
-          // If the bulk insert fails (e.g. a unique violation on a row that
-          // skipDuplicates should have ignored), fall back to inserting
-          // one-by-one so we can salvage as many rows as possible.
-          let salvaged = 0;
-          for (const row of serializedRows) {
-            try {
-              const { error: rowErr } = await this.client
-                .from(this.tableName)
-                .insert(row);
-              if (!rowErr) salvaged++;
-            } catch {
-              // skip this row
+          return { count: 0, error: error.message };
+        }
+        return {
+          count: Array.isArray(inserted) ? inserted.length : data.length,
+          error: null,
+        };
+      } catch (e) {
+        return {
+          count: 0,
+          error: e instanceof Error ? e.message : String(e),
+        };
+      }
+    };
+
+    // Try with the data as-is (caller-provided fields + auto id only).
+    let result = await attemptInsert(baseRows);
+
+    // If the error is about a missing column, strip that column and retry.
+    // PostgREST error messages look like:
+    //   'Could not find the `createdAt` column of `ContactGroup` in the schema cache'
+    //   'column "updatedAt" of relation "ContactGroup" does not exist'
+    if (result.error) {
+      const missingColMatch = result.error.match(
+        /(?:Could not find the `?(\w+)`? column|column "(\w+)" of relation)/
+      );
+      if (missingColMatch) {
+        const badCol = missingColMatch[1] || missingColMatch[2];
+        if (badCol) {
+          const strippedRows = baseRows.map((r) => {
+            const { [badCol]: _, ...rest } = r;
+            return rest;
+          });
+          result = await attemptInsert(strippedRows);
+          // If still failing, try stripping both createdAt and updatedAt
+          if (result.error) {
+            const stripped2 = strippedRows.map((r) => {
+              const { createdAt, updatedAt, created_at, updated_at, ...rest } = r as any;
+              return rest;
+            });
+            result = await attemptInsert(stripped2);
+          }
+        }
+      }
+    }
+
+    // If bulk insert succeeded, return the count.
+    if (!result.error) {
+      return { count: result.count };
+    }
+
+    // Fallback: insert rows one-by-one so a single bad row doesn't kill the
+    // whole batch. This also handles unique-constraint violations gracefully
+    // (the offending row is skipped, the rest succeed).
+    console.warn(
+      `[SupabaseDB] createMany bulk insert failed on ${this.tableName}, falling back to one-by-one:`,
+      result.error
+    );
+    let salvaged = 0;
+    let lastError = result.error;
+    for (const row of baseRows) {
+      const { error: rowErr } = await this.client
+        .from(this.tableName)
+        .insert(row);
+      if (rowErr) {
+        // If the error is about a missing column, strip it from remaining rows
+        const colMatch = rowErr.message?.match(
+          /(?:Could not find the `?(\w+)`? column|column "(\w+)" of relation)/
+        );
+        if (colMatch) {
+          const badCol = colMatch[1] || colMatch[2];
+          if (badCol) {
+            for (const r of baseRows) {
+              delete r[badCol];
             }
           }
-          return { count: salvaged };
         }
-        return { count: Array.isArray(inserted) ? inserted.length : 0 };
+        lastError = rowErr.message;
+      } else {
+        salvaged++;
       }
-
-      const { error } = await query;
-      if (error) {
-        // Fallback: insert one-by-one so a single bad row doesn't fail the batch.
-        let salvaged = 0;
-        for (const row of serializedRows) {
-          try {
-            const { error: rowErr } = await this.client
-              .from(this.tableName)
-              .insert(row);
-            if (!rowErr) salvaged++;
-          } catch {
-            // skip this row
-          }
-        }
-        if (salvaged === 0) {
-          console.error(`[SupabaseDB] createMany error on ${this.tableName}:`, error.message);
-          throw new Error(`Failed to createMany on ${this.tableName}: ${error.message}`);
-        }
-        return { count: salvaged };
-      }
-      return { count: serializedRows.length };
-    } catch (err) {
-      // Last-resort fallback: insert one-by-one.
-      if (err instanceof Error && err.message.startsWith('Failed to createMany')) {
-        throw err;
-      }
-      let salvaged = 0;
-      for (const row of serializedRows) {
-        try {
-          const { error: rowErr } = await this.client
-            .from(this.tableName)
-            .insert(row);
-          if (!rowErr) salvaged++;
-        } catch {
-          // skip
-        }
-      }
-      return { count: salvaged };
     }
+
+    if (salvaged === 0) {
+      throw new Error(
+        `Failed to createMany on ${this.tableName}: ${lastError}`
+      );
+    }
+
+    return { count: salvaged };
   }
 
   async update(options: UpdateOptions): Promise<unknown> {
