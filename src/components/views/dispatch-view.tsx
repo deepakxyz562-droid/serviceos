@@ -616,7 +616,9 @@ export function DispatchView() {
           </div>
           <div>
             <h2 className="text-xl font-bold tracking-tight">Smart Dispatch Center</h2>
-            <p className="text-sm text-muted-foreground">Real-time job assignment & employee management</p>
+            <p className="text-sm text-muted-foreground">
+              Advanced scheduling center for bulk assignment, workforce management, and route planning.
+            </p>
           </div>
         </div>
 

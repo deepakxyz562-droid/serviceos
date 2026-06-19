@@ -3,6 +3,12 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 
 // GET /api/tags — list tags for current tenant with contactCount
+//
+// NOTE: We compute `contactCount` via an explicit `ContactTag` query instead
+// of Prisma's `_count: { select: { contacts: true } }`. The Supabase REST
+// adapter doesn't support `_count` for many-to-many relations (it assumes a
+// direct FK and queries the wrong table), which meant contactCount was always
+// 0 in production. Doing it explicitly works on both SQLite and Supabase.
 export async function GET(request: NextRequest) {
   try {
     const user = await getAuthUser();
@@ -22,14 +28,24 @@ export async function GET(request: NextRequest) {
     const tags = await db.tag.findMany({
       where,
       orderBy: { name: 'asc' },
-      include: {
-        _count: { select: { contacts: true } },
-      },
     });
+
+    // Compute contactCount per tag via a single grouped query on ContactTag.
+    const tagIds = tags.map((t) => t.id);
+    const counts = tagIds.length > 0
+      ? await db.contactTag.findMany({
+          where: { tagId: { in: tagIds } },
+          select: { tagId: true },
+        })
+      : [];
+    const countByTag = new Map<string, number>();
+    for (const c of counts) {
+      countByTag.set(c.tagId, (countByTag.get(c.tagId) || 0) + 1);
+    }
 
     const data = tags.map((t) => ({
       ...t,
-      contactCount: t._count.contacts,
+      contactCount: countByTag.get(t.id) || 0,
     }));
 
     return NextResponse.json({ data });
@@ -76,13 +92,10 @@ export async function POST(request: NextRequest) {
         tenantId,
         workspaceId: user.workspaceId || null,
       },
-      include: {
-        _count: { select: { contacts: true } },
-      },
     });
 
     return NextResponse.json(
-      { data: { ...tag, contactCount: tag._count.contacts } },
+      { data: { ...tag, contactCount: 0 } },
       { status: 201 }
     );
   } catch (error) {

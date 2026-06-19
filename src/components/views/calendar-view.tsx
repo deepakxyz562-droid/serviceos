@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import {
   Calendar, ChevronLeft, ChevronRight, Clock, Plus, MapPin, User,
   Briefcase, LayoutGrid, List, X, ArrowRight, Eye,
+  MoreHorizontal, Users, CheckCircle2, Sparkles, CalendarClock, Ban,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,17 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuLabel,
+} from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -191,6 +203,11 @@ export function CalendarView() {
   const [showDetailPanel, setShowDetailPanel] = useState(false);
   const [form, setForm] = useState<BookingFormData>(EMPTY_FORM());
   const [saving, setSaving] = useState(false);
+
+  // Booking action state (event-card dropdown actions)
+  const [rescheduleEvent, setRescheduleEvent] = useState<CalendarEvent | null>(null);
+  const [rescheduleAt, setRescheduleAt] = useState('');
+  const [actionInProgress, setActionInProgress] = useState(false);
 
   // Derived
   const currentYear = currentDate.getFullYear();
@@ -389,6 +406,270 @@ export function CalendarView() {
       setSaving(false);
     }
   }, [form, fetchEvents]);
+
+  // ─── Booking Action Handlers (event-card dropdown) ──────────────────────
+
+  /**
+   * Extract the raw booking UUID from a calendar event id.
+   * Booking events use `booking-${b.id}` (see fetchEvents). Job events use
+   * `job-${j.id}` and have no booking actions.
+   */
+  function extractBookingId(evt: CalendarEvent): string | null {
+    if (evt.type !== 'booking') return null;
+    return evt.id.replace('booking-', '');
+  }
+
+  const handleEventAssign = useCallback(async (evt: CalendarEvent, employeeId: string) => {
+    const bookingId = extractBookingId(evt);
+    if (!bookingId) return;
+    setActionInProgress(true);
+    try {
+      const res = await authFetch(`/api/bookings/${bookingId}/assign`, {
+        method: 'POST',
+        body: JSON.stringify({ employeeId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to assign employee');
+      }
+      toast.success(employeeId ? 'Employee assigned' : 'Employee unassigned');
+      fetchEvents();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to assign employee');
+    } finally {
+      setActionInProgress(false);
+    }
+  }, [fetchEvents]);
+
+  const handleEventAutoAssign = useCallback(async (evt: CalendarEvent) => {
+    const bookingId = extractBookingId(evt);
+    if (!bookingId) return;
+    setActionInProgress(true);
+    try {
+      const res = await authFetch('/api/bookings/auto-assign', {
+        method: 'POST',
+        body: JSON.stringify({ bookingId, strategy: 'workload' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Auto-assign failed — no available employees');
+      }
+      toast.success(
+        data?.employee?.name
+          ? `Auto-assigned to ${data.employee.name}`
+          : 'Booking auto-assigned'
+      );
+      fetchEvents();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Auto-assign failed');
+    } finally {
+      setActionInProgress(false);
+    }
+  }, [fetchEvents]);
+
+  const handleEventCreateJob = useCallback(async (evt: CalendarEvent) => {
+    const bookingId = extractBookingId(evt);
+    if (!bookingId) return;
+    setActionInProgress(true);
+    try {
+      const res = await authFetch(`/api/bookings/${bookingId}/create-job`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // 409 = job already exists for this booking
+        if (res.status === 409) {
+          toast.error(data?.error || 'Job already exists for this booking');
+        } else {
+          throw new Error(data?.error || 'Failed to create job');
+        }
+      } else {
+        toast.success(data?.message || 'Job created from booking');
+        fetchEvents();
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to create job');
+    } finally {
+      setActionInProgress(false);
+    }
+  }, [fetchEvents]);
+
+  const handleEventMarkCompleted = useCallback(async (evt: CalendarEvent) => {
+    const bookingId = extractBookingId(evt);
+    if (!bookingId) return;
+    setActionInProgress(true);
+    try {
+      const res = await authFetch(`/api/bookings/${bookingId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: 'completed' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || 'Failed to mark completed');
+      }
+      toast.success('Booking marked as completed');
+      fetchEvents();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to mark completed');
+    } finally {
+      setActionInProgress(false);
+    }
+  }, [fetchEvents]);
+
+  const handleEventCancel = useCallback(async (evt: CalendarEvent) => {
+    const bookingId = extractBookingId(evt);
+    if (!bookingId) return;
+    setActionInProgress(true);
+    try {
+      const res = await authFetch(`/api/bookings/${bookingId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: 'cancelled' }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || 'Failed to cancel booking');
+      }
+      toast.success('Booking cancelled');
+      fetchEvents();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to cancel booking');
+    } finally {
+      setActionInProgress(false);
+    }
+  }, [fetchEvents]);
+
+  const openRescheduleDialog = useCallback((evt: CalendarEvent) => {
+    if (evt.type !== 'booking') return;
+    // Pre-fill with current scheduledAt (in datetime-local format)
+    let initial = '';
+    if (evt.scheduledAt) {
+      try {
+        initial = new Date(evt.scheduledAt).toISOString().slice(0, 16);
+      } catch {
+        initial = '';
+      }
+    }
+    setRescheduleAt(initial);
+    setRescheduleEvent(evt);
+  }, []);
+
+  const handleRescheduleSubmit = useCallback(async () => {
+    if (!rescheduleEvent || !rescheduleAt) {
+      toast.error('Please pick a new date and time');
+      return;
+    }
+    const bookingId = extractBookingId(rescheduleEvent);
+    if (!bookingId) return;
+    setActionInProgress(true);
+    try {
+      const res = await authFetch(`/api/bookings/${bookingId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ scheduledAt: new Date(rescheduleAt).toISOString() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || 'Failed to reschedule');
+      }
+      toast.success('Booking rescheduled');
+      setRescheduleEvent(null);
+      setRescheduleAt('');
+      fetchEvents();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to reschedule');
+    } finally {
+      setActionInProgress(false);
+    }
+  }, [rescheduleEvent, rescheduleAt, fetchEvents]);
+
+  /**
+   * Render the action dropdown menu for a single booking event card.
+   * Returns null for job events (no booking actions apply).
+   */
+  const renderEventActions = (evt: CalendarEvent) => {
+    if (evt.type !== 'booking') return null;
+    const isAssigned = !!evt.employee?.id;
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="size-6 p-0 shrink-0 hover:bg-background/80"
+            aria-label="Booking actions"
+            disabled={actionInProgress}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MoreHorizontal className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          {/* Assign / Change Employee with sub-menu of employees */}
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Users className="size-4 mr-2" />
+              {isAssigned ? 'Change Employee' : 'Assign Employee'}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="max-h-[280px] overflow-y-auto">
+              {employees.length === 0 ? (
+                <DropdownMenuItem disabled>No employees available</DropdownMenuItem>
+              ) : (
+                employees.map((emp) => (
+                  <DropdownMenuItem
+                    key={emp.id}
+                    onClick={() => handleEventAssign(evt, emp.id)}
+                  >
+                    <User className="size-3.5 mr-2 text-muted-foreground" />
+                    {emp.name}
+                  </DropdownMenuItem>
+                ))
+              )}
+              {isAssigned && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-red-600 focus:text-red-600"
+                    onClick={() => handleEventAssign(evt, '')}
+                  >
+                    <Ban className="size-3.5 mr-2" /> Unassign
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+
+          <DropdownMenuItem onClick={() => handleEventAutoAssign(evt)}>
+            <Sparkles className="size-4 mr-2" /> Auto Assign
+          </DropdownMenuItem>
+
+          <DropdownMenuItem onClick={() => handleEventCreateJob(evt)}>
+            <Briefcase className="size-4 mr-2" /> Create Job
+          </DropdownMenuItem>
+
+          <DropdownMenuSeparator />
+
+          <DropdownMenuItem
+            onClick={() => handleEventMarkCompleted(evt)}
+            disabled={evt.status === 'completed'}
+          >
+            <CheckCircle2 className="size-4 mr-2" /> Mark Completed
+          </DropdownMenuItem>
+
+          <DropdownMenuItem onClick={() => openRescheduleDialog(evt)}>
+            <CalendarClock className="size-4 mr-2" /> Reschedule
+          </DropdownMenuItem>
+
+          <DropdownMenuItem
+            className="text-red-600 focus:text-red-600"
+            onClick={() => handleEventCancel(evt)}
+            disabled={evt.status === 'cancelled'}
+          >
+            <Ban className="size-4 mr-2" /> Cancel Booking
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
 
   // ─── Selected Date Events ───────────────────────────────────────────────
 
@@ -706,7 +987,11 @@ export function CalendarView() {
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-foreground truncate">{evt.title}</p>
+                            <div className="flex items-start justify-between gap-1">
+                              <p className="text-sm font-semibold text-foreground truncate">{evt.title}</p>
+                              {/* 3-dot action menu — bookings only */}
+                              {!isJob && renderEventActions(evt)}
+                            </div>
                             <div className="flex items-center gap-1.5 mt-0.5">
                               <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-5 ${cfg.bg} ${cfg.text} ${cfg.border}`}>
                                 <span className={`size-1.5 rounded-full ${cfg.dot} mr-1`} />
@@ -715,6 +1000,11 @@ export function CalendarView() {
                               <span className="text-[10px] text-muted-foreground capitalize">
                                 {isJob ? 'Job' : 'Booking'}
                               </span>
+                              {evt.employeeName && (
+                                <span className="text-[10px] text-muted-foreground truncate">
+                                  · {evt.employeeName}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -736,16 +1026,6 @@ export function CalendarView() {
                             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                               <User className="size-3 shrink-0" />
                               <span>{evt.customerName}</span>
-                            </div>
-                          )}
-                          {evt.employeeName && (
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <Avatar className="size-4">
-                                <AvatarFallback className="text-[8px]">
-                                  {evt.employeeName.charAt(0).toUpperCase()}
-                                </AvatarFallback>
-                              </Avatar>
-                              <span>{evt.employeeName}</span>
                             </div>
                           )}
                           {evt.address && (
@@ -1165,7 +1445,11 @@ export function CalendarView() {
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-foreground truncate">{evt.title}</p>
+                              <div className="flex items-start justify-between gap-1">
+                                <p className="text-sm font-semibold text-foreground truncate">{evt.title}</p>
+                                {/* 3-dot action menu — bookings only */}
+                                {!isJob && renderEventActions(evt)}
+                              </div>
                               <div className="flex items-center gap-1.5 mt-0.5">
                                 <Badge variant="outline" className={`text-[10px] px-1.5 py-0 h-5 ${cfg.bg} ${cfg.text} ${cfg.border}`}>
                                   <span className={`size-1.5 rounded-full ${cfg.dot} mr-1`} />
@@ -1174,6 +1458,11 @@ export function CalendarView() {
                                 <span className="text-[10px] text-muted-foreground capitalize">
                                   {isJob ? 'Job' : 'Booking'}
                                 </span>
+                                {evt.employeeName && (
+                                  <span className="text-[10px] text-muted-foreground truncate">
+                                    · {evt.employeeName}
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -1191,16 +1480,6 @@ export function CalendarView() {
                               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                 <User className="size-3 shrink-0" />
                                 <span>{evt.customerName}</span>
-                              </div>
-                            )}
-                            {evt.employeeName && (
-                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <Avatar className="size-4">
-                                  <AvatarFallback className="text-[8px]">
-                                    {evt.employeeName.charAt(0).toUpperCase()}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <span>{evt.employeeName}</span>
                               </div>
                             )}
                             {evt.address && (
@@ -1223,6 +1502,59 @@ export function CalendarView() {
 
       {/* Create Booking Dialog */}
       {renderCreateDialog()}
+
+      {/* ─── Reschedule Booking Dialog ──────────────────────────────────────── */}
+      <Dialog
+        open={!!rescheduleEvent}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRescheduleEvent(null);
+            setRescheduleAt('');
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarClock className="size-5 text-emerald-600" />
+              Reschedule Booking
+            </DialogTitle>
+            <DialogDescription>
+              {rescheduleEvent
+                ? `Pick a new date and time for "${rescheduleEvent.title}".`
+                : 'Pick a new date and time for this booking.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2 py-2">
+            <Label htmlFor="reschedule-at">New Scheduled Date &amp; Time</Label>
+            <Input
+              id="reschedule-at"
+              type="datetime-local"
+              value={rescheduleAt}
+              onChange={(e) => setRescheduleAt(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setRescheduleEvent(null);
+                setRescheduleAt('');
+              }}
+              disabled={actionInProgress}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700"
+              onClick={handleRescheduleSubmit}
+              disabled={actionInProgress || !rescheduleAt}
+            >
+              {actionInProgress ? 'Rescheduling...' : 'Reschedule'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

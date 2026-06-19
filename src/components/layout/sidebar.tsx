@@ -135,7 +135,7 @@ const ownerNavSections: NavSection[] = [
       { view: 'booking', label: 'Booking', icon: CalendarCheck },
       { view: 'calendar', label: 'Calendar', icon: Calendar },
       { view: 'jobs', label: 'Jobs', icon: Briefcase },
-      { view: 'dispatch', label: 'Dispatch', icon: Radio },
+      { view: 'dispatch', label: 'Dispatch Board', icon: Radio },
       { view: 'employees', label: 'Employees', icon: UserCog },
     ],
   },

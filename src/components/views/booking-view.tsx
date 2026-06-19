@@ -15,6 +15,7 @@ import {
   Eye,
   Filter,
   X,
+  Briefcase,
 } from 'lucide-react';
 import {
   Card,
@@ -59,7 +60,13 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
+import { toast } from 'sonner';
 import {
   Table,
   TableBody,
@@ -241,6 +248,8 @@ interface BookingFormData {
   notes: string;
   status: string;
   source: string;
+  employeeId: string;
+  assignmentType: 'unassigned' | 'assign_now' | 'auto_assign';
 }
 
 const EMPTY_FORM: BookingFormData = {
@@ -255,6 +264,8 @@ const EMPTY_FORM: BookingFormData = {
   notes: '',
   status: 'pending',
   source: 'manual',
+  employeeId: '',
+  assignmentType: 'unassigned',
 };
 
 // ---------------------------------------------------------------------------
@@ -281,6 +292,25 @@ export function BookingView() {
   const [formData, setFormData] = useState<BookingFormData>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [employees, setEmployees] = useState<
+    { id: string; name: string; role: string; status: string }[]
+  >([]);
+
+  useEffect(() => {
+    apiGet<{ id: string; name: string; role: string; status: string }[]>(
+      '/api/employees'
+    )
+      .then((data) => {
+        // /api/employees may return either a bare array or { employees: [...] }
+        if (Array.isArray(data)) setEmployees(data);
+        else if (data && Array.isArray((data as unknown as { employees: unknown[] }).employees)) {
+          setEmployees(
+            (data as unknown as { employees: { id: string; name: string; role: string; status: string }[] }).employees
+          );
+        } else setEmployees([]);
+      })
+      .catch(() => setEmployees([]));
+  }, []);
 
   // Fetch bookings
   const fetchBookings = useCallback(async () => {
@@ -344,6 +374,8 @@ export function BookingView() {
       notes: booking.notes || '',
       status: booking.status,
       source: booking.source,
+      employeeId: booking.employeeId || '',
+      assignmentType: booking.employeeId ? 'assign_now' : 'unassigned',
     });
     setShowEditDialog(true);
   }
@@ -371,6 +403,60 @@ export function BookingView() {
     if (!formData.title.trim()) return;
     setSubmitting(true);
     try {
+      const created = await apiPost<{ id: string }>('/api/bookings', {
+        title: formData.title.trim(),
+        customerName: formData.customerName.trim() || null,
+        customerPhone: formData.customerPhone.trim() || null,
+        customerEmail: formData.customerEmail.trim() || null,
+        address: formData.address.trim() || null,
+        scheduledAt: formData.scheduledAt || null,
+        duration: parseInt(formData.duration) || 60,
+        description: formData.description.trim() || null,
+        notes: formData.notes.trim() || null,
+        source: formData.source,
+        employeeId:
+          formData.assignmentType === 'assign_now' && formData.employeeId
+            ? formData.employeeId
+            : null,
+      });
+      // If user picked Auto Assign, fire a follow-up auto-assign call.
+      if (formData.assignmentType === 'auto_assign' && created?.id) {
+        try {
+          const result = await apiPost<{ employee?: { name?: string } }>(
+            '/api/bookings/auto-assign',
+            { bookingId: created.id, strategy: 'workload' }
+          );
+          if (result?.employee?.name) {
+            toast.success(`Auto-assigned to ${result.employee.name}`);
+          } else {
+            toast.success('Booking created and auto-assigned');
+          }
+        } catch {
+          toast.error('Booking created, but auto-assign failed — no available employees');
+        }
+      } else {
+        toast.success('Booking created');
+      }
+      setShowCreateDialog(false);
+      fetchBookings();
+    } catch {
+      setError('Failed to create booking');
+      toast.error('Failed to create booking');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitCreateAndAssign() {
+    // Same as submitCreate but forces assignmentType='assign_now' and requires employeeId
+    if (!formData.title.trim()) return;
+    if (!formData.employeeId) {
+      setError('Please select an employee to assign');
+      toast.error('Please select an employee to assign');
+      return;
+    }
+    setSubmitting(true);
+    try {
       await apiPost('/api/bookings', {
         title: formData.title.trim(),
         customerName: formData.customerName.trim() || null,
@@ -382,11 +468,118 @@ export function BookingView() {
         description: formData.description.trim() || null,
         notes: formData.notes.trim() || null,
         source: formData.source,
+        employeeId: formData.employeeId,
       });
+      toast.success('Booking created and employee assigned');
       setShowCreateDialog(false);
       fetchBookings();
     } catch {
       setError('Failed to create booking');
+      toast.error('Failed to create booking');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitCreateAndJob() {
+    // Creates booking, then creates a job from it
+    if (!formData.title.trim()) return;
+    setSubmitting(true);
+    try {
+      const booking = await apiPost<{ id: string }>('/api/bookings', {
+        title: formData.title.trim(),
+        customerName: formData.customerName.trim() || null,
+        customerPhone: formData.customerPhone.trim() || null,
+        customerEmail: formData.customerEmail.trim() || null,
+        address: formData.address.trim() || null,
+        scheduledAt: formData.scheduledAt || null,
+        duration: parseInt(formData.duration) || 60,
+        description: formData.description.trim() || null,
+        notes: formData.notes.trim() || null,
+        source: formData.source,
+        employeeId:
+          formData.assignmentType === 'assign_now' && formData.employeeId
+            ? formData.employeeId
+            : null,
+      });
+      // Now create a job from this booking
+      if (booking?.id) {
+        try {
+          await apiPost(`/api/bookings/${booking.id}/create-job`, {});
+          toast.success('Booking created and Job generated');
+        } catch (err) {
+          console.error('Failed to create job from booking:', err);
+          toast.success('Booking created — could not auto-create job');
+          // Don't fail the whole flow — booking was created successfully
+        }
+      } else {
+        toast.success('Booking created');
+      }
+      setShowCreateDialog(false);
+      fetchBookings();
+    } catch {
+      setError('Failed to create booking');
+      toast.error('Failed to create booking');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleAutoAssign(bookingId: string) {
+    setSubmitting(true);
+    try {
+      const result = await apiPost<{ employee?: { name?: string } }>(
+        '/api/bookings/auto-assign',
+        { bookingId, strategy: 'workload' }
+      );
+      if (result?.employee?.name) {
+        toast.success(`Auto-assigned to ${result.employee.name}`);
+      } else {
+        toast.success('Booking auto-assigned');
+      }
+      fetchBookings();
+    } catch {
+      setError('Auto-assign failed — no available employees');
+      toast.error('Auto-assign failed — no available employees');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleAssignEmployee(bookingId: string, employeeId: string) {
+    setSubmitting(true);
+    try {
+      await apiPost(`/api/bookings/${bookingId}/assign`, { employeeId });
+      toast.success('Employee assigned');
+      fetchBookings();
+    } catch {
+      setError('Failed to assign employee');
+      toast.error('Failed to assign employee');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleCreateJobFromBooking(bookingId: string) {
+    setSubmitting(true);
+    try {
+      // Note: apiPost resolves the JSON body regardless of HTTP status
+      // (fetch only rejects on network errors). So we inspect the body
+      // for an `error` field to detect e.g. 409 conflict.
+      const result = await apiPost<{
+        message?: string;
+        job?: { id: string };
+        error?: string;
+      }>(`/api/bookings/${bookingId}/create-job`, {});
+      if (result?.error) {
+        toast.error(result.error);
+      } else {
+        toast.success(result?.message || 'Job created from booking');
+        fetchBookings();
+      }
+    } catch {
+      setError('Failed to create job from booking');
+      toast.error('Failed to create job from booking');
     } finally {
       setSubmitting(false);
     }
@@ -407,12 +600,57 @@ export function BookingView() {
         description: formData.description.trim() || null,
         notes: formData.notes.trim() || null,
         status: formData.status,
+        employeeId: formData.employeeId || null,
       });
+      toast.success('Booking updated');
       setShowEditDialog(false);
       setSelectedBooking(null);
       fetchBookings();
     } catch {
       setError('Failed to update booking');
+      toast.error('Failed to update booking');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function submitEditAndCreateJob() {
+    if (!selectedBooking || !formData.title.trim()) return;
+    setSubmitting(true);
+    try {
+      await apiPut(`/api/bookings/${selectedBooking.id}`, {
+        title: formData.title.trim(),
+        customerName: formData.customerName.trim() || null,
+        customerPhone: formData.customerPhone.trim() || null,
+        customerEmail: formData.customerEmail.trim() || null,
+        address: formData.address.trim() || null,
+        scheduledAt: formData.scheduledAt || null,
+        duration: parseInt(formData.duration) || 60,
+        description: formData.description.trim() || null,
+        notes: formData.notes.trim() || null,
+        status: formData.status,
+        employeeId: formData.employeeId || null,
+      });
+      // Then create a job from this booking
+      try {
+        const result = await apiPost<{ message?: string; error?: string }>(
+          `/api/bookings/${selectedBooking.id}/create-job`,
+          {}
+        );
+        if (result?.error) {
+          toast.error(result.error);
+        } else {
+          toast.success(result?.message || 'Booking saved and Job generated');
+        }
+      } catch {
+        toast.error('Booking saved — could not auto-create job');
+      }
+      setShowEditDialog(false);
+      setSelectedBooking(null);
+      fetchBookings();
+    } catch {
+      setError('Failed to update booking');
+      toast.error('Failed to update booking');
     } finally {
       setSubmitting(false);
     }
@@ -980,6 +1218,79 @@ export function BookingView() {
               </Select>
             </div>
 
+            {/* Assignment Type */}
+            <div className="grid gap-2">
+              <Label>Assignment Type</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {(
+                  [
+                    { value: 'unassigned', label: 'Unassigned' },
+                    { value: 'assign_now', label: 'Assign Now' },
+                    { value: 'auto_assign', label: 'Auto Assign' },
+                  ] as const
+                ).map((opt) => (
+                  <Button
+                    key={opt.value}
+                    type="button"
+                    variant={
+                      formData.assignmentType === opt.value ? 'default' : 'outline'
+                    }
+                    size="sm"
+                    className={
+                      formData.assignmentType === opt.value
+                        ? 'bg-emerald-600 hover:bg-emerald-700'
+                        : ''
+                    }
+                    onClick={() =>
+                      updateForm('assignmentType', opt.value)
+                    }
+                  >
+                    {opt.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Assigned Employee — only shown when assignmentType === 'assign_now' */}
+            {formData.assignmentType === 'assign_now' && (
+              <div className="grid gap-2">
+                <Label htmlFor="create-employeeId">Assigned Employee</Label>
+                <Select
+                  value={formData.employeeId}
+                  onValueChange={(v) => updateForm('employeeId', v)}
+                >
+                  <SelectTrigger id="create-employeeId">
+                    <SelectValue placeholder="Select employee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees.length === 0 ? (
+                      <SelectItem value="_none" disabled>
+                        No employees available
+                      </SelectItem>
+                    ) : (
+                      employees.map((emp) => (
+                        <SelectItem key={emp.id} value={emp.id}>
+                          {emp.name}
+                          <span className="text-xs text-muted-foreground ml-1">
+                            · {emp.role || '—'} · {emp.status || '—'}
+                          </span>
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Auto-assign strategy hint */}
+            {formData.assignmentType === 'auto_assign' && (
+              <div className="text-xs text-muted-foreground bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 rounded p-2">
+                After the booking is created, the system will auto-assign the
+                best available employee based on workload, rating, and
+                availability.
+              </div>
+            )}
+
             <div className="grid gap-2">
               <Label htmlFor="create-description">Description</Label>
               <Textarea
@@ -1003,7 +1314,7 @@ export function BookingView() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:justify-end">
             <Button
               variant="outline"
               onClick={() => setShowCreateDialog(false)}
@@ -1011,11 +1322,30 @@ export function BookingView() {
               Cancel
             </Button>
             <Button
-              className="bg-emerald-600 hover:bg-emerald-700"
+              variant="outline"
               onClick={submitCreate}
               disabled={submitting || !formData.title.trim()}
             >
-              {submitting ? 'Creating...' : 'Create Booking'}
+              Save Booking
+            </Button>
+            <Button
+              variant="outline"
+              onClick={submitCreateAndAssign}
+              disabled={
+                submitting ||
+                !formData.title.trim() ||
+                (formData.assignmentType === 'assign_now' && !formData.employeeId)
+              }
+              title="Save and assign the selected employee"
+            >
+              Save &amp; Assign
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700"
+              onClick={submitCreateAndJob}
+              disabled={submitting || !formData.title.trim()}
+            >
+              {submitting ? 'Creating...' : 'Save & Create Job'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1124,6 +1454,79 @@ export function BookingView() {
               </Select>
             </div>
 
+            {/* Assignment Type (Edit) */}
+            <div className="grid gap-2">
+              <Label>Assignment Type</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {(
+                  [
+                    { value: 'unassigned', label: 'Unassigned' },
+                    { value: 'assign_now', label: 'Assign Now' },
+                    { value: 'auto_assign', label: 'Auto Assign' },
+                  ] as const
+                ).map((opt) => (
+                  <Button
+                    key={opt.value}
+                    type="button"
+                    variant={
+                      formData.assignmentType === opt.value ? 'default' : 'outline'
+                    }
+                    size="sm"
+                    className={
+                      formData.assignmentType === opt.value
+                        ? 'bg-emerald-600 hover:bg-emerald-700'
+                        : ''
+                    }
+                    onClick={() =>
+                      updateForm('assignmentType', opt.value)
+                    }
+                  >
+                    {opt.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Assigned Employee — only shown when assignmentType === 'assign_now' */}
+            {formData.assignmentType === 'assign_now' && (
+              <div className="grid gap-2">
+                <Label htmlFor="edit-employeeId">Assigned Employee</Label>
+                <Select
+                  value={formData.employeeId}
+                  onValueChange={(v) => updateForm('employeeId', v)}
+                >
+                  <SelectTrigger id="edit-employeeId">
+                    <SelectValue placeholder="Select employee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees.length === 0 ? (
+                      <SelectItem value="_none" disabled>
+                        No employees available
+                      </SelectItem>
+                    ) : (
+                      employees.map((emp) => (
+                        <SelectItem key={emp.id} value={emp.id}>
+                          {emp.name}
+                          <span className="text-xs text-muted-foreground ml-1">
+                            · {emp.role || '—'} · {emp.status || '—'}
+                          </span>
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Auto-assign strategy hint */}
+            {formData.assignmentType === 'auto_assign' && (
+              <div className="text-xs text-muted-foreground bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 rounded p-2">
+                When you click <strong>Save Changes</strong>, the system will
+                auto-assign the best available employee based on workload,
+                rating, and availability.
+              </div>
+            )}
+
             <div className="grid gap-2">
               <Label htmlFor="edit-description">Description</Label>
               <Textarea
@@ -1145,16 +1548,33 @@ export function BookingView() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2 sm:justify-end">
             <Button variant="outline" onClick={() => setShowEditDialog(false)}>
               Cancel
             </Button>
             <Button
-              className="bg-emerald-600 hover:bg-emerald-700"
-              onClick={submitEdit}
+              variant="outline"
+              onClick={async () => {
+                if (formData.assignmentType === 'auto_assign' && selectedBooking) {
+                  // Save first, then auto-assign
+                  await submitEdit();
+                  if (selectedBooking) {
+                    await handleAutoAssign(selectedBooking.id);
+                  }
+                } else {
+                  submitEdit();
+                }
+              }}
               disabled={submitting || !formData.title.trim()}
             >
-              {submitting ? 'Saving...' : 'Save Changes'}
+              Save Changes
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700"
+              onClick={submitEditAndCreateJob}
+              disabled={submitting || !formData.title.trim()}
+            >
+              {submitting ? 'Saving...' : 'Save & Create Job'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1279,7 +1699,7 @@ export function BookingView() {
                 </div>
               )}
 
-              <div className="flex gap-2 mt-3">
+              <div className="flex flex-wrap gap-2 mt-3">
                 <Button
                   variant="outline"
                   size="sm"
@@ -1290,6 +1710,81 @@ export function BookingView() {
                 >
                   <Pencil className="size-3.5 mr-1.5" /> Edit
                 </Button>
+
+                {/* Assign / Change Employee dropdown */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" disabled={submitting}>
+                      <Users className="size-3.5 mr-1.5" />
+                      {selectedBooking.employeeId ? 'Change Employee' : 'Assign Employee'}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="max-h-[300px] overflow-y-auto w-64">
+                    <DropdownMenuLabel className="text-xs text-muted-foreground">
+                      Select an employee
+                    </DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {employees.length === 0 ? (
+                      <DropdownMenuItem disabled>No employees available</DropdownMenuItem>
+                    ) : (
+                      employees.map((emp) => (
+                        <DropdownMenuItem
+                          key={emp.id}
+                          onClick={() => {
+                            handleAssignEmployee(selectedBooking.id, emp.id);
+                            setShowViewDialog(false);
+                          }}
+                        >
+                          <div className="flex flex-col">
+                            <span>{emp.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {emp.role || '—'} · {emp.status || '—'}
+                            </span>
+                          </div>
+                        </DropdownMenuItem>
+                      ))
+                    )}
+                    {selectedBooking.employeeId && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-red-600 focus:text-red-600"
+                          onClick={() => {
+                            handleAssignEmployee(selectedBooking.id, '');
+                            setShowViewDialog(false);
+                          }}
+                        >
+                          Unassign
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    handleAutoAssign(selectedBooking.id);
+                    setShowViewDialog(false);
+                  }}
+                  disabled={submitting}
+                >
+                  <Users className="size-3.5 mr-1.5" /> Auto Assign
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    handleCreateJobFromBooking(selectedBooking.id);
+                    setShowViewDialog(false);
+                  }}
+                  disabled={submitting}
+                >
+                  <Briefcase className="size-3.5 mr-1.5" /> Create Job
+                </Button>
+
                 {getTransitionOptions(selectedBooking.status).map((t) => (
                   <Button
                     key={t.to}

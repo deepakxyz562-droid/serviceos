@@ -5,6 +5,16 @@ import { applyTagsToContact, addContactToGroups } from '@/lib/contact-links';
 
 // GET /api/contacts — list contacts with filters + pagination
 // Query params: search|q, groupId, tagId, status, source, country, city, page, limit
+// limit may be a number (1..1000) or the literal "all" to return every match.
+//
+// NOTE: We intentionally resolve the group/tag filters and the tag/group
+// includes with EXPLICIT pre-queries instead of relying on Prisma's nested
+// relation filters (`contactGroups: { some: { groupId } }`) or nested
+// includes (`contactTags: { include: { tag: true } }`). The custom Supabase
+// REST adapter (src/lib/supabase-db.ts) does NOT support nested relation
+// filters / includes — they are silently dropped — which meant group & tag
+// filters and tag/group badges were broken in production. Doing it
+// explicitly here works identically on SQLite (Prisma) and Supabase.
 export async function GET(request: NextRequest) {
   try {
     const user = await getAuthUser();
@@ -15,8 +25,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const search =
-      (searchParams.get('search') || searchParams.get('q') || '').trim() ||
-      '';
+      (searchParams.get('search') || searchParams.get('q') || '').trim() || '';
     const groupId = searchParams.get('groupId');
     const tagId = searchParams.get('tagId');
     const status = searchParams.get('status');
@@ -24,12 +33,48 @@ export async function GET(request: NextRequest) {
     const country = searchParams.get('country');
     const city = searchParams.get('city');
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
-    const limit = Math.min(
-      100,
-      Math.max(1, parseInt(searchParams.get('limit') || '20', 10))
-    );
+    const limitParam = searchParams.get('limit') || '20';
+    const isAll = limitParam === 'all';
+    const limit = isAll
+      ? 100000
+      : Math.min(1000, Math.max(1, parseInt(limitParam, 10) || 20));
     const skip = (page - 1) * limit;
 
+    // ── Resolve group filter → contactIds ────────────────────────────────
+    // If a groupId filter is set, find which contact IDs belong to that group.
+    // If none match, we can short-circuit to an empty result.
+    let groupFilteredIds: string[] | null = null;
+    if (groupId) {
+      const links = await db.contactGroup.findMany({
+        where: { groupId },
+        select: { contactId: true },
+      });
+      groupFilteredIds = links.map((l) => l.contactId);
+      if (groupFilteredIds.length === 0) {
+        return NextResponse.json({
+          data: [],
+          pagination: { page, limit: isAll ? 0 : limit, total: 0, totalPages: 0 },
+        });
+      }
+    }
+
+    // ── Resolve tag filter → contactIds ──────────────────────────────────
+    let tagFilteredIds: string[] | null = null;
+    if (tagId) {
+      const links = await db.contactTag.findMany({
+        where: { tagId },
+        select: { contactId: true },
+      });
+      tagFilteredIds = links.map((l) => l.contactId);
+      if (tagFilteredIds.length === 0) {
+        return NextResponse.json({
+          data: [],
+          pagination: { page, limit: isAll ? 0 : limit, total: 0, totalPages: 0 },
+        });
+      }
+    }
+
+    // ── Build the where clause ───────────────────────────────────────────
     const where: Record<string, unknown> = { tenantId };
 
     if (search) {
@@ -44,34 +89,109 @@ export async function GET(request: NextRequest) {
     if (source) where.source = source;
     if (country) where.country = country;
     if (city) where.city = city;
-    if (groupId) {
-      where.contactGroups = { some: { groupId } };
-    }
-    if (tagId) {
-      where.contactTags = { some: { tagId } };
+
+    // Intersect group & tag contact-id filters into the where clause.
+    // If both are present we intersect them first (only contacts that are in
+    // BOTH the selected group AND have the selected tag).
+    const idFilters: string[][] = [groupFilteredIds, tagFilteredIds].filter(
+      (x): x is string[] => x !== null
+    );
+    if (idFilters.length === 1) {
+      where.id = { in: idFilters[0] };
+    } else if (idFilters.length === 2) {
+      const setB = new Set(idFilters[1]);
+      const intersection = idFilters[0].filter((id) => setB.has(id));
+      if (intersection.length === 0) {
+        return NextResponse.json({
+          data: [],
+          pagination: { page, limit: isAll ? 0 : limit, total: 0, totalPages: 0 },
+        });
+      }
+      where.id = { in: intersection };
     }
 
+    // ── Fetch contacts (no nested includes — resolved manually below) ────
     const [contacts, total] = await Promise.all([
       db.contact.findMany({
         where,
         orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
-        include: {
-          contactTags: { include: { tag: true } },
-          contactGroups: { include: { group: true } },
-        },
+        skip: isAll ? undefined : skip,
+        take: isAll ? undefined : limit,
       }),
       db.contact.count({ where }),
     ]);
 
+    // ── Manually attach tags + groups for the returned contacts ──────────
+    // This mirrors `include: { contactTags: { include: { tag: true } },
+    // contactGroups: { include: { group: true } } }` but works on the
+    // Supabase adapter which does not support nested includes.
+    const contactIds = (contacts as { id: string }[]).map((c) => c.id);
+
+    const [tagLinks, groupLinks] = await Promise.all([
+      contactIds.length > 0
+        ? db.contactTag.findMany({
+            where: { contactId: { in: contactIds } },
+            select: { id: true, contactId: true, tagId: true, appliedAt: true },
+          })
+        : Promise.resolve([]),
+      contactIds.length > 0
+        ? db.contactGroup.findMany({
+            where: { contactId: { in: contactIds } },
+            select: { id: true, contactId: true, groupId: true, addedAt: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    // Fetch the referenced Tag + Group rows in one go each.
+    const tagIds = [...new Set(tagLinks.map((l) => l.tagId))] as string[];
+    const groupIdsForLinks = [
+      ...new Set(groupLinks.map((l) => l.groupId)),
+    ] as string[];
+
+    const [tags, groups] = await Promise.all([
+      tagIds.length > 0
+        ? db.tag.findMany({ where: { id: { in: tagIds } } })
+        : Promise.resolve([]),
+      groupIdsForLinks.length > 0
+        ? db.group.findMany({ where: { id: { in: groupIdsForLinks } } })
+        : Promise.resolve([]),
+    ]);
+
+    const tagMap = new Map(tags.map((t) => [t.id, t]));
+    const groupMap = new Map(groups.map((g) => [g.id, g]));
+
+    const tagByContact = new Map<string, unknown[]>();
+    for (const l of tagLinks) {
+      const tag = tagMap.get(l.tagId);
+      if (!tag) continue;
+      const arr = tagByContact.get(l.contactId) || [];
+      arr.push({ id: l.id, tag });
+      tagByContact.set(l.contactId, arr);
+    }
+    const groupByContact = new Map<string, unknown[]>();
+    for (const l of groupLinks) {
+      const group = groupMap.get(l.groupId);
+      if (!group) continue;
+      const arr = groupByContact.get(l.contactId) || [];
+      arr.push({ id: l.id, group });
+      groupByContact.set(l.contactId, arr);
+    }
+
+    const dataWithRelations = (contacts as Record<string, unknown>[]).map(
+      (c) => ({
+        ...c,
+        contactTags: tagByContact.get(c.id as string) || [],
+        contactGroups: groupByContact.get(c.id as string) || [],
+      })
+    );
+
     return NextResponse.json({
-      data: contacts,
+      data: dataWithRelations,
       pagination: {
         page,
-        limit,
+        limit: isAll ? total : limit,
         total,
-        totalPages: Math.ceil(total / limit) || 0,
+        totalPages: isAll ? 1 : Math.ceil(total / limit) || 0,
       },
     });
   } catch (error) {
@@ -210,16 +330,41 @@ export async function POST(request: NextRequest) {
       return created;
     });
 
-    // Re-fetch with relations for the response
+    // Re-fetch and attach tags + groups for the response (explicit queries
+    // because the Supabase adapter doesn't support nested includes).
     const full = await db.contact.findUnique({
       where: { id: contact.id },
-      include: {
-        contactTags: { include: { tag: true } },
-        contactGroups: { include: { group: true } },
-      },
     });
+    if (!full) {
+      return NextResponse.json({ error: 'Contact not found after create' }, { status: 500 });
+    }
+    const [tagLinks, groupLinks] = await Promise.all([
+      db.contactTag.findMany({
+        where: { contactId: full.id },
+        select: { id: true, contactId: true, tagId: true, appliedAt: true },
+      }),
+      db.contactGroup.findMany({
+        where: { contactId: full.id },
+        select: { id: true, contactId: true, groupId: true, addedAt: true },
+      }),
+    ]);
+    const tIds = [...new Set(tagLinks.map((l) => l.tagId))];
+    const gIds = [...new Set(groupLinks.map((l) => l.groupId))];
+    const [fetchedTags, fetchedGroups] = await Promise.all([
+      tIds.length > 0 ? db.tag.findMany({ where: { id: { in: tIds } } }) : Promise.resolve([]),
+      gIds.length > 0 ? db.group.findMany({ where: { id: { in: gIds } } }) : Promise.resolve([]),
+    ]);
+    const tagMap = new Map(fetchedTags.map((t) => [t.id, t]));
+    const groupMap = new Map(fetchedGroups.map((g) => [g.id, g]));
 
-    return NextResponse.json(full, { status: 201 });
+    return NextResponse.json(
+      {
+        ...full,
+        contactTags: tagLinks.map((l) => ({ id: l.id, tag: tagMap.get(l.tagId) })),
+        contactGroups: groupLinks.map((l) => ({ id: l.id, group: groupMap.get(l.groupId) })),
+      },
+      { status: 201 }
+    );
   } catch (error) {
     console.error('Error creating contact:', error);
     return NextResponse.json({ error: 'Failed to create contact' }, { status: 500 });

@@ -6,6 +6,7 @@ import {
   MoreVertical, FileSpreadsheet, CheckCircle2, AlertCircle, X,
   Loader2, Mail, Phone, Building2, Tag as TagIcon, ChevronDown,
   Users as UsersIcon, MapPin, AlertTriangle,
+  ArrowUpRight, Workflow as WorkflowIcon, Send, Layers,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,7 @@ import {
 } from '@/components/ui/table';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
+  DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -121,7 +123,12 @@ const SOURCE_OPTIONS = [
   { value: 'api', label: 'API' },
 ];
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS: Array<{ value: number | 'all'; label: string }> = [
+  { value: 20, label: '20 / page' },
+  { value: 50, label: '50 / page' },
+  { value: 100, label: '100 / page' },
+  { value: 'all', label: 'All' },
+];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -184,6 +191,7 @@ export function ContactsView() {
   const [countryFilter, setCountryFilter] = useState<string>('');
 
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number | 'all'>(20);
 
   // Available tags / groups (fetched once)
   const [availableTags, setAvailableTags] = useState<TagOption[]>([]);
@@ -243,6 +251,21 @@ export function ContactsView() {
   // Export state
   const [exportFormat, setExportFormat] = useState<string>('csv');
 
+  // ─── Lead / Workflow / Campaign / Segment linkage state ────────────────
+  // Lists of available workflows / campaigns / segments that the user can
+  // attach a contact to. Loaded lazily on first sub-menu open and cached.
+  interface WorkflowOption { id: string; name: string; description?: string | null; active?: boolean }
+  interface CampaignOption { id: string; name: string; description?: string | null; status?: string }
+  interface SegmentOption { id: string; name: string; description?: string | null; type?: string; memberCount?: number }
+
+  const [availableWorkflows, setAvailableWorkflows] = useState<WorkflowOption[]>([]);
+  const [availableCampaigns, setAvailableCampaigns] = useState<CampaignOption[]>([]);
+  const [availableSegments, setAvailableSegments] = useState<SegmentOption[]>([]);
+  const [loadingWorkflows, setLoadingWorkflows] = useState(false);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
+  const [loadingSegments, setLoadingSegments] = useState(false);
+  const [linkingContactId, setLinkingContactId] = useState<string | null>(null);
+
   // ─── Fetch tags & groups ────────────────────────────────────────────────
 
   const fetchTags = useCallback(async () => {
@@ -278,7 +301,7 @@ export function ContactsView() {
       setLoading(true);
       const params = new URLSearchParams();
       params.set('page', String(page));
-      params.set('limit', String(PAGE_SIZE));
+      params.set('limit', pageSize === 'all' ? 'all' : String(pageSize));
       if (debouncedSearch.trim()) params.set('search', debouncedSearch.trim());
       if (groupFilter !== 'all') params.set('groupId', groupFilter);
       if (tagFilter !== 'all') params.set('tagId', tagFilter);
@@ -311,7 +334,7 @@ export function ContactsView() {
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearch, groupFilter, tagFilter, statusFilter, sourceFilter, countryFilter]);
+  }, [page, pageSize, debouncedSearch, groupFilter, tagFilter, statusFilter, sourceFilter, countryFilter]);
 
   // Debounce search query
   useEffect(() => {
@@ -326,6 +349,11 @@ export function ContactsView() {
   useEffect(() => {
     setPage(1);
   }, [groupFilter, tagFilter, statusFilter, sourceFilter, countryFilter]);
+
+  // Reset page when page size changes (page 1 of the new size)
+  useEffect(() => {
+    setPage(1);
+  }, [pageSize]);
 
   useEffect(() => {
     fetchContacts();
@@ -524,6 +552,168 @@ export function ContactsView() {
     }
   };
 
+  // ─── Contact → Lead / Workflow / Campaign / Segment actions ─────────────
+
+  const fetchWorkflows = useCallback(async () => {
+    if (loadingWorkflows) return;
+    setLoadingWorkflows(true);
+    try {
+      const res = await fetch('/api/workflows?limit=100');
+      if (res.ok) {
+        const json = await res.json();
+        const list: WorkflowOption[] = Array.isArray(json?.workflows) ? json.workflows : [];
+        setAvailableWorkflows(list);
+      }
+    } catch {
+      // Silent — sub-menu will just show an empty state.
+    } finally {
+      setLoadingWorkflows(false);
+    }
+  }, [loadingWorkflows]);
+
+  const fetchCampaigns = useCallback(async () => {
+    if (loadingCampaigns) return;
+    setLoadingCampaigns(true);
+    try {
+      const res = await fetch('/api/campaigns?limit=100');
+      if (res.ok) {
+        const json = await res.json();
+        const list: CampaignOption[] = Array.isArray(json?.data) ? json.data : [];
+        setAvailableCampaigns(list);
+      }
+    } catch {
+      // Silent.
+    } finally {
+      setLoadingCampaigns(false);
+    }
+  }, [loadingCampaigns]);
+
+  const fetchSegments = useCallback(async () => {
+    if (loadingSegments) return;
+    setLoadingSegments(true);
+    try {
+      const res = await fetch('/api/segments?limit=100');
+      if (res.ok) {
+        const json = await res.json();
+        const list: SegmentOption[] = Array.isArray(json?.data) ? json.data : [];
+        setAvailableSegments(list);
+      }
+    } catch {
+      // Silent.
+    } finally {
+      setLoadingSegments(false);
+    }
+  }, [loadingSegments]);
+
+  /** Convert a contact into a lead. POSTs the contact's name/email/phone
+   *  to /api/leads with source='contact'. */
+  const handleConvertToLead = useCallback(async (contact: Contact) => {
+    setLinkingContactId(contact.id);
+    try {
+      const res = await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: contact.name,
+          phone: contact.phone || '',
+          email: contact.email || null,
+          source: 'contact',
+        }),
+      });
+      if (res.ok) {
+        toast.success(`Converted "${contact.name}" to a lead`);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to convert to lead');
+      }
+    } catch {
+      toast.error('Failed to convert to lead');
+    } finally {
+      setLinkingContactId(null);
+    }
+  }, []);
+
+  /** Trigger an existing workflow with the contact as the trigger data.
+   *  Uses the existing /api/workflows/[id]/execute endpoint. */
+  const handleAddToWorkflow = useCallback(async (contact: Contact, workflow: WorkflowOption) => {
+    setLinkingContactId(contact.id);
+    try {
+      const res = await fetch(`/api/workflows/${workflow.id}/execute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          triggerData: {
+            contactId: contact.id,
+            name: contact.name,
+            phone: contact.phone,
+            email: contact.email,
+          },
+        }),
+      });
+      if (res.ok) {
+        toast.success(`Added "${contact.name}" to workflow "${workflow.name}"`);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || `Failed to add to workflow "${workflow.name}"`);
+      }
+    } catch {
+      toast.error(`Failed to add to workflow "${workflow.name}"`);
+    } finally {
+      setLinkingContactId(null);
+    }
+  }, []);
+
+  /** Register a contact as a recipient of a campaign via the new
+   *  /api/campaigns/[id]/recipients endpoint. */
+  const handleAddToCampaign = useCallback(async (contact: Contact, campaign: CampaignOption) => {
+    setLinkingContactId(contact.id);
+    try {
+      const res = await fetch(`/api/campaigns/${campaign.id}/recipients`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contactId: contact.id }),
+      });
+      if (res.ok) {
+        const json = await res.json().catch(() => ({}));
+        if (json?.alreadyRecipient) {
+          toast.info(`"${contact.name}" is already a recipient of "${campaign.name}"`);
+        } else {
+          toast.success(`Added "${contact.name}" to campaign "${campaign.name}"`);
+        }
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || `Failed to add to campaign "${campaign.name}"`);
+      }
+    } catch {
+      toast.error(`Failed to add to campaign "${campaign.name}"`);
+    } finally {
+      setLinkingContactId(null);
+    }
+  }, []);
+
+  /** Add a contact to a segment via the new /api/segments/[id]/members
+   *  endpoint. */
+  const handleAddToSegment = useCallback(async (contact: Contact, segment: SegmentOption) => {
+    setLinkingContactId(contact.id);
+    try {
+      const res = await fetch(`/api/segments/${segment.id}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contactId: contact.id }),
+      });
+      if (res.ok) {
+        toast.success(`Added "${contact.name}" to segment "${segment.name}"`);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || `Failed to add to segment "${segment.name}"`);
+      }
+    } catch {
+      toast.error(`Failed to add to segment "${segment.name}"`);
+    } finally {
+      setLinkingContactId(null);
+    }
+  }, []);
+
   // ─── Bulk actions ───────────────────────────────────────────────────────
 
   const runBulkAction = async (action: BulkAction, extra?: Record<string, unknown>) => {
@@ -662,6 +852,14 @@ export function ContactsView() {
     setSourceFilter('all');
     setCountryFilter('');
     setPage(1);
+  };
+
+  const handlePageSizeChange = (value: string) => {
+    if (value === 'all') {
+      setPageSize('all');
+    } else {
+      setPageSize(parseInt(value, 10));
+    }
   };
 
   const hasActiveFilters =
@@ -1115,7 +1313,7 @@ export function ContactsView() {
               )}
             </div>
           ) : (
-            <ScrollArea className="max-h-[600px]">
+            <ScrollArea className="max-h-[1200px]">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1209,9 +1407,123 @@ export function ContactsView() {
                         <TableCell>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="size-4" /></Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" disabled={linkingContactId === contact.id}>
+                                {linkingContactId === contact.id
+                                  ? <Loader2 className="size-4 animate-spin" />
+                                  : <MoreVertical className="size-4" />}
+                              </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
+                            <DropdownMenuContent align="end" className="w-56">
+                              <DropdownMenuItem
+                                onClick={() => handleConvertToLead(contact)}
+                                title="Create a new Lead from this contact"
+                              >
+                                <ArrowUpRight className="size-3 mr-2" /> Convert to Lead
+                              </DropdownMenuItem>
+
+                              {/* Add to Workflow — sub-menu of available workflows */}
+                              <DropdownMenuSub onOpenChange={(open) => { if (open) fetchWorkflows(); }}>
+                                <DropdownMenuSubTrigger>
+                                  <WorkflowIcon className="size-3 mr-2" /> Add to Workflow
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent className="w-56">
+                                  {loadingWorkflows && availableWorkflows.length === 0 ? (
+                                    <div className="px-2 py-3 text-xs text-muted-foreground flex items-center gap-2">
+                                      <Loader2 className="size-3 animate-spin" /> Loading workflows…
+                                    </div>
+                                  ) : availableWorkflows.length === 0 ? (
+                                    <div className="px-2 py-3 text-xs text-muted-foreground">
+                                      No workflows available
+                                    </div>
+                                  ) : (
+                                    availableWorkflows.map(w => (
+                                      <DropdownMenuItem
+                                        key={w.id}
+                                        onClick={() => handleAddToWorkflow(contact, w)}
+                                      >
+                                        <div className="flex flex-col">
+                                          <span className="truncate">{w.name}</span>
+                                          {w.description && (
+                                            <span className="text-[10px] text-muted-foreground truncate">
+                                              {w.description}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </DropdownMenuItem>
+                                    ))
+                                  )}
+                                </DropdownMenuSubContent>
+                              </DropdownMenuSub>
+
+                              {/* Add to Campaign — sub-menu of available campaigns */}
+                              <DropdownMenuSub onOpenChange={(open) => { if (open) fetchCampaigns(); }}>
+                                <DropdownMenuSubTrigger>
+                                  <Send className="size-3 mr-2" /> Add to Campaign
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent className="w-56">
+                                  {loadingCampaigns && availableCampaigns.length === 0 ? (
+                                    <div className="px-2 py-3 text-xs text-muted-foreground flex items-center gap-2">
+                                      <Loader2 className="size-3 animate-spin" /> Loading campaigns…
+                                    </div>
+                                  ) : availableCampaigns.length === 0 ? (
+                                    <div className="px-2 py-3 text-xs text-muted-foreground">
+                                      No campaigns available
+                                    </div>
+                                  ) : (
+                                    availableCampaigns.map(c => (
+                                      <DropdownMenuItem
+                                        key={c.id}
+                                        onClick={() => handleAddToCampaign(contact, c)}
+                                      >
+                                        <div className="flex flex-col">
+                                          <span className="truncate">{c.name}</span>
+                                          {c.status && (
+                                            <span className="text-[10px] text-muted-foreground truncate">
+                                              {c.status}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </DropdownMenuItem>
+                                    ))
+                                  )}
+                                </DropdownMenuSubContent>
+                              </DropdownMenuSub>
+
+                              {/* Add to Segment — sub-menu of available segments */}
+                              <DropdownMenuSub onOpenChange={(open) => { if (open) fetchSegments(); }}>
+                                <DropdownMenuSubTrigger>
+                                  <Layers className="size-3 mr-2" /> Add to Segment
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent className="w-56">
+                                  {loadingSegments && availableSegments.length === 0 ? (
+                                    <div className="px-2 py-3 text-xs text-muted-foreground flex items-center gap-2">
+                                      <Loader2 className="size-3 animate-spin" /> Loading segments…
+                                    </div>
+                                  ) : availableSegments.length === 0 ? (
+                                    <div className="px-2 py-3 text-xs text-muted-foreground">
+                                      No segments available
+                                    </div>
+                                  ) : (
+                                    availableSegments.map(s => (
+                                      <DropdownMenuItem
+                                        key={s.id}
+                                        onClick={() => handleAddToSegment(contact, s)}
+                                      >
+                                        <div className="flex flex-col">
+                                          <span className="truncate">{s.name}</span>
+                                          {(s.type || typeof s.memberCount === 'number') && (
+                                            <span className="text-[10px] text-muted-foreground truncate">
+                                              {s.type || 'segment'}{typeof s.memberCount === 'number' ? ` · ${s.memberCount} members` : ''}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </DropdownMenuItem>
+                                    ))
+                                  )}
+                                </DropdownMenuSubContent>
+                              </DropdownMenuSub>
+
+                              <DropdownMenuSeparator />
                               <DropdownMenuItem onClick={() => openEditDialog(contact)}><Edit className="size-3 mr-2" /> Edit</DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem className="text-red-600" onClick={() => { setDeleteTarget(contact); setDeleteDialogOpen(true); }}><Trash2 className="size-3 mr-2" /> Delete</DropdownMenuItem>
@@ -1228,32 +1540,61 @@ export function ContactsView() {
         </CardContent>
       </Card>
 
-      {/* Pagination */}
-      {pagination && pagination.totalPages > 1 && (
+      {/* Pagination + page-size selector — always visible so the user can
+          switch between 20 / 50 / 100 / All per page regardless of result
+          count. Sits directly below the loaded data. */}
+      {pagination && (
         <div className="flex items-center justify-between flex-wrap gap-3">
           <p className="text-sm text-muted-foreground">
-            Showing {(pagination.page - 1) * pagination.limit + 1}-{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
+            {pagination.total === 0
+              ? 'No contacts'
+              : pageSize === 'all'
+                ? `Showing all ${pagination.total} contact${pagination.total === 1 ? '' : 's'}`
+                : `Showing ${Math.min((pagination.page - 1) * pagination.limit + 1, pagination.total)}-${Math.min(pagination.page * pagination.limit, pagination.total)} of ${pagination.total}`}
           </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={pagination.page <= 1}
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-            >
-              Previous
-            </Button>
-            <span className="text-sm text-muted-foreground">
-              Page {pagination.page} of {pagination.totalPages}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={pagination.page >= pagination.totalPages}
-              onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
-            >
-              Next
-            </Button>
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Page size selector */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground hidden sm:inline">Rows:</span>
+              <Select
+                value={pageSize === 'all' ? 'all' : String(pageSize)}
+                onValueChange={handlePageSizeChange}
+              >
+                <SelectTrigger className="w-[120px] h-8">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAGE_SIZE_OPTIONS.map(opt => (
+                    <SelectItem key={String(opt.value)} value={String(opt.value)}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {pageSize !== 'all' && pagination.totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={pagination.page <= 1}
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm text-muted-foreground whitespace-nowrap">
+                  Page {pagination.page} of {pagination.totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={pagination.page >= pagination.totalPages}
+                  onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
+                >
+                  Next
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1542,14 +1883,14 @@ export function ContactsView() {
 
       {/* ─── Import Dialog ───────────────────────────────────────────────── */}
       <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>Import Contacts</DialogTitle>
             <DialogDescription>Import contacts from CSV or XLSX files</DialogDescription>
           </DialogHeader>
 
           {!importStats ? (
-            <div className="space-y-4 py-4">
+            <div className="space-y-4 py-4 flex-1 overflow-y-auto min-h-0">
               <div
                 className="border-2 border-dashed rounded-lg p-8 text-center hover:border-emerald-400 transition-colors cursor-pointer"
                 onClick={() => fileInputRef.current?.click()}
@@ -1621,7 +1962,7 @@ export function ContactsView() {
               )}
             </div>
           ) : (
-            <div className="py-8 text-center space-y-4">
+            <div className="py-8 text-center space-y-4 flex-1 overflow-y-auto min-h-0">
               <CheckCircle2 className="size-12 text-emerald-600 mx-auto" />
               <h3 className="text-lg font-semibold">Import Complete</h3>
               <div className="grid grid-cols-3 gap-4 max-w-sm mx-auto">

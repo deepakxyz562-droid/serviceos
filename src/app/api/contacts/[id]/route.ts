@@ -5,6 +5,54 @@ import { applyTagsToContact, addContactToGroups } from '@/lib/contact-links';
 
 type Params = { params: Promise<{ id: string }> };
 
+/**
+ * Attach `contactTags` (with nested `tag`) and `contactGroups` (with nested
+ * `group`) to a single contact object. Done with explicit queries because the
+ * Supabase REST adapter does not support Prisma's nested `include` syntax —
+ * those nested includes are silently dropped in production.
+ */
+async function attachTagsAndGroups<T extends { id: string }>(
+  contact: T
+): Promise<T & { contactTags: unknown[]; contactGroups: unknown[] }> {
+  const [tagLinks, groupLinks] = await Promise.all([
+    db.contactTag.findMany({
+      where: { contactId: contact.id },
+      select: { id: true, contactId: true, tagId: true, appliedAt: true },
+    }),
+    db.contactGroup.findMany({
+      where: { contactId: contact.id },
+      select: { id: true, contactId: true, groupId: true, addedAt: true },
+    }),
+  ]);
+
+  const tagIds = [...new Set(tagLinks.map((l) => l.tagId))];
+  const groupIds = [...new Set(groupLinks.map((l) => l.groupId))];
+
+  const [tags, groups] = await Promise.all([
+    tagIds.length > 0
+      ? db.tag.findMany({ where: { id: { in: tagIds } } })
+      : Promise.resolve([]),
+    groupIds.length > 0
+      ? db.group.findMany({ where: { id: { in: groupIds } } })
+      : Promise.resolve([]),
+  ]);
+
+  const tagMap = new Map(tags.map((t) => [t.id, t]));
+  const groupMap = new Map(groups.map((g) => [g.id, g]));
+
+  return {
+    ...contact,
+    contactTags: tagLinks.map((l) => ({
+      id: l.id,
+      tag: tagMap.get(l.tagId),
+    })),
+    contactGroups: groupLinks.map((l) => ({
+      id: l.id,
+      group: groupMap.get(l.groupId),
+    })),
+  };
+}
+
 // GET /api/contacts/[id] — fetch one contact (include tags + groups)
 export async function GET(request: NextRequest, { params }: Params) {
   try {
@@ -17,10 +65,6 @@ export async function GET(request: NextRequest, { params }: Params) {
 
     const contact = await db.contact.findFirst({
       where: { id, tenantId },
-      include: {
-        contactTags: { include: { tag: true } },
-        contactGroups: { include: { group: true } },
-      },
     });
 
     if (!contact) {
@@ -32,7 +76,8 @@ export async function GET(request: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    return NextResponse.json({ data: contact });
+    const withRelations = await attachTagsAndGroups(contact);
+    return NextResponse.json({ data: withRelations });
   } catch (error) {
     console.error('Error fetching contact:', error);
     return NextResponse.json({ error: 'Failed to fetch contact' }, { status: 500 });
@@ -181,13 +226,14 @@ export async function PUT(request: NextRequest, { params }: Params) {
 
     const refreshed = await db.contact.findUnique({
       where: { id },
-      include: {
-        contactTags: { include: { tag: true } },
-        contactGroups: { include: { group: true } },
-      },
     });
 
-    return NextResponse.json({ data: refreshed });
+    if (!refreshed) {
+      return NextResponse.json({ error: 'Contact not found after update' }, { status: 404 });
+    }
+
+    const withRelations = await attachTagsAndGroups(refreshed);
+    return NextResponse.json({ data: withRelations });
   } catch (error) {
     console.error('Error updating contact:', error);
     return NextResponse.json({ error: 'Failed to update contact' }, { status: 500 });

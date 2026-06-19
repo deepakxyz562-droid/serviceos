@@ -7,10 +7,11 @@ import {
   ChevronRight, X, CheckCircle2, AlertCircle,
   ArrowUpRight, Receipt, MessageCircle, FileStack,
   Bot, Sparkles, Users, StickyNote,
-  TrendingUp, TrendingDown, ArrowUpDown, Upload, Image, File,
-  PhoneCall, Heart, Workflow,
+  ArrowUpDown, Upload, Image, File,
+  PhoneCall, Heart, Workflow, Loader2,
   ShoppingCart, Package, Truck,
 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +21,16 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useAppStore } from '@/store/app-store';
@@ -211,15 +222,6 @@ const ORDER_STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   refunded: { label: 'Refunded', cls: 'bg-muted text-muted-foreground border-border' },
 };
 
-// ─── Demo trend data for KPI cards ──────────────────────────────────────────
-const kpiTrends: Record<string, { direction: 'up' | 'down'; value: string }> = {
-  bookings: { direction: 'up', value: '+12%' },
-  revenue: { direction: 'up', value: '+8%' },
-  completed: { direction: 'up', value: '+5%' },
-  rating: { direction: 'down', value: '-0.2' },
-  outstanding: { direction: 'down', value: '-3%' },
-};
-
 // ─── Loading Skeleton ────────────────────────────────────────────────────────
 
 function ProfileSkeleton() {
@@ -278,7 +280,7 @@ function TimelineSkeleton() {
   );
 }
 
-// ─── KPI Card (enhanced with trend + colored border) ─────────────────────────
+// ─── KPI Card (enhanced with colored border) ─────────────────────────────────
 
 function KpiCard({
   label,
@@ -286,16 +288,13 @@ function KpiCard({
   icon: Icon,
   accent = 'text-emerald-400',
   borderColor = 'border-l-emerald-500',
-  trendKey,
 }: {
   label: string;
   value: string | number;
   icon: React.ElementType;
   accent?: string;
   borderColor?: string;
-  trendKey?: string;
 }) {
-  const trend = trendKey ? kpiTrends[trendKey] : undefined;
   return (
     <Card className={cn(
       'bg-card border-border border-l-4 transition-all duration-200 hover:shadow-md',
@@ -308,19 +307,6 @@ function KpiCard({
         </div>
         <div className="flex items-end gap-2">
           <p className="text-2xl font-extrabold text-foreground">{value}</p>
-          {trend && (
-            <span className={cn(
-              'text-[11px] font-semibold flex items-center gap-0.5 mb-0.5',
-              trend.direction === 'up' ? 'text-emerald-500' : 'text-red-500'
-            )}>
-              {trend.direction === 'up' ? (
-                <TrendingUp className="size-3" />
-              ) : (
-                <TrendingDown className="size-3" />
-              )}
-              {trend.value}
-            </span>
-          )}
         </div>
       </CardContent>
     </Card>
@@ -486,6 +472,27 @@ export function Customer360View() {
   const [activeTab, setActiveTab] = useState('overview');
   const [sortBy, setSortBy] = useState<SortOption>('name');
 
+  // QueryClient for invalidating queries after mutations
+  const queryClient = useQueryClient();
+
+  // Booking creation dialog state
+  const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
+  const [creatingBooking, setCreatingBooking] = useState(false);
+  const [bookingTitle, setBookingTitle] = useState('');
+  const [bookingScheduledAt, setBookingScheduledAt] = useState('');
+  const [bookingAddress, setBookingAddress] = useState('');
+  const [bookingNotes, setBookingNotes] = useState('');
+
+  // Invoice creation dialog state
+  const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
+  const [creatingInvoice, setCreatingInvoice] = useState(false);
+  const [invoiceItems, setInvoiceItems] = useState<{ description: string; quantity: number; rate: number }[]>([{ description: '', quantity: 1, rate: 0 }]);
+  const [invoiceDueDate, setInvoiceDueDate] = useState('');
+  const [invoiceNotes, setInvoiceNotes] = useState('');
+
+  // Jobs tab status filter
+  const [jobStatusFilter, setJobStatusFilter] = useState<string>('all');
+
   // Fetch customer list
   const { data: customers = [], isLoading: customersLoading } = useCustomers(tenantId);
 
@@ -642,6 +649,87 @@ export function Customer360View() {
     );
     return sorted[0]?.createdAt ? timeAgo(sorted[0].createdAt) : '';
   }, [timelineEvents]);
+
+  // ─── Create Booking handler ───────────────────────────────────────────────
+  const handleCreateBooking = useCallback(async () => {
+    if (!customer || !bookingTitle.trim()) {
+      toast.error('Title is required');
+      return;
+    }
+    setCreatingBooking(true);
+    try {
+      const res = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: bookingTitle.trim(),
+          customerId: customer.id,
+          customerName: customer.name,
+          customerPhone: customer.phone,
+          customerEmail: customer.email,
+          scheduledAt: bookingScheduledAt || undefined,
+          address: bookingAddress.trim() || undefined,
+          notes: bookingNotes.trim() || undefined,
+          source: 'manual',
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to create booking');
+      }
+      toast.success('Booking created successfully');
+      setBookingDialogOpen(false);
+      setBookingTitle(''); setBookingScheduledAt(''); setBookingAddress(''); setBookingNotes('');
+      queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['customer360', customer.id] });
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to create booking');
+    } finally {
+      setCreatingBooking(false);
+    }
+  }, [customer, bookingTitle, bookingScheduledAt, bookingAddress, bookingNotes, queryClient]);
+
+  // ─── Create Invoice handler ───────────────────────────────────────────────
+  const handleCreateInvoice = useCallback(async () => {
+    if (!customer) return;
+    const validItems = invoiceItems.filter(it => it.description.trim() && it.quantity > 0 && it.rate >= 0);
+    if (validItems.length === 0) {
+      toast.error('Add at least one valid line item');
+      return;
+    }
+    setCreatingInvoice(true);
+    try {
+      const res = await fetch('/api/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerId: customer.id,
+          items: validItems,
+          dueDate: invoiceDueDate || undefined,
+          notes: invoiceNotes.trim() || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to create invoice');
+      }
+      toast.success('Invoice created successfully');
+      setInvoiceDialogOpen(false);
+      setInvoiceItems([{ description: '', quantity: 1, rate: 0 }]);
+      setInvoiceDueDate(''); setInvoiceNotes('');
+      queryClient.invalidateQueries({ queryKey: ['customer360', customer.id] });
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to create invoice');
+    } finally {
+      setCreatingInvoice(false);
+    }
+  }, [customer, invoiceItems, invoiceDueDate, invoiceNotes, queryClient]);
+
+  // Filtered jobs based on the Jobs tab status filter
+  const filteredJobs = useMemo(
+    () => (jobStatusFilter === 'all' ? jobs : jobs.filter(j => j.status === jobStatusFilter)),
+    [jobs, jobStatusFilter]
+  );
 
   // ─── No customer selected — show list ─────────────────────────────────────
   if (!selectedCustomerId) {
@@ -936,11 +1024,14 @@ export function Customer360View() {
                       <Button
                         size="sm"
                         className="bg-emerald-600 hover:bg-emerald-700 text-foreground gap-2 flex-1 transition-all duration-200 shadow-sm"
-                        onClick={() =>
-                          toast.info('WhatsApp integration coming soon', {
-                            description: c.whatsappId || c.phone,
-                          })
-                        }
+                        onClick={() => {
+                          if (c.phone) {
+                            const phone = c.phone.replace(/[^0-9]/g, '');
+                            window.open(`https://wa.me/${phone}`, '_blank');
+                          } else {
+                            toast.warning('No phone number available');
+                          }
+                        }}
                       >
                         <MessageSquare className="size-3.5" /> WhatsApp
                       </Button>
@@ -949,7 +1040,14 @@ export function Customer360View() {
                         size="icon"
                         variant="outline"
                         className="size-9 rounded-full border-border text-muted-foreground hover:bg-accent hover:text-foreground transition-all duration-200"
-                        onClick={() => toast.info('Calling...', { description: c.phone })}
+                        onClick={() => {
+                          if (c.phone) {
+                            window.location.href = `tel:${c.phone}`;
+                          } else {
+                            toast.warning('No phone number available');
+                          }
+                        }}
+                        title="Call customer"
                       >
                         <PhoneCall className="size-3.5" />
                       </Button>
@@ -957,11 +1055,8 @@ export function Customer360View() {
                         size="icon"
                         variant="outline"
                         className="size-9 rounded-full border-border text-muted-foreground hover:bg-accent hover:text-foreground transition-all duration-200"
-                        onClick={() =>
-                          toast.info('Booking creation coming soon', {
-                            description: `Create booking for ${c.name}`,
-                          })
-                        }
+                        onClick={() => setBookingDialogOpen(true)}
+                        title="Create Booking"
                       >
                         <Calendar className="size-3.5" />
                       </Button>
@@ -969,11 +1064,8 @@ export function Customer360View() {
                         size="icon"
                         variant="outline"
                         className="size-9 rounded-full border-border text-muted-foreground hover:bg-accent hover:text-foreground transition-all duration-200"
-                        onClick={() =>
-                          toast.info('Invoice creation coming soon', {
-                            description: `Create invoice for ${c.name}`,
-                          })
-                        }
+                        onClick={() => setInvoiceDialogOpen(true)}
+                        title="Create Invoice"
                       >
                         <Receipt className="size-3.5" />
                       </Button>
@@ -1051,7 +1143,6 @@ export function Customer360View() {
                   icon={Calendar}
                   accent="text-sky-400"
                   borderColor="border-l-sky-500"
-                  trendKey="bookings"
                 />
                 <KpiCard
                   label="Total Revenue"
@@ -1059,7 +1150,6 @@ export function Customer360View() {
                   icon={DollarSign}
                   accent="text-emerald-400"
                   borderColor="border-l-emerald-500"
-                  trendKey="revenue"
                 />
                 <KpiCard
                   label="Completed Jobs"
@@ -1067,7 +1157,6 @@ export function Customer360View() {
                   icon={CheckCircle2}
                   accent="text-emerald-400"
                   borderColor="border-l-emerald-500"
-                  trendKey="completed"
                 />
                 <KpiCard
                   label="Avg Rating"
@@ -1075,7 +1164,6 @@ export function Customer360View() {
                   icon={Star}
                   accent="text-amber-400"
                   borderColor="border-l-amber-500"
-                  trendKey="rating"
                 />
                 <KpiCard
                   label="Outstanding"
@@ -1083,7 +1171,6 @@ export function Customer360View() {
                   icon={AlertCircle}
                   accent={stats.outstandingBalance > 0 ? 'text-red-400' : 'text-muted-foreground'}
                   borderColor="border-l-red-500"
-                  trendKey="outstanding"
                 />
               </div>
             )}
@@ -1563,9 +1650,16 @@ export function Customer360View() {
                   <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
                     <div className="p-5 space-y-4">
                       {customer360Loading ? (
-                        Array.from({ length: 4 }).map((_, i) => (
-                          <Skeleton key={i} className="h-16 w-full rounded-lg" />
-                        ))
+                        <>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            {Array.from({ length: 4 }).map((_, i) => (
+                              <Skeleton key={i} className="h-20 w-full rounded-xl" />
+                            ))}
+                          </div>
+                          {Array.from({ length: 4 }).map((_, i) => (
+                            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+                          ))}
+                        </>
                       ) : jobs.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-16 text-center">
                           <Wrench className="size-10 text-muted-foreground mb-3" />
@@ -1577,7 +1671,74 @@ export function Customer360View() {
                           </p>
                         </div>
                       ) : (
-                        jobs.map(job => {
+                        <>
+                          {/* Jobs Summary Stats */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div className="bg-card rounded-xl p-3 border border-border shadow-sm">
+                              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Total Jobs</p>
+                              <p className="text-lg font-extrabold text-foreground mt-1">{jobs.length}</p>
+                            </div>
+                            <div className="bg-card rounded-xl p-3 border border-border shadow-sm border-t-2 border-t-emerald-500">
+                              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Completed</p>
+                              <p className="text-lg font-extrabold text-emerald-500 mt-1">
+                                {jobs.filter(j => j.status === 'completed').length}
+                              </p>
+                            </div>
+                            <div className="bg-card rounded-xl p-3 border border-border shadow-sm border-t-2 border-t-amber-500">
+                              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">In Progress</p>
+                              <p className="text-lg font-extrabold text-amber-500 mt-1">
+                                {jobs.filter(j => j.status === 'in_progress').length}
+                              </p>
+                            </div>
+                            <div className="bg-card rounded-xl p-3 border border-border shadow-sm border-t-2 border-t-red-500">
+                              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Cancelled</p>
+                              <p className="text-lg font-extrabold text-red-500 mt-1">
+                                {jobs.filter(j => j.status === 'cancelled').length}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Filter + count row */}
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-1 bg-card border border-border rounded-lg p-0.5 flex-wrap">
+                              {([
+                                { key: 'all', label: 'All' },
+                                { key: 'pending', label: 'Pending' },
+                                { key: 'in_progress', label: 'In Progress' },
+                                { key: 'completed', label: 'Completed' },
+                                { key: 'cancelled', label: 'Cancelled' },
+                              ] as const).map(opt => (
+                                <Button
+                                  key={opt.key}
+                                  size="sm"
+                                  variant={jobStatusFilter === opt.key ? 'default' : 'ghost'}
+                                  className={cn(
+                                    'h-7 text-xs px-2.5 rounded-md transition-all duration-200',
+                                    jobStatusFilter === opt.key
+                                      ? 'bg-accent text-accent-foreground shadow-sm'
+                                      : 'text-muted-foreground hover:text-foreground'
+                                  )}
+                                  onClick={() => setJobStatusFilter(opt.key)}
+                                >
+                                  {opt.label}
+                                </Button>
+                              ))}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Showing {filteredJobs.length} of {jobs.length} jobs
+                            </p>
+                          </div>
+
+                          {filteredJobs.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-12 text-center">
+                              <Wrench className="size-8 text-muted-foreground mb-2" />
+                              <p className="text-sm font-medium text-foreground">No jobs match this filter</p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Try selecting a different status filter
+                              </p>
+                            </div>
+                          ) : (
+                            filteredJobs.map(job => {
                           const statusCfg =
                             jobStatusConfig[job.status] || jobStatusConfig.pending;
                           // Compute a fake progress for in_progress jobs
@@ -1668,6 +1829,8 @@ export function Customer360View() {
                             </div>
                           );
                         })
+                          )}
+                        </>
                       )}
                     </div>
                   </ScrollArea>
@@ -2184,6 +2347,109 @@ export function Customer360View() {
           </div>
         </div>
       </div>
+
+      {/* ─── Create Booking Dialog ─────────────────────────────────────────── */}
+      <Dialog open={bookingDialogOpen} onOpenChange={setBookingDialogOpen}>
+        <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>New Booking for {customer?.name}</DialogTitle>
+            <DialogDescription>Create a new booking — status will be auto-confirmed.</DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto min-h-0 space-y-3 py-2">
+            <div>
+              <Label className="text-xs">Title *</Label>
+              <Input value={bookingTitle} onChange={e => setBookingTitle(e.target.value)} placeholder="e.g. Deep cleaning service" />
+            </div>
+            <div>
+              <Label className="text-xs">Scheduled At</Label>
+              <Input type="datetime-local" value={bookingScheduledAt} onChange={e => setBookingScheduledAt(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs">Address</Label>
+              <Input value={bookingAddress} onChange={e => setBookingAddress(e.target.value)} placeholder="Service address" />
+            </div>
+            <div>
+              <Label className="text-xs">Notes</Label>
+              <Textarea value={bookingNotes} onChange={e => setBookingNotes(e.target.value)} rows={3} placeholder="Optional notes" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBookingDialogOpen(false)}>Cancel</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreateBooking} disabled={creatingBooking}>
+              {creatingBooking ? <><Loader2 className="size-4 mr-1 animate-spin" /> Creating...</> : 'Create Booking'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Create Invoice Dialog ─────────────────────────────────────────── */}
+      <Dialog open={invoiceDialogOpen} onOpenChange={setInvoiceDialogOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>New Invoice for {customer?.name}</DialogTitle>
+            <DialogDescription>Add line items. Invoice will be created as draft.</DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto min-h-0 space-y-3 py-2">
+            <div className="space-y-2">
+              {invoiceItems.map((item, idx) => (
+                <div key={idx} className="grid grid-cols-12 gap-2 items-end">
+                  <div className="col-span-6">
+                    <Label className="text-xs">Description</Label>
+                    <Input value={item.description} onChange={e => {
+                      const next = [...invoiceItems]; next[idx] = { ...next[idx], description: e.target.value };
+                      setInvoiceItems(next);
+                    }} placeholder="Service or product" />
+                  </div>
+                  <div className="col-span-2">
+                    <Label className="text-xs">Qty</Label>
+                    <Input type="number" min="1" value={item.quantity} onChange={e => {
+                      const next = [...invoiceItems]; next[idx] = { ...next[idx], quantity: Number(e.target.value) };
+                      setInvoiceItems(next);
+                    }} />
+                  </div>
+                  <div className="col-span-3">
+                    <Label className="text-xs">Rate</Label>
+                    <Input type="number" min="0" step="0.01" value={item.rate} onChange={e => {
+                      const next = [...invoiceItems]; next[idx] = { ...next[idx], rate: Number(e.target.value) };
+                      setInvoiceItems(next);
+                    }} />
+                  </div>
+                  <div className="col-span-1">
+                    {invoiceItems.length > 1 && (
+                      <Button size="icon" variant="ghost" className="text-red-500" onClick={() => setInvoiceItems(invoiceItems.filter((_, i) => i !== idx))}>
+                        <X className="size-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setInvoiceItems([...invoiceItems, { description: '', quantity: 1, rate: 0 }])}>
+              <Plus className="size-3.5 mr-1" /> Add Line Item
+            </Button>
+            <div className="border-t pt-3 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span className="font-medium">{format(invoiceItems.reduce((s, it) => s + it.quantity * it.rate, 0))}</span>
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs">Due Date</Label>
+              <Input type="date" value={invoiceDueDate} onChange={e => setInvoiceDueDate(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs">Notes</Label>
+              <Textarea value={invoiceNotes} onChange={e => setInvoiceNotes(e.target.value)} rows={2} placeholder="Optional notes" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInvoiceDialogOpen(false)}>Cancel</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreateInvoice} disabled={creatingInvoice}>
+              {creatingInvoice ? <><Loader2 className="size-4 mr-1 animate-spin" /> Creating...</> : 'Create Invoice'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
