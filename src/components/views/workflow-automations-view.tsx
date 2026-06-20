@@ -7,7 +7,7 @@ import {
   MessageCircle, Mail, UserPlus, ListChecks, RefreshCw,
   Bell, Globe, ChevronDown, ChevronRight, X,
   PlusCircle, MinusCircle, Settings2, GitBranch,
-  AlertCircle, Target, Briefcase, Send,
+  AlertCircle, Target, Briefcase, Send, CalendarClock,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,7 +28,7 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { TRIGGER_CATEGORIES, TRIGGER_EVENTS } from '@/lib/trigger-catalog';
+import { TRIGGER_CATEGORIES, TRIGGER_EVENTS, ACTION_TYPES } from '@/lib/trigger-catalog';
 
 // ============================================================
 // Types
@@ -68,21 +68,33 @@ interface WorkflowAutomation {
 // ============================================================
 
 // Derive local trigger categories from shared trigger-catalog for the accordion UI
-const TRIGGER_CATEGORIES_LOCAL = TRIGGER_CATEGORIES
-  .filter(cat => cat.id !== 'all')
-  .map(cat => {
-    // Convert shared color (e.g. 'text-blue-500') to local format (e.g. 'text-blue-600 bg-blue-50')
-    const colorName = cat.color.replace('text-', '').replace('-500', '');
-    const localColor = `text-${colorName}-600 bg-${colorName}-50`;
-    return {
-      name: cat.label, // e.g. 'CRM Events'
-      icon: cat.icon,
-      color: localColor,
-      triggers: TRIGGER_EVENTS
-        .filter(e => e.category === cat.label)
-        .map(e => ({ value: e.value, label: e.label })),
-    };
-  });
+const TRIGGER_CATEGORIES_LOCAL = [
+  ...TRIGGER_CATEGORIES
+    .filter((cat) => cat.id !== 'all')
+    .map((cat) => {
+      // Convert shared color (e.g. 'text-blue-500') to local format (e.g. 'text-blue-600 bg-blue-50')
+      const colorName = cat.color.replace('text-', '').replace('-500', '');
+      const localColor = `text-${colorName}-600 bg-${colorName}-50`;
+      return {
+        name: cat.label, // e.g. 'CRM Events'
+        icon: cat.icon,
+        color: localColor,
+        triggers: TRIGGER_EVENTS
+          .filter((e) => e.category === cat.label)
+          .map((e) => ({ value: e.value, label: e.label })),
+      };
+    }),
+  // "Schedule & Contract Events" is referenced by TRIGGER_EVENTS (contract.renewed, schedule.trigger)
+  // but has no entry in TRIGGER_CATEGORIES yet — include it locally so the triggers are visible.
+  {
+    name: 'Schedule & Contract Events',
+    icon: CalendarClock,
+    color: 'text-indigo-600 bg-indigo-50',
+    triggers: TRIGGER_EVENTS
+      .filter((e) => e.category === 'Schedule & Contract Events')
+      .map((e) => ({ value: e.value, label: e.label })),
+  },
+];
 
 const ALL_TRIGGERS = TRIGGER_EVENTS.map(t => {
   const cat = TRIGGER_CATEGORIES.find(c => c.label === t.category);
@@ -111,17 +123,8 @@ const CONDITION_FIELDS = [
   'Service Category', 'Booking Date',
 ];
 
-const ACTION_TYPES = [
-  { value: 'send_whatsapp', label: 'Send WhatsApp Message', icon: MessageCircle, color: 'text-green-600 bg-green-50' },
-  { value: 'send_email', label: 'Send Email', icon: Mail, color: 'text-blue-600 bg-blue-50' },
-  { value: 'assign_sales_rep', label: 'Assign Sales Rep', icon: UserPlus, color: 'text-purple-600 bg-purple-50' },
-  { value: 'create_followup_task', label: 'Create Follow-up Task', icon: ListChecks, color: 'text-orange-600 bg-orange-50' },
-  { value: 'update_lead_status', label: 'Update Lead Status', icon: RefreshCw, color: 'text-amber-600 bg-amber-50' },
-  { value: 'add_to_campaign', label: 'Add to Campaign', icon: Target, color: 'text-pink-600 bg-pink-50' },
-  { value: 'notify_team', label: 'Notify Team', icon: Bell, color: 'text-cyan-600 bg-cyan-50' },
-  { value: 'call_webhook', label: 'Call Webhook', icon: Globe, color: 'text-slate-600 bg-slate-50' },
-  { value: 'move_to_segment', label: 'Move Customer to Segment', icon: Filter, color: 'text-indigo-600 bg-indigo-50' },
-];
+// Action types are imported from @/lib/trigger-catalog (canonical source).
+// This ensures the workflow builder's action dropdown matches the trigger-engine's executor switch.
 
 const MOCK_EMPLOYEES = [
   { id: 'e1', name: 'Sarah Johnson', role: 'Sales Manager' },
@@ -149,8 +152,8 @@ const MOCK_AUTOMATIONS: WorkflowAutomation[] = [
     ],
     conditionLogic: 'and',
     actions: [
-      { id: 'a2', type: 'notify_team', config: { message: 'High-value lead detected! Value: £{{value}}', channel: 'sales' } },
-      { id: 'a3', type: 'assign_sales_rep', config: { employeeId: 'e1' } },
+      { id: 'a2', type: 'send_notification', config: { message: 'High-value lead detected! Value: £{{value}}', channel: 'sales' } },
+      { id: 'a3', type: 'assign_user', config: { employeeId: 'e1' } },
     ],
     active: true, executionCount: 38, lastExecutedAt: '2025-03-09T10:15:00', lastExecutionStatus: 'success', createdAt: '2025-02-01',
   },
@@ -186,7 +189,7 @@ const MOCK_AUTOMATIONS: WorkflowAutomation[] = [
     conditionLogic: 'and',
     actions: [
       { id: 'a7', type: 'send_whatsapp', config: { template: 'Hi {{name}}, this is a reminder that your invoice #{{invoice_number}} is overdue. Please arrange payment at your earliest convenience.' } },
-      { id: 'a8', type: 'notify_team', config: { message: 'Invoice #{{invoice_number}} is now 7 days overdue', channel: 'finance' } },
+      { id: 'a8', type: 'send_notification', config: { message: 'Invoice #{{invoice_number}} is now 7 days overdue', channel: 'finance' } },
     ],
     active: false, executionCount: 23, lastExecutedAt: '2025-02-28T11:00:00', lastExecutionStatus: 'failed', createdAt: '2025-01-05',
   },
@@ -197,7 +200,7 @@ const MOCK_AUTOMATIONS: WorkflowAutomation[] = [
     conditionLogic: 'and',
     actions: [
       { id: 'a9', type: 'send_whatsapp', config: { template: 'Thanks for reaching out! Our team will get back to you shortly. In the meantime, feel free to ask any questions.' } },
-      { id: 'a10', type: 'create_followup_task', config: { taskTitle: 'Follow up with WhatsApp lead', dueIn: '2 hours' } },
+      { id: 'a10', type: 'create_task', config: { taskTitle: 'Follow up with WhatsApp lead', dueIn: '2 hours' } },
     ],
     active: true, executionCount: 210, lastExecutedAt: '2025-03-10T15:45:00', lastExecutionStatus: 'success', createdAt: '2024-12-20',
   },
@@ -318,7 +321,7 @@ function ActionConfigPanel({ action, onChange }: { action: Action; onChange: (co
           />
         </div>
       );
-    case 'assign_sales_rep':
+    case 'assign_user':
       return (
         <div className="space-y-2">
           <Label className="text-xs">Select Employee</Label>
@@ -337,7 +340,7 @@ function ActionConfigPanel({ action, onChange }: { action: Action; onChange: (co
           </Select>
         </div>
       );
-    case 'create_followup_task':
+    case 'create_task':
       return (
         <div className="space-y-2">
           <Label className="text-xs">Task Title</Label>
@@ -366,43 +369,35 @@ function ActionConfigPanel({ action, onChange }: { action: Action; onChange: (co
           </Select>
         </div>
       );
-    case 'update_lead_status':
+    case 'create_job':
       return (
         <div className="space-y-2">
-          <Label className="text-xs">New Status</Label>
-          <Select
-            value={action.config.newStatus || ''}
-            onValueChange={(val) => onChange({ ...action.config, newStatus: val })}
-          >
-            <SelectTrigger className="h-7 text-xs">
-              <SelectValue placeholder="Select status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="new">New</SelectItem>
-              <SelectItem value="contacted">Contacted</SelectItem>
-              <SelectItem value="qualified">Qualified</SelectItem>
-              <SelectItem value="negotiation">Negotiation</SelectItem>
-              <SelectItem value="won">Won</SelectItem>
-              <SelectItem value="lost">Lost</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      );
-    case 'add_to_campaign':
-      return (
-        <div className="space-y-2">
-          <Label className="text-xs">Campaign Name</Label>
+          <Label className="text-xs">Job Title</Label>
           <Input
-            placeholder="Campaign name"
-            value={action.config.campaignName || ''}
-            onChange={(e) => onChange({ ...action.config, campaignName: e.target.value })}
+            placeholder="e.g., AC Repair"
+            value={action.config.jobTitle || ''}
+            onChange={(e) => onChange({ ...action.config, jobTitle: e.target.value })}
+            className="h-7 text-xs"
+          />
+          <Label className="text-xs">Job Type</Label>
+          <Input
+            placeholder="e.g., Installation, Maintenance"
+            value={action.config.jobType || ''}
+            onChange={(e) => onChange({ ...action.config, jobType: e.target.value })}
             className="h-7 text-xs"
           />
         </div>
       );
-    case 'notify_team':
+    case 'send_notification':
       return (
         <div className="space-y-2">
+          <Label className="text-xs">Title</Label>
+          <Input
+            placeholder="Notification title"
+            value={action.config.title || ''}
+            onChange={(e) => onChange({ ...action.config, title: e.target.value })}
+            className="h-7 text-xs"
+          />
           <Label className="text-xs">Message</Label>
           <Textarea
             placeholder="Notification message..."
@@ -428,40 +423,188 @@ function ActionConfigPanel({ action, onChange }: { action: Action; onChange: (co
           </Select>
         </div>
       );
-    case 'call_webhook':
+    case 'send_sms':
       return (
         <div className="space-y-2">
-          <Label className="text-xs">Webhook URL</Label>
+          <Label className="text-xs">Message</Label>
+          <Textarea
+            placeholder="SMS message..."
+            value={action.config.message || ''}
+            onChange={(e) => onChange({ ...action.config, message: e.target.value })}
+            rows={2}
+            className="text-xs"
+          />
+        </div>
+      );
+    case 'add_tag':
+    case 'remove_tag':
+      return (
+        <div className="space-y-2">
+          <Label className="text-xs">Tag Name</Label>
           <Input
-            placeholder="https://..."
-            value={action.config.url || ''}
-            onChange={(e) => onChange({ ...action.config, url: e.target.value })}
+            placeholder="e.g., VIP, Follow-up"
+            value={action.config.tagName || ''}
+            onChange={(e) => onChange({ ...action.config, tagName: e.target.value })}
             className="h-7 text-xs"
           />
-          <Label className="text-xs">Method</Label>
+        </div>
+      );
+    case 'update_record':
+      return (
+        <div className="space-y-2">
+          <Label className="text-xs">Field</Label>
+          <Input
+            placeholder="e.g., status"
+            value={action.config.field || ''}
+            onChange={(e) => onChange({ ...action.config, field: e.target.value })}
+            className="h-7 text-xs"
+          />
+          <Label className="text-xs">Value</Label>
+          <Input
+            placeholder="e.g., active"
+            value={action.config.value || ''}
+            onChange={(e) => onChange({ ...action.config, value: e.target.value })}
+            className="h-7 text-xs"
+          />
+        </div>
+      );
+    case 'move_pipeline':
+      return (
+        <div className="space-y-2">
+          <Label className="text-xs">Target Stage</Label>
+          <Input
+            placeholder="e.g., Negotiation"
+            value={action.config.stage || ''}
+            onChange={(e) => onChange({ ...action.config, stage: e.target.value })}
+            className="h-7 text-xs"
+          />
+        </div>
+      );
+    case 'create_broadcast':
+      return (
+        <div className="space-y-2">
+          <Label className="text-xs">Broadcast Name</Label>
+          <Input
+            placeholder="Broadcast name"
+            value={action.config.broadcastName || ''}
+            onChange={(e) => onChange({ ...action.config, broadcastName: e.target.value })}
+            className="h-7 text-xs"
+          />
+          <Label className="text-xs">Message</Label>
+          <Textarea
+            placeholder="Broadcast message..."
+            value={action.config.message || ''}
+            onChange={(e) => onChange({ ...action.config, message: e.target.value })}
+            rows={2}
+            className="text-xs"
+          />
+        </div>
+      );
+    case 'create_invoice':
+    case 'create_deposit_invoice':
+    case 'create_recurring_invoice':
+      return (
+        <div className="space-y-2">
+          <Label className="text-xs">Amount</Label>
+          <Input
+            type="number"
+            min={0}
+            step="0.01"
+            placeholder="0.00"
+            value={action.config.amount || ''}
+            onChange={(e) => onChange({ ...action.config, amount: e.target.value })}
+            className="h-7 text-xs"
+          />
+          <Label className="text-xs">Description</Label>
+          <Input
+            placeholder="Invoice description"
+            value={action.config.description || ''}
+            onChange={(e) => onChange({ ...action.config, description: e.target.value })}
+            className="h-7 text-xs"
+          />
+          {action.type === 'create_recurring_invoice' && (
+            <>
+              <Label className="text-xs">Frequency</Label>
+              <Select
+                value={action.config.frequency || 'monthly'}
+                onValueChange={(val) => onChange({ ...action.config, frequency: val })}
+              >
+                <SelectTrigger className="h-7 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                  <SelectItem value="quarterly">Quarterly</SelectItem>
+                  <SelectItem value="yearly">Yearly</SelectItem>
+                </SelectContent>
+              </Select>
+            </>
+          )}
+        </div>
+      );
+    case 'send_invoice':
+    case 'mark_paid':
+    case 'send_reminder':
+    case 'approve_invoice':
+      return (
+        <div className="space-y-2">
+          <Label className="text-xs">Note (optional)</Label>
+          <Textarea
+            placeholder="Optional note for this invoice action"
+            value={action.config.note || ''}
+            onChange={(e) => onChange({ ...action.config, note: e.target.value })}
+            rows={2}
+            className="text-xs"
+          />
+          <p className="text-[10px] text-muted-foreground">
+            This action will use the invoice from the trigger context.
+          </p>
+        </div>
+      );
+    case 'condition':
+      return (
+        <div className="space-y-2">
+          <Label className="text-xs">Field</Label>
+          <Input
+            placeholder="e.g., total"
+            value={action.config.field || ''}
+            onChange={(e) => onChange({ ...action.config, field: e.target.value })}
+            className="h-7 text-xs"
+          />
+          <Label className="text-xs">Operator</Label>
           <Select
-            value={action.config.method || 'POST'}
-            onValueChange={(val) => onChange({ ...action.config, method: val })}
+            value={action.config.operator || 'equals'}
+            onValueChange={(val) => onChange({ ...action.config, operator: val })}
           >
             <SelectTrigger className="h-7 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="POST">POST</SelectItem>
-              <SelectItem value="GET">GET</SelectItem>
-              <SelectItem value="PUT">PUT</SelectItem>
+              <SelectItem value="equals">Equals</SelectItem>
+              <SelectItem value="not_equals">Not Equals</SelectItem>
+              <SelectItem value="greater_than">Greater Than</SelectItem>
+              <SelectItem value="less_than">Less Than</SelectItem>
+              <SelectItem value="contains">Contains</SelectItem>
             </SelectContent>
           </Select>
+          <Label className="text-xs">Value</Label>
+          <Input
+            placeholder="Comparison value"
+            value={action.config.value || ''}
+            onChange={(e) => onChange({ ...action.config, value: e.target.value })}
+            className="h-7 text-xs"
+          />
         </div>
       );
-    case 'move_to_segment':
+    case 'delay':
       return (
         <div className="space-y-2">
-          <Label className="text-xs">Segment</Label>
+          <Label className="text-xs">Delay Duration</Label>
           <Input
-            placeholder="e.g., VIP Customers"
-            value={action.config.segmentName || ''}
-            onChange={(e) => onChange({ ...action.config, segmentName: e.target.value })}
+            placeholder="e.g., 1 hour, 2 days, 1 week"
+            value={action.config.duration || ''}
+            onChange={(e) => onChange({ ...action.config, duration: e.target.value })}
             className="h-7 text-xs"
           />
         </div>

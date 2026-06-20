@@ -957,6 +957,14 @@ export const ACTION_TYPES = [
   { value: 'update_record', label: 'Update Record', icon: Save, color: 'bg-indigo-500/15 text-indigo-600 border-indigo-500/20' },
   { value: 'move_pipeline', label: 'Move Pipeline', icon: ArrowRightLeft, color: 'bg-teal-500/15 text-teal-600 border-teal-500/20' },
   { value: 'create_broadcast', label: 'Create Broadcast', icon: Send, color: 'bg-emerald-500/15 text-emerald-600 border-emerald-500/20' },
+  // ─── Invoice workflow actions ───────────────────────────────────────────
+  { value: 'create_invoice', label: 'Create Invoice', icon: Receipt, color: 'bg-emerald-500/15 text-emerald-700 border-emerald-500/20' },
+  { value: 'create_deposit_invoice', label: 'Create Deposit Invoice', icon: Banknote, color: 'bg-yellow-500/15 text-yellow-700 border-yellow-500/20' },
+  { value: 'create_recurring_invoice', label: 'Create Recurring Invoice', icon: CalendarClock, color: 'bg-purple-500/15 text-purple-700 border-purple-500/20' },
+  { value: 'send_invoice', label: 'Send Invoice', icon: FileCheck2, color: 'bg-green-500/15 text-green-700 border-green-500/20' },
+  { value: 'mark_paid', label: 'Mark Paid', icon: CreditCard, color: 'bg-teal-500/15 text-teal-700 border-teal-500/20' },
+  { value: 'send_reminder', label: 'Send Reminder', icon: Bell, color: 'bg-orange-500/15 text-orange-700 border-orange-500/20' },
+  { value: 'approve_invoice', label: 'Approve Invoice', icon: ShieldCheck, color: 'bg-blue-500/15 text-blue-700 border-blue-500/20' },
   { value: 'condition', label: 'If/Else Condition', icon: ArrowRightLeft, color: 'bg-orange-500/15 text-orange-600 border-orange-500/20' },
   { value: 'delay', label: 'Delay / Wait', icon: Clock3, color: 'bg-gray-500/15 text-gray-600 border-gray-500/20' },
 ];
@@ -991,6 +999,9 @@ export const TRIGGER_EVENTS = [
   { value: 'job.completed', label: 'Job Completed', category: 'Job Events' },
   { value: 'job.cancelled', label: 'Job Cancelled', category: 'Job Events' },
   { value: 'time.3d_after_job', label: '3 Days After Job', category: 'Job Events' },
+  // Contract & Schedule Events
+  { value: 'contract.renewed', label: 'Contract Renewed', category: 'Schedule & Contract Events' },
+  { value: 'schedule.trigger', label: 'Schedule Trigger (Time-based)', category: 'Schedule & Contract Events' },
   // Invoice Events
   { value: 'invoice.created', label: 'Invoice Created', category: 'Invoice Events' },
   { value: 'invoice.paid', label: 'Invoice Paid', category: 'Invoice Events' },

@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { EventBus } from '@/lib/event-bus';
 import { sendEmail } from '@/lib/email-send';
+import { notifyOwner } from '@/lib/owner-notifications';
 
 // GET /api/leads - List leads with optional status filter
 export async function GET(request: NextRequest) {
@@ -239,6 +240,39 @@ export async function POST(request: NextRequest) {
     } catch (emailErr) {
       // Email failure must NOT break the lead creation flow — just log it
       console.error('[LeadsCreate] Lead email notification failed:', emailErr);
+    }
+
+    // ─── Send WhatsApp notification to the tenant owner ──────────────
+    // Independent of email: even if email failed/simulated, WhatsApp still fires.
+    try {
+      if (lead.tenantId) {
+        const leadValueStr = lead.value
+          ? `$${Number(lead.value).toLocaleString()}`
+          : 'N/A';
+        const waMessage = [
+          '🎯 *New Lead Received*',
+          '',
+          `*Name:* ${lead.name}`,
+          `*Phone:* ${lead.phone}`,
+          lead.email ? `*Email:* ${lead.email}` : '',
+          `*Source:* ${lead.source}`,
+          `*Service:* ${lead.serviceType || 'N/A'}`,
+          `*Priority:* ${lead.priority}`,
+          `*Value:* ${leadValueStr}`,
+          lead.description ? `*Notes:* ${lead.description.slice(0, 120)}` : '',
+          '',
+          'Follow up promptly to maximize conversion!',
+        ].filter(Boolean).join('\n');
+
+        await notifyOwner(lead.tenantId, {
+          eventType: 'lead.created',
+          eventLabel: 'New Lead',
+          whatsappMessage: waMessage,
+          leadId: lead.id,
+        });
+      }
+    } catch (waErr) {
+      console.error('[LeadsCreate] Owner WhatsApp notification failed:', waErr);
     }
 
     return NextResponse.json({ lead }, { status: 201 });

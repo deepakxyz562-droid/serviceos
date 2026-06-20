@@ -304,6 +304,93 @@ async function executeAction(
         console.log(`[TriggerEngine] Creating broadcast: ${action.config.name || 'Auto Broadcast'}`)
         return { success: true, result: { broadcastCreated: true } }
       }
+
+      // ─── Invoice workflow actions ───────────────────────────────────────
+      // These let workflow automations create/send/approve invoices. They're
+      // backed by the real invoice-automation functions so workflows and the UI
+      // share the exact same business logic.
+      case 'create_invoice': {
+        const { autoCreateInvoiceFromJob } = await import('@/lib/invoice-automation')
+        // Prefer an explicit jobId from config, then fall back to the payload
+        // (resourceId is set by the job lifecycle emitter; job.id is the nested form)
+        const jobId = action.config.jobId || payload.data.jobId || payload.data.resourceId || payload.data.job?.id
+        if (!jobId) {
+          return { success: false, error: 'create_invoice requires a jobId (in config or payload)' }
+        }
+        const r = await autoCreateInvoiceFromJob(jobId)
+        return { success: r.success, result: r, error: r.error }
+      }
+      case 'create_deposit_invoice': {
+        const { createDepositInvoiceFromBooking } = await import('@/lib/invoice-automation')
+        const bookingId = action.config.bookingId || payload.data.bookingId || payload.data.resourceId || payload.data.booking?.id
+        if (!bookingId) {
+          return { success: false, error: 'create_deposit_invoice requires a bookingId (in config or payload)' }
+        }
+        const pct = action.config.percentage ? Number(action.config.percentage) : undefined
+        const r = await createDepositInvoiceFromBooking(bookingId, pct)
+        return { success: r.success, result: r, error: r.error }
+      }
+      case 'create_recurring_invoice': {
+        const { createRecurringInvoiceSchedule } = await import('@/lib/invoice-automation')
+        const tenantId = action.config.tenantId || payload.tenantId || payload.data.tenantId
+        if (!tenantId) {
+          return { success: false, error: 'create_recurring_invoice requires a tenantId' }
+        }
+        const r = await createRecurringInvoiceSchedule({
+          name: action.config.name || 'Auto Recurring Invoice',
+          customerId: action.config.customerId || payload.data.customerId || payload.data.customer?.id || null,
+          jobId: action.config.jobId || payload.data.jobId || payload.data.job?.id || null,
+          frequency: action.config.frequency || 'monthly',
+          dayOfMonth: action.config.dayOfMonth ? Number(action.config.dayOfMonth) : 1,
+          amount: Number(action.config.amount || 0),
+          taxPercent: action.config.taxPercent ? Number(action.config.taxPercent) : 0,
+          currency: action.config.currency || 'USD',
+          itemsJson: action.config.itemsJson,
+          notes: action.config.notes || 'Created by workflow automation',
+          tenantId,
+        })
+        return { success: r.success, result: r, error: r.error }
+      }
+      case 'send_invoice': {
+        const { sendInvoice } = await import('@/lib/invoice-automation')
+        const invoiceId = action.config.invoiceId || payload.data.invoiceId || payload.data.invoice?.id
+        if (!invoiceId) {
+          return { success: false, error: 'send_invoice requires an invoiceId (in config or payload)' }
+        }
+        const r = await sendInvoice(invoiceId, {
+          sendEmail: action.config.sendEmail !== false,
+          sendWhatsApp: action.config.sendWhatsApp !== false,
+        })
+        return { success: !(r.email?.error) || !(r.whatsapp?.error), result: r }
+      }
+      case 'mark_paid': {
+        const { markInvoicePaid } = await import('@/lib/invoice-automation')
+        const invoiceId = action.config.invoiceId || payload.data.invoiceId || payload.data.invoice?.id
+        if (!invoiceId) {
+          return { success: false, error: 'mark_paid requires an invoiceId (in config or payload)' }
+        }
+        const r = await markInvoicePaid(invoiceId)
+        return { success: r.success, result: r, error: r.error }
+      }
+      case 'send_reminder': {
+        const { sendInvoiceReminder } = await import('@/lib/invoice-automation')
+        const invoiceId = action.config.invoiceId || payload.data.invoiceId || payload.data.invoice?.id
+        if (!invoiceId) {
+          return { success: false, error: 'send_reminder requires an invoiceId (in config or payload)' }
+        }
+        const r = await sendInvoiceReminder(invoiceId)
+        return { success: r.success, result: r, error: r.error }
+      }
+      case 'approve_invoice': {
+        const { approveInvoice } = await import('@/lib/invoice-automation')
+        const invoiceId = action.config.invoiceId || payload.data.invoiceId || payload.data.invoice?.id
+        if (!invoiceId) {
+          return { success: false, error: 'approve_invoice requires an invoiceId (in config or payload)' }
+        }
+        const r = await approveInvoice(invoiceId)
+        return { success: r.success, result: r, error: r.error }
+      }
+
       default:
         return { success: false, error: `Unknown action type: ${action.type}` }
     }

@@ -8,6 +8,8 @@ import {
   notifyEmployeeJobCompleted,
 } from '@/lib/whatsapp-notifications'
 import { EventBus } from '@/lib/event-bus'
+import { notifyOwner } from '@/lib/owner-notifications'
+import { autoCreateInvoiceFromJob, createMilestoneInvoice, getInvoiceSettings } from '@/lib/invoice-automation'
 
 function safeParseJson(str: string): unknown[] {
   try {
@@ -293,6 +295,46 @@ export async function POST(request: NextRequest) {
           console.error('Failed to emit job.started event:', e)
         }
 
+        // ─── Notify the tenant owner that the job has started ────
+        try {
+          const jobNumber = updatedJob.jobNumber || String(updatedJob.id).slice(-6).toUpperCase()
+          const startTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+          const waMessage = [
+            '🚀 *Job Started*',
+            '',
+            `*Job #:* ${jobNumber}`,
+            `*Title:* ${updatedJob.title || 'N/A'}`,
+            `*Customer:* ${updatedJob.customerName || 'N/A'}`,
+            `*Technician:* ${updatedJob.assigneeName || 'Unassigned'}`,
+            `*Started At:* ${startTime}`,
+            updatedJob.address ? `*Address:* ${updatedJob.address}` : '',
+          ].filter(Boolean).join('\n')
+
+          await notifyOwner(updatedJob.workspaceId, {
+            eventType: 'job.started',
+            eventLabel: 'Job Started',
+            whatsappMessage: waMessage,
+            jobId: updatedJob.id,
+          })
+        } catch (ownerErr) {
+          console.error('[JobLifecycle] Owner start notification failed:', ownerErr)
+        }
+
+        // ─── Milestone invoice #1 (30% on job start) if enabled ──
+        try {
+          const invSettings = await getInvoiceSettings(updatedJob.workspaceId)
+          if (invSettings.enableMilestones) {
+            const msResult = await createMilestoneInvoice(updatedJob.id, 1)
+            if (msResult.success) {
+              console.log(`[JobLifecycle] Created milestone 1 invoice ${msResult.number} for job ${updatedJob.id}`)
+            } else if (!msResult.skipped) {
+              console.error(`[JobLifecycle] Milestone 1 invoice failed: ${msResult.error}`)
+            }
+          }
+        } catch (msErr) {
+          console.error('[JobLifecycle] Milestone invoice error:', msErr)
+        }
+
         break
       }
 
@@ -370,6 +412,58 @@ export async function POST(request: NextRequest) {
           }, { tenantId: updatedJob.workspaceId || undefined, workspaceId: updatedJob.workspaceId || undefined })
         } catch (e) {
           console.error('Failed to emit job.completed event:', e)
+        }
+
+        // ─── Notify the tenant owner that the job is complete ────
+        try {
+          const jobNumber = updatedJob.jobNumber || String(updatedJob.id).slice(-6).toUpperCase()
+          const completedAt = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+          const waMessage = [
+            '🎉 *Job Completed*',
+            '',
+            `*Job #:* ${jobNumber}`,
+            `*Title:* ${updatedJob.title || 'N/A'}`,
+            `*Customer:* ${updatedJob.customerName || 'N/A'}`,
+            `*Technician:* ${updatedJob.assigneeName || 'Unassigned'}`,
+            `*Completed At:* ${completedAt}`,
+          ].filter(Boolean).join('\n')
+
+          await notifyOwner(updatedJob.workspaceId, {
+            eventType: 'job.completed',
+            eventLabel: 'Job Completed',
+            whatsappMessage: waMessage,
+            jobId: updatedJob.id,
+          })
+        } catch (ownerErr) {
+          console.error('[JobLifecycle] Owner complete notification failed:', ownerErr)
+        }
+
+        // ─── Auto-create invoice if tenant setting is enabled ────
+        // Two paths:
+        //   1. Milestone mode (enableMilestones=true) → create milestone #3 (final 30%).
+        //      Milestone #1 (30%) was created on job start; milestone #2 (40% at 50%
+        //      progress) is created manually by the manager from the invoices view.
+        //   2. Standard mode → autoCreateInvoiceFromJob (respects autoCreateOnJobComplete
+        //      toggle + approval_required → pending_approval status).
+        try {
+          const invSettings = await getInvoiceSettings(updatedJob.workspaceId)
+          if (invSettings.enableMilestones) {
+            const msResult = await createMilestoneInvoice(updatedJob.id, 3)
+            if (msResult.success) {
+              console.log(`[JobLifecycle] Created milestone 3 (final) invoice ${msResult.number} for job ${updatedJob.id}`)
+            } else if (!msResult.skipped) {
+              console.error(`[JobLifecycle] Milestone 3 invoice failed: ${msResult.error}`)
+            }
+          } else {
+            const invResult = await autoCreateInvoiceFromJob(updatedJob.id)
+            if (invResult.success) {
+              console.log(`[JobLifecycle] Auto-created invoice ${invResult.number} for job ${updatedJob.id}`)
+            } else if (!invResult.skipped) {
+              console.error(`[JobLifecycle] Auto-invoice failed: ${invResult.error}`)
+            }
+          }
+        } catch (invErr) {
+          console.error('[JobLifecycle] Auto-invoice creation error:', invErr)
         }
 
         break

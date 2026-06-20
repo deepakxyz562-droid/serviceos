@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Megaphone, Plus, Search, Play, Pause, Copy, Eye, Calendar,
   Users, Send, BarChart3, Clock, CheckCircle2, XCircle,
-  MessageSquare, TrendingUp, Loader2, Trash2,
+  MessageSquare, TrendingUp, Loader2, Trash2, Pencil,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { authFetch } from '@/lib/client-auth';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -36,6 +37,8 @@ interface Campaign {
   status: CampaignStatus;
   channel: CampaignChannel;
   audienceType: string;
+  audienceId?: string;
+  audienceFiltersJson?: string;
   messageContent: string;
   scheduledAt: string | null;
   timezone: string;
@@ -85,7 +88,116 @@ const AUDIENCE_LABELS: Record<string, string> = {
   unpaid: 'Unpaid Invoices',
   upcoming_bookings: 'Upcoming Bookings',
   custom: 'Custom Segment',
+  segment: 'Specific Group',
+  contact_list: 'Specific Group',
+  mixed: 'Group + Manual Emails',
 };
+
+// ─── Audience Mode helpers ────────────────────────────────────────────────
+// The form exposes 4 conceptual audience modes that map to the backend
+// Campaign fields `audienceType` (all|segment|contact_list|custom),
+// `audienceId` (group id), and `audienceFiltersJson` (JSON string carrying
+// `{ manualEmails: "a@b.com,c@d.com" }` when manual recipients are present).
+
+type AudienceMode = 'all' | 'segment' | 'custom' | 'mixed';
+
+const AUDIENCE_MODES: { value: AudienceMode; label: string }[] = [
+  { value: 'all', label: 'All Contacts' },
+  { value: 'segment', label: 'Specific Group' },
+  { value: 'custom', label: 'Manual Emails' },
+  { value: 'mixed', label: 'Group + Manual Emails' },
+];
+
+interface GroupOption {
+  id: string;
+  name: string;
+  type: string;
+  memberCount: number;
+}
+
+function parseManualEmails(filtersJson: string | null | undefined): string {
+  if (!filtersJson) return '';
+  try {
+    const parsed = JSON.parse(filtersJson) as Record<string, unknown>;
+    const val = parsed?.manualEmails;
+    return typeof val === 'string' ? val : '';
+  } catch {
+    return '';
+  }
+}
+
+function deriveAudienceMode(
+  audienceType: string,
+  audienceId: string | null | undefined,
+  filtersJson: string | null | undefined,
+): { mode: AudienceMode; groupId: string; manualEmails: string } {
+  const manualEmails = parseManualEmails(filtersJson);
+  const hasGroup = !!audienceId;
+  const hasManual = !!manualEmails.trim();
+
+  if (audienceType === 'segment' || audienceType === 'contact_list') {
+    if (hasManual) return { mode: 'mixed', groupId: audienceId || '', manualEmails };
+    if (hasGroup) return { mode: 'segment', groupId: audienceId || '', manualEmails: '' };
+  }
+  if (audienceType === 'custom') {
+    if (hasGroup && hasManual) return { mode: 'mixed', groupId: audienceId || '', manualEmails };
+    if (hasManual) return { mode: 'custom', groupId: '', manualEmails };
+  }
+  if (audienceType === 'all' && !hasGroup && !hasManual) {
+    return { mode: 'all', groupId: '', manualEmails: '' };
+  }
+  // Legacy audience types (leads, customers, vip, etc.)
+  if (hasManual) return { mode: 'custom', groupId: '', manualEmails };
+  return { mode: 'all', groupId: '', manualEmails: '' };
+}
+
+function buildAudiencePayload(
+  mode: AudienceMode,
+  groupId: string,
+  manualEmails: string,
+): { audienceType: string; audienceId?: string; audienceFiltersJson?: string } {
+  const cleanEmails = manualEmails
+    .split(/[\s,\n]+/)
+    .map(e => e.trim())
+    .filter(Boolean)
+    .join(', ');
+  switch (mode) {
+    case 'all':
+      return { audienceType: 'all' };
+    case 'segment':
+      return {
+        audienceType: 'segment',
+        audienceId: groupId || undefined,
+        audienceFiltersJson: '{}',
+      };
+    case 'custom':
+      return {
+        audienceType: 'custom',
+        audienceFiltersJson: JSON.stringify({ manualEmails: cleanEmails }),
+      };
+    case 'mixed':
+      // Backend has no 'mixed' type — keep audienceId for the group and stash
+      // the manual emails in audienceFiltersJson, using 'custom' as the type.
+      return {
+        audienceType: 'custom',
+        audienceId: groupId || undefined,
+        audienceFiltersJson: JSON.stringify({ manualEmails: cleanEmails }),
+      };
+  }
+}
+
+function getAudienceDisplayLabel(campaign: {
+  audienceType: string;
+  audienceId?: string;
+  audienceFiltersJson?: string;
+}): string {
+  const { mode } = deriveAudienceMode(
+    campaign.audienceType,
+    campaign.audienceId,
+    campaign.audienceFiltersJson,
+  );
+  return AUDIENCE_MODES.find(a => a.value === mode)?.label || campaign.audienceType;
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -135,10 +247,22 @@ export function CampaignsView() {
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [groups, setGroups] = useState<GroupOption[]>([]);
+  const [isLoadingGroups, setIsLoadingGroups] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const [createForm, setCreateForm] = useState({
     name: '', type: 'promotional' as CampaignType, channel: 'whatsapp' as CampaignChannel,
-    audienceType: 'all', messageContent: '', ctaText: '', ctaUrl: '',
+    audienceMode: 'all' as AudienceMode, audienceId: '', manualEmails: '',
+    messageContent: '', ctaText: '', ctaUrl: '',
+    scheduleDate: '', scheduleTime: '', timezone: 'Asia/Kolkata',
+  });
+  const [editForm, setEditForm] = useState({
+    name: '', type: 'promotional' as CampaignType, channel: 'whatsapp' as CampaignChannel,
+    audienceMode: 'all' as AudienceMode, audienceId: '', manualEmails: '',
+    messageContent: '', ctaText: '', ctaUrl: '',
     scheduleDate: '', scheduleTime: '', timezone: 'Asia/Kolkata',
   });
 
@@ -153,7 +277,7 @@ export function CampaignsView() {
       // Exclude broadcasts from campaigns view
       params.set('type', 'promotional,reminder,seasonal,re_engagement,follow_up');
 
-      const res = await fetch(`/api/campaigns?${params.toString()}`);
+      const res = await authFetch(`/api/campaigns?${params.toString()}`);
       if (res.ok) {
         const result = await res.json();
         setCampaigns(result.data || []);
@@ -173,6 +297,26 @@ export function CampaignsView() {
     loadCampaigns();
   }, [loadCampaigns]);
 
+  // ── Load groups for the audience selector ──
+  const loadGroups = useCallback(async () => {
+    setIsLoadingGroups(true);
+    try {
+      const res = await authFetch('/api/groups');
+      if (res.ok) {
+        const result = await res.json();
+        setGroups((result.data || []) as GroupOption[]);
+      }
+    } catch {
+      // Non-blocking — the selector just shows an empty list.
+    } finally {
+      setIsLoadingGroups(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadGroups();
+  }, [loadGroups]);
+
   const filteredCampaigns = campaigns.filter(c => {
     if (search && !c.name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
@@ -180,9 +324,8 @@ export function CampaignsView() {
 
   const handleStatusChange = async (id: string, newStatus: CampaignStatus) => {
     try {
-      const res = await fetch(`/api/campaigns/${id}`, {
+      const res = await authFetch(`/api/campaigns/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: newStatus }),
       });
       if (res.ok) {
@@ -196,14 +339,15 @@ export function CampaignsView() {
 
   const handleClone = async (campaign: Campaign) => {
     try {
-      const res = await fetch('/api/campaigns', {
+      const res = await authFetch('/api/campaigns', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: `${campaign.name} (Copy)`,
           type: campaign.type,
           channel: campaign.channel,
           audienceType: campaign.audienceType,
+          audienceId: campaign.audienceId,
+          audienceFiltersJson: campaign.audienceFiltersJson || '{}',
           messageContent: campaign.messageContent,
           status: 'draft',
         }),
@@ -221,17 +365,26 @@ export function CampaignsView() {
   const handleCreate = async () => {
     if (!createForm.name) { toast.error('Campaign name is required'); return; }
     if (!createForm.messageContent) { toast.error('Message content is required'); return; }
+    if ((createForm.audienceMode === 'segment' || createForm.audienceMode === 'mixed') && !createForm.audienceId) {
+      toast.error('Please select a group for the audience'); return;
+    }
+    if ((createForm.audienceMode === 'custom' || createForm.audienceMode === 'mixed') && !createForm.manualEmails.trim()) {
+      toast.error('Please enter at least one email address'); return;
+    }
+
+    const audience = buildAudiencePayload(createForm.audienceMode, createForm.audienceId, createForm.manualEmails);
 
     setIsCreating(true);
     try {
-      const res = await fetch('/api/campaigns', {
+      const res = await authFetch('/api/campaigns', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: createForm.name,
           type: createForm.type,
           channel: createForm.channel,
-          audienceType: createForm.audienceType,
+          audienceType: audience.audienceType,
+          audienceId: audience.audienceId,
+          audienceFiltersJson: audience.audienceFiltersJson,
           messageContent: createForm.messageContent,
           ctaText: createForm.ctaText || undefined,
           ctaUrl: createForm.ctaUrl || undefined,
@@ -246,7 +399,8 @@ export function CampaignsView() {
         setShowCreateDialog(false);
         setCreateForm({
           name: '', type: 'promotional', channel: 'whatsapp',
-          audienceType: 'all', messageContent: '', ctaText: '', ctaUrl: '',
+          audienceMode: 'all', audienceId: '', manualEmails: '',
+          messageContent: '', ctaText: '', ctaUrl: '',
           scheduleDate: '', scheduleTime: '', timezone: 'Asia/Kolkata',
         });
         toast.success('Campaign created');
@@ -260,9 +414,83 @@ export function CampaignsView() {
     }
   };
 
+  // ── Open the edit dialog pre-populated with a campaign's current values ──
+  const openEditDialog = (campaign: Campaign) => {
+    const derived = deriveAudienceMode(campaign.audienceType, campaign.audienceId, campaign.audienceFiltersJson);
+    const scheduled = campaign.scheduledAt ? new Date(campaign.scheduledAt) : null;
+    setEditingId(campaign.id);
+    setEditForm({
+      name: campaign.name,
+      type: campaign.type,
+      channel: campaign.channel,
+      audienceMode: derived.mode,
+      audienceId: derived.groupId,
+      manualEmails: derived.manualEmails,
+      messageContent: campaign.messageContent || '',
+      ctaText: campaign.ctaText || '',
+      ctaUrl: campaign.ctaUrl || '',
+      scheduleDate: scheduled ? scheduled.toISOString().split('T')[0] : '',
+      scheduleTime: scheduled ? scheduled.toTimeString().slice(0, 5) : '',
+      timezone: campaign.timezone || 'Asia/Kolkata',
+    });
+    setShowDetailDialog(false);
+    setShowEditDialog(true);
+    if (groups.length === 0) loadGroups();
+  };
+
+  // ── Save edits via PUT /api/campaigns/[id] ──
+  const handleEdit = async () => {
+    if (!editingId) return;
+    const id = editingId;
+    if (!editForm.name) { toast.error('Campaign name is required'); return; }
+    if (!editForm.messageContent) { toast.error('Message content is required'); return; }
+    if ((editForm.audienceMode === 'segment' || editForm.audienceMode === 'mixed') && !editForm.audienceId) {
+      toast.error('Please select a group for the audience'); return;
+    }
+    if ((editForm.audienceMode === 'custom' || editForm.audienceMode === 'mixed') && !editForm.manualEmails.trim()) {
+      toast.error('Please enter at least one email address'); return;
+    }
+
+    const audience = buildAudiencePayload(editForm.audienceMode, editForm.audienceId, editForm.manualEmails);
+
+    setIsEditing(true);
+    try {
+      const res = await authFetch(`/api/campaigns/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: editForm.name,
+          type: editForm.type,
+          channel: editForm.channel,
+          audienceType: audience.audienceType,
+          audienceId: audience.audienceId,
+          audienceFiltersJson: audience.audienceFiltersJson,
+          messageContent: editForm.messageContent,
+          ctaText: editForm.ctaText || undefined,
+          ctaUrl: editForm.ctaUrl || undefined,
+          status: editForm.scheduleDate ? 'scheduled' : 'draft',
+          scheduledAt: editForm.scheduleDate ? `${editForm.scheduleDate}T${editForm.scheduleTime || '09:00'}:00` : undefined,
+          timezone: editForm.timezone,
+        }),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        setCampaigns(prev => prev.map(c => c.id === id ? result.data : c));
+        setShowEditDialog(false);
+        setEditingId(null);
+        toast.success('Campaign updated');
+      } else {
+        toast.error('Failed to update campaign');
+      }
+    } catch {
+      toast.error('Failed to update campaign');
+    } finally {
+      setIsEditing(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     try {
-      const res = await fetch(`/api/campaigns/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/campaigns/${id}`, { method: 'DELETE' });
       if (res.ok) {
         setCampaigns(prev => prev.filter(c => c.id !== id));
         toast.success('Campaign deleted');
@@ -419,12 +647,13 @@ export function CampaignsView() {
                     {campaign.status === 'draft' && (
                       <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleStatusChange(campaign.id, 'running')}><Play className="size-3.5" /></Button></TooltipTrigger><TooltipContent>Start</TooltipContent></Tooltip></TooltipProvider>
                     )}
+                    <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Edit" onClick={() => openEditDialog(campaign)}><Pencil className="size-3.5" /></Button></TooltipTrigger><TooltipContent>Edit</TooltipContent></Tooltip></TooltipProvider>
                     <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleClone(campaign)}><Copy className="size-3.5" /></Button></TooltipTrigger><TooltipContent>Clone</TooltipContent></Tooltip></TooltipProvider>
                     <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500" onClick={() => handleDelete(campaign.id)}><Trash2 className="size-3.5" /></Button></TooltipTrigger><TooltipContent>Delete</TooltipContent></Tooltip></TooltipProvider>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1"><Users className="size-3" />{AUDIENCE_LABELS[campaign.audienceType] || campaign.audienceType}</span>
+                  <span className="flex items-center gap-1"><Users className="size-3" />{getAudienceDisplayLabel(campaign)}</span>
                   <span className="flex items-center gap-1"><Calendar className="size-3" />{new Date(campaign.createdAt).toLocaleDateString()}</span>
                 </div>
                 {campaign.sentCount > 0 && (
@@ -485,12 +714,45 @@ export function CampaignsView() {
             </div>
             <div className="space-y-2">
               <Label>Audience</Label>
-              <Select value={createForm.audienceType} onValueChange={v => setCreateForm({ ...createForm, audienceType: v })}>
+              <Select value={createForm.audienceMode} onValueChange={v => setCreateForm({ ...createForm, audienceMode: v as AudienceMode })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {AUDIENCE_TYPES.map(a => <SelectItem key={a} value={a}>{AUDIENCE_LABELS[a]}</SelectItem>)}
+                  {AUDIENCE_MODES.map(a => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {(createForm.audienceMode === 'segment' || createForm.audienceMode === 'mixed') && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Group</Label>
+                  <Select value={createForm.audienceId || undefined} onValueChange={v => setCreateForm({ ...createForm, audienceId: v })}>
+                    <SelectTrigger><SelectValue placeholder={isLoadingGroups ? 'Loading groups...' : 'Select a group'} /></SelectTrigger>
+                    <SelectContent>
+                      {groups.length === 0 ? (
+                        <SelectItem value="_none" disabled>No groups available</SelectItem>
+                      ) : (
+                        groups.map(g => (
+                          <SelectItem key={g.id} value={g.id}>
+                            {g.name} ({g.memberCount || 0})
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {(createForm.audienceMode === 'custom' || createForm.audienceMode === 'mixed') && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Manual Emails (comma or newline separated)</Label>
+                  <Textarea
+                    placeholder="alice@example.com, bob@example.com"
+                    value={createForm.manualEmails}
+                    onChange={e => setCreateForm({ ...createForm, manualEmails: e.target.value })}
+                    rows={3}
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    {createForm.manualEmails.split(/[\s,\n]+/).map(s => s.trim()).filter(Boolean).length} email(s) entered
+                  </p>
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Message Content *</Label>
@@ -556,7 +818,7 @@ export function CampaignsView() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div><span className="text-muted-foreground">Type:</span> <span className="font-medium">{selectedCampaign.type}</span></div>
-                <div><span className="text-muted-foreground">Audience:</span> <span className="font-medium">{AUDIENCE_LABELS[selectedCampaign.audienceType] || selectedCampaign.audienceType}</span></div>
+                <div><span className="text-muted-foreground">Audience:</span> <span className="font-medium">{getAudienceDisplayLabel(selectedCampaign)}</span></div>
                 <div><span className="text-muted-foreground">Channel:</span> <span className="font-medium">{selectedCampaign.channel}</span></div>
                 <div><span className="text-muted-foreground">Timezone:</span> <span className="font-medium">{selectedCampaign.timezone}</span></div>
               </div>
@@ -609,6 +871,130 @@ export function CampaignsView() {
               </div>
             </div>
           )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDetailDialog(false)}>Close</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => selectedCampaign && openEditDialog(selectedCampaign)}>
+              <Pencil className="size-4 mr-1.5" /> Edit Campaign
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Campaign Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Campaign</DialogTitle>
+            <DialogDescription>Update campaign details and audience</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Campaign Name *</Label>
+              <Input placeholder="e.g., Summer Cleaning Promo" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Type</Label>
+                <Select value={editForm.type} onValueChange={v => setEditForm({ ...editForm, type: v as CampaignType })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CAMPAIGN_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Channel</Label>
+                <Select value={editForm.channel} onValueChange={v => setEditForm({ ...editForm, channel: v as CampaignChannel })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CAMPAIGN_CHANNELS.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Audience</Label>
+              <Select value={editForm.audienceMode} onValueChange={v => setEditForm({ ...editForm, audienceMode: v as AudienceMode })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {AUDIENCE_MODES.map(a => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {(editForm.audienceMode === 'segment' || editForm.audienceMode === 'mixed') && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Group</Label>
+                  <Select value={editForm.audienceId || undefined} onValueChange={v => setEditForm({ ...editForm, audienceId: v })}>
+                    <SelectTrigger><SelectValue placeholder={isLoadingGroups ? 'Loading groups...' : 'Select a group'} /></SelectTrigger>
+                    <SelectContent>
+                      {groups.length === 0 ? (
+                        <SelectItem value="_none" disabled>No groups available</SelectItem>
+                      ) : (
+                        groups.map(g => (
+                          <SelectItem key={g.id} value={g.id}>
+                            {g.name} ({g.memberCount || 0})
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {(editForm.audienceMode === 'custom' || editForm.audienceMode === 'mixed') && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Manual Emails (comma or newline separated)</Label>
+                  <Textarea
+                    placeholder="alice@example.com, bob@example.com"
+                    value={editForm.manualEmails}
+                    onChange={e => setEditForm({ ...editForm, manualEmails: e.target.value })}
+                    rows={3}
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    {editForm.manualEmails.split(/[\s,\n]+/).map(s => s.trim()).filter(Boolean).length} email(s) entered
+                  </p>
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label>Message Content *</Label>
+              <Textarea placeholder="Type your message... Use {{name}}, {{service}}, {{amount}} as placeholders" value={editForm.messageContent} onChange={e => setEditForm({ ...editForm, messageContent: e.target.value })} rows={4} />
+              <p className="text-[10px] text-muted-foreground">{editForm.messageContent.length} characters</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>CTA Button Text</Label>
+                <Input placeholder="e.g., Book Now" value={editForm.ctaText} onChange={e => setEditForm({ ...editForm, ctaText: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>CTA URL</Label>
+                <Input placeholder="https://..." value={editForm.ctaUrl} onChange={e => setEditForm({ ...editForm, ctaUrl: e.target.value })} />
+              </div>
+            </div>
+            <Separator />
+            <div className="space-y-2">
+              <Label>Schedule (optional)</Label>
+              <div className="grid grid-cols-3 gap-3">
+                <Input type="date" value={editForm.scheduleDate} onChange={e => setEditForm({ ...editForm, scheduleDate: e.target.value })} />
+                <Input type="time" value={editForm.scheduleTime} onChange={e => setEditForm({ ...editForm, scheduleTime: e.target.value })} />
+                <Select value={editForm.timezone} onValueChange={v => setEditForm({ ...editForm, timezone: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Asia/Kolkata">IST (India)</SelectItem>
+                    <SelectItem value="America/New_York">EST (New York)</SelectItem>
+                    <SelectItem value="America/Chicago">CST (Chicago)</SelectItem>
+                    <SelectItem value="America/Los_Angeles">PST (LA)</SelectItem>
+                    <SelectItem value="UTC">UTC</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleEdit} disabled={!editForm.name || !editForm.messageContent || isEditing}>
+              {isEditing ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
+              Save Changes
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

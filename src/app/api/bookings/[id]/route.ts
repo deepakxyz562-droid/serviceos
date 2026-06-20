@@ -1,6 +1,8 @@
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { EventBus } from '@/lib/event-bus';
+import { createDepositInvoiceFromBooking, getInvoiceSettings } from '@/lib/invoice-automation';
 
 // GET /api/bookings/[id] — Get booking by ID
 export async function GET(
@@ -131,6 +133,63 @@ export async function PUT(
         },
       },
     });
+
+    // ─── If status flipped to confirmed, emit event + create deposit invoice ──
+    const wasConfirmed = existingBooking.status !== 'confirmed' && body.status === 'confirmed'
+    if (wasConfirmed) {
+      try {
+        await EventBus.emit('booking.confirmed', {
+          booking: { id: booking.id, title: booking.title, status: booking.status, customerName: booking.customerName, customerPhone: booking.customerPhone, scheduledAt: booking.scheduledAt?.toISOString() || null },
+          resourceType: 'booking', resourceId: booking.id,
+          tenantId: user.tenantId,
+          workspaceId: booking.workspaceId || undefined,
+        }, { tenantId: user.tenantId })
+      } catch (evtErr) {
+        console.error('[BookingsUpdate] booking.confirmed emit failed:', evtErr)
+      }
+
+      try {
+        const invSettings = await getInvoiceSettings(user.tenantId)
+        if (invSettings.createDepositOnBooking) {
+          const dep = await createDepositInvoiceFromBooking(booking.id)
+          if (dep.success) {
+            console.log(`[BookingsUpdate] Auto-created deposit invoice ${dep.number} on booking confirmation`)
+          } else if (!dep.skipped) {
+            console.error(`[BookingsUpdate] Deposit invoice failed: ${dep.error}`)
+          }
+        }
+      } catch (depErr) {
+        console.error('[BookingsUpdate] Deposit invoice error:', depErr)
+      }
+    }
+
+    // ─── Emit booking.rescheduled when the scheduled date changes ─────────────
+    if (body.scheduledAt !== undefined && existingBooking.scheduledAt?.toISOString() !== booking.scheduledAt?.toISOString()) {
+      try {
+        await EventBus.emit('booking.rescheduled', {
+          booking: { id: booking.id, title: booking.title, scheduledAt: booking.scheduledAt?.toISOString() || null },
+          resourceType: 'booking', resourceId: booking.id,
+          tenantId: user.tenantId,
+          workspaceId: booking.workspaceId || undefined,
+        }, { tenantId: user.tenantId })
+      } catch (evtErr) {
+        console.error('[BookingsUpdate] booking.rescheduled emit failed:', evtErr)
+      }
+    }
+
+    // ─── Emit booking.cancelled when status flips to cancelled ────────────────
+    if (existingBooking.status !== 'cancelled' && body.status === 'cancelled') {
+      try {
+        await EventBus.emit('booking.cancelled', {
+          booking: { id: booking.id, title: booking.title, reason: body.cancellationReason || null },
+          resourceType: 'booking', resourceId: booking.id,
+          tenantId: user.tenantId,
+          workspaceId: booking.workspaceId || undefined,
+        }, { tenantId: user.tenantId })
+      } catch (evtErr) {
+        console.error('[BookingsUpdate] booking.cancelled emit failed:', evtErr)
+      }
+    }
 
     return NextResponse.json(booking);
   } catch (error) {

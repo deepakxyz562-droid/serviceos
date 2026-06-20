@@ -118,20 +118,75 @@ export async function PUT(
       }
     }
 
-    const lead = await db.lead.update({
-      where: { id },
-      data: updateData,
-      include: {
-        assignedTo: {
-          select: { id: true, name: true, phone: true, avatar: true },
+    // --- Propagate phone/name/email changes to linked Customer & Conversations ---
+    // The phone number is stored in 3 places: Lead.phone, Customer.phone (read by
+    // Customer 360), and Conversation.customerPhone (read by the Omni-channel inbox).
+    // Without this propagation, editing a lead's phone only updates the Leads menu
+    // and leaves Customer 360 + Omni-channel showing the stale number.
+    const customerUpdate: Record<string, unknown> = {};
+    if (name !== undefined) customerUpdate.name = name;
+    if (phone !== undefined) customerUpdate.phone = phone;
+    if (email !== undefined) customerUpdate.email = email;
+
+    const conversationUpdate: Record<string, unknown> = {};
+    if (phone !== undefined) conversationUpdate.customerPhone = phone;
+    if (name !== undefined) conversationUpdate.customerName = name;
+
+    const hasCustomerChanges = Object.keys(customerUpdate).length > 0;
+    const hasConversationChanges = Object.keys(conversationUpdate).length > 0;
+    const linkedCustomerId = existingLead.customerId;
+
+    const lead = await db.$transaction(async (tx) => {
+      const updated = await tx.lead.update({
+        where: { id },
+        data: updateData,
+        include: {
+          assignedTo: {
+            select: { id: true, name: true, phone: true, avatar: true },
+          },
+          customer: {
+            select: { id: true, name: true, phone: true, email: true },
+          },
+          job: {
+            select: { id: true, title: true, status: true },
+          },
         },
-        customer: {
-          select: { id: true, name: true, phone: true, email: true },
-        },
-        job: {
-          select: { id: true, title: true, status: true },
-        },
-      },
+      });
+
+      // Sync to the linked Customer record (read by Customer 360 view)
+      if (linkedCustomerId && hasCustomerChanges) {
+        try {
+          await tx.customer.update({
+            where: { id: linkedCustomerId },
+            data: customerUpdate,
+          });
+        } catch (custErr) {
+          console.error('[LeadsUpdate] Failed to sync customer:', custErr);
+        }
+      }
+
+      // Sync to all Conversations linked to this lead (1:1 via leadId) or to the
+      // same customer (covers cross-channel conversations). Read by Omni-channel inbox.
+      if (hasConversationChanges) {
+        try {
+          // Conversations directly linked to this lead
+          await tx.conversation.updateMany({
+            where: { leadId: id },
+            data: conversationUpdate,
+          });
+          // Conversations linked to the same customer (other channels / sessions)
+          if (linkedCustomerId) {
+            await tx.conversation.updateMany({
+              where: { customerId: linkedCustomerId },
+              data: conversationUpdate,
+            });
+          }
+        } catch (convErr) {
+          console.error('[LeadsUpdate] Failed to sync conversations:', convErr);
+        }
+      }
+
+      return updated;
     });
 
     // Emit lead.updated event via EventBus

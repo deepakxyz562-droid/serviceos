@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   FileText, Plus, Search, Send, MoreHorizontal, DollarSign,
   Clock, CheckCircle2, AlertCircle, XCircle, Eye, Trash2,
   X, PlusCircle, MinusCircle, ArrowUpDown, ChevronUp, ChevronDown,
   CalendarDays, Calculator, MessageCircle, Phone, ShoppingCart, Tag,
-  Percent, Receipt, Copy, Edit3,
+  Percent, Receipt, Copy, Edit3, Loader2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,6 +29,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
+import { authFetch } from '@/lib/client-auth';
 
 // ============================================================
 // Types
@@ -97,6 +98,16 @@ interface QuoteFormData {
   validUntil: string;
 }
 
+interface Customer {
+  id: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  workspaceId?: string;
+  preferredCurrency?: string;
+}
+
 // ============================================================
 // Constants
 // ============================================================
@@ -110,15 +121,6 @@ const STATUS_CONFIG: Record<QuoteStatus, { label: string; bg: string; text: stri
 };
 
 
-const MOCK_CUSTOMERS = [
-  { id: 'c1', name: 'John Smith', phone: '+447911123456' },
-  { id: 'c2', name: 'Sarah Johnson', phone: '+447922234567' },
-  { id: 'c3', name: 'Mike Chen', phone: '+447933345678' },
-  { id: 'c4', name: 'Emma Wilson', phone: '+447944456789' },
-  { id: 'c5', name: 'Robert Brown', phone: '+447955567890' },
-  { id: 'c6', name: 'Lisa Park', phone: '+447966678901' },
-];
-
 const MOCK_SERVICE_CATALOG: ServiceCatalogItem[] = [
   { id: 's1', name: 'Window Cleaning', category: 'Cleaning', basePrice: 120, description: 'Interior & exterior window cleaning' },
   { id: 's2', name: 'Gutter Cleaning', category: 'Cleaning', basePrice: 80, description: 'Full gutter clearing and flush' },
@@ -130,73 +132,6 @@ const MOCK_SERVICE_CATALOG: ServiceCatalogItem[] = [
   { id: 's8', name: 'Pest Control Treatment', category: 'Specialist', basePrice: 180, description: 'Full property pest treatment' },
   { id: 's9', name: 'Painting (per room)', category: 'Decorating', basePrice: 350, description: 'Full room painting service' },
   { id: 's10', name: 'Garden Maintenance', category: 'Outdoor', basePrice: 75, description: 'Lawn mowing, weeding, tidying' },
-];
-
-const MOCK_QUOTES: Quote[] = [
-  {
-    id: 'q1', title: 'Window Cleaning', description: 'Full window cleaning service for residential property',
-    customerName: 'John Smith', customerId: 'c1', customerPhone: '+447911123456',
-    services: [
-      { id: 'qs1', serviceId: 's1', name: 'Window Cleaning', price: 120, quantity: 1 },
-      { id: 'qs2', serviceId: 's2', name: 'Gutter Cleaning', price: 80, quantity: 1 },
-    ],
-    addOns: [{ id: 'qa1', name: 'Solar Panel Cleaning', price: 50 }],
-    subtotal: 250, discountType: 'fixed', discountValue: 0, discount: 0, taxRate: 20, tax: 50, total: 300,
-    status: 'sent', validUntil: '2025-03-20', whatsappSent: true, createdAt: '2025-03-05',
-    currency: 'INR', exchangeRate: 1, baseCurrency: 'INR', baseAmount: 300,
-  },
-  {
-    id: 'q2', title: 'Deep Clean + Carpet', description: 'Full deep clean and carpet steam cleaning',
-    customerName: 'Sarah Johnson', customerId: 'c2', customerPhone: '+447922234567',
-    services: [
-      { id: 'qs3', serviceId: 's3', name: 'Deep House Cleaning', price: 250, quantity: 1 },
-      { id: 'qs4', serviceId: 's4', name: 'Carpet Cleaning', price: 150, quantity: 2 },
-    ],
-    addOns: [],
-    subtotal: 550, discountType: 'percentage', discountValue: 10, discount: 55, taxRate: 20, tax: 99, total: 594,
-    status: 'accepted', validUntil: '2025-04-01', whatsappSent: true, createdAt: '2025-03-01',
-    currency: 'INR', exchangeRate: 1, baseCurrency: 'INR', baseAmount: 594,
-  },
-  {
-    id: 'q3', title: 'Plumbing Repair', description: '',
-    customerName: 'Mike Chen', customerId: 'c3', customerPhone: '+447933345678',
-    services: [{ id: 'qs5', serviceId: 's5', name: 'Plumbing Repair', price: 95, quantity: 1 }],
-    addOns: [],
-    subtotal: 95, discountType: 'fixed', discountValue: 0, discount: 0, taxRate: 20, tax: 19, total: 114,
-    status: 'draft', validUntil: '2025-04-15', whatsappSent: false, createdAt: '2025-03-10',
-    currency: 'INR', exchangeRate: 1, baseCurrency: 'INR', baseAmount: 114,
-  },
-  {
-    id: 'q4', title: 'Full Property Maintenance', description: 'Complete property maintenance package',
-    customerName: 'Emma Wilson', customerId: 'c4', customerPhone: '+447944456789',
-    services: [
-      { id: 'qs6', serviceId: 's6', name: 'Electrical Work', price: 120, quantity: 1 },
-      { id: 'qs7', serviceId: 's5', name: 'Plumbing Repair', price: 95, quantity: 2 },
-      { id: 'qs8', serviceId: 's10', name: 'Garden Maintenance', price: 75, quantity: 1 },
-    ],
-    addOns: [{ id: 'qa2', name: 'Emergency Callout Fee', price: 150 }],
-    subtotal: 535, discountType: 'fixed', discountValue: 35, discount: 35, taxRate: 20, tax: 100, total: 600,
-    status: 'rejected', validUntil: '2025-03-01', whatsappSent: true, createdAt: '2025-02-15',
-    currency: 'INR', exchangeRate: 1, baseCurrency: 'INR', baseAmount: 600,
-  },
-  {
-    id: 'q5', title: 'Pest Control', description: 'Full pest control treatment',
-    customerName: 'Robert Brown', customerId: 'c5', customerPhone: '+447955567890',
-    services: [{ id: 'qs9', serviceId: 's8', name: 'Pest Control Treatment', price: 180, quantity: 1 }],
-    addOns: [{ id: 'qa3', name: 'Follow-up Visit', price: 75 }],
-    subtotal: 255, discountType: 'fixed', discountValue: 0, discount: 0, taxRate: 20, tax: 51, total: 306,
-    status: 'expired', validUntil: '2025-02-28', whatsappSent: true, createdAt: '2025-02-01',
-    currency: 'INR', exchangeRate: 1, baseCurrency: 'INR', baseAmount: 306,
-  },
-  {
-    id: 'q6', title: 'Painting Service', description: 'Two room painting',
-    customerName: 'Lisa Park', customerId: 'c6', customerPhone: '+447966678901',
-    services: [{ id: 'qs10', serviceId: 's9', name: 'Painting (per room)', price: 350, quantity: 2 }],
-    addOns: [{ id: 'qa4', name: 'Wallpaper Removal', price: 200 }],
-    subtotal: 900, discountType: 'percentage', discountValue: 5, discount: 45, taxRate: 20, tax: 171, total: 1026,
-    status: 'sent', validUntil: '2025-04-10', whatsappSent: false, createdAt: '2025-03-08',
-    currency: 'INR', exchangeRate: 1, baseCurrency: 'INR', baseAmount: 1026,
-  },
 ];
 
 const EMPTY_SERVICE_ITEM = (): QuoteServiceItem => ({
@@ -221,8 +156,10 @@ const EMPTY_FORM = (): QuoteFormData => ({
 // ============================================================
 
 function formatShortDate(dateStr: string): string {
+  if (!dateStr) return '—';
   try {
     const d = new Date(dateStr + 'T00:00:00');
+    if (isNaN(d.getTime())) return '—';
     return d.toLocaleDateString('en-GB', { month: 'short', day: 'numeric', year: 'numeric' });
   } catch { return '—'; }
 }
@@ -241,6 +178,77 @@ function calcSummary(services: QuoteServiceItem[], addOns: QuoteAddOn[], discoun
   const tax = afterDiscount * (taxRate / 100);
   const total = afterDiscount + tax;
   return { servicesTotal, addOnsTotal, subtotal, discount, tax, total };
+}
+
+/**
+ * Normalize a quote coming back from the API into the component's Quote type.
+ *
+ * The GET /api/quotes endpoint returns a pre-formatted object where
+ * `services` / `addOns` are already arrays and `discountValue` is computed.
+ * The POST /api/quotes and PUT /api/quotes/[id] endpoints return the raw
+ * Prisma row where those arrays live inside `itemsJson` / `addOnsJson` as
+ * JSON strings and `discountValue` is not present. This helper handles both
+ * shapes so the rest of the UI always works against a consistent Quote.
+ */
+function normalizeQuote(raw: any, customers: Customer[]): Quote {
+  let services: QuoteServiceItem[] = [];
+  if (Array.isArray(raw.services)) {
+    services = raw.services as QuoteServiceItem[];
+  } else if (raw.itemsJson) {
+    try { services = JSON.parse(raw.itemsJson) as QuoteServiceItem[]; } catch { services = []; }
+  }
+
+  let addOns: QuoteAddOn[] = [];
+  if (Array.isArray(raw.addOns)) {
+    addOns = raw.addOns as QuoteAddOn[];
+  } else if (raw.addOnsJson) {
+    try { addOns = JSON.parse(raw.addOnsJson) as QuoteAddOn[]; } catch { addOns = []; }
+  }
+
+  const customer = raw.customerId ? customers.find((c) => c.id === raw.customerId) : undefined;
+  const customerName = raw.customerName || customer?.name || 'Unknown';
+  const customerPhone = raw.customerPhone || customer?.phone;
+
+  const toDateStr = (v: unknown): string => {
+    if (!v) return '';
+    if (typeof v === 'string') return v.split('T')[0];
+    try { return new Date(v as any).toISOString().split('T')[0]; } catch { return ''; }
+  };
+
+  let discountValue: number;
+  if (raw.discountValue !== undefined && raw.discountValue !== null) {
+    discountValue = Number(raw.discountValue);
+  } else if (raw.discountType === 'percentage' && Number(raw.subtotal) > 0) {
+    discountValue = Math.round((Number(raw.discount) / Number(raw.subtotal)) * 100);
+  } else {
+    discountValue = Number(raw.discount) || 0;
+  }
+
+  return {
+    id: raw.id,
+    title: raw.title || '',
+    description: raw.description || undefined,
+    customerName,
+    customerId: raw.customerId || '',
+    customerPhone,
+    services,
+    addOns,
+    subtotal: Number(raw.subtotal) || 0,
+    discountType: raw.discountType === 'percentage' ? 'percentage' : 'fixed',
+    discountValue,
+    discount: Number(raw.discount) || 0,
+    taxRate: Number(raw.taxRate) || 0,
+    tax: Number(raw.tax) || 0,
+    total: Number(raw.total) || 0,
+    status: (raw.status as QuoteStatus) || 'draft',
+    validUntil: toDateStr(raw.validUntil),
+    whatsappSent: !!raw.whatsappSent,
+    createdAt: toDateStr(raw.createdAt),
+    currency: raw.currency,
+    exchangeRate: raw.exchangeRate !== undefined ? Number(raw.exchangeRate) : undefined,
+    baseCurrency: raw.baseCurrency,
+    baseAmount: raw.baseAmount !== undefined ? Number(raw.baseAmount) : undefined,
+  };
 }
 
 // ============================================================
@@ -283,7 +291,10 @@ function WhatsAppPreview({ quote }: { quote: Quote | null }) {
 // ============================================================
 
 export function QuotesView() {
-  const [quotes, setQuotes] = useState<Quote[]>(MOCK_QUOTES);
+  const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [tenantId, setTenantId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortField, setSortField] = useState<string>('createdAt');
@@ -300,6 +311,52 @@ export function QuotesView() {
 
   // ── Currency from hook ───────────────────────────────────
   const { currency, format, formatCompact, symbol } = useCompanyCurrency();
+
+  // ── Fetch real customers + quotes on mount ────────────────
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const [customersRes, quotesRes, meRes] = await Promise.all([
+          authFetch('/api/customers'),
+          authFetch('/api/quotes'),
+          authFetch('/api/auth/me'),
+        ]);
+
+        if (cancelled) return;
+
+        let customersList: Customer[] = [];
+        if (customersRes.ok) {
+          const data = await customersRes.json();
+          if (Array.isArray(data)) customersList = data;
+        } else {
+          toast.error('Failed to load customers');
+        }
+
+        if (quotesRes.ok) {
+          const data = await quotesRes.json();
+          if (Array.isArray(data)) {
+            setQuotes(data.map((q: any) => normalizeQuote(q, customersList)));
+          }
+        } else {
+          toast.error('Failed to load quotes');
+        }
+
+        if (meRes.ok) {
+          const meData = await meRes.json();
+          setTenantId(meData?.user?.tenantId || null);
+        }
+
+        setCustomers(customersList);
+      } catch {
+        if (!cancelled) toast.error('Network error loading quotes');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // ============================================================
   // Filtered & sorted quotes
@@ -454,7 +511,7 @@ export function QuotesView() {
     }));
   };
 
-  const handleSaveQuote = () => {
+  const handleSaveQuote = async () => {
     if (!form.title.trim()) { toast.error('Quote title is required'); return; }
     if (!form.customerId) { toast.error('Please select a customer'); return; }
     if (!form.validUntil) { toast.error('Please set a valid-until date'); return; }
@@ -464,71 +521,125 @@ export function QuotesView() {
     }
 
     setSaving(true);
-    setTimeout(() => {
-      const customer = MOCK_CUSTOMERS.find((c) => c.id === form.customerId);
-      const summary = calcSummary(form.services, form.addOns, form.discountType, form.discountValue, form.taxRate);
+    try {
+      const customer = customers.find((c) => c.id === form.customerId);
+      const payload = {
+        title: form.title,
+        description: form.description,
+        customerId: form.customerId,
+        services: form.services,
+        addOns: form.addOns,
+        discountType: form.discountType,
+        discountValue: form.discountValue,
+        taxRate: form.taxRate,
+        validUntil: form.validUntil,
+        currency,
+        tenantId,
+      };
 
       if (editingQuoteId) {
-        setQuotes((prev) => prev.map((q) => q.id === editingQuoteId ? {
-          ...q,
-          title: form.title, description: form.description,
-          customerName: customer?.name || form.customerName,
-          customerId: form.customerId,
-          customerPhone: customer?.phone,
-          services: form.services, addOns: form.addOns,
-          ...summary,
-          discountType: form.discountType, discountValue: form.discountValue, taxRate: form.taxRate,
-          validUntil: form.validUntil,
-        } : q));
+        const res = await authFetch(`/api/quotes/${editingQuoteId}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          toast.error(err.error || 'Failed to update quote');
+          return;
+        }
+        const updated = await res.json();
+        const normalized = normalizeQuote(updated, customers);
+        if (customer) {
+          normalized.customerName = customer.name;
+          normalized.customerPhone = customer.phone;
+        }
+        setQuotes((prev) => prev.map((q) => q.id === editingQuoteId ? normalized : q));
+        if (selectedQuote?.id === editingQuoteId) {
+          setSelectedQuote(normalized);
+        }
         toast.success('Quote updated successfully');
       } else {
-        const newQuote: Quote = {
-          id: `q_${Date.now()}`,
-          title: form.title,
-          description: form.description,
-          customerName: customer?.name || form.customerName,
-          customerId: form.customerId,
-          customerPhone: customer?.phone,
-          services: form.services,
-          addOns: form.addOns,
-          ...summary,
-          discountType: form.discountType,
-          discountValue: form.discountValue,
-          taxRate: form.taxRate,
-          status: 'draft',
-          validUntil: form.validUntil,
-          whatsappSent: false,
-          createdAt: new Date().toISOString().split('T')[0],
-          currency: currency,
-          exchangeRate: 1,
-          baseCurrency: currency,
-          baseAmount: summary.total,
-        };
-        setQuotes((prev) => [newQuote, ...prev]);
+        const res = await authFetch('/api/quotes', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          toast.error(err.error || 'Failed to create quote');
+          return;
+        }
+        const created = await res.json();
+        const normalized = normalizeQuote(created, customers);
+        if (customer) {
+          normalized.customerName = customer.name;
+          normalized.customerPhone = customer.phone;
+        }
+        setQuotes((prev) => [normalized, ...prev]);
         toast.success('Quote created successfully');
       }
 
-      setSaving(false);
       setShowCreateDialog(false);
       setEditingQuoteId(null);
-    }, 400);
+    } catch {
+      toast.error('Network error saving quote');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleStatusChange = (quoteId: string, newStatus: QuoteStatus) => {
+  const handleStatusChange = async (quoteId: string, newStatus: QuoteStatus) => {
+    const prevQuotes = quotes;
+    const prevStatus = prevQuotes.find((q) => q.id === quoteId)?.status;
+    // Optimistic update
     setQuotes((prev) => prev.map((q) => q.id === quoteId ? { ...q, status: newStatus } : q));
     if (selectedQuote?.id === quoteId) {
       setSelectedQuote((prev) => prev ? { ...prev, status: newStatus } : prev);
     }
-    toast.success(`Quote marked as ${STATUS_CONFIG[newStatus].label}`);
+    try {
+      const res = await authFetch(`/api/quotes/${quoteId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to update status');
+        setQuotes(prevQuotes);
+        if (selectedQuote?.id === quoteId && prevStatus) {
+          setSelectedQuote((prev) => prev ? { ...prev, status: prevStatus } : prev);
+        }
+        return;
+      }
+      toast.success(`Quote marked as ${STATUS_CONFIG[newStatus].label}`);
+    } catch {
+      toast.error('Network error updating status');
+      setQuotes(prevQuotes);
+      if (selectedQuote?.id === quoteId && prevStatus) {
+        setSelectedQuote((prev) => prev ? { ...prev, status: prevStatus } : prev);
+      }
+    }
   };
 
-  const handleDeleteQuote = (quoteId: string) => {
+  const handleDeleteQuote = async (quoteId: string) => {
+    const prevQuotes = quotes;
+    // Optimistic remove
     setQuotes((prev) => prev.filter((q) => q.id !== quoteId));
     if (selectedQuote?.id === quoteId) {
       setShowDetailDialog(false);
       setSelectedQuote(null);
     }
-    toast.success('Quote deleted');
+    try {
+      const res = await authFetch(`/api/quotes/${quoteId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to delete quote');
+        setQuotes(prevQuotes);
+        return;
+      }
+      toast.success('Quote deleted');
+    } catch {
+      toast.error('Network error deleting quote');
+      setQuotes(prevQuotes);
+    }
   };
 
   const handleSendWhatsApp = async (quote: Quote) => {
@@ -554,19 +665,42 @@ export function QuotesView() {
     }
   };
 
-  const handleDuplicateQuote = (quote: Quote) => {
-    const duplicate: Quote = {
-      ...quote,
-      id: `q_${Date.now()}`,
-      title: `${quote.title} (Copy)`,
-      status: 'draft',
-      whatsappSent: false,
-      createdAt: new Date().toISOString().split('T')[0],
-      services: quote.services.map((s) => ({ ...s, id: `qs_${Date.now()}_${Math.random().toString(36).slice(2, 7)}` })),
-      addOns: quote.addOns.map((a) => ({ ...a, id: `qa_${Date.now()}_${Math.random().toString(36).slice(2, 7)}` })),
-    };
-    setQuotes((prev) => [duplicate, ...prev]);
-    toast.success('Quote duplicated');
+  const handleDuplicateQuote = async (quote: Quote) => {
+    try {
+      const payload = {
+        title: `${quote.title} (Copy)`,
+        description: quote.description || '',
+        customerId: quote.customerId,
+        services: quote.services.map((s) => ({ ...s, id: `qs_${Date.now()}_${Math.random().toString(36).slice(2, 7)}` })),
+        addOns: quote.addOns.map((a) => ({ ...a, id: `qa_${Date.now()}_${Math.random().toString(36).slice(2, 7)}` })),
+        discountType: quote.discountType,
+        discountValue: quote.discountValue,
+        taxRate: quote.taxRate,
+        validUntil: quote.validUntil,
+        currency: quote.currency || currency,
+        tenantId,
+      };
+      const res = await authFetch('/api/quotes', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to duplicate quote');
+        return;
+      }
+      const created = await res.json();
+      const normalized = normalizeQuote(created, customers);
+      const customer = customers.find((c) => c.id === quote.customerId);
+      if (customer) {
+        normalized.customerName = customer.name;
+        normalized.customerPhone = customer.phone;
+      }
+      setQuotes((prev) => [normalized, ...prev]);
+      toast.success('Quote duplicated');
+    } catch {
+      toast.error('Network error duplicating quote');
+    }
   };
 
   const renderStatusBadge = (status: QuoteStatus) => {
@@ -654,7 +788,14 @@ export function QuotesView() {
       </div>
 
       {/* ── Quotes Table ─────────────────────────────────────────── */}
-      {filteredQuotes.length === 0 ? (
+      {loading ? (
+        <Card>
+          <CardContent className="flex items-center justify-center py-16">
+            <Loader2 className="size-6 animate-spin text-emerald-600" />
+            <span className="ml-2 text-sm text-muted-foreground">Loading quotes...</span>
+          </CardContent>
+        </Card>
+      ) : filteredQuotes.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
           <FileText className="size-12 mb-3 opacity-20" />
           <p className="font-medium">No quotes found</p>
@@ -803,7 +944,7 @@ export function QuotesView() {
                   <Select
                     value={form.customerId}
                     onValueChange={(val) => {
-                      const customer = MOCK_CUSTOMERS.find((c) => c.id === val);
+                      const customer = customers.find((c) => c.id === val);
                       setForm((prev) => ({ ...prev, customerId: val, customerName: customer?.name || '' }));
                     }}
                   >
@@ -811,9 +952,13 @@ export function QuotesView() {
                       <SelectValue placeholder="Select customer" />
                     </SelectTrigger>
                     <SelectContent>
-                      {MOCK_CUSTOMERS.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                      ))}
+                      {customers.length === 0 ? (
+                        <SelectItem value="_none" disabled>No customers available</SelectItem>
+                      ) : (
+                        customers.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1049,7 +1194,7 @@ export function QuotesView() {
                   className="border-emerald-600 text-emerald-600 hover:bg-emerald-50"
                   onClick={() => {
                     const summary = calcSummary(form.services, form.addOns, form.discountType, form.discountValue, form.taxRate);
-                    const customer = MOCK_CUSTOMERS.find((c) => c.id === form.customerId);
+                    const customer = customers.find((c) => c.id === form.customerId);
                     const previewQuote: Quote = {
                       id: 'preview', title: form.title, description: form.description,
                       customerName: customer?.name || form.customerName,

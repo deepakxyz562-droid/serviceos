@@ -47,6 +47,7 @@ model Tenant {
   workspaces      Workspace[]
   leads           Lead[]
   invoices        Invoice[]
+  recurringInvoices RecurringInvoice[]
   subscriptions   Subscription[]
   services        Service[]
   reviews         Review[]
@@ -217,6 +218,7 @@ model Invoice {
   number      String    @unique
   tenantId    String?
   jobId       String?
+  bookingId   String?
   customerId  String?
   employeeId  String?
   amount      Float     @default(0)
@@ -227,22 +229,69 @@ model Invoice {
   exchangeRate Float    @default(1)           // Rate at creation: 1 base = X transaction currency
   baseCurrency String   @default("USD")      // Tenant base currency at creation time
   baseAmount   Float    @default(0)           // Amount converted to base currency (for reporting)
-  status      String    @default("draft")
+  status      String    @default("draft")     // draft, sent, paid, pending_approval, cancelled
+  invoiceType String    @default("standard")  // standard, deposit, milestone, recurring
+  milestoneIndex Int?                        // 1-based index for milestone invoices (1=30%, 2=40%, 3=30%)
+  parentInvoiceId String?                    // For milestone splits → the originating job's first invoice
+  recurrenceId String?                       // FK to RecurringInvoice schedule that generated this (recurring type)
   dueDate     DateTime?
+  sentAt      DateTime?
   paidAt      DateTime?
   itemsJson   String    @default("[]")
   notes       String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  tenant   Tenant?   @relation(fields: [tenantId], references: [id])
-  job      Job?      @relation(fields: [jobId], references: [id])
-  customer Customer? @relation(fields: [customerId], references: [id])
-  employee Employee? @relation(fields: [employeeId], references: [id])
+  tenant    Tenant?          @relation(fields: [tenantId], references: [id])
+  job       Job?             @relation(fields: [jobId], references: [id])
+  customer  Customer?        @relation(fields: [customerId], references: [id])
+  employee  Employee?        @relation(fields: [employeeId], references: [id])
+  booking   Booking?         @relation("BookingInvoices", fields: [bookingId], references: [id])
+  recurrence RecurringInvoice? @relation(fields: [recurrenceId], references: [id])
 
   @@index([tenantId])
   @@index([status])
   @@index([customerId])
+  @@index([invoiceType])
+  @@index([bookingId])
+  @@index([recurrenceId])
+  @@index([parentInvoiceId])
+}
+
+// Recurring invoice schedule (AMC / subscriptions / monthly maintenance contracts)
+model RecurringInvoice {
+  id              String   @id @default(cuid())
+  name            String                              // e.g. "Monthly Pool Cleaning — John Doe"
+  tenantId        String?
+  customerId      String?
+  jobId           String?                             // optional template job
+  frequency       String   @default("monthly")        // weekly, monthly, quarterly, yearly
+  dayOfMonth      Int      @default(1)                 // 1-31 (for monthly+); day of week for weekly (0-6)
+  amount          Float    @default(0)                 // recurring charge (subtotal, before tax)
+  taxPercent      Float    @default(0)
+  currency        String   @default("USD")
+  itemsJson       String   @default("[]")              // line items template
+  notes           String?
+  startDate       DateTime @default(now())
+  endDate         DateTime?                            // null = open-ended
+  nextRunAt       DateTime @default(now())             // when the next invoice should be generated
+  lastRunAt       DateTime?
+  lastInvoiceId   String?
+  active          Boolean  @default(true)
+  executionCount  Int      @default(0)
+  createdById     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant   Tenant?    @relation(fields: [tenantId], references: [id])
+  customer Customer?  @relation(fields: [customerId], references: [id])
+  job      Job?       @relation("JobRecurringInvoices", fields: [jobId], references: [id])
+  invoices Invoice[]
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([active])
+  @@index([nextRunAt])
 }
 
 // ==========================================
@@ -751,6 +800,7 @@ model Customer {
   workspace Workspace? @relation(fields: [workspaceId], references: [id])
   jobs      Job[]
   invoices  Invoice[]
+  recurringInvoices RecurringInvoice[]
   leads     Lead[]
   quotes    Quote[]
   notificationLogs NotificationLog[]
@@ -850,6 +900,7 @@ model Job {
   resource   Resource?  @relation("JobResource", fields: [resourceId], references: [id])
   lead       Lead?
   invoices   Invoice[]
+  recurringInvoices RecurringInvoice[] @relation("JobRecurringInvoices")
   currentEmployee Employee? @relation("EmployeeCurrentJob")
   notificationLogs NotificationLog[]
   conversation      Conversation?
@@ -2483,6 +2534,7 @@ model Booking {
   updatedAt         DateTime  @updatedAt
 
   employee  Employee? @relation(fields: [employeeId], references: [id])
+  invoices  Invoice[] @relation("BookingInvoices")
 
   @@index([tenantId])
   @@index([status])

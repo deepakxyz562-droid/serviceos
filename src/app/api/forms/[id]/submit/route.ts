@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { sendJobNotification } from '@/lib/whatsapp-notifications';
+import { sendWhatsAppMessage } from '@/lib/whatsapp-send';
+import { sendEmail } from '@/lib/email-send';
 import { EventBus } from '@/lib/event-bus';
+import { notifyOwner } from '@/lib/owner-notifications';
 
 // ─── POST /api/forms/[id]/submit ───────────────────────────────────────────
 // CRITICAL route: Form submission with action execution
@@ -65,6 +67,16 @@ export async function POST(
     const respondentName: string | undefined = body.respondentName || formData.name as string || undefined;
 
     // ─── 3. Store the response ────────────────────────────────────────
+    // Defensive: validate tenantId exists before linking (avoids FK errors
+    // when a form was created against a tenant that no longer exists).
+    let validTenantId: string | null = form.tenantId;
+    if (validTenantId) {
+      try {
+        const t = await db.tenant.findUnique({ where: { id: validTenantId }, select: { id: true } });
+        if (!t) validTenantId = null;
+      } catch { validTenantId = null; }
+    }
+
     const response = await db.formResponse.create({
       data: {
         formId: form.id,
@@ -72,7 +84,7 @@ export async function POST(
         respondent: respondent || null,
         respondentName: respondentName || null,
         source,
-        tenantId: form.tenantId,
+        tenantId: validTenantId,
       },
     });
 
@@ -108,7 +120,7 @@ export async function POST(
                 description,
                 address,
                 serviceType,
-                tenantId: form.tenantId,
+                tenantId: validTenantId,
                 tagsJson: JSON.stringify(['form_submission', form.type]),
               },
             });
@@ -287,7 +299,7 @@ export async function POST(
                 subtotal,
                 total: subtotal,
                 status: 'draft',
-                tenantId: form.tenantId,
+                tenantId: validTenantId,
                 customerId: quoteCustomerId,
               },
             });
@@ -311,16 +323,23 @@ export async function POST(
           case 'send_whatsapp': {
             const customerPhone = String(mappedData.phone || formData.phone || '');
             const customerName = String(mappedData.name || formData.name || 'Unknown');
-            const tenantId = form.tenantId;
+            const tenantId = validTenantId;
 
             // Send to owner
             if (form.whatsappOwnerTemplate) {
               try {
-                // Try to get tenant WhatsApp phone
+                // Resolve owner WhatsApp phone: tenant.whatsappPhone → tenant.phone → owner user phone
                 let ownerPhone = '';
                 if (tenantId) {
                   const tenant = await db.tenant.findUnique({ where: { id: tenantId } });
-                  if (tenant?.whatsappPhone) ownerPhone = tenant.whatsappPhone;
+                  ownerPhone = tenant?.whatsappPhone || tenant?.phone || '';
+                }
+                if (!ownerPhone && tenantId) {
+                  const owner = await db.user.findFirst({
+                    where: { tenantId, role: 'owner', isActive: true },
+                    select: { phone: true },
+                  });
+                  if (owner?.phone) ownerPhone = owner.phone;
                 }
 
                 if (ownerPhone) {
@@ -330,15 +349,27 @@ export async function POST(
                     form: form.name,
                     ...formData,
                   });
-                  await sendJobNotification({
-                    to: ownerPhone,
-                    message: ownerMessage,
-                    recipientName: 'Owner',
-                    recipientRole: 'manager' as 'customer',
-                    subject: `New form submission: ${form.name}`,
-                    tenantId: tenantId || undefined,
-                  });
-                  actionResults.send_whatsapp_owner = { success: true, to: ownerPhone };
+                  const waRes = await sendWhatsAppMessage({ to: ownerPhone, message: ownerMessage });
+                  // Best-effort log
+                  try {
+                    await db.notificationLog.create({
+                      data: {
+                        type: 'whatsapp',
+                        recipient: ownerPhone,
+                        recipientName: 'Owner',
+                        recipientRole: 'manager',
+                        subject: `New form submission: ${form.name}`,
+                        message: ownerMessage,
+                        status: waRes.success ? 'sent' : 'failed',
+                        externalId: waRes.messageId,
+                        tenantId: tenantId || undefined,
+                        metadataJson: JSON.stringify({ eventType: 'form.submitted', formId: form.id, simulated: !!waRes.simulated, error: waRes.error }),
+                      },
+                    });
+                  } catch (logErr) {
+                    console.error('[FormSubmit] Owner WhatsApp log failed:', logErr);
+                  }
+                  actionResults.send_whatsapp_owner = { success: waRes.success, to: ownerPhone, simulated: !!waRes.simulated, error: waRes.error };
                 } else {
                   actionResults.send_whatsapp_owner = { success: false, error: 'No owner WhatsApp phone configured' };
                 }
@@ -356,36 +387,51 @@ export async function POST(
                   ...formData,
                 });
 
-                // If AI-generated flag is on, use AI to enhance the message
+                // If AI-generated flag is on, use the z-ai SDK directly (server-side)
+                // to enhance the confirmation message. Falls back to template on any error.
                 if (form.whatsappAiGenerated) {
                   try {
-                    const aiResponse = await fetch('/api/ai/suggest-nodes?XTransformPort=3000', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        prompt: `Generate a brief, friendly WhatsApp confirmation message for a form submission. Form name: "${form.name}". Customer name: "${customerName}". Form data: ${JSON.stringify(formData).slice(0, 500)}. Keep it under 200 characters. Only return the message text, no explanation.`,
-                      }),
+                    const ZAI = (await import('z-ai-web-dev-sdk')).default;
+                    const zai = await ZAI.create();
+                    const aiResult = await zai.chat.completions.create({
+                      messages: [
+                        {
+                          role: 'system',
+                          content: 'You generate brief, friendly WhatsApp confirmation messages for form submissions. Return ONLY the message text, no quotes, no explanation, under 200 characters.',
+                        },
+                        {
+                          role: 'user',
+                          content: `Form: "${form.name}". Customer: "${customerName}". Data: ${JSON.stringify(formData).slice(0, 400)}. Generate a warm confirmation message.`,
+                        },
+                      ],
                     });
-                    if (aiResponse.ok) {
-                      const aiData = await aiResponse.json();
-                      if (aiData.message || aiData.suggestion) {
-                        userMessage = aiData.message || aiData.suggestion;
-                      }
-                    }
+                    const aiText = aiResult.choices?.[0]?.message?.content?.trim();
+                    if (aiText) userMessage = aiText;
                   } catch (aiErr) {
-                    console.error('AI WhatsApp generation failed, using template:', aiErr);
+                    console.error('[FormSubmit] AI WhatsApp generation failed, using template:', aiErr);
                   }
                 }
 
-                await sendJobNotification({
-                  to: customerPhone,
-                  message: userMessage,
-                  recipientName: customerName,
-                  recipientRole: 'customer',
-                  subject: `Form submission received`,
-                  tenantId: tenantId || undefined,
-                });
-                actionResults.send_whatsapp_user = { success: true, to: customerPhone };
+                const waRes = await sendWhatsAppMessage({ to: customerPhone, message: userMessage });
+                try {
+                  await db.notificationLog.create({
+                    data: {
+                      type: 'whatsapp',
+                      recipient: customerPhone,
+                      recipientName: customerName,
+                      recipientRole: 'customer',
+                      subject: `Form submission received`,
+                      message: userMessage,
+                      status: waRes.success ? 'sent' : 'failed',
+                      externalId: waRes.messageId,
+                      tenantId: tenantId || undefined,
+                      metadataJson: JSON.stringify({ eventType: 'form.submitted', formId: form.id, simulated: !!waRes.simulated, error: waRes.error }),
+                    },
+                  });
+                } catch (logErr) {
+                  console.error('[FormSubmit] User WhatsApp log failed:', logErr);
+                }
+                actionResults.send_whatsapp_user = { success: waRes.success, to: customerPhone, simulated: !!waRes.simulated, error: waRes.error };
               } catch (err) {
                 actionResults.send_whatsapp_user = { success: false, error: String(err) };
               }
@@ -395,12 +441,94 @@ export async function POST(
 
           // ─── SEND EMAIL ─────────────────────────────────────────────
           case 'send_email': {
-            // Placeholder: Log email action
-            const recipientEmail = String(mappedData.email || formData.email || '');
+            const customerEmail = String(mappedData.email || formData.email || '');
+            const customerName = String(mappedData.name || formData.name || 'Unknown');
+            const tenantId = validTenantId;
+            let emailSentTo: string[] = [];
+
+            // 1. Email the owner/tenant (form submission alert)
+            if (tenantId) {
+              try {
+                const ownerSubject = `📬 New Form Submission: ${form.name}`;
+                const ownerHtml = [
+                  `<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:600px;margin:0 auto;padding:24px">`,
+                  `<h2 style="color:#0f172a">📬 New Form Submission</h2>`,
+                  `<p><strong>Form:</strong> ${form.name}</p>`,
+                  `<p><strong>Submitter:</strong> ${customerName}${customerEmail ? ` (${customerEmail})` : ''}</p>`,
+                  `<h3>Submitted Data</h3>`,
+                  `<table style="width:100%;border-collapse:collapse;font-size:14px">`,
+                  ...Object.entries(formData).map(([k, v]) =>
+                    `<tr><td style="padding:8px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb;width:40%">${k}</td><td style="padding:8px;border:1px solid #e5e7eb">${String(v)}</td></tr>`
+                  ),
+                  `</table>`,
+                  `<p style="font-size:12px;color:#9ca3af;margin-top:24px">— Sent from ServiceOS Forms</p>`,
+                  `</div>`,
+                ].join('\n');
+                const ownerText = `New Form Submission\nForm: ${form.name}\nSubmitter: ${customerName}${customerEmail ? ` (${customerEmail})` : ''}\n\nData:\n${Object.entries(formData).map(([k, v]) => `${k}: ${v}`).join('\n')}\n\n— ServiceOS Forms`;
+
+                // notifyOwner handles owner email resolution + sendEmail + NotificationLog
+                const r = await notifyOwner(tenantId, {
+                  eventType: 'form.submitted',
+                  eventLabel: `Form: ${form.name}`,
+                  emailSubject: ownerSubject,
+                  emailHtml: ownerHtml,
+                  emailText: ownerText,
+                });
+                if (r.email.sent) emailSentTo.push(r.ownerEmail || 'owner');
+              } catch (ownerErr) {
+                console.error('[FormSubmit] Owner email failed:', ownerErr);
+              }
+            }
+
+            // 2. Email the customer a confirmation (if they gave an email)
+            if (customerEmail) {
+              try {
+                const userSubject = `✅ We received your submission — ${form.name}`;
+                const userHtml = [
+                  `<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:600px;margin:0 auto;padding:24px">`,
+                  `<h2 style="color:#059669">✅ Submission Received</h2>`,
+                  `<p>Hi ${customerName},</p>`,
+                  `<p>Thank you for submitting the <strong>${form.name}</strong> form. We've received your details and will be in touch shortly.</p>`,
+                  form.completionMessage ? `<p>${form.completionMessage}</p>` : '',
+                  `<p style="font-size:12px;color:#9ca3af;margin-top:24px">— Sent from ServiceOS</p>`,
+                  `</div>`,
+                ].filter(Boolean).join('\n');
+                const userText = `Hi ${customerName},\n\nThank you for submitting the ${form.name} form. We've received your details and will be in touch shortly.\n${form.completionMessage ? `\n${form.completionMessage}\n` : ''}\n— Sent from ServiceOS`;
+
+                const r = await sendEmail({
+                  to: customerEmail,
+                  subject: userSubject,
+                  html: userHtml,
+                  text: userText,
+                  usageType: 'transactional',
+                });
+                if (r.success) emailSentTo.push(customerEmail);
+                try {
+                  await db.notificationLog.create({
+                    data: {
+                      type: 'email',
+                      recipient: customerEmail,
+                      recipientName: customerName,
+                      recipientRole: 'customer',
+                      subject: userSubject,
+                      message: userText,
+                      status: r.success ? 'sent' : 'failed',
+                      externalId: r.messageId,
+                      tenantId: tenantId || undefined,
+                      metadataJson: JSON.stringify({ eventType: 'form.submitted', formId: form.id, simulated: !!r.simulated, error: r.error }),
+                    },
+                  });
+                } catch (logErr) {
+                  console.error('[FormSubmit] Customer email log failed:', logErr);
+                }
+              } catch (custErr) {
+                console.error('[FormSubmit] Customer email failed:', custErr);
+              }
+            }
+
             actionResults.send_email = {
-              success: true,
-              note: 'Email action logged (not yet implemented)',
-              recipient: recipientEmail,
+              success: emailSentTo.length > 0,
+              recipients: emailSentTo,
             };
             break;
           }
@@ -413,7 +541,7 @@ export async function POST(
                 where: {
                   triggerType: 'form.submitted',
                   active: true,
-                  tenantId: form.tenantId,
+                  tenantId: validTenantId || undefined,
                 },
               });
 
@@ -513,6 +641,13 @@ export async function POST(
     }, { status: 201 });
   } catch (error) {
     console.error('Form submission error:', error);
-    return NextResponse.json({ error: 'Failed to process form submission' }, { status: 500 });
+    // Return a detailed error so the frontend / embed can surface what went
+    // wrong instead of a generic 500. This makes debugging hosted forms much
+    // easier (the original report was a bare 500 with no body).
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json(
+      { error: 'Failed to process form submission', details: message },
+      { status: 500 }
+    );
   }
 }

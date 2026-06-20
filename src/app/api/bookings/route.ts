@@ -1,6 +1,9 @@
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { notifyOwner } from '@/lib/owner-notifications';
+import { createDepositInvoiceFromBooking, getInvoiceSettings } from '@/lib/invoice-automation';
+import { EventBus } from '@/lib/event-bus';
 
 // GET /api/bookings — List bookings with filters
 export async function GET(request: NextRequest) {
@@ -191,6 +194,96 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
+    // ─── Notify the tenant owner via Email + WhatsApp ──────────────
+    try {
+      const scheduledStr = booking.scheduledAt
+        ? new Date(booking.scheduledAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+        : 'TBD'
+
+      const waMessage = [
+        '📅 *New Booking Created*',
+        '',
+        `*Title:* ${booking.title}`,
+        `*Customer:* ${finalCustomerName || 'N/A'}`,
+        finalCustomerPhone ? `*Phone:* ${finalCustomerPhone}` : '',
+        finalCustomerEmail ? `*Email:* ${finalCustomerEmail}` : '',
+        booking.address ? `*Address:* ${booking.address}` : '',
+        `*Scheduled:* ${scheduledStr}`,
+        `*Source:* ${finalSource}`,
+        `*Status:* ${booking.status}`,
+        booking.description ? `*Notes:* ${booking.description.slice(0, 120)}` : '',
+      ].filter(Boolean).join('\n')
+
+      const emailSubject = `📅 New Booking: ${booking.title}`
+      const emailHtml = [
+        `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:24px">`,
+        `<h2 style="color:#0f172a">📅 New Booking Created</h2>`,
+        `<p>A new booking has been created. Here are the details:</p>`,
+        `<table style="width:100%;border-collapse:collapse;margin:20px 0;font-size:14px">`,
+        `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb;width:35%">Title</td><td style="padding:10px;border:1px solid #e5e7eb">${booking.title}</td></tr>`,
+        `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb">Customer</td><td style="padding:10px;border:1px solid #e5e7eb">${finalCustomerName || 'N/A'}</td></tr>`,
+        finalCustomerPhone ? `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb">Phone</td><td style="padding:10px;border:1px solid #e5e7eb">${finalCustomerPhone}</td></tr>` : '',
+        finalCustomerEmail ? `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb">Email</td><td style="padding:10px;border:1px solid #e5e7eb">${finalCustomerEmail}</td></tr>` : '',
+        booking.address ? `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb">Address</td><td style="padding:10px;border:1px solid #e5e7eb">${booking.address}</td></tr>` : '',
+        `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb">Scheduled</td><td style="padding:10px;border:1px solid #e5e7eb">${scheduledStr}</td></tr>`,
+        `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb">Source</td><td style="padding:10px;border:1px solid #e5e7eb">${finalSource}</td></tr>`,
+        `<tr><td style="padding:10px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb">Status</td><td style="padding:10px;border:1px solid #e5e7eb">${booking.status}</td></tr>`,
+        `</table>`,
+        `<p style="font-size:12px;color:#9ca3af">— Sent from ServiceOS</p>`,
+        `</div>`,
+      ].filter(Boolean).join('\n')
+      const emailText = `New Booking Created\n\nTitle: ${booking.title}\nCustomer: ${finalCustomerName || 'N/A'}\n${finalCustomerPhone ? `Phone: ${finalCustomerPhone}\n` : ''}${finalCustomerEmail ? `Email: ${finalCustomerEmail}\n` : ''}${booking.address ? `Address: ${booking.address}\n` : ''}Scheduled: ${scheduledStr}\nSource: ${finalSource}\nStatus: ${booking.status}\n\n— Sent from ServiceOS`
+
+      await notifyOwner(user.tenantId, {
+        eventType: 'booking.created',
+        eventLabel: 'New Booking',
+        whatsappMessage: waMessage,
+        emailSubject,
+        emailHtml,
+        emailText,
+        bookingId: booking.id,
+        customerId: finalCustomerId || undefined,
+      })
+    } catch (ownerErr) {
+      console.error('[BookingsCreate] Owner notification failed:', ownerErr)
+    }
+
+    // ─── Auto-create deposit invoice if setting enabled ───────────
+    try {
+      const invSettings = await getInvoiceSettings(user.tenantId)
+      if (invSettings.createDepositOnBooking && booking.status === 'confirmed') {
+        const dep = await createDepositInvoiceFromBooking(booking.id)
+        if (dep.success) {
+          console.log(`[BookingsCreate] Auto-created deposit invoice ${dep.number}`)
+        } else if (!dep.skipped) {
+          console.error(`[BookingsCreate] Deposit invoice failed: ${dep.error}`)
+        }
+      }
+    } catch (depErr) {
+      console.error('[BookingsCreate] Deposit invoice error:', depErr)
+    }
+
+    // ─── Emit booking events via EventBus (for workflow automations) ──
+    try {
+      await EventBus.emit('booking.created', {
+        booking: { id: booking.id, title: booking.title, status: booking.status, source: booking.source, customerName: booking.customerName, customerPhone: booking.customerPhone, scheduledAt: booking.scheduledAt?.toISOString() || null },
+        resourceType: 'booking', resourceId: booking.id,
+        tenantId: user.tenantId,
+        workspaceId: booking.workspaceId || undefined,
+      }, { tenantId: user.tenantId })
+      // If the booking was created already-confirmed (manual source), also emit booking.confirmed
+      if (booking.status === 'confirmed') {
+        await EventBus.emit('booking.confirmed', {
+          booking: { id: booking.id, title: booking.title, status: booking.status, customerName: booking.customerName, customerPhone: booking.customerPhone, scheduledAt: booking.scheduledAt?.toISOString() || null },
+          resourceType: 'booking', resourceId: booking.id,
+          tenantId: user.tenantId,
+          workspaceId: booking.workspaceId || undefined,
+        }, { tenantId: user.tenantId })
+      }
+    } catch (evtErr) {
+      console.error('[BookingsCreate] EventBus emit failed:', evtErr)
+    }
 
     return NextResponse.json(booking, { status: 201 });
   } catch (error) {

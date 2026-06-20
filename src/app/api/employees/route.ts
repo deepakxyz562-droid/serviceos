@@ -108,6 +108,7 @@ export async function PUT(request: NextRequest) {
     const {
       name,
       phone,
+      email,
       role,
       skills,
       status,
@@ -131,6 +132,8 @@ export async function PUT(request: NextRequest) {
       data: {
         ...(name && { name }),
         ...(phone && { phone }),
+        // email is nullable, so allow explicit empty string to clear it
+        ...(email !== undefined && { email: email || null }),
         ...(role && { role }),
         ...(skills && { skills: JSON.stringify(skills) }),
         ...(status && { status }),

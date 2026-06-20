@@ -36,6 +36,11 @@ export type ServiceEvent =
   | 'job.created' | 'job.updated' | 'job.assigned' | 'job.accepted'
   | 'job.started' | 'job.completed' | 'job.cancelled' | 'job.rejected'
   | 'lead.created' | 'lead.updated' | 'lead.converted'
+  | 'booking.created' | 'booking.confirmed' | 'booking.cancelled'
+  | 'booking.completed' | 'booking.rescheduled'
+  | 'contract.renewed' | 'schedule.trigger'
+  | 'invoice.created' | 'invoice.paid' | 'invoice.overdue'
+  | 'quote.sent' | 'quote.accepted' | 'quote.rejected'
   | 'payment.received' | 'payment.failed'
   | 'employee.status_changed' | 'employee.heartbeat'
   | 'conversation.message_received' | 'conversation.message_sent'
@@ -71,6 +76,19 @@ export const SERVICE_EVENT_LABELS: Record<ServiceEvent, { label: string; descrip
   'lead.created':      { label: 'Lead Created',       description: 'A new lead was created',                    category: 'lead' },
   'lead.updated':      { label: 'Lead Updated',       description: 'Lead details were modified',                category: 'lead' },
   'lead.converted':    { label: 'Lead Converted',     description: 'A lead was converted to a customer/job',    category: 'lead' },
+  'booking.created':   { label: 'Booking Created',    description: 'A new booking was created',                 category: 'booking' },
+  'booking.confirmed': { label: 'Booking Confirmed',  description: 'A booking was confirmed',                   category: 'booking' },
+  'booking.cancelled': { label: 'Booking Cancelled',  description: 'A booking was cancelled',                   category: 'booking' },
+  'booking.completed': { label: 'Booking Completed',  description: 'A booking was completed',                   category: 'booking' },
+  'booking.rescheduled': { label: 'Booking Rescheduled', description: 'A booking was rescheduled',              category: 'booking' },
+  'contract.renewed':  { label: 'Contract Renewed',   description: 'A service contract was renewed',            category: 'contract' },
+  'schedule.trigger':  { label: 'Schedule Trigger',   description: 'A time-based schedule trigger fired',       category: 'schedule' },
+  'invoice.created':   { label: 'Invoice Created',    description: 'A new invoice was created',                 category: 'invoice' },
+  'invoice.paid':      { label: 'Invoice Paid',       description: 'An invoice was paid',                       category: 'invoice' },
+  'invoice.overdue':   { label: 'Invoice Overdue',    description: 'An invoice became overdue',                 category: 'invoice' },
+  'quote.sent':        { label: 'Quote Sent',         description: 'A quote was sent to a customer',            category: 'quote' },
+  'quote.accepted':    { label: 'Quote Accepted',     description: 'A quote was accepted',                      category: 'quote' },
+  'quote.rejected':    { label: 'Quote Rejected',     description: 'A quote was rejected',                      category: 'quote' },
   'payment.received':  { label: 'Payment Received',   description: 'A payment was received',                    category: 'payment' },
   'payment.failed':    { label: 'Payment Failed',     description: 'A payment attempt failed',                  category: 'payment' },
   'employee.status_changed': { label: 'Employee Status Changed', description: 'An employee status was updated',  category: 'employee' },
