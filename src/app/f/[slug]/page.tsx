@@ -8,11 +8,21 @@ export const dynamic = 'force-dynamic'
 
 async function getForm(slug: string) {
   try {
-    const form = await db.form.findUnique({
+    // `slug` may be either the human-readable slug OR the form's cuid (the UI
+    // falls back to form.id when slug is null). Try the slug column first,
+    // then fall back to id lookup so both `/f/booking-request` and
+    // `/f/cmqmokssc004m...` resolve to the right form.
+    const bySlug = await db.form.findUnique({
       where: { slug },
       include: { _count: { select: { responses: true } } },
     })
-    return form
+    if (bySlug) return bySlug
+
+    const byId = await db.form.findUnique({
+      where: { id: slug },
+      include: { _count: { select: { responses: true } } },
+    })
+    return byId
   } catch {
     return null
   }

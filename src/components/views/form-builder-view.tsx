@@ -1829,7 +1829,14 @@ export function FormBuilderView() {
                 ))}
               </div>
 
-              <Button className="w-full bg-emerald-600 hover:bg-emerald-700 h-9">Submit</Button>
+              <div className="flex gap-2">
+                <Button className="w-full bg-emerald-600 hover:bg-emerald-700 h-9" onClick={() => openFormLink(selectedForm)}>
+                  <ExternalLink className="size-3.5 mr-1.5" /> Open Live Form to Submit
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground text-center -mt-1">
+                This preview shows the form layout. Click above to open the live form and test a real submission.
+              </p>
 
               {/* Completion */}
               <div className="text-center p-2 bg-muted/50 rounded-lg">

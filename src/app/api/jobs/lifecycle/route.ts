@@ -25,6 +25,29 @@ function addNotificationLog(logJson: string, entry: Record<string, unknown>): st
   return JSON.stringify(logs)
 }
 
+/**
+ * Resolve the tenant id for a job. Jobs reference a Workspace (not a Tenant
+ * directly), so look up the workspace → tenantId. Fall back to the first
+ * tenant so invoice-automation settings still resolve in single-tenant demos.
+ */
+async function resolveTenantIdForJob(workspaceId: string | null | undefined): Promise<string | null> {
+  if (workspaceId) {
+    try {
+      const ws = await db.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { tenantId: true },
+      })
+      if (ws?.tenantId) return ws.tenantId
+    } catch { /* fall through */ }
+  }
+  try {
+    const t = await db.tenant.findFirst({ select: { id: true } })
+    return t?.id || null
+  } catch {
+    return null
+  }
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -322,7 +345,7 @@ export async function POST(request: NextRequest) {
 
         // ─── Milestone invoice #1 (30% on job start) if enabled ──
         try {
-          const invSettings = await getInvoiceSettings(updatedJob.workspaceId)
+          const invSettings = await getInvoiceSettings(await resolveTenantIdForJob(updatedJob.workspaceId))
           if (invSettings.enableMilestones) {
             const msResult = await createMilestoneInvoice(updatedJob.id, 1)
             if (msResult.success) {
@@ -446,7 +469,7 @@ export async function POST(request: NextRequest) {
         //   2. Standard mode → autoCreateInvoiceFromJob (respects autoCreateOnJobComplete
         //      toggle + approval_required → pending_approval status).
         try {
-          const invSettings = await getInvoiceSettings(updatedJob.workspaceId)
+          const invSettings = await getInvoiceSettings(await resolveTenantIdForJob(updatedJob.workspaceId))
           if (invSettings.enableMilestones) {
             const msResult = await createMilestoneInvoice(updatedJob.id, 3)
             if (msResult.success) {

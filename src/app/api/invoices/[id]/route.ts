@@ -39,6 +39,11 @@ export async function GET(
 }
 
 // PUT /api/invoices/[id] — Full update of invoice (status changes, payment info)
+// NOTE: The Invoice schema uses `amount`, `tax`, `discount`, `total` (NOT
+// `subtotal`, `taxAmount`, `discountAmount`, `taxRate`, `discountType`,
+// `discountValue`). There is no `customerName/Email/Phone`, `amountPaid`,
+// `paymentMethod`, `paymentId`, or `pdfUrl` column on Invoice either. This
+// handler was rewritten to only touch fields that actually exist on the model.
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -58,71 +63,53 @@ export async function PUT(
     const {
       status,
       customerId,
-      customerName,
-      customerEmail,
-      customerPhone,
       itemsJson,
-      taxRate,
-      discountType,
-      discountValue,
-      amountPaid,
-      paymentMethod,
-      paymentId,
+      taxPercent,   // percentage e.g. 18
+      discount,     // flat amount in transaction currency
       dueDate,
       notes,
     } = body
 
-    // Recalculate totals if items or rates changed
-    let subtotal = existing.subtotal
-    let taxAmount = existing.taxAmount
-    let discountAmount = existing.discountAmount
+    // Recalculate totals only if line items changed. The schema stores a single
+    // `amount` (subtotal), `tax`, `discount`, `total`.
+    let amount = existing.amount
+    let tax = existing.tax
+    let discountVal = existing.discount
     let total = existing.total
 
-    if (itemsJson) {
-      let items: Array<{ description: string; quantity: number; unitPrice: number; amount: number }>
+    if (itemsJson !== undefined) {
+      let items: Array<{ description: string; quantity: number; rate: number; unitPrice?: number; amount?: number }>
       if (typeof itemsJson === 'string') {
         items = JSON.parse(itemsJson)
       } else {
         items = itemsJson
       }
-      subtotal = items.reduce((sum, item) => sum + (item.amount || item.quantity * item.unitPrice), 0)
+      amount = items.reduce((sum, item) => sum + (item.amount || (item.quantity * (item.rate ?? item.unitPrice ?? 0))), 0)
+      // Recompute tax/discount from the new subtotal
+      const pct = typeof taxPercent === 'number' ? taxPercent : 0
+      tax = amount * (pct / 100)
+      discountVal = typeof discount === 'number' ? discount : 0
+      total = amount + tax - discountVal
+    } else if (typeof taxPercent === 'number' || typeof discount === 'number') {
+      // Subtotal unchanged but tax % or discount changed
+      const pct = typeof taxPercent === 'number' ? taxPercent : 0
+      tax = amount * (pct / 100)
+      discountVal = typeof discount === 'number' ? discount : existing.discount
+      total = amount + tax - discountVal
     }
-
-    const effectiveTaxRate = taxRate ?? existing.taxRate
-    taxAmount = subtotal * (effectiveTaxRate / 100)
-
-    const effectiveDiscountType = discountType ?? existing.discountType
-    const effectiveDiscountValue = discountValue ?? existing.discountValue
-    discountAmount = 0
-    if (effectiveDiscountType === 'percentage' && effectiveDiscountValue > 0) {
-      discountAmount = subtotal * (effectiveDiscountValue / 100)
-    } else if (effectiveDiscountType === 'fixed' && effectiveDiscountValue > 0) {
-      discountAmount = effectiveDiscountValue
-    }
-
-    total = subtotal + taxAmount - discountAmount
 
     const invoice = await db.invoice.update({
       where: { id },
       data: {
         ...(status !== undefined && { status }),
         ...(customerId !== undefined && { customerId }),
-        ...(customerName !== undefined && { customerName }),
-        ...(customerEmail !== undefined && { customerEmail }),
-        ...(customerPhone !== undefined && { customerPhone }),
         ...(itemsJson !== undefined && {
           itemsJson: typeof itemsJson === 'string' ? itemsJson : JSON.stringify(itemsJson),
         }),
-        subtotal,
-        taxRate: effectiveTaxRate,
-        taxAmount,
-        discountType: effectiveDiscountType,
-        discountValue: effectiveDiscountValue,
-        discountAmount,
+        amount,
+        tax,
+        discount: discountVal,
         total,
-        ...(amountPaid !== undefined && { amountPaid }),
-        ...(paymentMethod !== undefined && { paymentMethod }),
-        ...(paymentId !== undefined && { paymentId }),
         ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
         ...(notes !== undefined && { notes }),
         // Set paidAt when status changes to paid
@@ -176,26 +163,23 @@ export async function PATCH(
     } else if (body.action === 'mark_paid') {
       updateData.status = 'paid'
       updateData.paidAt = new Date()
-      if (body.paymentMethod) updateData.paymentMethod = body.paymentMethod
-      if (body.paymentId) updateData.paymentId = body.paymentId
-      updateData.amountPaid = existing.total
     } else if (body.action === 'mark_overdue') {
       updateData.status = 'overdue'
     } else if (body.action === 'cancel') {
       updateData.status = 'cancelled'
     } else {
-      // Generic partial update
+      // Generic partial update — only touch real Invoice columns
       if (body.status !== undefined) {
         updateData.status = body.status
         if (body.status === 'paid' && !existing.paidAt) updateData.paidAt = new Date()
         if (body.status === 'sent' && !existing.sentAt) updateData.sentAt = new Date()
       }
-      if (body.amountPaid !== undefined) updateData.amountPaid = body.amountPaid
-      if (body.paymentMethod !== undefined) updateData.paymentMethod = body.paymentMethod
-      if (body.paymentId !== undefined) updateData.paymentId = body.paymentId
       if (body.notes !== undefined) updateData.notes = body.notes
       if (body.dueDate !== undefined) updateData.dueDate = body.dueDate ? new Date(body.dueDate) : null
-      if (body.pdfUrl !== undefined) updateData.pdfUrl = body.pdfUrl
+      if (body.total !== undefined) updateData.total = body.total
+      if (body.amount !== undefined) updateData.amount = body.amount
+      if (body.tax !== undefined) updateData.tax = body.tax
+      if (body.discount !== undefined) updateData.discount = body.discount
     }
 
     const invoice = await db.invoice.update({

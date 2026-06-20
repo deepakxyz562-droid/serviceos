@@ -818,6 +818,7 @@ async function main() {
     data: {
       name: 'Lead Capture Form', description: 'Website lead capture form for all services',
       type: 'lead_capture', status: 'active',
+      slug: 'lead-capture-form',
       fieldsJson: JSON.stringify([
         { id: 'f1', name: 'name', label: 'Full Name', type: 'text', required: true },
         { id: 'f2', name: 'phone', label: 'Phone Number', type: 'tel', required: true },
@@ -836,6 +837,7 @@ async function main() {
     data: {
       name: 'Booking Request Form', description: 'Quick booking request form',
       type: 'booking', status: 'active',
+      slug: 'booking-request-form',
       fieldsJson: JSON.stringify([
         { id: 'f1', name: 'name', label: 'Full Name', type: 'text', required: true },
         { id: 'f2', name: 'phone', label: 'Phone Number', type: 'tel', required: true },

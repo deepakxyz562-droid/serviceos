@@ -52,15 +52,20 @@ export interface InvoiceAutomationSettings {
 }
 
 export const DEFAULT_INVOICE_SETTINGS: InvoiceAutomationSettings = {
-  autoCreateOnJobComplete: false,
-  autoSendEmail: false,
+  // Auto-create an invoice the moment a job is marked complete — core ServiceOS
+  // value proposition. Tenants can turn this off from the invoice settings dialog.
+  autoCreateOnJobComplete: true,
+  // Auto-email the invoice to the customer immediately after creation. Email
+  // delivery failures are non-fatal (the invoice is still created as 'draft'
+  // and only flipped to 'sent' when the email succeeds).
+  autoSendEmail: true,
   autoSendWhatsApp: false,
   createDepositOnBooking: false,
   depositPercentage: 30,
   enableRecurring: false,
   enableMilestones: false,
   defaultTaxPercent: 0,
-  creationMethod: 'manual',
+  creationMethod: 'automatic',
   defaultDueDays: 15,
 }
 
