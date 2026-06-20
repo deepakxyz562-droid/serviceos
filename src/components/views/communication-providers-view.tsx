@@ -17,10 +17,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Settings, Plus, Send, Mail, Smartphone, MessageSquare,
   Wifi, WifiOff, AlertCircle, CheckCircle2, Loader2,
-  Trash2, Shield, Key, Globe, Pencil,
-  ShieldCheck, Megaphone, RefreshCw,
+  Trash2, Shield, Key, Globe, Pencil, ExternalLink,
+  ShieldCheck, Megaphone, RefreshCw, Link2, Info,
 } from 'lucide-react';
 import { useAppStore } from '@/store/app-store';
+import { authFetch } from '@/lib/client-auth';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -28,9 +29,19 @@ interface ProviderConfig {
   [key: string]: string;
 }
 
+// Lightweight credential shape returned by /api/credentials and embedded in
+// CommunicationProvider responses (the encryptedData is never sent to the UI).
+interface CredentialLite {
+  id: string;
+  name: string;
+  type: string;
+}
+
 interface CommunicationProvider {
   id: string;
   name: string;
+  // 'email' is kept in the union ONLY for rendering legacy rows. New rows can
+  // only be 'whatsapp' or 'sms' — see /api/communication-providers POST.
   type: 'email' | 'sms' | 'whatsapp';
   provider: string;
   status: string;
@@ -46,6 +57,8 @@ interface CommunicationProvider {
   lastUsedAt: string | null;
   lastError: string | null;
   config: ProviderConfig;
+  credentialId: string | null;
+  credential: CredentialLite | null;
   createdAt: string;
 }
 
@@ -84,14 +97,11 @@ interface EmailChannelStatus {
 const MARKETING_PROVIDER_CHIPS = ['SMTP', 'Resend', 'SendGrid', 'Amazon SES', 'Mailgun', 'Brevo'];
 
 // ─── Provider Configurations ─────────────────────────────────────────────────
+// NOTE: 'email' type is no longer first-class here. Email send is owned by the
+// EmailProvider model + /api/email-providers + src/lib/email-send.ts. Only
+// WhatsApp + SMS providers can be created/edited through this view.
 
 const PROVIDER_OPTIONS: Record<string, { value: string; label: string }> = {
-  // Email
-  amazon_ses: { value: 'amazon_ses', label: 'Amazon SES' },
-  resend: { value: 'resend', label: 'Resend' },
-  sendgrid: { value: 'sendgrid', label: 'SendGrid' },
-  mailgun: { value: 'mailgun', label: 'Mailgun' },
-  postmark: { value: 'postmark', label: 'Postmark' },
   // SMS
   twilio: { value: 'twilio', label: 'Twilio' },
   msg91: { value: 'msg91', label: 'MSG91' },
@@ -106,52 +116,10 @@ const PROVIDER_OPTIONS: Record<string, { value: string; label: string }> = {
   gupshup: { value: 'gupshup', label: 'Gupshup' },
 };
 
-const EMAIL_PROVIDERS = ['amazon_ses', 'resend', 'sendgrid', 'mailgun', 'postmark'];
 const SMS_PROVIDERS = ['twilio', 'msg91', 'plivo', 'textlocal', 'exotel'];
 const WHATSAPP_PROVIDERS = ['meta_cloud_api', '360dialog', 'wati', 'interakt', 'gupshup'];
 
 const CONFIG_FIELDS: Record<string, { key: string; label: string; type: 'text' | 'password'; placeholder: string }[]> = {
-  // Email providers
-  amazon_ses: [
-    { key: 'smtpHost', label: 'SMTP Host', type: 'text', placeholder: 'email-smtp.us-east-1.amazonaws.com' },
-    { key: 'smtpPort', label: 'Port', type: 'text', placeholder: '587' },
-    { key: 'username', label: 'Username', type: 'text', placeholder: 'AKIA...' },
-    { key: 'apiKey', label: 'API Key / Password', type: 'password', placeholder: '••••••••' },
-    { key: 'fromEmail', label: 'From Email', type: 'text', placeholder: 'noreply@yourdomain.com' },
-    { key: 'fromName', label: 'From Name', type: 'text', placeholder: 'ServiceOS' },
-  ],
-  resend: [
-    { key: 'smtpHost', label: 'SMTP Host', type: 'text', placeholder: 'smtp.resend.com' },
-    { key: 'smtpPort', label: 'Port', type: 'text', placeholder: '465' },
-    { key: 'username', label: 'Username', type: 'text', placeholder: 'resend' },
-    { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 're_••••••••' },
-    { key: 'fromEmail', label: 'From Email', type: 'text', placeholder: 'noreply@yourdomain.com' },
-    { key: 'fromName', label: 'From Name', type: 'text', placeholder: 'ServiceOS' },
-  ],
-  sendgrid: [
-    { key: 'smtpHost', label: 'SMTP Host', type: 'text', placeholder: 'smtp.sendgrid.net' },
-    { key: 'smtpPort', label: 'Port', type: 'text', placeholder: '587' },
-    { key: 'username', label: 'Username', type: 'text', placeholder: 'apikey' },
-    { key: 'apiKey', label: 'API Key', type: 'password', placeholder: 'SG.••••••••' },
-    { key: 'fromEmail', label: 'From Email', type: 'text', placeholder: 'noreply@yourdomain.com' },
-    { key: 'fromName', label: 'From Name', type: 'text', placeholder: 'ServiceOS' },
-  ],
-  mailgun: [
-    { key: 'smtpHost', label: 'SMTP Host', type: 'text', placeholder: 'smtp.mailgun.org' },
-    { key: 'smtpPort', label: 'Port', type: 'text', placeholder: '587' },
-    { key: 'username', label: 'Username', type: 'text', placeholder: 'postmaster@yourdomain.com' },
-    { key: 'apiKey', label: 'API Key', type: 'password', placeholder: '••••••••' },
-    { key: 'fromEmail', label: 'From Email', type: 'text', placeholder: 'noreply@yourdomain.com' },
-    { key: 'fromName', label: 'From Name', type: 'text', placeholder: 'ServiceOS' },
-  ],
-  postmark: [
-    { key: 'smtpHost', label: 'SMTP Host', type: 'text', placeholder: 'smtp.postmarkapp.com' },
-    { key: 'smtpPort', label: 'Port', type: 'text', placeholder: '587' },
-    { key: 'username', label: 'Username', type: 'text', placeholder: '••••••••' },
-    { key: 'apiKey', label: 'API Key / Password', type: 'password', placeholder: '••••••••' },
-    { key: 'fromEmail', label: 'From Email', type: 'text', placeholder: 'noreply@yourdomain.com' },
-    { key: 'fromName', label: 'From Name', type: 'text', placeholder: 'ServiceOS' },
-  ],
   // SMS providers
   twilio: [
     { key: 'accountSid', label: 'Account SID', type: 'text', placeholder: 'AC...' },
@@ -211,8 +179,18 @@ const CONFIG_FIELDS: Record<string, { key: string; label: string; type: 'text' |
 
 // ─── Type Config ─────────────────────────────────────────────────────────────
 
-const TYPE_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string; bgColor: string; borderColor: string }> = {
-  email: { label: 'Email', icon: Mail, color: 'text-emerald-600', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200' },
+interface TypeConfig {
+  label: string;
+  icon: React.ElementType;
+  color: string;
+  bgColor: string;
+  borderColor: string;
+  /** True for legacy types that can no longer be created (only displayed). */
+  deprecated?: boolean;
+}
+
+const TYPE_CONFIG: Record<string, TypeConfig> = {
+  email: { label: 'Email (deprecated)', icon: Mail, color: 'text-amber-600', bgColor: 'bg-amber-50', borderColor: 'border-amber-200', deprecated: true },
   sms: { label: 'SMS', icon: Smartphone, color: 'text-emerald-600', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200' },
   whatsapp: { label: 'WhatsApp', icon: MessageSquare, color: 'text-emerald-600', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-200' },
 };
@@ -255,15 +233,45 @@ export function CommunicationProvidersView() {
   const [saving, setSaving] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  // Form state (shared for add/edit)
+  // Form state (shared for add/edit). Default to WhatsApp since 'email' is
+  // deprecated and 'whatsapp' is the most common tenant-managed channel.
   const [formName, setFormName] = useState('');
-  const [formType, setFormType] = useState<'email' | 'sms' | 'whatsapp'>('email');
-  const [formProvider, setFormProvider] = useState('amazon_ses');
+  const [formType, setFormType] = useState<'email' | 'sms' | 'whatsapp'>('whatsapp');
+  const [formProvider, setFormProvider] = useState('meta_cloud_api');
   const [formConfig, setFormConfig] = useState<Record<string, string>>({});
+  const [formCredentialId, setFormCredentialId] = useState<string>('');
   const [formIsDefault, setFormIsDefault] = useState(false);
   const [formSendingEnabled, setFormSendingEnabled] = useState(true);
   const [formDailyLimit, setFormDailyLimit] = useState('1000');
   const [formMonthlyLimit, setFormMonthlyLimit] = useState('30000');
+
+  // ─── Credentials (for the Linked Credential dropdown) ───────────────────
+  const [credentials, setCredentials] = useState<CredentialLite[]>([]);
+  const [credentialsLoading, setCredentialsLoading] = useState(false);
+
+  const fetchCredentials = useCallback(async (type?: 'whatsapp') => {
+    setCredentialsLoading(true);
+    try {
+      const url = type ? `/api/credentials?type=${encodeURIComponent(type)}` : '/api/credentials';
+      const res = await authFetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        // API returns either { credentials: [...] } or { data: [...] }
+        const list: CredentialLite[] = (data.credentials || data.data || []).map((c: CredentialLite) => ({
+          id: c.id,
+          name: c.name,
+          type: c.type,
+        }));
+        setCredentials(list);
+      } else {
+        setCredentials([]);
+      }
+    } catch {
+      setCredentials([]);
+    } finally {
+      setCredentialsLoading(false);
+    }
+  }, []);
 
   // ─── Fetch ──────────────────────────────────────────────────────────────
 
@@ -271,7 +279,7 @@ export function CommunicationProvidersView() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/communication-providers');
+      const res = await authFetch('/api/communication-providers');
       if (res.ok) {
         const data = await res.json();
         setProviders(data.data || []);
@@ -339,21 +347,39 @@ export function CommunicationProvidersView() {
   // Track whether we're populating for edit to avoid useEffect override
   const isPopulatingForEdit = useRef(false);
 
-  // Reset form provider when type changes (skip during edit population)
+  // Reset form provider when type changes (skip during edit population).
+  // Email is intentionally absent — we only allow whatsapp/sms selection for
+  // new providers, but legacy email rows still pass through populateFormForEdit
+  // which sets isPopulatingForEdit to bypass this branch.
   useEffect(() => {
     if (isPopulatingForEdit.current) return;
-    const providerList = formType === 'email' ? EMAIL_PROVIDERS : formType === 'sms' ? SMS_PROVIDERS : WHATSAPP_PROVIDERS;
+    const providerList = formType === 'sms' ? SMS_PROVIDERS : WHATSAPP_PROVIDERS;
     setFormProvider(providerList[0]);
     setFormConfig({});
+    setFormCredentialId('');
   }, [formType]);
+
+  // Load credentials for the Linked Credential dropdown whenever the form is
+  // opened or the form type changes. For WhatsApp providers we filter the
+  // vault by type=whatsapp; for SMS providers we show all credentials (since
+  // SMS providers don't typically have a dedicated vault type).
+  useEffect(() => {
+    if (!showAddDialog && !showEditDialog) return;
+    if (formType === 'whatsapp') {
+      fetchCredentials('whatsapp');
+    } else {
+      fetchCredentials(undefined);
+    }
+  }, [showAddDialog, showEditDialog, formType, fetchCredentials]);
 
   // ─── Form helpers ───────────────────────────────────────────────────────
 
   const resetForm = () => {
     setFormName('');
-    setFormType('email');
-    setFormProvider('amazon_ses');
+    setFormType('whatsapp');
+    setFormProvider('meta_cloud_api');
     setFormConfig({});
+    setFormCredentialId('');
     setFormIsDefault(false);
     setFormSendingEnabled(true);
     setFormDailyLimit('1000');
@@ -366,6 +392,7 @@ export function CommunicationProvidersView() {
     setFormType(provider.type);
     setFormProvider(provider.provider);
     setFormConfig(provider.config || {});
+    setFormCredentialId(provider.credentialId || '');
     setFormIsDefault(provider.isDefault);
     setFormSendingEnabled(provider.sendingEnabled);
     setFormDailyLimit(String(provider.dailyLimit));
@@ -386,14 +413,14 @@ export function CommunicationProvidersView() {
 
     setSaving(true);
     try {
-      const res = await fetch('/api/communication-providers', {
+      const res = await authFetch('/api/communication-providers', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: formName.trim(),
           type: formType,
           provider: formProvider,
           config: formConfig,
+          credentialId: formCredentialId || undefined,
           isDefault: formIsDefault,
           sendingEnabled: formSendingEnabled,
           dailyLimit: parseInt(formDailyLimit) || 1000,
@@ -425,13 +452,15 @@ export function CommunicationProvidersView() {
 
     setSaving(true);
     try {
-      const res = await fetch(`/api/communication-providers/${editingProvider.id}`, {
+      const res = await authFetch(`/api/communication-providers/${editingProvider.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: formName.trim(),
           provider: formProvider,
           config: formConfig,
+          // Pass null when the user cleared the dropdown so the backend unlinks
+          // any previously linked credential.
+          credentialId: formCredentialId === '' ? null : formCredentialId,
           isDefault: formIsDefault,
           sendingEnabled: formSendingEnabled,
           dailyLimit: parseInt(formDailyLimit) || 1000,
@@ -465,9 +494,8 @@ export function CommunicationProvidersView() {
   const handleToggleSending = async (provider: CommunicationProvider) => {
     setTogglingId(provider.id);
     try {
-      const res = await fetch(`/api/communication-providers/${provider.id}`, {
+      const res = await authFetch(`/api/communication-providers/${provider.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sendingEnabled: !provider.sendingEnabled }),
       });
       if (res.ok) {
@@ -485,7 +513,7 @@ export function CommunicationProvidersView() {
 
   const handleDelete = async (id: string) => {
     try {
-      const res = await fetch(`/api/communication-providers/${id}`, {
+      const res = await authFetch(`/api/communication-providers/${id}`, {
         method: 'DELETE',
       });
       if (res.ok) {
@@ -505,6 +533,9 @@ export function CommunicationProvidersView() {
   const ProviderCard = ({ provider }: { provider: CommunicationProvider }) => {
     const typeConf = TYPE_CONFIG[provider.type] || TYPE_CONFIG.email;
     const TypeIcon = typeConf.icon;
+    const isDeprecatedEmail = provider.type === 'email';
+    // For legacy email rows the provider value (e.g. amazon_ses) is no longer
+    // in PROVIDER_OPTIONS, so fall back to the raw string.
     const providerLabel = PROVIDER_OPTIONS[provider.provider]?.label || provider.provider;
     const dailyPct = provider.dailyLimit > 0 ? Math.min((provider.sentToday / provider.dailyLimit) * 100, 100) : 0;
     const monthlyPct = provider.monthlyLimit > 0 ? Math.min((provider.sentThisMonth / provider.monthlyLimit) * 100, 100) : 0;
@@ -513,7 +544,7 @@ export function CommunicationProvidersView() {
     const isToggling = togglingId === provider.id;
 
     return (
-      <Card className={cn('transition-all hover:shadow-md', !isActive && 'opacity-60')}>
+      <Card className={cn('transition-all hover:shadow-md', !isActive && 'opacity-60', isDeprecatedEmail && 'border-amber-300 bg-amber-50/30')}>
         <CardContent className="p-4 space-y-4">
           {/* Header */}
           <div className="flex items-start justify-between gap-2">
@@ -526,7 +557,12 @@ export function CommunicationProvidersView() {
                 <p className="text-xs text-muted-foreground">{providerLabel}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+              {isDeprecatedEmail && (
+                <Badge variant="outline" className="text-[10px] bg-amber-100 text-amber-800 border-amber-300">
+                  <AlertCircle className="size-3 mr-0.5" /> Deprecated
+                </Badge>
+              )}
               {provider.isDefault && (
                 <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">
                   <Shield className="size-3 mr-0.5" /> Default
@@ -538,6 +574,46 @@ export function CommunicationProvidersView() {
               </Badge>
             </div>
           </div>
+
+          {/* Deprecation banner for legacy email rows */}
+          {isDeprecatedEmail && (
+            <div className="rounded-md border border-amber-300 bg-amber-100/70 p-2.5 text-xs text-amber-900 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-700">
+              <div className="flex items-start gap-2">
+                <Info className="size-3.5 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-medium">Email providers have moved to Email Providers — this record is deprecated.</p>
+                  <p className="text-amber-800/80 dark:text-amber-300/80">Email send is now managed by the EmailProvider system. This row is preserved for audit only.</p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-6 mt-1 text-[11px] bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700"
+                    onClick={() => setActiveView('emailProviders')}
+                  >
+                    <ExternalLink className="size-3 mr-1" /> View Email Providers
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Linked credential indicator */}
+          {!isDeprecatedEmail && provider.credential && (
+            <div className="flex items-center gap-2 text-xs">
+              <Link2 className="size-3.5 text-muted-foreground" />
+              <span className="text-muted-foreground">Linked credential:</span>
+              <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
+                {provider.credential.name}
+                <span className="ml-1 opacity-60 uppercase">{provider.credential.type}</span>
+              </Badge>
+            </div>
+          )}
+          {!isDeprecatedEmail && !provider.credential && provider.credentialId && (
+            <div className="flex items-center gap-2 text-xs text-amber-700">
+              <AlertCircle className="size-3.5" />
+              <span>Linked credential is missing (deleted from vault).</span>
+            </div>
+          )}
 
           {/* Sending Toggle */}
           <div className="flex items-center justify-between">
@@ -632,20 +708,49 @@ export function CommunicationProvidersView() {
 
   // ─── Section ────────────────────────────────────────────────────────────
 
-  const ProviderSection = ({ title, icon: SectionIcon, providers: sectionProviders, emptyText }: {
+  const ProviderSection = ({ title, icon: SectionIcon, providers: sectionProviders, emptyText, deprecated }: {
     title: string;
     icon: React.ElementType;
     providers: CommunicationProvider[];
     emptyText: string;
+    /** When true, the section renders as deprecated (e.g. legacy email rows). */
+    deprecated?: boolean;
   }) => (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <SectionIcon className="size-5 text-emerald-600" />
+        <SectionIcon className={cn('size-5', deprecated ? 'text-amber-600' : 'text-emerald-600')} />
         <h3 className="text-lg font-semibold">{title}</h3>
-        <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
+        <Badge variant="outline" className={cn('text-[10px]', deprecated ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200')}>
           {sectionProviders.length}
         </Badge>
+        {deprecated && (
+          <Badge variant="outline" className="text-[10px] bg-amber-100 text-amber-800 border-amber-300">
+            Deprecated
+          </Badge>
+        )}
       </div>
+      {deprecated && sectionProviders.length > 0 && (
+        <div className="rounded-md border border-amber-300 bg-amber-100/60 p-3 text-xs text-amber-900 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-700">
+          <div className="flex items-start gap-2">
+            <Info className="size-4 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-medium">Email providers have moved to Email Providers.</p>
+              <p className="text-amber-800/80 dark:text-amber-300/80">
+                These legacy rows are no longer used to send email — they're preserved for audit. Email send is now handled by the EmailProvider system.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-6 mt-1 text-[11px] bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700"
+                onClick={() => setActiveView('emailProviders')}
+              >
+                <ExternalLink className="size-3 mr-1" /> Open Email Providers
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       {sectionProviders.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-10 text-muted-foreground">
@@ -665,27 +770,54 @@ export function CommunicationProvidersView() {
   // ─── Dynamic config fields for add/edit dialog ───────────────────────────
 
   const currentConfigFields = CONFIG_FIELDS[formProvider] || [];
+  // When a credential is linked (or when editing a legacy email row), the
+  // manual config fields below are decorative — secrets come from the vault.
+  // For email rows we still show the legacy CONFIG_FIELDS lookup would yield [],
+  // but we also short-circuit on the email type itself to be safe.
+  const isEditingLegacyEmail = !!editingProvider && editingProvider.type === 'email';
+  const configFieldsDisabled = !!formCredentialId || isEditingLegacyEmail;
 
   // ─── Shared form content for add/edit ──────────────────────────────────
 
   const formContent = (
     <div className="space-y-4 py-2">
+      {/* Deprecation banner shown when editing a legacy email row */}
+      {isEditingLegacyEmail && (
+        <div className="rounded-md border border-amber-300 bg-amber-100/70 p-3 text-xs text-amber-900 dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-700">
+          <div className="flex items-start gap-2">
+            <Info className="size-4 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-medium">Email providers have moved to Email Providers — this record is deprecated.</p>
+              <p className="text-amber-800/80 dark:text-amber-300/80">
+                You can adjust quotas or disable sending here, but type/config changes are blocked. Please manage email send via the Email Providers page.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-6 mt-1 text-[11px] bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-700"
+                onClick={() => setActiveView('emailProviders')}
+              >
+                <ExternalLink className="size-3 mr-1" /> View Email Providers
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Name */}
       <div className="space-y-2">
         <Label>Provider Name *</Label>
-        <Input placeholder="e.g., Twilio SMS, Amazon SES" value={formName} onChange={e => setFormName(e.target.value)} />
+        <Input placeholder="e.g., Twilio SMS, Meta Cloud API" value={formName} onChange={e => setFormName(e.target.value)} />
       </div>
 
-      {/* Type - only editable in Add mode */}
+      {/* Type - only editable in Add mode. Email is intentionally NOT offered. */}
       {!editingProvider && (
         <div className="space-y-2">
           <Label>Type</Label>
-          <Select value={formType} onValueChange={(v: 'email' | 'sms' | 'whatsapp') => setFormType(v)}>
+          <Select value={formType === 'email' ? 'whatsapp' : formType} onValueChange={(v: 'email' | 'sms' | 'whatsapp') => setFormType(v)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="email">
-                <span className="flex items-center gap-2"><Mail className="size-3.5 text-emerald-600" /> Email</span>
-              </SelectItem>
               <SelectItem value="sms">
                 <span className="flex items-center gap-2"><Smartphone className="size-3.5 text-emerald-600" /> SMS</span>
               </SelectItem>
@@ -694,6 +826,9 @@ export function CommunicationProvidersView() {
               </SelectItem>
             </SelectContent>
           </Select>
+          <p className="text-[11px] text-muted-foreground">
+            Email providers are managed on the <button type="button" className="underline text-emerald-700 hover:text-emerald-800" onClick={() => setActiveView('emailProviders')}>Email Providers</button> page.
+          </p>
         </div>
       )}
 
@@ -703,7 +838,7 @@ export function CommunicationProvidersView() {
           <Label>Type</Label>
           <div className="flex items-center gap-2 h-9 px-3 rounded-md border bg-muted/50 text-sm text-muted-foreground">
             {(() => {
-              const typeConf = TYPE_CONFIG[editingProvider.type];
+              const typeConf = TYPE_CONFIG[editingProvider.type] || TYPE_CONFIG.email;
               const TypeIcon = typeConf.icon;
               return <><TypeIcon className={cn('size-4', typeConf.color)} /> {typeConf.label}</>;
             })()}
@@ -711,13 +846,21 @@ export function CommunicationProvidersView() {
         </div>
       )}
 
-      {/* Provider */}
+      {/* Provider dropdown — email is intentionally excluded. */}
       <div className="space-y-2">
         <Label>Provider</Label>
-        <Select value={formProvider} onValueChange={v => { setFormProvider(v); setFormConfig({}); }}>
+        <Select
+          value={formProvider}
+          onValueChange={v => { setFormProvider(v); setFormConfig({}); }}
+          // Disable provider switching for legacy email rows — their provider
+          // value (e.g. amazon_ses) is no longer in the option list, so the
+          // Select would show an empty value otherwise. They can still edit
+          // name/limits/toggles below.
+          disabled={isEditingLegacyEmail}
+        >
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            {(formType === 'email' ? EMAIL_PROVIDERS : formType === 'sms' ? SMS_PROVIDERS : WHATSAPP_PROVIDERS).map(key => (
+            {(formType === 'sms' ? SMS_PROVIDERS : WHATSAPP_PROVIDERS).map(key => (
               <SelectItem key={key} value={key}>
                 {PROVIDER_OPTIONS[key]?.label || key}
               </SelectItem>
@@ -726,14 +869,65 @@ export function CommunicationProvidersView() {
         </Select>
       </div>
 
+      {/* Linked Credential section — only for whatsapp/sms providers (not legacy email) */}
+      {!isEditingLegacyEmail && (
+        <>
+          <Separator />
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Link2 className="size-4 text-emerald-600" />
+              <Label className="text-sm font-semibold">Linked Credential</Label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Link a credential from the Credentials vault instead of pasting secrets here. If a credential is linked, the secrets below are ignored.
+            </p>
+            <Select
+              value={formCredentialId || '__none__'}
+              onValueChange={v => setFormCredentialId(v === '__none__' ? '' : v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="No credential linked (use config fields below)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">— None (use config below) —</SelectItem>
+                {credentialsLoading ? (
+                  <div className="flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground">
+                    <Loader2 className="size-3 animate-spin" /> Loading credentials...
+                  </div>
+                ) : credentials.length === 0 ? (
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                    No credentials found. Add one in the Credentials page.
+                  </div>
+                ) : (
+                  credentials.map(c => (
+                    <SelectItem key={c.id} value={c.id}>
+                      <span className="flex items-center gap-2">
+                        <Key className="size-3 text-muted-foreground" />
+                        {c.name}
+                        <span className="text-[10px] uppercase opacity-60">{c.type}</span>
+                      </span>
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+        </>
+      )}
+
       <Separator />
 
       {/* Dynamic Config Fields */}
       {currentConfigFields.length > 0 && (
-        <div className="space-y-3">
+        <div className={cn('space-y-3', configFieldsDisabled && 'opacity-50 pointer-events-none')}>
           <div className="flex items-center gap-2">
             <Key className="size-4 text-emerald-600" />
             <Label className="text-sm font-semibold">Configuration</Label>
+            {configFieldsDisabled && (
+              <span className="text-[11px] text-muted-foreground ml-auto">
+                {isEditingLegacyEmail ? 'Disabled (legacy email row)' : 'Ignored — credential linked'}
+              </span>
+            )}
           </div>
           {currentConfigFields.map(field => (
             <div key={field.key} className="space-y-1.5">
@@ -743,6 +937,7 @@ export function CommunicationProvidersView() {
                 placeholder={field.placeholder}
                 value={formConfig[field.key] || ''}
                 onChange={e => setFormConfig(prev => ({ ...prev, [field.key]: e.target.value }))}
+                disabled={configFieldsDisabled}
               />
             </div>
           ))}
@@ -1018,7 +1213,7 @@ export function CommunicationProvidersView() {
           </div>
           <div>
             <h2 className="text-xl font-bold">Communication Providers</h2>
-            <p className="text-sm text-muted-foreground">Manage email, SMS, and WhatsApp providers</p>
+            <p className="text-sm text-muted-foreground">Manage SMS and WhatsApp providers — email is configured under Email Providers</p>
           </div>
         </div>
         <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => { resetForm(); setShowAddDialog(true); }}>
@@ -1093,12 +1288,15 @@ export function CommunicationProvidersView() {
         </Card>
       ) : (
         <div className="space-y-8">
-          <ProviderSection
-            title="Email Providers"
-            icon={Mail}
-            providers={emailProviders}
-            emptyText="Add an email provider like Amazon SES, Resend, or SendGrid"
-          />
+          {emailProviders.length > 0 && (
+            <ProviderSection
+              title="Email Providers (Legacy)"
+              icon={Mail}
+              providers={emailProviders}
+              emptyText="Add an email provider like Amazon SES, Resend, or SendGrid"
+              deprecated
+            />
+          )}
           <ProviderSection
             title="SMS Providers"
             icon={Smartphone}
@@ -1119,7 +1317,7 @@ export function CommunicationProvidersView() {
         <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Communication Provider</DialogTitle>
-            <DialogDescription>Configure a new email, SMS, or WhatsApp provider.</DialogDescription>
+            <DialogDescription>Configure a new SMS or WhatsApp provider. Email providers are managed on the Email Providers page.</DialogDescription>
           </DialogHeader>
           {formContent}
           <DialogFooter className="gap-2">

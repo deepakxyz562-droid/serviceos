@@ -57,6 +57,9 @@ interface CampaignResponse {
   skipped: number;
   results: SendResult[];
   error?: string;
+  // Backend returns `message` alongside `error` on a 409 MARKETING_PROVIDER_REQUIRED
+  // response (the body is a different shape than the success payload).
+  message?: string;
 }
 
 interface LogEntry {

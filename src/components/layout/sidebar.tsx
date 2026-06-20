@@ -21,6 +21,8 @@ import {
   Wrench,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  Plus,
   LogOut,
   Crown,
   Globe,
@@ -75,6 +77,12 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 
 // ─── Nav item definition ────────────────────────────────────────────────────
@@ -89,15 +97,144 @@ interface NavItem {
 interface NavSection {
   title: string;
   items: NavItem[];
+  collapsible?: boolean;      // if true, section can be collapsed by clicking its title
+  defaultCollapsed?: boolean; // if true, section starts collapsed (desktop expanded mode only)
 }
 
-// ─── Navigation sections — organized by user's module structure ──────────────
+// ─── Navigation sections — organized by module structure (8 sections) ──────
 
 const ownerNavSections: NavSection[] = [
   {
     title: 'Overview',
     items: [
       { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { view: 'calendar', label: 'Calendar', icon: Calendar },
+      { view: 'reports', label: 'Reports', icon: BarChart3 },
+    ],
+  },
+  {
+    title: 'CRM',
+    items: [
+      { view: 'leads', label: 'Leads', icon: Target },
+      { view: 'customers', label: 'Customers', icon: Users },
+      { view: 'customer360', label: 'Customer 360', icon: UserCircle, badge: '360' },
+      { view: 'salesPipeline', label: 'Pipeline', icon: Kanban },
+    ],
+  },
+  {
+    title: 'Audience',
+    collapsible: true,
+    defaultCollapsed: true,
+    items: [
+      { view: 'contacts', label: 'All Contacts', icon: Users },
+      { view: 'groups', label: 'Groups', icon: FolderTree },
+      { view: 'tags', label: 'Tags', icon: TagIcon },
+      { view: 'segments', label: 'Segments', icon: Filter },
+      { view: 'contactImports', label: 'Imports', icon: Upload },
+      { view: 'contactExports', label: 'Exports', icon: Download },
+      { view: 'audienceAnalytics', label: 'Audience Analytics', icon: BarChart3 },
+    ],
+  },
+  {
+    title: 'Operations',
+    items: [
+      { view: 'booking', label: 'Booking', icon: CalendarCheck },
+      { view: 'jobs', label: 'Jobs', icon: Briefcase },
+      { view: 'dispatch', label: 'Dispatch Board', icon: Radio },
+      { view: 'employees', label: 'Employees', icon: UserCog },
+      { view: 'reviews', label: 'Reviews', icon: Star },
+      { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },
+    ],
+  },
+  {
+    title: 'Marketing',
+    items: [
+      { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
+      { view: 'broadcast', label: 'Broadcast', icon: Send },
+      { view: 'marketingTemplates', label: 'Templates', icon: MessageSquare },
+      { view: 'retargeting', label: 'Retargeting', icon: RefreshCw },
+      { view: 'marketingAnalytics', label: 'Analytics', icon: BarChart3 },
+    ],
+  },
+  {
+    title: 'Inbox & Automation',
+    items: [
+      { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
+      { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
+      { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
+      { view: 'workflows', label: 'Workflows', icon: Workflow },
+      { view: 'workflowAutomations', label: 'Automations', icon: GitBranch },
+      { view: 'triggers', label: 'Triggers', icon: Zap },
+      { view: 'formBuilder', label: 'Form Builder', icon: ClipboardList },
+      { view: 'variables', label: 'Variables', icon: Variable },
+      { view: 'executions', label: 'Executions', icon: Activity },
+    ],
+  },
+  {
+    title: 'Finance',
+    items: [
+      { view: 'quotes', label: 'Quotes', icon: Receipt },
+      { view: 'invoices', label: 'Invoices', icon: FileText },
+      { view: 'billing', label: 'Subscription', icon: CreditCard },
+    ],
+  },
+  {
+    title: 'Setup & Admin',
+    collapsible: true,
+    defaultCollapsed: true,
+    items: [
+      { view: 'settings', label: 'Settings', icon: Settings },
+      { view: 'integrations', label: 'Integrations', icon: Plug, badge: 'New' },
+      { view: 'communicationProviders', label: 'Providers', icon: KeyRound },
+      { view: 'emailProviders', label: 'Email Providers', icon: Mail },
+      { view: 'emailTemplates', label: 'Email Templates', icon: FileText },
+      { view: 'credentials', label: 'Credentials', icon: KeyRound },
+      { view: 'auditLogs', label: 'Audit Logs', icon: ScrollText },
+      { view: 'customerPortal', label: 'Customer Portal', icon: Globe },
+      { view: 'employeePortal', label: 'Employee Portal', icon: HardHat },
+    ],
+  },
+];
+
+const employeeNavSections: NavSection[] = [
+  {
+    title: 'My Work',
+    items: [
+      { view: 'employeePortal', label: 'My Jobs', icon: Briefcase },
+      { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    ],
+  },
+  {
+    title: 'Account',
+    items: [
+      { view: 'settings', label: 'Settings', icon: Settings },
+    ],
+  },
+];
+
+// ─── Dedicated Superadmin Navigation (mirrors owner structure minus portals) ─
+// Superadmin has a platform-focused sidebar: Admin Panel + Platform on top, then
+// the same 8 module sections as owner (omitting Customer/Employee Portal which
+// are tenant-user features). No collapsible flags — superadmin has fewer items.
+
+const superadminNavSections: NavSection[] = [
+  {
+    title: 'Admin Panel',
+    items: [
+      { view: 'superadmin', label: 'Dashboard', icon: ShieldCheck, badge: 'SA' },
+    ],
+  },
+  {
+    title: 'Platform',
+    items: [
+      { view: 'dashboard', label: 'App Dashboard', icon: LayoutDashboard },
+    ],
+  },
+  {
+    title: 'Overview',
+    items: [
+      { view: 'calendar', label: 'Calendar', icon: Calendar },
+      { view: 'reports', label: 'Reports', icon: BarChart3 },
     ],
   },
   {
@@ -122,190 +259,58 @@ const ownerNavSections: NavSection[] = [
     ],
   },
   {
-    title: 'Communication Providers',
-    items: [
-      { view: 'emailProviders', label: 'Email Providers', icon: Mail },
-      { view: 'emailTemplates', label: 'Email Templates', icon: FileText },
-      { view: 'emailCampaigns', label: 'Email Campaigns', icon: Send },
-    ],
-  },
-  {
     title: 'Operations',
     items: [
       { view: 'booking', label: 'Booking', icon: CalendarCheck },
-      { view: 'calendar', label: 'Calendar', icon: Calendar },
       { view: 'jobs', label: 'Jobs', icon: Briefcase },
       { view: 'dispatch', label: 'Dispatch Board', icon: Radio },
       { view: 'employees', label: 'Employees', icon: UserCog },
+      { view: 'reviews', label: 'Reviews', icon: Star },
+      { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },
     ],
   },
   {
-    title: 'Communication',
+    title: 'Marketing',
     items: [
-      { view: 'omnichannel', label: 'Omnichannel', icon: RadioTower },
+      { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
       { view: 'broadcast', label: 'Broadcast', icon: Send },
       { view: 'marketingTemplates', label: 'Templates', icon: MessageSquare },
-    ],
-  },
-  {
-    title: 'Marketing',
-    items: [
-      { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
       { view: 'retargeting', label: 'Retargeting', icon: RefreshCw },
       { view: 'marketingAnalytics', label: 'Analytics', icon: BarChart3 },
     ],
   },
   {
-    title: 'Automation',
+    title: 'Inbox & Automation',
     items: [
-      { view: 'workflows', label: 'Workflow Editor', icon: Workflow },
-      { view: 'triggers', label: 'Triggers', icon: Zap },
-      { view: 'variables', label: 'Variables', icon: Variable },
-      { view: 'executions', label: 'Executions', icon: Activity },
-      { view: 'formBuilder', label: 'Form Builder', icon: ClipboardList },
-      { view: 'workflowAutomations', label: 'Automations', icon: GitBranch },
-    ],
-  },
-  {
-    title: 'Finance',
-    items: [
-      { view: 'quotes', label: 'Quotes', icon: Receipt },
-      { view: 'invoices', label: 'Invoices', icon: FileText },
-      { view: 'billing', label: 'Billing', icon: CreditCard },
-    ],
-  },
-  {
-    title: 'Administration',
-    items: [
-      { view: 'credentials', label: 'Credentials', icon: KeyRound },
-      { view: 'integrations', label: 'Integrations', icon: Plug, badge: 'New' },
-      { view: 'settings', label: 'Settings', icon: Settings },
-      { view: 'auditLogs', label: 'Audit Logs', icon: ScrollText },
-      { view: 'reports', label: 'Reports', icon: BarChart3 },
-    ],
-  },
-  {
-    title: 'Portals',
-    items: [
-      { view: 'customerPortal', label: 'Customer Portal', icon: Globe },
-      { view: 'employeePortal', label: 'Employee Portal', icon: HardHat },
-    ],
-  },
-  {
-    title: 'AI & More',
-    items: [
+      { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
       { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
       { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
-      { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },
-      { view: 'communicationProviders', label: 'Providers', icon: KeyRound },
-      { view: 'reviews', label: 'Reviews', icon: Star },
-    ],
-  },
-];
-
-const employeeNavSections: NavSection[] = [
-  {
-    title: 'My Work',
-    items: [
-      { view: 'employeePortal', label: 'My Jobs', icon: Briefcase },
-      { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    ],
-  },
-  {
-    title: 'Account',
-    items: [
-      { view: 'settings', label: 'Settings', icon: Settings },
-    ],
-  },
-];
-
-// ─── Dedicated Superadmin Navigation ────────────────────────────────────────
-// Superadmin has a completely different sidebar focused on platform management
-
-const superadminNavSections: NavSection[] = [
-  {
-    title: 'Admin Panel',
-    items: [
-      { view: 'superadmin', label: 'Dashboard', icon: ShieldCheck, badge: 'SA' },
-    ],
-  },
-  {
-    title: 'Platform',
-    items: [
-      { view: 'dashboard', label: 'App Dashboard', icon: LayoutDashboard },
-    ],
-  },
-  {
-    title: 'CRM',
-    items: [
-      { view: 'leads', label: 'Leads', icon: Target },
-      { view: 'customers', label: 'Customers', icon: Users },
-      { view: 'salesPipeline', label: 'Sales Pipeline', icon: Kanban },
-    ],
-  },
-  {
-    title: 'Audience',
-    items: [
-      { view: 'contacts', label: 'All Contacts', icon: Users },
-      { view: 'groups', label: 'Groups', icon: FolderTree },
-      { view: 'tags', label: 'Tags', icon: TagIcon },
-      { view: 'segments', label: 'Segments', icon: Filter },
-      { view: 'contactImports', label: 'Imports', icon: Upload },
-      { view: 'contactExports', label: 'Exports', icon: Download },
-      { view: 'audienceAnalytics', label: 'Audience Analytics', icon: BarChart3 },
-    ],
-  },
-  {
-    title: 'Communication Providers',
-    items: [
-      { view: 'emailProviders', label: 'Email Providers', icon: Mail },
-      { view: 'emailTemplates', label: 'Email Templates', icon: FileText },
-      { view: 'emailCampaigns', label: 'Email Campaigns', icon: Send },
-    ],
-  },
-  {
-    title: 'Operations',
-    items: [
-      { view: 'booking', label: 'Booking', icon: Calendar },
-      { view: 'jobs', label: 'Jobs', icon: Briefcase },
-      { view: 'employees', label: 'Employees', icon: UserCog },
-    ],
-  },
-  {
-    title: 'Communication',
-    items: [
-      { view: 'omnichannel', label: 'Omnichannel', icon: Radio },
-      { view: 'broadcast', label: 'Broadcast', icon: Radio },
-    ],
-  },
-  {
-    title: 'Marketing',
-    items: [
-      { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
-      { view: 'retargeting', label: 'Retargeting', icon: RefreshCw },
-      { view: 'marketingAnalytics', label: 'Analytics', icon: BarChart3 },
-    ],
-  },
-  {
-    title: 'Automation',
-    items: [
       { view: 'workflows', label: 'Workflows', icon: Workflow },
+      { view: 'workflowAutomations', label: 'Automations', icon: GitBranch },
       { view: 'triggers', label: 'Triggers', icon: Zap },
+      { view: 'formBuilder', label: 'Form Builder', icon: ClipboardList },
+      { view: 'variables', label: 'Variables', icon: Variable },
+      { view: 'executions', label: 'Executions', icon: Activity },
     ],
   },
   {
     title: 'Finance',
     items: [
-      { view: 'invoices', label: 'Invoices', icon: FileText },
       { view: 'quotes', label: 'Quotes', icon: Receipt },
-      { view: 'billing', label: 'Billing', icon: CreditCard },
+      { view: 'invoices', label: 'Invoices', icon: FileText },
+      { view: 'billing', label: 'Subscription', icon: CreditCard },
     ],
   },
   {
-    title: 'System',
+    title: 'Setup & Admin',
     items: [
       { view: 'settings', label: 'Settings', icon: Settings },
-      { view: 'reports', label: 'Reports', icon: BarChart3 },
+      { view: 'integrations', label: 'Integrations', icon: Plug, badge: 'New' },
+      { view: 'communicationProviders', label: 'Providers', icon: KeyRound },
+      { view: 'emailProviders', label: 'Email Providers', icon: Mail },
+      { view: 'emailTemplates', label: 'Email Templates', icon: FileText },
+      { view: 'credentials', label: 'Credentials', icon: KeyRound },
+      { view: 'auditLogs', label: 'Audit Logs', icon: ScrollText },
     ],
   },
 ];
@@ -327,6 +332,65 @@ interface AppSidebarProps {
   onLogout?: () => void;
 }
 
+// ─── "+ Create" quick-action menu ────────────────────────────────────────────
+
+interface CreateMenuProps {
+  isMobile: boolean;
+  leftSidebarOpen: boolean;
+  onSelect: (view: ViewType) => void;
+}
+
+function CreateMenu({ isMobile, leftSidebarOpen, onSelect }: CreateMenuProps) {
+  const isExpanded = isMobile || leftSidebarOpen;
+  const items: { view: ViewType; label: string; icon: React.ElementType }[] = [
+    { view: 'leads', label: 'New Lead', icon: Target },
+    { view: 'customers', label: 'New Customer', icon: Users },
+    { view: 'booking', label: 'New Booking', icon: CalendarCheck },
+    { view: 'jobs', label: 'New Job', icon: Briefcase },
+    { view: 'invoices', label: 'New Invoice', icon: FileText },
+    { view: 'campaigns', label: 'New Campaign', icon: Megaphone },
+  ];
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="Create"
+          title="Create"
+          className={cn(
+            'flex items-center rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition-colors shadow-sm shadow-emerald-900/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400',
+            isExpanded ? 'w-full h-9 px-3 gap-2 text-sm' : 'w-full h-9 justify-center'
+          )}
+        >
+          <Plus className="size-4 shrink-0" />
+          {isExpanded && <span className="flex-1 text-left">Create</span>}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        side={isExpanded ? 'bottom' : 'right'}
+        align="start"
+        sideOffset={6}
+        className="w-52 bg-slate-900 border-slate-700 text-slate-200"
+      >
+        {items.map((item) => {
+          const Icon = item.icon;
+          return (
+            <DropdownMenuItem
+              key={item.view}
+              onClick={() => onSelect(item.view)}
+              className="cursor-pointer text-slate-200 hover:bg-emerald-600/20 hover:text-emerald-300 focus:bg-emerald-600/20 focus:text-emerald-300"
+            >
+              <Icon className="size-4 mr-2 text-emerald-400" />
+              <span>{item.label}</span>
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 // ─── Sidebar Content (shared between desktop and mobile) ────────────────────
 
 function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMobile?: boolean }) {
@@ -340,17 +404,23 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
   } = useAppStore();
 
   const [disabledMenus, setDisabledMenus] = useState<string[]>([]);
+  // User-explicit overrides of each section's collapsed state. The effective
+  // collapsed state is derived: override wins if present, otherwise the
+  // section's `defaultCollapsed` flag applies. This avoids a setState-in-effect
+  // for initialization (the override map starts empty and is only mutated by
+  // user clicks).
+  const [collapsedOverrides, setCollapsedOverrides] = useState<Record<string, boolean>>({});
 
   // Compute isSuperAdmin early (needed in effects and rendering)
   const isSuperAdmin = !!(auth.user?.isSuperAdmin || auth.user?.role === 'superadmin' || auth.user?.role === 'super_admin' || (auth.user?.role === 'admin' && !auth.user?.tenantId));
   const isEmployee = auth.user?.role === 'employee';
 
-  // Fetch menu visibility for non-superadmin users
+  // Fetch menu visibility for non-superadmin users. Superadmin bypasses the
+  // fetch entirely (the filter below ignores `disabledMenus` when isSuperAdmin),
+  // so we early-return without touching state — avoids a synchronous setState
+  // in the effect body.
   useEffect(() => {
-    if (isSuperAdmin) {
-      setDisabledMenus([]);
-      return;
-    }
+    if (isSuperAdmin) return;
     async function fetchMenuVisibility() {
       try {
         const res = await fetch('/api/menu-visibility');
@@ -363,7 +433,20 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
       }
     }
     fetchMenuVisibility();
-  }, [auth.user?.role, auth.user?.tenantId, auth.user?.isSuperAdmin]);
+  }, [auth.user?.role, auth.user?.tenantId, auth.user?.isSuperAdmin, isSuperAdmin]);
+
+  // Effective collapsed state for a section: explicit user override wins,
+  // otherwise fall back to the section's `defaultCollapsed` flag. Non-collapsible
+  // sections are never collapsed.
+  const isSectionCollapsed = (section: NavSection): boolean => {
+    if (!section.collapsible) return false;
+    if (section.title in collapsedOverrides) return collapsedOverrides[section.title];
+    return !!section.defaultCollapsed;
+  };
+
+  const toggleSection = (title: string, currentlyCollapsed: boolean) => {
+    setCollapsedOverrides((prev) => ({ ...prev, [title]: !currentlyCollapsed }));
+  };
 
   const getUserInitials = () => {
     if (auth.user?.name) {
@@ -420,6 +503,11 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     if (isMobile) setMobileSidebarOpen(false);
   };
 
+  const handleCreateSelect = (view: ViewType) => {
+    setCurrentView(view);
+    if (isMobile) setMobileSidebarOpen(false);
+  };
+
   const renderNavItem = (item: NavItem) => {
     const Icon = item.icon;
     const isActive = currentView === item.view;
@@ -452,13 +540,20 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     );
   };
 
+  // Whether the sidebar is in "expanded" mode (mobile drawer OR desktop expanded).
+  // Used for label visibility, padding, full-width buttons, etc.
+  const isExpandedMode = isMobile || leftSidebarOpen;
+  // Collapsing sections only applies in DESKTOP-EXPANDED mode. Mobile drawer
+  // and icon-only mode ignore the collapsible flag entirely (spec requirement).
+  const isDesktopExpanded = !isMobile && leftSidebarOpen;
+
   return (
     <div className="flex flex-col h-full">
       {/* Logo / Branding */}
       <div
         className={cn(
           'flex items-center h-14 px-4 border-b border-slate-800/60 shrink-0',
-          isMobile || leftSidebarOpen ? 'justify-start gap-3' : 'justify-center'
+          isExpandedMode ? 'justify-start gap-3' : 'justify-center'
         )}
       >
         <div className={cn(
@@ -473,7 +568,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
             <Wrench className="size-5 text-white" />
           )}
         </div>
-        {(isMobile || leftSidebarOpen) && (
+        {isExpandedMode && (
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-lg font-bold tracking-tight whitespace-nowrap text-white">
               {isSuperAdmin ? 'ServiceOS' : 'ServiceOS'}
@@ -485,10 +580,8 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
         )}
       </div>
 
-
-
       {/* Superadmin tenant indicator */}
-      {isSuperAdmin && (isMobile || leftSidebarOpen) && (
+      {isSuperAdmin && isExpandedMode && (
         <div className="px-3 py-2 border-b border-slate-800/60 shrink-0">
           <div className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-red-400/80 bg-red-500/5">
             <Shield className="size-4 shrink-0" />
@@ -497,40 +590,85 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
         </div>
       )}
 
+      {/* + Create quick-action button (owner/admin only — tenant CRUD actions) */}
+      {!isSuperAdmin && !isEmployee && (
+        <div className="px-3 pt-3 pb-1 shrink-0">
+          <CreateMenu
+            isMobile={isMobile}
+            leftSidebarOpen={leftSidebarOpen}
+            onSelect={handleCreateSelect}
+          />
+        </div>
+      )}
+
       {/* Navigation Sections */}
       <ScrollArea className="flex-1 py-2 min-h-0">
         <div className="flex flex-col gap-0.5">
-          {filteredNavSections.map((section, sectionIdx) => (
-            <div key={section.title}>
-              {(isMobile || leftSidebarOpen) && (
-                <div className="px-4 pt-2.5 pb-1">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                    {section.title}
-                  </span>
-                </div>
-              )}
-              {!isMobile && !leftSidebarOpen && sectionIdx > 0 && (
-                <div className="px-3 my-1.5">
-                  <Separator className="bg-slate-800/60" />
-                </div>
-              )}
-              <nav className="flex flex-col gap-0.5 px-2">
-                {section.items.map((item) => {
-                  if (isMobile || leftSidebarOpen) return renderNavItem(item);
-                  return (
-                    <Tooltip key={item.view}>
-                      <TooltipTrigger asChild>
-                        {renderNavItem(item)}
-                      </TooltipTrigger>
-                      <TooltipContent side="right" sideOffset={8}>
-                        {item.label}
-                      </TooltipContent>
-                    </Tooltip>
-                  );
-                })}
-              </nav>
-            </div>
-          ))}
+          {filteredNavSections.map((section, sectionIdx) => {
+            // Collapsing only applies in DESKTOP-EXPANDED mode. Mobile drawer
+            // and icon-only mode ignore the collapsible flag (spec requirement):
+            //   - mobile: all sections render expanded (plain headers, all items)
+            //   - icon-only: no headers at all, just icons + separators
+            const sectionCollapsed = isDesktopExpanded && isSectionCollapsed(section);
+            const showItems = !isExpandedMode || !sectionCollapsed;
+
+            return (
+              <div key={section.title}>
+                {/* Expanded-mode section header. Only desktop-expanded
+                    collapsible sections get the clickable toggle button;
+                    mobile always gets a plain (non-collapsible) header. */}
+                {isExpandedMode && (
+                  (isDesktopExpanded && section.collapsible) ? (
+                    <button
+                      type="button"
+                      onClick={() => toggleSection(section.title, sectionCollapsed)}
+                      className="flex items-center w-full px-4 pt-2.5 pb-1 group/section-header"
+                      aria-expanded={!sectionCollapsed}
+                      aria-label={`Toggle ${section.title} section`}
+                    >
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 group-hover/section-header:text-slate-400 flex-1 text-left">
+                        {section.title}
+                      </span>
+                      {sectionCollapsed ? (
+                        <ChevronRight className="size-3 text-slate-500 group-hover/section-header:text-slate-400" />
+                      ) : (
+                        <ChevronDown className="size-3 text-slate-500 group-hover/section-header:text-slate-400" />
+                      )}
+                    </button>
+                  ) : (
+                    <div className="px-4 pt-2.5 pb-1">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                        {section.title}
+                      </span>
+                    </div>
+                  )
+                )}
+                {/* Icon-only mode: separator between sections (skip before first) */}
+                {!isExpandedMode && sectionIdx > 0 && (
+                  <div className="px-3 my-1.5">
+                    <Separator className="bg-slate-800/60" />
+                  </div>
+                )}
+                {showItems && (
+                  <nav className="flex flex-col gap-0.5 px-2">
+                    {section.items.map((item) => {
+                      if (isExpandedMode) return renderNavItem(item);
+                      return (
+                        <Tooltip key={item.view}>
+                          <TooltipTrigger asChild>
+                            {renderNavItem(item)}
+                          </TooltipTrigger>
+                          <TooltipContent side="right" sideOffset={8}>
+                            {item.label}
+                          </TooltipContent>
+                        </Tooltip>
+                      );
+                    })}
+                  </nav>
+                )}
+              </div>
+            );
+          })}
         </div>
       </ScrollArea>
 
@@ -551,7 +689,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
       <div
         className={cn(
           'flex items-center gap-3 p-3 shrink-0',
-          isMobile || leftSidebarOpen ? '' : 'justify-center'
+          isExpandedMode ? '' : 'justify-center'
         )}
       >
         <Avatar className="size-8 shrink-0">
@@ -559,7 +697,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
             {getUserInitials()}
           </AvatarFallback>
         </Avatar>
-        {(isMobile || leftSidebarOpen) && (
+        {isExpandedMode && (
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-slate-200 truncate">
               {auth.user?.name || 'Demo User'}
@@ -569,7 +707,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
             </p>
           </div>
         )}
-        {(isMobile || leftSidebarOpen) && onLogout && (
+        {isExpandedMode && onLogout && (
           <Button
             variant="ghost"
             size="icon"

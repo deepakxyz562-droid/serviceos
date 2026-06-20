@@ -53,29 +53,38 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
 
+    // Whitelist + default the fields we accept. Prevents mass-assignment of
+    // unexpected keys and ensures `channel` is persisted (was previously dropped,
+    // causing all new campaigns to silently default to 'whatsapp').
+    const allowedChannels = ['whatsapp', 'email', 'sms', 'multi']
+    const channel = body.channel && allowedChannels.includes(body.channel)
+      ? body.channel
+      : 'whatsapp'
+
     const campaign = await db.campaign.create({
       data: {
         name: body.name,
-        description: body.description,
+        description: body.description || null,
         type: body.type || 'promotional',
         status: body.status || 'draft',
+        channel,
         audienceType: body.audienceType || 'all',
-        audienceId: body.audienceId,
+        audienceId: body.audienceId || null,
         audienceFiltersJson: body.audienceFiltersJson || '{}',
-        templateId: body.templateId,
+        templateId: body.templateId || null,
         messageContent: body.messageContent,
-        mediaUrl: body.mediaUrl,
-        mediaType: body.mediaType,
-        ctaText: body.ctaText,
-        ctaUrl: body.ctaUrl,
+        mediaUrl: body.mediaUrl || null,
+        mediaType: body.mediaType || null,
+        ctaText: body.ctaText || null,
+        ctaUrl: body.ctaUrl || null,
         scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : undefined,
         timezone: body.timezone || 'UTC',
         totalRecipients: body.totalRecipients || 0,
         followUpSequenceJson: body.followUpSequenceJson || '[]',
-        cloneFromId: body.cloneFromId,
-        createdById: body.createdById,
-        tenantId: body.tenantId,
-        workspaceId: body.workspaceId,
+        cloneFromId: body.cloneFromId || null,
+        createdById: body.createdById || null,
+        tenantId: body.tenantId || null,
+        workspaceId: body.workspaceId || null,
       },
     })
 

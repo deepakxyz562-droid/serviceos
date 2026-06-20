@@ -5,6 +5,7 @@ import {
   Megaphone, Plus, Search, Play, Pause, Copy, Eye, Calendar,
   Users, Send, BarChart3, Clock, CheckCircle2, XCircle,
   MessageSquare, TrendingUp, Loader2, Trash2, Pencil,
+  Mail, AlertTriangle, Plug, ArrowRight,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -23,6 +24,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { authFetch } from '@/lib/client-auth';
+import { useAppStore } from '@/store/app-store';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -199,6 +201,95 @@ function getAudienceDisplayLabel(campaign: {
   return AUDIENCE_MODES.find(a => a.value === mode)?.label || campaign.audienceType;
 }
 
+// ─── Email provider helpers (for Send Now flow) ─────────────────────────────
+// Mirrors the eligible-provider filter from email-campaigns-view.tsx: a
+// marketing-capable provider is one whose usageType is 'marketing' or 'both',
+// is active, and is NOT the shared platform provider (bulk email must always
+// go through the tenant's own domain).
+
+// ─── Select Template helpers (Create/Edit dialogs) ──────────────────────────
+// Templates are loaded from different endpoints based on the campaign
+// channel:
+//   - whatsapp / sms  → /api/campaign-templates  (generic message templates,
+//                          since no whatsapp-templates endpoint exists)
+//   - email            → /api/email-templates     (real email templates with
+//                          subject + htmlBody)
+//   - multi            → both endpoints, merged
+// The two endpoints return differently-shaped objects, so we normalize them
+// into a single Template[] for the dropdown.
+
+interface Template {
+  id: string;
+  name: string;
+  content: string;           // normalized message body
+  subject?: string;          // email templates only
+  category?: string;
+  source: 'campaign' | 'email';
+}
+
+const TEMPLATE_NONE_VALUE = '__none__';
+
+// Extract a stored email subject from audienceFiltersJson (set by the
+// Create/Edit dialog when a user picks an email template). Returns '' if no
+// subject is stored.
+function parseStoredSubject(filtersJson: string | null | undefined): string {
+  if (!filtersJson) return '';
+  try {
+    const parsed = JSON.parse(filtersJson) as Record<string, unknown>;
+    const val = parsed?.subject;
+    return typeof val === 'string' ? val : '';
+  } catch {
+    return '';
+  }
+}
+
+interface EmailProvider {
+  id: string;
+  name: string;
+  providerType: string;
+  usageType: string;
+  isDefaultMarketing: boolean;
+  isPlatform: boolean;
+  status: string;
+}
+
+function isMarketingEligible(p: EmailProvider): boolean {
+  return (
+    !p.isPlatform &&
+    (p.usageType === 'marketing' || p.usageType === 'both') &&
+    p.status === 'active'
+  );
+}
+
+// Build the audience body for POST /api/email-campaigns/send from a campaign.
+// Returns null when the audience shape can't be mapped (e.g. manual emails),
+// in which case the UI shows a notice instead of dispatching.
+function buildEmailSendAudience(campaign: Campaign): {
+  allContacts?: boolean;
+  groupIds?: string[];
+  contactIds?: string[];
+} | null {
+  const { mode, groupId } = deriveAudienceMode(
+    campaign.audienceType,
+    campaign.audienceId,
+    campaign.audienceFiltersJson,
+  );
+  switch (mode) {
+    case 'all':
+      return { allContacts: true };
+    case 'segment':
+      return groupId ? { groupIds: [groupId] } : null;
+    case 'mixed':
+      // Best effort: send to the group; manual-email recipients are skipped
+      // (the email-campaigns API doesn't accept raw emails, only contactIds).
+      return groupId ? { groupIds: [groupId] } : null;
+    case 'custom':
+      // Manual emails only — not supported by Send Now.
+      return null;
+  }
+  return null;
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function getStatusColor(status: string) {
@@ -238,6 +329,7 @@ function getChannelColor(channel: string) {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function CampaignsView() {
+  const setActiveView = useAppStore((s) => s.setActiveView);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -253,18 +345,40 @@ export function CampaignsView() {
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // ── Send Now (email-channel campaigns) ──
+  const [showSendNowDialog, setShowSendNowDialog] = useState(false);
+  const [sendNowCampaign, setSendNowCampaign] = useState<Campaign | null>(null);
+  const [sendNowForm, setSendNowForm] = useState({
+    subject: '',
+    html: '',
+    providerId: '',
+  });
+  const [isSendingNow, setIsSendingNow] = useState(false);
+  const [emailProviders, setEmailProviders] = useState<EmailProvider[]>([]);
+  const [isLoadingProviders, setIsLoadingProviders] = useState(false);
+  const [marketingConnected, setMarketingConnected] = useState<boolean | null>(null);
+
   const [createForm, setCreateForm] = useState({
     name: '', type: 'promotional' as CampaignType, channel: 'whatsapp' as CampaignChannel,
     audienceMode: 'all' as AudienceMode, audienceId: '', manualEmails: '',
-    messageContent: '', ctaText: '', ctaUrl: '',
+    messageContent: '', ctaText: '', ctaUrl: '', subject: '',
     scheduleDate: '', scheduleTime: '', timezone: 'Asia/Kolkata',
   });
   const [editForm, setEditForm] = useState({
     name: '', type: 'promotional' as CampaignType, channel: 'whatsapp' as CampaignChannel,
     audienceMode: 'all' as AudienceMode, audienceId: '', manualEmails: '',
-    messageContent: '', ctaText: '', ctaUrl: '',
+    messageContent: '', ctaText: '', ctaUrl: '', subject: '',
     scheduleDate: '', scheduleTime: '', timezone: 'Asia/Kolkata',
   });
+
+  // ── Select Template dropdown state (Create/Edit dialogs) ──
+  // `templates` is shared between dialogs (only one is open at a time).
+  // `createSelectedTemplateId` / `editSelectedTemplateId` track the picker
+  // value per dialog so opening one doesn't bleed into the other.
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(false);
+  const [createSelectedTemplateId, setCreateSelectedTemplateId] = useState<string>('');
+  const [editSelectedTemplateId, setEditSelectedTemplateId] = useState<string>('');
 
   // ── Load campaigns from API ──
   const loadCampaigns = useCallback(async () => {
@@ -316,6 +430,201 @@ export function CampaignsView() {
   useEffect(() => {
     loadGroups();
   }, [loadGroups]);
+
+  // ── Load email providers for the Send Now flow ──
+  // Fetches all providers + the marketing-status endpoint, then filters to
+  // marketing-capable ones (mirrors the email-campaigns-view logic).
+  const loadEmailProviders = useCallback(async () => {
+    setIsLoadingProviders(true);
+    try {
+      const [pRes, stRes] = await Promise.all([
+        authFetch('/api/email-providers'),
+        authFetch('/api/email-providers/status').catch(() => null),
+      ]);
+      if (pRes.ok) {
+        const raw = await pRes.json();
+        const all = (Array.isArray(raw) ? raw : (raw?.data || [])) as EmailProvider[];
+        const eligible = all.filter(isMarketingEligible);
+        setEmailProviders(eligible);
+        if (stRes?.ok) {
+          const st = await stRes.json();
+          if (st?.marketingEmail && typeof st.marketingEmail.connected === 'boolean') {
+            setMarketingConnected(st.marketingEmail.connected);
+          } else {
+            setMarketingConnected(eligible.length > 0);
+          }
+        } else {
+          setMarketingConnected(eligible.length > 0);
+        }
+      }
+    } catch {
+      // Non-blocking — the Send Now dialog will show the empty state.
+    } finally {
+      setIsLoadingProviders(false);
+    }
+  }, []);
+
+  // ── Load templates for the Select Template dropdown ──
+  // Fetches from /api/campaign-templates (whatsapp/sms/multi) and/or
+  // /api/email-templates (email/multi) and normalizes both into a single
+  // Template[] shape. Errors are swallowed — the dropdown just renders empty.
+  const loadTemplates = useCallback(async (channel: CampaignChannel): Promise<Template[]> => {
+    setIsLoadingTemplates(true);
+    try {
+      const fetchCampaignTemplates = async (): Promise<Template[]> => {
+        const res = await authFetch('/api/campaign-templates?limit=50');
+        if (!res.ok) return [];
+        const data = await res.json();
+        const arr = Array.isArray(data) ? data : (data?.data || []);
+        return (arr as Record<string, unknown>[]).map((t) => ({
+          id: String(t.id ?? ''),
+          name: String(t.name ?? 'Untitled'),
+          content: String(t.content ?? t.messageContent ?? ''),
+          subject: undefined,
+          category: typeof t.category === 'string' ? t.category : undefined,
+          source: 'campaign' as const,
+        }));
+      };
+      const fetchEmailTemplates = async (): Promise<Template[]> => {
+        const res = await authFetch('/api/email-templates');
+        if (!res.ok) return [];
+        const data = await res.json();
+        const arr = Array.isArray(data) ? data : (data?.data || []);
+        return (arr as Record<string, unknown>[]).map((t) => ({
+          id: String(t.id ?? ''),
+          name: String(t.name ?? 'Untitled'),
+          content: String(t.htmlBody ?? t.body ?? t.textBody ?? ''),
+          subject: typeof t.subject === 'string' && t.subject ? t.subject : undefined,
+          category: typeof t.category === 'string' ? t.category : undefined,
+          source: 'email' as const,
+        }));
+      };
+
+      if (channel === 'email') return await fetchEmailTemplates();
+      if (channel === 'whatsapp' || channel === 'sms') return await fetchCampaignTemplates();
+      // multi → merge both lists (WhatsApp + Email)
+      const [wa, em] = await Promise.all([
+        fetchCampaignTemplates().catch(() => [] as Template[]),
+        fetchEmailTemplates().catch(() => [] as Template[]),
+      ]);
+      return [...wa, ...em];
+    } catch {
+      return [];
+    } finally {
+      setIsLoadingTemplates(false);
+    }
+  }, []);
+
+  // Refresh templates whenever the create dialog's channel changes (or the
+  // dialog opens). Clears the picker so a stale selection doesn't bleed in.
+  useEffect(() => {
+    if (!showCreateDialog) return;
+    setCreateSelectedTemplateId('');
+    loadTemplates(createForm.channel).then(setTemplates);
+  }, [createForm.channel, showCreateDialog, loadTemplates]);
+
+  // Same for the edit dialog.
+  useEffect(() => {
+    if (!showEditDialog) return;
+    setEditSelectedTemplateId('');
+    loadTemplates(editForm.channel).then(setTemplates);
+  }, [editForm.channel, showEditDialog, loadTemplates]);
+
+  // Open the Send Now dialog pre-populated from the campaign record.
+  // Prefer a stored email subject (set by the Create/Edit dialog when an
+  // email template was applied); fall back to the campaign name (the
+  // BE-FIX-2 default behavior).
+  const openSendNowDialog = useCallback((campaign: Campaign) => {
+    const storedSubject = parseStoredSubject(campaign.audienceFiltersJson);
+    setSendNowCampaign(campaign);
+    setSendNowForm({
+      subject: storedSubject || campaign.name,
+      html: campaign.messageContent || '',
+      providerId: '',
+    });
+    setShowDetailDialog(false);
+    setShowSendNowDialog(true);
+    // Load providers fresh each time (in case the user just connected one).
+    loadEmailProviders().then(() => {
+      // After loading, default-select the tenant's default marketing provider
+      // (or the first eligible one). The setState below runs in a microtask so
+      // the emailProviders state has been committed.
+      setEmailProviders(prev => {
+        const def = prev.find(p => p.isDefaultMarketing);
+        const chosen = def?.id || prev[0]?.id || '';
+        if (chosen) {
+          setSendNowForm(f => (f.providerId ? f : { ...f, providerId: chosen }));
+        }
+        return prev;
+      });
+    });
+  }, [loadEmailProviders]);
+
+  // Submit the Send Now form to POST /api/email-campaigns/send.
+  const handleSendNow = async () => {
+    if (!sendNowCampaign) return;
+    if (!sendNowForm.subject.trim() || !sendNowForm.html.trim()) {
+      toast.error('Subject and HTML body are required');
+      return;
+    }
+    const audience = buildEmailSendAudience(sendNowCampaign);
+    if (!audience) {
+      toast.error(
+        'Manual-email audiences are not supported by Send Now. Use individual contacts or a group.',
+        { duration: 6000 },
+      );
+      return;
+    }
+
+    setIsSendingNow(true);
+    try {
+      const res = await authFetch('/api/email-campaigns/send', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: sendNowCampaign.name,
+          subject: sendNowForm.subject,
+          html: sendNowForm.html,
+          providerId: sendNowForm.providerId || undefined,
+          campaignId: sendNowCampaign.id,
+          ...audience,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      // Marketing provider gate — backend refuses with 409 MARKETING_PROVIDER_REQUIRED.
+      if (res.status === 409 || data?.error === 'MARKETING_PROVIDER_REQUIRED') {
+        setMarketingConnected(false);
+        setShowSendNowDialog(false);
+        toast.error(
+          data?.message ||
+            'Connect a marketing email provider before sending campaigns.',
+          { duration: 6000 },
+        );
+        return;
+      }
+
+      if (!res.ok || !data?.success) {
+        toast.error(data?.error || 'Failed to send campaign');
+        return;
+      }
+
+      toast.success(
+        `Campaign sent — Sent ${data.sent ?? 0}, Delivered ${data.sent ?? 0}` +
+          (data.failed ? `, Failed ${data.failed}` : '') +
+          (data.skipped ? `, Skipped ${data.skipped}` : '') +
+          (data.totalAudience !== undefined ? ` (of ${data.totalAudience})` : ''),
+        { duration: 6000 },
+      );
+      setShowSendNowDialog(false);
+      setSendNowCampaign(null);
+      // Refresh so the user sees updated sentCount/status (backend flips to 'completed').
+      loadCampaigns();
+    } catch {
+      toast.error('Network error sending campaign');
+    } finally {
+      setIsSendingNow(false);
+    }
+  };
 
   const filteredCampaigns = campaigns.filter(c => {
     if (search && !c.name.toLowerCase().includes(search.toLowerCase())) return false;
@@ -374,6 +683,22 @@ export function CampaignsView() {
 
     const audience = buildAudiencePayload(createForm.audienceMode, createForm.audienceId, createForm.manualEmails);
 
+    // For email-channel campaigns, the Campaign model has no dedicated
+    // `subject` column — stash the email subject inside audienceFiltersJson
+    // (merged with any manualEmails). The Send Now dialog reads it back via
+    // parseStoredSubject().
+    let audienceFiltersJson = audience.audienceFiltersJson;
+    if (createForm.channel === 'email' && createForm.subject.trim()) {
+      let parsed: Record<string, unknown> = {};
+      try {
+        parsed = JSON.parse(audienceFiltersJson || '{}') as Record<string, unknown>;
+      } catch {
+        parsed = {};
+      }
+      parsed.subject = createForm.subject.trim();
+      audienceFiltersJson = JSON.stringify(parsed);
+    }
+
     setIsCreating(true);
     try {
       const res = await authFetch('/api/campaigns', {
@@ -384,7 +709,7 @@ export function CampaignsView() {
           channel: createForm.channel,
           audienceType: audience.audienceType,
           audienceId: audience.audienceId,
-          audienceFiltersJson: audience.audienceFiltersJson,
+          audienceFiltersJson,
           messageContent: createForm.messageContent,
           ctaText: createForm.ctaText || undefined,
           ctaUrl: createForm.ctaUrl || undefined,
@@ -400,9 +725,10 @@ export function CampaignsView() {
         setCreateForm({
           name: '', type: 'promotional', channel: 'whatsapp',
           audienceMode: 'all', audienceId: '', manualEmails: '',
-          messageContent: '', ctaText: '', ctaUrl: '',
+          messageContent: '', ctaText: '', ctaUrl: '', subject: '',
           scheduleDate: '', scheduleTime: '', timezone: 'Asia/Kolkata',
         });
+        setCreateSelectedTemplateId('');
         toast.success('Campaign created');
       } else {
         toast.error('Failed to create campaign');
@@ -429,10 +755,12 @@ export function CampaignsView() {
       messageContent: campaign.messageContent || '',
       ctaText: campaign.ctaText || '',
       ctaUrl: campaign.ctaUrl || '',
+      subject: parseStoredSubject(campaign.audienceFiltersJson),
       scheduleDate: scheduled ? scheduled.toISOString().split('T')[0] : '',
       scheduleTime: scheduled ? scheduled.toTimeString().slice(0, 5) : '',
       timezone: campaign.timezone || 'Asia/Kolkata',
     });
+    setEditSelectedTemplateId('');
     setShowDetailDialog(false);
     setShowEditDialog(true);
     if (groups.length === 0) loadGroups();
@@ -453,6 +781,21 @@ export function CampaignsView() {
 
     const audience = buildAudiencePayload(editForm.audienceMode, editForm.audienceId, editForm.manualEmails);
 
+    // For email-channel campaigns, persist the email subject inside
+    // audienceFiltersJson (Campaign has no `subject` column). The Send Now
+    // dialog reads it back via parseStoredSubject().
+    let audienceFiltersJson = audience.audienceFiltersJson;
+    if (editForm.channel === 'email' && editForm.subject.trim()) {
+      let parsed: Record<string, unknown> = {};
+      try {
+        parsed = JSON.parse(audienceFiltersJson || '{}') as Record<string, unknown>;
+      } catch {
+        parsed = {};
+      }
+      parsed.subject = editForm.subject.trim();
+      audienceFiltersJson = JSON.stringify(parsed);
+    }
+
     setIsEditing(true);
     try {
       const res = await authFetch(`/api/campaigns/${id}`, {
@@ -463,7 +806,7 @@ export function CampaignsView() {
           channel: editForm.channel,
           audienceType: audience.audienceType,
           audienceId: audience.audienceId,
-          audienceFiltersJson: audience.audienceFiltersJson,
+          audienceFiltersJson,
           messageContent: editForm.messageContent,
           ctaText: editForm.ctaText || undefined,
           ctaUrl: editForm.ctaUrl || undefined,
@@ -477,6 +820,7 @@ export function CampaignsView() {
         setCampaigns(prev => prev.map(c => c.id === id ? result.data : c));
         setShowEditDialog(false);
         setEditingId(null);
+        setEditSelectedTemplateId('');
         toast.success('Campaign updated');
       } else {
         toast.error('Failed to update campaign');
@@ -638,6 +982,9 @@ export function CampaignsView() {
                     </div>
                   </div>
                   <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                    {campaign.channel === 'email' && campaign.status !== 'completed' && (
+                      <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-sky-600 hover:text-sky-700" onClick={() => openSendNowDialog(campaign)}><Send className="size-3.5" /></Button></TooltipTrigger><TooltipContent>Send Now (email blast)</TooltipContent></Tooltip></TooltipProvider>
+                    )}
                     {campaign.status === 'running' && (
                       <TooltipProvider><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleStatusChange(campaign.id, 'paused')}><Pause className="size-3.5" /></Button></TooltipTrigger><TooltipContent>Pause</TooltipContent></Tooltip></TooltipProvider>
                     )}
@@ -754,6 +1101,69 @@ export function CampaignsView() {
                 </div>
               )}
             </div>
+            {/* Template (optional) — pre-fills the message body (and subject for email) */}
+            <div className="space-y-2">
+              <Label>Template (optional)</Label>
+              <Select
+                value={createSelectedTemplateId || TEMPLATE_NONE_VALUE}
+                onValueChange={(v) => {
+                  if (v === TEMPLATE_NONE_VALUE) {
+                    setCreateSelectedTemplateId('');
+                    return;
+                  }
+                  const tpl = templates.find(t => t.id === v);
+                  if (!tpl) return;
+                  setCreateSelectedTemplateId(v);
+                  setCreateForm(prev => ({
+                    ...prev,
+                    messageContent: tpl.content || prev.messageContent,
+                    ...(tpl.subject !== undefined ? { subject: tpl.subject } : {}),
+                  }));
+                  toast.success(`Template applied: ${tpl.name}`);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={isLoadingTemplates ? 'Loading templates...' : '— No template —'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={TEMPLATE_NONE_VALUE}>— No template —</SelectItem>
+                  {templates.length === 0 && !isLoadingTemplates && (
+                    <SelectItem value="_empty_create" disabled>No templates available</SelectItem>
+                  )}
+                  {templates.map(t => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}{t.category ? ` [${t.category}]` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground">
+                Pick a template to pre-fill the message. You can edit after selecting.
+              </p>
+              {createSelectedTemplateId && (() => {
+                const tpl = templates.find(t => t.id === createSelectedTemplateId);
+                if (!tpl) return null;
+                const preview = tpl.content.slice(0, 200);
+                const truncated = tpl.content.length > 200;
+                return (
+                  <div className="bg-muted/50 rounded p-2 text-xs">
+                    <p className="text-[10px] text-muted-foreground mb-1">Applied to message body</p>
+                    <div className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words">{preview}{truncated ? '…' : ''}</div>
+                  </div>
+                );
+              })()}
+            </div>
+            {/* Email Subject — only for email-channel campaigns */}
+            {createForm.channel === 'email' && (
+              <div className="space-y-2">
+                <Label>Email Subject</Label>
+                <Input
+                  placeholder="Email subject (supports {{name}})"
+                  value={createForm.subject}
+                  onChange={e => setCreateForm({ ...createForm, subject: e.target.value })}
+                />
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Message Content *</Label>
               <Textarea placeholder="Type your message... Use {{name}}, {{service}}, {{amount}} as placeholders" value={createForm.messageContent} onChange={e => setCreateForm({ ...createForm, messageContent: e.target.value })} rows={4} />
@@ -873,6 +1283,14 @@ export function CampaignsView() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDetailDialog(false)}>Close</Button>
+            {selectedCampaign && selectedCampaign.channel === 'email' && selectedCampaign.status !== 'completed' && (
+              <Button
+                className="bg-sky-600 hover:bg-sky-700"
+                onClick={() => selectedCampaign && openSendNowDialog(selectedCampaign)}
+              >
+                <Send className="size-4 mr-1.5" /> Send Now
+              </Button>
+            )}
             <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => selectedCampaign && openEditDialog(selectedCampaign)}>
               <Pencil className="size-4 mr-1.5" /> Edit Campaign
             </Button>
@@ -954,6 +1372,69 @@ export function CampaignsView() {
                 </div>
               )}
             </div>
+            {/* Template (optional) — pre-fills the message body (and subject for email) */}
+            <div className="space-y-2">
+              <Label>Template (optional)</Label>
+              <Select
+                value={editSelectedTemplateId || TEMPLATE_NONE_VALUE}
+                onValueChange={(v) => {
+                  if (v === TEMPLATE_NONE_VALUE) {
+                    setEditSelectedTemplateId('');
+                    return;
+                  }
+                  const tpl = templates.find(t => t.id === v);
+                  if (!tpl) return;
+                  setEditSelectedTemplateId(v);
+                  setEditForm(prev => ({
+                    ...prev,
+                    messageContent: tpl.content || prev.messageContent,
+                    ...(tpl.subject !== undefined ? { subject: tpl.subject } : {}),
+                  }));
+                  toast.success(`Template applied: ${tpl.name}`);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={isLoadingTemplates ? 'Loading templates...' : '— No template —'} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={TEMPLATE_NONE_VALUE}>— No template —</SelectItem>
+                  {templates.length === 0 && !isLoadingTemplates && (
+                    <SelectItem value="_empty_edit" disabled>No templates available</SelectItem>
+                  )}
+                  {templates.map(t => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.name}{t.category ? ` [${t.category}]` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground">
+                Pick a template to pre-fill the message. You can edit after selecting.
+              </p>
+              {editSelectedTemplateId && (() => {
+                const tpl = templates.find(t => t.id === editSelectedTemplateId);
+                if (!tpl) return null;
+                const preview = tpl.content.slice(0, 200);
+                const truncated = tpl.content.length > 200;
+                return (
+                  <div className="bg-muted/50 rounded p-2 text-xs">
+                    <p className="text-[10px] text-muted-foreground mb-1">Applied to message body</p>
+                    <div className="max-h-32 overflow-y-auto whitespace-pre-wrap break-words">{preview}{truncated ? '…' : ''}</div>
+                  </div>
+                );
+              })()}
+            </div>
+            {/* Email Subject — only for email-channel campaigns */}
+            {editForm.channel === 'email' && (
+              <div className="space-y-2">
+                <Label>Email Subject</Label>
+                <Input
+                  placeholder="Email subject (supports {{name}})"
+                  value={editForm.subject}
+                  onChange={e => setEditForm({ ...editForm, subject: e.target.value })}
+                />
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Message Content *</Label>
               <Textarea placeholder="Type your message... Use {{name}}, {{service}}, {{amount}} as placeholders" value={editForm.messageContent} onChange={e => setEditForm({ ...editForm, messageContent: e.target.value })} rows={4} />
@@ -993,6 +1474,178 @@ export function CampaignsView() {
             <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleEdit} disabled={!editForm.name || !editForm.messageContent || isEditing}>
               {isEditing ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
               Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Send Now (Email Blast) Dialog */}
+      <Dialog open={showSendNowDialog} onOpenChange={(open) => {
+        setShowSendNowDialog(open);
+        if (!open) setSendNowCampaign(null);
+      }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Send Now: {sendNowCampaign?.name}</DialogTitle>
+            <DialogDescription>
+              Dispatch this campaign as an email blast via your marketing email provider.
+              Variables <code>{'{{name}}'}</code>, <code>{'{{email}}'}</code>, <code>{'{{company}}'}</code>, <code>{'{{city}}'}</code>, <code>{'{{country}}'}</code> are supported.
+            </DialogDescription>
+          </DialogHeader>
+
+          {sendNowCampaign && (() => {
+            const derived = deriveAudienceMode(
+              sendNowCampaign.audienceType,
+              sendNowCampaign.audienceId,
+              sendNowCampaign.audienceFiltersJson,
+            );
+            const matchedGroup = groups.find(g => g.id === derived.groupId);
+            const groupName = matchedGroup?.name;
+            const groupCount = matchedGroup?.memberCount;
+            return (
+              <div className="space-y-4 py-2">
+                {/* Read-only audience summary */}
+                <div className="rounded-md border bg-slate-50 dark:bg-slate-900 p-3">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                    <Users className="size-3.5" /> Audience (read-only — set on the campaign)
+                  </div>
+                  {derived.mode === 'all' && (
+                    <p className="text-sm font-medium">All Contacts</p>
+                  )}
+                  {derived.mode === 'segment' && (
+                    <p className="text-sm font-medium">
+                      Group: {groupName || 'Unknown'}{groupCount !== undefined ? ` (${groupCount} contacts)` : ''}
+                    </p>
+                  )}
+                  {derived.mode === 'mixed' && (
+                    <p className="text-sm font-medium">
+                      Group: {groupName || 'Unknown'}{groupCount !== undefined ? ` (${groupCount} contacts)` : ''}
+                      <span className="text-muted-foreground"> + manual emails (skipped — only the group will receive this blast)</span>
+                    </p>
+                  )}
+                  {derived.mode === 'custom' && (
+                    <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                      Manual-email audience — not supported by Send Now.
+                    </p>
+                  )}
+                </div>
+
+                {derived.mode === 'custom' && (
+                  <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3 text-sm text-amber-900 dark:text-amber-100">
+                    Manual email audiences are sent via the standalone Email Campaigns feature.
+                    For Send Now, please use individual contacts or a group audience.
+                  </div>
+                )}
+
+                {/* Marketing provider not connected banner */}
+                {marketingConnected === false && (
+                  <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                      <div className="flex items-start gap-2 flex-1">
+                        <AlertTriangle className="size-5 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                            Marketing Email Provider Required
+                          </p>
+                          <p className="text-xs text-amber-800 dark:text-amber-200 mt-0.5">
+                            Connect SMTP, Resend, SendGrid, Amazon SES, Mailgun or Brevo before sending campaigns.
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="bg-amber-600 hover:bg-amber-700 text-white shrink-0"
+                        onClick={() => {
+                          setShowSendNowDialog(false);
+                          setActiveView('emailProviders');
+                        }}
+                      >
+                        <Plug className="size-4 mr-1.5" /> Configure
+                        <ArrowRight className="size-4 ml-1.5" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Subject */}
+                <div className="space-y-2">
+                  <Label>Subject</Label>
+                  <Input
+                    placeholder="Email subject (supports {{name}})"
+                    value={sendNowForm.subject}
+                    onChange={e => setSendNowForm({ ...sendNowForm, subject: e.target.value })}
+                  />
+                </div>
+
+                {/* HTML body */}
+                <div className="space-y-2">
+                  <Label>Email Body (HTML, supports variables)</Label>
+                  <Textarea
+                    rows={10}
+                    className="font-mono text-xs"
+                    placeholder="<h1>Hello {{name}}</h1>"
+                    value={sendNowForm.html}
+                    onChange={e => setSendNowForm({ ...sendNowForm, html: e.target.value })}
+                  />
+                  <p className="text-[10px] text-muted-foreground">{sendNowForm.html.length} characters</p>
+                </div>
+
+                {/* Email Provider dropdown */}
+                <div className="space-y-2">
+                  <Label>Email Provider</Label>
+                  <Select
+                    value={sendNowForm.providerId}
+                    onValueChange={v => setSendNowForm({ ...sendNowForm, providerId: v })}
+                    disabled={emailProviders.length === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue
+                        placeholder={
+                          isLoadingProviders
+                            ? 'Loading providers...'
+                            : emailProviders.length === 0
+                              ? 'No marketing providers connected'
+                              : 'Select a provider'
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {emailProviders.map(p => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name} <span className="text-muted-foreground">({p.providerType.toUpperCase()})</span>
+                          {p.isDefaultMarketing ? ' ★' : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                    <Mail className="size-3" />
+                    Only customer-connected marketing providers are shown (platform providers are excluded).
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSendNowDialog(false)} disabled={isSendingNow}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-sky-600 hover:bg-sky-700"
+              onClick={handleSendNow}
+              disabled={
+                isSendingNow ||
+                !sendNowForm.subject.trim() ||
+                !sendNowForm.html.trim() ||
+                (sendNowCampaign ? buildEmailSendAudience(sendNowCampaign) === null : true)
+              }
+            >
+              {isSendingNow ? (
+                <><Loader2 className="size-4 mr-1.5 animate-spin" /> Sending...</>
+              ) : (
+                <><Send className="size-4 mr-1.5" /> Send Now</>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
