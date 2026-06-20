@@ -79,6 +79,7 @@ export async function PUT(
       description,
       address,
       serviceType,
+      serviceId,
       assignedToId,
       notesJson,
       tagsJson,
@@ -96,6 +97,7 @@ export async function PUT(
     if (description !== undefined) updateData.description = description;
     if (address !== undefined) updateData.address = address;
     if (serviceType !== undefined) updateData.serviceType = serviceType;
+    if (serviceId !== undefined) updateData.serviceId = serviceId || null;
     if (assignedToId !== undefined) updateData.assignedToId = assignedToId;
     if (notesJson !== undefined) updateData.notesJson = notesJson;
     if (tagsJson !== undefined) updateData.tagsJson = tagsJson;

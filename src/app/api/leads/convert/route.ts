@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
         customerName: customer.name,
         customerPhone: customer.phone,
         assigneeId: lead.assignedToId || null,
+        serviceId: lead.serviceId || null,
         workspaceId: jobWorkspaceId,
       },
       include: {

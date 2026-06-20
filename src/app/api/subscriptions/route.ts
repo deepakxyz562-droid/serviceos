@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { seedPlans, getActivePlans } from '@/lib/billing-seed';
 
 // GET /api/subscriptions - Get current subscription for tenant
 export async function GET() {
@@ -20,42 +21,191 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     });
 
-    if (!subscription) {
-      return NextResponse.json(
-        { error: 'No subscription found' },
-        { status: 404 }
-      );
-    }
+    // If no subscription yet, fall back to the tenant's plan/trial info so the
+    // Settings → Billing tab can still render current-plan + trial info.
+    const tenant = await db.tenant.findUnique({ where: { id: tenantId } });
 
     // Check if trial has expired
+    const trialEndsAt = subscription?.trialEndsAt ?? tenant?.trialEndsAt ?? null;
     let isTrialExpired = false;
-    if (subscription.status === 'trial' && subscription.trialEndsAt) {
-      isTrialExpired = new Date() > subscription.trialEndsAt;
+    const trialStatus = subscription?.status ?? tenant?.planStatus ?? 'trial';
+    if (trialStatus === 'trial' && trialEndsAt) {
+      isTrialExpired = new Date() > trialEndsAt;
     }
 
+    const plan = subscription?.plan ?? tenant?.plan ?? 'starter';
+    const billingCycle = subscription?.billingCycle ?? 'monthly';
+    const status = subscription?.status ?? tenant?.planStatus ?? 'trial';
+
+    // ─── Real usage stats ───────────────────────────────────────────────
+    // Users: active users on this tenant
+    const userCount = await db.user.count({
+      where: { tenantId, isActive: true },
+    });
+    // Workflows: active workflow automations on this tenant
+    const workflowCount = await db.workflowAutomation.count({
+      where: { tenantId, active: true },
+    });
+    // Jobs this billing cycle: count jobs created since the current subscription
+    // started (fallback: current calendar month), scoped via workspace.tenantId.
+    const cycleStart = subscription?.startDate
+      ? subscription.startDate
+      : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const tenantWorkspaceIds = await db.workspace.findMany({
+      where: { tenantId },
+      select: { id: true },
+    });
+    const workspaceIds = tenantWorkspaceIds.map((w) => w.id);
+    const jobCount = workspaceIds.length
+      ? await db.job.count({
+          where: {
+            workspaceId: { in: workspaceIds },
+            createdAt: { gte: cycleStart },
+          },
+        })
+      : 0;
+
+    // Limits come from the subscription record (defaults if none)
+    const maxUsers = subscription?.maxUsers ?? 1;
+    const maxJobs = subscription?.maxJobs ?? 100;
+    const maxWorkflows = subscription?.maxWorkflows ?? 10;
+
+    // ─── Real billing history (SubscriptionPayment rows) ────────────────
+    const payments = await db.subscriptionPayment.findMany({
+      where: { tenantId },
+      orderBy: { paidAt: 'desc' },
+      take: 24,
+    });
+    const billingHistory = payments.map((p) => ({
+      id: p.id,
+      date: p.paidAt.toISOString(),
+      description: p.description || `${p.plan} Plan - ${p.billingCycle === 'yearly' ? 'Yearly' : 'Monthly'}`,
+      amount: p.amount,
+      status: p.status === 'paid' ? 'Paid' : p.status === 'pending' ? 'Pending' : p.status === 'failed' ? 'Failed' : p.status === 'refunded' ? 'Refunded' : 'Paid',
+      invoiceUrl: `/api/billing-history/${p.id}/receipt`,
+      invoiceNumber: p.invoiceNumber,
+      paymentProvider: p.paymentProvider,
+      paypalOrderId: p.paypalOrderId,
+    }));
+
+    // ─── Payment method (PayPal stores the account email, not a card) ───
+    const paymentProvider = subscription?.paymentProvider ?? 'none';
+    const paypalPayerEmail = subscription?.paypalPayerEmail ?? null;
+    const paymentMethod =
+      paymentProvider === 'paypal' && paypalPayerEmail
+        ? {
+            brand: 'PayPal',
+            last4: null,
+            payerEmail: paypalPayerEmail,
+          }
+        : null;
+
+    // ─── Renewal date = subscription.endDate (or tenant.planEndsAt) ─────
+    const renewalDate = subscription?.endDate ?? tenant?.planEndsAt ?? null;
+
+    // ─── Pending downgrade (Phase 3) ────────────────────────────────────
+    const pendingDowngrade = subscription?.pendingDowngradePlan
+      ? {
+          plan: subscription.pendingDowngradePlan,
+          effectiveAt: subscription.pendingDowngradeAt?.toISOString() ?? null,
+          billingCycle: subscription.pendingDowngradeCycle ?? null,
+        }
+      : null;
+
+    // ─── Recent billing events (audit log, last 10) ─────────────────────
+    const recentEvents = await db.billingEvent.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+    });
+    const billingEvents = recentEvents.map((e) => ({
+      id: e.id,
+      type: e.type,
+      amount: e.amount,
+      currency: e.currency,
+      status: e.status,
+      description: e.description,
+      paymentProvider: e.paymentProvider,
+      payerEmail: e.payerEmail,
+      invoiceNumber: e.invoiceNumber,
+      createdAt: e.createdAt.toISOString(),
+      metadata: e.metadata ? JSON.parse(e.metadata) : {},
+    }));
+
+    // ─── Plan catalog (DB-backed, Phase 3) ──────────────────────────────
+    // Idempotent seed so the catalog always exists, then fetch for the UI.
+    await seedPlans();
+    const planRows = await getActivePlans();
+    const plans = planRows.map((p) => ({
+      id: p.code,
+      code: p.code,
+      name: p.name,
+      description: p.description,
+      monthlyPrice: p.monthlyPrice,
+      yearlyPrice: p.yearlyPrice,
+      currency: p.currency,
+      maxUsers: p.maxUsers,
+      maxJobs: p.maxJobs,
+      maxWorkflows: p.maxWorkflows,
+      features: JSON.parse(p.featuresJson),
+      popular: p.popular,
+      sortOrder: p.sortOrder,
+    }));
+
     return NextResponse.json({
-      subscription: {
-        id: subscription.id,
-        tenantId: subscription.tenantId,
-        plan: subscription.plan,
-        status: subscription.status,
-        amount: subscription.amount,
-        currency: subscription.currency,
-        billingCycle: subscription.billingCycle,
-        startDate: subscription.startDate,
-        endDate: subscription.endDate,
-        trialEndsAt: subscription.trialEndsAt,
-        maxUsers: subscription.maxUsers,
-        maxJobs: subscription.maxJobs,
-        maxWorkflows: subscription.maxWorkflows,
-        featuresJson: subscription.featuresJson,
-        createdAt: subscription.createdAt,
+      subscription: subscription
+        ? {
+            id: subscription.id,
+            tenantId: subscription.tenantId,
+            plan: subscription.plan,
+            status: subscription.status,
+            amount: subscription.amount,
+            currency: subscription.currency,
+            billingCycle: subscription.billingCycle,
+            startDate: subscription.startDate,
+            endDate: subscription.endDate,
+            trialEndsAt: subscription.trialEndsAt,
+            maxUsers: subscription.maxUsers,
+            maxJobs: subscription.maxJobs,
+            maxWorkflows: subscription.maxWorkflows,
+            aiQuota: subscription.aiQuota,
+            whatsappQuota: subscription.whatsappQuota,
+            emailQuota: subscription.emailQuota,
+            smsQuota: subscription.smsQuota,
+            aiUsageCount: subscription.aiUsageCount,
+            whatsappUsageCount: subscription.whatsappUsageCount,
+            emailUsageCount: subscription.emailUsageCount,
+            smsUsageCount: subscription.smsUsageCount,
+            featuresJson: subscription.featuresJson,
+            paymentProvider: subscription.paymentProvider,
+            paypalPayerEmail: subscription.paypalPayerEmail,
+            createdAt: subscription.createdAt,
+          }
+        : null,
+      // Top-level convenience fields (consumed by Settings → Billing + billing-view)
+      plan,
+      status,
+      billingCycle,
+      trialEndsAt: trialEndsAt ? (trialEndsAt instanceof Date ? trialEndsAt.toISOString() : trialEndsAt) : null,
+      renewalDate: renewalDate ? (renewalDate instanceof Date ? renewalDate.toISOString() : renewalDate) : null,
+      usage: {
+        jobs: { used: jobCount, limit: maxJobs },
+        workflows: { used: workflowCount, limit: maxWorkflows },
+        users: { used: userCount, limit: maxUsers },
       },
+      paymentMethod,
+      paymentProvider,
+      paypalPayerEmail,
+      billingHistory,
       isTrialExpired,
       daysRemainingInTrial:
-        subscription.status === 'trial' && subscription.trialEndsAt
-          ? Math.max(0, Math.ceil((subscription.trialEndsAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+        trialStatus === 'trial' && trialEndsAt
+          ? Math.max(0, Math.ceil((new Date(trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
           : null,
+      // Phase 2 + 3 additions:
+      pendingDowngrade, // { plan, effectiveAt, billingCycle } | null
+      billingEvents, // last 10 audit-log entries
+      plans, // DB-backed plan catalog for the UI
     });
   } catch (error) {
     console.error('Get subscription error:', error);

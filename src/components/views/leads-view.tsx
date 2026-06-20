@@ -59,6 +59,7 @@ interface Lead {
   description?: string | null;
   address?: string | null;
   serviceType?: string | null;
+  serviceId?: string | null;
   assignedToId?: string | null;
   customerId?: string | null;
   jobId?: string | null;
@@ -92,6 +93,7 @@ interface LeadFormData {
   email: string;
   source: string;
   serviceType: string;
+  serviceId: string;
   address: string;
   priority: string;
   value: string;
@@ -222,6 +224,7 @@ const EMPTY_FORM: LeadFormData = {
   email: '',
   source: 'manual',
   serviceType: '',
+  serviceId: '',
   address: '',
   priority: 'medium',
   value: '',
@@ -303,6 +306,21 @@ export function LeadsView() {
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deletingLead, setDeletingLead] = useState<Lead | null>(null);
+
+  // Service catalog — fetched so the lead form can link a lead to a
+  // specific catalog service (which then flows through to the job on convert).
+  const [services, setServices] = useState<
+    { id: string; name: string; category: string; basePrice: number; duration: number }[]
+  >([]);
+  useEffect(() => {
+    fetch('/api/services?active=true&limit=200')
+      .then((r) => (r.ok ? r.json() : { services: [] }))
+      .then((data) => {
+        const list = Array.isArray(data) ? data : data?.services ?? [];
+        setServices(list);
+      })
+      .catch(() => setServices([]));
+  }, []);
 
   // Notes
   const [newNote, setNewNote] = useState('');
@@ -412,6 +430,7 @@ export function LeadsView() {
         description: leadForm.notes.trim() || null,
         address: leadForm.address.trim() || null,
         serviceType: leadForm.serviceType || null,
+        serviceId: leadForm.serviceId || null,
       };
 
       const res = await fetch(url, {
@@ -516,6 +535,7 @@ export function LeadsView() {
       email: lead.email || '',
       source: lead.source,
       serviceType: lead.serviceType || '',
+      serviceId: lead.serviceId || '',
       address: lead.address || '',
       priority: lead.priority,
       value: lead.value ? String(lead.value) : '',
@@ -992,34 +1012,67 @@ export function LeadsView() {
             </div>
           </div>
 
-          {/* Source & Service Type row */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
-              <Label>Source</Label>
-              <Select value={leadForm.source} onValueChange={(v) => setLeadForm({ ...leadForm, source: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select source" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(SOURCE_CONFIG).map(([key, val]) => (
-                    <SelectItem key={key} value={key}>{val.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-2">
-              <Label>Service Type</Label>
-              <Select value={leadForm.serviceType} onValueChange={(v) => setLeadForm({ ...leadForm, serviceType: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select service" />
-                </SelectTrigger>
-                <SelectContent>
-                  {SERVICE_TYPES.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          {/* Source (full-width — Service Type dropdown hidden; serviceType is
+              auto-derived from the Catalog Service selection below when a
+              catalog service is picked, and stays empty otherwise). */}
+          <div className="grid gap-2">
+            <Label>Source</Label>
+            <Select value={leadForm.source} onValueChange={(v) => setLeadForm({ ...leadForm, source: v })}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select source" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(SOURCE_CONFIG).map(([key, val]) => (
+                  <SelectItem key={key} value={key}>{val.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Service Catalog dropdown — links this lead to a specific catalog
+              service so its serviceId flows through to the job on convert. */}
+          <div className="grid gap-2">
+            <Label>
+              Service{' '}
+              <span className="text-xs font-normal text-muted-foreground">
+                (from catalog — optional)
+              </span>
+            </Label>
+            <Select
+              value={leadForm.serviceId || '_none'}
+              onValueChange={(v) => {
+                const id = v === '_none' ? '' : v;
+                const svc = services.find((s) => s.id === id);
+                setLeadForm((prev) => ({
+                  ...prev,
+                  serviceId: id,
+                  // Auto-set serviceType from the catalog service's category
+                  // so legacy code that reads lead.serviceType still works.
+                  serviceType: svc?.category || prev.serviceType,
+                }));
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={
+                    services.length === 0
+                      ? 'No services in catalog'
+                      : 'Select a catalog service (optional)'
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_none">— No catalog service —</SelectItem>
+                {services.map((svc) => (
+                  <SelectItem key={svc.id} value={svc.id}>
+                    {svc.name}
+                    <span className="text-xs text-muted-foreground ml-1">
+                      · {svc.category} · ${svc.basePrice.toFixed(2)}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Address */}

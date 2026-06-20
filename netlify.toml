@@ -9,16 +9,45 @@
 [build.environment]
   NEXT_USE_NETLIFY_EDGE = "false"
 
-# Required environment variables for Netlify deployment:
+# ── Netlify Functions directory ───────────────────────────────────────────
+# The daily cron master function lives in netlify/functions/cron-daily.js
+# Its schedule is declared INSIDE the function file via `export const schedule`.
+[functions]
+  directory = "netlify/functions"
+  # Include node_modules needed at runtime (none needed here — uses native fetch)
+
+# ── Daily Cron Schedule ───────────────────────────────────────────────────
+# The cron-daily function triggers all 5 ServiceOS cron endpoints at 09:00 UTC.
+# To change the time, edit `export const schedule` in netlify/functions/cron-daily.js.
+# To disable: delete the file or remove the `schedule` export.
+
+# ── Required environment variables for Netlify deployment ─────────────────
 # Set these in Netlify Dashboard → Site settings → Environment variables:
 #
-# DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
-# DIRECT_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
-# USE_SUPABASE_DB=true
-# NEXT_PUBLIC_SUPABASE_URL=https://[PROJECT-REF].supabase.co
-# SUPABASE_ANON_KEY=eyJ...
-# SUPABASE_SERVICE_ROLE_KEY=eyJ...
-# JWT_SECRET=your-production-jwt-secret
+#   ── Database ──
+#   USE_SUPABASE_DB=true
+#   NEXT_PUBLIC_SUPABASE_URL=https://[PROJECT-REF].supabase.co
+#   SUPABASE_SERVICE_ROLE_KEY=eyJ...
+#   SUPABASE_ANON_KEY=eyJ...
+#
+#   ── Auth ──
+#   JWT_SECRET=your-production-jwt-secret
+#
+#   ── Cron (REQUIRED for daily scheduled jobs to work) ──
+#   CRON_SECRET=your-cron-secret-here      ← pick any random string
+#   SITE_URL=https://your-site.netlify.app ← your deployed site URL
+#
+#   ── PayPal (subscription billing) ──
+#   PAYPAL_CLIENT_ID=...
+#   PAYPAL_CLIENT_SECRET=...
+#   PAYPAL_SANDBOX=true                    ← set to false for production
+#   PAYPAL_MERCHANT_EMAIL=...
+#
+#   ── App ──
+#   NEXT_PUBLIC_APP_URL=https://your-site.netlify.app
+#
+# IMPORTANT: After changing env vars on Netlify, you MUST
+# trigger a new deploy for changes to take effect.
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"

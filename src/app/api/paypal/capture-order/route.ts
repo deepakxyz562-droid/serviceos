@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { getPayPalAccessToken, PAYPAL_PLANS, getPayPalBaseUrl, isPayPalConfigured } from '@/lib/paypal';
+import { logBillingEvent } from '@/lib/billing-events';
 
 /**
  * POST /api/paypal/capture-order
@@ -53,6 +54,17 @@ export async function POST(request: NextRequest) {
     if (!captureResponse.ok) {
       const errorData = await captureResponse.json();
       console.error('PayPal capture error:', JSON.stringify(errorData, null, 2));
+      // Audit log: capture failure (Phase 2)
+      await logBillingEvent({
+        tenantId,
+        type: 'fail',
+        status: 'failed',
+        description: `PayPal capture failed: ${errorData.message || 'Unknown error'}`,
+        providerResponse: errorData,
+        paymentProvider: 'paypal',
+        paypalOrderId: orderID,
+        metadata: { plan: selectedPlan, billingCycle: cycle },
+      });
       return NextResponse.json(
         { error: 'Failed to capture PayPal payment', details: errorData.message || 'Unknown error' },
         { status: 500 }
@@ -61,7 +73,7 @@ export async function POST(request: NextRequest) {
 
     const captureData = await captureResponse.json();
 
-    // Extract payer email from capture data
+    // Extract payer email + order id from capture data
     const payerEmail = captureData.payer?.email_address || '';
     const paypalOrderId = captureData.id;
 
@@ -70,6 +82,13 @@ export async function POST(request: NextRequest) {
     const cycle = billingCycle === 'yearly' ? 'yearly' : 'monthly';
     const planConfig = PAYPAL_PLANS[selectedPlan];
     const price = cycle === 'yearly' ? planConfig.yearlyPrice : planConfig.monthlyPrice;
+
+    // The capture resource lives under purchase_units[0].payments.captures[0]
+    const captureUnit = captureData.purchase_units?.[0]?.payments?.captures?.[0];
+    const paypalCaptureId = captureUnit?.id || null;
+    const capturedAmount = captureUnit?.amount?.value
+      ? parseFloat(captureUnit.amount.value)
+      : price;
 
     // Plan details
     const planDetails: Record<string, { amount: number; maxUsers: number; maxJobs: number; maxWorkflows: number; features: Record<string, boolean> }> = {
@@ -139,6 +158,88 @@ export async function POST(request: NextRequest) {
         planStartedAt: now,
         planEndsAt: endDate,
       },
+    });
+
+    // Record this payment in the billing history (SubscriptionPayment table)
+    // so it shows up in Settings → Billing and the sidebar Subscription page.
+    // Generate a human-readable invoice number: SUB-{YYYY}-{4-digit sequence}.
+    const yearStr = now.getUTCFullYear().toString();
+    const yearPrefix = `SUB-${yearStr}-`;
+    const lastPayment = await db.subscriptionPayment.findFirst({
+      where: { invoiceNumber: { startsWith: yearPrefix } },
+      orderBy: { invoiceNumber: 'desc' },
+    });
+    let nextSeq = 1;
+    if (lastPayment?.invoiceNumber) {
+      const parts = lastPayment.invoiceNumber.split('-');
+      const parsed = parseInt(parts[parts.length - 1], 10);
+      if (!Number.isNaN(parsed)) nextSeq = parsed + 1;
+    }
+    const invoiceNumber = `${yearPrefix}${String(nextSeq).padStart(4, '0')}`;
+
+    const planLabel = planConfig.name || selectedPlan;
+    const description = `${planLabel} Plan - ${cycle === 'yearly' ? 'Yearly' : 'Monthly'}`;
+
+    await db.subscriptionPayment.create({
+      data: {
+        tenantId,
+        subscriptionId: subscription.id,
+        invoiceNumber,
+        amount: capturedAmount,
+        currency: 'USD',
+        status: 'paid',
+        description,
+        plan: selectedPlan,
+        billingCycle: cycle,
+        paymentProvider: 'paypal',
+        paypalOrderId,
+        paypalCaptureId,
+        payerEmail: payerEmail || null,
+        paidAt: now,
+      },
+    });
+
+    // ─── Audit log: record this capture event ──────────────────────────
+    // (Phase 2: BillingEvent logging on every PayPal event)
+    await logBillingEvent({
+      tenantId,
+      subscriptionId: subscription.id,
+      type: 'capture',
+      amount: capturedAmount,
+      currency: 'USD',
+      status: 'success',
+      description: `PayPal capture for ${planLabel} Plan (${cycle}) — invoice ${invoiceNumber}`,
+      providerResponse: captureData,
+      paymentProvider: 'paypal',
+      paypalOrderId,
+      paypalCaptureId,
+      payerEmail: payerEmail || null,
+      invoiceNumber,
+      metadata: { plan: selectedPlan, billingCycle: cycle, invoiceNumber },
+    });
+    await logBillingEvent({
+      tenantId,
+      subscriptionId: subscription.id,
+      type: 'subscription_created',
+      amount: price,
+      currency: 'USD',
+      status: 'success',
+      description: `Subscription activated: ${planLabel} (${cycle})`,
+      paymentProvider: 'paypal',
+      paypalOrderId,
+      payerEmail: payerEmail || null,
+      metadata: { plan: selectedPlan, billingCycle: cycle, endDate: endDate.toISOString() },
+    });
+    await logBillingEvent({
+      tenantId,
+      subscriptionId: subscription.id,
+      type: 'payment_method_added',
+      status: 'success',
+      description: `PayPal payment method added: ${payerEmail || 'unknown'}`,
+      paymentProvider: 'paypal',
+      payerEmail: payerEmail || null,
+      paypalOrderId,
+      metadata: { payerEmail },
     });
 
     return NextResponse.json({

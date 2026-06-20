@@ -249,6 +249,7 @@ interface BookingFormData {
   status: string;
   source: string;
   employeeId: string;
+  serviceId: string;
   assignmentType: 'unassigned' | 'assign_now' | 'auto_assign';
 }
 
@@ -265,8 +266,18 @@ const EMPTY_FORM: BookingFormData = {
   status: 'pending',
   source: 'manual',
   employeeId: '',
+  serviceId: '',
   assignmentType: 'unassigned',
 };
+
+interface ServiceOption {
+  id: string;
+  name: string;
+  category: string;
+  basePrice: number;
+  duration: number;
+  isActive: boolean;
+}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -295,6 +306,7 @@ export function BookingView() {
   const [employees, setEmployees] = useState<
     { id: string; name: string; role: string; status: string }[]
   >([]);
+  const [services, setServices] = useState<ServiceOption[]>([]);
 
   useEffect(() => {
     apiGet<{ id: string; name: string; role: string; status: string }[]>(
@@ -311,6 +323,41 @@ export function BookingView() {
       })
       .catch(() => setEmployees([]));
   }, []);
+
+  // Fetch active services from the Service Catalog so the user can pick
+  // a service and have title / duration auto-filled from the catalog.
+  useEffect(() => {
+    apiGet<{ services: ServiceOption[] } | ServiceOption[]>('/api/services?active=true&limit=200')
+      .then((data) => {
+        if (Array.isArray(data)) setServices(data);
+        else if (data && Array.isArray((data as { services: ServiceOption[] }).services))
+          setServices((data as { services: ServiceOption[] }).services);
+        else setServices([]);
+      })
+      .catch(() => setServices([]));
+  }, []);
+
+  // When a service is selected, auto-fill title (if empty) and duration
+  // from the catalog. Keeps any user-entered title intact if they edited it.
+  function handleServiceSelect(selectedId: string) {
+    // The "_none" option clears the selection.
+    const normalized = selectedId === '_none' ? '' : selectedId;
+    updateForm('serviceId', normalized);
+    if (!normalized) return;
+    const svc = services.find((s) => s.id === normalized);
+    if (!svc) return;
+    setFormData((prev) => ({
+      ...prev,
+      serviceId: normalized,
+      // Only auto-fill title if it is empty or matches a previously-selected
+      // service name (so we don't clobber a user's custom title).
+      title:
+        !prev.title.trim() || services.some((s) => s.name === prev.title)
+          ? svc.name
+          : prev.title,
+      duration: String(svc.duration || prev.duration || 60),
+    }));
+  }
 
   // Fetch bookings
   const fetchBookings = useCallback(async () => {
@@ -375,6 +422,7 @@ export function BookingView() {
       status: booking.status,
       source: booking.source,
       employeeId: booking.employeeId || '',
+      serviceId: booking.serviceId || '',
       assignmentType: booking.employeeId ? 'assign_now' : 'unassigned',
     });
     setShowEditDialog(true);
@@ -414,6 +462,7 @@ export function BookingView() {
         description: formData.description.trim() || null,
         notes: formData.notes.trim() || null,
         source: formData.source,
+        serviceId: formData.serviceId || null,
         employeeId:
           formData.assignmentType === 'assign_now' && formData.employeeId
             ? formData.employeeId
@@ -468,6 +517,7 @@ export function BookingView() {
         description: formData.description.trim() || null,
         notes: formData.notes.trim() || null,
         source: formData.source,
+        serviceId: formData.serviceId || null,
         employeeId: formData.employeeId,
       });
       toast.success('Booking created and employee assigned');
@@ -497,6 +547,7 @@ export function BookingView() {
         description: formData.description.trim() || null,
         notes: formData.notes.trim() || null,
         source: formData.source,
+        serviceId: formData.serviceId || null,
         employeeId:
           formData.assignmentType === 'assign_now' && formData.employeeId
             ? formData.employeeId
@@ -600,6 +651,7 @@ export function BookingView() {
         description: formData.description.trim() || null,
         notes: formData.notes.trim() || null,
         status: formData.status,
+        serviceId: formData.serviceId || null,
         employeeId: formData.employeeId || null,
       });
       toast.success('Booking updated');
@@ -629,6 +681,7 @@ export function BookingView() {
         description: formData.description.trim() || null,
         notes: formData.notes.trim() || null,
         status: formData.status,
+        serviceId: formData.serviceId || null,
         employeeId: formData.employeeId || null,
       });
       // Then create a job from this booking
@@ -1123,6 +1176,63 @@ export function BookingView() {
           </DialogHeader>
 
           <div className="grid gap-4 py-2">
+            {/* Service Catalog dropdown — auto-fills title + duration */}
+            <div className="grid gap-2">
+              <Label htmlFor="create-serviceId">
+                Service{' '}
+                <span className="text-xs font-normal text-muted-foreground">
+                  (from catalog — optional)
+                </span>
+              </Label>
+              <Select
+                value={formData.serviceId || '_none'}
+                onValueChange={handleServiceSelect}
+              >
+                <SelectTrigger id="create-serviceId">
+                  <SelectValue
+                    placeholder={
+                      services.length === 0
+                        ? 'No services in catalog'
+                        : 'Select a service to auto-fill details'
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— No service —</SelectItem>
+                  {services.map((svc) => (
+                    <SelectItem key={svc.id} value={svc.id}>
+                      {svc.name}
+                      <span className="text-xs text-muted-foreground ml-1">
+                        · {svc.category} · {svc.duration}m ·
+                        ${svc.basePrice.toFixed(2)}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {formData.serviceId &&
+                services.find((s) => s.id === formData.serviceId) && (
+                  <p className="text-xs text-muted-foreground">
+                    Auto-filled from catalog:{' '}
+                    <span className="font-medium text-foreground">
+                      {
+                        services.find((s) => s.id === formData.serviceId)
+                          ?.name
+                      }
+                    </span>{' '}
+                    ·{' '}
+                    {
+                      services.find((s) => s.id === formData.serviceId)
+                        ?.duration
+                    }{' '}
+                    min · $
+                    {services
+                      .find((s) => s.id === formData.serviceId)
+                      ?.basePrice.toFixed(2)}
+                  </p>
+                )}
+            </div>
+
             <div className="grid gap-2">
               <Label htmlFor="create-title">
                 Title <span className="text-red-500">*</span>
@@ -1364,6 +1474,42 @@ export function BookingView() {
           </DialogHeader>
 
           <div className="grid gap-4 py-2">
+            {/* Service Catalog dropdown — auto-fills title + duration */}
+            <div className="grid gap-2">
+              <Label htmlFor="edit-serviceId">
+                Service{' '}
+                <span className="text-xs font-normal text-muted-foreground">
+                  (from catalog — optional)
+                </span>
+              </Label>
+              <Select
+                value={formData.serviceId || '_none'}
+                onValueChange={handleServiceSelect}
+              >
+                <SelectTrigger id="edit-serviceId">
+                  <SelectValue
+                    placeholder={
+                      services.length === 0
+                        ? 'No services in catalog'
+                        : 'Select a service to auto-fill details'
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— No service —</SelectItem>
+                  {services.map((svc) => (
+                    <SelectItem key={svc.id} value={svc.id}>
+                      {svc.name}
+                      <span className="text-xs text-muted-foreground ml-1">
+                        · {svc.category} · {svc.duration}m ·
+                        ${svc.basePrice.toFixed(2)}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="grid gap-2">
               <Label htmlFor="edit-title">
                 Title <span className="text-red-500">*</span>

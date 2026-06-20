@@ -181,7 +181,24 @@ export function JobsView() {
     assigneeId: 'none',
     priority: 'medium',
     notes: '',
+    serviceId: '',
+    estimatedDuration: '',
   });
+
+  // Service catalog — fetched so the create-job form can pick a service
+  // and auto-fill the duration from the catalog.
+  const [services, setServices] = useState<
+    { id: string; name: string; category: string; basePrice: number; duration: number }[]
+  >([]);
+  useEffect(() => {
+    fetch('/api/services?active=true&limit=200')
+      .then((r) => (r.ok ? r.json() : { services: [] }))
+      .then((data) => {
+        const list = Array.isArray(data) ? data : data?.services ?? [];
+        setServices(list);
+      })
+      .catch(() => setServices([]));
+  }, []);
 
   // ─── Fetch ──────────────────────────────────────────────────────────────
 
@@ -266,6 +283,10 @@ export function JobsView() {
           scheduledAt,
           scheduledTime: jobForm.scheduledTime || undefined,
           notes: jobForm.notes || undefined,
+          serviceId: jobForm.serviceId || undefined,
+          estimatedDuration: jobForm.estimatedDuration
+            ? Number(jobForm.estimatedDuration)
+            : undefined,
           status: assignee ? 'assigned' : 'pending',
         }),
       });
@@ -276,7 +297,7 @@ export function JobsView() {
         setJobForm({
           title: '', customerName: '', customerPhone: '', type: 'service',
           address: '', scheduledDate: '', scheduledTime: '', assigneeId: 'none',
-          priority: 'medium', notes: '',
+          priority: 'medium', notes: '', serviceId: '', estimatedDuration: '',
         });
         fetchJobs();
       } else {
@@ -710,6 +731,55 @@ export function JobsView() {
             <DialogDescription>Schedule a new service job</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            {/* Service Catalog dropdown — auto-fills title + duration */}
+            <div className="space-y-2">
+              <Label>
+                Service{' '}
+                <span className="text-xs font-normal text-muted-foreground">
+                  (from catalog — optional)
+                </span>
+              </Label>
+              <Select
+                value={jobForm.serviceId || '_none'}
+                onValueChange={(v) => {
+                  const id = v === '_none' ? '' : v;
+                  const svc = services.find((s) => s.id === id);
+                  setJobForm((prev) => ({
+                    ...prev,
+                    serviceId: id,
+                    // Auto-fill title only if empty or matches a known service name.
+                    title:
+                      !prev.title.trim() || services.some((s) => s.name === prev.title)
+                        ? svc?.name ?? prev.title
+                        : prev.title,
+                    // Auto-fill duration from catalog (in minutes).
+                    estimatedDuration: svc ? String(svc.duration) : prev.estimatedDuration,
+                  }));
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      services.length === 0
+                        ? 'No services in catalog'
+                        : 'Select a service to auto-fill details'
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— No service —</SelectItem>
+                  {services.map((svc) => (
+                    <SelectItem key={svc.id} value={svc.id}>
+                      {svc.name}
+                      <span className="text-xs text-muted-foreground ml-1">
+                        · {svc.category} · {svc.duration}m · ${svc.basePrice.toFixed(2)}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="space-y-2">
               <Label>Title *</Label>
               <Input
@@ -738,35 +808,21 @@ export function JobsView() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Service Type</Label>
-                <Select value={jobForm.type} onValueChange={(v) => setJobForm({ ...jobForm, type: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="service">Service</SelectItem>
-                    <SelectItem value="delivery">Delivery</SelectItem>
-                    <SelectItem value="installation">Installation</SelectItem>
-                    <SelectItem value="repair">Repair</SelectItem>
-                    <SelectItem value="maintenance">Maintenance</SelectItem>
-                    <SelectItem value="transport">Transport</SelectItem>
-                    <SelectItem value="salon">Salon</SelectItem>
-                    <SelectItem value="healthcare">Healthcare</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Priority</Label>
-                <Select value={jobForm.priority} onValueChange={(v) => setJobForm({ ...jobForm, priority: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            {/* Priority (full-width — Service Type dropdown hidden; jobForm.type
+                stays at its default 'service' which is what the API expects for
+                a catalog-driven job. The catalog Service dropdown above is the
+                source of truth for what kind of job this is.) */}
+            <div className="space-y-2">
+              <Label>Priority</Label>
+              <Select value={jobForm.priority} onValueChange={(v) => setJobForm({ ...jobForm, priority: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="urgent">Urgent</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
@@ -778,7 +834,7 @@ export function JobsView() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <div className="space-y-2">
                 <Label>Scheduled Date</Label>
                 <Input
@@ -793,6 +849,21 @@ export function JobsView() {
                   type="time"
                   value={jobForm.scheduledTime}
                   onChange={(e) => setJobForm({ ...jobForm, scheduledTime: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>
+                  Est. Duration{' '}
+                  <span className="text-xs font-normal text-muted-foreground">(min)</span>
+                </Label>
+                <Input
+                  type="number"
+                  min="5"
+                  placeholder="60"
+                  value={jobForm.estimatedDuration}
+                  onChange={(e) =>
+                    setJobForm({ ...jobForm, estimatedDuration: e.target.value })
+                  }
                 />
               </div>
             </div>

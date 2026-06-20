@@ -60,6 +60,8 @@ model Tenant {
   menuItemConfigs   MenuItemConfig[]
   featureFlags      FeatureFlag[]
   invitations       Invitation[]
+  subscriptionPayments SubscriptionPayment[]
+  billingEvents     BillingEvent[]
 
   @@index([slug])
   @@index([plan])
@@ -89,6 +91,18 @@ model Subscription {
   pausedAt                DateTime?
   pauseReason             String?
   pausedById              String?
+  // ── Downgrade scheduling (Phase 3) ────────────────────────────────────
+  // When a user downgrades mid-cycle, we record the requested lower plan and
+  // the date it should take effect (= next renewal date). Applied by the
+  // renewal cron on the renewal date. Null when no downgrade is pending.
+  pendingDowngradePlan    String?  // starter | growth | pro
+  pendingDowngradeAt      DateTime? // when to apply (= current endDate)
+  pendingDowngradeCycle   String?  // monthly | yearly (cycle for the downgraded plan)
+  // ── Proration tracking (Phase 3) ──────────────────────────────────────
+  // When a user upgrades mid-cycle, the prorated charge is recorded here so
+  // the receipt + audit log can reference it.
+  lastProrationAmount     Float    @default(0)
+  lastProrationAt         DateTime?
   seatCount               Int      @default(1)
   aiQuota                 Int      @default(100)
   whatsappQuota           Int      @default(1000)
@@ -103,10 +117,114 @@ model Subscription {
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
-  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant   Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payments SubscriptionPayment[]
+  billingEvents BillingEvent[]
 
   @@index([tenantId])
   @@index([status])
+}
+
+// Records each successful subscription payment (PayPal capture, manual, etc.)
+// Powers the real Billing History shown in Settings → Billing tab and the
+// sidebar Subscription page (replaces the previously-hardcoded FALLBACK_DATA).
+model SubscriptionPayment {
+  id              String   @id @default(cuid())
+  tenantId        String
+  subscriptionId  String?
+  invoiceNumber   String?  @unique                       // human-readable, e.g. SUB-2025-0001
+  amount          Float    @default(0)
+  currency        String   @default("USD")
+  status          String   @default("paid")              // paid | pending | failed | refunded
+  description     String?
+  plan            String                                   // starter | growth | pro | enterprise
+  billingCycle    String   @default("monthly")           // monthly | yearly
+  paymentProvider String   @default("paypal")            // paypal | manual | stripe
+  paypalOrderId   String?
+  paypalCaptureId String?
+  payerEmail      String?
+  paidAt          DateTime @default(now())
+  refundAmount    Float    @default(0)
+  refundedAt      DateTime?
+  createdAt       DateTime @default(now())
+
+  tenant       Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([paidAt])
+  @@index([paypalOrderId])
+  @@index([plan])
+}
+
+// ==========================================
+// BILLING EVENT AUDIT LOG
+// ==========================================
+// Append-only audit trail of every billing-related event for a tenant:
+// PayPal captures, refunds, cancellations, failures, trial reminders sent,
+// trial expirations, plan changes, proration charges, etc.
+// One row per event — never updated or deleted (regulatory + dispute defense).
+model BillingEvent {
+  id              String   @id @default(cuid())
+  tenantId        String
+  subscriptionId  String?
+  type            String   // capture | refund | cancel | fail | trial_reminder | trial_expired | plan_change | proration | downgrade_scheduled | renewal | payment_method_added
+  amount          Float    @default(0)
+  currency        String   @default("USD")
+  status          String   @default("success") // success | failed | pending
+  description     String?
+  // Raw provider response (PayPal API JSON, etc.) — capped at a reasonable size.
+  providerResponse String  @default("{}")
+  paymentProvider String   @default("paypal") // paypal | stripe | manual
+  paypalOrderId   String?
+  paypalCaptureId String?
+  payerEmail      String?
+  invoiceNumber   String?
+  metadata        String   @default("{}") // arbitrary JSON: { plan, billingCycle, daysRemaining, ... }
+  createdAt       DateTime @default(now())
+
+  tenant       Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+  @@index([paypalOrderId])
+}
+
+// ==========================================
+// PLAN CATALOG (DB-backed, editable by super-admin)
+// ==========================================
+// Replaces the hardcoded PLANS in billing-view.tsx + PAYPAL_PLANS in paypal.ts.
+// Super-admin can edit pricing, limits, and feature flags without code changes.
+// Seeded on first run by /api/plans/seed (idempotent).
+model Plan {
+  id              String   @id @default(cuid())
+  code            String   @unique // starter | growth | pro | enterprise
+  name            String
+  description     String?
+  monthlyPrice    Float    @default(0)
+  yearlyPrice     Float    @default(0)
+  currency        String   @default("USD")
+  maxUsers        Int      @default(1)
+  maxJobs         Int      @default(100)
+  maxWorkflows    Int      @default(10)
+  aiQuota         Int      @default(100)
+  whatsappQuota   Int      @default(1000)
+  emailQuota      Int      @default(5000)
+  smsQuota        Int      @default(500)
+  storageQuotaMb  Int      @default(1024)
+  featuresJson    String   @default("{}") // { whatsappIntegration, customWorkflows, apiAccess, prioritySupport, ... }
+  popular         Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([code])
+  @@index([isActive])
 }
 
 model User {

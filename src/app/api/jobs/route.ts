@@ -72,6 +72,11 @@ export async function POST(request: NextRequest) {
         resourceId: body.resourceId,
         externalId: body.externalId,
         externalSource: body.externalSource,
+        serviceId: body.serviceId || null,
+        estimatedDuration:
+          body.estimatedDuration !== undefined && body.estimatedDuration !== null && body.estimatedDuration !== ''
+            ? Number(body.estimatedDuration)
+            : undefined,
         workspaceId: body.workspaceId,
       },
       include: {

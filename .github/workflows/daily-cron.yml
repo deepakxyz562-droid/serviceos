@@ -1,0 +1,92 @@
+# ====================================================================
+# ServiceOS — Daily Cron Jobs (GitHub Actions alternative)
+# ====================================================================
+# This is an ALTERNATIVE to the Netlify Scheduled Function.
+# You only need ONE of them — pick whichever you prefer:
+#
+#   Option A: Netlify Scheduled Function (netlify/functions/cron-daily.js)
+#             → Runs on Netlify's infrastructure, no extra account needed.
+#             → Enable in Netlify Dashboard → Functions → Scheduled.
+#
+#   Option B: THIS GitHub Actions workflow
+#             → Runs on GitHub's infrastructure.
+#             → Enable by adding these as repository secrets:
+#                 CRON_SECRET  → same value as in Netlify env vars
+#                 SITE_URL     → https://your-site.netlify.app
+#             → Then push to your repo. Runs automatically at 09:00 UTC.
+#
+# To DISABLE: either delete this file, or rename it from .yml to .yml.disabled
+# ====================================================================
+
+name: Daily Cron Jobs
+
+on:
+  schedule:
+    # Runs at 09:00 UTC every day (~2:30 PM IST)
+    # GitHub Actions cron is in UTC.
+    - cron: '0 9 * * *'
+
+  # Allow manual triggering from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  run-daily-cron:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Trigger all 5 cron endpoints
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          BASE_URL="${SITE_URL%/}"
+          echo "🚀 Starting daily cron at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "Base URL: $BASE_URL"
+          echo ""
+
+          ENDPOINTS=(
+            "/api/cron/trial-reminders|trial-reminders"
+            "/api/cron/pre-charge-reminder|pre-charge-reminder"
+            "/api/cron/renewal|renewal"
+            "/api/cron/trial-expire|trial-expire"
+            "/api/cron/recurring-invoices|recurring-invoices"
+          )
+
+          FAILED=0
+
+          for entry in "${ENDPOINTS[@]}"; do
+            PATH_PART="${entry%%|*}"
+            NAME="${entry##*|}"
+            FULL_URL="${BASE_URL}${PATH_PART}"
+
+            echo "──────────────────────────────────────────────────────────"
+            echo "→ POST $FULL_URL  ($NAME)"
+
+            HTTP_CODE=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+              -X POST "$FULL_URL" \
+              -H "x-cron-secret: ${CRON_SECRET}" \
+              -H "content-type: application/json" \
+              -d "{\"source\":\"github-actions\",\"triggeredAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" \
+              --max-time 120)
+
+            echo "  HTTP Status: $HTTP_CODE"
+            echo "  Response: $(head -c 500 /tmp/response.json)"
+            echo ""
+
+            if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+              echo "  ❌ $NAME FAILED (HTTP $HTTP_CODE)"
+              FAILED=$((FAILED + 1))
+            else
+              echo "  ✅ $NAME succeeded"
+            fi
+          done
+
+          echo "──────────────────────────────────────────────────────────"
+          echo "🏁 Daily cron complete. Failed: $FAILED / ${#ENDPOINTS[@]}"
+
+          if [ "$FAILED" -gt 0 ]; then
+            echo "::error::$FAILED cron endpoint(s) failed"
+            exit 1
+          fi

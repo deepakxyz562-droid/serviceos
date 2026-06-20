@@ -9,6 +9,7 @@ import { MobileBottomNav } from '@/components/layout/mobile-bottom-nav';
 import { Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { useTrialStatus, TrialPaywallOverlay } from '@/components/billing/trial-paywall';
 
 // ─── Lazy-loaded views — organized by module ──────────────────────────────────
 
@@ -256,6 +257,7 @@ interface AppLayoutProps {
 export function AppLayout({ onLogout }: AppLayoutProps) {
   const { currentView, darkMode } = useAppStore();
   const isMobile = useIsMobile();
+  const trialStatus = useTrialStatus();
 
   // Resolve the active view component
   const ActiveView = viewComponents[currentView] || DashboardView;
@@ -286,6 +288,11 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
       </div>
 
       <MobileBottomNav />
+
+      {/* Trial-expiry paywall overlay — blocks all views except 'billing'
+          when the tenant's trial has expired. Forces the user to add a
+          payment method via the sidebar Subscription page. */}
+      <TrialPaywallOverlay trialStatus={trialStatus} />
     </div>
   );
 }

@@ -6,7 +6,6 @@ import {
   Users as UsersIcon,
   Shield,
   Plug,
-  CreditCard,
   Globe,
   KeyRound,
   Bell,
@@ -277,13 +276,11 @@ export function SettingsView() {
     { id: 'viewer', name: 'Viewer', description: 'Read-only access to dashboards and reports', users: 0, color: 'bg-slate-100 text-slate-600 border-slate-200' },
   ]);
 
-
-
   // ─── Billing State ────────────────────────────────────────────────────
-  const [billingPlan, setBillingPlan] = useState('starter');
-  const [planStatus, setPlanStatus] = useState('trial');
-  const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
-
+  // No Billing tab in Settings — subscription/billing management lives in the
+  // dedicated Subscription page (sidebar → Finance → Subscription), which
+  // renders real usage + real billing history from /api/subscriptions.
+  // See FE-SETTINGS-BILLING-3 for the rationale (avoid duplicate billing UIs).
 
 
   // ─── Fetch tenant data ──────────────────────────────────────────────────
@@ -296,9 +293,6 @@ export function SettingsView() {
         const tenant = authData.tenant;
         if (tenant) {
           setTenantId(tenant.id);
-          setBillingPlan(tenant.plan || 'starter');
-          setPlanStatus(tenant.planStatus || 'trial');
-          setTrialEndsAt(tenant.trialEndsAt || null);
           setWorkspaceSlug(tenant.slug || '');
 
           // Parse address if it's a JSON string or a simple string
@@ -759,11 +753,6 @@ export function SettingsView() {
             <Plug className="size-4" />
             <span className="hidden sm:inline">Integrations</span>
             <span className="sm:hidden">Apps</span>
-          </TabsTrigger>
-          <TabsTrigger value="billing" className="gap-1.5 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 py-2">
-            <CreditCard className="size-4" />
-            <span className="hidden sm:inline">Billing</span>
-            <span className="sm:hidden">Bill</span>
           </TabsTrigger>
         </TabsList>
 
@@ -1819,130 +1808,6 @@ export function SettingsView() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </TabsContent>
-
-        {/* ═══════════════════════════════════════════════════════════════════
-            Billing Tab
-            ═══════════════════════════════════════════════════════════════════ */}
-        <TabsContent value="billing" className="space-y-6">
-          {/* Current Plan */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30">
-                  <CreditCard className="size-4 text-emerald-600" />
-                </div>
-                <div>
-                  <CardTitle className="text-base">Subscription Plan</CardTitle>
-                  <CardDescription>Manage your subscription and billing</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Current Plan Banner */}
-              <div className="p-4 rounded-lg border-2 border-emerald-300 dark:border-emerald-700 bg-emerald-50/50 dark:bg-emerald-950/20">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <Crown className="size-5 text-emerald-600" />
-                    <span className="font-semibold text-emerald-700 dark:text-emerald-400">
-                      {billingPlan === 'pro' ? 'Pro' : billingPlan === 'growth' ? 'Growth' : billingPlan === 'enterprise' ? 'Enterprise' : 'Starter'} Plan
-                    </span>
-                  </div>
-                  <Badge className={`${planStatus === 'active' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : planStatus === 'trial' ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-red-100 text-red-700 border-red-200'} text-[10px]`} variant="outline">
-                    {planStatus === 'active' ? 'Active' : planStatus === 'trial' ? 'Trial' : planStatus === 'past_due' ? 'Past Due' : planStatus}
-                  </Badge>
-                </div>
-                {trialEndsAt && planStatus === 'trial' && (
-                  <p className="text-xs text-muted-foreground">
-                    Trial ends on {new Date(trialEndsAt).toLocaleDateString()}
-                  </p>
-                )}
-              </div>
-
-              {/* Plan Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {[
-                  { id: 'starter', name: 'Starter', price: 'Free', features: ['Up to 3 users', '50 leads/month', 'Basic reporting', 'Email support'], current: billingPlan === 'starter' },
-                  { id: 'growth', name: 'Growth', price: '$29/mo', features: ['Up to 15 users', '500 leads/month', 'Advanced reporting', 'Priority support', 'WhatsApp integration'], current: billingPlan === 'growth' },
-                  { id: 'pro', name: 'Pro', price: '$79/mo', features: ['Unlimited users', 'Unlimited leads', 'Custom workflows', 'API access', 'White-label', 'Dedicated support'], current: billingPlan === 'pro' },
-                  { id: 'enterprise', name: 'Enterprise', price: 'Custom', features: ['Everything in Pro', 'Custom integrations', 'SLA guarantee', 'On-premise option', 'Training sessions'], current: billingPlan === 'enterprise' },
-                ].map((plan) => (
-                  <div key={plan.id} className={`p-4 rounded-lg border-2 transition-colors ${plan.current ? 'border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20' : 'border-border hover:border-emerald-200'}`}>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-semibold text-sm">{plan.name}</span>
-                      {plan.current && (
-                        <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[9px]" variant="outline">
-                          Current
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-lg font-bold text-emerald-600 mb-3">{plan.price}</p>
-                    <ul className="space-y-1.5 mb-4">
-                      {plan.features.map((f) => (
-                        <li key={f} className="text-xs text-muted-foreground flex items-center gap-1.5">
-                          <Check className="size-3 text-emerald-500 shrink-0" />
-                          {f}
-                        </li>
-                      ))}
-                    </ul>
-                    <Button
-                      variant={plan.current ? 'outline' : 'default'}
-                      size="sm"
-                      className={`w-full ${plan.current ? '' : 'bg-emerald-600 hover:bg-emerald-700'}`}
-                      disabled={plan.current}
-                    >
-                      {plan.current ? 'Current Plan' : 'Upgrade'}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Billing History */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center size-9 rounded-lg bg-muted">
-                  <CreditCard className="size-4 text-emerald-500" />
-                </div>
-                <div>
-                  <CardTitle className="text-base">Billing History</CardTitle>
-                  <CardDescription>Your recent transactions and invoices</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {[
-                  { date: '2025-03-01', description: 'Starter Plan — Monthly', amount: '$0.00', status: 'Paid' },
-                  { date: '2025-02-01', description: 'Starter Plan — Monthly', amount: '$0.00', status: 'Paid' },
-                  { date: '2025-01-01', description: 'Starter Plan — Monthly', amount: '$0.00', status: 'Paid' },
-                ].map((invoice, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/30 transition-colors">
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center justify-center size-8 rounded-lg bg-muted shrink-0">
-                        <CreditCard className="size-3.5 text-muted-foreground" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">{invoice.description}</p>
-                        <p className="text-xs text-muted-foreground">{new Date(invoice.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-medium">{invoice.amount}</span>
-                      <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
-                        {invoice.status}
-                      </Badge>
-                      <Button variant="ghost" size="sm" className="text-xs gap-1">
-                        <Download className="size-3" /> PDF
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
         </TabsContent>
 
       </Tabs>
