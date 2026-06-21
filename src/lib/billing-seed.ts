@@ -159,30 +159,35 @@ export async function seedTrialEmailTemplates(): Promise<{ seeded: number; skipp
   let seeded = 0;
   let skipped = 0;
   for (const tpl of TRIAL_TEMPLATES) {
-    // tenantId=null → global platform template (visible to all tenants).
-    // The (slug, tenantId) pair is unique, so upsert is idempotent.
-    const existing = await db.emailTemplate.findFirst({
-      where: { slug: tpl.slug, tenantId: null },
-    });
-    if (existing) {
-      skipped++;
-      continue;
+    try {
+      // tenantId=null → global platform template (visible to all tenants).
+      // The (slug, tenantId) pair is unique, so upsert is idempotent.
+      const existing = await db.emailTemplate.findFirst({
+        where: { slug: tpl.slug, tenantId: null },
+      });
+      if (existing) {
+        skipped++;
+        continue;
+      }
+      await db.emailTemplate.create({
+        data: {
+          name: tpl.name,
+          slug: tpl.slug,
+          category: 'system',
+          subject: tpl.subject,
+          htmlBody: tpl.htmlBody,
+          textBody: tpl.textBody,
+          variablesJson: tpl.variablesJson,
+          isBuiltIn: true,
+          isDefault: true,
+          tenantId: null, // global
+        },
+      });
+      seeded++;
+    } catch (err) {
+      // Non-fatal: don't let one template failure abort the rest or the caller.
+      console.error(`[billing-seed] seedTrialEmailTemplates: failed to seed "${tpl.slug}" (non-fatal):`, err);
     }
-    await db.emailTemplate.create({
-      data: {
-        name: tpl.name,
-        slug: tpl.slug,
-        category: 'system',
-        subject: tpl.subject,
-        htmlBody: tpl.htmlBody,
-        textBody: tpl.textBody,
-        variablesJson: tpl.variablesJson,
-        isBuiltIn: true,
-        isDefault: true,
-        tenantId: null, // global
-      },
-    });
-    seeded++;
   }
   return { seeded, skipped };
 }
@@ -308,27 +313,36 @@ export async function seedPlans(): Promise<{ seeded: number; skipped: number }> 
   let seeded = 0;
   let skipped = 0;
   for (const p of PLAN_DEFS) {
-    const existing = await db.plan.findUnique({ where: { code: p.code } });
-    if (existing) {
-      skipped++;
-      continue;
+    try {
+      const existing = await db.plan.findUnique({ where: { code: p.code } });
+      if (existing) {
+        skipped++;
+        continue;
+      }
+      await db.plan.create({
+        data: {
+          code: p.code,
+          name: p.name,
+          description: p.description,
+          monthlyPrice: p.monthlyPrice,
+          yearlyPrice: p.yearlyPrice,
+          maxUsers: p.maxUsers,
+          maxJobs: p.maxJobs,
+          maxWorkflows: p.maxWorkflows,
+          featuresJson: JSON.stringify(p.features),
+          popular: p.popular ?? false,
+          sortOrder: p.sortOrder,
+        },
+      });
+      seeded++;
+    } catch (err) {
+      // Don't let one plan failure abort the rest (or the caller). This is
+      // common on serverless (Supabase REST) when the Plan table doesn't
+      // exist yet, has RLS blocking writes, or a concurrent request already
+      // inserted the same code. Log and move on — the GET route wraps
+      // seedPlans() in its own try/catch too, so this is defense-in-depth.
+      console.error(`[billing-seed] seedPlans: failed to seed plan "${p.code}" (non-fatal):`, err);
     }
-    await db.plan.create({
-      data: {
-        code: p.code,
-        name: p.name,
-        description: p.description,
-        monthlyPrice: p.monthlyPrice,
-        yearlyPrice: p.yearlyPrice,
-        maxUsers: p.maxUsers,
-        maxJobs: p.maxJobs,
-        maxWorkflows: p.maxWorkflows,
-        featuresJson: JSON.stringify(p.features),
-        popular: p.popular ?? false,
-        sortOrder: p.sortOrder,
-      },
-    });
-    seeded++;
   }
   return { seeded, skipped };
 }

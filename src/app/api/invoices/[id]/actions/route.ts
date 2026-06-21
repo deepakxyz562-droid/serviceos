@@ -42,7 +42,17 @@ export async function POST(
           sendWhatsApp: action === 'send' || action === 'send_whatsapp',
         };
         const result = await sendInvoice(id, opts);
-        return NextResponse.json({ success: true, action, result });
+        // Aggregate per-channel results into the top-level success flag so
+        // the UI can show an accurate toast. If BOTH channels failed (or the
+        // only requested channel failed), the overall action failed.
+        const channels = [result.email, result.whatsapp].filter(Boolean);
+        const anySuccess = channels.some((c) => c?.success);
+        const anyRequested = channels.length > 0;
+        return NextResponse.json({
+          success: anyRequested ? anySuccess : false,
+          action,
+          result,
+        });
       }
 
       case 'mark_paid': {
@@ -57,7 +67,7 @@ export async function POST(
 
       case 'approve': {
         const result = await approveInvoice(id);
-        return NextResponse.json({ success: result.success, action, error: result.error, invoiceId: result.invoiceId, number: result.number });
+        return NextResponse.json({ success: result.success, action, error: result.error, invoiceId: result.invoiceId, number: result.number, result: result.sendResult });
       }
 
       default:

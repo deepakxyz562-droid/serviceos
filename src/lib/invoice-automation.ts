@@ -163,6 +163,12 @@ export interface AutoInvoiceResult {
   error?: string
   skipped?: boolean
   reason?: string
+  /** True when the invoice was created but the auto-send (email/WhatsApp) failed. */
+  sendFailed?: boolean
+  /** Aggregated error message from the failed auto-send. */
+  sendError?: string
+  /** The per-channel send result (email + WhatsApp). */
+  sendResult?: { email?: { success: boolean; error?: string; simulated?: boolean }; whatsapp?: { success: boolean; error?: string; simulated?: boolean } }
 }
 
 /**
@@ -340,6 +346,101 @@ export async function autoCreateInvoiceFromJob(jobId: string): Promise<AutoInvoi
         return { success: false, skipped: true, reason: 'Job has no customer to invoice' }
       }
 
+      // ── Ensure the invoice has a linked Customer record ──────────────
+      // sendInvoice() resolves the recipient from `invoice.customer` (the
+      // linked Customer row), falling back to `invoice.job.customerEmail/Phone`.
+      // If the job was created directly (not from a lead) the user may have
+      // typed customerName/Phone/Email on the form WITHOUT selecting an
+      // existing Customer — so job.customerId is null.
+      //
+      // PREVIOUS BUG: The find-or-create block was gated on
+      //   `(job.customerPhone || job.customerEmail) && job.workspaceId`
+      // which meant jobs with ONLY customerName (no phone/email), OR jobs
+      // with no workspaceId, produced invoices with customerId=null. If the
+      // job also lacked customerEmail/customerPhone, sendInvoice() had no
+      // recipient at all → both channels returned success:false → invoice
+      // stayed in 'draft' and could not be sent even manually.
+      //
+      // FIX: Always try to find-or-create a Customer when there's ANY
+      // customer identifier (name, phone, email, or existing customerId).
+      // If the job has no workspaceId, resolve one from the tenant's first
+      // workspace. This ensures the invoice is always linked to a Customer
+      // row, and sendInvoice() can resolve recipients from it.
+      let invoiceCustomerId = job.customerId || null
+      if (!invoiceCustomerId && (job.customerName || job.customerPhone || job.customerEmail)) {
+        try {
+          // Resolve a workspaceId — prefer the job's, else first workspace
+          // for the tenant. Customer.workspaceId is required by the schema.
+          let customerWorkspaceId = job.workspaceId
+          if (!customerWorkspaceId && tenantId) {
+            const firstWs = await db.workspace.findFirst({
+              where: { tenantId },
+              select: { id: true },
+            })
+            customerWorkspaceId = firstWs?.id || null
+          }
+          if (customerWorkspaceId) {
+            // Find by phone (most unique), then by email, then by name
+            const existingCustomer = await db.customer.findFirst({
+              where: {
+                OR: [
+                  ...(job.customerPhone ? [{ phone: job.customerPhone }] : []),
+                  ...(job.customerEmail ? [{ email: job.customerEmail }] : []),
+                  ...(job.customerName ? [{ name: job.customerName }] : []),
+                ],
+                workspaceId: customerWorkspaceId,
+              },
+            })
+            if (existingCustomer) {
+              invoiceCustomerId = existingCustomer.id
+              // Backfill missing contact info on the Customer from the job
+              // (e.g. the Customer existed with only a name, but the job
+              // captured a phone/email — enrich the Customer record).
+              const needsUpdate =
+                (job.customerPhone && !existingCustomer.phone) ||
+                (job.customerEmail && !existingCustomer.email)
+              if (needsUpdate) {
+                try {
+                  await db.customer.update({
+                    where: { id: existingCustomer.id },
+                    data: {
+                      ...(job.customerPhone && !existingCustomer.phone ? { phone: job.customerPhone } : {}),
+                      ...(job.customerEmail && !existingCustomer.email ? { email: job.customerEmail } : {}),
+                    },
+                  })
+                } catch { /* non-critical enrichment */ }
+              }
+            } else {
+              // Create a Customer from the job's customer fields.
+              // NOTE: Customer.phone is a non-nullable String in the Prisma
+              // schema, so we use '' (empty string) instead of null when the
+              // job has no phone. Using null here previously caused a
+              // PrismaClientValidationError that was silently caught, leaving
+              // the invoice with customerId=null.
+              const created = await db.customer.create({
+                data: {
+                  name: job.customerName || 'Unknown Customer',
+                  phone: job.customerPhone || '',
+                  email: job.customerEmail || null,
+                  workspaceId: customerWorkspaceId,
+                },
+              })
+              invoiceCustomerId = created.id
+            }
+            // Link the job to this customer for future reference
+            if (invoiceCustomerId && invoiceCustomerId !== job.customerId) {
+              try {
+                await db.job.update({ where: { id: jobId }, data: { customerId: invoiceCustomerId } })
+              } catch { /* non-critical */ }
+            }
+          }
+        } catch (e) {
+          console.error('[InvoiceAutomation] find-or-create customer error:', e)
+          // Non-fatal — proceed with null customerId. sendInvoice() will
+          // still try to fall back to job.customerEmail/customerPhone.
+        }
+      }
+
       const { base, rate } = await resolveCurrency(tenantId)
       const taxPercent = settings.defaultTaxPercent || 0
 
@@ -370,12 +471,19 @@ export async function autoCreateInvoiceFromJob(jobId: string): Promise<AutoInvoi
         ? 'paid'
         : (settings.creationMethod === 'approval_required' ? 'pending_approval' : 'draft')
 
+      // Resolve the recipient email/phone for logging purposes. sendInvoice()
+      // does its own resolution (customer.email → job.customerEmail), but we
+      // compute a rough check here so we can log a clear warning when the
+      // send fails due to a missing recipient.
+      const recipientEmailFromJob = !!(job.customerEmail)
+      const recipientPhoneFromJob = !!(job.customerPhone)
+
       const invoice = await db.invoice.create({
         data: {
           number,
           tenantId,
           jobId,
-          customerId: job.customerId || null,
+          customerId: invoiceCustomerId,
           employeeId: job.assigneeId || null,
           amount: subtotal,
           tax,
@@ -396,15 +504,46 @@ export async function autoCreateInvoiceFromJob(jobId: string): Promise<AutoInvoi
 
       // Auto-send (email + WhatsApp) if enabled and not already paid (COD
       // invoices are handed over in person, no need to email).
+      //
+      // We capture the send result and log a WARNING if it failed, so the
+      // fire-and-forget caller (job lifecycle) records WHY the invoice
+      // stayed in 'draft'. Previously the result was awaited but never
+      // inspected, so send failures were silently swallowed and the user
+      // saw a draft invoice with no indication that sending was attempted
+      // and failed.
+      let sendResult: { email?: { success: boolean; error?: string; simulated?: boolean }; whatsapp?: { success: boolean; error?: string; simulated?: boolean } } | undefined
+      let sendFailed = false
+      let sendError: string | undefined
       if (!isCodPaid && (settings.autoSendEmail || settings.autoSendWhatsApp)) {
-        await sendInvoice(invoice.id, {
-          sendEmail: settings.autoSendEmail,
-          sendWhatsApp: settings.autoSendWhatsApp,
-        })
+        try {
+          sendResult = await sendInvoice(invoice.id, {
+            sendEmail: settings.autoSendEmail,
+            sendWhatsApp: settings.autoSendWhatsApp,
+          })
+          // Check if all attempted channels failed
+          const channels = [sendResult?.email, sendResult?.whatsapp].filter(Boolean) as { success: boolean; error?: string }[]
+          const anySuccess = channels.some((c) => c.success)
+          if (channels.length > 0 && !anySuccess) {
+            sendFailed = true
+            const errors = channels.map((c) => c.error).filter(Boolean)
+            sendError = errors.join('; ')
+            console.warn(
+              `[InvoiceAutomation] Auto-created invoice ${invoice.number} but SEND FAILED: ${sendError}. ` +
+              `Invoice remains in 'draft'. Recipient email: ${recipientEmailFromJob ? 'yes' : 'no'}, phone: ${recipientPhoneFromJob ? 'yes' : 'no'}. ` +
+              `Link a Customer with email/phone or edit the invoice to add recipient info, then click Send.`
+            )
+          } else if (sendResult?.email?.simulated || sendResult?.whatsapp?.simulated) {
+            console.log(`[InvoiceAutomation] Auto-created invoice ${invoice.number} — send SIMULATED (no provider configured).`)
+          }
+        } catch (sendErr) {
+          sendFailed = true
+          sendError = String(sendErr)
+          console.warn(`[InvoiceAutomation] Auto-created invoice ${invoice.number} but sendInvoice() threw: ${sendError}`)
+        }
       }
 
-      console.log(`[InvoiceAutomation] Auto-created invoice ${invoice.number} for job ${jobId} (amount: ${resolvedAmount} via ${amountSource}, status: ${status})`)
-      return { success: true, invoiceId: invoice.id, number: invoice.number, total: invoice.total }
+      console.log(`[InvoiceAutomation] Auto-created invoice ${invoice.number} for job ${jobId} (amount: ${resolvedAmount} via ${amountSource}, status: ${status}, sendFailed: ${sendFailed})`)
+      return { success: true, invoiceId: invoice.id, number: invoice.number, total: invoice.total, sendFailed, sendError, sendResult }
     } catch (err) {
       console.error('[InvoiceAutomation] autoCreateInvoiceFromJob error:', err)
       return { success: false, error: String(err) }
@@ -505,23 +644,44 @@ export interface SendInvoiceOptions {
   sendWhatsApp?: boolean
 }
 
-export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = { sendEmail: true, sendWhatsApp: true }): Promise<{ email?: { success: boolean; error?: string }; whatsapp?: { success: boolean; error?: string } }> {
+export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = { sendEmail: true, sendWhatsApp: true }): Promise<{ email?: { success: boolean; error?: string; simulated?: boolean }; whatsapp?: { success: boolean; error?: string; simulated?: boolean } }> {
   const invoice = await db.invoice.findUnique({
     where: { id: invoiceId },
-    include: { customer: true, tenant: true },
+    include: { customer: true, tenant: true, job: true },
   })
   if (!invoice) return { email: { success: false, error: 'Invoice not found' } }
 
-  const result: { email?: { success: boolean; error?: string }; whatsapp?: { success: boolean; error?: string } } = {}
+  const result: { email?: { success: boolean; error?: string; simulated?: boolean }; whatsapp?: { success: boolean; error?: string; simulated?: boolean } } = {}
 
   // Build a compact text summary
   const items = safeParse(invoice.itemsJson, []) as Array<{ description: string; quantity: number; rate: number }>
   const itemsText = items.map((it, i) => `${i + 1}. ${it.description} ×${it.quantity} = $${(it.quantity * it.rate).toFixed(2)}`).join('\n')
-  const customerName = invoice.customer?.name || 'Customer'
+  const customerName = invoice.customer?.name || invoice.job?.customerName || 'Customer'
   const invoiceTotal = `$${Number(invoice.total).toFixed(2)} ${invoice.currency}`
 
+  // ── Resolve recipient email & phone ──────────────────────────────
+  // Prefer the linked Customer record; fall back to the job's customer
+  // fields (for invoices where no Customer row exists). This ensures the
+  // send flow has a recipient even for direct-created jobs that were
+  // completed before the find-or-create-customer fix was deployed.
+  const recipientEmail = invoice.customer?.email || invoice.job?.customerEmail || null
+  const recipientPhone = invoice.customer?.phone || invoice.job?.customerPhone || null
+
+  // Log a clear warning when there's no recipient at all — this is the #1
+  // cause of "invoice stuck in draft" reports. The per-channel errors
+  // below will also be returned to the caller, but this console.warn
+  // makes the issue immediately visible in server logs.
+  if (!recipientEmail && !recipientPhone && (opts.sendEmail || opts.sendWhatsApp)) {
+    console.warn(
+      `[InvoiceAutomation] sendInvoice(${invoice.number}): no recipient email AND no recipient phone. ` +
+      `customerId=${invoice.customerId || 'null'}, job.customerEmail=${invoice.job?.customerEmail || 'null'}, ` +
+      `job.customerPhone=${invoice.job?.customerPhone || 'null'}. ` +
+      `Invoice will remain in 'draft'. Link a Customer with contact info or edit the invoice.`
+    )
+  }
+
   // ─── Email ─────────────────────────────────────────────────────
-  if (opts.sendEmail && invoice.customer?.email) {
+  if (opts.sendEmail && recipientEmail) {
     const subject = `Invoice ${invoice.number} from ${invoice.tenant?.name || 'ServiceOS'}`
     const html = [
       `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">`,
@@ -542,11 +702,8 @@ export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = 
     ].filter(Boolean).join('\n')
     const text = `Invoice ${invoice.number}\nTotal: ${invoiceTotal}\nDue: ${invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : 'N/A'}\n\nItems:\n${itemsText}\n\n— ${invoice.tenant?.name || 'ServiceOS'}`
     try {
-      const r = await sendEmail({ to: invoice.customer.email, subject, html, text, usageType: 'transactional' })
-      result.email = { success: !!r.success, error: r.error }
-      if (r.success && invoice.status === 'draft') {
-        await db.invoice.update({ where: { id: invoiceId }, data: { status: 'sent', sentAt: new Date() } })
-      }
+      const r = await sendEmail({ to: recipientEmail, subject, html, text, usageType: 'transactional' })
+      result.email = { success: !!r.success, error: r.error, simulated: r.simulated }
     } catch (err) {
       result.email = { success: false, error: String(err) }
     }
@@ -555,7 +712,7 @@ export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = 
   }
 
   // ─── WhatsApp ──────────────────────────────────────────────────
-  if (opts.sendWhatsApp && invoice.customer?.phone) {
+  if (opts.sendWhatsApp && recipientPhone) {
     const waMessage = [
       `🧾 *Invoice ${invoice.number}*`,
       '',
@@ -570,13 +727,28 @@ export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = 
       'Thank you for your business!',
     ].filter(Boolean).join('\n')
     try {
-      const r = await sendWhatsAppMessage({ to: invoice.customer.phone, message: waMessage })
-      result.whatsapp = { success: !!r.success, error: r.error }
+      const r = await sendWhatsAppMessage({ to: recipientPhone, message: waMessage })
+      result.whatsapp = { success: !!r.success, error: r.error, simulated: r.simulated }
     } catch (err) {
       result.whatsapp = { success: false, error: String(err) }
     }
   } else if (opts.sendWhatsApp) {
     result.whatsapp = { success: false, error: 'Customer has no phone number' }
+  }
+
+  // ── Flip invoice status to 'sent' if ANY channel succeeded ────
+  // PREVIOUS BUG: The status flip was only inside the email success block,
+  // so when email had no recipient but WhatsApp succeeded, the invoice
+  // stayed in 'draft' even though WhatsApp was delivered. Now we check
+  // both channels after both have run.
+  const anyChannelSuccess =
+    (result.email?.success === true) || (result.whatsapp?.success === true)
+  if (anyChannelSuccess && invoice.status === 'draft') {
+    try {
+      await db.invoice.update({ where: { id: invoiceId }, data: { status: 'sent', sentAt: new Date() } })
+    } catch (err) {
+      console.error(`[InvoiceAutomation] sendInvoice(${invoice.number}): failed to flip status to 'sent':`, err)
+    }
   }
 
   return result
@@ -648,7 +820,7 @@ export async function sendInvoiceReminder(invoiceId: string): Promise<{ success:
 // pending_approval invoice and approves it, which flips it to "sent" and
 // emails + WhatsApps the customer.
 
-export async function approveInvoice(invoiceId: string): Promise<{ success: boolean; error?: string; invoiceId?: string; number?: string }> {
+export async function approveInvoice(invoiceId: string): Promise<{ success: boolean; error?: string; invoiceId?: string; number?: string; sendResult?: { email?: { success: boolean; simulated?: boolean; error?: string }; whatsapp?: { success: boolean; simulated?: boolean; error?: string } } }> {
   try {
     const invoice = await db.invoice.findUnique({ where: { id: invoiceId } })
     if (!invoice) return { success: false, error: 'Invoice not found' }
@@ -660,13 +832,17 @@ export async function approveInvoice(invoiceId: string): Promise<{ success: bool
       where: { id: invoiceId },
       data: { status: 'sent', sentAt: new Date() },
     })
-    // Send to customer via email + WhatsApp
+    // Send to customer via email + WhatsApp — capture the result so the
+    // caller (API → UI) can surface a "simulated" notice when no real
+    // provider is configured. Without this, the UI would claim "Invoice
+    // approved and sent to customer" even when the send was simulated.
+    let sendResult: { email?: { success: boolean; simulated?: boolean; error?: string }; whatsapp?: { success: boolean; simulated?: boolean; error?: string } } | undefined
     try {
-      await sendInvoice(invoiceId, { sendEmail: true, sendWhatsApp: true })
+      sendResult = await sendInvoice(invoiceId, { sendEmail: true, sendWhatsApp: true })
     } catch (sendErr) {
       console.error('[InvoiceAutomation] approveInvoice send error:', sendErr)
     }
-    return { success: true, invoiceId, number: invoice.number }
+    return { success: true, invoiceId, number: invoice.number, sendResult }
   } catch (err) {
     console.error('[InvoiceAutomation] approveInvoice error:', err)
     return { success: false, error: String(err) }

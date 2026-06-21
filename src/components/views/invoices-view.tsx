@@ -748,6 +748,19 @@ export function InvoicesView() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.success === false) {
+        // For send actions, build a helpful error message from the per-channel
+        // results so the user knows WHY it failed (e.g. "Customer has no email
+        // address" / "Customer has no phone number") instead of a generic toast.
+        if (action === 'send' || action === 'send_email' || action === 'send_whatsapp') {
+          const result = (data as { result?: { email?: { success: boolean; error?: string }; whatsapp?: { success: boolean; error?: string } } }).result;
+          const emailErr = result?.email?.success === false ? result.email.error : null;
+          const waErr = result?.whatsapp?.success === false ? result.whatsapp.error : null;
+          const errors = [emailErr, waErr].filter(Boolean);
+          const msg = errors.length > 0
+            ? `Send failed: ${errors.join('; ')}`
+            : (data as { error?: string }).error || `Action "${action}" failed`;
+          throw new Error(msg);
+        }
         const msg =
           (data as { error?: string }).error ||
           (data as { details?: string }).details ||
@@ -755,15 +768,78 @@ export function InvoicesView() {
         throw new Error(msg);
       }
 
-      const successMsg: Record<InvoiceAction, string> = {
-        send: 'Invoice sent via Email + WhatsApp',
-        send_email: 'Invoice sent via Email',
-        send_whatsapp: 'Invoice sent via WhatsApp',
-        mark_paid: 'Invoice marked as paid',
-        reminder: 'Payment reminder sent to customer',
-        approve: 'Invoice approved and sent to customer',
-      };
-      toast.success(successMsg[action]);
+      // For send actions, show a contextual toast based on which channels
+      // actually succeeded AND whether they were real or simulated.
+      //
+      // IMPORTANT: When no email/WhatsApp provider is configured, the backend
+      // "simulates" the send (logs to console, returns success:true, simulated:true)
+      // but no real message is delivered. We must NOT claim "Invoice sent via Email"
+      // in that case — the user would check their inbox, find nothing, and conclude
+      // the feature is broken. Instead, surface a clear "simulated" notice with
+      // guidance to connect a real provider.
+      if (action === 'send' || action === 'send_email' || action === 'send_whatsapp') {
+        const result = (data as { result?: { email?: { success: boolean; simulated?: boolean }; whatsapp?: { success: boolean; simulated?: boolean } } }).result;
+        const emailOk = result?.email?.success === true;
+        const waOk = result?.whatsapp?.success === true;
+        const emailSimulated = result?.email?.simulated === true;
+        const waSimulated = result?.whatsapp?.simulated === true;
+
+        const realChannels: string[] = [];
+        const simulatedChannels: string[] = [];
+        if (emailOk) (emailSimulated ? simulatedChannels : realChannels).push('Email');
+        if (waOk) (waSimulated ? simulatedChannels : realChannels).push('WhatsApp');
+
+        if (realChannels.length > 0 && simulatedChannels.length === 0) {
+          // All channels really sent
+          toast.success(`Invoice sent via ${realChannels.join(' + ')}`);
+        } else if (realChannels.length > 0 && simulatedChannels.length > 0) {
+          // Mixed: some real, some simulated
+          toast.warning(`Invoice sent via ${realChannels.join(' + ')}. ${simulatedChannels.join(' + ')} simulated (no provider configured).`);
+        } else if (simulatedChannels.length > 0) {
+          // All channels simulated — no real provider configured
+          toast.info(
+            `Invoice marked as sent, but ${simulatedChannels.join(' + ')} delivery was simulated (no provider configured). Connect an email/WhatsApp provider in Settings → Providers to send real messages.`,
+            { duration: 8000 },
+          );
+        } else {
+          // Shouldn't reach here (data.success would be false), but guard anyway
+          toast.error('Invoice send failed — no delivery channel succeeded');
+        }
+      } else {
+        const successMsg: Record<Exclude<InvoiceAction, 'send' | 'send_email' | 'send_whatsapp'>, string> = {
+          mark_paid: 'Invoice marked as paid',
+          reminder: 'Payment reminder sent to customer',
+          approve: 'Invoice approved and sent to customer',
+        };
+        // For the approve action, the backend also sends the invoice to the
+        // customer (email + WhatsApp). Surface a "simulated" notice when no
+        // real provider is configured, exactly like the send action above —
+        // otherwise the user would think a real email went out.
+        if (action === 'approve') {
+          const sendResult = (data as { result?: { email?: { success: boolean; simulated?: boolean }; whatsapp?: { success: boolean; simulated?: boolean } } }).result;
+          const emailOk = sendResult?.email?.success === true;
+          const waOk = sendResult?.whatsapp?.success === true;
+          const emailSimulated = sendResult?.email?.simulated === true;
+          const waSimulated = sendResult?.whatsapp?.simulated === true;
+          const realChannels: string[] = [];
+          const simulatedChannels: string[] = [];
+          if (emailOk) (emailSimulated ? simulatedChannels : realChannels).push('Email');
+          if (waOk) (waSimulated ? simulatedChannels : realChannels).push('WhatsApp');
+
+          if (simulatedChannels.length > 0 && realChannels.length === 0) {
+            toast.info(
+              `Invoice approved & marked as sent, but ${simulatedChannels.join(' + ')} delivery was simulated (no provider configured). Connect an email/WhatsApp provider in Settings → Providers to send real messages.`,
+              { duration: 8000 },
+            );
+          } else if (simulatedChannels.length > 0) {
+            toast.warning(`Invoice approved. Sent via ${realChannels.join(' + ')}. ${simulatedChannels.join(' + ')} simulated (no provider configured).`);
+          } else {
+            toast.success(successMsg.approve);
+          }
+        } else {
+          toast.success(successMsg[action as Exclude<InvoiceAction, 'send' | 'send_email' | 'send_whatsapp' | 'approve'>]);
+        }
+      }
 
       // Reflect likely status changes locally
       if (action === 'mark_paid') {

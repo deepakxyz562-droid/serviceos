@@ -3,6 +3,35 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { seedPlans, getActivePlans } from '@/lib/billing-seed';
 
+/**
+ * Safely parse a JSON string that should be an object. Returns {} on null,
+ * malformed JSON, or non-object results. Used for DB columns like
+ * featuresJson / metadata that are typed as String but may be null or
+ * contain invalid JSON in edge cases (especially via the Supabase REST
+ * adapter, which doesn't enforce @default values).
+ */
+function safeParseObject(raw: string | null | undefined): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Type-safe wrapper for plan features (Record<string, boolean>). */
+function safeParseFeatures(raw: string | null | undefined): Record<string, boolean> {
+  const obj = safeParseObject(raw);
+  const out: Record<string, boolean> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    out[k] = Boolean(v);
+  }
+  return out;
+}
+
 // GET /api/subscriptions - Get current subscription for tenant
 export async function GET() {
   try {
@@ -129,28 +158,52 @@ export async function GET() {
       payerEmail: e.payerEmail,
       invoiceNumber: e.invoiceNumber,
       createdAt: e.createdAt.toISOString(),
-      metadata: e.metadata ? JSON.parse(e.metadata) : {},
+      metadata: safeParseObject(e.metadata),
     }));
 
     // ─── Plan catalog (DB-backed, Phase 3) ──────────────────────────────
     // Idempotent seed so the catalog always exists, then fetch for the UI.
-    await seedPlans();
-    const planRows = await getActivePlans();
-    const plans = planRows.map((p) => ({
-      id: p.code,
-      code: p.code,
-      name: p.name,
-      description: p.description,
-      monthlyPrice: p.monthlyPrice,
-      yearlyPrice: p.yearlyPrice,
-      currency: p.currency,
-      maxUsers: p.maxUsers,
-      maxJobs: p.maxJobs,
-      maxWorkflows: p.maxWorkflows,
-      features: JSON.parse(p.featuresJson),
-      popular: p.popular,
-      sortOrder: p.sortOrder,
-    }));
+    //
+    // NOTE: seedPlans() does a write (create) for each missing plan. On
+    // serverless (Netlify + Supabase REST), this can fail if the Plan table
+    // doesn't exist yet, has RLS blocking writes, or has a schema mismatch.
+    // We MUST NOT let a seed failure abort the entire GET — the subscription
+    // data above is the critical payload; the plan catalog is supplementary.
+    // So we wrap seedPlans() in try/catch and gracefully degrade to an empty
+    // plans array if seeding/fetching fails.
+    try {
+      await seedPlans();
+    } catch (seedErr) {
+      console.error('[Subscriptions] seedPlans() failed (non-fatal):', seedErr);
+    }
+    let plans: Array<{
+      id: string; code: string; name: string; description: string | null;
+      monthlyPrice: number; yearlyPrice: number; currency: string;
+      maxUsers: number; maxJobs: number; maxWorkflows: number;
+      features: Record<string, boolean>; popular: boolean; sortOrder: number;
+    }> = [];
+    try {
+      const planRows = await getActivePlans();
+      plans = planRows.map((p) => ({
+        id: p.code,
+        code: p.code,
+        name: p.name,
+        description: p.description,
+        monthlyPrice: p.monthlyPrice,
+        yearlyPrice: p.yearlyPrice,
+        currency: p.currency,
+        maxUsers: p.maxUsers,
+        maxJobs: p.maxJobs,
+        maxWorkflows: p.maxWorkflows,
+        // Safe parse: featuresJson has @default("{}") in the schema but may
+        // be null/empty in older rows or Supabase REST edge cases.
+        features: safeParseFeatures(p.featuresJson),
+        popular: p.popular,
+        sortOrder: p.sortOrder,
+      }));
+    } catch (plansErr) {
+      console.error('[Subscriptions] getActivePlans() failed (non-fatal):', plansErr);
+    }
 
     return NextResponse.json({
       subscription: subscription

@@ -431,7 +431,15 @@ export async function POST(request: NextRequest) {
         fireAndForget('auto-invoice', async () => {
           const invResult = await autoCreateInvoiceFromJob(updatedJob.id)
           if (invResult.success) {
-            console.log(`[JobLifecycle] Auto-created invoice ${invResult.number} for job ${updatedJob.id}`)
+            if (invResult.sendFailed) {
+              console.warn(
+                `[JobLifecycle] Auto-created invoice ${invResult.number} for job ${updatedJob.id}, ` +
+                `but SEND FAILED: ${invResult.sendError || 'unknown reason'}. ` +
+                `The invoice is in 'draft' status. Add customer email/phone and click Send.`
+              )
+            } else {
+              console.log(`[JobLifecycle] Auto-created invoice ${invResult.number} for job ${updatedJob.id}`)
+            }
           } else if (!invResult.skipped) {
             console.error(`[JobLifecycle] Auto-invoice failed: ${invResult.error}`)
           }
