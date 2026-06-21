@@ -97,9 +97,18 @@ export async function POST(request: NextRequest) {
         customerId: customer.id,
         customerName: customer.name,
         customerPhone: customer.phone,
+        // Carry the lead's email onto the job so customer-facing features
+        // (notifications, invoices, portal) can reach the customer.
+        customerEmail: lead.email || customer.email || null,
         assigneeId: lead.assignedToId || null,
         serviceId: lead.serviceId || null,
         workspaceId: jobWorkspaceId,
+        // Carry the lead's negotiated quote value onto the job as quotedAmount.
+        // This ensures the auto-created invoice on job completion uses the
+        // quote value the user entered on the lead — NOT the Service catalog
+        // basePrice (which is just a generic default). Without this, the
+        // invoice amount would mismatch the lead's quote value.
+        quotedAmount: lead.value && lead.value > 0 ? lead.value : undefined,
       },
       include: {
         assignee: {

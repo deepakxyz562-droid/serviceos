@@ -213,11 +213,20 @@ async function withJobInvoiceLock<T extends AutoInvoiceResult>(
  * REAL data instead of a hard-coded $50/hr rate.
  *
  * Priority:
- *   1. job.quotedAmount   — explicitly agreed price (set on the Create Job form)
+ *   1. job.quotedAmount   — explicitly agreed price (set on Create Job form,
+ *                           OR carried over from lead.value during conversion)
  *   2. job.amountCollected — COD payment already collected by the technician
- *   3. Service.basePrice  — the linked service catalog entry's price
- *   4. Lead.value         — if the job was converted from a lead
+ *   3. Lead.value         — if the job was converted from a lead (an explicit
+ *                           negotiated quote beats the generic catalog price)
+ *   4. Service.basePrice  — the linked service catalog entry's default price
  *   5. estimatedDuration × DEFAULT_HOURLY_RATE  — last-resort fallback
+ *
+ * NOTE: Lead.value is checked BEFORE Service.basePrice. A lead's value is an
+ * explicitly negotiated quote between the business and the customer, while a
+ * Service.basePrice is just a catalog default. If a lead was converted before
+ * the quotedAmount carry-over fix was deployed (so job.quotedAmount is null),
+ * the lead's value should still win over the service catalog price — that is
+ * the amount the customer actually agreed to pay.
  */
 const DEFAULT_HOURLY_RATE = 50
 export async function resolveJobAmount(job: {
@@ -227,7 +236,7 @@ export async function resolveJobAmount(job: {
   estimatedDuration?: number | null
   id: string
 }): Promise<{ amount: number; source: string }> {
-  // 1. Explicitly quoted amount
+  // 1. Explicitly quoted amount (set on the job, or carried from lead.value)
   if (job.quotedAmount && job.quotedAmount > 0) {
     return { amount: job.quotedAmount, source: 'quoted_amount' }
   }
@@ -235,7 +244,18 @@ export async function resolveJobAmount(job: {
   if (job.amountCollected && job.amountCollected > 0) {
     return { amount: job.amountCollected, source: 'cod_collected' }
   }
-  // 3. Service catalog base price
+  // 3. Lead value (if this job was converted from a lead) — explicit
+  //    negotiated quote beats the generic service catalog price.
+  try {
+    const lead = await db.lead.findFirst({
+      where: { jobId: job.id },
+      select: { value: true },
+    })
+    if (lead && lead.value > 0) {
+      return { amount: lead.value, source: 'lead_value' }
+    }
+  } catch { /* ignore — fall through */ }
+  // 4. Service catalog base price
   if (job.serviceId) {
     try {
       const svc = await db.service.findUnique({
@@ -247,16 +267,6 @@ export async function resolveJobAmount(job: {
       }
     } catch { /* ignore — fall through */ }
   }
-  // 4. Lead value (if this job was converted from a lead)
-  try {
-    const lead = await db.lead.findFirst({
-      where: { jobId: job.id },
-      select: { value: true },
-    })
-    if (lead && lead.value > 0) {
-      return { amount: lead.value, source: 'lead_value' }
-    }
-  } catch { /* ignore — fall through */ }
   // 5. Last resort: estimated duration × default hourly rate
   if (job.estimatedDuration && job.estimatedDuration > 0) {
     return {

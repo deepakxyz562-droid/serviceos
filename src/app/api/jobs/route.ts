@@ -1,7 +1,50 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { getAuthUser } from '@/lib/auth'
 import { notifyCustomerBookingConfirmed, notifyEmployeeJobAssigned } from '@/lib/whatsapp-notifications'
 import { dispatchJobEvent } from '@/lib/event-webhook-dispatcher'
+
+/**
+ * Resolve a workspaceId for a new job.
+ *
+ * The Create Job form does NOT send workspaceId, so without this resolution
+ * the job would be created with `workspaceId: null`. That breaks downstream
+ * features that rely on workspace → tenant context — most notably auto-invoice
+ * creation on job completion: `autoCreateInvoiceFromJob` resolves the tenant
+ * via `job.workspaceId → workspace.tenantId`, and when workspaceId is null it
+ * falls back to "first tenant", which may be the WRONG tenant in multi-tenant
+ * deployments (the invoice gets created with a foreign tenantId and never
+ * shows up in the user's invoice list).
+ *
+ * Resolution order (mirrors /api/leads/convert):
+ *   1. Explicitly provided `body.workspaceId`
+ *   2. The authenticated user's `workspaceId`
+ *   3. The first workspace in the DB
+ *   4. A newly-created "Default Workspace"
+ */
+async function resolveWorkspaceId(
+  provided: string | null | undefined,
+  authUser: Awaited<ReturnType<typeof getAuthUser>>,
+): Promise<string | null> {
+  if (provided) return provided
+  if (authUser?.workspaceId) return authUser.workspaceId
+  try {
+    const existing = await db.workspace.findFirst()
+    if (existing) return existing.id
+    const created = await db.workspace.create({
+      data: {
+        name: 'Default Workspace',
+        slug: 'default',
+        ownerId: authUser?.id || 'system',
+        tenantId: authUser?.tenantId || null,
+      },
+    })
+    return created.id
+  } catch (e) {
+    console.error('[Jobs POST] Failed to resolve workspaceId:', e)
+    return null
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -50,6 +93,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+    const authUser = await getAuthUser()
+
+    // Resolve workspaceId so the job has proper workspace → tenant context.
+    // The Create Job form does not send workspaceId; without this, the job
+    // would be created with workspaceId=null, which breaks auto-invoice
+    // creation (the invoice gets the wrong tenantId and is invisible in the
+    // user's invoice list). See resolveWorkspaceId() docblock above.
+    const workspaceId = await resolveWorkspaceId(body.workspaceId, authUser)
 
     const job = await db.job.create({
       data: {
@@ -82,7 +133,7 @@ export async function POST(request: NextRequest) {
           body.quotedAmount !== undefined && body.quotedAmount !== null && body.quotedAmount !== ''
             ? Number(body.quotedAmount)
             : undefined,
-        workspaceId: body.workspaceId,
+        workspaceId,
       },
       include: {
         assignee: true,
