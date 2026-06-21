@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { EventBus } from '@/lib/event-bus';
+import { generateInvoiceNumber } from '@/lib/invoice-automation';
 
 /**
  * POST /api/jobs/[id]/complete-proof
@@ -144,38 +145,53 @@ export async function POST(
     }
 
     // ─── Create invoice for COD if amount collected ───
+    // Idempotency: skip if an invoice already exists for this job (prevents
+    // duplicates when the manager also triggers auto-invoice from the lifecycle
+    // route, or when complete-proof is submitted twice).
     if (paymentMethod === 'cod' && amountCollected > 0) {
       try {
-        const invoiceCount = await db.invoice.count();
-        const invoiceNumber = `INV-${String(invoiceCount + 1).padStart(5, '0')}`;
-
-        // Resolve the tenantId via the workspace (Job has no direct tenantId column)
-        let invoiceTenantId: string | undefined = undefined;
-        if (job.workspaceId) {
-          const ws = await db.workspace.findUnique({
-            where: { id: job.workspaceId },
-            select: { tenantId: true },
-          });
-          invoiceTenantId = ws?.tenantId || undefined;
-        }
-
-        await db.invoice.create({
-          data: {
-            number: invoiceNumber,
-            tenantId: invoiceTenantId,
-            jobId: job.id,
-            customerId: job.customerId,
-            employeeId: job.assigneeId,
-            amount: amountCollected,
-            tax: 0,
-            discount: 0,
-            total: amountCollected,
-            currency: 'USD',
-            status: 'paid',
-            paidAt: new Date(),
-            notes: `COD payment collected by ${job.assigneeName || 'employee'}`,
-          },
+        const existingInvoice = await db.invoice.findFirst({
+          where: { jobId: job.id },
+          select: { id: true, number: true },
         });
+        if (existingInvoice) {
+          console.log(`[CompleteProof] Invoice ${existingInvoice.number} already exists for job ${job.id}, skipping COD invoice creation`);
+        } else {
+          // Resolve the tenantId via the workspace (Job has no direct tenantId column)
+          let invoiceTenantId: string | undefined = undefined;
+          if (job.workspaceId) {
+            const ws = await db.workspace.findUnique({
+              where: { id: job.workspaceId },
+              select: { tenantId: true },
+            });
+            invoiceTenantId = ws?.tenantId || undefined;
+          }
+
+          // Use generateInvoiceNumber() for global-unique safety (prevents
+          // P2002 collisions on multi-tenant Postgres/Supabase deployments).
+          const invoiceNumber = invoiceTenantId
+            ? await generateInvoiceNumber(invoiceTenantId)
+            : `INV-${Date.now()}`;
+
+          await db.invoice.create({
+            data: {
+              number: invoiceNumber,
+              tenantId: invoiceTenantId,
+              jobId: job.id,
+              customerId: job.customerId,
+              employeeId: job.assigneeId,
+              amount: amountCollected,
+              tax: 0,
+              discount: 0,
+              total: amountCollected,
+              currency: 'USD',
+              status: 'paid',
+              paidAt: new Date(),
+              invoiceType: 'job_completion',
+              notes: `COD payment collected by ${job.assigneeName || 'employee'}`,
+            },
+          });
+        }
       } catch (e) {
         console.error('Failed to create invoice for COD:', e);
       }

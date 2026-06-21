@@ -348,7 +348,7 @@ model Invoice {
   baseCurrency String   @default("USD")      // Tenant base currency at creation time
   baseAmount   Float    @default(0)           // Amount converted to base currency (for reporting)
   status      String    @default("draft")     // draft, sent, paid, pending_approval, cancelled
-  invoiceType String    @default("standard")  // standard, deposit, milestone, recurring
+  invoiceType String    @default("standard")  // standard, job_completion, deposit, milestone, recurring
   milestoneIndex Int?                        // 1-based index for milestone invoices (1=30%, 2=40%, 3=30%)
   parentInvoiceId String?                    // For milestone splits → the originating job's first invoice
   recurrenceId String?                       // FK to RecurringInvoice schedule that generated this (recurring type)

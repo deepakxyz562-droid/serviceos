@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Briefcase, Plus, Search, RefreshCw, Filter, Clock, MapPin, User,
   Phone, Calendar, Play, CheckCircle2, XCircle, Eye, ChevronRight,
-  ArrowRight, AlertCircle, Activity, Zap,
+  ArrowRight, AlertCircle, Activity, Zap, Pencil, Trash2, MoreVertical,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,23 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Table,
   TableBody,
@@ -169,6 +186,18 @@ export function JobsView() {
   const [assigningJob, setAssigningJob] = useState<Job | null>(null);
   const [lifecycleLoading, setLifecycleLoading] = useState(false);
 
+  // Edit / Delete dialog state
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingJob, setEditingJob] = useState<Job | null>(null);
+  const [editForm, setEditForm] = useState({
+    title: '', customerName: '', customerPhone: '', type: 'service',
+    address: '', scheduledDate: '', scheduledTime: '', priority: 'medium',
+    notes: '', estimatedDuration: '',
+  });
+  const [editSaving, setEditSaving] = useState(false);
+  const [deletingJob, setDeletingJob] = useState<Job | null>(null);
+  const [deleteSaving, setDeleteSaving] = useState(false);
+
   // Create job form
   const [jobForm, setJobForm] = useState({
     title: '',
@@ -319,6 +348,13 @@ export function JobsView() {
       if (res.ok) {
         toast.success(`Job ${action} successfully`);
         fetchJobs();
+        // ── Refresh employees so status changes (busy↔available) reflect in
+        // the UI immediately. Without this, the employee list stays stale
+        // after assign/complete/reject, making it look like the employee is
+        // still busy when they've actually been freed up (or vice-versa).
+        if (['assign', 'start', 'complete', 'reject', 'accept'].includes(action)) {
+          fetchEmployees();
+        }
         if (action === 'assign') {
           setShowAssignDialog(false);
           setAssigningJob(null);
@@ -380,21 +416,160 @@ export function JobsView() {
     }
   };
 
+  // ─── Edit Job ───────────────────────────────────────────────────────────
+  const openEditDialog = (job: Job) => {
+    setEditingJob(job);
+    // Pre-fill the edit form from the job's current values
+    const scheduledAt = job.scheduledAt ? new Date(job.scheduledAt) : null;
+    setEditForm({
+      title: job.title || '',
+      customerName: job.customerName || '',
+      customerPhone: job.customerPhone || '',
+      type: job.type || 'service',
+      address: job.address || '',
+      scheduledDate: scheduledAt
+        ? scheduledAt.toISOString().slice(0, 10)
+        : '',
+      scheduledTime: scheduledAt
+        ? scheduledAt.toTimeString().slice(0, 5)
+        : '',
+      priority: job.priority || 'medium',
+      notes: job.notes || '',
+      estimatedDuration: job.estimatedDuration
+        ? String(job.estimatedDuration)
+        : '',
+    });
+    setShowEditDialog(true);
+    // Close the detail dialog if it's open so the edit dialog is the focus
+    if (showJobDetail) setShowJobDetail(false);
+  };
+
+  const handleEditJob = async () => {
+    if (!editingJob) return;
+    if (!editForm.title.trim()) {
+      toast.error('Job title is required');
+      return;
+    }
+    setEditSaving(true);
+    try {
+      const scheduledAt = editForm.scheduledDate && editForm.scheduledTime
+        ? new Date(`${editForm.scheduledDate}T${editForm.scheduledTime}`).toISOString()
+        : undefined;
+
+      const res = await fetch(`/api/jobs/${editingJob.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editForm.title,
+          type: editForm.type,
+          priority: editForm.priority,
+          address: editForm.address || null,
+          customerName: editForm.customerName || null,
+          customerPhone: editForm.customerPhone || null,
+          scheduledAt: scheduledAt || null,
+          scheduledTime: editForm.scheduledTime || null,
+          notes: editForm.notes || null,
+          estimatedDuration: editForm.estimatedDuration
+            ? Number(editForm.estimatedDuration)
+            : null,
+        }),
+      });
+
+      if (res.ok) {
+        toast.success('Job updated successfully');
+        setShowEditDialog(false);
+        setEditingJob(null);
+        fetchJobs();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to update job');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  // ─── Delete Job ─────────────────────────────────────────────────────────
+  const handleDeleteJob = async () => {
+    if (!deletingJob) return;
+    setDeleteSaving(true);
+    try {
+      const res = await fetch(`/api/jobs/${deletingJob.id}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        toast.success('Job deleted successfully');
+        setDeletingJob(null);
+        setShowJobDetail(false);
+        fetchJobs();
+        fetchEmployees();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Failed to delete job');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setDeleteSaving(false);
+    }
+  };
+
+  // A small "⋯" dropdown with Edit / Delete actions, shown on every job row
+  // regardless of status (so completed/cancelled jobs can still be edited or
+  // removed). Wrapped to stop click propagation so it doesn't open the detail.
+  const getMoreActionsMenu = (job: Job) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onClick={(e) => e.stopPropagation()}
+          title="More actions"
+        >
+          <MoreVertical className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+        <DropdownMenuItem onClick={() => openJobDetail(job)}>
+          <Eye className="size-4 mr-2" /> View Details
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => openEditDialog(job)}>
+          <Pencil className="size-4 mr-2" /> Edit Job
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="text-red-600 focus:text-red-700 focus:bg-red-50"
+          onClick={() => setDeletingJob(job)}
+        >
+          <Trash2 className="size-4 mr-2" /> Delete Job
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   const getActionButtons = (job: Job) => {
+    // The status-specific primary action + the "⋯" more-actions menu (edit/delete)
+    const moreMenu = getMoreActionsMenu(job);
     switch (job.status) {
       case 'pending':
         return (
-          <Button
-            size="sm"
-            className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs"
-            onClick={(e) => { e.stopPropagation(); openAssignDialog(job); }}
-          >
-            <User className="size-3 mr-1" /> Assign
-          </Button>
+          <div className="flex items-center gap-1 justify-end">
+            <Button
+              size="sm"
+              className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs"
+              onClick={(e) => { e.stopPropagation(); openAssignDialog(job); }}
+            >
+              <User className="size-3 mr-1" /> Assign
+            </Button>
+            {moreMenu}
+          </div>
         );
       case 'assigned':
         return (
-          <div className="flex gap-1">
+          <div className="flex items-center gap-1 justify-end">
             <Button
               size="sm"
               className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs"
@@ -402,41 +577,38 @@ export function JobsView() {
             >
               <Play className="size-3 mr-1" /> Start
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs"
-              onClick={(e) => { e.stopPropagation(); openAssignDialog(job); }}
-            >
-              Reassign
-            </Button>
+            {moreMenu}
           </div>
         );
       case 'in_progress':
         return (
-          <Button
-            size="sm"
-            className="bg-green-600 hover:bg-green-700 h-7 text-xs"
-            onClick={(e) => { e.stopPropagation(); handleLifecycleAction('complete', job.id); }}
-          >
-            <CheckCircle2 className="size-3 mr-1" /> Complete
-          </Button>
+          <div className="flex items-center gap-1 justify-end">
+            <Button
+              size="sm"
+              className="bg-green-600 hover:bg-green-700 h-7 text-xs"
+              onClick={(e) => { e.stopPropagation(); handleLifecycleAction('complete', job.id); }}
+            >
+              <CheckCircle2 className="size-3 mr-1" /> Complete
+            </Button>
+            {moreMenu}
+          </div>
         );
       case 'completed':
-        return (
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs"
-            onClick={(e) => { e.stopPropagation(); openJobDetail(job); }}
-          >
-            <Eye className="size-3 mr-1" /> View
-          </Button>
-        );
       case 'cancelled':
-        return null;
       default:
-        return null;
+        return (
+          <div className="flex items-center gap-1 justify-end">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={(e) => { e.stopPropagation(); openJobDetail(job); }}
+            >
+              <Eye className="size-3 mr-1" /> View
+            </Button>
+            {moreMenu}
+          </div>
+        );
     }
   };
 
@@ -1230,11 +1402,200 @@ export function JobsView() {
                     <XCircle className="size-4 mr-1.5" /> Cancel Job
                   </Button>
                 )}
+                {/* Edit + Delete — available on any job regardless of status */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openEditDialog(selectedJob)}
+                >
+                  <Pencil className="size-4 mr-1.5" /> Edit
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                  onClick={() => {
+                    setDeletingJob(selectedJob);
+                  }}
+                >
+                  <Trash2 className="size-4 mr-1.5" /> Delete
+                </Button>
               </div>
             </div>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* ─── Edit Job Dialog ─────────────────────────────────────────── */}
+      <Dialog open={showEditDialog} onOpenChange={(open) => {
+        setShowEditDialog(open);
+        if (!open) setEditingJob(null);
+      }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="size-5 text-emerald-600" />
+              Edit Job
+            </DialogTitle>
+            <DialogDescription>
+              {editingJob && (
+                <span>
+                  Update details for{' '}
+                  <span className="font-mono text-xs">
+                    {editingJob.jobNumber || editingJob.id.slice(0, 8).toUpperCase()}
+                  </span>
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Title *</Label>
+              <Input
+                placeholder="Job title"
+                value={editForm.title}
+                onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Customer Name</Label>
+                <Input
+                  placeholder="Customer name"
+                  value={editForm.customerName}
+                  onChange={(e) => setEditForm({ ...editForm, customerName: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Customer Phone</Label>
+                <Input
+                  placeholder="+1 555 123 4567"
+                  value={editForm.customerPhone}
+                  onChange={(e) => setEditForm({ ...editForm, customerPhone: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Priority</Label>
+              <Select value={editForm.priority} onValueChange={(v) => setEditForm({ ...editForm, priority: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="urgent">Urgent</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Address</Label>
+              <Input
+                placeholder="Service location address"
+                value={editForm.address}
+                onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="space-y-2">
+                <Label>Scheduled Date</Label>
+                <Input
+                  type="date"
+                  value={editForm.scheduledDate}
+                  onChange={(e) => setEditForm({ ...editForm, scheduledDate: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Scheduled Time</Label>
+                <Input
+                  type="time"
+                  value={editForm.scheduledTime}
+                  onChange={(e) => setEditForm({ ...editForm, scheduledTime: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>
+                  Est. Duration{' '}
+                  <span className="text-xs font-normal text-muted-foreground">(min)</span>
+                </Label>
+                <Input
+                  type="number"
+                  min="5"
+                  placeholder="60"
+                  value={editForm.estimatedDuration}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, estimatedDuration: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Notes</Label>
+              <Textarea
+                placeholder="Additional notes or instructions"
+                value={editForm.notes}
+                onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700"
+              onClick={handleEditJob}
+              disabled={!editForm.title.trim() || editSaving}
+            >
+              {editSaving ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Delete Job Confirmation ─────────────────────────────────── */}
+      <AlertDialog open={!!deletingJob} onOpenChange={(open) => {
+        if (!open) setDeletingJob(null);
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="size-5 text-red-600" />
+              Delete Job?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {deletingJob && (
+                <>
+                  Are you sure you want to permanently delete job{' '}
+                  <span className="font-mono font-semibold text-foreground">
+                    {deletingJob.jobNumber || deletingJob.id.slice(0, 8).toUpperCase()}
+                  </span>
+                  {' '}
+                  ({deletingJob.title})? This action cannot be undone.
+                  {deletingJob.status === 'completed' && (
+                    <span className="block mt-2 text-amber-600">
+                      ⚠️ This job may have linked invoices. The job record will be removed but invoices will remain.
+                    </span>
+                  )}
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteSaving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteJob}
+              disabled={deleteSaving}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {deleteSaving ? 'Deleting...' : 'Delete Job'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

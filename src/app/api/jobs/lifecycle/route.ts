@@ -362,6 +362,17 @@ export async function POST(request: NextRequest) {
       }
 
       case 'complete': {
+        // ── Idempotency guard ──────────────────────────────────────
+        // If the job is already completed, return it as-is without re-running
+        // the complete flow (which would re-fire notifications, re-create
+        // invoices, etc.). This prevents duplicate invoices when the user
+        // double-clicks "Complete" or when the complete-proof route already
+        // closed the job.
+        if (job.status === 'completed') {
+          updatedJob = job
+          break
+        }
+
         const logEntry = { action: 'completed', resourceId: job.resourceId, assigneeId: job.assigneeId, reason }
         const newLogJson = addNotificationLog(job.notificationLogJson, logEntry)
 

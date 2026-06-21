@@ -260,7 +260,7 @@ export async function autoCreateInvoiceFromJob(jobId: string): Promise<AutoInvoi
         baseCurrency: base,
         baseAmount: total,
         status,
-        invoiceType: 'standard',
+        invoiceType: 'job_completion',
         dueDate,
         itemsJson: JSON.stringify(items),
         notes: `Auto-created from completed job #${job.jobNumber || job.id.slice(-6)}`,

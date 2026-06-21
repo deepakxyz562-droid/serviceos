@@ -33,6 +33,7 @@ import {
   ShieldCheck,
   Play,
   Power,
+  Sparkles,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -126,7 +127,7 @@ interface Invoice {
   baseAmount?: number;
   itemsJson?: string;
   sentAt?: string | null;
-  invoiceType?: 'standard' | 'deposit' | 'milestone' | 'recurring';
+  invoiceType?: 'standard' | 'job_completion' | 'deposit' | 'milestone' | 'recurring';
   milestoneIndex?: number | null;
   parentInvoiceId?: string | null;
   recurrenceId?: string | null;
@@ -415,6 +416,7 @@ export function InvoicesView() {
 
   // Filter & search
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [autoFilter, setAutoFilter] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Sort
@@ -488,6 +490,18 @@ export function InvoicesView() {
       result = result.filter((inv) => inv.status === statusFilter);
     }
 
+    // "Auto-generated only" filter: invoices created by the system
+    // (job completion, deposit, milestone, recurring) — excludes manual 'standard'.
+    if (autoFilter) {
+      result = result.filter(
+        (inv) =>
+          inv.invoiceType === 'job_completion' ||
+          inv.invoiceType === 'deposit' ||
+          inv.invoiceType === 'milestone' ||
+          inv.invoiceType === 'recurring'
+      );
+    }
+
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(
@@ -517,7 +531,7 @@ export function InvoicesView() {
     });
 
     return result;
-  }, [invoices, statusFilter, searchQuery, sortField, sortDirection]);
+  }, [invoices, statusFilter, autoFilter, searchQuery, sortField, sortDirection]);
 
   // ============================================================
   // Stats
@@ -1058,6 +1072,17 @@ export function InvoicesView() {
             <TabsTrigger value="overdue" className="text-xs px-3">Overdue</TabsTrigger>
           </TabsList>
         </Tabs>
+        <Button
+          type="button"
+          variant={autoFilter ? 'default' : 'outline'}
+          size="sm"
+          className="h-9 text-xs gap-1.5"
+          onClick={() => setAutoFilter((v) => !v)}
+          title="Filter to show only system-generated invoices (job completion, deposit, milestone, recurring)"
+        >
+          <Sparkles className="size-3.5" />
+          Auto-generated
+        </Button>
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
@@ -1142,13 +1167,17 @@ export function InvoicesView() {
                             </div>
                             {invoice.invoiceType && invoice.invoiceType !== 'standard' && (
                               <Badge variant="outline" className={`text-[9px] h-4 px-1.5 ${
-                                invoice.invoiceType === 'deposit'
+                                invoice.invoiceType === 'job_completion'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : invoice.invoiceType === 'deposit'
                                   ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
                                   : invoice.invoiceType === 'milestone'
                                   ? 'bg-purple-50 text-purple-700 border-purple-200'
                                   : 'bg-blue-50 text-blue-700 border-blue-200'
                               }`}>
-                                {invoice.invoiceType === 'deposit'
+                                {invoice.invoiceType === 'job_completion'
+                                  ? 'Auto · Job'
+                                  : invoice.invoiceType === 'deposit'
                                   ? 'Deposit'
                                   : invoice.invoiceType === 'milestone'
                                   ? (invoice.milestoneIndex ? `Milestone ${invoice.milestoneIndex}` : 'Milestone')
@@ -1504,9 +1533,28 @@ export function InvoicesView() {
           {selectedInvoice && (
             <>
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
+                <DialogTitle className="flex items-center gap-2 flex-wrap">
                   <Receipt className="size-5 text-emerald-600" />
                   {selectedInvoice.number}
+                  {selectedInvoice.invoiceType && selectedInvoice.invoiceType !== 'standard' && (
+                    <Badge variant="outline" className={`text-[10px] h-5 px-2 ${
+                      selectedInvoice.invoiceType === 'job_completion'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        : selectedInvoice.invoiceType === 'deposit'
+                        ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                        : selectedInvoice.invoiceType === 'milestone'
+                        ? 'bg-purple-50 text-purple-700 border-purple-200'
+                        : 'bg-blue-50 text-blue-700 border-blue-200'
+                    }`}>
+                      {selectedInvoice.invoiceType === 'job_completion'
+                        ? 'Auto · Job Completion'
+                        : selectedInvoice.invoiceType === 'deposit'
+                        ? 'Deposit'
+                        : selectedInvoice.invoiceType === 'milestone'
+                        ? (selectedInvoice.milestoneIndex ? `Milestone ${selectedInvoice.milestoneIndex}` : 'Milestone')
+                        : 'Recurring'}
+                    </Badge>
+                  )}
                 </DialogTitle>
                 <DialogDescription>
                   Invoice for {selectedInvoice.customer}
