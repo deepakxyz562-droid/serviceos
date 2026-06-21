@@ -1,0 +1,2002 @@
+     1→generator client {
+     2→  provider = "prisma-client-js"
+     3→  binaryTargets = ["native", "debian-openssl-3.0.x"]
+     4→}
+     5→
+     6→datasource db {
+     7→  provider  = "sqlite"
+     8→  url       = env("DATABASE_URL")
+     9→}
+    10→
+    11→// ==========================================
+    12→// MULTI-TENANT CORE
+    13→// ==========================================
+    14→
+    15→model Tenant {
+    16→  id                String   @id @default(cuid())
+    17→  name              String
+    18→  slug              String   @unique
+    19→  industry          String?
+    20→  logo              String?
+    21→  phone             String?
+    22→  email             String?
+    23→  address           String?
+    24→  country           String   @default("US")
+    25→  currency          String   @default("USD")
+    26→  whatsappPhone     String?
+    27→  whatsappConfigJson String @default("{}")
+    28→  plan              String   @default("starter")
+    29→  planStatus        String   @default("trial")
+    30→  trialEndsAt       DateTime?
+    31→  planStartedAt     DateTime?
+    32→  planEndsAt        DateTime?
+    33→  settingsJson      String   @default("{}")
+    34→  onboardingCompleted Boolean @default(false)
+    35→  onboardingStep    Int      @default(0)
+    36→  suspendedAt       DateTime?
+    37→  suspensionReason  String?
+    38→  whiteLabelJson    String   @default("{}")
+    39→  region            String   @default("us-east-1")
+    40→  mrr               Float    @default(0)
+    41→  arr               Float    @default(0)
+    42→  churnRate         Float    @default(0)
+    43→  createdAt         DateTime @default(now())
+    44→  updatedAt         DateTime @updatedAt
+    45→
+    46→  users           User[]
+    47→  workspaces      Workspace[]
+    48→  leads           Lead[]
+    49→  invoices        Invoice[]
+    50→  recurringInvoices RecurringInvoice[]
+    51→  subscriptions   Subscription[]
+    52→  services        Service[]
+    53→  reviews         Review[]
+    54→  notifications   Notification[]
+    55→  quotes          Quote[]
+    56→  notificationLogs NotificationLog[]
+    57→  conversations   Conversation[]
+    58→  forms           Form[]
+    59→  workflowAutomations WorkflowAutomation[]
+    60→  menuItemConfigs   MenuItemConfig[]
+    61→  featureFlags      FeatureFlag[]
+    62→  invitations       Invitation[]
+    63→  subscriptionPayments SubscriptionPayment[]
+    64→  billingEvents     BillingEvent[]
+    65→
+    66→  @@index([slug])
+    67→  @@index([plan])
+    68→  @@index([planStatus])
+    69→}
+    70→
+    71→model Subscription {
+    72→  id                      String   @id @default(cuid())
+    73→  tenantId                String
+    74→  plan                    String
+    75→  status                  String   @default("trial")  // trial, active, paused, cancelled, expired
+    76→  amount                  Float    @default(0)
+    77→  currency                String   @default("USD")
+    78→  billingCycle            String   @default("monthly")
+    79→  startDate               DateTime @default(now())
+    80→  endDate                 DateTime?
+    81→  trialEndsAt             DateTime?
+    82→  paypalSubscriptionId    String?
+    83→  paypalPlanId            String?
+    84→  paypalOrderId           String?
+    85→  paypalPayerEmail        String?
+    86→  paymentProvider         String   @default("none")
+    87→  maxUsers                Int      @default(1)
+    88→  maxJobs                 Int      @default(100)
+    89→  maxWorkflows            Int      @default(10)
+    90→  featuresJson            String   @default("{}")
+    91→  pausedAt                DateTime?
+    92→  pauseReason             String?
+    93→  pausedById              String?
+    94→  // ── Downgrade scheduling (Phase 3) ────────────────────────────────────
+    95→  // When a user downgrades mid-cycle, we record the requested lower plan and
+    96→  // the date it should take effect (= next renewal date). Applied by the
+    97→  // renewal cron on the renewal date. Null when no downgrade is pending.
+    98→  pendingDowngradePlan    String?  // starter | growth | pro
+    99→  pendingDowngradeAt      DateTime? // when to apply (= current endDate)
+   100→  pendingDowngradeCycle   String?  // monthly | yearly (cycle for the downgraded plan)
+   101→  // ── Proration tracking (Phase 3) ──────────────────────────────────────
+   102→  // When a user upgrades mid-cycle, the prorated charge is recorded here so
+   103→  // the receipt + audit log can reference it.
+   104→  lastProrationAmount     Float    @default(0)
+   105→  lastProrationAt         DateTime?
+   106→  seatCount               Int      @default(1)
+   107→  aiQuota                 Int      @default(100)
+   108→  whatsappQuota           Int      @default(1000)
+   109→  emailQuota              Int      @default(5000)
+   110→  smsQuota                Int      @default(500)
+   111→  storageQuotaMb          Int      @default(1024)
+   112→  aiUsageCount            Int      @default(0)
+   113→  whatsappUsageCount      Int      @default(0)
+   114→  emailUsageCount         Int      @default(0)
+   115→  smsUsageCount           Int      @default(0)
+   116→  storageUsageMb          Float    @default(0)
+   117→  createdAt               DateTime @default(now())
+   118→  updatedAt               DateTime @updatedAt
+   119→
+   120→  tenant   Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+   121→  payments SubscriptionPayment[]
+   122→  billingEvents BillingEvent[]
+   123→
+   124→  @@index([tenantId])
+   125→  @@index([status])
+   126→}
+   127→
+   128→// Records each successful subscription payment (PayPal capture, manual, etc.)
+   129→// Powers the real Billing History shown in Settings → Billing tab and the
+   130→// sidebar Subscription page (replaces the previously-hardcoded FALLBACK_DATA).
+   131→model SubscriptionPayment {
+   132→  id              String   @id @default(cuid())
+   133→  tenantId        String
+   134→  subscriptionId  String?
+   135→  invoiceNumber   String?  @unique                       // human-readable, e.g. SUB-2025-0001
+   136→  amount          Float    @default(0)
+   137→  currency        String   @default("USD")
+   138→  status          String   @default("paid")              // paid | pending | failed | refunded
+   139→  description     String?
+   140→  plan            String                                   // starter | growth | pro | enterprise
+   141→  billingCycle    String   @default("monthly")           // monthly | yearly
+   142→  paymentProvider String   @default("paypal")            // paypal | manual | stripe
+   143→  paypalOrderId   String?
+   144→  paypalCaptureId String?
+   145→  payerEmail      String?
+   146→  paidAt          DateTime @default(now())
+   147→  refundAmount    Float    @default(0)
+   148→  refundedAt      DateTime?
+   149→  createdAt       DateTime @default(now())
+   150→
+   151→  tenant       Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+   152→  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+   153→
+   154→  @@index([tenantId])
+   155→  @@index([status])
+   156→  @@index([paidAt])
+   157→  @@index([paypalOrderId])
+   158→  @@index([plan])
+   159→}
+   160→
+   161→// ==========================================
+   162→// BILLING EVENT AUDIT LOG
+   163→// ==========================================
+   164→// Append-only audit trail of every billing-related event for a tenant:
+   165→// PayPal captures, refunds, cancellations, failures, trial reminders sent,
+   166→// trial expirations, plan changes, proration charges, etc.
+   167→// One row per event — never updated or deleted (regulatory + dispute defense).
+   168→model BillingEvent {
+   169→  id              String   @id @default(cuid())
+   170→  tenantId        String
+   171→  subscriptionId  String?
+   172→  type            String   // capture | refund | cancel | fail | trial_reminder | trial_expired | plan_change | proration | downgrade_scheduled | renewal | payment_method_added
+   173→  amount          Float    @default(0)
+   174→  currency        String   @default("USD")
+   175→  status          String   @default("success") // success | failed | pending
+   176→  description     String?
+   177→  // Raw provider response (PayPal API JSON, etc.) — capped at a reasonable size.
+   178→  providerResponse String  @default("{}")
+   179→  paymentProvider String   @default("paypal") // paypal | stripe | manual
+   180→  paypalOrderId   String?
+   181→  paypalCaptureId String?
+   182→  payerEmail      String?
+   183→  invoiceNumber   String?
+   184→  metadata        String   @default("{}") // arbitrary JSON: { plan, billingCycle, daysRemaining, ... }
+   185→  createdAt       DateTime @default(now())
+   186→
+   187→  tenant       Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+   188→  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+   189→
+   190→  @@index([tenantId])
+   191→  @@index([type])
+   192→  @@index([status])
+   193→  @@index([createdAt])
+   194→  @@index([paypalOrderId])
+   195→}
+   196→
+   197→// ==========================================
+   198→// PLAN CATALOG (DB-backed, editable by super-admin)
+   199→// ==========================================
+   200→// Replaces the hardcoded PLANS in billing-view.tsx + PAYPAL_PLANS in paypal.ts.
+   201→// Super-admin can edit pricing, limits, and feature flags without code changes.
+   202→// Seeded on first run by /api/plans/seed (idempotent).
+   203→model Plan {
+   204→  id              String   @id @default(cuid())
+   205→  code            String   @unique // starter | growth | pro | enterprise
+   206→  name            String
+   207→  description     String?
+   208→  monthlyPrice    Float    @default(0)
+   209→  yearlyPrice     Float    @default(0)
+   210→  currency        String   @default("USD")
+   211→  maxUsers        Int      @default(1)
+   212→  maxJobs         Int      @default(100)
+   213→  maxWorkflows    Int      @default(10)
+   214→  aiQuota         Int      @default(100)
+   215→  whatsappQuota   Int      @default(1000)
+   216→  emailQuota      Int      @default(5000)
+   217→  smsQuota        Int      @default(500)
+   218→  storageQuotaMb  Int      @default(1024)
+   219→  featuresJson    String   @default("{}") // { whatsappIntegration, customWorkflows, apiAccess, prioritySupport, ... }
+   220→  popular         Boolean  @default(false)
+   221→  isActive        Boolean  @default(true)
+   222→  sortOrder       Int      @default(0)
+   223→  createdAt       DateTime @default(now())
+   224→  updatedAt       DateTime @updatedAt
+   225→
+   226→  @@index([code])
+   227→  @@index([isActive])
+   228→}
+   229→
+   230→model User {
+   231→  id              String   @id @default(cuid())
+   232→  email           String   @unique
+   233→  name            String?
+   234→  passwordHash    String?
+   235→  avatar          String?
+   236→  role            String   @default("owner")
+   237→  authProvider    String   @default("email")
+   238→  authProviderId  String?
+   239→  phone           String?
+   240→  isActive        Boolean  @default(true)
+   241→  isSuperAdmin    Boolean  @default(false)
+   242→  lastLoginAt     DateTime?
+   243→  mfaEnabled      Boolean  @default(false)
+   244→  lastActivityAt  DateTime?
+   245→  loginCount      Int      @default(0)
+   246→  tenantId        String?
+   247→  workspaceId     String?
+   248→  createdAt       DateTime @default(now())
+   249→  updatedAt       DateTime @updatedAt
+   250→
+   251→  tenant       Tenant?     @relation(fields: [tenantId], references: [id])
+   252→  workspace    Workspace?  @relation(fields: [workspaceId], references: [id])
+   253→  apiKeys      ApiKey[]
+   254→  auditLogs    AuditLog[]
+   255→  workflows    Workflow[]  @relation("WorkflowCreator")
+   256→  credentials  Credential[] @relation("CredentialOwner")
+   257→  notifications Notification[]
+   258→  employeeAccount Employee?
+   259→  employeeStatusLogs EmployeeStatusLog[]
+   260→  sentInvitations  Invitation[] @relation("InvitationInvitedBy")
+   261→
+   262→  @@index([email])
+   263→  @@index([tenantId])
+   264→}
+   265→
+   266→// ==========================================
+   267→// SERVICE CATALOG
+   268→// ==========================================
+   269→
+   270→model Service {
+   271→  id          String   @id @default(cuid())
+   272→  name        String
+   273→  description String?
+   274→  category    String   @default("general")
+   275→  basePrice   Float    @default(0)
+   276→  duration    Int      @default(60)
+   277→  icon        String?
+   278→  isActive    Boolean  @default(true)
+   279→  tenantId    String?
+   280→  createdAt   DateTime @default(now())
+   281→  updatedAt   DateTime @updatedAt
+   282→
+   283→  tenant Tenant? @relation(fields: [tenantId], references: [id])
+   284→
+   285→  @@index([tenantId])
+   286→  @@index([category])
+   287→}
+   288→
+   289→// ==========================================
+   290→// LEAD MANAGEMENT
+   291→// ==========================================
+   292→
+   293→model Lead {
+   294→  id              String   @id @default(cuid())
+   295→  name            String
+   296→  phone           String
+   297→  email           String?
+   298→  source          String   @default("manual")
+   299→  status          String   @default("new")
+   300→  priority        String   @default("medium")
+   301→  value           Float    @default(0)
+   302→  description     String?
+   303→  address         String?
+   304→  serviceType     String?
+   305→  serviceId       String?
+   306→  assignedToId    String?
+   307→  tenantId        String?
+   308→  customerId      String?
+   309→  jobId           String?  @unique
+   310→  notesJson       String   @default("[]")
+   311→  tagsJson        String   @default("[]")
+   312→  followUpAt      DateTime?
+   313→  convertedAt     DateTime?
+   314→  createdAt       DateTime @default(now())
+   315→  updatedAt       DateTime @updatedAt
+   316→
+   317→  tenant     Tenant?   @relation(fields: [tenantId], references: [id])
+   318→  customer   Customer? @relation(fields: [customerId], references: [id])
+   319→  job        Job?      @relation(fields: [jobId], references: [id])
+   320→  assignedTo Employee? @relation(fields: [assignedToId], references: [id])
+   321→  conversation Conversation?
+   322→  journey      CustomerJourney?
+   323→
+   324→  @@index([tenantId])
+   325→  @@index([status])
+   326→  @@index([source])
+   327→  @@index([createdAt])
+   328→}
+   329→
+   330→// ==========================================
+   331→// INVOICES
+   332→// ==========================================
+   333→
+   334→model Invoice {
+   335→  id          String    @id @default(cuid())
+   336→  number      String    @unique
+   337→  tenantId    String?
+   338→  jobId       String?
+   339→  bookingId   String?
+   340→  customerId  String?
+   341→  employeeId  String?
+   342→  amount      Float     @default(0)
+   343→  tax         Float     @default(0)
+   344→  discount    Float     @default(0)
+   345→  total       Float     @default(0)
+   346→  currency    String    @default("USD")      // Transaction currency (what the customer sees/pays)
+   347→  exchangeRate Float    @default(1)           // Rate at creation: 1 base = X transaction currency
+   348→  baseCurrency String   @default("USD")      // Tenant base currency at creation time
+   349→  baseAmount   Float    @default(0)           // Amount converted to base currency (for reporting)
+   350→  status      String    @default("draft")     // draft, sent, paid, pending_approval, cancelled
+   351→  invoiceType String    @default("standard")  // standard, deposit, milestone, recurring
+   352→  milestoneIndex Int?                        // 1-based index for milestone invoices (1=30%, 2=40%, 3=30%)
+   353→  parentInvoiceId String?                    // For milestone splits → the originating job's first invoice
+   354→  recurrenceId String?                       // FK to RecurringInvoice schedule that generated this (recurring type)
+   355→  dueDate     DateTime?
+   356→  sentAt      DateTime?
+   357→  paidAt      DateTime?
+   358→  itemsJson   String    @default("[]")
+   359→  notes       String?
+   360→  createdAt   DateTime  @default(now())
+   361→  updatedAt   DateTime  @updatedAt
+   362→
+   363→  tenant    Tenant?          @relation(fields: [tenantId], references: [id])
+   364→  job       Job?             @relation(fields: [jobId], references: [id])
+   365→  customer  Customer?        @relation(fields: [customerId], references: [id])
+   366→  employee  Employee?        @relation(fields: [employeeId], references: [id])
+   367→  booking   Booking?         @relation("BookingInvoices", fields: [bookingId], references: [id])
+   368→  recurrence RecurringInvoice? @relation(fields: [recurrenceId], references: [id])
+   369→
+   370→  @@index([tenantId])
+   371→  @@index([status])
+   372→  @@index([customerId])
+   373→  @@index([invoiceType])
+   374→  @@index([bookingId])
+   375→  @@index([recurrenceId])
+   376→  @@index([parentInvoiceId])
+   377→}
+   378→
+   379→// Recurring invoice schedule (AMC / subscriptions / monthly maintenance contracts)
+   380→model RecurringInvoice {
+   381→  id              String   @id @default(cuid())
+   382→  name            String                              // e.g. "Monthly Pool Cleaning — John Doe"
+   383→  tenantId        String?
+   384→  customerId      String?
+   385→  jobId           String?                             // optional template job
+   386→  frequency       String   @default("monthly")        // weekly, monthly, quarterly, yearly
+   387→  dayOfMonth      Int      @default(1)                 // 1-31 (for monthly+); day of week for weekly (0-6)
+   388→  amount          Float    @default(0)                 // recurring charge (subtotal, before tax)
+   389→  taxPercent      Float    @default(0)
+   390→  currency        String   @default("USD")
+   391→  itemsJson       String   @default("[]")              // line items template
+   392→  notes           String?
+   393→  startDate       DateTime @default(now())
+   394→  endDate         DateTime?                            // null = open-ended
+   395→  nextRunAt       DateTime @default(now())             // when the next invoice should be generated
+   396→  lastRunAt       DateTime?
+   397→  lastInvoiceId   String?
+   398→  active          Boolean  @default(true)
+   399→  executionCount  Int      @default(0)
+   400→  createdById     String?
+   401→  createdAt       DateTime @default(now())
+   402→  updatedAt       DateTime @updatedAt
+   403→
+   404→  tenant   Tenant?    @relation(fields: [tenantId], references: [id])
+   405→  customer Customer?  @relation(fields: [customerId], references: [id])
+   406→  job      Job?       @relation("JobRecurringInvoices", fields: [jobId], references: [id])
+   407→  invoices Invoice[]
+   408→
+   409→  @@index([tenantId])
+   410→  @@index([customerId])
+   411→  @@index([active])
+   412→  @@index([nextRunAt])
+   413→}
+   414→
+   415→// ==========================================
+   416→// REVIEWS
+   417→// ==========================================
+   418→
+   419→model Review {
+   420→  id          String   @id @default(cuid())
+   421→  rating      Int      @default(5)
+   422→  comment     String?
+   423→  jobId       String?  @unique
+   424→  customerId  String?
+   425→  employeeId  String?
+   426→  tenantId    String?
+   427→  createdAt   DateTime @default(now())
+   428→  updatedAt   DateTime @updatedAt
+   429→
+   430→  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+   431→
+   432→  @@index([tenantId])
+   433→  @@index([employeeId])
+   434→  @@index([rating])
+   435→}
+   436→
+   437→// ==========================================
+   438→// NOTIFICATIONS
+   439→// ==========================================
+   440→
+   441→model Notification {
+   442→  id        String   @id @default(cuid())
+   443→  title     String
+   444→  message   String
+   445→  type      String   @default("info")
+   446→  userId    String?
+   447→  tenantId  String?
+   448→  read      Boolean  @default(false)
+   449→  createdAt DateTime @default(now())
+   450→
+   451→  user   User?   @relation(fields: [userId], references: [id])
+   452→  tenant Tenant? @relation(fields: [tenantId], references: [id])
+   453→
+   454→  @@index([userId])
+   455→  @@index([tenantId])
+   456→  @@index([read])
+   457→}
+   458→
+   459→// ==========================================
+   460→// QUOTES
+   461→// ==========================================
+   462→
+   463→model Quote {
+   464→  id            String    @id @default(cuid())
+   465→  title         String
+   466→  description   String?
+   467→  itemsJson     String    @default("[]")  // Service line items with serviceId, name, price, qty
+   468→  addOnsJson    String    @default("[]")  // Add-on items with name, price
+   469→  subtotal      Float     @default(0)
+   470→  tax           Float     @default(0)
+   471→  taxRate       Float     @default(0)     // Tax percentage
+   472→  discount      Float     @default(0)
+   473→  discountType  String    @default("fixed") // fixed, percentage
+   474→  total         Float     @default(0)
+   475→  currency      String    @default("USD")      // Transaction currency
+   476→  exchangeRate  Float     @default(1)           // Rate at creation: 1 base = X transaction currency
+   477→  baseCurrency  String    @default("USD")      // Tenant base currency at creation time
+   478→  baseAmount    Float     @default(0)           // Amount converted to base currency (for reporting)
+   479→  status        String    @default("draft") // draft, sent, accepted, rejected, expired
+   480→  tenantId      String?
+   481→  customerId    String?
+   482→  leadId        String?
+   483→  validUntil    DateTime?
+   484→  whatsappSent  Boolean   @default(false)
+   485→  whatsappSentAt DateTime?
+   486→  createdAt     DateTime  @default(now())
+   487→  updatedAt     DateTime  @updatedAt
+   488→
+   489→  tenant   Tenant?   @relation(fields: [tenantId], references: [id])
+   490→  customer Customer? @relation(fields: [customerId], references: [id])
+   491→
+   492→  @@index([tenantId])
+   493→  @@index([status])
+   494→  @@index([customerId])
+   495→}
+   496→
+   497→// ==========================================
+   498→// FORM BUILDER
+   499→// ==========================================
+   500→
+   501→model Form {
+   502→  id                  String   @id @default(cuid())
+   503→  name                String
+   504→  description         String?
+   505→  type                String   @default("lead_capture") // lead_capture, booking, feedback, survey, quote_request, job_request, custom
+   506→  status              String   @default("active") // active, inactive, archived
+   507→  fieldsJson          String   @default("[]")     // Array of form field definitions
+   508→  submissionActions   String   @default("[]")     // Array of actions: create_lead, create_customer, create_booking, create_job, create_quote, store_response, send_whatsapp, send_email, trigger_workflow, call_webhook
+   509→  fieldMappingJson    String   @default("{}")     // Form field → CRM field mapping
+   510→  welcomeMessage      String   @default("")
+   511→  completionMessage   String   @default("")
+   512→  whatsappOwnerTemplate String  @default("")     // WhatsApp template sent to owner on submission
+   513→  whatsappUserTemplate  String  @default("")     // WhatsApp template sent to user on submission
+   514→  whatsappAiGenerated  Boolean @default(false)   // AI-generate user WhatsApp confirmation
+   515→  embedScriptEnabled  Boolean  @default(false)
+   516→  embedIframeEnabled  Boolean  @default(false)
+   517→  slug                String?  @unique           // For embed URLs
+   518→  submissions         Int      @default(0)
+   519→  conversionRate      Float    @default(0)
+   520→  tenantId            String?
+   521→  workspaceId         String?
+   522→  createdById         String?
+   523→  createdAt           DateTime @default(now())
+   524→  updatedAt           DateTime @updatedAt
+   525→
+   526→  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+   527→  responses FormResponse[]
+   528→
+   529→  @@index([tenantId])
+   530→  @@index([type])
+   531→  @@index([status])
+   532→  @@index([slug])
+   533→}
+   534→
+   535→model FormResponse {
+   536→  id          String   @id @default(cuid())
+   537→  formId      String
+   538→  dataJson    String   @default("{}")  // Key-value pairs of form responses
+   539→  respondent  String?  // Phone or email of submitter
+   540→  respondentName String?
+   541→  source      String   @default("direct") // direct, whatsapp, embed, wordpress, webhook
+   542→  leadId      String?  // If a lead was created from this response
+   543→  customerId  String?  // If a customer was created
+   544→  jobId       String?  // If a job was created
+   545→  quoteId     String?  // If a quote was created
+   546→  bookingId   String?  // If a booking was created
+   547→  actionsResultsJson String @default("{}") // Results of submission actions
+   548→  tenantId    String?
+   549→  createdAt   DateTime @default(now())
+   550→
+   551→  form Form @relation(fields: [formId], references: [id], onDelete: Cascade)
+   552→
+   553→  @@index([formId])
+   554→  @@index([source])
+   555→  @@index([tenantId])
+   556→  @@index([createdAt])
+   557→}
+   558→
+   559→// ==========================================
+   560→// WORKFLOW AUTOMATION (Enhanced)
+   561→// ==========================================
+   562→
+   563→model WorkflowAutomation {
+   564→  id            String   @id @default(cuid())
+   565→  name          String
+   566→  description   String?
+   567→  triggerType   String   // lead.created, lead.assigned, lead.status_changed, lead.converted, customer.created, quote.sent, quote.accepted, quote.rejected, booking.created, booking.confirmed, booking.cancelled, job.created, job.assigned, job.completed, job.cancelled, employee.assigned, whatsapp.message_received, form.submitted, invoice.created, invoice.paid, invoice.overdue, time.based
+   568→  triggerConfigJson String @default("{}") // Trigger-specific config (e.g., time delays, field filters)
+   569→  conditionsJson String  @default("[]")   // Array of condition objects { field, operator, value }
+   570→  actionsJson   String   @default("[]")   // Array of action objects { type, config }
+   571→  active        Boolean  @default(true)
+   572→  executionCount Int     @default(0)
+   573→  lastExecutedAt DateTime?
+   574→  lastExecutionStatus String? // success, failed
+   575→  tagsJson      String   @default("[]")
+   576→  tenantId      String?
+   577→  workspaceId   String?
+   578→  createdById   String?
+   579→  createdAt     DateTime @default(now())
+   580→  updatedAt     DateTime @updatedAt
+   581→
+   582→  tenant Tenant? @relation(fields: [tenantId], references: [id])
+   583→  executions TriggerExecution[]
+   584→
+   585→  @@index([tenantId])
+   586→  @@index([triggerType])
+   587→  @@index([active])
+   588→}
+   589→
+   590→// ==========================================
+   591→// WORKFLOW AUTOMATION
+   592→// ==========================================
+   593→
+   594→model Workspace {
+   595→  id            String   @id @default(cuid())
+   596→  name          String
+   597→  slug          String   @unique
+   598→  industry      String?
+   599→  logo          String?
+   600→  plan          String   @default("free")
+   601→  planExpiresAt DateTime?
+   602→  ownerId       String
+   603→  tenantId      String?
+   604→  settingsJson  String   @default("{}")
+   605→  createdAt     DateTime @default(now())
+   606→  updatedAt     DateTime @updatedAt
+   607→
+   608→  tenant        Tenant?     @relation(fields: [tenantId], references: [id])
+   609→  users         User[]
+   610→  workflows     Workflow[]
+   611→  credentials   Credential[]
+   612→  variables     Variable[]
+   613→  employees     Employee[]
+   614→  customers     Customer[]
+   615→  resources     Resource[]
+   616→  jobs          Job[]
+   617→  contactLists  ContactList[]
+   618→  folders       Folder[]
+   619→  webhookSources WebhookSource[]
+   620→  invitations   Invitation[]
+   621→
+   622→  @@index([tenantId])
+   623→}
+   624→
+   625→model Workflow {
+   626→  id            String   @id @default(cuid())
+   627→  name          String
+   628→  description   String?
+   629→  nodesJson     String   @default("[]")
+   630→  edgesJson     String   @default("[]")
+   631→  settingsJson  String   @default("{}")
+   632→  active        Boolean  @default(false)
+   633→  tags          String   @default("[]")
+   634→  folderId      String?
+   635→  workspaceId   String?
+   636→  createdById   String?
+   637→  createdAt     DateTime @default(now())
+   638→  updatedAt     DateTime @updatedAt
+   639→
+   640→  workspace    Workspace?    @relation(fields: [workspaceId], references: [id])
+   641→  createdBy    User?         @relation("WorkflowCreator", fields: [createdById], references: [id], onDelete: SetNull)
+   642→  versions     WorkflowVersion[]
+   643→  executions   Execution[]
+   644→  webhooks     WebhookRegistration[]
+   645→  folder       Folder?       @relation(fields: [folderId], references: [id])
+   646→
+   647→  @@index([workspaceId])
+   648→  @@index([active])
+   649→}
+   650→
+   651→model WorkflowVersion {
+   652→  id           String   @id @default(cuid())
+   653→  workflowId   String
+   654→  snapshotJson String
+   655→  message      String?
+   656→  createdById  String?
+   657→  createdAt    DateTime @default(now())
+   658→  workflow     Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+   659→
+   660→  @@index([workflowId])
+   661→}
+   662→
+   663→model Credential {
+   664→  id            String   @id @default(cuid())
+   665→  name          String
+   666→  type          String
+   667→  encryptedData String
+   668→  workspaceId   String?
+   669→  userId        String?
+   670→  createdAt     DateTime @default(now())
+   671→  updatedAt     DateTime @updatedAt
+   672→
+   673→  workspace              Workspace?             @relation(fields: [workspaceId], references: [id])
+   674→  user                   User?                  @relation("CredentialOwner", fields: [userId], references: [id], onDelete: SetNull)
+   675→  communicationProviders CommunicationProvider[]
+   676→
+   677→  @@index([workspaceId])
+   678→}
+   679→
+   680→model Execution {
+   681→  id           String    @id @default(cuid())
+   682→  workflowId   String
+   683→  status       String    @default("running")
+   684→  mode         String    @default("manual")
+   685→  startedAt    DateTime  @default(now())
+   686→  finishedAt   DateTime?
+   687→  dataJson     String    @default("{}")
+   688→  errorJson    String?
+   689→  durationMs   Int?
+   690→  workflow     Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+   691→  nodeData     ExecutionNodeData[]
+   692→
+   693→  @@index([workflowId])
+   694→  @@index([status])
+   695→}
+   696→
+   697→model ExecutionNodeData {
+   698→  id          String   @id @default(cuid())
+   699→  executionId String
+   700→  nodeName    String
+   701→  nodeId      String
+   702→  inputJson   String   @default("[]")
+   703→  outputJson  String   @default("[]")
+   704→  errorJson   String?
+   705→  durationMs  Int?
+   706→  status      String   @default("success")
+   707→  execution   Execution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+   708→
+   709→  @@index([executionId])
+   710→}
+   711→
+   712→model WebhookRegistration {
+   713→  id          String   @id @default(cuid())
+   714→  workflowId  String
+   715→  path        String
+   716→  method      String   @default("POST")
+   717→  active      Boolean  @default(true)
+   718→  createdAt   DateTime @default(now())
+   719→  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+   720→
+   721→  @@index([workflowId])
+   722→  @@index([path])
+   723→}
+   724→
+   725→model AuditLog {
+   726→  id           String   @id @default(cuid())
+   727→  userId       String?
+   728→  action       String
+   729→  resourceType String?
+   730→  resourceId   String?
+   731→  ip           String?
+   732→  metadataJson String?
+   733→  createdAt    DateTime @default(now())
+   734→  user         User?    @relation(fields: [userId], references: [id])
+   735→
+   736→  @@index([userId])
+   737→  @@index([action])
+   738→}
+   739→
+   740→model ApiKey {
+   741→  id        String   @id @default(cuid())
+   742→  userId    String
+   743→  keyHash   String
+   744→  name      String
+   745→  scopes    String   @default("[]")
+   746→  lastUsed  DateTime?
+   747→  createdAt DateTime @default(now())
+   748→  user      User     @relation(fields: [userId], references: [id])
+   749→
+   750→  @@index([userId])
+   751→  @@unique([keyHash])
+   752→}
+   753→
+   754→model Variable {
+   755→  id             String   @id @default(cuid())
+   756→  key            String
+   757→  valueEncrypted String
+   758→  workspaceId    String?
+   759→  createdAt      DateTime @default(now())
+   760→  updatedAt      DateTime @updatedAt
+   761→  workspace      Workspace? @relation(fields: [workspaceId], references: [id])
+   762→
+   763→  @@unique([key, workspaceId])
+   764→}
+   765→
+   766→model Folder {
+   767→  id          String   @id @default(cuid())
+   768→  name        String
+   769→  parentId    String?
+   770→  workspaceId String?
+   771→  createdAt   DateTime @default(now())
+   772→  updatedAt   DateTime @updatedAt
+   773→  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+   774→  workflows   Workflow[]
+   775→  parent      Folder?  @relation("FolderHierarchy", fields: [parentId], references: [id])
+   776→  children    Folder[] @relation("FolderHierarchy")
+   777→
+   778→  @@index([workspaceId])
+   779→}
+   780→
+   781→model Template {
+   782→  id           String   @id @default(cuid())
+   783→  name         String
+   784→  description  String?
+   785→  workflowJson String
+   786→  category     String
+   787→  icon         String?
+   788→  featured     Boolean  @default(false)
+   789→  usageCount   Int      @default(0)
+   790→  rating       Float    @default(0)
+   791→  createdAt    DateTime @default(now())
+   792→  updatedAt    DateTime @updatedAt
+   793→
+   794→  @@index([category])
+   795→}
+   796→
+   797→// ==========================================
+   798→// BUSINESS OPERATIONS
+   799→// ==========================================
+   800→
+   801→model Employee {
+   802→  id              String    @id @default(cuid())
+   803→  name            String
+   804→  phone           String
+   805→  email           String?
+   806→  role            String    @default("technician")
+   807→  skills          String    @default("[]")
+   808→  status          String    @default("available")
+   809→  avatar          String?
+   810→  whatsappId      String?
+   811→  rating          Float     @default(0)
+   812→  completedJobs   Int       @default(0)
+   813→  location        String?
+   814→  latitude        Float?
+   815→  longitude       Float?
+   816→  workspaceId     String?
+   817→  lastSeenAt      DateTime?
+   818→  currentJobId    String?   @unique
+   819→  userId          String?   @unique
+   820→  lastLocationAt  DateTime?
+   821→  onLeaveUntil    DateTime?
+   822→  createdAt       DateTime  @default(now())
+   823→  updatedAt       DateTime  @updatedAt
+   824→
+   825→  workspace       Workspace?              @relation(fields: [workspaceId], references: [id])
+   826→  assignedJobs    Job[]                   @relation("JobAssignee")
+   827→  leads           Lead[]
+   828→  invoices        Invoice[]
+   829→  currentJob      Job?                    @relation("EmployeeCurrentJob", fields: [currentJobId], references: [id])
+   830→  userAccount     User?                   @relation(fields: [userId], references: [id])
+   831→  statusLogs      EmployeeStatusLog[]
+   832→  notificationLogs NotificationLog[]
+   833→  bookings        Booking[]
+   834→  documents       Document[]
+   835→  invitations     Invitation[]
+   836→
+   837→  // ── Enterprise Invitation Management ──
+   838→  invitationStatus String   @default("none")  // none | pending | accepted | suspended
+   839→
+   840→  @@index([role])
+   841→  @@index([status])
+   842→  @@index([workspaceId])
+   843→  @@index([lastSeenAt])
+   844→  @@index([currentJobId])
+   845→  @@index([userId])
+   846→  @@index([invitationStatus])
+   847→}
+   848→
+   849→model EmployeeStatusLog {
+   850→  id           String   @id @default(cuid())
+   851→  employeeId   String
+   852→  fromStatus   String?
+   853→  toStatus     String
+   854→  reason       String?
+   855→  changedById  String?
+   856→  metadataJson String   @default("{}")
+   857→  createdAt    DateTime @default(now())
+   858→
+   859→  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+   860→  changedBy User?   @relation(fields: [changedById], references: [id])
+   861→
+   862→  @@index([employeeId])
+   863→  @@index([toStatus])
+   864→  @@index([createdAt])
+   865→}
+   866→
+   867→model NotificationLog {
+   868→  id            String   @id @default(cuid())
+   869→  type          String   @default("whatsapp")  // whatsapp, email, sms, push, in_app
+   870→  recipient     String
+   871→  recipientName String?
+   872→  recipientRole String?  // employee, customer, manager
+   873→  subject       String?
+   874→  message       String
+   875→  status        String   @default("sent")  // sent, delivered, read, failed
+   876→  externalId    String?  // WhatsApp message ID, email message ID, etc.
+   877→  jobId         String?
+   878→  employeeId    String?
+   879→  customerId    String?
+   880→  tenantId      String?
+   881→  metadataJson  String   @default("{}")
+   882→  createdAt     DateTime @default(now())
+   883→
+   884→  job      Job?      @relation(fields: [jobId], references: [id])
+   885→  employee Employee? @relation(fields: [employeeId], references: [id])
+   886→  customer Customer? @relation(fields: [customerId], references: [id])
+   887→  tenant   Tenant?   @relation(fields: [tenantId], references: [id])
+   888→
+   889→  @@index([type])
+   890→  @@index([status])
+   891→  @@index([jobId])
+   892→  @@index([employeeId])
+   893→  @@index([customerId])
+   894→  @@index([createdAt])
+   895→}
+   896→
+   897→model Customer {
+   898→  id                 String   @id @default(cuid())
+   899→  name               String
+   900→  phone              String
+   901→  email              String?
+   902→  address            String?
+   903→  whatsappId         String?
+   904→  preferredCurrency  String   @default("USD")  // Customer's preferred display currency
+   905→  workspaceId        String?
+   906→  createdAt          DateTime @default(now())
+   907→  updatedAt          DateTime @updatedAt
+   908→
+   909→  // ── Portal Access (Email/Password + invitation-based activation) ──
+   910→  passwordHash                String?
+   911→  activationToken             String?
+   912→  activationTokenExpiresAt    DateTime?
+   913→  activatedAt                 DateTime?
+   914→  lastLoginAt                 DateTime?
+   915→  invitationSentAt            DateTime?
+   916→  portalEnabled               Boolean  @default(false)
+   917→  invitationStatus            String   @default("none")  // none | pending | accepted | disabled
+   918→
+   919→  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+   920→  jobs      Job[]
+   921→  invoices  Invoice[]
+   922→  recurringInvoices RecurringInvoice[]
+   923→  leads     Lead[]
+   924→  quotes    Quote[]
+   925→  notificationLogs NotificationLog[]
+   926→  conversations        Conversation[]
+   927→  journeys             CustomerJourney[]
+   928→  portalSessions       CustomerPortalSession[]
+   929→  documents            Document[]
+   930→  paymentMethods       PaymentMethod[]
+   931→  invitations          Invitation[]
+   932→
+   933→  @@index([phone])
+   934→  @@index([email])
+   935→  @@index([workspaceId])
+   936→  @@index([portalEnabled])
+   937→  @@index([invitationStatus])
+   938→}
+   939→
+   940→model Resource {
+   941→  id            String   @id @default(cuid())
+   942→  name          String
+   943→  phone         String
+   944→  type          String   @default("driver")
+   945→  status        String   @default("available")
+   946→  skills        String   @default("[]")
+   947→  location      String?
+   948→  avatar        String?
+   949→  whatsappId    String?
+   950→  rating        Float    @default(0)
+   951→  completedJobs Int      @default(0)
+   952→  metadataJson  String?
+   953→  workspaceId   String?
+   954→  createdAt     DateTime @default(now())
+   955→  updatedAt     DateTime @updatedAt
+   956→
+   957→  workspace    Workspace? @relation(fields: [workspaceId], references: [id])
+   958→  assignedJobs Job[]      @relation("JobResource")
+   959→
+   960→  @@index([type])
+   961→  @@index([status])
+   962→}
+   963→
+   964→model Job {
+   965→  id                 String    @id @default(cuid())
+   966→  jobNumber          String?
+   967→  title              String
+   968→  description        String?
+   969→  status             String    @default("pending")
+   970→  priority           String    @default("medium")
+   971→  type               String    @default("service")
+   972→  address            String?
+   973→  pickup             String?
+   974→  dropoff            String?
+   975→  scheduledAt        DateTime?
+   976→  scheduledTime      String?
+   977→  estimatedDuration  Int?
+   978→  actualStartTime    DateTime?
+   979→  actualEndTime      DateTime?
+   980→  notes              String?
+   981→  customerId         String?
+   982→  customerName       String?
+   983→  customerPhone      String?
+   984→  assigneeId         String?
+   985→  assigneeName       String?
+   986→  assigneePhone      String?
+   987→  resourceId         String?
+   988→  serviceId          String?
+   989→  checkInLat         Float?
+   990→  checkInLng         Float?
+   991→  checkOutLat        Float?
+   992→  checkOutLng        Float?
+   993→  customerRating     Int?
+   994→  employeeRating     Int?
+   995→  externalId         String?
+   996→  externalSource     String?
+   997→  whatsappMessageId  String?
+   998→  whatsappSessionId  String?
+   999→  assignmentStatus   String?
+  1000→  notificationLogJson String @default("[]")
+  1001→  // ── Completion proof (POST /api/jobs/[id]/complete-proof) ──
+  1002→  completionNotes      String?
+  1003→  completionPhotosJson String   @default("[]")
+  1004→  completionSignatureData String?
+  1005→  completedAt          DateTime?
+  1006→  // ── Payment collection (COD / online / card / upi / bank_transfer) ──
+  1007→  paymentMethod     String?
+  1008→  paymentStatus     String?
+  1009→  amountCollected   Float?
+  1010→  collectedAt       DateTime?
+  1011→  collectedById     String?
+  1012→  workspaceId        String?
+  1013→  createdAt          DateTime  @default(now())
+  1014→  updatedAt          DateTime  @updatedAt
+  1015→
+  1016→  workspace  Workspace? @relation(fields: [workspaceId], references: [id])
+  1017→  assignee   Employee?  @relation("JobAssignee", fields: [assigneeId], references: [id])
+  1018→  customer   Customer?  @relation(fields: [customerId], references: [id])
+  1019→  resource   Resource?  @relation("JobResource", fields: [resourceId], references: [id])
+  1020→  lead       Lead?
+  1021→  invoices   Invoice[]
+  1022→  recurringInvoices RecurringInvoice[] @relation("JobRecurringInvoices")
+  1023→  currentEmployee Employee? @relation("EmployeeCurrentJob")
+  1024→  notificationLogs NotificationLog[]
+  1025→  conversation      Conversation?
+  1026→  journey           CustomerJourney?
+  1027→  documents         Document[]
+  1028→
+  1029→  @@index([status])
+  1030→  @@index([assigneeId])
+  1031→  @@index([customerId])
+  1032→  @@index([scheduledAt])
+  1033→  @@index([workspaceId])
+  1034→}
+  1035→
+  1036→model ContactList {
+  1037→  id          String   @id @default(cuid())
+  1038→  name        String
+  1039→  description String?
+  1040→  type        String   @default("custom")
+  1041→  roleFilter  String?
+  1042→  icon        String?
+  1043→  color       String?
+  1044→  isDefault   Boolean  @default(false)
+  1045→  workspaceId String?
+  1046→  createdAt   DateTime @default(now())
+  1047→  updatedAt   DateTime @updatedAt
+  1048→
+  1049→  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+  1050→  entries   ContactListEntry[]
+  1051→
+  1052→  @@index([type])
+  1053→  @@index([workspaceId])
+  1054→}
+  1055→
+  1056→model ContactListEntry {
+  1057→  id            String   @id @default(cuid())
+  1058→  contactListId String
+  1059→  name          String
+  1060→  phone         String
+  1061→  email         String?
+  1062→  role          String?
+  1063→  employeeId    String?
+  1064→  customerId    String?
+  1065→  whatsappId    String?
+  1066→  avatar        String?
+  1067→  metadataJson  String?
+  1068→  createdAt     DateTime @default(now())
+  1069→  updatedAt     DateTime @updatedAt
+  1070→
+  1071→  contactList ContactList @relation(fields: [contactListId], references: [id], onDelete: Cascade)
+  1072→
+  1073→  @@index([contactListId])
+  1074→}
+  1075→
+  1076→model WebhookSource {
+  1077→  id          String    @id @default(cuid())
+  1078→  name        String
+  1079→  type        String
+  1080→  configJson  String    @default("{}")
+  1081→  status      String    @default("active")
+  1082→  lastSyncAt  DateTime?
+  1083→  lastError   String?
+  1084→  workspaceId String?
+  1085→  createdAt   DateTime  @default(now())
+  1086→  updatedAt   DateTime  @updatedAt
+  1087→  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+  1088→
+  1089→  @@index([type])
+  1090→  @@index([status])
+  1091→}
+  1092→
+  1093→// Universal Webhook Endpoint — receives inbound webhooks from any source (WordPress, Zapier, custom forms, etc.)
+  1094→model WebhookEndpoint {
+  1095→  id            String   @id @default(cuid())
+  1096→  name          String                    // e.g., "WordPress Lead Capture"
+  1097→  endpointId    String   @unique          // Unique path segment: /api/webhooks/ingest/{endpointId}
+  1098→  apiKeyHash    String                    // Hash of the API key for authentication
+  1099→  apiKeyPrefix  String                    // First 8 chars for display: "sos_prod_••••"
+  1100→  source        String   @default("universal") // wordpress, zapier, custom, universal
+  1101→  active        Boolean  @default(true)
+  1102→  leadSource    String   @default("webhook")   // Value for Lead.source field
+  1103→  fieldMapping  String   @default("{}")        // JSON: source field → lead field mapping
+  1104→  autoCreateCustomer Boolean @default(true)
+  1105→  sendWhatsApp  Boolean  @default(true)
+  1106→  whatsappOwnerPhone String @default("")    // Owner WhatsApp number for notifications
+  1107→  whatsappOwnerTemplate String @default("") // WhatsApp template sent to owner on lead
+  1108→  whatsappUserTemplate  String @default("") // WhatsApp template sent to user/form submitter
+  1109→  whatsappAiGenerated  Boolean @default(false) // AI-generate user WhatsApp message
+  1110→  whatsappTemplate String @default("new_lead")
+  1111→  tenantId      String?
+  1112→  workspaceId   String?
+  1113→  totalReceived Int      @default(0)
+  1114→  lastReceived  DateTime?
+  1115→  lastError     String?
+  1116→  createdAt     DateTime @default(now())
+  1117→  updatedAt     DateTime @updatedAt
+  1118→
+  1119→  logs          WebhookEndpointLog[]
+  1120→
+  1121→  @@index([endpointId])
+  1122→  @@index([apiKeyHash])
+  1123→  @@index([tenantId])
+  1124→  @@index([active])
+  1125→}
+  1126→
+  1127→// Log of inbound webhook requests for debugging and audit trail
+  1128→model WebhookEndpointLog {
+  1129→  id              String   @id @default(cuid())
+  1130→  webhookEndpointId String
+  1131→  sourceIp        String?
+  1132→  source          String   // wordpress, zapier, custom
+  1133→  payloadJson     String
+  1134→  leadId          String?  // If a lead was created
+  1135→  status          String   @default("received") // received, processed, error
+  1136→  error           String?
+  1137→  processingMs    Int?
+  1138→  createdAt       DateTime @default(now())
+  1139→
+  1140→  webhookEndpoint WebhookEndpoint @relation(fields: [webhookEndpointId], references: [id], onDelete: Cascade)
+  1141→
+  1142→  @@index([webhookEndpointId])
+  1143→  @@index([status])
+  1144→  @@index([createdAt])
+  1145→}
+  1146→
+  1147→model WebhookTestRequest {
+  1148→  id              String   @id @default(cuid())
+  1149→  path            String
+  1150→  method          String
+  1151→  headersJson     String   @default("{}")
+  1152→  queryParamsJson String   @default("{}")
+  1153→  bodyJson        String?
+  1154→  contentType     String   @default("")
+  1155→  receivedAt      DateTime @default(now())
+  1156→
+  1157→  @@index([path])
+  1158→}
+  1159→
+  1160→model WhatsAppMessageAction {
+  1161→  id                 String   @id @default(cuid())
+  1162→  whatsappMessageId  String   @unique
+  1163→  workflowId         String
+  1164→  nodeId             String
+  1165→  onSelectWebhookUrl String?
+  1166→  onSelectWorkflowId String?
+  1167→  nodeConfigJson     String   @default("{}")
+  1168→  phoneRecipient     String
+  1169→  createdAt          DateTime @default(now())
+  1170→
+  1171→  @@index([whatsappMessageId])
+  1172→  @@index([workflowId])
+  1173→}
+  1174→
+  1175→// ==========================================
+  1176→// EVENT WEBHOOKS (n8n integration)
+  1177→// ==========================================
+  1178→// Stores external webhook URLs (e.g., n8n workflows) that ServiceOS
+  1179→// calls when job events occur. This bridges the gap between
+  1180→// ServiceOS job lifecycle and n8n automation workflows.
+  1181→
+  1182→model EventWebhook {
+  1183→  id            String   @id @default(cuid())
+  1184→  name          String                    // e.g., "n8n - Job Created → WhatsApp Employee"
+  1185→  event         String                    // job.created, job.assigned, job.accepted, job.started, job.completed, job.cancelled, job.rejected
+  1186→  url           String                    // The n8n webhook URL to call (e.g., https://n8n.example.com/webhook/abc123)
+  1187→  method        String   @default("POST") // HTTP method
+  1188→  headersJson   String   @default("{}")   // Custom headers to send (e.g., auth headers for n8n)
+  1189→  active        Boolean  @default(true)
+  1190→  retryOnFail   Boolean  @default(true)   // Retry if webhook call fails
+  1191→  maxRetries    Int      @default(3)
+  1192→  timeoutMs     Int      @default(10000)  // Request timeout
+  1193→  lastTriggered DateTime?                 // When this webhook was last fired
+  1194→  lastStatus    String?                   // success, failed, timeout
+  1195→  lastError     String?                   // Error message from last attempt
+  1196→  failCount     Int      @default(0)      // Consecutive failures
+  1197→  workspaceId   String?                   // Optional: scope to workspace
+  1198→  tenantId      String?                   // Optional: scope to tenant
+  1199→  createdAt     DateTime @default(now())
+  1200→  updatedAt     DateTime @updatedAt
+  1201→
+  1202→  @@index([event])
+  1203→  @@index([active])
+  1204→  @@index([workspaceId])
+  1205→  @@index([tenantId])
+  1206→}
+  1207→
+  1208→// Log of webhook dispatches for debugging and audit trail
+  1209→model EventWebhookLog {
+  1210→  id            String   @id @default(cuid())
+  1211→  eventWebhookId String                   // FK to EventWebhook
+  1212→  event         String                    // The event that triggered this
+  1213→  jobId         String?                   // Related job
+  1214→  payloadJson   String                    // The JSON payload sent
+  1215→  responseStatus Int?                     // HTTP status code received
+  1216→  responseBody  String?                   // Response body (truncated)
+  1217→  error         String?                   // Error if failed
+  1218→  durationMs    Int?                      // How long the webhook call took
+  1219→  retried       Boolean  @default(false)  // Was this a retry?
+  1220→  createdAt     DateTime @default(now())
+  1221→
+  1222→  @@index([eventWebhookId])
+  1223→  @@index([event])
+  1224→  @@index([jobId])
+  1225→  @@index([createdAt])
+  1226→}
+  1227→
+  1228→// ==========================================
+  1229→// ENTERPRISE FEATURES
+  1230→// ==========================================
+  1231→
+  1232→model Conversation {
+  1233→  id              String   @id @default(cuid())
+  1234→  conversationId  String   @unique  // Conversation ID
+  1235→  customerPhone   String
+  1236→  customerName    String?
+  1237→  customerWhatsappId String?
+  1238→  customerId      String?
+  1239→  leadId          String?  @unique
+  1240→  jobId           String?  @unique
+  1241→  channel         String   @default("whatsapp") // whatsapp, website, facebook, instagram, google_ads, justdial, email, sms, phone, manual
+  1242→  status          String   @default("active")  // active, completed, archived
+  1243→  currentStage    String   @default("greeting") // greeting, intent_detected, booking, assigned, in_progress, completed, review
+  1244→  intentDetected  String?  // e.g., "cleaning_service", "plumbing", "booking"
+  1245→  intentConfidence Float?
+  1246→  lastMessageAt   DateTime @default(now())
+  1247→  lastMessageBody String?
+  1248→  lastDirection   String?  // inbound, outbound
+  1249→  messagesJson    String   @default("[]")  // Message history as JSON
+  1250→  metadataJson    String   @default("{}")
+  1251→  tenantId        String?
+  1252→  workspaceId     String?
+  1253→  createdAt       DateTime @default(now())
+  1254→  updatedAt       DateTime @updatedAt
+  1255→
+  1256→  customer Customer? @relation(fields: [customerId], references: [id])
+  1257→  lead     Lead?     @relation(fields: [leadId], references: [id])
+  1258→  job      Job?      @relation(fields: [jobId], references: [id])
+  1259→  tenant   Tenant?   @relation(fields: [tenantId], references: [id])
+  1260→
+  1261→  @@index([conversationId])
+  1262→  @@index([customerPhone])
+  1263→  @@index([status])
+  1264→  @@index([tenantId])
+  1265→  @@index([lastMessageAt])
+  1266→  @@index([channel])
+  1267→}
+  1268→
+  1269→// ==========================================
+  1270→// OMNICHANNEL CONFIGURATION
+  1271→// ==========================================
+  1272→
+  1273→model ChannelConfig {
+  1274→  id              String   @id @default(cuid())
+  1275→  channel         String   // whatsapp, website, facebook, instagram, google_ads, justdial, email, sms
+  1276→  name            String   // Display name
+  1277→  configJson      String   @default("{}")  // Channel-specific configuration (API keys, tokens, etc.)
+  1278→  status          String   @default("active")  // active, inactive, error
+  1279→  isDefault       Boolean  @default(false)
+  1280→  autoCreateLead  Boolean  @default(true)  // Auto-create lead from this channel
+  1281→  autoReply       Boolean  @default(false) // Auto-reply on this channel
+  1282→  autoReplyMessage String  @default("")    // Auto-reply message template
+  1283→  webhookUrl      String?  // Incoming webhook URL for this channel
+  1284→  leadSourceTag   String   @default("")    // Tag to add to leads from this channel
+  1285→  totalLeads      Int      @default(0)     // Total leads from this channel
+  1286→  totalMessages   Int      @default(0)     // Total messages on this channel
+  1287→  lastActivityAt  DateTime?
+  1288→  lastError       String?
+  1289→  tenantId        String?
+  1290→  workspaceId     String?
+  1291→  createdAt       DateTime @default(now())
+  1292→  updatedAt       DateTime @updatedAt
+  1293→
+  1294→  @@index([channel])
+  1295→  @@index([status])
+  1296→  @@index([tenantId])
+  1297→}
+  1298→
+  1299→model CustomerJourney {
+  1300→  id              String    @id @default(cuid())
+  1301→  customerId      String?
+  1302→  jobId           String?   @unique
+  1303→  leadId          String?   @unique
+  1304→  currentStage    String    @default("lead")  // lead, booking, assigned, en_route, in_progress, completed, review
+  1305→  previousStage   String?
+  1306→  stageChangedAt  DateTime  @default(now())
+  1307→  nextActionAt    DateTime?  // When the next automated action should fire
+  1308→  nextActionType  String?    // whatsapp_message, email, internal_update
+  1309→  nextActionData  String?    // JSON with action details
+  1310→  automationActive Boolean   @default(true)
+  1311→  completedStagesJson String @default("[]")  // Array of completed stages with timestamps
+  1312→  tenantId        String?
+  1313→  createdAt       DateTime  @default(now())
+  1314→  updatedAt       DateTime  @updatedAt
+  1315→
+  1316→  customer Customer? @relation(fields: [customerId], references: [id])
+  1317→  job      Job?      @relation(fields: [jobId], references: [id])
+  1318→  lead     Lead?     @relation(fields: [leadId], references: [id])
+  1319→
+  1320→  @@index([customerId])
+  1321→  @@index([jobId])
+  1322→  @@index([currentStage])
+  1323→  @@index([nextActionAt])
+  1324→  @@index([tenantId])
+  1325→}
+  1326→
+  1327→model CustomerPortalSession {
+  1328→  id              String   @id @default(cuid())
+  1329→  token           String   @unique
+  1330→  customerId      String
+  1331→  customerPhone   String
+  1332→  expiresAt       DateTime
+  1333→  lastAccessedAt  DateTime @default(now())
+  1334→  tenantId        String?
+  1335→  createdAt       DateTime @default(now())
+  1336→
+  1337→  customer Customer @relation(fields: [customerId], references: [id])
+  1338→
+  1339→  @@index([token])
+  1340→  @@index([customerId])
+  1341→  @@index([expiresAt])
+  1342→}
+  1343→
+  1344→model OtpVerification {
+  1345→  id          String   @id @default(cuid())
+  1346→  phone       String
+  1347→  otpCode     String
+  1348→  channel     String   @default("whatsapp")  // whatsapp, sms
+  1349→  verified    Boolean  @default(false)
+  1350→  expiresAt   DateTime
+  1351→  verifiedAt  DateTime?
+  1352→  attempts    Int      @default(0)
+  1353→  tenantId    String?
+  1354→  createdAt   DateTime @default(now())
+  1355→
+  1356→  @@index([phone])
+  1357→  @@index([otpCode])
+  1358→  @@index([expiresAt])
+  1359→}
+  1360→
+  1361→model IntegrationConfig {
+  1362→  id              String   @id @default(cuid())
+  1363→  name            String   // e.g., "n8n", "Zapier", "Custom Webhook"
+  1364→  type            String   // n8n, zapier, custom_webhook, google_sheets, slack
+  1365→  configJson      String   @default("{}")
+  1366→  active          Boolean  @default(true)
+  1367→  lastSyncAt      DateTime?
+  1368→  lastError       String?
+  1369→  failCount       Int      @default(0)
+  1370→  workspaceId     String?
+  1371→  tenantId        String?
+  1372→  createdAt       DateTime @default(now())
+  1373→  updatedAt       DateTime @updatedAt
+  1374→
+  1375→  @@index([type])
+  1376→  @@index([active])
+  1377→  @@index([tenantId])
+  1378→}
+  1379→
+  1380→// ==========================================
+  1381→// E-COMMERCE INTEGRATIONS
+  1382→// ==========================================
+  1383→
+  1384→// Connection to an e-commerce platform (Shopify, WooCommerce, etc.)
+  1385→model IntegrationConnection {
+  1386→  id                String   @id @default(cuid())
+  1387→  provider          String   // shopify, woocommerce, magento, bigcommerce
+  1388→  name              String   // Display name e.g., "My Shopify Store"
+  1389→  status            String   @default("disconnected") // connected, disconnected, syncing, error
+  1390→  storeUrl          String?  // e.g., "mystore.myshopify.com"
+  1391→  accessToken       String?  // Encrypted access token / API key
+  1392→  apiSecret         String?  // Encrypted API secret
+  1393→  scopesJson        String   @default("[]")  // Granted scopes / permissions
+  1394→  configJson        String   @default("{}")  // Provider-specific configuration
+  1395→  syncSettingsJson  String   @default("{}")  // What to sync: { customers: true, orders: true, products: true, carts: true }
+  1396→  lastSyncAt        DateTime?
+  1397→  lastSyncStatus    String?  // success, partial, failed
+  1398→  lastError         String?
+  1399→  totalSyncedOrders Int      @default(0)
+  1400→  totalSyncedProducts Int    @default(0)
+  1401→  totalSyncedCustomers Int   @default(0)
+  1402→  webhookUrl        String?  // Our webhook endpoint for receiving platform events
+  1403→  webhookVerified   Boolean  @default(false)
+  1404→  tenantId          String?
+  1405→  workspaceId       String?
+  1406→  createdAt         DateTime @default(now())
+  1407→  updatedAt         DateTime @updatedAt
+  1408→
+  1409→  orders     EcommerceOrder[]
+  1410→  products   EcommerceProduct[]
+  1411→  syncLogs   EcommerceSyncLog[]
+  1412→
+  1413→  @@index([provider])
+  1414→  @@index([status])
+  1415→  @@index([tenantId])
+  1416→  @@index([lastSyncAt])
+  1417→}
+  1418→
+  1419→// Synced e-commerce orders
+  1420→model EcommerceOrder {
+  1421→  id                String   @id @default(cuid())
+  1422→  externalOrderId   String   // Order ID from Shopify/WooCommerce
+  1423→  orderNumber       String?  // Human-readable order number e.g., "#1001"
+  1424→  status            String   @default("pending") // pending, confirmed, processing, shipped, delivered, cancelled, refunded
+  1425→  financialStatus   String?  // paid, unpaid, partially_refunded, refunded
+  1426→  fulfillmentStatus String?  // fulfilled, unfulfilled, partial
+  1427→  customerId        String?  // Link to our Customer record
+  1428→  customerEmail     String?
+  1429→  customerName      String?
+  1430→  customerPhone     String?
+  1431→  subtotal          Float    @default(0)
+  1432→  total             Float    @default(0)
+  1433→  currency          String   @default("USD")
+  1434→  discountTotal     Float    @default(0)
+  1435→  taxTotal          Float    @default(0)
+  1436→  shippingTotal     Float    @default(0)
+  1437→  itemsJson         String   @default("[]")  // Line items: [{ productId, name, qty, price }]
+  1438→  shippingAddress   String?  // JSON string
+  1439→  billingAddress    String?  // JSON string
+  1440→  tagsJson          String   @default("[]")
+  1441→  notes             String?
+  1442→  couponCode        String?
+  1443→  orderedAt         DateTime?
+  1444→  fulfilledAt       DateTime?
+  1445→  cancelledAt       DateTime?
+  1446→  refundedAt        DateTime?
+  1447→  rawDataJson       String   @default("{}")  // Full order payload from provider
+  1448→  integrationId     String   // FK to IntegrationConnection
+  1449→  tenantId          String?
+  1450→  workspaceId       String?
+  1451→  createdAt         DateTime @default(now())
+  1452→  updatedAt         DateTime @updatedAt
+  1453→
+  1454→  integration IntegrationConnection @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  1455→
+  1456→  @@unique([integrationId, externalOrderId])
+  1457→  @@index([status])
+  1458→  @@index([financialStatus])
+  1459→  @@index([customerId])
+  1460→  @@index([tenantId])
+  1461→  @@index([orderedAt])
+  1462→  @@index([integrationId])
+  1463→}
+  1464→
+  1465→// Synced e-commerce products
+  1466→model EcommerceProduct {
+  1467→  id                String   @id @default(cuid())
+  1468→  externalProductId String   // Product ID from Shopify/WooCommerce
+  1469→  title             String
+  1470→  description       String?
+  1471→  status            String   @default("active") // active, draft, archived
+  1472→  productType       String?  // e.g., "Service", "Physical"
+  1473→  vendor           String?
+  1474→  tagsJson          String   @default("[]")
+  1475→  price             Float    @default(0)
+  1476→  compareAtPrice    Float?
+  1477→  costPrice         Float?
+  1478→  currency          String   @default("USD")
+  1479→  sku               String?
+  1480→  barcode           String?
+  1481→  inventoryQuantity Int      @default(0)
+  1482→  weight            Float?
+  1483→  weightUnit        String   @default("kg")
+  1484→  imagesJson        String   @default("[]")  // Array of image URLs
+  1485→  variantsJson      String   @default("[]")  // Product variants
+  1486→  optionsJson       String   @default("[]")  // Product options (size, color, etc.)
+  1487→  seoTitle          String?
+  1488→  seoDescription    String?
+  1489→  rawDataJson       String   @default("{}")  // Full product payload
+  1490→  integrationId     String   // FK to IntegrationConnection
+  1491→  tenantId          String?
+  1492→  workspaceId       String?
+  1493→  createdAt         DateTime @default(now())
+  1494→  updatedAt         DateTime @updatedAt
+  1495→
+  1496→  integration IntegrationConnection @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  1497→
+  1498→  @@unique([integrationId, externalProductId])
+  1499→  @@index([status])
+  1500→  @@index([tenantId])
+  1501→  @@index([sku])
+  1502→  @@index([productType])
+  1503→  @@index([integrationId])
+  1504→}
+  1505→
+  1506→// Sync log for tracking data imports
+  1507→model EcommerceSyncLog {
+  1508→  id              String   @id @default(cuid())
+  1509→  syncType        String   // full, incremental, webhook
+  1510→  entity          String   // orders, products, customers, carts
+  1511→  status          String   // started, completed, failed
+  1512→  recordsTotal    Int      @default(0)
+  1513→  recordsSynced   Int      @default(0)
+  1514→  recordsFailed   Int      @default(0)
+  1515→  errorsJson      String   @default("[]")  // Array of error messages
+  1516→  durationMs      Int?
+  1517→  integrationId   String   // FK to IntegrationConnection
+  1518→  tenantId        String?
+  1519→  createdAt       DateTime @default(now())
+  1520→
+  1521→  integration IntegrationConnection @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  1522→
+  1523→  @@index([entity])
+  1524→  @@index([status])
+  1525→  @@index([tenantId])
+  1526→  @@index([integrationId])
+  1527→  @@index([createdAt])
+  1528→}
+  1529→
+  1530→model AnalyticsSnapshot {
+  1531→  id              String   @id @default(cuid())
+  1532→  date            String   // YYYY-MM-DD
+  1533→  metric          String   // revenue, jobs_completed, leads_created, avg_response_time, etc.
+  1534→  value           Float
+  1535→  dimensionsJson  String   @default("{}")  // e.g., { "source": "whatsapp", "employee": "emp_123" }
+  1536→  tenantId        String?
+  1537→  workspaceId     String?
+  1538→  createdAt       DateTime @default(now())
+  1539→
+  1540→  @@unique([date, metric, tenantId])
+  1541→  @@index([date])
+  1542→  @@index([metric])
+  1543→  @@index([tenantId])
+  1544→}
+  1545→
+  1546→// ==========================================
+  1547→// WHATSAPP CUSTOMER ENGAGEMENT PLATFORM
+  1548→// ==========================================
+  1549→
+  1550→// --- Module 1: Multi-Agent Shared WhatsApp Inbox ---
+  1551→
+  1552→model InboxMessage {
+  1553→  id              String   @id @default(cuid())
+  1554→  conversationId  String
+  1555→  senderType      String   @default("customer")  // customer, agent, system, bot
+  1556→  senderId        String?  // userId for agent, customerId for customer
+  1557→  senderName      String?
+  1558→  content         String
+  1559→  messageType     String   @default("text")  // text, image, document, audio, video, location, template, interactive
+  1560→  mediaUrl        String?
+  1561→  mediaCaption    String?
+  1562→  direction       String   @default("inbound")  // inbound, outbound
+  1563→  status          String   @default("sent")  // sent, delivered, read, failed
+  1564→  externalId      String?  // WhatsApp message ID
+  1565→  replyToId       String?  // ID of message being replied to
+  1566→  isInternalNote  Boolean  @default(false)
+  1567→  mentionsJson    String   @default("[]")  // @mentioned user IDs
+  1568→  reactionsJson   String   @default("[]")
+  1569→  metadataJson    String   @default("{}")
+  1570→  tenantId        String?
+  1571→  workspaceId     String?
+  1572→  createdAt       DateTime @default(now())
+  1573→  updatedAt       DateTime @updatedAt
+  1574→
+  1575→  @@index([conversationId])
+  1576→  @@index([senderType])
+  1577→  @@index([direction])
+  1578→  @@index([status])
+  1579→  @@index([tenantId])
+  1580→  @@index([createdAt])
+  1581→}
+  1582→
+  1583→model ChatLabel {
+  1584→  id          String   @id @default(cuid())
+  1585→  name        String
+  1586→  color       String   @default("#10b981")
+  1587→  icon        String?
+  1588→  tenantId    String?
+  1589→  workspaceId String?
+  1590→  createdAt   DateTime @default(now())
+  1591→
+  1592→  @@index([tenantId])
+  1593→}
+  1594→
+  1595→model ConversationLabel {
+  1596→  id              String   @id @default(cuid())
+  1597→  conversationId  String
+  1598→  labelId         String
+  1599→  createdAt       DateTime @default(now())
+  1600→
+  1601→  @@unique([conversationId, labelId])
+  1602→  @@index([conversationId])
+  1603→  @@index([labelId])
+  1604→}
+  1605→
+  1606→model ConversationAssignment {
+  1607→  id              String    @id @default(cuid())
+  1608→  conversationId  String
+  1609→  agentId         String    // userId of the agent
+  1610→  agentName       String?
+  1611→  assignedById    String?
+  1612→  type            String    @default("primary")  // primary, secondary, watcher
+  1613→  status          String    @default("active")   // active, transferred, resolved
+  1614→  transferredFrom String?
+  1615→  transferReason  String?
+  1616→  createdAt       DateTime  @default(now())
+  1617→  updatedAt       DateTime  @updatedAt
+  1618→
+  1619→  @@index([conversationId])
+  1620→  @@index([agentId])
+  1621→  @@index([status])
+  1622→}
+  1623→
+  1624→// --- Module 2: Customer 360 Profile ---
+  1625→
+  1626→model TimelineEvent {
+  1627→  id              String   @id @default(cuid())
+  1628→  customerId      String
+  1629→  eventType       String   // message, booking, job_update, payment, campaign, note, call, form_submission
+  1630→  title           String
+  1631→  description     String?
+  1632→  actorId         String?  // who performed the action
+  1633→  actorName       String?
+  1634→  actorType       String?  // customer, agent, system, bot
+  1635→  metadataJson    String   @default("{}")
+  1636→  tenantId        String?
+  1637→  createdAt       DateTime @default(now())
+  1638→
+  1639→  @@index([customerId])
+  1640→  @@index([eventType])
+  1641→  @@index([tenantId])
+  1642→  @@index([createdAt])
+  1643→}
+  1644→
+  1645→// --- Module 3: WhatsApp Campaign Engine ---
+  1646→
+  1647→model Campaign {
+  1648→  id              String    @id @default(cuid())
+  1649→  name            String
+  1650→  description     String?
+  1651→  type            String    @default("promotional")  // promotional, service_reminder, seasonal, re_engagement, follow_up
+  1652→  status          String    @default("draft")  // draft, scheduled, running, paused, completed
+  1653→  audienceType    String    @default("all")  // all, segment, contact_list, custom
+  1654→  audienceId      String?   // segment or contact list ID
+  1655→  audienceFiltersJson String @default("{}")
+  1656→  templateId      String?
+  1657→  messageContent  String
+  1658→  mediaUrl        String?
+  1659→  mediaType       String?   // image, video, document
+  1660→  ctaText         String?
+  1661→  ctaUrl          String?
+  1662→  scheduledAt     DateTime?
+  1663→  timezone        String    @default("UTC")
+  1664→  totalRecipients Int       @default(0)
+  1665→  sentCount       Int       @default(0)
+  1666→  deliveredCount  Int       @default(0)
+  1667→  readCount       Int       @default(0)
+  1668→  clickedCount    Int       @default(0)
+  1669→  repliedCount    Int       @default(0)
+  1670→  convertedCount  Int       @default(0)
+  1671→  failedCount     Int       @default(0)
+  1672→  revenueGenerated Float    @default(0)
+  1673→  channel         String    @default("whatsapp")  // whatsapp, email, sms, multi
+  1674→  followUpSequenceJson String @default("[]")
+  1675→  cloneFromId     String?
+  1676→  approvedBy      String?
+  1677→  approvedAt      DateTime?
+  1678→  createdById     String?
+  1679→  tenantId        String?
+  1680→  workspaceId     String?
+  1681→  createdAt       DateTime  @default(now())
+  1682→  updatedAt       DateTime  @updatedAt
+  1683→
+  1684→  @@index([status])
+  1685→  @@index([type])
+  1686→  @@index([tenantId])
+  1687→  @@index([scheduledAt])
+  1688→}
+  1689→
+  1690→model CampaignMessage {
+  1691→  id              String   @id @default(cuid())
+  1692→  campaignId      String
+  1693→  recipientPhone  String
+  1694→  recipientName   String?
+  1695→  recipientId     String?  // customerId
+  1696→  status          String   @default("pending")  // pending, sent, delivered, read, failed
+  1697→  externalId      String?
+  1698→  sentAt          DateTime?
+  1699→  deliveredAt     DateTime?
+  1700→  readAt          DateTime?
+  1701→  repliedAt       DateTime?
+  1702→  clickedAt       DateTime?
+  1703→  convertedAt     DateTime?
+  1704→  error           String?
+  1705→  metadataJson    String   @default("{}")
+  1706→  createdAt       DateTime @default(now())
+  1707→
+  1708→  @@index([campaignId])
+  1709→  @@index([status])
+  1710→  @@index([recipientPhone])
+  1711→}
+  1712→
+  1713→model CampaignTemplate {
+  1714→  id              String   @id @default(cuid())
+  1715→  name            String
+  1716→  description     String?
+  1717→  category        String   @default("general")  // promotional, reminder, seasonal, follow_up, re_engagement
+  1718→  content         String
+  1719→  mediaUrl        String?
+  1720→  mediaType       String?
+  1721→  ctaText         String?
+  1722→  ctaUrl          String?
+  1723→  variablesJson   String   @default("[]")  // template variables like {{name}}, {{date}}
+  1724→  isApproved      Boolean  @default(false)
+  1725→  externalId      String?  // WhatsApp template ID
+  1726→  usageCount      Int      @default(0)
+  1727→  tenantId        String?
+  1728→  workspaceId     String?
+  1729→  createdAt       DateTime @default(now())
+  1730→  updatedAt       DateTime @updatedAt
+  1731→
+  1732→  @@index([category])
+  1733→  @@index([tenantId])
+  1734→}
+  1735→
+  1736→// --- Module 4: Customer Segmentation Engine ---
+  1737→
+  1738→model Segment {
+  1739→  id              String   @id @default(cuid())
+  1740→  name            String
+  1741→  description     String?
+  1742→  type            String   @default("dynamic")  // dynamic, static
+  1743→  rulesJson       String   @default("[]")  // Array of filter rules
+  1744→  matchLogic      String   @default("and")  // and, or
+  1745→  memberCount     Int      @default(0)
+  1746→  lastCalculated  DateTime?
+  1747→  color           String?
+  1748→  icon            String?
+  1749→  isDefault       Boolean  @default(false)
+  1750→  tenantId        String?
+  1751→  workspaceId     String?
+  1752→  createdAt       DateTime @default(now())
+  1753→  updatedAt       DateTime @updatedAt
+  1754→
+  1755→  @@index([tenantId])
+  1756→  @@index([type])
+  1757→}
+  1758→
+  1759→model SegmentMember {
+  1760→  id          String   @id @default(cuid())
+  1761→  segmentId   String
+  1762→  customerId  String
+  1763→  addedAt     DateTime @default(now())
+  1764→
+  1765→  @@unique([segmentId, customerId])
+  1766→  @@index([segmentId])
+  1767→  @@index([customerId])
+  1768→}
+  1769→
+  1770→// --- Module 5: WhatsApp Retargeting System ---
+  1771→
+  1772→model RetargetingRule {
+  1773→  id              String   @id @default(cuid())
+  1774→  name            String
+  1775→  description     String?
+  1776→  triggerType     String   // no_booking_days, unpaid_invoice, quote_not_accepted, job_not_scheduled, clicked_no_conversion
+  1777→  triggerConfigJson String @default("{}")  // Thresholds, time windows
+  1778→  actionType      String   // whatsapp_reminder, special_offer, follow_up_sequence
+  1779→  actionConfigJson String @default("{}")  // Message template, offer details, sequence
+  1780→  status          String   @default("active")  // active, paused, archived
+  1781→  priority        Int      @default(0)
+  1782→  cooldownHours   Int      @default(24)
+  1783→  maxTriggers     Int      @default(3)  // Max times per customer
+  1784→  triggersToday   Int      @default(0)
+  1785→  totalTriggers   Int      @default(0)
+  1786→  lastTriggered   DateTime?
+  1787→  tenantId        String?
+  1788→  workspaceId     String?
+  1789→  createdAt       DateTime @default(now())
+  1790→  updatedAt       DateTime @updatedAt
+  1791→
+  1792→  @@index([triggerType])
+  1793→  @@index([status])
+  1794→  @@index([tenantId])
+  1795→}
+  1796→
+  1797→model RetargetingLog {
+  1798→  id                String   @id @default(cuid())
+  1799→  ruleId            String
+  1800→  customerId        String
+  1801→  customerPhone     String
+  1802→  triggerType       String
+  1803→  actionType        String
+  1804→  actionResult      String?  // sent, failed, skipped
+  1805→  messageContent    String?
+  1806→  error             String?
+  1807→  tenantId          String?
+  1808→  createdAt         DateTime @default(now())
+  1809→
+  1810→  @@index([ruleId])
+  1811→  @@index([customerId])
+  1812→  @@index([createdAt])
+  1813→}
+  1814→
+  1815→// --- Module 6: Drag & Drop Chatbot Builder ---
+  1816→
+  1817→model Chatbot {
+  1818→  id              String   @id @default(cuid())
+  1819→  name            String
+  1820→  description     String?
+  1821→  status          String   @default("draft")  // draft, active, paused, archived
+  1822→  triggerType     String   @default("keyword")  // keyword, all_messages, new_conversation, no_agent_response
+  1823→  triggerConfigJson String @default("{}")
+  1824→  nodesJson       String   @default("[]")
+  1825→  edgesJson       String   @default("[]")
+  1826→  startNodeId     String?
+  1827→  fallbackNodeId  String?
+  1828→  isDefault       Boolean  @default(false)
+  1829→  totalSessions   Int      @default(0)
+  1830→  activeSessions  Int      @default(0)
+  1831→  completionRate  Float    @default(0)
+  1832→  tenantId        String?
+  1833→  workspaceId     String?
+  1834→  createdById     String?
+  1835→  createdAt       DateTime @default(now())
+  1836→  updatedAt       DateTime @updatedAt
+  1837→
+  1838→  @@index([status])
+  1839→  @@index([tenantId])
+  1840→}
+  1841→
+  1842→model ChatbotSession {
+  1843→  id              String   @id @default(cuid())
+  1844→  chatbotId       String
+  1845→  customerId      String?
+  1846→  customerPhone   String
+  1847→  customerName    String?
+  1848→  conversationId  String?
+  1849→  status          String   @default("active")  // active, completed, abandoned, handed_over
+  1850→  currentNodeId   String?
+  1851→  collectedDataJson String @default("{}")
+  1852→  messagesJson    String   @default("[]")
+  1853→  startedAt       DateTime @default(now())
+  1854→  completedAt     DateTime?
+  1855→  tenantId        String?
+  1856→
+  1857→  @@index([chatbotId])
+  1858→  @@index([customerId])
+  1859→  @@index([status])
+  1860→  @@index([startedAt])
+  1861→}
+  1862→
+  1863→// --- Module 9: WhatsApp Form Builder ---
+  1864→
+  1865→model WAForm {
+  1866→  id              String   @id @default(cuid())
+  1867→  name            String
+  1868→  description     String?
+  1869→  type            String   @default("lead")  // lead, booking, feedback, survey, quote_request
+  1870→  fieldsJson      String   @default("[]")
+  1871→  welcomeMessage  String?
+  1872→  completionMessage String?
+  1873→  status          String   @default("active")  // active, paused, archived
+  1874→  totalSubmissions Int     @default(0)
+  1875→  conversionRate  Float    @default(0)
+  1876→  tenantId        String?
+  1877→  workspaceId     String?
+  1878→  createdAt       DateTime @default(now())
+  1879→  updatedAt       DateTime @updatedAt
+  1880→
+  1881→  @@index([type])
+  1882→  @@index([tenantId])
+  1883→  @@index([status])
+  1884→}
+  1885→
+  1886→model WAFormResponse {
+  1887→  id              String   @id @default(cuid())
+  1888→  formId          String
+  1889→  respondentPhone String
+  1890→  respondentName  String?
+  1891→  respondentId    String?  // customerId
+  1892→  responsesJson   String   @default("{}")
+  1893→  status          String   @default("completed")  // started, completed, abandoned
+  1894→  startedAt       DateTime @default(now())
+  1895→  completedAt     DateTime?
+  1896→  tenantId        String?
+  1897→
+  1898→  @@index([formId])
+  1899→  @@index([respondentPhone])
+  1900→}
+  1901→
+  1902→// --- Module 10: WhatsApp Webview Engine ---
+  1903→
+  1904→model WAWebview {
+  1905→  id              String   @id @default(cuid())
+  1906→  name            String
+  1907→  description     String?
+  1908→  type            String   @default("booking")  // booking, payment, quote_approval, portal, invoice
+  1909→  url             String
+  1910→  configJson      String   @default("{}")
+  1911→  status          String   @default("active")
+  1912→  views           Int      @default(0)
+  1913→  clicks          Int      @default(0)
+  1914→  conversions     Int      @default(0)
+  1915→  tenantId        String?
+  1916→  workspaceId     String?
+  1917→  createdAt       DateTime @default(now())
+  1918→  updatedAt       DateTime @updatedAt
+  1919→
+  1920→  @@index([type])
+  1921→  @@index([tenantId])
+  1922→}
+  1923→
+  1924→// --- Module 11: Click-to-WhatsApp Ads ---
+  1925→
+  1926→model AdCampaign {
+  1927→  id              String   @id @default(cuid())
+  1928→  name            String
+  1929→  platform        String   @default("meta")  // meta, google
+  1930→  adId            String?  // External ad ID
+  1931→  adsetName       String?
+  1932→  campaignName    String?
+  1933→  budget          Float    @default(0)
+  1934→  spent           Float    @default(0)
+  1935→  currency        String   @default("USD")
+  1936→  status          String   @default("active")  // active, paused, completed
+  1937→  leadCount       Int      @default(0)
+  1938→  costPerLead     Float    @default(0)
+  1939→  conversionCount Int      @default(0)
+  1940→  conversionRate  Float    @default(0)
+  1941→  startDate       DateTime?
+  1942→  endDate         DateTime?
+  1943→  configJson      String   @default("{}")
+  1944→  tenantId        String?
+  1945→  workspaceId     String?
+  1946→  createdAt       DateTime @default(now())
+  1947→  updatedAt       DateTime @updatedAt
+  1948→
+  1949→  @@index([platform])
+  1950→  @@index([status])
+  1951→  @@index([tenantId])
+  1952→}
+  1953→
+  1954→model AdConversion {
+  1955→  id              String   @id @default(cuid())
+  1956→  adCampaignId    String
+  1957→  customerId      String?
+  1958→  leadId          String?
+  1959→  phone           String
+  1960→  source          String   @default("click_to_whatsapp")  // click_to_whatsapp, lead_ad, message_ad
+  1961→  convertedTo     String?  // lead, customer, job, booking
+  1962→  convertedAt     DateTime?
+  1963→  tenantId        String?
+  1964→  createdAt       DateTime @default(now())
+  1965→
+  1966→  @@index([adCampaignId])
+  1967→  @@index([customerId])
+  1968→  @@index([leadId])
+  1969→  @@index([createdAt])
+  1970→}
+  1971→
+  1972→// --- Module 12: Customer Journey Automation ---
+  1973→
+  1974→model JourneyWorkflow {
+  1975→  id              String   @id @default(cuid())
+  1976→  name            String
+  1977→  description     String?
+  1978→  status          String   @default("draft")  // draft, active, paused, archived
+  1979→  triggerType     String   // new_lead, new_customer, new_booking, job_assigned, job_completed, payment_received
+  1980→  triggerConfigJson String @default("{}")
+  1981→  nodesJson       String   @default("[]")  // Visual journey nodes
+  1982→  edgesJson       String   @default("[]")  // Connections between nodes
+  1983→  totalEnrolled   Int      @default(0)
+  1984→  activeCount     Int      @default(0)
+  1985→  completedCount  Int      @default(0)
+  1986→  tenantId        String?
+  1987→  workspaceId     String?
+  1988→  createdById     String?
+  1989→  createdAt       DateTime @default(now())
+  1990→  updatedAt       DateTime @updatedAt
+  1991→
+  1992→  @@index([status])
+  1993→  @@index([triggerType])
+  1994→  @@index([tenantId])
+  1995→}
+  1996→
+  1997→model JourneyExecution {
+  1998→  id                String   @id @default(cuid())
+  1999→  journeyId         String
+  2000→  customerId        String?
+
+[showing lines 1-2000 of 2805; use offset=2001 with limit to continue reading]

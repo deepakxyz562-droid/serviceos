@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { getExchangeRate, convertCurrency } from '@/lib/currency';
+import { generateInvoiceNumber } from '@/lib/invoice-automation';
 
 /**
  * Resolves a tenant ID from the auth user, falling back to the first tenant
@@ -137,9 +138,12 @@ export async function POST(request: NextRequest) {
     const exchangeRate = transactionCurrency === baseCurrency ? 1 : getExchangeRate(transactionCurrency, baseCurrency);
     const baseAmount = transactionCurrency === baseCurrency ? total : convertCurrency(total, transactionCurrency, baseCurrency, exchangeRate);
 
-    // Generate invoice number
-    const invoiceCount = await db.invoice.count({ where: { tenantId } });
-    const number = `INV-${String(invoiceCount + 1).padStart(3, '0')}`;
+    // Generate a globally-unique invoice number. The `number` column is
+    // @unique globally (not per-tenant), so a naive per-tenant count would
+    // collide across tenants on multi-tenant deployments (Supabase/Postgres
+    // → P2002 unique constraint violation → 500). generateInvoiceNumber()
+    // detects collisions and appends a timestamp suffix when needed.
+    const number = await generateInvoiceNumber(tenantId);
 
     const invoice = await db.invoice.create({
       data: {
@@ -171,8 +175,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ invoice }, { status: 201 });
   } catch (error) {
     console.error('Error creating invoice:', error);
+    // Surface the underlying Prisma error code so the client can distinguish
+    // unique-constraint collisions (P2002) from FK violations (P2003) etc.
+    const code = (error as { code?: string })?.code;
+    const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { error: 'Failed to create invoice' },
+      { error: 'Failed to create invoice', code, message: process.env.NODE_ENV === 'production' ? undefined : message },
       { status: 500 }
     );
   }

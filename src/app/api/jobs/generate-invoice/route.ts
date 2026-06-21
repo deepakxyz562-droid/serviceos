@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { generateInvoiceNumber } from '@/lib/invoice-automation'
 
 // POST /api/jobs/generate-invoice — Generate invoice from a completed job
 export async function POST(request: NextRequest) {
@@ -27,17 +28,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invoice already exists for this job', invoice: existingInvoice }, { status: 409 })
     }
 
-    // Generate invoice number (Invoice.number is the unique field)
-    const lastInvoice = await db.invoice.findFirst({
-      orderBy: { createdAt: 'desc' },
-      select: { number: true },
-    })
-    let nextNum = 1
-    if (lastInvoice?.number) {
-      const match = lastInvoice.number.match(/INV-(\d+)/)
-      if (match) nextNum = parseInt(match[1], 10) + 1
+    // Generate a globally-unique invoice number. The `number` column is
+    // @unique globally, so use the shared collision-safe generator (same one
+    // used by the auto-invoice path) instead of a naive "last + 1" which
+    // races on Postgres and collides across tenants.
+    let invoiceTenantId: string | undefined = undefined
+    if (job.workspaceId) {
+      const ws = await db.workspace.findUnique({
+        where: { id: job.workspaceId },
+        select: { tenantId: true },
+      })
+      invoiceTenantId = ws?.tenantId || undefined
     }
-    const invoiceNumber = `INV-${String(nextNum).padStart(4, '0')}`
+    const invoiceNumber = await generateInvoiceNumber(invoiceTenantId || null)
 
     // Build line items from job
     const unitPrice = job.estimatedDuration ? Math.round(job.estimatedDuration * 5) : 1500
@@ -61,16 +64,6 @@ export async function POST(request: NextRequest) {
 
     const dueDate = new Date()
     dueDate.setDate(dueDate.getDate() + (dueDays || 7))
-
-    // Resolve tenantId via workspace (Job has no direct tenantId column)
-    let invoiceTenantId: string | undefined = undefined
-    if (job.workspaceId) {
-      const ws = await db.workspace.findUnique({
-        where: { id: job.workspaceId },
-        select: { tenantId: true },
-      })
-      invoiceTenantId = ws?.tenantId || undefined
-    }
 
     // Persist breakdown details in itemsJson so the Invoice model stays clean
     const breakdown = {

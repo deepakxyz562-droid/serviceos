@@ -120,7 +120,7 @@ export async function saveInvoiceSettings(tenantId: string, patch: Partial<Invoi
 
 // ─── Number generation ───────────────────────────────────────────────────────
 
-async function generateInvoiceNumber(tenantId: string | null): Promise<string> {
+export async function generateInvoiceNumber(tenantId: string | null): Promise<string> {
   // The `number` field is GLOBALLY unique (not per-tenant), so we must avoid
   // collisions with invoices from other tenants. We try a sequential per-tenant
   // number first, then fall back to a timestamp-suffixed number on collision.
@@ -133,9 +133,11 @@ async function generateInvoiceNumber(tenantId: string | null): Promise<string> {
   const existing = await db.invoice.findUnique({ where: { number: sequential } })
   if (!existing) return sequential
 
-  // Collision — append a short timestamp suffix to guarantee uniqueness
+  // Collision — append a short timestamp suffix to guarantee uniqueness.
+  // Use a counter too so two rapid collisions in the same millisecond differ.
   const suffix = Date.now().toString(36).toUpperCase().slice(-5)
-  return `${prefix}-${String(count + 1).padStart(4, '0')}-${suffix}`
+  const counter = Math.floor(Math.random() * 36).toString(36).toUpperCase()
+  return `${prefix}-${String(count + 1).padStart(4, '0')}-${suffix}${counter}`
 }
 
 // ─── Currency helpers ────────────────────────────────────────────────────────
