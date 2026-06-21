@@ -127,7 +127,7 @@ interface Invoice {
   baseAmount?: number;
   itemsJson?: string;
   sentAt?: string | null;
-  invoiceType?: 'standard' | 'job_completion' | 'deposit' | 'milestone' | 'recurring';
+  invoiceType?: 'standard' | 'job_completion' | 'deposit' | 'recurring';
   milestoneIndex?: number | null;
   parentInvoiceId?: string | null;
   recurrenceId?: string | null;
@@ -160,7 +160,6 @@ interface InvoiceAutomationSettings {
   createDepositOnBooking: boolean;
   depositPercentage: number;
   enableRecurring: boolean;
-  enableMilestones: boolean;
   defaultTaxPercent: number;
   creationMethod: 'manual' | 'automatic' | 'approval_required' | 'recurring';
   defaultDueDays: number;
@@ -190,7 +189,6 @@ const DEFAULT_INVOICE_SETTINGS: InvoiceAutomationSettings = {
   createDepositOnBooking: false,
   depositPercentage: 30,
   enableRecurring: false,
-  enableMilestones: false,
   defaultTaxPercent: 0,
   creationMethod: 'manual',
   defaultDueDays: 15,
@@ -491,13 +489,12 @@ export function InvoicesView() {
     }
 
     // "Auto-generated only" filter: invoices created by the system
-    // (job completion, deposit, milestone, recurring) — excludes manual 'standard'.
+    // (job completion, deposit, recurring) — excludes manual 'standard'.
     if (autoFilter) {
       result = result.filter(
         (inv) =>
           inv.invoiceType === 'job_completion' ||
           inv.invoiceType === 'deposit' ||
-          inv.invoiceType === 'milestone' ||
           inv.invoiceType === 'recurring'
       );
     }
@@ -1078,7 +1075,7 @@ export function InvoicesView() {
           size="sm"
           className="h-9 text-xs gap-1.5"
           onClick={() => setAutoFilter((v) => !v)}
-          title="Filter to show only system-generated invoices (job completion, deposit, milestone, recurring)"
+          title="Filter to show only system-generated invoices (job completion, deposit, recurring)"
         >
           <Sparkles className="size-3.5" />
           Auto-generated
@@ -1171,16 +1168,12 @@ export function InvoicesView() {
                                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                   : invoice.invoiceType === 'deposit'
                                   ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
-                                  : invoice.invoiceType === 'milestone'
-                                  ? 'bg-purple-50 text-purple-700 border-purple-200'
                                   : 'bg-blue-50 text-blue-700 border-blue-200'
                               }`}>
                                 {invoice.invoiceType === 'job_completion'
                                   ? 'Auto · Job'
                                   : invoice.invoiceType === 'deposit'
                                   ? 'Deposit'
-                                  : invoice.invoiceType === 'milestone'
-                                  ? (invoice.milestoneIndex ? `Milestone ${invoice.milestoneIndex}` : 'Milestone')
                                   : 'Recurring'}
                               </Badge>
                             )}
@@ -1542,16 +1535,12 @@ export function InvoicesView() {
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                         : selectedInvoice.invoiceType === 'deposit'
                         ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
-                        : selectedInvoice.invoiceType === 'milestone'
-                        ? 'bg-purple-50 text-purple-700 border-purple-200'
                         : 'bg-blue-50 text-blue-700 border-blue-200'
                     }`}>
                       {selectedInvoice.invoiceType === 'job_completion'
                         ? 'Auto · Job Completion'
                         : selectedInvoice.invoiceType === 'deposit'
                         ? 'Deposit'
-                        : selectedInvoice.invoiceType === 'milestone'
-                        ? (selectedInvoice.milestoneIndex ? `Milestone ${selectedInvoice.milestoneIndex}` : 'Milestone')
                         : 'Recurring'}
                     </Badge>
                   )}
@@ -1580,22 +1569,6 @@ export function InvoicesView() {
                     <div className="rounded-lg border bg-muted/30 p-3 text-sm">
                       <span className="text-muted-foreground">Linked Job: </span>
                       <span className="font-medium">{selectedInvoice.jobTitle}</span>
-                    </div>
-                  )}
-
-                  {/* Milestone Info */}
-                  {selectedInvoice.invoiceType === 'milestone' && selectedInvoice.milestoneIndex && (
-                    <div className="rounded-lg border bg-purple-50 border-purple-200 p-3 text-sm flex items-center gap-2">
-                      <Receipt className="size-4 text-purple-600" />
-                      <span className="font-medium text-purple-800">
-                        Milestone {selectedInvoice.milestoneIndex} of 3 (
-                        {selectedInvoice.milestoneIndex === 1
-                          ? '30%'
-                          : selectedInvoice.milestoneIndex === 2
-                          ? '40%'
-                          : '30%'}
-                        )
-                      </span>
                     </div>
                   )}
 
@@ -1943,21 +1916,6 @@ export function InvoicesView() {
                       checked={settingsForm.enableRecurring}
                       onCheckedChange={(v) =>
                         setSettingsForm((prev) => ({ ...prev, enableRecurring: v }))
-                      }
-                    />
-                  </div>
-
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <Label className="text-sm font-medium">Enable Milestone Invoicing (30%/40%/30%)</Label>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        Creates milestone 1 (30%) when a job starts, milestone 3 (30%) when a job completes. Milestone 2 (40% at 50% progress) is created manually from the invoice row menu.
-                      </p>
-                    </div>
-                    <Switch
-                      checked={settingsForm.enableMilestones}
-                      onCheckedChange={(v) =>
-                        setSettingsForm((prev) => ({ ...prev, enableMilestones: v }))
                       }
                     />
                   </div>

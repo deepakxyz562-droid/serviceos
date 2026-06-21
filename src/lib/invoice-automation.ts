@@ -41,8 +41,6 @@ export interface InvoiceAutomationSettings {
   depositPercentage: number
   /** Enable recurring invoice schedules */
   enableRecurring: boolean
-  /** Enable milestone invoicing (30% on start / 40% at 50% / 30% on complete) */
-  enableMilestones: boolean
   /** Default tax % applied to auto-invoices */
   defaultTaxPercent: number
   /** Invoice creation method: manual | automatic | approval_required | recurring */
@@ -63,7 +61,6 @@ export const DEFAULT_INVOICE_SETTINGS: InvoiceAutomationSettings = {
   createDepositOnBooking: false,
   depositPercentage: 30,
   enableRecurring: false,
-  enableMilestones: false,
   defaultTaxPercent: 0,
   creationMethod: 'automatic',
   defaultDueDays: 15,
@@ -209,7 +206,7 @@ async function withJobInvoiceLock<T extends AutoInvoiceResult>(
 
 /**
  * Resolve the monetary value of a job using a sensible fallback chain.
- * Used by auto-invoice and milestone-invoice so the invoice amount reflects
+ * Used by auto-invoice so the invoice amount reflects
  * REAL data instead of a hard-coded $50/hr rate.
  *
  * Priority:
@@ -672,148 +669,6 @@ export async function approveInvoice(invoiceId: string): Promise<{ success: bool
     return { success: true, invoiceId, number: invoice.number }
   } catch (err) {
     console.error('[InvoiceAutomation] approveInvoice error:', err)
-    return { success: false, error: String(err) }
-  }
-}
-
-// ─── Core: milestone invoices for larger projects ────────────────────────────
-// Splits a job's value across 3 milestone invoices:
-//   1. Job Started      → 30%  (milestoneIndex = 1)
-//   2. Job 50% Complete → 40%  (milestoneIndex = 2)  [triggered manually or by progress update]
-//   3. Job Complete     → 30%  (milestoneIndex = 3)
-// Each milestone is its own Invoice row linked via parentInvoiceId to the first one.
-
-export interface MilestoneSplit {
-  label: string
-  percentage: number
-  milestoneIndex: number
-}
-
-export const DEFAULT_MILESTONE_SPLITS: MilestoneSplit[] = [
-  { label: 'Milestone 1 — Start (30%)', percentage: 30, milestoneIndex: 1 },
-  { label: 'Milestone 2 — 50% Complete (40%)', percentage: 40, milestoneIndex: 2 },
-  { label: 'Milestone 3 — Complete (30%)', percentage: 30, milestoneIndex: 3 },
-]
-
-/**
- * Create a single milestone invoice for a job.
- * Called from the job lifecycle 'start' (index 1) and 'complete' (index 3) actions,
- * and can be called manually for the 50% milestone (index 2).
- */
-export async function createMilestoneInvoice(
-  jobId: string,
-  milestoneIndex: number,
-  splits: MilestoneSplit[] = DEFAULT_MILESTONE_SPLITS
-): Promise<AutoInvoiceResult> {
-  try {
-    const job = await db.job.findUnique({
-      where: { id: jobId },
-      include: { customer: true },
-    })
-    if (!job) return { success: false, error: 'Job not found' }
-
-    // Resolve tenant
-    let tenantId: string | null = null
-    if (job.workspaceId) {
-      try {
-        const ws = await db.workspace.findUnique({ where: { id: job.workspaceId }, select: { tenantId: true } })
-        tenantId = ws?.tenantId || null
-      } catch { /* ignore */ }
-    }
-    if (!tenantId) {
-      const t = await db.tenant.findFirst({ select: { id: true } })
-      tenantId = t?.id || null
-    }
-    if (!tenantId) return { success: false, error: 'No tenant for job' }
-
-    const settings = await getInvoiceSettings(tenantId)
-    const split = splits.find((s) => s.milestoneIndex === milestoneIndex)
-    if (!split) return { success: false, error: `Unknown milestone index: ${milestoneIndex}` }
-
-    // Idempotency: skip if this milestone already has an invoice
-    const existing = await db.invoice.findFirst({
-      where: { jobId, invoiceType: 'milestone', milestoneIndex },
-    })
-    if (existing) {
-      return { success: false, skipped: true, reason: `Milestone ${milestoneIndex} invoice already exists`, invoiceId: existing.id, number: existing.number }
-    }
-
-    // Compute the job's total value using the REAL fallback chain
-    // (quotedAmount → amountCollected → Service.basePrice → Lead.value →
-    // estimatedDuration × rate) instead of a hard-coded $50/hr.
-    const { amount: jobValue, source: amountSource } = await resolveJobAmount(job)
-    const milestoneAmount = Math.round(jobValue * (split.percentage / 100))
-
-    const { base, rate } = await resolveCurrency(tenantId)
-    const taxPercent = settings.defaultTaxPercent || 0
-    const subtotal = milestoneAmount
-    const tax = subtotal * (taxPercent / 100)
-    const total = subtotal + tax
-
-    const number = await generateInvoiceNumber(tenantId)
-    const dueDate = new Date()
-    dueDate.setDate(dueDate.getDate() + (settings.defaultDueDays || 15))
-
-    // Find the parent invoice (milestone 1) to link subsequent milestones
-    let parentInvoiceId: string | null = null
-    if (milestoneIndex > 1) {
-      const parent = await db.invoice.findFirst({
-        where: { jobId, invoiceType: 'milestone', milestoneIndex: 1 },
-        select: { id: true },
-      })
-      parentInvoiceId = parent?.id || null
-    }
-
-    const items = [{
-      description: split.label,
-      quantity: 1,
-      rate: milestoneAmount,
-      notes: `Milestone ${milestoneIndex} of ${splits.length} for job #${job.jobNumber || job.id.slice(-6)}`,
-    }]
-
-    const status = settings.creationMethod === 'approval_required' ? 'pending_approval' : 'sent'
-
-    const invoice = await db.invoice.create({
-      data: {
-        number,
-        tenantId,
-        jobId,
-        customerId: job.customerId || null,
-        employeeId: job.assigneeId || null,
-        parentInvoiceId,
-        amount: subtotal,
-        tax,
-        discount: 0,
-        total,
-        currency: base,
-        exchangeRate: rate(base),
-        baseCurrency: base,
-        baseAmount: total,
-        status,
-        invoiceType: 'milestone',
-        milestoneIndex,
-        sentAt: status === 'sent' ? new Date() : null,
-        dueDate,
-        itemsJson: JSON.stringify(items),
-        notes: `Milestone ${milestoneIndex}/${splits.length} (${split.percentage}%) for job #${job.jobNumber || job.id.slice(-6)} (amount source: ${amountSource})`,
-      },
-    })
-
-    // Auto-send if enabled and not pending approval
-    if (status === 'sent' && (settings.autoSendEmail || settings.autoSendWhatsApp)) {
-      try {
-        await sendInvoice(invoice.id, {
-          sendEmail: settings.autoSendEmail,
-          sendWhatsApp: settings.autoSendWhatsApp,
-        })
-      } catch (sendErr) {
-        console.error('[InvoiceAutomation] milestone send error:', sendErr)
-      }
-    }
-
-    return { success: true, invoiceId: invoice.id, number: invoice.number, total: invoice.total }
-  } catch (err) {
-    console.error('[InvoiceAutomation] createMilestoneInvoice error:', err)
     return { success: false, error: String(err) }
   }
 }

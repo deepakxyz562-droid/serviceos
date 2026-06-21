@@ -9,7 +9,7 @@ import {
 } from '@/lib/whatsapp-notifications'
 import { EventBus } from '@/lib/event-bus'
 import { notifyOwner } from '@/lib/owner-notifications'
-import { autoCreateInvoiceFromJob, createMilestoneInvoice, getInvoiceSettings } from '@/lib/invoice-automation'
+import { autoCreateInvoiceFromJob } from '@/lib/invoice-automation'
 
 function safeParseJson(str: string): unknown[] {
   try {
@@ -38,29 +38,6 @@ function addNotificationLog(logJson: string, entry: Record<string, unknown>): st
   const logs = safeParseJson(logJson)
   logs.push({ ...entry, timestamp: new Date().toISOString() })
   return JSON.stringify(logs)
-}
-
-/**
- * Resolve the tenant id for a job. Jobs reference a Workspace (not a Tenant
- * directly), so look up the workspace → tenantId. Fall back to the first
- * tenant so invoice-automation settings still resolve in single-tenant demos.
- */
-async function resolveTenantIdForJob(workspaceId: string | null | undefined): Promise<string | null> {
-  if (workspaceId) {
-    try {
-      const ws = await db.workspace.findUnique({
-        where: { id: workspaceId },
-        select: { tenantId: true },
-      })
-      if (ws?.tenantId) return ws.tenantId
-    } catch { /* fall through */ }
-  }
-  try {
-    const t = await db.tenant.findFirst({ select: { id: true } })
-    return t?.id || null
-  } catch {
-    return null
-  }
 }
 
 export async function GET(request: NextRequest) {
@@ -329,19 +306,6 @@ export async function POST(request: NextRequest) {
           })
         })
 
-        // ─── Milestone invoice #1 (30% on job start) if enabled (background) ──
-        fireAndForget('milestone 1 invoice', async () => {
-          const invSettings = await getInvoiceSettings(await resolveTenantIdForJob(updatedJob.workspaceId))
-          if (invSettings.enableMilestones) {
-            const msResult = await createMilestoneInvoice(updatedJob.id, 1)
-            if (msResult.success) {
-              console.log(`[JobLifecycle] Created milestone 1 invoice ${msResult.number} for job ${updatedJob.id}`)
-            } else if (!msResult.skipped) {
-              console.error(`[JobLifecycle] Milestone 1 invoice failed: ${msResult.error}`)
-            }
-          }
-        })
-
         break
       }
 
@@ -458,29 +422,18 @@ export async function POST(request: NextRequest) {
           })
         })
 
-        // ─── Auto-create invoice if tenant setting is enabled (background) ────
-        // Two paths:
-        //   1. Milestone mode (enableMilestones=true) → create milestone #3 (final 30%).
-        //      Milestone #1 (30%) was created on job start; milestone #2 (40% at 50%
-        //      progress) is created manually by the manager from the invoices view.
-        //   2. Standard mode → autoCreateInvoiceFromJob (respects autoCreateOnJobComplete
-        //      toggle + approval_required → pending_approval status).
+        // ─── Auto-create a single invoice on job completion (background) ────
+        // Single-invoice billing only (milestone invoicing was removed).
+        // autoCreateInvoiceFromJob is idempotent (skips if an invoice already
+        // exists for the job), respects the autoCreateOnJobComplete toggle,
+        // and uses resolveJobAmount() so the amount reflects real data
+        // (quotedAmount → amountCollected → Lead.value → Service.basePrice).
         fireAndForget('auto-invoice', async () => {
-          const invSettings = await getInvoiceSettings(await resolveTenantIdForJob(updatedJob.workspaceId))
-          if (invSettings.enableMilestones) {
-            const msResult = await createMilestoneInvoice(updatedJob.id, 3)
-            if (msResult.success) {
-              console.log(`[JobLifecycle] Created milestone 3 (final) invoice ${msResult.number} for job ${updatedJob.id}`)
-            } else if (!msResult.skipped) {
-              console.error(`[JobLifecycle] Milestone 3 invoice failed: ${msResult.error}`)
-            }
-          } else {
-            const invResult = await autoCreateInvoiceFromJob(updatedJob.id)
-            if (invResult.success) {
-              console.log(`[JobLifecycle] Auto-created invoice ${invResult.number} for job ${updatedJob.id}`)
-            } else if (!invResult.skipped) {
-              console.error(`[JobLifecycle] Auto-invoice failed: ${invResult.error}`)
-            }
+          const invResult = await autoCreateInvoiceFromJob(updatedJob.id)
+          if (invResult.success) {
+            console.log(`[JobLifecycle] Auto-created invoice ${invResult.number} for job ${updatedJob.id}`)
+          } else if (!invResult.skipped) {
+            console.error(`[JobLifecycle] Auto-invoice failed: ${invResult.error}`)
           }
         })
 
