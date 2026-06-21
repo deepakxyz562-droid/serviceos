@@ -798,9 +798,25 @@ class SupabaseModel {
       .select('*')
       .single();
 
-    // Retry without updatedAt if the column doesn't exist in the table
-    if (error && error.message && error.message.includes('updatedAt') && 'updatedAt' in serialized) {
-      delete serialized.updatedAt;
+    // Resilient retry loop: if PostgREST rejects a column that doesn't exist
+    // on this table (e.g. `createdAt` on `Execution`, which only has
+    // `startedAt`/`finishedAt`), strip that column and retry. We loop so we
+    // can recover from multiple bad columns in a single create() call
+    // (e.g. a table that has neither `createdAt` nor `updatedAt`).
+    // PostgREST error formats:
+    //   "Could not find the `createdAt` column of `Execution` in the schema cache"
+    //   'column "updatedAt" of relation "Execution" does not exist'
+    let retryCount = 0;
+    while (error && retryCount < 4) {
+      const msg = error.message || '';
+      const missingColMatch = msg.match(
+        /(?:Could not find the `?(\w+)`? column of|column "(\w+)" of relation)/
+      );
+      if (!missingColMatch) break;
+      const badCol = missingColMatch[1] || missingColMatch[2];
+      if (!badCol || !(badCol in serialized)) break;
+      delete serialized[badCol];
+      retryCount++;
       const retry = await this.client
         .from(this.tableName)
         .insert(serialized)
@@ -986,9 +1002,19 @@ class SupabaseModel {
 
     let { data: result, error } = await query.single();
 
-    // Retry without updatedAt if the column doesn't exist in the table
-    if (error && error.message && error.message.includes('updatedAt') && 'updatedAt' in serialized) {
-      delete serialized.updatedAt;
+    // Resilient retry loop: strip any column PostgREST rejects (e.g.
+    // `updatedAt` on tables that don't have it, like `Execution`).
+    let retryCount = 0;
+    while (error && retryCount < 4) {
+      const msg = error.message || '';
+      const missingColMatch = msg.match(
+        /(?:Could not find the `?(\w+)`? column of|column "(\w+)" of relation)/
+      );
+      if (!missingColMatch) break;
+      const badCol = missingColMatch[1] || missingColMatch[2];
+      if (!badCol || !(badCol in serialized)) break;
+      delete serialized[badCol];
+      retryCount++;
       let retryQuery = this.client.from(this.tableName).update(serialized).select('*');
       for (const [field, value] of Object.entries(where)) {
         if (value !== undefined) {
@@ -1023,11 +1049,32 @@ class SupabaseModel {
     const serialized = serializeData(merged);
     const uniqueColumns = Object.keys(where);
 
-    const { data: result, error } = await this.client
+    let { data: result, error } = await this.client
       .from(this.tableName)
       .upsert(serialized, { onConflict: uniqueColumns.join(',') })
       .select('*')
       .single();
+
+    // Resilient retry loop: strip any column PostgREST rejects.
+    let retryCount = 0;
+    while (error && retryCount < 4) {
+      const msg = error.message || '';
+      const missingColMatch = msg.match(
+        /(?:Could not find the `?(\w+)`? column of|column "(\w+)" of relation)/
+      );
+      if (!missingColMatch) break;
+      const badCol = missingColMatch[1] || missingColMatch[2];
+      if (!badCol || !(badCol in serialized)) break;
+      delete serialized[badCol];
+      retryCount++;
+      const retry = await this.client
+        .from(this.tableName)
+        .upsert(serialized, { onConflict: uniqueColumns.join(',') })
+        .select('*')
+        .single();
+      result = retry.data;
+      error = retry.error;
+    }
 
     if (error) {
       console.error(`[SupabaseDB] upsert error on ${this.tableName}:`, error.message);

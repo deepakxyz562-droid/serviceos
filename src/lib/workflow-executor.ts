@@ -1010,6 +1010,46 @@ const nodeHandlers: Record<string, NodeHandler> = {
     };
   },
 
+  // Alias: the node-registry exposes a simplified "Send WhatsApp" action
+  // (type: sendWhatsApp) and a full "WhatsApp Business Cloud" node
+  // (type: whatsappNode). Both should actually send messages — route the
+  // simple one to the same handler. The simple node only has `recipient`
+  // (customer/employee/manager) + `template` properties, so we adapt its
+  // config to the shape whatsappNode expects.
+  sendWhatsApp: async (node, input, context) => {
+    const config = node.data.config || {};
+    // If the user already provided phoneNumber + bodyText, just forward.
+    // Otherwise, adapt the simplified `recipient` + `template` props.
+    if (config.phoneNumber || config.bodyText || config.operation) {
+      return nodeHandlers.whatsappNode(node, input, context);
+    }
+    // Resolve a phone number from the recipient type:
+    // - 'customer' / 'employee' / 'manager' → look up in trigger data
+    //   ($json.body.phone, $json.body.customerPhone, etc.)
+    const recipientType = config.recipient || 'customer';
+    const fallbackPhone =
+      context?.$json?.body?.phone ||
+      context?.$json?.body?.customerPhone ||
+      context?.$json?.body?.phoneNumber ||
+      context?.$body?.phone ||
+      context?.$body?.customerPhone ||
+      context?.$trigger?.body?.phone ||
+      '';
+    const adaptedNode = {
+      ...node,
+      data: {
+        ...node.data,
+        config: {
+          ...config,
+          operation: 'sendText',
+          phoneNumber: config.phoneNumber || fallbackPhone || '',
+          bodyText: config.bodyText || config.template || '',
+        },
+      },
+    };
+    return nodeHandlers.whatsappNode(adaptedNode, input, context);
+  },
+
   emailSend: async (node, input, context) => {
     // Email sending - pass through with simulated success
     const config = node.data.config;
@@ -1025,6 +1065,34 @@ const nodeHandlers: Record<string, NodeHandler> = {
       }],
       context,
     };
+  },
+
+  // Alias: the node-registry exposes "Send Email" as type `sendEmail`
+  // (with `recipient`/`subject`/`body` props), but the executor handler is
+  // `emailSend`. Route the alias so Send Email nodes actually invoke the
+  // email handler instead of falling through to `_default`.
+  sendEmail: async (node, input, context) => {
+    const config = node.data.config || {};
+    // Adapt the registry's `recipient` (customer/employee/manager) + `body`
+    // props to the `emailSend` handler's `to` + `message` shape.
+    const adaptedNode = {
+      ...node,
+      data: {
+        ...node.data,
+        config: {
+          ...config,
+          to: config.to || config.email || (
+            config.recipient === 'customer' ? (context?.$json?.body?.customerEmail || context?.$body?.customerEmail || context?.$trigger?.body?.customerEmail || '') :
+            config.recipient === 'employee' ? (context?.$json?.body?.employeeEmail || context?.$body?.employeeEmail || '') :
+            config.recipient === 'manager'  ? (context?.$json?.body?.managerEmail  || context?.$body?.managerEmail  || '') :
+            ''
+          ),
+          subject: config.subject || '',
+          message: config.message || config.body || '',
+        },
+      },
+    };
+    return nodeHandlers.emailSend(adaptedNode, input, context);
   },
 
   slackNode: async (node, input, context) => {

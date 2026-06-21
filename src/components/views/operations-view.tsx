@@ -6,7 +6,8 @@ import {
   Plus, RefreshCw, XCircle, ChevronRight, MapPin, Phone, Star,
   User, Settings, Trash2, Edit, Eye, Play, ArrowRight, ExternalLink,
   Filter, MoreHorizontal, Activity, Globe, Database, Server,
-  Zap, Link2, Shield, CheckCircle, XCircle as XIcon, AlertTriangle
+  Zap, Link2, Shield, CheckCircle, XCircle as XIcon, AlertTriangle,
+  Loader2,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -169,6 +170,9 @@ export function OperationsView() {
   const [assigningJob, setAssigningJob] = useState<Job | null>(null);
   const [availableResources, setAvailableResources] = useState<Resource[]>([]);
   const [lifecycleLoading, setLifecycleLoading] = useState(false);
+  // Per-job loading state so only the clicked card button shows a spinner.
+  const [loadingJobId, setLoadingJobId] = useState<string | null>(null);
+  const [loadingAction, setLoadingAction] = useState<string | null>(null);
 
   // Resources state
   const [resources, setResources] = useState<Resource[]>([]);
@@ -272,6 +276,8 @@ export function OperationsView() {
   // Job lifecycle actions
   const handleLifecycleAction = async (action: string, jobId: string, resourceId?: string) => {
     setLifecycleLoading(true);
+    setLoadingJobId(jobId);
+    setLoadingAction(action);
     try {
       const res = await fetch('/api/jobs/lifecycle', {
         method: 'POST',
@@ -297,6 +303,8 @@ export function OperationsView() {
       toast.error(`Network error: Failed to ${action} job`);
     } finally {
       setLifecycleLoading(false);
+      setLoadingJobId(null);
+      setLoadingAction(null);
     }
   };
 
@@ -469,8 +477,12 @@ export function OperationsView() {
       case 'assigned':
         return (
           <div className="flex gap-1">
-            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs" onClick={(e) => { e.stopPropagation(); handleLifecycleAction('start', job.id); }}>
-              <Play className="size-3 mr-1" /> Start Job
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs" onClick={(e) => { e.stopPropagation(); handleLifecycleAction('start', job.id); }}
+              disabled={loadingJobId === job.id && loadingAction === 'start'}
+            >
+              {loadingJobId === job.id && loadingAction === 'start'
+                ? <Loader2 className="size-3 mr-1 animate-spin" />
+                : <Play className="size-3 mr-1" />} Start Job
             </Button>
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); openAssignDialog(job); }}>
               <RefreshCw className="size-3 mr-1" /> Reassign
@@ -479,8 +491,12 @@ export function OperationsView() {
         );
       case 'in_progress':
         return (
-          <Button size="sm" className="bg-green-600 hover:bg-green-700 h-7 text-xs" onClick={(e) => { e.stopPropagation(); handleLifecycleAction('complete', job.id); }}>
-            <CheckCircle2 className="size-3 mr-1" /> Complete Job
+          <Button size="sm" className="bg-green-600 hover:bg-green-700 h-7 text-xs" onClick={(e) => { e.stopPropagation(); handleLifecycleAction('complete', job.id); }}
+            disabled={loadingJobId === job.id && loadingAction === 'complete'}
+          >
+            {loadingJobId === job.id && loadingAction === 'complete'
+              ? <Loader2 className="size-3 mr-1 animate-spin" />
+              : <CheckCircle2 className="size-3 mr-1" />} Complete Job
           </Button>
         );
       case 'completed':

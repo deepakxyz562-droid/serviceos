@@ -138,42 +138,42 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Emit lead.converted event via EventBus
-    try {
-      await EventBus.emit('lead.converted', {
-        leadId: updatedLead.id,
-        name: updatedLead.name,
-        phone: updatedLead.phone,
-        source: updatedLead.source,
-        jobId: job.id,
-        customerId: customer.id,
-        tenantId: updatedLead.tenantId,
-        resourceType: 'lead',
-        resourceId: updatedLead.id,
-        summary: `Lead converted: ${updatedLead.name} → Job ${job.id}`,
-      }, { tenantId: updatedLead.tenantId || undefined, workspaceId: jobWorkspaceId || undefined });
+    // Emit lead.converted + job.created events via EventBus (background —
+    // don't block the response; these only write audit logs / fire webhooks)
+    EventBus.emit('lead.converted', {
+      leadId: updatedLead.id,
+      name: updatedLead.name,
+      phone: updatedLead.phone,
+      source: updatedLead.source,
+      jobId: job.id,
+      customerId: customer.id,
+      tenantId: updatedLead.tenantId,
+      resourceType: 'lead',
+      resourceId: updatedLead.id,
+      summary: `Lead converted: ${updatedLead.name} → Job ${job.id}`,
+    }, { tenantId: updatedLead.tenantId || undefined, workspaceId: jobWorkspaceId || undefined }).catch((eventErr) =>
+      console.error('[LeadsConvert] Failed to emit lead.converted event:', eventErr)
+    );
 
-      // Also emit job.created for the new job
-      await EventBus.emit('job.created', {
-        job: {
-          id: job.id,
-          jobNumber: job.jobNumber,
-          title: job.title,
-          status: job.status,
-          priority: job.priority,
-          type: job.type,
-          address: job.address,
-          customerName: job.customerName,
-          customerPhone: job.customerPhone,
-          workspaceId: job.workspaceId,
-        },
-        resourceType: 'job',
-        resourceId: job.id,
-        summary: `Job created from lead: ${updatedLead.name}`,
-      }, { tenantId: updatedLead.tenantId || undefined, workspaceId: jobWorkspaceId || undefined });
-    } catch (eventErr) {
-      console.error('[LeadsConvert] Failed to emit events:', eventErr);
-    }
+    EventBus.emit('job.created', {
+      job: {
+        id: job.id,
+        jobNumber: job.jobNumber,
+        title: job.title,
+        status: job.status,
+        priority: job.priority,
+        type: job.type,
+        address: job.address,
+        customerName: job.customerName,
+        customerPhone: job.customerPhone,
+        workspaceId: job.workspaceId,
+      },
+      resourceType: 'job',
+      resourceId: job.id,
+      summary: `Job created from lead: ${updatedLead.name}`,
+    }, { tenantId: updatedLead.tenantId || undefined, workspaceId: jobWorkspaceId || undefined }).catch((eventErr) =>
+      console.error('[LeadsConvert] Failed to emit job.created event:', eventErr)
+    );
 
     return NextResponse.json({
       customer: {

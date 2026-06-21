@@ -1,0 +1,1602 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback } from 'react';
+     4→import {
+     5→  Briefcase, Plus, Search, RefreshCw, Filter, Clock, MapPin, User,
+     6→  Phone, Calendar, Play, CheckCircle2, XCircle, Eye, ChevronRight,
+     7→  ArrowRight, AlertCircle, Activity, Zap, Pencil, Trash2, MoreVertical,
+     8→} from 'lucide-react';
+     9→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    10→import { Input } from '@/components/ui/input';
+    11→import { Button } from '@/components/ui/button';
+    12→import { Badge } from '@/components/ui/badge';
+    13→import { Label } from '@/components/ui/label';
+    14→import { Textarea } from '@/components/ui/textarea';
+    15→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+    16→import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+    17→import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+    18→import { ScrollArea } from '@/components/ui/scroll-area';
+    19→import { Separator } from '@/components/ui/separator';
+    20→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    21→import {
+    22→  DropdownMenu,
+    23→  DropdownMenuContent,
+    24→  DropdownMenuItem,
+    25→  DropdownMenuSeparator,
+    26→  DropdownMenuTrigger,
+    27→} from '@/components/ui/dropdown-menu';
+    28→import {
+    29→  AlertDialog,
+    30→  AlertDialogAction,
+    31→  AlertDialogCancel,
+    32→  AlertDialogContent,
+    33→  AlertDialogDescription,
+    34→  AlertDialogFooter,
+    35→  AlertDialogHeader,
+    36→  AlertDialogTitle,
+    37→} from '@/components/ui/alert-dialog';
+    38→import {
+    39→  Table,
+    40→  TableBody,
+    41→  TableCell,
+    42→  TableHead,
+    43→  TableHeader,
+    44→  TableRow,
+    45→} from '@/components/ui/table';
+    46→import { toast } from 'sonner';
+    47→
+    48→// ─── Types ──────────────────────────────────────────────────────────────────
+    49→
+    50→interface Job {
+    51→  id: string;
+    52→  jobNumber?: string;
+    53→  title: string;
+    54→  description?: string;
+    55→  status: string;
+    56→  priority: string;
+    57→  type: string;
+    58→  address?: string;
+    59→  pickup?: string;
+    60→  dropoff?: string;
+    61→  scheduledAt?: string;
+    62→  scheduledTime?: string;
+    63→  estimatedDuration?: number;
+    64→  actualStartTime?: string;
+    65→  actualEndTime?: string;
+    66→  notes?: string;
+    67→  customerId?: string;
+    68→  customerName?: string;
+    69→  customerPhone?: string;
+    70→  assigneeId?: string;
+    71→  assigneeName?: string;
+    72→  assigneePhone?: string;
+    73→  serviceId?: string;
+    74→  notificationLogJson?: string;
+    75→  createdAt: string;
+    76→  updatedAt: string;
+    77→  assignee?: { id: string; name: string; phone: string; role: string };
+    78→  customer?: { id: string; name: string; phone: string; email?: string };
+    79→}
+    80→
+    81→interface Employee {
+    82→  id: string;
+    83→  name: string;
+    84→  phone: string;
+    85→  role: string;
+    86→  status: string;
+    87→  skills: string;
+    88→  rating: number;
+    89→  completedJobs: number;
+    90→}
+    91→
+    92→// ─── Helpers ────────────────────────────────────────────────────────────────
+    93→
+    94→function getStatusColor(status: string) {
+    95→  const map: Record<string, string> = {
+    96→    pending: 'bg-amber-100 text-amber-700 border-amber-200',
+    97→    assigned: 'bg-blue-100 text-blue-700 border-blue-200',
+    98→    in_progress: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    99→    completed: 'bg-green-100 text-green-700 border-green-200',
+   100→    cancelled: 'bg-red-100 text-red-700 border-red-200',
+   101→  };
+   102→  return map[status] || 'bg-gray-100 text-gray-600 border-gray-200';
+   103→}
+   104→
+   105→function getStatusIcon(status: string) {
+   106→  const map: Record<string, React.ReactNode> = {
+   107→    pending: <Clock className="size-3" />,
+   108→    assigned: <User className="size-3" />,
+   109→    in_progress: <Activity className="size-3" />,
+   110→    completed: <CheckCircle2 className="size-3" />,
+   111→    cancelled: <XCircle className="size-3" />,
+   112→  };
+   113→  return map[status] || null;
+   114→}
+   115→
+   116→function getPriorityColor(priority: string) {
+   117→  const map: Record<string, string> = {
+   118→    low: 'bg-slate-100 text-slate-600 border-slate-200',
+   119→    medium: 'bg-amber-100 text-amber-700 border-amber-200',
+   120→    high: 'bg-orange-100 text-orange-700 border-orange-200',
+   121→    urgent: 'bg-red-100 text-red-700 border-red-200',
+   122→  };
+   123→  return map[priority] || 'bg-gray-100 text-gray-600 border-gray-200';
+   124→}
+   125→
+   126→function getJobTypeLabel(type: string) {
+   127→  const labels: Record<string, string> = {
+   128→    delivery: 'Delivery',
+   129→    service: 'Service',
+   130→    transport: 'Transport',
+   131→    installation: 'Installation',
+   132→    salon: 'Salon',
+   133→    healthcare: 'Healthcare',
+   134→    repair: 'Repair',
+   135→    maintenance: 'Maintenance',
+   136→  };
+   137→  return labels[type] || type;
+   138→}
+   139→
+   140→function formatDate(dateStr?: string | null) {
+   141→  if (!dateStr) return '--';
+   142→  try {
+   143→    return new Date(dateStr).toLocaleDateString('en-US', {
+   144→      month: 'short', day: 'numeric', year: 'numeric',
+   145→    });
+   146→  } catch {
+   147→    return '--';
+   148→  }
+   149→}
+   150→
+   151→function formatDateTime(dateStr?: string | null) {
+   152→  if (!dateStr) return '--';
+   153→  try {
+   154→    return new Date(dateStr).toLocaleString('en-US', {
+   155→      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+   156→    });
+   157→  } catch {
+   158→    return '--';
+   159→  }
+   160→}
+   161→
+   162→function parseNotificationLog(logJson?: string) {
+   163→  try {
+   164→    return logJson ? JSON.parse(logJson) : [];
+   165→  } catch {
+   166→    return [];
+   167→  }
+   168→}
+   169→
+   170→// ─── Component ──────────────────────────────────────────────────────────────
+   171→
+   172→export function JobsView() {
+   173→  // State
+   174→  const [jobs, setJobs] = useState<Job[]>([]);
+   175→  const [employees, setEmployees] = useState<Employee[]>([]);
+   176→  const [loading, setLoading] = useState(true);
+   177→  const [statusFilter, setStatusFilter] = useState('all');
+   178→  const [search, setSearch] = useState('');
+   179→  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+   180→
+   181→  // Dialogs
+   182→  const [showCreateJob, setShowCreateJob] = useState(false);
+   183→  const [showJobDetail, setShowJobDetail] = useState(false);
+   184→  const [showAssignDialog, setShowAssignDialog] = useState(false);
+   185→  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+   186→  const [assigningJob, setAssigningJob] = useState<Job | null>(null);
+   187→  const [lifecycleLoading, setLifecycleLoading] = useState(false);
+   188→
+   189→  // Edit / Delete dialog state
+   190→  const [showEditDialog, setShowEditDialog] = useState(false);
+   191→  const [editingJob, setEditingJob] = useState<Job | null>(null);
+   192→  const [editForm, setEditForm] = useState({
+   193→    title: '', customerName: '', customerPhone: '', type: 'service',
+   194→    address: '', scheduledDate: '', scheduledTime: '', priority: 'medium',
+   195→    notes: '', estimatedDuration: '',
+   196→  });
+   197→  const [editSaving, setEditSaving] = useState(false);
+   198→  const [deletingJob, setDeletingJob] = useState<Job | null>(null);
+   199→  const [deleteSaving, setDeleteSaving] = useState(false);
+   200→
+   201→  // Create job form
+   202→  const [jobForm, setJobForm] = useState({
+   203→    title: '',
+   204→    customerName: '',
+   205→    customerPhone: '',
+   206→    type: 'service',
+   207→    address: '',
+   208→    scheduledDate: '',
+   209→    scheduledTime: '',
+   210→    assigneeId: 'none',
+   211→    priority: 'medium',
+   212→    notes: '',
+   213→    serviceId: '',
+   214→    estimatedDuration: '',
+   215→  });
+   216→
+   217→  // Service catalog — fetched so the create-job form can pick a service
+   218→  // and auto-fill the duration from the catalog.
+   219→  const [services, setServices] = useState<
+   220→    { id: string; name: string; category: string; basePrice: number; duration: number }[]
+   221→  >([]);
+   222→  useEffect(() => {
+   223→    fetch('/api/services?active=true&limit=200')
+   224→      .then((r) => (r.ok ? r.json() : { services: [] }))
+   225→      .then((data) => {
+   226→        const list = Array.isArray(data) ? data : data?.services ?? [];
+   227→        setServices(list);
+   228→      })
+   229→      .catch(() => setServices([]));
+   230→  }, []);
+   231→
+   232→  // ─── Fetch ──────────────────────────────────────────────────────────────
+   233→
+   234→  const fetchJobs = useCallback(async () => {
+   235→    setLoading(true);
+   236→    try {
+   237→      const params = new URLSearchParams();
+   238→      if (statusFilter !== 'all') params.set('status', statusFilter);
+   239→      if (search) params.set('search', search);
+   240→      const res = await fetch(`/api/jobs?${params.toString()}`);
+   241→      if (res.ok) {
+   242→        const data = await res.json();
+   243→        setJobs(Array.isArray(data) ? data : []);
+   244→      }
+   245→    } catch {
+   246→      setJobs([]);
+   247→    } finally {
+   248→      setLoading(false);
+   249→    }
+   250→  }, [statusFilter, search]);
+   251→
+   252→  const fetchEmployees = useCallback(async () => {
+   253→    try {
+   254→      const res = await fetch('/api/employees');
+   255→      if (res.ok) {
+   256→        const data = await res.json();
+   257→        setEmployees(Array.isArray(data) ? data : []);
+   258→      }
+   259→    } catch {
+   260→      setEmployees([]);
+   261→    }
+   262→  }, []);
+   263→
+   264→  useEffect(() => {
+   265→    fetchJobs();
+   266→  }, [fetchJobs]);
+   267→
+   268→  useEffect(() => {
+   269→    fetchEmployees();
+   270→  }, [fetchEmployees]);
+   271→
+   272→  // ─── Stats ──────────────────────────────────────────────────────────────
+   273→
+   274→  const stats = {
+   275→    total: jobs.length,
+   276→    pending: jobs.filter(j => j.status === 'pending').length,
+   277→    assigned: jobs.filter(j => j.status === 'assigned').length,
+   278→    inProgress: jobs.filter(j => j.status === 'in_progress').length,
+   279→    completed: jobs.filter(j => j.status === 'completed').length,
+   280→    cancelled: jobs.filter(j => j.status === 'cancelled').length,
+   281→  };
+   282→
+   283→  // ─── Handlers ───────────────────────────────────────────────────────────
+   284→
+   285→  const handleCreateJob = async () => {
+   286→    if (!jobForm.title) {
+   287→      toast.error('Job title is required');
+   288→      return;
+   289→    }
+   290→    try {
+   291→      const assignee = jobForm.assigneeId !== 'none'
+   292→        ? employees.find(e => e.id === jobForm.assigneeId)
+   293→        : null;
+   294→
+   295→      const scheduledAt = jobForm.scheduledDate && jobForm.scheduledTime
+   296→        ? new Date(`${jobForm.scheduledDate}T${jobForm.scheduledTime}`).toISOString()
+   297→        : undefined;
+   298→
+   299→      const res = await fetch('/api/jobs', {
+   300→        method: 'POST',
+   301→        headers: { 'Content-Type': 'application/json' },
+   302→        body: JSON.stringify({
+   303→          title: jobForm.title,
+   304→          type: jobForm.type,
+   305→          priority: jobForm.priority,
+   306→          address: jobForm.address || undefined,
+   307→          customerName: jobForm.customerName || undefined,
+   308→          customerPhone: jobForm.customerPhone || undefined,
+   309→          assigneeId: assignee?.id || undefined,
+   310→          assigneeName: assignee?.name || undefined,
+   311→          assigneePhone: assignee?.phone || undefined,
+   312→          scheduledAt,
+   313→          scheduledTime: jobForm.scheduledTime || undefined,
+   314→          notes: jobForm.notes || undefined,
+   315→          serviceId: jobForm.serviceId || undefined,
+   316→          estimatedDuration: jobForm.estimatedDuration
+   317→            ? Number(jobForm.estimatedDuration)
+   318→            : undefined,
+   319→          status: assignee ? 'assigned' : 'pending',
+   320→        }),
+   321→      });
+   322→
+   323→      if (res.ok) {
+   324→        toast.success('Job created successfully');
+   325→        setShowCreateJob(false);
+   326→        setJobForm({
+   327→          title: '', customerName: '', customerPhone: '', type: 'service',
+   328→          address: '', scheduledDate: '', scheduledTime: '', assigneeId: 'none',
+   329→          priority: 'medium', notes: '', serviceId: '', estimatedDuration: '',
+   330→        });
+   331→        fetchJobs();
+   332→      } else {
+   333→        toast.error('Failed to create job');
+   334→      }
+   335→    } catch {
+   336→      toast.error('Network error');
+   337→    }
+   338→  };
+   339→
+   340→  const handleLifecycleAction = async (action: string, jobId: string, resourceId?: string) => {
+   341→    setLifecycleLoading(true);
+   342→    try {
+   343→      const res = await fetch('/api/jobs/lifecycle', {
+   344→        method: 'POST',
+   345→        headers: { 'Content-Type': 'application/json' },
+   346→        body: JSON.stringify({ action, jobId, resourceId }),
+   347→      });
+   348→      if (res.ok) {
+   349→        toast.success(`Job ${action} successfully`);
+   350→        fetchJobs();
+   351→        // ── Refresh employees so status changes (busy↔available) reflect in
+   352→        // the UI immediately. Without this, the employee list stays stale
+   353→        // after assign/complete/reject, making it look like the employee is
+   354→        // still busy when they've actually been freed up (or vice-versa).
+   355→        if (['assign', 'start', 'complete', 'reject', 'accept'].includes(action)) {
+   356→          fetchEmployees();
+   357→        }
+   358→        if (action === 'assign') {
+   359→          setShowAssignDialog(false);
+   360→          setAssigningJob(null);
+   361→        }
+   362→        if (showJobDetail && selectedJob?.id === jobId) {
+   363→          const detailRes = await fetch(`/api/jobs/lifecycle?jobId=${jobId}`);
+   364→          if (detailRes.ok) {
+   365→            const data = await detailRes.json();
+   366→            setSelectedJob(data);
+   367→          }
+   368→        }
+   369→      } else {
+   370→        const err = await res.json();
+   371→        toast.error(err.error || `Failed to ${action} job`);
+   372→      }
+   373→    } catch {
+   374→      toast.error('Network error');
+   375→    } finally {
+   376→      setLifecycleLoading(false);
+   377→    }
+   378→  };
+   379→
+   380→  const openJobDetail = async (job: Job) => {
+   381→    try {
+   382→      const res = await fetch(`/api/jobs/lifecycle?jobId=${job.id}`);
+   383→      if (res.ok) {
+   384→        const data = await res.json();
+   385→        setSelectedJob(data);
+   386→      } else {
+   387→        setSelectedJob(job);
+   388→      }
+   389→    } catch {
+   390→      setSelectedJob(job);
+   391→    }
+   392→    setShowJobDetail(true);
+   393→  };
+   394→
+   395→  const openAssignDialog = (job: Job) => {
+   396→    setAssigningJob(job);
+   397→    setShowAssignDialog(true);
+   398→  };
+   399→
+   400→  const handleCancelJob = async (jobId: string) => {
+   401→    try {
+   402→      const res = await fetch(`/api/jobs/${jobId}`, {
+   403→        method: 'PUT',
+   404→        headers: { 'Content-Type': 'application/json' },
+   405→        body: JSON.stringify({ id: jobId, status: 'cancelled' }),
+   406→      });
+   407→      if (res.ok) {
+   408→        toast.success('Job cancelled');
+   409→        fetchJobs();
+   410→        setShowJobDetail(false);
+   411→      } else {
+   412→        toast.error('Failed to cancel job');
+   413→      }
+   414→    } catch {
+   415→      toast.error('Network error');
+   416→    }
+   417→  };
+   418→
+   419→  // ─── Edit Job ───────────────────────────────────────────────────────────
+   420→  const openEditDialog = (job: Job) => {
+   421→    setEditingJob(job);
+   422→    // Pre-fill the edit form from the job's current values
+   423→    const scheduledAt = job.scheduledAt ? new Date(job.scheduledAt) : null;
+   424→    setEditForm({
+   425→      title: job.title || '',
+   426→      customerName: job.customerName || '',
+   427→      customerPhone: job.customerPhone || '',
+   428→      type: job.type || 'service',
+   429→      address: job.address || '',
+   430→      scheduledDate: scheduledAt
+   431→        ? scheduledAt.toISOString().slice(0, 10)
+   432→        : '',
+   433→      scheduledTime: scheduledAt
+   434→        ? scheduledAt.toTimeString().slice(0, 5)
+   435→        : '',
+   436→      priority: job.priority || 'medium',
+   437→      notes: job.notes || '',
+   438→      estimatedDuration: job.estimatedDuration
+   439→        ? String(job.estimatedDuration)
+   440→        : '',
+   441→    });
+   442→    setShowEditDialog(true);
+   443→    // Close the detail dialog if it's open so the edit dialog is the focus
+   444→    if (showJobDetail) setShowJobDetail(false);
+   445→  };
+   446→
+   447→  const handleEditJob = async () => {
+   448→    if (!editingJob) return;
+   449→    if (!editForm.title.trim()) {
+   450→      toast.error('Job title is required');
+   451→      return;
+   452→    }
+   453→    setEditSaving(true);
+   454→    try {
+   455→      const scheduledAt = editForm.scheduledDate && editForm.scheduledTime
+   456→        ? new Date(`${editForm.scheduledDate}T${editForm.scheduledTime}`).toISOString()
+   457→        : undefined;
+   458→
+   459→      const res = await fetch(`/api/jobs/${editingJob.id}`, {
+   460→        method: 'PUT',
+   461→        headers: { 'Content-Type': 'application/json' },
+   462→        body: JSON.stringify({
+   463→          title: editForm.title,
+   464→          type: editForm.type,
+   465→          priority: editForm.priority,
+   466→          address: editForm.address || null,
+   467→          customerName: editForm.customerName || null,
+   468→          customerPhone: editForm.customerPhone || null,
+   469→          scheduledAt: scheduledAt || null,
+   470→          scheduledTime: editForm.scheduledTime || null,
+   471→          notes: editForm.notes || null,
+   472→          estimatedDuration: editForm.estimatedDuration
+   473→            ? Number(editForm.estimatedDuration)
+   474→            : null,
+   475→        }),
+   476→      });
+   477→
+   478→      if (res.ok) {
+   479→        toast.success('Job updated successfully');
+   480→        setShowEditDialog(false);
+   481→        setEditingJob(null);
+   482→        fetchJobs();
+   483→      } else {
+   484→        const err = await res.json().catch(() => ({}));
+   485→        toast.error(err.error || 'Failed to update job');
+   486→      }
+   487→    } catch {
+   488→      toast.error('Network error');
+   489→    } finally {
+   490→      setEditSaving(false);
+   491→    }
+   492→  };
+   493→
+   494→  // ─── Delete Job ─────────────────────────────────────────────────────────
+   495→  const handleDeleteJob = async () => {
+   496→    if (!deletingJob) return;
+   497→    setDeleteSaving(true);
+   498→    try {
+   499→      const res = await fetch(`/api/jobs/${deletingJob.id}`, {
+   500→        method: 'DELETE',
+   501→      });
+   502→      if (res.ok) {
+   503→        toast.success('Job deleted successfully');
+   504→        setDeletingJob(null);
+   505→        setShowJobDetail(false);
+   506→        fetchJobs();
+   507→        fetchEmployees();
+   508→      } else {
+   509→        const err = await res.json().catch(() => ({}));
+   510→        toast.error(err.error || 'Failed to delete job');
+   511→      }
+   512→    } catch {
+   513→      toast.error('Network error');
+   514→    } finally {
+   515→      setDeleteSaving(false);
+   516→    }
+   517→  };
+   518→
+   519→  // A small "⋯" dropdown with Edit / Delete actions, shown on every job row
+   520→  // regardless of status (so completed/cancelled jobs can still be edited or
+   521→  // removed). Wrapped to stop click propagation so it doesn't open the detail.
+   522→  const getMoreActionsMenu = (job: Job) => (
+   523→    <DropdownMenu>
+   524→      <DropdownMenuTrigger asChild>
+   525→        <Button
+   526→          variant="ghost"
+   527→          size="icon"
+   528→          className="h-7 w-7"
+   529→          onClick={(e) => e.stopPropagation()}
+   530→          title="More actions"
+   531→        >
+   532→          <MoreVertical className="size-4" />
+   533→        </Button>
+   534→      </DropdownMenuTrigger>
+   535→      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+   536→        <DropdownMenuItem onClick={() => openJobDetail(job)}>
+   537→          <Eye className="size-4 mr-2" /> View Details
+   538→        </DropdownMenuItem>
+   539→        <DropdownMenuItem onClick={() => openEditDialog(job)}>
+   540→          <Pencil className="size-4 mr-2" /> Edit Job
+   541→        </DropdownMenuItem>
+   542→        <DropdownMenuSeparator />
+   543→        <DropdownMenuItem
+   544→          className="text-red-600 focus:text-red-700 focus:bg-red-50"
+   545→          onClick={() => setDeletingJob(job)}
+   546→        >
+   547→          <Trash2 className="size-4 mr-2" /> Delete Job
+   548→        </DropdownMenuItem>
+   549→      </DropdownMenuContent>
+   550→    </DropdownMenu>
+   551→  );
+   552→
+   553→  const getActionButtons = (job: Job) => {
+   554→    // The status-specific primary action + the "⋯" more-actions menu (edit/delete)
+   555→    const moreMenu = getMoreActionsMenu(job);
+   556→    switch (job.status) {
+   557→      case 'pending':
+   558→        return (
+   559→          <div className="flex items-center gap-1 justify-end">
+   560→            <Button
+   561→              size="sm"
+   562→              className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs"
+   563→              onClick={(e) => { e.stopPropagation(); openAssignDialog(job); }}
+   564→            >
+   565→              <User className="size-3 mr-1" /> Assign
+   566→            </Button>
+   567→            {moreMenu}
+   568→          </div>
+   569→        );
+   570→      case 'assigned':
+   571→        return (
+   572→          <div className="flex items-center gap-1 justify-end">
+   573→            <Button
+   574→              size="sm"
+   575→              className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs"
+   576→              onClick={(e) => { e.stopPropagation(); handleLifecycleAction('start', job.id); }}
+   577→            >
+   578→              <Play className="size-3 mr-1" /> Start
+   579→            </Button>
+   580→            {moreMenu}
+   581→          </div>
+   582→        );
+   583→      case 'in_progress':
+   584→        return (
+   585→          <div className="flex items-center gap-1 justify-end">
+   586→            <Button
+   587→              size="sm"
+   588→              className="bg-green-600 hover:bg-green-700 h-7 text-xs"
+   589→              onClick={(e) => { e.stopPropagation(); handleLifecycleAction('complete', job.id); }}
+   590→            >
+   591→              <CheckCircle2 className="size-3 mr-1" /> Complete
+   592→            </Button>
+   593→            {moreMenu}
+   594→          </div>
+   595→        );
+   596→      case 'completed':
+   597→      case 'cancelled':
+   598→      default:
+   599→        return (
+   600→          <div className="flex items-center gap-1 justify-end">
+   601→            <Button
+   602→              size="sm"
+   603→              variant="outline"
+   604→              className="h-7 text-xs"
+   605→              onClick={(e) => { e.stopPropagation(); openJobDetail(job); }}
+   606→            >
+   607→              <Eye className="size-3 mr-1" /> View
+   608→            </Button>
+   609→            {moreMenu}
+   610→          </div>
+   611→        );
+   612→    }
+   613→  };
+   614→
+   615→  // ─── Render ─────────────────────────────────────────────────────────────
+   616→
+   617→  return (
+   618→    <div className="space-y-6 max-w-7xl mx-auto">
+   619→      {/* ─── Header ──────────────────────────────────────────────────────── */}
+   620→      <div className="flex items-center justify-between flex-wrap gap-4">
+   621→        <div className="flex items-center gap-3">
+   622→          <div className="flex items-center justify-center size-10 rounded-lg bg-amber-600">
+   623→            <Briefcase className="size-5 text-white" />
+   624→          </div>
+   625→          <div>
+   626→            <h2 className="text-xl font-bold">Jobs</h2>
+   627→            <p className="text-sm text-muted-foreground">Manage and track all service jobs</p>
+   628→          </div>
+   629→        </div>
+   630→        <Button
+   631→          className="bg-emerald-600 hover:bg-emerald-700"
+   632→          onClick={() => setShowCreateJob(true)}
+   633→        >
+   634→          <Plus className="size-4 mr-1.5" /> Create Job
+   635→        </Button>
+   636→      </div>
+   637→
+   638→      {/* ─── Stats ───────────────────────────────────────────────────────── */}
+   639→      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+   640→        {[
+   641→          { label: 'Total', value: stats.total, color: 'text-foreground', icon: Briefcase },
+   642→          { label: 'Pending', value: stats.pending, color: 'text-amber-600', icon: Clock },
+   643→          { label: 'Assigned', value: stats.assigned, color: 'text-blue-600', icon: User },
+   644→          { label: 'In Progress', value: stats.inProgress, color: 'text-emerald-600', icon: Activity },
+   645→          { label: 'Completed', value: stats.completed, color: 'text-green-600', icon: CheckCircle2 },
+   646→          { label: 'Cancelled', value: stats.cancelled, color: 'text-red-600', icon: XCircle },
+   647→        ].map((stat) => {
+   648→          const Icon = stat.icon;
+   649→          return (
+   650→            <Card key={stat.label} className="p-3">
+   651→              <div className="flex items-center gap-2">
+   652→                <Icon className={`size-4 ${stat.color.replace('text-', 'text-').includes('foreground') ? 'text-muted-foreground' : stat.color}`} />
+   653→                <div>
+   654→                  <p className="text-xs text-muted-foreground">{stat.label}</p>
+   655→                  <p className={`text-lg font-bold ${stat.color}`}>{stat.value}</p>
+   656→                </div>
+   657→              </div>
+   658→            </Card>
+   659→          );
+   660→        })}
+   661→      </div>
+   662→
+   663→      {/* ─── Status Filter Tabs + Search ─────────────────────────────────── */}
+   664→      <div className="space-y-4">
+   665→        <div className="flex flex-wrap items-center gap-3">
+   666→          <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-auto">
+   667→            <TabsList>
+   668→              <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
+   669→              <TabsTrigger value="pending" className="text-xs">Pending</TabsTrigger>
+   670→              <TabsTrigger value="assigned" className="text-xs">Assigned</TabsTrigger>
+   671→              <TabsTrigger value="in_progress" className="text-xs">In Progress</TabsTrigger>
+   672→              <TabsTrigger value="completed" className="text-xs">Completed</TabsTrigger>
+   673→              <TabsTrigger value="cancelled" className="text-xs">Cancelled</TabsTrigger>
+   674→            </TabsList>
+   675→          </Tabs>
+   676→        </div>
+   677→
+   678→        <div className="flex flex-wrap gap-3 items-center">
+   679→          <div className="relative flex-1 min-w-[200px]">
+   680→            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+   681→            <Input
+   682→              placeholder="Search jobs by title, customer, address..."
+   683→              value={search}
+   684→              onChange={(e) => setSearch(e.target.value)}
+   685→              className="pl-9"
+   686→            />
+   687→          </div>
+   688→          <div className="flex gap-1 border rounded-md p-0.5">
+   689→            <Button
+   690→              size="sm"
+   691→              variant={viewMode === 'cards' ? 'default' : 'ghost'}
+   692→              className="h-7 text-xs px-2"
+   693→              onClick={() => setViewMode('cards')}
+   694→            >
+   695→              Cards
+   696→            </Button>
+   697→            <Button
+   698→              size="sm"
+   699→              variant={viewMode === 'table' ? 'default' : 'ghost'}
+   700→              className="h-7 text-xs px-2"
+   701→              onClick={() => setViewMode('table')}
+   702→            >
+   703→              Table
+   704→            </Button>
+   705→          </div>
+   706→          <Button variant="outline" size="sm" onClick={() => fetchJobs()}>
+   707→            <RefreshCw className="size-3.5 mr-1" /> Refresh
+   708→          </Button>
+   709→        </div>
+   710→      </div>
+   711→
+   712→      {/* ─── Jobs Content ────────────────────────────────────────────────── */}
+   713→      {loading ? (
+   714→        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+   715→          {[1, 2, 3, 4, 5, 6].map((i) => (
+   716→            <Card key={i} className="animate-pulse">
+   717→              <CardContent className="p-4">
+   718→                <div className="h-4 bg-muted rounded w-3/4 mb-3" />
+   719→                <div className="h-3 bg-muted rounded w-1/2 mb-2" />
+   720→                <div className="h-3 bg-muted rounded w-2/3 mb-4" />
+   721→                <div className="h-8 bg-muted rounded" />
+   722→              </CardContent>
+   723→            </Card>
+   724→          ))}
+   725→        </div>
+   726→      ) : jobs.length === 0 ? (
+   727→        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+   728→          <Briefcase className="size-12 mb-4 opacity-20" />
+   729→          <p className="text-lg font-medium">No jobs found</p>
+   730→          <p className="text-sm">Create a new job or adjust your filters</p>
+   731→        </div>
+   732→      ) : viewMode === 'cards' ? (
+   733→        /* ─── Card View ────────────────────────────────────────────────── */
+   734→        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+   735→          {jobs.map((job) => (
+   736→            <Card
+   737→              key={job.id}
+   738→              className="cursor-pointer hover:shadow-md transition-all border-l-4"
+   739→              style={{
+   740→                borderLeftColor:
+   741→                  job.status === 'pending' ? '#f59e0b' :
+   742→                  job.status === 'assigned' ? '#3b82f6' :
+   743→                  job.status === 'in_progress' ? '#10b981' :
+   744→                  job.status === 'completed' ? '#22c55e' :
+   745→                  job.status === 'cancelled' ? '#ef4444' : '#94a3b8',
+   746→              }}
+   747→              onClick={() => openJobDetail(job)}
+   748→            >
+   749→              <CardContent className="p-4 space-y-3">
+   750→                {/* Title + Status */}
+   751→                <div className="flex items-start justify-between gap-2">
+   752→                  <div className="min-w-0">
+   753→                    <div className="flex items-center gap-2 mb-1">
+   754→                      <span className="text-[10px] text-muted-foreground font-mono">
+   755→                        {job.jobNumber || job.id.slice(0, 8).toUpperCase()}
+   756→                      </span>
+   757→                    </div>
+   758→                    <h4 className="font-semibold text-sm leading-tight truncate">{job.title}</h4>
+   759→                  </div>
+   760→                  <Badge variant="outline" className={`${getStatusColor(job.status)} shrink-0 text-[10px]`}>
+   761→                    <span className="mr-1">{getStatusIcon(job.status)}</span>
+   762→                    {job.status.replace('_', ' ')}
+   763→                  </Badge>
+   764→                </div>
+   765→
+   766→                {/* Customer */}
+   767→                {job.customerName && (
+   768→                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+   769→                    <User className="size-3 shrink-0" />
+   770→                    <span className="truncate">{job.customerName}</span>
+   771→                  </div>
+   772→                )}
+   773→
+   774→                {/* Service Type */}
+   775→                <div className="flex items-center gap-2 flex-wrap">
+   776→                  <Badge variant="secondary" className="text-[10px] h-5">
+   777→                    {getJobTypeLabel(job.type)}
+   778→                  </Badge>
+   779→                  <Badge variant="outline" className={`${getPriorityColor(job.priority)} text-[10px] h-5`}>
+   780→                    {job.priority}
+   781→                  </Badge>
+   782→                </div>
+   783→
+   784→                {/* Address */}
+   785→                {job.address && (
+   786→                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+   787→                    <MapPin className="size-3 shrink-0" />
+   788→                    <span className="truncate">{job.address}</span>
+   789→                  </div>
+   790→                )}
+   791→
+   792→                {/* Route */}
+   793→                {(job.pickup || job.dropoff) && (
+   794→                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+   795→                    <MapPin className="size-3 shrink-0" />
+   796→                    <span className="truncate max-w-[80px]">{job.pickup}</span>
+   797→                    <ArrowRight className="size-3 shrink-0" />
+   798→                    <span className="truncate max-w-[80px]">{job.dropoff}</span>
+   799→                  </div>
+   800→                )}
+   801→
+   802→                {/* Schedule */}
+   803→                {job.scheduledAt && (
+   804→                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+   805→                    <Calendar className="size-3 shrink-0" />
+   806→                    <span>{formatDate(job.scheduledAt)}</span>
+   807→                    {job.scheduledTime && <span className="ml-1">{job.scheduledTime}</span>}
+   808→                  </div>
+   809→                )}
+   810→
+   811→                {/* Assignee */}
+   812→                {job.assigneeName ? (
+   813→                  <div className="flex items-center gap-2 pt-1 border-t">
+   814→                    <Avatar className="size-6">
+   815→                      <AvatarFallback className="bg-emerald-100 text-emerald-700 text-[10px]">
+   816→                        {job.assigneeName[0]}
+   817→                      </AvatarFallback>
+   818→                    </Avatar>
+   819→                    <span className="text-xs text-muted-foreground">{job.assigneeName}</span>
+   820→                  </div>
+   821→                ) : (
+   822→                  <div className="pt-1 border-t">
+   823→                    <span className="text-xs text-amber-600 flex items-center gap-1">
+   824→                      <AlertCircle className="size-3" /> Unassigned
+   825→                    </span>
+   826→                  </div>
+   827→                )}
+   828→
+   829→                {/* Actions */}
+   830→                <div className="pt-1 border-t">
+   831→                  {getActionButtons(job)}
+   832→                </div>
+   833→              </CardContent>
+   834→            </Card>
+   835→          ))}
+   836→        </div>
+   837→      ) : (
+   838→        /* ─── Table View ───────────────────────────────────────────────── */
+   839→        <Card>
+   840→          <ScrollArea className="max-h-[600px]">
+   841→            <Table>
+   842→              <TableHeader>
+   843→                <TableRow>
+   844→                  <TableHead className="w-[100px]">Job #</TableHead>
+   845→                  <TableHead>Title</TableHead>
+   846→                  <TableHead>Customer</TableHead>
+   847→                  <TableHead>Service</TableHead>
+   848→                  <TableHead>Address</TableHead>
+   849→                  <TableHead>Scheduled</TableHead>
+   850→                  <TableHead>Assignee</TableHead>
+   851→                  <TableHead>Status</TableHead>
+   852→                  <TableHead className="text-right">Actions</TableHead>
+   853→                </TableRow>
+   854→              </TableHeader>
+   855→              <TableBody>
+   856→                {jobs.map((job) => (
+   857→                  <TableRow
+   858→                    key={job.id}
+   859→                    className="cursor-pointer"
+   860→                    onClick={() => openJobDetail(job)}
+   861→                  >
+   862→                    <TableCell className="font-mono text-xs">
+   863→                      {job.jobNumber || job.id.slice(0, 8).toUpperCase()}
+   864→                    </TableCell>
+   865→                    <TableCell className="font-medium text-sm">{job.title}</TableCell>
+   866→                    <TableCell className="text-sm">{job.customerName || '--'}</TableCell>
+   867→                    <TableCell>
+   868→                      <Badge variant="secondary" className="text-[10px]">
+   869→                        {getJobTypeLabel(job.type)}
+   870→                      </Badge>
+   871→                    </TableCell>
+   872→                    <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate">
+   873→                      {job.address || job.pickup || '--'}
+   874→                    </TableCell>
+   875→                    <TableCell className="text-xs text-muted-foreground">
+   876→                      {job.scheduledAt ? formatDate(job.scheduledAt) : '--'}
+   877→                      {job.scheduledTime && <div>{job.scheduledTime}</div>}
+   878→                    </TableCell>
+   879→                    <TableCell className="text-sm">
+   880→                      {job.assigneeName || <span className="text-amber-600 text-xs">Unassigned</span>}
+   881→                    </TableCell>
+   882→                    <TableCell>
+   883→                      <Badge variant="outline" className={`${getStatusColor(job.status)} text-[10px]`}>
+   884→                        {job.status.replace('_', ' ')}
+   885→                      </Badge>
+   886→                    </TableCell>
+   887→                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+   888→                      {getActionButtons(job)}
+   889→                    </TableCell>
+   890→                  </TableRow>
+   891→                ))}
+   892→              </TableBody>
+   893→            </Table>
+   894→          </ScrollArea>
+   895→        </Card>
+   896→      )}
+   897→
+   898→      {/* ─── Create Job Dialog ─────────────────────────────────────────── */}
+   899→      <Dialog open={showCreateJob} onOpenChange={setShowCreateJob}>
+   900→        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+   901→          <DialogHeader>
+   902→            <DialogTitle>Create New Job</DialogTitle>
+   903→            <DialogDescription>Schedule a new service job</DialogDescription>
+   904→          </DialogHeader>
+   905→          <div className="space-y-4 py-2">
+   906→            {/* Service Catalog dropdown — auto-fills title + duration */}
+   907→            <div className="space-y-2">
+   908→              <Label>
+   909→                Service{' '}
+   910→                <span className="text-xs font-normal text-muted-foreground">
+   911→                  (from catalog — optional)
+   912→                </span>
+   913→              </Label>
+   914→              <Select
+   915→                value={jobForm.serviceId || '_none'}
+   916→                onValueChange={(v) => {
+   917→                  const id = v === '_none' ? '' : v;
+   918→                  const svc = services.find((s) => s.id === id);
+   919→                  setJobForm((prev) => ({
+   920→                    ...prev,
+   921→                    serviceId: id,
+   922→                    // Auto-fill title only if empty or matches a known service name.
+   923→                    title:
+   924→                      !prev.title.trim() || services.some((s) => s.name === prev.title)
+   925→                        ? svc?.name ?? prev.title
+   926→                        : prev.title,
+   927→                    // Auto-fill duration from catalog (in minutes).
+   928→                    estimatedDuration: svc ? String(svc.duration) : prev.estimatedDuration,
+   929→                  }));
+   930→                }}
+   931→              >
+   932→                <SelectTrigger>
+   933→                  <SelectValue
+   934→                    placeholder={
+   935→                      services.length === 0
+   936→                        ? 'No services in catalog'
+   937→                        : 'Select a service to auto-fill details'
+   938→                    }
+   939→                  />
+   940→                </SelectTrigger>
+   941→                <SelectContent>
+   942→                  <SelectItem value="_none">— No service —</SelectItem>
+   943→                  {services.map((svc) => (
+   944→                    <SelectItem key={svc.id} value={svc.id}>
+   945→                      {svc.name}
+   946→                      <span className="text-xs text-muted-foreground ml-1">
+   947→                        · {svc.category} · {svc.duration}m · ${svc.basePrice.toFixed(2)}
+   948→                      </span>
+   949→                    </SelectItem>
+   950→                  ))}
+   951→                </SelectContent>
+   952→              </Select>
+   953→            </div>
+   954→
+   955→            <div className="space-y-2">
+   956→              <Label>Title *</Label>
+   957→              <Input
+   958→                placeholder="e.g., AC Repair at Customer Site"
+   959→                value={jobForm.title}
+   960→                onChange={(e) => setJobForm({ ...jobForm, title: e.target.value })}
+   961→              />
+   962→            </div>
+   963→
+   964→            <div className="grid grid-cols-2 gap-3">
+   965→              <div className="space-y-2">
+   966→                <Label>Customer Name</Label>
+   967→                <Input
+   968→                  placeholder="Customer name"
+   969→                  value={jobForm.customerName}
+   970→                  onChange={(e) => setJobForm({ ...jobForm, customerName: e.target.value })}
+   971→                />
+   972→              </div>
+   973→              <div className="space-y-2">
+   974→                <Label>Customer Phone</Label>
+   975→                <Input
+   976→                  placeholder="+1 555 123 4567"
+   977→                  value={jobForm.customerPhone}
+   978→                  onChange={(e) => setJobForm({ ...jobForm, customerPhone: e.target.value })}
+   979→                />
+   980→              </div>
+   981→            </div>
+   982→
+   983→            {/* Priority (full-width — Service Type dropdown hidden; jobForm.type
+   984→                stays at its default 'service' which is what the API expects for
+   985→                a catalog-driven job. The catalog Service dropdown above is the
+   986→                source of truth for what kind of job this is.) */}
+   987→            <div className="space-y-2">
+   988→              <Label>Priority</Label>
+   989→              <Select value={jobForm.priority} onValueChange={(v) => setJobForm({ ...jobForm, priority: v })}>
+   990→                <SelectTrigger><SelectValue /></SelectTrigger>
+   991→                <SelectContent>
+   992→                  <SelectItem value="low">Low</SelectItem>
+   993→                  <SelectItem value="medium">Medium</SelectItem>
+   994→                  <SelectItem value="high">High</SelectItem>
+   995→                  <SelectItem value="urgent">Urgent</SelectItem>
+   996→                </SelectContent>
+   997→              </Select>
+   998→            </div>
+   999→
+  1000→            <div className="space-y-2">
+  1001→              <Label>Address</Label>
+  1002→              <Input
+  1003→                placeholder="Service location address"
+  1004→                value={jobForm.address}
+  1005→                onChange={(e) => setJobForm({ ...jobForm, address: e.target.value })}
+  1006→              />
+  1007→            </div>
+  1008→
+  1009→            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+  1010→              <div className="space-y-2">
+  1011→                <Label>Scheduled Date</Label>
+  1012→                <Input
+  1013→                  type="date"
+  1014→                  value={jobForm.scheduledDate}
+  1015→                  onChange={(e) => setJobForm({ ...jobForm, scheduledDate: e.target.value })}
+  1016→                />
+  1017→              </div>
+  1018→              <div className="space-y-2">
+  1019→                <Label>Scheduled Time</Label>
+  1020→                <Input
+  1021→                  type="time"
+  1022→                  value={jobForm.scheduledTime}
+  1023→                  onChange={(e) => setJobForm({ ...jobForm, scheduledTime: e.target.value })}
+  1024→                />
+  1025→              </div>
+  1026→              <div className="space-y-2">
+  1027→                <Label>
+  1028→                  Est. Duration{' '}
+  1029→                  <span className="text-xs font-normal text-muted-foreground">(min)</span>
+  1030→                </Label>
+  1031→                <Input
+  1032→                  type="number"
+  1033→                  min="5"
+  1034→                  placeholder="60"
+  1035→                  value={jobForm.estimatedDuration}
+  1036→                  onChange={(e) =>
+  1037→                    setJobForm({ ...jobForm, estimatedDuration: e.target.value })
+  1038→                  }
+  1039→                />
+  1040→              </div>
+  1041→            </div>
+  1042→
+  1043→            <div className="space-y-2">
+  1044→              <Label>Assignee</Label>
+  1045→              <Select value={jobForm.assigneeId} onValueChange={(v) => setJobForm({ ...jobForm, assigneeId: v })}>
+  1046→                <SelectTrigger><SelectValue placeholder="Select employee (optional)" /></SelectTrigger>
+  1047→                <SelectContent>
+  1048→                  <SelectItem value="none">No assignee</SelectItem>
+  1049→                  {employees.filter(e => e.status === 'available').map((emp) => (
+  1050→                    <SelectItem key={emp.id} value={emp.id}>
+  1051→                      {emp.name} - {emp.role} ({emp.rating.toFixed(1)} rating)
+  1052→                    </SelectItem>
+  1053→                  ))}
+  1054→                </SelectContent>
+  1055→              </Select>
+  1056→            </div>
+  1057→
+  1058→            <div className="space-y-2">
+  1059→              <Label>Notes</Label>
+  1060→              <Textarea
+  1061→                placeholder="Additional notes or instructions"
+  1062→                value={jobForm.notes}
+  1063→                onChange={(e) => setJobForm({ ...jobForm, notes: e.target.value })}
+  1064→                rows={3}
+  1065→              />
+  1066→            </div>
+  1067→          </div>
+  1068→          <DialogFooter>
+  1069→            <Button variant="outline" onClick={() => setShowCreateJob(false)}>Cancel</Button>
+  1070→            <Button
+  1071→              className="bg-emerald-600 hover:bg-emerald-700"
+  1072→              onClick={handleCreateJob}
+  1073→              disabled={!jobForm.title}
+  1074→            >
+  1075→              Create Job
+  1076→            </Button>
+  1077→          </DialogFooter>
+  1078→        </DialogContent>
+  1079→      </Dialog>
+  1080→
+  1081→      {/* ─── Assign Employee Dialog ────────────────────────────────────── */}
+  1082→      <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
+  1083→        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
+  1084→          <DialogHeader>
+  1085→            <DialogTitle>Assign Employee</DialogTitle>
+  1086→            <DialogDescription>
+  1087→              {assigningJob ? `Select an employee for: ${assigningJob.title}` : 'Select an employee'}
+  1088→            </DialogDescription>
+  1089→          </DialogHeader>
+  1090→          {assigningJob && (
+  1091→            <div className="space-y-4 overflow-y-auto flex-1 min-h-0">
+  1092→              <div className="p-3 rounded-lg bg-muted/50 space-y-1">
+  1093→                <div className="flex items-center gap-2">
+  1094→                  <span className="font-medium text-sm">{assigningJob.title}</span>
+  1095→                  <Badge variant="outline" className={getStatusColor(assigningJob.status)}>
+  1096→                    {assigningJob.status.replace('_', ' ')}
+  1097→                  </Badge>
+  1098→                </div>
+  1099→                {assigningJob.address && (
+  1100→                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+  1101→                    <MapPin className="size-3" /> {assigningJob.address}
+  1102→                  </p>
+  1103→                )}
+  1104→              </div>
+  1105→              <Separator />
+  1106→              <div>
+  1107→                <p className="text-sm font-medium mb-2">Available Employees</p>
+  1108→                {employees.filter(e => e.status === 'available').length === 0 ? (
+  1109→                  <div className="text-center py-6 text-muted-foreground text-sm">
+  1110→                    No available employees
+  1111→                  </div>
+  1112→                ) : (
+  1113→                  <ScrollArea className="max-h-[50vh]">
+  1114→                    <div className="space-y-2">
+  1115→                      {employees.filter(e => e.status === 'available').map((emp) => {
+  1116→                        let skills: string[] = [];
+  1117→                        try { skills = JSON.parse(emp.skills || '[]'); } catch { /* empty */ }
+  1118→                        return (
+  1119→                          <button
+  1120→                            key={emp.id}
+  1121→                            className="w-full flex items-center gap-3 p-3 rounded-lg border hover:bg-emerald-50 hover:border-emerald-200 transition-colors text-left"
+  1122→                            onClick={() => handleLifecycleAction('assign', assigningJob.id, emp.id)}
+  1123→                            disabled={lifecycleLoading}
+  1124→                          >
+  1125→                            <Avatar className="size-9 shrink-0">
+  1126→                              <AvatarFallback className="bg-emerald-100 text-emerald-700 text-sm font-medium">
+  1127→                                {emp.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+  1128→                              </AvatarFallback>
+  1129→                            </Avatar>
+  1130→                            <div className="flex-1 min-w-0">
+  1131→                              <div className="flex items-center gap-2">
+  1132→                                <span className="font-medium text-sm">{emp.name}</span>
+  1133→                                <Badge variant="outline" className="text-[10px] h-4">{emp.role}</Badge>
+  1134→                              </div>
+  1135→                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+  1136→                                <Phone className="size-3" /> {emp.phone}
+  1137→                              </div>
+  1138→                              {skills.length > 0 && (
+  1139→                                <div className="flex gap-1 mt-1">
+  1140→                                  {skills.slice(0, 3).map((s, i) => (
+  1141→                                    <Badge key={i} variant="secondary" className="text-[9px] h-4">{s}</Badge>
+  1142→                                  ))}
+  1143→                                </div>
+  1144→                              )}
+  1145→                            </div>
+  1146→                            <div className="text-right shrink-0">
+  1147→                              <div className="flex items-center gap-0.5 text-xs">
+  1148→                                <span className="text-yellow-500">★</span>
+  1149→                                <span>{emp.rating.toFixed(1)}</span>
+  1150→                              </div>
+  1151→                              <span className="text-[10px] text-muted-foreground">{emp.completedJobs} jobs</span>
+  1152→                            </div>
+  1153→                          </button>
+  1154→                        );
+  1155→                      })}
+  1156→                    </div>
+  1157→                  </ScrollArea>
+  1158→                )}
+  1159→              </div>
+  1160→            </div>
+  1161→          )}
+  1162→        </DialogContent>
+  1163→      </Dialog>
+  1164→
+  1165→      {/* ─── Job Detail Dialog ─────────────────────────────────────────── */}
+  1166→      <Dialog open={showJobDetail} onOpenChange={setShowJobDetail}>
+  1167→        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+  1168→          <DialogHeader>
+  1169→            <DialogTitle className="flex items-center gap-2">
+  1170→              Job Details
+  1171→              {selectedJob && (
+  1172→                <Badge variant="outline" className={getStatusColor(selectedJob.status)}>
+  1173→                  {getStatusIcon(selectedJob.status)}
+  1174→                  <span className="ml-1">{selectedJob.status.replace('_', ' ')}</span>
+  1175→                </Badge>
+  1176→              )}
+  1177→            </DialogTitle>
+  1178→            <DialogDescription>
+  1179→              {selectedJob?.jobNumber && (
+  1180→                <span className="font-mono">{selectedJob.jobNumber}</span>
+  1181→              )}
+  1182→            </DialogDescription>
+  1183→          </DialogHeader>
+  1184→          {selectedJob && (
+  1185→            <div className="space-y-5">
+  1186→              {/* Title & Priority */}
+  1187→              <div>
+  1188→                <h3 className="font-semibold text-lg">{selectedJob.title}</h3>
+  1189→                <div className="flex items-center gap-2 mt-1">
+  1190→                  <Badge variant="outline" className={getPriorityColor(selectedJob.priority)}>
+  1191→                    {selectedJob.priority} priority
+  1192→                  </Badge>
+  1193→                  <Badge variant="secondary" className="text-xs">
+  1194→                    {getJobTypeLabel(selectedJob.type)}
+  1195→                  </Badge>
+  1196→                </div>
+  1197→              </div>
+  1198→
+  1199→              <Separator />
+  1200→
+  1201→              {/* Info Grid */}
+  1202→              <div className="grid grid-cols-2 gap-3 text-sm">
+  1203→                {selectedJob.customerName && (
+  1204→                  <div className="flex items-center gap-2">
+  1205→                    <User className="size-4 text-muted-foreground shrink-0" />
+  1206→                    <div>
+  1207→                      <p className="text-xs text-muted-foreground">Customer</p>
+  1208→                      <p className="font-medium">{selectedJob.customerName}</p>
+  1209→                      {selectedJob.customerPhone && (
+  1210→                        <p className="text-xs text-muted-foreground">{selectedJob.customerPhone}</p>
+  1211→                      )}
+  1212→                    </div>
+  1213→                  </div>
+  1214→                )}
+  1215→                {selectedJob.assigneeName && (
+  1216→                  <div className="flex items-center gap-2">
+  1217→                    <div className="size-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-medium shrink-0">
+  1218→                      {selectedJob.assigneeName[0]}
+  1219→                    </div>
+  1220→                    <div>
+  1221→                      <p className="text-xs text-muted-foreground">Assignee</p>
+  1222→                      <p className="font-medium">{selectedJob.assigneeName}</p>
+  1223→                      {selectedJob.assigneePhone && (
+  1224→                        <p className="text-xs text-muted-foreground">{selectedJob.assigneePhone}</p>
+  1225→                      )}
+  1226→                    </div>
+  1227→                  </div>
+  1228→                )}
+  1229→                {selectedJob.address && (
+  1230→                  <div className="flex items-start gap-2 col-span-2">
+  1231→                    <MapPin className="size-4 text-muted-foreground shrink-0 mt-0.5" />
+  1232→                    <div>
+  1233→                      <p className="text-xs text-muted-foreground">Address</p>
+  1234→                      <p>{selectedJob.address}</p>
+  1235→                    </div>
+  1236→                  </div>
+  1237→                )}
+  1238→                {selectedJob.scheduledAt && (
+  1239→                  <div className="flex items-center gap-2">
+  1240→                    <Calendar className="size-4 text-muted-foreground shrink-0" />
+  1241→                    <div>
+  1242→                      <p className="text-xs text-muted-foreground">Scheduled</p>
+  1243→                      <p>{formatDate(selectedJob.scheduledAt)}{selectedJob.scheduledTime ? ` at ${selectedJob.scheduledTime}` : ''}</p>
+  1244→                    </div>
+  1245→                  </div>
+  1246→                )}
+  1247→                <div className="flex items-center gap-2">
+  1248→                  <Clock className="size-4 text-muted-foreground shrink-0" />
+  1249→                  <div>
+  1250→                    <p className="text-xs text-muted-foreground">Created</p>
+  1251→                    <p>{formatDateTime(selectedJob.createdAt)}</p>
+  1252→                  </div>
+  1253→                </div>
+  1254→              </div>
+  1255→
+  1256→              {/* Description / Notes */}
+  1257→              {(selectedJob.description || selectedJob.notes) && (
+  1258→                <>
+  1259→                  <Separator />
+  1260→                  <div>
+  1261→                    <p className="text-sm font-medium mb-1">
+  1262→                      {selectedJob.description ? 'Description' : 'Notes'}
+  1263→                    </p>
+  1264→                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+  1265→                      {selectedJob.description || selectedJob.notes}
+  1266→                    </p>
+  1267→                  </div>
+  1268→                </>
+  1269→              )}
+  1270→
+  1271→              {/* Status Timeline */}
+  1272→              <Separator />
+  1273→              <div>
+  1274→                <p className="text-sm font-medium mb-3">Status Timeline</p>
+  1275→                <div className="space-y-3">
+  1276→                  {[
+  1277→                    {
+  1278→                      label: 'Created',
+  1279→                      time: selectedJob.createdAt,
+  1280→                      icon: <Briefcase className="size-3" />,
+  1281→                      done: true,
+  1282→                    },
+  1283→                    {
+  1284→                      label: 'Assigned',
+  1285→                      time: selectedJob.assigneeName ? selectedJob.updatedAt : null,
+  1286→                      icon: <User className="size-3" />,
+  1287→                      done: !!selectedJob.assigneeName,
+  1288→                    },
+  1289→                    {
+  1290→                      label: 'In Progress',
+  1291→                      time: selectedJob.actualStartTime,
+  1292→                      icon: <Play className="size-3" />,
+  1293→                      done: ['in_progress', 'completed'].includes(selectedJob.status),
+  1294→                    },
+  1295→                    {
+  1296→                      label: 'Completed',
+  1297→                      time: selectedJob.actualEndTime,
+  1298→                      icon: <CheckCircle2 className="size-3" />,
+  1299→                      done: selectedJob.status === 'completed',
+  1300→                    },
+  1301→                  ].map((step, i) => (
+  1302→                    <div key={i} className="flex items-center gap-3">
+  1303→                      <div className={`size-7 rounded-full flex items-center justify-center shrink-0 ${
+  1304→                        step.done
+  1305→                          ? 'bg-emerald-100 text-emerald-700'
+  1306→                          : 'bg-muted text-muted-foreground'
+  1307→                      }`}>
+  1308→                        {step.icon}
+  1309→                      </div>
+  1310→                      <div className="flex-1">
+  1311→                        <span className={`text-sm ${step.done ? '' : 'text-muted-foreground'}`}>
+  1312→                          {step.label}
+  1313→                        </span>
+  1314→                      </div>
+  1315→                      <span className="text-xs text-muted-foreground">
+  1316→                        {step.time ? formatDateTime(step.time) : '--'}
+  1317→                      </span>
+  1318→                    </div>
+  1319→                  ))}
+  1320→                </div>
+  1321→              </div>
+  1322→
+  1323→              {/* Notification Log */}
+  1324→              {(() => {
+  1325→                const logs = parseNotificationLog(selectedJob.notificationLogJson);
+  1326→                if (logs.length === 0) return null;
+  1327→                return (
+  1328→                  <>
+  1329→                    <Separator />
+  1330→                    <div>
+  1331→                      <p className="text-sm font-medium mb-2">Notification Log</p>
+  1332→                      <div className="space-y-1.5">
+  1333→                        {logs.map((log: Record<string, unknown>, i: number) => (
+  1334→                          <div key={i} className="flex items-center gap-2 text-xs p-2 rounded bg-muted/50">
+  1335→                            <Zap className="size-3 text-yellow-500 shrink-0" />
+  1336→                            <span className="font-medium">{String(log.action)}</span>
+  1337→                            {Boolean(log.resourceName) && (
+  1338→                              <span className="text-muted-foreground">to {String(log.resourceName)}</span>
+  1339→                            )}
+  1340→                            {Boolean(log.timestamp) && (
+  1341→                              <span className="text-muted-foreground ml-auto">
+  1342→                                {new Date(String(log.timestamp)).toLocaleTimeString()}
+  1343→                              </span>
+  1344→                            )}
+  1345→                          </div>
+  1346→                        ))}
+  1347→                      </div>
+  1348→                    </div>
+  1349→                  </>
+  1350→                );
+  1351→              })()}
+  1352→
+  1353→              {/* Actions */}
+  1354→              <Separator />
+  1355→              <div className="flex flex-wrap gap-2">
+  1356→                {selectedJob.status === 'pending' && (
+  1357→                  <Button
+  1358→                    className="bg-emerald-600 hover:bg-emerald-700"
+  1359→                    onClick={() => {
+  1360→                      setShowJobDetail(false);
+  1361→                      openAssignDialog(selectedJob);
+  1362→                    }}
+  1363→                  >
+  1364→                    <User className="size-4 mr-1.5" /> Assign
+  1365→                  </Button>
+  1366→                )}
+  1367→                {selectedJob.status === 'assigned' && (
+  1368→                  <>
+  1369→                    <Button
+  1370→                      className="bg-emerald-600 hover:bg-emerald-700"
+  1371→                      onClick={() => handleLifecycleAction('start', selectedJob.id)}
+  1372→                      disabled={lifecycleLoading}
+  1373→                    >
+  1374→                      <Play className="size-4 mr-1.5" /> Start Job
+  1375→                    </Button>
+  1376→                    <Button
+  1377→                      variant="outline"
+  1378→                      onClick={() => {
+  1379→                        setShowJobDetail(false);
+  1380→                        openAssignDialog(selectedJob);
+  1381→                      }}
+  1382→                    >
+  1383→                      Reassign
+  1384→                    </Button>
+  1385→                  </>
+  1386→                )}
+  1387→                {selectedJob.status === 'in_progress' && (
+  1388→                  <Button
+  1389→                    className="bg-green-600 hover:bg-green-700"
+  1390→                    onClick={() => handleLifecycleAction('complete', selectedJob.id)}
+  1391→                    disabled={lifecycleLoading}
+  1392→                  >
+  1393→                    <CheckCircle2 className="size-4 mr-1.5" /> Complete
+  1394→                  </Button>
+  1395→                )}
+  1396→                {!['completed', 'cancelled'].includes(selectedJob.status) && (
+  1397→                  <Button
+  1398→                    variant="destructive"
+  1399→                    size="sm"
+  1400→                    onClick={() => handleCancelJob(selectedJob.id)}
+  1401→                  >
+  1402→                    <XCircle className="size-4 mr-1.5" /> Cancel Job
+  1403→                  </Button>
+  1404→                )}
+  1405→                {/* Edit + Delete — available on any job regardless of status */}
+  1406→                <Button
+  1407→                  variant="outline"
+  1408→                  size="sm"
+  1409→                  onClick={() => openEditDialog(selectedJob)}
+  1410→                >
+  1411→                  <Pencil className="size-4 mr-1.5" /> Edit
+  1412→                </Button>
+  1413→                <Button
+  1414→                  variant="outline"
+  1415→                  size="sm"
+  1416→                  className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+  1417→                  onClick={() => {
+  1418→                    setDeletingJob(selectedJob);
+  1419→                  }}
+  1420→                >
+  1421→                  <Trash2 className="size-4 mr-1.5" /> Delete
+  1422→                </Button>
+  1423→              </div>
+  1424→            </div>
+  1425→          )}
+  1426→        </DialogContent>
+  1427→      </Dialog>
+  1428→
+  1429→      {/* ─── Edit Job Dialog ─────────────────────────────────────────── */}
+  1430→      <Dialog open={showEditDialog} onOpenChange={(open) => {
+  1431→        setShowEditDialog(open);
+  1432→        if (!open) setEditingJob(null);
+  1433→      }}>
+  1434→        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+  1435→          <DialogHeader>
+  1436→            <DialogTitle className="flex items-center gap-2">
+  1437→              <Pencil className="size-5 text-emerald-600" />
+  1438→              Edit Job
+  1439→            </DialogTitle>
+  1440→            <DialogDescription>
+  1441→              {editingJob && (
+  1442→                <span>
+  1443→                  Update details for{' '}
+  1444→                  <span className="font-mono text-xs">
+  1445→                    {editingJob.jobNumber || editingJob.id.slice(0, 8).toUpperCase()}
+  1446→                  </span>
+  1447→                </span>
+  1448→              )}
+  1449→            </DialogDescription>
+  1450→          </DialogHeader>
+  1451→          <div className="space-y-4 py-2">
+  1452→            <div className="space-y-2">
+  1453→              <Label>Title *</Label>
+  1454→              <Input
+  1455→                placeholder="Job title"
+  1456→                value={editForm.title}
+  1457→                onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+  1458→              />
+  1459→            </div>
+  1460→
+  1461→            <div className="grid grid-cols-2 gap-3">
+  1462→              <div className="space-y-2">
+  1463→                <Label>Customer Name</Label>
+  1464→                <Input
+  1465→                  placeholder="Customer name"
+  1466→                  value={editForm.customerName}
+  1467→                  onChange={(e) => setEditForm({ ...editForm, customerName: e.target.value })}
+  1468→                />
+  1469→              </div>
+  1470→              <div className="space-y-2">
+  1471→                <Label>Customer Phone</Label>
+  1472→                <Input
+  1473→                  placeholder="+1 555 123 4567"
+  1474→                  value={editForm.customerPhone}
+  1475→                  onChange={(e) => setEditForm({ ...editForm, customerPhone: e.target.value })}
+  1476→                />
+  1477→              </div>
+  1478→            </div>
+  1479→
+  1480→            <div className="space-y-2">
+  1481→              <Label>Priority</Label>
+  1482→              <Select value={editForm.priority} onValueChange={(v) => setEditForm({ ...editForm, priority: v })}>
+  1483→                <SelectTrigger><SelectValue /></SelectTrigger>
+  1484→                <SelectContent>
+  1485→                  <SelectItem value="low">Low</SelectItem>
+  1486→                  <SelectItem value="medium">Medium</SelectItem>
+  1487→                  <SelectItem value="high">High</SelectItem>
+  1488→                  <SelectItem value="urgent">Urgent</SelectItem>
+  1489→                </SelectContent>
+  1490→              </Select>
+  1491→            </div>
+  1492→
+  1493→            <div className="space-y-2">
+  1494→              <Label>Address</Label>
+  1495→              <Input
+  1496→                placeholder="Service location address"
+  1497→                value={editForm.address}
+  1498→                onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+  1499→              />
+  1500→            </div>
+  1501→
+  1502→            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+  1503→              <div className="space-y-2">
+  1504→                <Label>Scheduled Date</Label>
+  1505→                <Input
+  1506→                  type="date"
+  1507→                  value={editForm.scheduledDate}
+  1508→                  onChange={(e) => setEditForm({ ...editForm, scheduledDate: e.target.value })}
+  1509→                />
+  1510→              </div>
+  1511→              <div className="space-y-2">
+  1512→                <Label>Scheduled Time</Label>
+  1513→                <Input
+  1514→                  type="time"
+  1515→                  value={editForm.scheduledTime}
+  1516→                  onChange={(e) => setEditForm({ ...editForm, scheduledTime: e.target.value })}
+  1517→                />
+  1518→              </div>
+  1519→              <div className="space-y-2">
+  1520→                <Label>
+  1521→                  Est. Duration{' '}
+  1522→                  <span className="text-xs font-normal text-muted-foreground">(min)</span>
+  1523→                </Label>
+  1524→                <Input
+  1525→                  type="number"
+  1526→                  min="5"
+  1527→                  placeholder="60"
+  1528→                  value={editForm.estimatedDuration}
+  1529→                  onChange={(e) =>
+  1530→                    setEditForm({ ...editForm, estimatedDuration: e.target.value })
+  1531→                  }
+  1532→                />
+  1533→              </div>
+  1534→            </div>
+  1535→
+  1536→            <div className="space-y-2">
+  1537→              <Label>Notes</Label>
+  1538→              <Textarea
+  1539→                placeholder="Additional notes or instructions"
+  1540→                value={editForm.notes}
+  1541→                onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+  1542→                rows={3}
+  1543→              />
+  1544→            </div>
+  1545→          </div>
+  1546→          <DialogFooter>
+  1547→            <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
+  1548→            <Button
+  1549→              className="bg-emerald-600 hover:bg-emerald-700"
+  1550→              onClick={handleEditJob}
+  1551→              disabled={!editForm.title.trim() || editSaving}
+  1552→            >
+  1553→              {editSaving ? 'Saving...' : 'Save Changes'}
+  1554→            </Button>
+  1555→          </DialogFooter>
+  1556→        </DialogContent>
+  1557→      </Dialog>
+  1558→
+  1559→      {/* ─── Delete Job Confirmation ─────────────────────────────────── */}
+  1560→      <AlertDialog open={!!deletingJob} onOpenChange={(open) => {
+  1561→        if (!open) setDeletingJob(null);
+  1562→      }}>
+  1563→        <AlertDialogContent>
+  1564→          <AlertDialogHeader>
+  1565→            <AlertDialogTitle className="flex items-center gap-2">
+  1566→              <Trash2 className="size-5 text-red-600" />
+  1567→              Delete Job?
+  1568→            </AlertDialogTitle>
+  1569→            <AlertDialogDescription>
+  1570→              {deletingJob && (
+  1571→                <>
+  1572→                  Are you sure you want to permanently delete job{' '}
+  1573→                  <span className="font-mono font-semibold text-foreground">
+  1574→                    {deletingJob.jobNumber || deletingJob.id.slice(0, 8).toUpperCase()}
+  1575→                  </span>
+  1576→                  {' '}
+  1577→                  ({deletingJob.title})? This action cannot be undone.
+  1578→                  {deletingJob.status === 'completed' && (
+  1579→                    <span className="block mt-2 text-amber-600">
+  1580→                      ⚠️ This job may have linked invoices. The job record will be removed but invoices will remain.
+  1581→                    </span>
+  1582→                  )}
+  1583→                </>
+  1584→              )}
+  1585→            </AlertDialogDescription>
+  1586→          </AlertDialogHeader>
+  1587→          <AlertDialogFooter>
+  1588→            <AlertDialogCancel disabled={deleteSaving}>Cancel</AlertDialogCancel>
+  1589→            <AlertDialogAction
+  1590→              onClick={handleDeleteJob}
+  1591→              disabled={deleteSaving}
+  1592→              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+  1593→            >
+  1594→              {deleteSaving ? 'Deleting...' : 'Delete Job'}
+  1595→            </AlertDialogAction>
+  1596→          </AlertDialogFooter>
+  1597→        </AlertDialogContent>
+  1598→      </AlertDialog>
+  1599→    </div>
+  1600→  );
+  1601→}
+  1602→

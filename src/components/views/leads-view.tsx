@@ -9,6 +9,7 @@ import {
   List, ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft,
   ChevronRight, CheckCircle2, X, Send, StickyNote,
   CalendarDays, Briefcase, AlertCircle, User, UserPlus,
+  Loader2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -306,6 +307,10 @@ export function LeadsView() {
 
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deletingLead, setDeletingLead] = useState<Lead | null>(null);
+  // Loading flags for delete + per-lead status change so only the clicked
+  // button shows a spinner instead of disabling the whole view.
+  const [deletingLeadLoading, setDeletingLeadLoading] = useState(false);
+  const [statusLoadingId, setStatusLoadingId] = useState<string | null>(null);
 
   // Service catalog — fetched so the lead form can link a lead to a
   // specific catalog service (which then flows through to the job on convert).
@@ -458,6 +463,7 @@ export function LeadsView() {
 
   const handleDeleteLead = async () => {
     if (!deletingLead) return;
+    setDeletingLeadLoading(true);
     try {
       const res = await fetch(`/api/leads/${deletingLead.id}`, { method: 'DELETE' });
       if (res.ok) {
@@ -474,6 +480,8 @@ export function LeadsView() {
       }
     } catch {
       toast.error('Network error');
+    } finally {
+      setDeletingLeadLoading(false);
     }
   };
 
@@ -507,6 +515,7 @@ export function LeadsView() {
   };
 
   const handleStatusChange = async (leadId: string, newStatus: string) => {
+    setStatusLoadingId(leadId);
     try {
       const res = await fetch(`/api/leads/${leadId}`, {
         method: 'PUT',
@@ -524,6 +533,8 @@ export function LeadsView() {
       }
     } catch {
       toast.error('Network error');
+    } finally {
+      setStatusLoadingId(null);
     }
   };
 
@@ -1297,6 +1308,7 @@ export function LeadsView() {
                 <div className="flex flex-wrap gap-2">
                   {KANBAN_STATUSES.filter((s) => s !== selectedLead.status).map((status) => {
                     const config = STATUS_CONFIG[status];
+                    const isStatusLoading = statusLoadingId === selectedLead.id;
                     return (
                       <Button
                         key={status}
@@ -1304,7 +1316,9 @@ export function LeadsView() {
                         size="sm"
                         className={cn('text-xs', config.color, config.borderColor)}
                         onClick={() => handleStatusChange(selectedLead.id, status)}
+                        disabled={isStatusLoading}
                       >
+                        {isStatusLoading && <Loader2 className="size-3 mr-1 animate-spin" />}
                         {config.label}
                       </Button>
                     );
@@ -1463,8 +1477,9 @@ export function LeadsView() {
           <Button variant="outline" onClick={() => { setShowDeleteDialog(false); setDeletingLead(null); }}>
             Cancel
           </Button>
-          <Button variant="destructive" onClick={handleDeleteLead}>
-            Delete
+          <Button variant="destructive" onClick={handleDeleteLead} disabled={deletingLeadLoading}>
+            {deletingLeadLoading && <Loader2 className="size-4 mr-1.5 animate-spin" />}
+            {deletingLeadLoading ? 'Deleting...' : 'Delete'}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -19,6 +19,21 @@ function safeParseJson(str: string): unknown[] {
   }
 }
 
+/**
+ * Run a background side-effect without blocking the API response.
+ * Errors are logged but never thrown to the caller. This is what makes
+ * assign/start/complete feel instant to the user — the DB write is awaited
+ * (so the response reflects the new state) but WhatsApp/Email/EventBus/
+ * invoice creation all run detached in the background.
+ */
+function fireAndForget<T>(
+  label: string,
+  task: Promise<T> | (() => Promise<T>),
+): void {
+  const p = typeof task === 'function' ? task() : task
+  p.catch((err) => console.error(`[JobLifecycle] ${label} failed:`, err))
+}
+
 function addNotificationLog(logJson: string, entry: Record<string, unknown>): string {
   const logs = safeParseJson(logJson)
   logs.push({ ...entry, timestamp: new Date().toISOString() })
@@ -162,43 +177,31 @@ export async function POST(request: NextRequest) {
           })
         }
 
-        // Send WhatsApp notification to employee
+        // Send WhatsApp notification to employee (background — don't block response)
         if (employee) {
-          try {
-            await notifyEmployeeJobAssigned(updatedJob, employee)
-          } catch (e) {
-            console.error('Failed to send employee assignment notification:', e)
-          }
+          fireAndForget('employee assign notification', notifyEmployeeJobAssigned(updatedJob, employee))
         }
 
-        // Send WhatsApp notification to customer
+        // Send WhatsApp notification to customer (background)
         // NOTE: notifyCustomerJobAssigned(job, employee) uses `employee.name` for
         // the "Technician:" field — so we MUST pass the assigned employee here,
         // NOT the customer. Falling back to updatedJob.assigneeName/Phone covers
         // the resource-only assignment case (no Employee row).
-        try {
-          if (job.customerPhone) {
-            const technician =
-              employee
-                ? { id: employee.id, name: employee.name, phone: employee.phone }
-                : { name: updatedJob.assigneeName, phone: updatedJob.assigneePhone }
-            await notifyCustomerJobAssigned(updatedJob, technician)
-          }
-        } catch (e) {
-          console.error('Failed to send customer assignment notification:', e)
+        if (job.customerPhone) {
+          const technician =
+            employee
+              ? { id: employee.id, name: employee.name, phone: employee.phone }
+              : { name: updatedJob.assigneeName, phone: updatedJob.assigneePhone }
+          fireAndForget('customer assign notification', notifyCustomerJobAssigned(updatedJob, technician))
         }
 
-        // ─── Emit event via EventBus ─────────────────────────────
-        try {
-          await EventBus.emit('job.assigned', {
-            job: { id: updatedJob.id, jobNumber: updatedJob.jobNumber, title: updatedJob.title, status: updatedJob.status, priority: updatedJob.priority, type: updatedJob.type, address: updatedJob.address, customerName: updatedJob.customerName, customerPhone: updatedJob.customerPhone, assigneeName: updatedJob.assigneeName, assigneePhone: updatedJob.assigneePhone, workspaceId: updatedJob.workspaceId },
-            employee: employee ? { id: employee.id, name: employee.name, phone: employee.phone } : null,
-            customer: job.customerPhone ? { name: job.customerName, phone: job.customerPhone } : null,
-            resourceType: 'job', resourceId: updatedJob.id,
-          }, { tenantId: updatedJob.workspaceId || undefined, workspaceId: updatedJob.workspaceId || undefined })
-        } catch (e) {
-          console.error('Failed to emit job.assigned event:', e)
-        }
+        // ─── Emit event via EventBus (background) ────────────────
+        fireAndForget('job.assigned event', EventBus.emit('job.assigned', {
+          job: { id: updatedJob.id, jobNumber: updatedJob.jobNumber, title: updatedJob.title, status: updatedJob.status, priority: updatedJob.priority, type: updatedJob.type, address: updatedJob.address, customerName: updatedJob.customerName, customerPhone: updatedJob.customerPhone, assigneeName: updatedJob.assigneeName, assigneePhone: updatedJob.assigneePhone, workspaceId: updatedJob.workspaceId },
+          employee: employee ? { id: employee.id, name: employee.name, phone: employee.phone } : null,
+          customer: job.customerPhone ? { name: job.customerName, phone: job.customerPhone } : null,
+          resourceType: 'job', resourceId: updatedJob.id,
+        }, { tenantId: updatedJob.workspaceId || undefined, workspaceId: updatedJob.workspaceId || undefined }))
 
         break
       }
@@ -217,26 +220,18 @@ export async function POST(request: NextRequest) {
           include: { assignee: true, customer: true, resource: true },
         })
 
-        // Notify customer that employee accepted
-        try {
-          if (job.customerPhone) {
-            await notifyCustomerJobAssigned(updatedJob, { name: updatedJob.assigneeName, phone: updatedJob.assigneePhone })
-          }
-        } catch (e) {
-          console.error('Failed to send notification:', e)
+        // Notify customer that employee accepted (background)
+        if (job.customerPhone) {
+          fireAndForget('customer accept notification', notifyCustomerJobAssigned(updatedJob, { name: updatedJob.assigneeName, phone: updatedJob.assigneePhone }))
         }
 
-        // ─── Emit event via EventBus ─────────────────────────────
-        try {
-          await EventBus.emit('job.accepted', {
-            job: { id: updatedJob.id, jobNumber: updatedJob.jobNumber, title: updatedJob.title, status: updatedJob.status, priority: updatedJob.priority, type: updatedJob.type, address: updatedJob.address, customerName: updatedJob.customerName, customerPhone: updatedJob.customerPhone, assigneeName: updatedJob.assigneeName, assigneePhone: updatedJob.assigneePhone, workspaceId: updatedJob.workspaceId },
-            employee: updatedJob.assigneeId ? { id: updatedJob.assigneeId, name: updatedJob.assigneeName, phone: updatedJob.assigneePhone } : null,
-            customer: job.customerPhone ? { name: job.customerName, phone: job.customerPhone } : null,
-            resourceType: 'job', resourceId: updatedJob.id,
-          }, { tenantId: updatedJob.workspaceId || undefined, workspaceId: updatedJob.workspaceId || undefined })
-        } catch (e) {
-          console.error('Failed to emit job.accepted event:', e)
-        }
+        // ─── Emit event via EventBus (background) ────────────────
+        fireAndForget('job.accepted event', EventBus.emit('job.accepted', {
+          job: { id: updatedJob.id, jobNumber: updatedJob.jobNumber, title: updatedJob.title, status: updatedJob.status, priority: updatedJob.priority, type: updatedJob.type, address: updatedJob.address, customerName: updatedJob.customerName, customerPhone: updatedJob.customerPhone, assigneeName: updatedJob.assigneeName, assigneePhone: updatedJob.assigneePhone, workspaceId: updatedJob.workspaceId },
+          employee: updatedJob.assigneeId ? { id: updatedJob.assigneeId, name: updatedJob.assigneeName, phone: updatedJob.assigneePhone } : null,
+          customer: job.customerPhone ? { name: job.customerName, phone: job.customerPhone } : null,
+          resourceType: 'job', resourceId: updatedJob.id,
+        }, { tenantId: updatedJob.workspaceId || undefined, workspaceId: updatedJob.workspaceId || undefined }))
 
         break
       }
@@ -267,18 +262,14 @@ export async function POST(request: NextRequest) {
           include: { assignee: true, customer: true, resource: true },
         })
 
-        // ─── Emit event via EventBus ─────────────────────────────
-        try {
-          await EventBus.emit('job.rejected', {
-            job: { id: updatedJob.id, jobNumber: updatedJob.jobNumber, title: updatedJob.title, status: updatedJob.status, priority: updatedJob.priority, type: updatedJob.type, address: updatedJob.address, customerName: updatedJob.customerName, customerPhone: updatedJob.customerPhone, assigneeName: null, assigneePhone: null, workspaceId: updatedJob.workspaceId },
-            employee: null,
-            customer: job.customerPhone ? { name: job.customerName, phone: job.customerPhone } : null,
-            resourceType: 'job', resourceId: updatedJob.id,
-            reason: reason || 'No reason provided',
-          }, { tenantId: updatedJob.workspaceId || undefined, workspaceId: updatedJob.workspaceId || undefined })
-        } catch (e) {
-          console.error('Failed to emit job.rejected event:', e)
-        }
+        // ─── Emit event via EventBus (background) ────────────────
+        fireAndForget('job.rejected event', EventBus.emit('job.rejected', {
+          job: { id: updatedJob.id, jobNumber: updatedJob.jobNumber, title: updatedJob.title, status: updatedJob.status, priority: updatedJob.priority, type: updatedJob.type, address: updatedJob.address, customerName: updatedJob.customerName, customerPhone: updatedJob.customerPhone, assigneeName: null, assigneePhone: null, workspaceId: updatedJob.workspaceId },
+          employee: null,
+          customer: job.customerPhone ? { name: job.customerName, phone: job.customerPhone } : null,
+          resourceType: 'job', resourceId: updatedJob.id,
+          reason: reason || 'No reason provided',
+        }, { tenantId: updatedJob.workspaceId || undefined, workspaceId: updatedJob.workspaceId || undefined }))
 
         break
       }
@@ -297,29 +288,21 @@ export async function POST(request: NextRequest) {
           include: { assignee: true, customer: true, resource: true },
         })
 
-        // Notify customer that technician is on the way
-        try {
-          if (job.customerPhone) {
-            await notifyCustomerJobStarted(updatedJob, { name: updatedJob.assigneeName, phone: updatedJob.assigneePhone })
-          }
-        } catch (e) {
-          console.error('Failed to send notification:', e)
+        // Notify customer that technician is on the way (background)
+        if (job.customerPhone) {
+          fireAndForget('customer start notification', notifyCustomerJobStarted(updatedJob, { name: updatedJob.assigneeName, phone: updatedJob.assigneePhone }))
         }
 
-        // ─── Emit event via EventBus ─────────────────────────────
-        try {
-          await EventBus.emit('job.started', {
-            job: { id: updatedJob.id, jobNumber: updatedJob.jobNumber, title: updatedJob.title, status: updatedJob.status, priority: updatedJob.priority, type: updatedJob.type, address: updatedJob.address, customerName: updatedJob.customerName, customerPhone: updatedJob.customerPhone, assigneeName: updatedJob.assigneeName, assigneePhone: updatedJob.assigneePhone, workspaceId: updatedJob.workspaceId },
-            employee: updatedJob.assigneeId ? { id: updatedJob.assigneeId, name: updatedJob.assigneeName, phone: updatedJob.assigneePhone } : null,
-            customer: job.customerPhone ? { name: job.customerName, phone: job.customerPhone } : null,
-            resourceType: 'job', resourceId: updatedJob.id,
-          }, { tenantId: updatedJob.workspaceId || undefined, workspaceId: updatedJob.workspaceId || undefined })
-        } catch (e) {
-          console.error('Failed to emit job.started event:', e)
-        }
+        // ─── Emit event via EventBus (background) ────────────────
+        fireAndForget('job.started event', EventBus.emit('job.started', {
+          job: { id: updatedJob.id, jobNumber: updatedJob.jobNumber, title: updatedJob.title, status: updatedJob.status, priority: updatedJob.priority, type: updatedJob.type, address: updatedJob.address, customerName: updatedJob.customerName, customerPhone: updatedJob.customerPhone, assigneeName: updatedJob.assigneeName, assigneePhone: updatedJob.assigneePhone, workspaceId: updatedJob.workspaceId },
+          employee: updatedJob.assigneeId ? { id: updatedJob.assigneeId, name: updatedJob.assigneeName, phone: updatedJob.assigneePhone } : null,
+          customer: job.customerPhone ? { name: job.customerName, phone: job.customerPhone } : null,
+          resourceType: 'job', resourceId: updatedJob.id,
+        }, { tenantId: updatedJob.workspaceId || undefined, workspaceId: updatedJob.workspaceId || undefined }))
 
-        // ─── Notify the tenant owner that the job has started ────
-        try {
+        // ─── Notify the tenant owner that the job has started (background) ────
+        fireAndForget('owner start notification', async () => {
           const jobNumber = updatedJob.jobNumber || String(updatedJob.id).slice(-6).toUpperCase()
           const startTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
           const waMessage = [
@@ -339,12 +322,10 @@ export async function POST(request: NextRequest) {
             whatsappMessage: waMessage,
             jobId: updatedJob.id,
           })
-        } catch (ownerErr) {
-          console.error('[JobLifecycle] Owner start notification failed:', ownerErr)
-        }
+        })
 
-        // ─── Milestone invoice #1 (30% on job start) if enabled ──
-        try {
+        // ─── Milestone invoice #1 (30% on job start) if enabled (background) ──
+        fireAndForget('milestone 1 invoice', async () => {
           const invSettings = await getInvoiceSettings(await resolveTenantIdForJob(updatedJob.workspaceId))
           if (invSettings.enableMilestones) {
             const msResult = await createMilestoneInvoice(updatedJob.id, 1)
@@ -354,9 +335,7 @@ export async function POST(request: NextRequest) {
               console.error(`[JobLifecycle] Milestone 1 invoice failed: ${msResult.error}`)
             }
           }
-        } catch (msErr) {
-          console.error('[JobLifecycle] Milestone invoice error:', msErr)
-        }
+        })
 
         break
       }
@@ -415,41 +394,28 @@ export async function POST(request: NextRequest) {
           include: { assignee: true, customer: true, resource: true },
         })
 
-        // Notify customer that job is completed
-        try {
-          if (job.customerPhone) {
-            await notifyCustomerJobCompleted(updatedJob, { name: updatedJob.assigneeName, phone: updatedJob.assigneePhone })
-          }
-        } catch (e) {
-          console.error('Failed to send notification:', e)
+        // Notify customer that job is completed (background)
+        if (job.customerPhone) {
+          fireAndForget('customer complete notification', notifyCustomerJobCompleted(updatedJob, { name: updatedJob.assigneeName, phone: updatedJob.assigneePhone }))
         }
 
-        // Notify employee that job is completed
-        try {
-          if (updatedJob.assigneeId) {
-            const employee = await db.employee.findUnique({ where: { id: updatedJob.assigneeId } })
-            if (employee) {
-              await notifyEmployeeJobCompleted(updatedJob, employee)
-            }
-          }
-        } catch (e) {
-          console.error('Failed to send notification:', e)
+        // Notify employee that job is completed (background).
+        // Use the already-included `updatedJob.assignee` relation instead of
+        // re-querying the employee table.
+        if (updatedJob.assignee) {
+          fireAndForget('employee complete notification', notifyEmployeeJobCompleted(updatedJob, updatedJob.assignee))
         }
 
-        // ─── Emit event via EventBus ─────────────────────────────
-        try {
-          await EventBus.emit('job.completed', {
-            job: { id: updatedJob.id, jobNumber: updatedJob.jobNumber, title: updatedJob.title, status: updatedJob.status, priority: updatedJob.priority, type: updatedJob.type, address: updatedJob.address, customerName: updatedJob.customerName, customerPhone: updatedJob.customerPhone, assigneeName: updatedJob.assigneeName, assigneePhone: updatedJob.assigneePhone, workspaceId: updatedJob.workspaceId },
-            employee: updatedJob.assigneeId ? { id: updatedJob.assigneeId, name: updatedJob.assigneeName, phone: updatedJob.assigneePhone } : null,
-            customer: job.customerPhone ? { name: job.customerName, phone: job.customerPhone } : null,
-            resourceType: 'job', resourceId: updatedJob.id,
-          }, { tenantId: updatedJob.workspaceId || undefined, workspaceId: updatedJob.workspaceId || undefined })
-        } catch (e) {
-          console.error('Failed to emit job.completed event:', e)
-        }
+        // ─── Emit event via EventBus (background) ────────────────
+        fireAndForget('job.completed event', EventBus.emit('job.completed', {
+          job: { id: updatedJob.id, jobNumber: updatedJob.jobNumber, title: updatedJob.title, status: updatedJob.status, priority: updatedJob.priority, type: updatedJob.type, address: updatedJob.address, customerName: updatedJob.customerName, customerPhone: updatedJob.customerPhone, assigneeName: updatedJob.assigneeName, assigneePhone: updatedJob.assigneePhone, workspaceId: updatedJob.workspaceId },
+          employee: updatedJob.assigneeId ? { id: updatedJob.assigneeId, name: updatedJob.assigneeName, phone: updatedJob.assigneePhone } : null,
+          customer: job.customerPhone ? { name: job.customerName, phone: job.customerPhone } : null,
+          resourceType: 'job', resourceId: updatedJob.id,
+        }, { tenantId: updatedJob.workspaceId || undefined, workspaceId: updatedJob.workspaceId || undefined }))
 
-        // ─── Notify the tenant owner that the job is complete ────
-        try {
+        // ─── Notify the tenant owner that the job is complete (background) ────
+        fireAndForget('owner complete notification', async () => {
           const jobNumber = updatedJob.jobNumber || String(updatedJob.id).slice(-6).toUpperCase()
           const completedAt = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })
           const waMessage = [
@@ -468,18 +434,16 @@ export async function POST(request: NextRequest) {
             whatsappMessage: waMessage,
             jobId: updatedJob.id,
           })
-        } catch (ownerErr) {
-          console.error('[JobLifecycle] Owner complete notification failed:', ownerErr)
-        }
+        })
 
-        // ─── Auto-create invoice if tenant setting is enabled ────
+        // ─── Auto-create invoice if tenant setting is enabled (background) ────
         // Two paths:
         //   1. Milestone mode (enableMilestones=true) → create milestone #3 (final 30%).
         //      Milestone #1 (30%) was created on job start; milestone #2 (40% at 50%
         //      progress) is created manually by the manager from the invoices view.
         //   2. Standard mode → autoCreateInvoiceFromJob (respects autoCreateOnJobComplete
         //      toggle + approval_required → pending_approval status).
-        try {
+        fireAndForget('auto-invoice', async () => {
           const invSettings = await getInvoiceSettings(await resolveTenantIdForJob(updatedJob.workspaceId))
           if (invSettings.enableMilestones) {
             const msResult = await createMilestoneInvoice(updatedJob.id, 3)
@@ -496,9 +460,7 @@ export async function POST(request: NextRequest) {
               console.error(`[JobLifecycle] Auto-invoice failed: ${invResult.error}`)
             }
           }
-        } catch (invErr) {
-          console.error('[JobLifecycle] Auto-invoice creation error:', invErr)
-        }
+        })
 
         break
       }

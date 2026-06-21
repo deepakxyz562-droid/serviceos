@@ -5,6 +5,7 @@ import {
   Briefcase, Plus, Search, RefreshCw, Filter, Clock, MapPin, User,
   Phone, Calendar, Play, CheckCircle2, XCircle, Eye, ChevronRight,
   ArrowRight, AlertCircle, Activity, Zap, Pencil, Trash2, MoreVertical,
+  Loader2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -185,6 +186,13 @@ export function JobsView() {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [assigningJob, setAssigningJob] = useState<Job | null>(null);
   const [lifecycleLoading, setLifecycleLoading] = useState(false);
+  // Per-job loading state for the card action buttons (Start/Complete) so only
+  // the clicked button shows a spinner instead of disabling every card.
+  const [loadingJobId, setLoadingJobId] = useState<string | null>(null);
+  const [loadingAction, setLoadingAction] = useState<string | null>(null);
+  // Create-job dialog + cancel-job button loading states
+  const [creatingJob, setCreatingJob] = useState(false);
+  const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
 
   // Edit / Delete dialog state
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -287,6 +295,7 @@ export function JobsView() {
       toast.error('Job title is required');
       return;
     }
+    setCreatingJob(true);
     try {
       const assignee = jobForm.assigneeId !== 'none'
         ? employees.find(e => e.id === jobForm.assigneeId)
@@ -334,11 +343,15 @@ export function JobsView() {
       }
     } catch {
       toast.error('Network error');
+    } finally {
+      setCreatingJob(false);
     }
   };
 
   const handleLifecycleAction = async (action: string, jobId: string, resourceId?: string) => {
     setLifecycleLoading(true);
+    setLoadingJobId(jobId);
+    setLoadingAction(action);
     try {
       const res = await fetch('/api/jobs/lifecycle', {
         method: 'POST',
@@ -374,6 +387,8 @@ export function JobsView() {
       toast.error('Network error');
     } finally {
       setLifecycleLoading(false);
+      setLoadingJobId(null);
+      setLoadingAction(null);
     }
   };
 
@@ -398,6 +413,7 @@ export function JobsView() {
   };
 
   const handleCancelJob = async (jobId: string) => {
+    setCancellingJobId(jobId);
     try {
       const res = await fetch(`/api/jobs/${jobId}`, {
         method: 'PUT',
@@ -413,10 +429,10 @@ export function JobsView() {
       }
     } catch {
       toast.error('Network error');
+    } finally {
+      setCancellingJobId(null);
     }
   };
-
-  // ─── Edit Job ───────────────────────────────────────────────────────────
   const openEditDialog = (job: Job) => {
     setEditingJob(job);
     // Pre-fill the edit form from the job's current values
@@ -574,8 +590,11 @@ export function JobsView() {
               size="sm"
               className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs"
               onClick={(e) => { e.stopPropagation(); handleLifecycleAction('start', job.id); }}
+              disabled={loadingJobId === job.id && loadingAction === 'start'}
             >
-              <Play className="size-3 mr-1" /> Start
+              {loadingJobId === job.id && loadingAction === 'start'
+                ? <Loader2 className="size-3 mr-1 animate-spin" />
+                : <Play className="size-3 mr-1" />} Start
             </Button>
             {moreMenu}
           </div>
@@ -587,8 +606,11 @@ export function JobsView() {
               size="sm"
               className="bg-green-600 hover:bg-green-700 h-7 text-xs"
               onClick={(e) => { e.stopPropagation(); handleLifecycleAction('complete', job.id); }}
+              disabled={loadingJobId === job.id && loadingAction === 'complete'}
             >
-              <CheckCircle2 className="size-3 mr-1" /> Complete
+              {loadingJobId === job.id && loadingAction === 'complete'
+                ? <Loader2 className="size-3 mr-1 animate-spin" />
+                : <CheckCircle2 className="size-3 mr-1" />} Complete
             </Button>
             {moreMenu}
           </div>
@@ -1070,9 +1092,10 @@ export function JobsView() {
             <Button
               className="bg-emerald-600 hover:bg-emerald-700"
               onClick={handleCreateJob}
-              disabled={!jobForm.title}
+              disabled={!jobForm.title || creatingJob}
             >
-              Create Job
+              {creatingJob && <Loader2 className="size-4 mr-1.5 animate-spin" />}
+              {creatingJob ? 'Creating...' : 'Create Job'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1371,7 +1394,9 @@ export function JobsView() {
                       onClick={() => handleLifecycleAction('start', selectedJob.id)}
                       disabled={lifecycleLoading}
                     >
-                      <Play className="size-4 mr-1.5" /> Start Job
+                      {lifecycleLoading && loadingAction === 'start'
+                        ? <Loader2 className="size-4 mr-1.5 animate-spin" />
+                        : <Play className="size-4 mr-1.5" />} Start Job
                     </Button>
                     <Button
                       variant="outline"
@@ -1390,7 +1415,9 @@ export function JobsView() {
                     onClick={() => handleLifecycleAction('complete', selectedJob.id)}
                     disabled={lifecycleLoading}
                   >
-                    <CheckCircle2 className="size-4 mr-1.5" /> Complete
+                    {lifecycleLoading && loadingAction === 'complete'
+                      ? <Loader2 className="size-4 mr-1.5 animate-spin" />
+                      : <CheckCircle2 className="size-4 mr-1.5" />} Complete
                   </Button>
                 )}
                 {!['completed', 'cancelled'].includes(selectedJob.status) && (
@@ -1398,8 +1425,11 @@ export function JobsView() {
                     variant="destructive"
                     size="sm"
                     onClick={() => handleCancelJob(selectedJob.id)}
+                    disabled={cancellingJobId === selectedJob.id}
                   >
-                    <XCircle className="size-4 mr-1.5" /> Cancel Job
+                    {cancellingJobId === selectedJob.id
+                      ? <Loader2 className="size-4 mr-1.5 animate-spin" />
+                      : <XCircle className="size-4 mr-1.5" />} Cancel Job
                   </Button>
                 )}
                 {/* Edit + Delete — available on any job regardless of status */}
