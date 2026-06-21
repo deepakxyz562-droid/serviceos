@@ -93,6 +93,48 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
     }
   }
 
+  // 2b. Search CommunicationProvider for WhatsApp providers configured via the
+  // settings UI (Communication Providers screen). This is the PRIMARY way users
+  // configure WhatsApp — the Credential vault (step 2) is a legacy fallback.
+  // A CommunicationProvider may either store its secrets directly in configJson
+  // OR link to a Credential row via credentialId.
+  if (!accessToken || !phoneNumberId) {
+    try {
+      const waProviders = await db.communicationProvider.findMany({
+        where: {
+          type: 'whatsapp',
+          status: 'active',
+          sendingEnabled: true,
+        },
+        orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
+        include: { credential: true },
+      })
+
+      for (const prov of waProviders) {
+        const cfg = safeJsonParse(prov.configJson, {}) as Record<string, string>
+        let cfgAccessToken = cfg.accessToken || ''
+        let cfgPhoneNumberId = cfg.phoneNumberId || ''
+
+        // If the provider links to a Credential, the secrets live there.
+        if (!cfgAccessToken && prov.credential) {
+          const credData = safeJsonParse(prov.credential.encryptedData, {}) as Record<string, string>
+          cfgAccessToken = credData.accessToken || credData.apiKey || ''
+          // phoneNumberId might be in either place — check both.
+          if (!cfgPhoneNumberId) cfgPhoneNumberId = credData.phoneNumberId || ''
+        }
+
+        if (cfgAccessToken && cfgPhoneNumberId) {
+          accessToken = cfgAccessToken
+          phoneNumberId = cfgPhoneNumberId
+          credentialSource = `communicationProvider:${prov.id}(${prov.name}/${prov.provider})`
+          break
+        }
+      }
+    } catch {
+      // Fall through to config/env
+    }
+  }
+
   // 3. Try local config / env vars
   if (!accessToken || !phoneNumberId) {
     const config = getWhatsAppConfig()

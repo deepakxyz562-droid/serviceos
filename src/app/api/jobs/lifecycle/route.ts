@@ -355,14 +355,35 @@ export async function POST(request: NextRequest) {
         const logEntry = { action: 'completed', resourceId: job.resourceId, assigneeId: job.assigneeId, reason }
         const newLogJson = addNotificationLog(job.notificationLogJson, logEntry)
 
-        // Set employee back to available and increment completedJobs
+        // Set employee back to available and increment completedJobs.
+        // Only mark the employee as 'available' if they have no OTHER active
+        // jobs (assigned / in_progress / en_route). If they still have work
+        // assigned, keep them busy so the dispatch board doesn't show them as
+        // free when they're actually still on a job.
         if (job.assigneeId) {
           try {
+            const otherActiveJobs = await db.job.count({
+              where: {
+                assigneeId: job.assigneeId,
+                id: { not: jobId },
+                status: { in: ['assigned', 'in_progress', 'en_route'] },
+              },
+            })
+
+            // Clear currentJobId if it still points at the job we just closed.
+            const employee = await db.employee.findUnique({
+              where: { id: job.assigneeId },
+              select: { currentJobId: true },
+            })
+            const clearCurrentJob =
+              employee?.currentJobId === jobId ? { currentJobId: null } : {}
+
             await db.employee.update({
               where: { id: job.assigneeId },
               data: {
-                status: 'available',
+                status: otherActiveJobs > 0 ? 'busy' : 'available',
                 completedJobs: { increment: 1 },
+                ...clearCurrentJob,
               },
             })
           } catch (e) {

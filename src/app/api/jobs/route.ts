@@ -66,6 +66,7 @@ export async function POST(request: NextRequest) {
         customerId: body.customerId,
         customerName: body.customerName,
         customerPhone: body.customerPhone,
+        customerEmail: body.customerEmail,
         assigneeId: body.assigneeId,
         assigneeName: body.assigneeName,
         assigneePhone: body.assigneePhone,

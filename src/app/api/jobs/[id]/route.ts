@@ -83,6 +83,7 @@ export async function PUT(
     if (body.customerId !== undefined) updateData.customerId = body.customerId;
     if (body.customerName !== undefined) updateData.customerName = body.customerName;
     if (body.customerPhone !== undefined) updateData.customerPhone = body.customerPhone;
+    if (body.customerEmail !== undefined) updateData.customerEmail = body.customerEmail;
     if (body.assigneeId !== undefined) updateData.assigneeId = body.assigneeId;
     if (body.assigneeName !== undefined) updateData.assigneeName = body.assigneeName;
     if (body.assigneePhone !== undefined) updateData.assigneePhone = body.assigneePhone;
@@ -102,10 +103,18 @@ export async function PUT(
     if (body.status === 'completed') {
       updateData.actualEndTime = new Date();
       if (existingJob.assigneeId) {
+        // Only mark as 'available' if no other active jobs remain.
+        const otherActiveJobs = await db.job.count({
+          where: {
+            assigneeId: existingJob.assigneeId,
+            id: { not: id },
+            status: { in: ['assigned', 'in_progress', 'en_route'] },
+          },
+        });
         await db.employee.update({
           where: { id: existingJob.assigneeId },
           data: {
-            status: 'available',
+            status: otherActiveJobs > 0 ? 'busy' : 'available',
             completedJobs: { increment: 1 },
           },
         });

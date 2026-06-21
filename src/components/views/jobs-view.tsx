@@ -68,6 +68,7 @@ interface Job {
   customerId?: string;
   customerName?: string;
   customerPhone?: string;
+  customerEmail?: string;
   assigneeId?: string;
   assigneeName?: string;
   assigneePhone?: string;
@@ -198,7 +199,7 @@ export function JobsView() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [editForm, setEditForm] = useState({
-    title: '', customerName: '', customerPhone: '', type: 'service',
+    title: '', customerName: '', customerPhone: '', customerEmail: '', type: 'service',
     address: '', scheduledDate: '', scheduledTime: '', priority: 'medium',
     notes: '', estimatedDuration: '',
   });
@@ -211,6 +212,7 @@ export function JobsView() {
     title: '',
     customerName: '',
     customerPhone: '',
+    customerEmail: '',
     type: 'service',
     address: '',
     scheduledDate: '',
@@ -315,6 +317,7 @@ export function JobsView() {
           address: jobForm.address || undefined,
           customerName: jobForm.customerName || undefined,
           customerPhone: jobForm.customerPhone || undefined,
+          customerEmail: jobForm.customerEmail || undefined,
           assigneeId: assignee?.id || undefined,
           assigneeName: assignee?.name || undefined,
           assigneePhone: assignee?.phone || undefined,
@@ -333,7 +336,7 @@ export function JobsView() {
         toast.success('Job created successfully');
         setShowCreateJob(false);
         setJobForm({
-          title: '', customerName: '', customerPhone: '', type: 'service',
+          title: '', customerName: '', customerPhone: '', customerEmail: '', type: 'service',
           address: '', scheduledDate: '', scheduledTime: '', assigneeId: 'none',
           priority: 'medium', notes: '', serviceId: '', estimatedDuration: '',
         });
@@ -441,6 +444,7 @@ export function JobsView() {
       title: job.title || '',
       customerName: job.customerName || '',
       customerPhone: job.customerPhone || '',
+      customerEmail: (job as any).customerEmail || '',
       type: job.type || 'service',
       address: job.address || '',
       scheduledDate: scheduledAt
@@ -482,6 +486,7 @@ export function JobsView() {
           address: editForm.address || null,
           customerName: editForm.customerName || null,
           customerPhone: editForm.customerPhone || null,
+          customerEmail: editForm.customerEmail || null,
           scheduledAt: scheduledAt || null,
           scheduledTime: editForm.scheduledTime || null,
           notes: editForm.notes || null,
@@ -1002,6 +1007,16 @@ export function JobsView() {
               </div>
             </div>
 
+            <div className="space-y-2">
+              <Label>Customer Email</Label>
+              <Input
+                type="email"
+                placeholder="customer@example.com"
+                value={jobForm.customerEmail}
+                onChange={(e) => setJobForm({ ...jobForm, customerEmail: e.target.value })}
+              />
+            </div>
+
             {/* Priority (full-width — Service Type dropdown hidden; jobForm.type
                 stays at its default 'service' which is what the API expects for
                 a catalog-driven job. The catalog Service dropdown above is the
@@ -1231,6 +1246,9 @@ export function JobsView() {
                       <p className="font-medium">{selectedJob.customerName}</p>
                       {selectedJob.customerPhone && (
                         <p className="text-xs text-muted-foreground">{selectedJob.customerPhone}</p>
+                      )}
+                      {selectedJob.customerEmail && (
+                        <p className="text-xs text-muted-foreground">{selectedJob.customerEmail}</p>
                       )}
                     </div>
                   </div>
@@ -1505,6 +1523,16 @@ export function JobsView() {
                   onChange={(e) => setEditForm({ ...editForm, customerPhone: e.target.value })}
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Customer Email</Label>
+              <Input
+                type="email"
+                placeholder="customer@example.com"
+                value={editForm.customerEmail}
+                onChange={(e) => setEditForm({ ...editForm, customerEmail: e.target.value })}
+              />
             </div>
 
             <div className="space-y-2">

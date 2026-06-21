@@ -981,6 +981,7 @@ model Job {
   customerId         String?
   customerName       String?
   customerPhone      String?
+  customerEmail      String?
   assigneeId         String?
   assigneeName       String?
   assigneePhone      String?

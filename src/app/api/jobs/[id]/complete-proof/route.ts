@@ -111,12 +111,20 @@ export async function POST(
     });
 
     // ─── Update employee: set back to available, increment completedJobs ───
+    // Only mark as 'available' if the employee has no OTHER active jobs.
     if (job.assigneeId) {
       try {
+        const otherActiveJobs = await db.job.count({
+          where: {
+            assigneeId: job.assigneeId,
+            id: { not: job.id },
+            status: { in: ['assigned', 'in_progress', 'en_route'] },
+          },
+        });
         await db.employee.update({
           where: { id: job.assigneeId },
           data: {
-            status: 'available',
+            status: otherActiveJobs > 0 ? 'busy' : 'available',
             completedJobs: { increment: 1 },
             currentJobId: null,
           },

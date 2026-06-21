@@ -56,23 +56,29 @@ function getInitials(name: string): string {
 }
 
 function getStatusColor(status: string): string {
+  // 'busy' and 'on_job' are treated as the same state — the lifecycle route
+  // sets 'busy' when assigning a job, while this view historically expects
+  // 'on_job'. Map both to the amber "On Job" badge so the dispatch board
+  // shows a consistent colour regardless of which code path set the status.
+  const normalized = status === 'busy' ? 'on_job' : status;
   const map: Record<string, string> = {
     available: 'bg-emerald-100 text-emerald-700 border-emerald-200',
     on_job: 'bg-amber-100 text-amber-700 border-amber-200',
     on_leave: 'bg-purple-100 text-purple-700 border-purple-200',
     offline: 'bg-slate-100 text-slate-600 border-slate-200',
   };
-  return map[status] || 'bg-gray-100 text-gray-600 border-gray-200';
+  return map[normalized] || 'bg-gray-100 text-gray-600 border-gray-200';
 }
 
 function getStatusDot(status: string): string {
+  const normalized = status === 'busy' ? 'on_job' : status;
   const map: Record<string, string> = {
     available: 'fill-emerald-500 text-emerald-500',
     on_job: 'fill-amber-500 text-amber-500',
     on_leave: 'fill-purple-500 text-purple-500',
     offline: 'fill-slate-400 text-slate-400',
   };
-  return map[status] || 'fill-gray-400 text-gray-400';
+  return map[normalized] || 'fill-gray-400 text-gray-400';
 }
 
 function apiUrl(path: string) {
@@ -274,7 +280,9 @@ export function EmployeesView() {
   const stats = useMemo(() => ({
     total: employees.length,
     available: employees.filter((e) => e.status === 'available').length,
-    onJob: employees.filter((e) => e.status === 'on_job').length,
+    // Count both 'busy' (set by job lifecycle) and 'on_job' so the stat
+    // reflects reality regardless of which code path set the status.
+    onJob: employees.filter((e) => e.status === 'on_job' || e.status === 'busy').length,
     onLeave: employees.filter((e) => e.status === 'on_leave').length,
   }), [employees]);
 
@@ -644,7 +652,7 @@ export function EmployeesView() {
                           'text-sm font-semibold',
                           emp.status === 'available'
                             ? 'bg-emerald-100 text-emerald-700'
-                            : emp.status === 'on_job'
+                            : (emp.status === 'on_job' || emp.status === 'busy')
                             ? 'bg-amber-100 text-amber-700'
                             : emp.status === 'on_leave'
                             ? 'bg-purple-100 text-purple-700'
@@ -735,7 +743,7 @@ export function EmployeesView() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <Badge variant="outline" className={cn(getStatusColor(emp.status), 'text-[10px]')}>
                       <span className={cn('size-1.5 rounded-full mr-1', getStatusDot(emp.status))} />
-                      {emp.status.replace('_', ' ')}
+                      {emp.status === 'busy' ? 'on job' : emp.status.replace('_', ' ')}
                     </Badge>
                     {getInvitationBadge(emp.invitationStatus)}
                   </div>
