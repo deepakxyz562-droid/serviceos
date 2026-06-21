@@ -975,6 +975,7 @@ model Job {
   scheduledAt        DateTime?
   scheduledTime      String?
   estimatedDuration  Int?
+  quotedAmount       Float?   // Agreed price for this job (used by auto-invoice)
   actualStartTime    DateTime?
   actualEndTime      DateTime?
   notes              String?

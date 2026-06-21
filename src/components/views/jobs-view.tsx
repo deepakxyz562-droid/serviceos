@@ -62,6 +62,7 @@ interface Job {
   scheduledAt?: string;
   scheduledTime?: string;
   estimatedDuration?: number;
+  quotedAmount?: number;
   actualStartTime?: string;
   actualEndTime?: string;
   notes?: string;
@@ -201,7 +202,7 @@ export function JobsView() {
   const [editForm, setEditForm] = useState({
     title: '', customerName: '', customerPhone: '', customerEmail: '', type: 'service',
     address: '', scheduledDate: '', scheduledTime: '', priority: 'medium',
-    notes: '', estimatedDuration: '',
+    notes: '', estimatedDuration: '', quotedAmount: '',
   });
   const [editSaving, setEditSaving] = useState(false);
   const [deletingJob, setDeletingJob] = useState<Job | null>(null);
@@ -222,6 +223,7 @@ export function JobsView() {
     notes: '',
     serviceId: '',
     estimatedDuration: '',
+    quotedAmount: '',
   });
 
   // Service catalog — fetched so the create-job form can pick a service
@@ -328,6 +330,9 @@ export function JobsView() {
           estimatedDuration: jobForm.estimatedDuration
             ? Number(jobForm.estimatedDuration)
             : undefined,
+          quotedAmount: jobForm.quotedAmount
+            ? Number(jobForm.quotedAmount)
+            : undefined,
           status: assignee ? 'assigned' : 'pending',
         }),
       });
@@ -339,6 +344,7 @@ export function JobsView() {
           title: '', customerName: '', customerPhone: '', customerEmail: '', type: 'service',
           address: '', scheduledDate: '', scheduledTime: '', assigneeId: 'none',
           priority: 'medium', notes: '', serviceId: '', estimatedDuration: '',
+          quotedAmount: '',
         });
         fetchJobs();
       } else {
@@ -458,6 +464,7 @@ export function JobsView() {
       estimatedDuration: job.estimatedDuration
         ? String(job.estimatedDuration)
         : '',
+      quotedAmount: job.quotedAmount != null ? String(job.quotedAmount) : '',
     });
     setShowEditDialog(true);
     // Close the detail dialog if it's open so the edit dialog is the focus
@@ -492,6 +499,9 @@ export function JobsView() {
           notes: editForm.notes || null,
           estimatedDuration: editForm.estimatedDuration
             ? Number(editForm.estimatedDuration)
+            : null,
+          quotedAmount: editForm.quotedAmount
+            ? Number(editForm.quotedAmount)
             : null,
         }),
       });
@@ -953,6 +963,12 @@ export function JobsView() {
                         : prev.title,
                     // Auto-fill duration from catalog (in minutes).
                     estimatedDuration: svc ? String(svc.duration) : prev.estimatedDuration,
+                    // Auto-fill quoted amount from the service's base price,
+                    // but only if the user hasn't manually entered one yet.
+                    quotedAmount:
+                      svc && svc.basePrice > 0
+                        ? String(svc.basePrice)
+                        : prev.quotedAmount,
                   }));
                 }}
               >
@@ -1072,6 +1088,24 @@ export function JobsView() {
                   value={jobForm.estimatedDuration}
                   onChange={(e) =>
                     setJobForm({ ...jobForm, estimatedDuration: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>
+                  Quoted Amount{' '}
+                  <span className="text-xs font-normal text-muted-foreground">
+                    (used by auto-invoice)
+                  </span>
+                </Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={jobForm.quotedAmount}
+                  onChange={(e) =>
+                    setJobForm({ ...jobForm, quotedAmount: e.target.value })
                   }
                 />
               </div>
@@ -1586,6 +1620,24 @@ export function JobsView() {
                   value={editForm.estimatedDuration}
                   onChange={(e) =>
                     setEditForm({ ...editForm, estimatedDuration: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>
+                  Quoted Amount{' '}
+                  <span className="text-xs font-normal text-muted-foreground">
+                    (used by auto-invoice)
+                  </span>
+                </Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={editForm.quotedAmount}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, quotedAmount: e.target.value })
                   }
                 />
               </div>

@@ -169,117 +169,240 @@ export interface AutoInvoiceResult {
 }
 
 /**
+ * In-memory per-job lock that prevents two concurrent requests from both
+ * passing the "no invoice exists yet" check and creating duplicate invoices.
+ *
+ * This handles the race between:
+ *   - POST /api/jobs/lifecycle { action: 'complete' }  → fireAndForget(autoCreateInvoiceFromJob)
+ *   - POST /api/jobs/[id]/complete-proof               → COD invoice creation
+ *
+ * Both paths call this lock before checking/creating. On a multi-server
+ * deployment a distributed lock (Redis SETNX etc.) would be needed, but
+ * ServiceOS runs as a single Next.js process so this is sufficient.
+ */
+const _invoiceLockForJob = new Map<string, Promise<AutoInvoiceResult>>()
+
+async function withJobInvoiceLock<T extends AutoInvoiceResult>(
+  jobId: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  // If another request is already creating an invoice for this job, wait for
+  // it to finish and return its result (the caller will then see `skipped`
+  // because the invoice now exists).
+  const existing = _invoiceLockForJob.get(jobId)
+  if (existing) {
+    return existing as Promise<T>
+  }
+  const p = (async () => {
+    try {
+      return await fn()
+    } finally {
+      // Clear the lock once the operation completes (success or failure).
+      // Use a microtask delay so concurrent callers that started while we
+      // were running still see the lock and join our promise.
+      queueMicrotask(() => _invoiceLockForJob.delete(jobId))
+    }
+  })()
+  _invoiceLockForJob.set(jobId, p)
+  return p as Promise<T>
+}
+
+/**
+ * Resolve the monetary value of a job using a sensible fallback chain.
+ * Used by auto-invoice and milestone-invoice so the invoice amount reflects
+ * REAL data instead of a hard-coded $50/hr rate.
+ *
+ * Priority:
+ *   1. job.quotedAmount   — explicitly agreed price (set on the Create Job form)
+ *   2. job.amountCollected — COD payment already collected by the technician
+ *   3. Service.basePrice  — the linked service catalog entry's price
+ *   4. Lead.value         — if the job was converted from a lead
+ *   5. estimatedDuration × DEFAULT_HOURLY_RATE  — last-resort fallback
+ */
+const DEFAULT_HOURLY_RATE = 50
+export async function resolveJobAmount(job: {
+  quotedAmount?: number | null
+  amountCollected?: number | null
+  serviceId?: string | null
+  estimatedDuration?: number | null
+  id: string
+}): Promise<{ amount: number; source: string }> {
+  // 1. Explicitly quoted amount
+  if (job.quotedAmount && job.quotedAmount > 0) {
+    return { amount: job.quotedAmount, source: 'quoted_amount' }
+  }
+  // 2. COD amount already collected
+  if (job.amountCollected && job.amountCollected > 0) {
+    return { amount: job.amountCollected, source: 'cod_collected' }
+  }
+  // 3. Service catalog base price
+  if (job.serviceId) {
+    try {
+      const svc = await db.service.findUnique({
+        where: { id: job.serviceId },
+        select: { basePrice: true, name: true },
+      })
+      if (svc && svc.basePrice > 0) {
+        return { amount: svc.basePrice, source: 'service_base_price' }
+      }
+    } catch { /* ignore — fall through */ }
+  }
+  // 4. Lead value (if this job was converted from a lead)
+  try {
+    const lead = await db.lead.findFirst({
+      where: { jobId: job.id },
+      select: { value: true },
+    })
+    if (lead && lead.value > 0) {
+      return { amount: lead.value, source: 'lead_value' }
+    }
+  } catch { /* ignore — fall through */ }
+  // 5. Last resort: estimated duration × default hourly rate
+  if (job.estimatedDuration && job.estimatedDuration > 0) {
+    return {
+      amount: Math.round((job.estimatedDuration / 60) * DEFAULT_HOURLY_RATE),
+      source: 'estimated_duration_fallback',
+    }
+  }
+  // Absolute fallback
+  return { amount: DEFAULT_HOURLY_RATE, source: 'default_flat' }
+}
+
+/**
  * Auto-create an invoice from a completed job.
+ * - Wrapped in a per-job lock to prevent duplicate invoices from concurrent
+ *   requests (e.g. lifecycle complete + complete-proof running at the same
+ *   time, or the user double-clicking "Complete").
  * - Skips if an invoice already exists for the job.
- * - Uses the job's customer + a single line item for the job service.
+ * - Uses resolveJobAmount() so the invoice amount reflects REAL data
+ *   (quotedAmount → amountCollected → Service.basePrice → Lead.value →
+ *    estimatedDuration × rate) instead of a hard-coded $50/hr.
  * - Honors the tenant's defaultTaxPercent and defaultDueDays.
  */
 export async function autoCreateInvoiceFromJob(jobId: string): Promise<AutoInvoiceResult> {
-  try {
-    const job = await db.job.findUnique({
-      where: { id: jobId },
-      include: { customer: true },
-    })
-    if (!job) return { success: false, error: 'Job not found' }
-
-    // Resolve tenant: job.workspaceId is a Workspace ID (not a Tenant ID), so
-    // look up the Workspace to get its tenantId. Fall back to the first tenant.
-    let tenantId: string | null = null
-    if (job.workspaceId) {
-      try {
-        const ws = await db.workspace.findUnique({
-          where: { id: job.workspaceId },
-          select: { tenantId: true },
-        })
-        tenantId = ws?.tenantId || null
-      } catch { /* ignore */ }
-    }
-    if (!tenantId) {
-      // Last resort: first tenant
-      try {
-        const t = await db.tenant.findFirst({ select: { id: true } })
-        tenantId = t?.id || null
-      } catch { /* ignore */ }
-    }
-    if (!tenantId) return { success: false, error: 'No tenant for job' }
-
-    const settings = await getInvoiceSettings(tenantId)
-
-    // ── Respect the "Auto Create Invoice on Job Completion" toggle ──
-    // The settings dialog exposes this switch; without this check, invoices were
-    // being created on EVERY job completion regardless of the toggle value.
-    if (!settings.autoCreateOnJobComplete) {
-      return { success: false, skipped: true, reason: 'autoCreateOnJobComplete is disabled' }
-    }
-
-    // Idempotency: skip if an invoice already exists for this job
-    const existing = await db.invoice.findFirst({ where: { jobId } })
-    if (existing) {
-      return { success: false, skipped: true, reason: 'Invoice already exists for this job', invoiceId: existing.id, number: existing.number }
-    }
-
-    // Need a customer to invoice
-    if (!job.customerId && !job.customerPhone) {
-      return { success: false, skipped: true, reason: 'Job has no customer to invoice' }
-    }
-
-    const { base, rate } = await resolveCurrency(tenantId)
-    const taxPercent = settings.defaultTaxPercent || 0
-
-    // Build a single line item for the job
-    const lineItem = {
-      description: job.title || `Job #${job.jobNumber || job.id.slice(-6)}`,
-      quantity: 1,
-      rate: job.estimatedDuration ? Math.round((job.estimatedDuration / 60) * 50) : 50, // fallback rate
-      notes: job.description || '',
-    }
-    const items = [lineItem]
-    const subtotal = items.reduce((s, it) => s + it.quantity * it.rate, 0)
-    const tax = subtotal * (taxPercent / 100)
-    const total = subtotal + tax
-
-    const number = await generateInvoiceNumber(tenantId)
-    const dueDate = new Date()
-    dueDate.setDate(dueDate.getDate() + (settings.defaultDueDays || 15))
-
-    const status = settings.creationMethod === 'approval_required' ? 'pending_approval' : 'draft'
-
-    const invoice = await db.invoice.create({
-      data: {
-        number,
-        tenantId,
-        jobId,
-        customerId: job.customerId || null,
-        employeeId: job.assigneeId || null,
-        amount: subtotal,
-        tax,
-        discount: 0,
-        total,
-        currency: base,
-        exchangeRate: rate(base),
-        baseCurrency: base,
-        baseAmount: total,
-        status,
-        invoiceType: 'job_completion',
-        dueDate,
-        itemsJson: JSON.stringify(items),
-        notes: `Auto-created from completed job #${job.jobNumber || job.id.slice(-6)}`,
-      },
-    })
-
-    // Auto-send (email + WhatsApp) if enabled
-    if (settings.autoSendEmail || settings.autoSendWhatsApp) {
-      await sendInvoice(invoice.id, {
-        sendEmail: settings.autoSendEmail,
-        sendWhatsApp: settings.autoSendWhatsApp,
+  return withJobInvoiceLock(jobId, async () => {
+    try {
+      const job = await db.job.findUnique({
+        where: { id: jobId },
+        include: { customer: true },
       })
-    }
+      if (!job) return { success: false, error: 'Job not found' }
 
-    return { success: true, invoiceId: invoice.id, number: invoice.number, total: invoice.total }
-  } catch (err) {
-    console.error('[InvoiceAutomation] autoCreateInvoiceFromJob error:', err)
-    return { success: false, error: String(err) }
-  }
+      // Resolve tenant: job.workspaceId is a Workspace ID (not a Tenant ID), so
+      // look up the Workspace to get its tenantId. Fall back to the first tenant.
+      let tenantId: string | null = null
+      if (job.workspaceId) {
+        try {
+          const ws = await db.workspace.findUnique({
+            where: { id: job.workspaceId },
+            select: { tenantId: true },
+          })
+          tenantId = ws?.tenantId || null
+        } catch { /* ignore */ }
+      }
+      if (!tenantId) {
+        // Last resort: first tenant
+        try {
+          const t = await db.tenant.findFirst({ select: { id: true } })
+          tenantId = t?.id || null
+        } catch { /* ignore */ }
+      }
+      if (!tenantId) return { success: false, error: 'No tenant for job' }
+
+      const settings = await getInvoiceSettings(tenantId)
+
+      // ── Respect the "Auto Create Invoice on Job Completion" toggle ──
+      // The settings dialog exposes this switch; without this check, invoices were
+      // being created on EVERY job completion regardless of the toggle value.
+      if (!settings.autoCreateOnJobComplete) {
+        return { success: false, skipped: true, reason: 'autoCreateOnJobComplete is disabled' }
+      }
+
+      // Idempotency: skip if an invoice already exists for this job (re-check
+      // inside the lock so concurrent callers see the invoice the first one
+      // created and bail out).
+      const existing = await db.invoice.findFirst({ where: { jobId } })
+      if (existing) {
+        return { success: false, skipped: true, reason: 'Invoice already exists for this job', invoiceId: existing.id, number: existing.number }
+      }
+
+      // Need a customer to invoice — accept customerId, customerPhone, OR
+      // customerName (previously only id/phone were accepted, which caused
+      // invoices to be silently skipped for jobs that only had a name).
+      if (!job.customerId && !job.customerPhone && !job.customerName) {
+        return { success: false, skipped: true, reason: 'Job has no customer to invoice' }
+      }
+
+      const { base, rate } = await resolveCurrency(tenantId)
+      const taxPercent = settings.defaultTaxPercent || 0
+
+      // ── Resolve the REAL invoice amount (Bug 3 fix) ──
+      // Uses quotedAmount → amountCollected → Service.basePrice → Lead.value
+      // → estimatedDuration × rate, instead of a hard-coded $50/hr.
+      const { amount: resolvedAmount, source: amountSource } = await resolveJobAmount(job)
+
+      // Build a single line item for the job
+      const lineItem = {
+        description: job.title || `Job #${job.jobNumber || job.id.slice(-6)}`,
+        quantity: 1,
+        rate: resolvedAmount,
+        notes: job.description || '',
+      }
+      const items = [lineItem]
+      const subtotal = items.reduce((s, it) => s + it.quantity * it.rate, 0)
+      const tax = subtotal * (taxPercent / 100)
+      const total = subtotal + tax
+
+      const number = await generateInvoiceNumber(tenantId)
+      const dueDate = new Date()
+      dueDate.setDate(dueDate.getDate() + (settings.defaultDueDays || 15))
+
+      // If COD payment was already collected, mark the invoice as 'paid'.
+      const isCodPaid = !!(job.amountCollected && job.amountCollected > 0)
+      const status = isCodPaid
+        ? 'paid'
+        : (settings.creationMethod === 'approval_required' ? 'pending_approval' : 'draft')
+
+      const invoice = await db.invoice.create({
+        data: {
+          number,
+          tenantId,
+          jobId,
+          customerId: job.customerId || null,
+          employeeId: job.assigneeId || null,
+          amount: subtotal,
+          tax,
+          discount: 0,
+          total,
+          currency: base,
+          exchangeRate: rate(base),
+          baseCurrency: base,
+          baseAmount: total,
+          status,
+          invoiceType: 'job_completion',
+          dueDate,
+          paidAt: isCodPaid ? new Date() : null,
+          itemsJson: JSON.stringify(items),
+          notes: `Auto-created from completed job #${job.jobNumber || job.id.slice(-6)} (amount source: ${amountSource})`,
+        },
+      })
+
+      // Auto-send (email + WhatsApp) if enabled and not already paid (COD
+      // invoices are handed over in person, no need to email).
+      if (!isCodPaid && (settings.autoSendEmail || settings.autoSendWhatsApp)) {
+        await sendInvoice(invoice.id, {
+          sendEmail: settings.autoSendEmail,
+          sendWhatsApp: settings.autoSendWhatsApp,
+        })
+      }
+
+      console.log(`[InvoiceAutomation] Auto-created invoice ${invoice.number} for job ${jobId} (amount: ${resolvedAmount} via ${amountSource}, status: ${status})`)
+      return { success: true, invoiceId: invoice.id, number: invoice.number, total: invoice.total }
+    } catch (err) {
+      console.error('[InvoiceAutomation] autoCreateInvoiceFromJob error:', err)
+      return { success: false, error: String(err) }
+    }
+  })
 }
 
 // ─── Core: create deposit invoice from a booking ─────────────────────────────
@@ -605,8 +728,10 @@ export async function createMilestoneInvoice(
       return { success: false, skipped: true, reason: `Milestone ${milestoneIndex} invoice already exists`, invoiceId: existing.id, number: existing.number }
     }
 
-    // Compute the job's total value (estimated from duration × rate, or job value field)
-    const jobValue = job.estimatedDuration ? Math.round((job.estimatedDuration / 60) * 50) : 50
+    // Compute the job's total value using the REAL fallback chain
+    // (quotedAmount → amountCollected → Service.basePrice → Lead.value →
+    // estimatedDuration × rate) instead of a hard-coded $50/hr.
+    const { amount: jobValue, source: amountSource } = await resolveJobAmount(job)
     const milestoneAmount = Math.round(jobValue * (split.percentage / 100))
 
     const { base, rate } = await resolveCurrency(tenantId)
@@ -660,7 +785,7 @@ export async function createMilestoneInvoice(
         sentAt: status === 'sent' ? new Date() : null,
         dueDate,
         itemsJson: JSON.stringify(items),
-        notes: `Milestone ${milestoneIndex}/${splits.length} (${split.percentage}%) for job #${job.jobNumber || job.id.slice(-6)}`,
+        notes: `Milestone ${milestoneIndex}/${splits.length} (${split.percentage}%) for job #${job.jobNumber || job.id.slice(-6)} (amount source: ${amountSource})`,
       },
     })
 

@@ -78,6 +78,10 @@ export async function POST(request: NextRequest) {
           body.estimatedDuration !== undefined && body.estimatedDuration !== null && body.estimatedDuration !== ''
             ? Number(body.estimatedDuration)
             : undefined,
+        quotedAmount:
+          body.quotedAmount !== undefined && body.quotedAmount !== null && body.quotedAmount !== ''
+            ? Number(body.quotedAmount)
+            : undefined,
         workspaceId: body.workspaceId,
       },
       include: {

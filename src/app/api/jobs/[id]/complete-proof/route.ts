@@ -2,7 +2,7 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { EventBus } from '@/lib/event-bus';
-import { generateInvoiceNumber } from '@/lib/invoice-automation';
+import { autoCreateInvoiceFromJob } from '@/lib/invoice-automation';
 
 /**
  * POST /api/jobs/[id]/complete-proof
@@ -152,57 +152,29 @@ export async function POST(
       }
     }
 
-    // ─── Create invoice for COD if amount collected ───
-    // Idempotency: skip if an invoice already exists for this job (prevents
-    // duplicates when the manager also triggers auto-invoice from the lifecycle
-    // route, or when complete-proof is submitted twice).
-    if (paymentMethod === 'cod' && amountCollected > 0) {
-      try {
-        const existingInvoice = await db.invoice.findFirst({
-          where: { jobId: job.id },
-          select: { id: true, number: true },
-        });
-        if (existingInvoice) {
-          console.log(`[CompleteProof] Invoice ${existingInvoice.number} already exists for job ${job.id}, skipping COD invoice creation`);
-        } else {
-          // Resolve the tenantId via the workspace (Job has no direct tenantId column)
-          let invoiceTenantId: string | undefined = undefined;
-          if (job.workspaceId) {
-            const ws = await db.workspace.findUnique({
-              where: { id: job.workspaceId },
-              select: { tenantId: true },
-            });
-            invoiceTenantId = ws?.tenantId || undefined;
-          }
-
-          // Use generateInvoiceNumber() for global-unique safety (prevents
-          // P2002 collisions on multi-tenant Postgres/Supabase deployments).
-          const invoiceNumber = invoiceTenantId
-            ? await generateInvoiceNumber(invoiceTenantId)
-            : `INV-${Date.now()}`;
-
-          await db.invoice.create({
-            data: {
-              number: invoiceNumber,
-              tenantId: invoiceTenantId,
-              jobId: job.id,
-              customerId: job.customerId,
-              employeeId: job.assigneeId,
-              amount: amountCollected,
-              tax: 0,
-              discount: 0,
-              total: amountCollected,
-              currency: 'USD',
-              status: 'paid',
-              paidAt: new Date(),
-              invoiceType: 'job_completion',
-              notes: `COD payment collected by ${job.assigneeName || 'employee'}`,
-            },
-          });
-        }
-      } catch (e) {
-        console.error('Failed to create invoice for COD:', e);
+    // ─── Auto-create invoice (Bug 1 fix) ───
+    // Previously, invoices were ONLY created here when paymentMethod='cod'.
+    // That meant: if an employee completed a job via the portal WITHOUT COD
+    // (e.g. "online" or no payment), NO invoice was ever created — the
+    // auto-invoice logic only ran in the lifecycle route (manager dispatch).
+    //
+    // Now we always call autoCreateInvoiceFromJob(), which:
+    //   - Is idempotent (skips if an invoice already exists for the job)
+    //   - Uses a per-job lock (prevents duplicates from concurrent calls)
+    //   - Uses resolveJobAmount() so the amount reflects REAL data:
+    //     quotedAmount → amountCollected (COD) → Service.basePrice →
+    //     Lead.value → estimatedDuration × rate
+    //   - Marks the invoice as 'paid' if amountCollected > 0 (COD)
+    //   - Respects the tenant's autoCreateOnJobComplete toggle
+    try {
+      const invResult = await autoCreateInvoiceFromJob(job.id);
+      if (invResult.success) {
+        console.log(`[CompleteProof] Auto-created invoice ${invResult.number} for job ${job.id}`);
+      } else if (!invResult.skipped) {
+        console.error(`[CompleteProof] Auto-invoice failed: ${invResult.error}`);
       }
+    } catch (e) {
+      console.error('Failed to auto-create invoice on complete-proof:', e);
     }
 
     // ─── Emit event via EventBus ───

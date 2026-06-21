@@ -167,7 +167,12 @@ export async function POST(request: NextRequest) {
         if (employee) {
           await db.employee.update({
             where: { id: employee.id },
-            data: { status: 'busy' },
+            data: {
+              status: 'busy',
+              // Track the current job so the dispatch board / employee portal
+              // can show "on job: X". Cleared when the job is completed.
+              currentJobId: jobId,
+            },
           })
         }
         if (resource) {
@@ -370,20 +375,15 @@ export async function POST(request: NextRequest) {
               },
             })
 
-            // Clear currentJobId if it still points at the job we just closed.
-            const employee = await db.employee.findUnique({
-              where: { id: job.assigneeId },
-              select: { currentJobId: true },
-            })
-            const clearCurrentJob =
-              employee?.currentJobId === jobId ? { currentJobId: null } : {}
-
             await db.employee.update({
               where: { id: job.assigneeId },
               data: {
                 status: otherActiveJobs > 0 ? 'busy' : 'available',
                 completedJobs: { increment: 1 },
-                ...clearCurrentJob,
+                // Always clear currentJobId when the job completes. If the
+                // employee has another active job, the dispatch board will
+                // re-assign currentJobId when they start that job next.
+                currentJobId: null,
               },
             })
           } catch (e) {
@@ -410,6 +410,7 @@ export async function POST(request: NextRequest) {
           data: {
             status: 'completed',
             actualEndTime: new Date(),
+            completedAt: new Date(),
             notificationLogJson: newLogJson,
           },
           include: { assignee: true, customer: true, resource: true },

@@ -84,6 +84,12 @@ export async function PUT(
     if (body.customerName !== undefined) updateData.customerName = body.customerName;
     if (body.customerPhone !== undefined) updateData.customerPhone = body.customerPhone;
     if (body.customerEmail !== undefined) updateData.customerEmail = body.customerEmail;
+    if (body.quotedAmount !== undefined) {
+      updateData.quotedAmount =
+        body.quotedAmount === null || body.quotedAmount === ''
+          ? null
+          : Number(body.quotedAmount);
+    }
     if (body.assigneeId !== undefined) updateData.assigneeId = body.assigneeId;
     if (body.assigneeName !== undefined) updateData.assigneeName = body.assigneeName;
     if (body.assigneePhone !== undefined) updateData.assigneePhone = body.assigneePhone;
