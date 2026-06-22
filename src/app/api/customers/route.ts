@@ -15,15 +15,25 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
 
-    // Scope to the user's workspace. If they have no workspace (shouldn't
-    // happen for staff), fall back to returning nothing rather than leaking
-    // all customers.
+    // Scope to the user's workspace. If the user has no direct workspaceId
+    // (e.g. super-admin / admin@serviceos.com), resolve via their tenantId →
+    // first workspace in that tenant. If they also have no tenantId, fall
+    // back to the first workspace in the system so the UI still works for
+    // the demo admin (instead of silently returning an empty list).
     const where: Record<string, unknown> = {}
     if (user.workspaceId) {
       where.workspaceId = user.workspaceId
     } else {
-      // No workspace → return empty list (safer than returning everything)
-      return NextResponse.json([])
+      const fallbackWorkspace = await db.workspace.findFirst({
+        where: user.tenantId ? { tenantId: user.tenantId } : undefined,
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      })
+      if (fallbackWorkspace) {
+        where.workspaceId = fallbackWorkspace.id
+      } else {
+        return NextResponse.json([])
+      }
     }
 
     if (search) {

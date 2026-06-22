@@ -1,5 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { getAuthUser } from '@/lib/auth'
+import { resolveBroadcastAudience } from '@/lib/broadcast-audience'
 
 export async function GET(request: NextRequest) {
   try {
@@ -61,6 +63,24 @@ export async function POST(request: NextRequest) {
       ? body.channel
       : 'whatsapp'
 
+    // ── Compute live audience count so the list shows a real number, not 0 ──
+    let totalRecipients = body.totalRecipients || 0
+    if (!totalRecipients) {
+      try {
+        const user = await getAuthUser()
+        const audience = await resolveBroadcastAudience({
+          tenantId: user?.tenantId || null,
+          audienceType: body.audienceType || 'all',
+          audienceId: body.audienceId || null,
+          audienceFiltersJson: body.audienceFiltersJson || '{}',
+          channel,
+        })
+        totalRecipients = audience.total
+      } catch {
+        // Non-fatal — fall back to 0 if audience resolution fails
+      }
+    }
+
     const campaign = await db.campaign.create({
       data: {
         name: body.name,
@@ -79,7 +99,7 @@ export async function POST(request: NextRequest) {
         ctaUrl: body.ctaUrl || null,
         scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : undefined,
         timezone: body.timezone || 'UTC',
-        totalRecipients: body.totalRecipients || 0,
+        totalRecipients,
         followUpSequenceJson: body.followUpSequenceJson || '[]',
         cloneFromId: body.cloneFromId || null,
         createdById: body.createdById || null,

@@ -16,7 +16,11 @@ export async function GET(
           select: { id: true, name: true, phone: true, email: true, address: true },
         },
         job: {
-          select: { id: true, title: true, jobNumber: true, status: true, service: true },
+          // NOTE: `service` was previously included here but is NOT a field
+          // on the Job model (the model has `serviceId` FK and `type` String).
+          // Including it caused a PrismaClientValidationError that broke both
+          // this GET (single) and the PUT (edit) endpoints with HTTP 500.
+          select: { id: true, title: true, jobNumber: true, status: true },
         },
       },
     })
@@ -63,6 +67,8 @@ export async function PUT(
     const {
       status,
       customerId,
+      employeeId,
+      jobId,
       itemsJson,
       taxPercent,   // percentage e.g. 18
       discount,     // flat amount in transaction currency
@@ -102,7 +108,9 @@ export async function PUT(
       where: { id },
       data: {
         ...(status !== undefined && { status }),
-        ...(customerId !== undefined && { customerId }),
+        ...(customerId !== undefined && { customerId: customerId || null }),
+        ...(employeeId !== undefined && { employeeId: employeeId || null }),
+        ...(jobId !== undefined && { jobId: jobId || null }),
         ...(itemsJson !== undefined && {
           itemsJson: typeof itemsJson === 'string' ? itemsJson : JSON.stringify(itemsJson),
         }),
@@ -119,9 +127,10 @@ export async function PUT(
       },
       include: {
         customer: {
-          select: { id: true, name: true, phone: true, email: true },
+          select: { id: true, name: true, phone: true, email: true, address: true },
         },
         job: {
+          // NOTE: `service` is not a field on Job (see GET handler comment).
           select: { id: true, title: true, jobNumber: true, status: true },
         },
       },
@@ -132,6 +141,34 @@ export async function PUT(
     console.error('Failed to update invoice:', error)
     return NextResponse.json(
       { error: 'Failed to update invoice' },
+      { status: 500 }
+    )
+  }
+}
+
+// DELETE /api/invoices/[id] — Delete an invoice
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+
+    const existing = await db.invoice.findUnique({ where: { id } })
+    if (!existing) {
+      return NextResponse.json(
+        { error: 'Invoice not found' },
+        { status: 404 }
+      )
+    }
+
+    await db.invoice.delete({ where: { id } })
+
+    return NextResponse.json({ success: true, id })
+  } catch (error) {
+    console.error('Failed to delete invoice:', error)
+    return NextResponse.json(
+      { error: 'Failed to delete invoice' },
       { status: 500 }
     )
   }

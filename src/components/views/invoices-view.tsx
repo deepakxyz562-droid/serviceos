@@ -34,6 +34,7 @@ import {
   Play,
   Power,
   Sparkles,
+  Pencil,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -425,6 +426,8 @@ export function InvoicesView() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  // When non-null, the create dialog is in "edit" mode and will PUT instead of POST.
+  const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
 
   // Form
   const [form, setForm] = useState<InvoiceFormData>(EMPTY_FORM());
@@ -562,7 +565,30 @@ export function InvoicesView() {
   };
 
   const openCreateDialog = () => {
+    setEditingInvoice(null);
     setForm(EMPTY_FORM());
+    setShowCreateDialog(true);
+  };
+
+  const openEditDialog = (invoice: Invoice) => {
+    setEditingInvoice(invoice);
+    setForm({
+      customer: invoice.customerId || '',
+      lineItems:
+        invoice.lineItems.length > 0
+          ? invoice.lineItems.map((li) => ({
+              id: li.id || `li_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+              description: li.description,
+              quantity: li.quantity,
+              rate: li.rate,
+            }))
+          : [EMPTY_LINE_ITEM()],
+      taxPercent: invoice.taxPercent || 0,
+      discount: invoice.discount || 0,
+      dueDate: invoice.dueDate || '',
+      notes: invoice.notes || '',
+    });
+    setShowDetailDialog(false);
     setShowCreateDialog(true);
   };
 
@@ -594,7 +620,7 @@ export function InvoicesView() {
     }));
   };
 
-  const handleCreateInvoice = async () => {
+  const handleSaveInvoice = async () => {
     if (!form.customer) {
       toast.error('Please select a customer');
       return;
@@ -608,35 +634,71 @@ export function InvoicesView() {
       return;
     }
 
+    const isEditing = !!editingInvoice;
     setSaving(true);
     try {
-      const body = {
-        customerId: form.customer,
-        items: form.lineItems.map((li) => ({
-          description: li.description,
-          quantity: li.quantity,
-          rate: li.rate,
-        })),
-        dueDate: form.dueDate,
-        notes: form.notes || undefined,
-        discount: form.discount || 0,
-        taxPercent: form.taxPercent || 0,
-        currency,
-      };
-      const res = await authFetch('/api/invoices', {
-        method: 'POST',
-        body: JSON.stringify(body),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error((data as { error?: string }).error || 'Failed to create invoice');
+      if (isEditing) {
+        // ── Edit mode: PUT to /api/invoices/[id] ──
+        // The PUT route recalculates amount/tax/total from itemsJson + taxPercent + discount.
+        const body = {
+          customerId: form.customer,
+          itemsJson: form.lineItems.map((li) => ({
+            description: li.description,
+            quantity: li.quantity,
+            rate: li.rate,
+          })),
+          taxPercent: form.taxPercent || 0,
+          discount: form.discount || 0,
+          dueDate: form.dueDate,
+          notes: form.notes || '',
+        };
+        const res = await authFetch(`/api/invoices/${editingInvoice!.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error((data as { error?: string }).error || 'Failed to update invoice');
+        }
+        const updated = parseApiInvoice(data as Record<string, unknown>);
+        setInvoices((prev) => prev.map((inv) => (inv.id === updated.id ? updated : inv)));
+        // If the detail dialog is open for this invoice, refresh it too
+        if (selectedInvoice?.id === updated.id) {
+          setSelectedInvoice(updated);
+        }
+        setShowCreateDialog(false);
+        setEditingInvoice(null);
+        toast.success(`Invoice ${updated.number} updated`);
+      } else {
+        // ── Create mode: POST to /api/invoices ──
+        const body = {
+          customerId: form.customer,
+          items: form.lineItems.map((li) => ({
+            description: li.description,
+            quantity: li.quantity,
+            rate: li.rate,
+          })),
+          dueDate: form.dueDate,
+          notes: form.notes || undefined,
+          discount: form.discount || 0,
+          taxPercent: form.taxPercent || 0,
+          currency,
+        };
+        const res = await authFetch('/api/invoices', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error((data as { error?: string }).error || 'Failed to create invoice');
+        }
+        const newInvoice = parseApiInvoice((data as { invoice: Record<string, unknown> }).invoice);
+        setInvoices((prev) => [newInvoice, ...prev]);
+        setShowCreateDialog(false);
+        toast.success('Invoice created successfully');
       }
-      const newInvoice = parseApiInvoice((data as { invoice: Record<string, unknown> }).invoice);
-      setInvoices((prev) => [newInvoice, ...prev]);
-      setShowCreateDialog(false);
-      toast.success('Invoice created successfully');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Failed to create invoice');
+      toast.error(e instanceof Error ? e.message : (isEditing ? 'Failed to update invoice' : 'Failed to create invoice'));
     } finally {
       setSaving(false);
     }
@@ -1284,6 +1346,9 @@ export function InvoicesView() {
                               <DropdownMenuItem onClick={() => openDetailDialog(invoice)}>
                                 <Eye className="size-3.5 mr-2" /> View Details
                               </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openEditDialog(invoice)}>
+                                <Pencil className="size-3.5 mr-2" /> Edit
+                              </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuLabel className="text-xs text-muted-foreground">Send</DropdownMenuLabel>
                               <DropdownMenuItem
@@ -1393,15 +1458,29 @@ export function InvoicesView() {
         </Card>
       )}
 
-      {/* ── Create Invoice Dialog ────────────────────────────────── */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+      {/* ── Create / Edit Invoice Dialog ─────────────────────────── */}
+      <Dialog
+        open={showCreateDialog}
+        onOpenChange={(open) => {
+          setShowCreateDialog(open);
+          if (!open) setEditingInvoice(null);
+        }}
+      >
         <DialogContent className="max-w-2xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Plus className="size-5 text-emerald-600" />
-              Create Invoice
+              {editingInvoice ? (
+                <Pencil className="size-5 text-blue-600" />
+              ) : (
+                <Plus className="size-5 text-emerald-600" />
+              )}
+              {editingInvoice ? `Edit Invoice ${editingInvoice.number}` : 'Create Invoice'}
             </DialogTitle>
-            <DialogDescription>Fill in the details to create a new invoice</DialogDescription>
+            <DialogDescription>
+              {editingInvoice
+                ? 'Update the invoice details. Totals are recalculated automatically.'
+                : 'Fill in the details to create a new invoice'}
+            </DialogDescription>
           </DialogHeader>
 
           <ScrollArea className="max-h-[65vh] pr-1">
@@ -1576,17 +1655,29 @@ export function InvoicesView() {
           </ScrollArea>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateDialog(false)} disabled={saving}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowCreateDialog(false);
+                setEditingInvoice(null);
+              }}
+              disabled={saving}
+            >
               Cancel
             </Button>
             <Button
-              className="bg-emerald-600 hover:bg-emerald-700"
-              onClick={handleCreateInvoice}
+              className={editingInvoice ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'}
+              onClick={handleSaveInvoice}
               disabled={saving}
             >
               {saving ? (
                 <>
-                  <Loader2 className="size-4 mr-1.5 animate-spin" /> Creating...
+                  <Loader2 className="size-4 mr-1.5 animate-spin" />
+                  {editingInvoice ? 'Saving...' : 'Creating...'}
+                </>
+              ) : editingInvoice ? (
+                <>
+                  <Pencil className="size-4 mr-1.5" /> Save Changes
                 </>
               ) : (
                 'Create Invoice'
@@ -1768,6 +1859,12 @@ export function InvoicesView() {
 
               <DialogFooter className="flex-col sm:flex-row gap-2">
                 <div className="flex gap-2 flex-wrap flex-1">
+                  <Button
+                    variant="outline"
+                    onClick={() => openEditDialog(selectedInvoice)}
+                  >
+                    <Pencil className="size-4 mr-1.5" /> Edit
+                  </Button>
                   <Button
                     className="bg-blue-600 hover:bg-blue-700 text-white"
                     disabled={

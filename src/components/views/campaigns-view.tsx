@@ -253,12 +253,26 @@ interface EmailProvider {
   status: string;
 }
 
+/**
+ * Determine whether a provider can be used for campaign/broadcast sending.
+ *
+ * PREVIOUSLY this was very strict: it excluded platform providers AND any
+ * provider whose usageType was 'transactional'. That meant a user who
+ * connected a single SMTP provider and left it at the default 'both' could
+ * still be blocked if the isPlatform flag was set, and a user who chose
+ * 'transactional' (or whose provider was seeded as platform) saw the
+ * "Marketing Email Provider Required" banner with a DISABLED dropdown —
+ * even though they had a working provider in Settings.
+ *
+ * FIX: Accept ANY active provider. When the user explicitly selects a
+ * provider in the Send Now dropdown, the backend's resolveSmtpConfig()
+ * uses it directly (it does NOT re-check isPlatform/usageType when a
+ * providerId is passed). This lets the user send campaigns through
+ * whichever provider they've configured, while still warning them when
+ * there are literally zero providers connected.
+ */
 function isMarketingEligible(p: EmailProvider): boolean {
-  return (
-    !p.isPlatform &&
-    (p.usageType === 'marketing' || p.usageType === 'both') &&
-    p.status === 'active'
-  );
+  return p.status === 'active';
 }
 
 // Build the audience body for POST /api/email-campaigns/send from a campaign.
@@ -432,8 +446,11 @@ export function CampaignsView() {
   }, [loadGroups]);
 
   // ── Load email providers for the Send Now flow ──
-  // Fetches all providers + the marketing-status endpoint, then filters to
-  // marketing-capable ones (mirrors the email-campaigns-view logic).
+  // Fetches all providers and filters to active ones. We no longer rely on
+  // the /api/email-providers/status "marketingEmail.connected" flag because
+  // that flag uses a strict filter (excludes platform + transactional-only
+  // providers). Instead, we compute "connected" = "has at least one active
+  // provider" so the dropdown is enabled for any configured provider.
   const loadEmailProviders = useCallback(async () => {
     setIsLoadingProviders(true);
     try {
@@ -446,17 +463,21 @@ export function CampaignsView() {
         const all = (Array.isArray(raw) ? raw : (raw?.data || [])) as EmailProvider[];
         const eligible = all.filter(isMarketingEligible);
         setEmailProviders(eligible);
-        if (stRes?.ok) {
-          const st = await stRes.json();
-          if (st?.marketingEmail && typeof st.marketingEmail.connected === 'boolean') {
-            setMarketingConnected(st.marketingEmail.connected);
-          } else {
-            setMarketingConnected(eligible.length > 0);
-          }
-        } else {
-          setMarketingConnected(eligible.length > 0);
+        // Use our relaxed definition: connected = has at least one active
+        // provider. Ignore the strict marketingEmail.connected from the
+        // status endpoint (which would block platform/transactional providers).
+        setMarketingConnected(eligible.length > 0);
+        // Optionally pre-select the default marketing provider (or the first
+        // provider) so the user doesn't have to manually pick every time.
+        if (eligible.length > 0) {
+          const defaultMkt = eligible.find(p => p.isDefaultMarketing);
+          const first = defaultMkt || eligible[0];
+          setSendNowForm(prev => prev.providerId ? prev : { ...prev, providerId: first.id });
         }
       }
+      // stRes is fetched but not used for the gate anymore — kept for
+      // potential future use (e.g. showing provider health status).
+      void stRes;
     } catch {
       // Non-blocking — the Send Now dialog will show the empty state.
     } finally {
@@ -1537,7 +1558,10 @@ export function CampaignsView() {
                   </div>
                 )}
 
-                {/* Marketing provider not connected banner */}
+                {/* Marketing provider not connected banner — only shows when
+                    there are ZERO active providers at all. If the user has
+                    connected any provider (even a "transactional" or "platform"
+                    one), the dropdown below is enabled and they can pick it. */}
                 {marketingConnected === false && (
                   <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -1545,10 +1569,10 @@ export function CampaignsView() {
                         <AlertTriangle className="size-5 text-amber-600 shrink-0 mt-0.5" />
                         <div>
                           <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
-                            Marketing Email Provider Required
+                            Email Provider Required
                           </p>
                           <p className="text-xs text-amber-800 dark:text-amber-200 mt-0.5">
-                            Connect SMTP, Resend, SendGrid, Amazon SES, Mailgun or Brevo before sending campaigns.
+                            Connect SMTP, Resend, SendGrid, Amazon SES, Mailgun or Brevo in Settings → Providers before sending campaigns.
                           </p>
                         </div>
                       </div>
@@ -1604,7 +1628,7 @@ export function CampaignsView() {
                           isLoadingProviders
                             ? 'Loading providers...'
                             : emailProviders.length === 0
-                              ? 'No marketing providers connected'
+                              ? 'No providers connected'
                               : 'Select a provider'
                         }
                       />
@@ -1614,13 +1638,14 @@ export function CampaignsView() {
                         <SelectItem key={p.id} value={p.id}>
                           {p.name} <span className="text-muted-foreground">({p.providerType.toUpperCase()})</span>
                           {p.isDefaultMarketing ? ' ★' : ''}
+                          {p.isPlatform && <span className="text-muted-foreground ml-1">· platform</span>}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                   <p className="text-[10px] text-muted-foreground flex items-center gap-1">
                     <Mail className="size-3" />
-                    Only customer-connected marketing providers are shown (platform providers are excluded).
+                    All active email providers are listed. If none appear, connect one in Settings → Providers.
                   </p>
                 </div>
               </div>

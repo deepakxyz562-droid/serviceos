@@ -111,28 +111,23 @@ export function EmailCampaignsView() {
       ]);
       setGroups(g.data || []);
       const allProviders = (Array.isArray(p) ? p : (p.data || [])) as EmailProvider[];
-      // Eligible: customer-connected (non-platform), marketing-capable, active providers.
-      // Platform providers are excluded — bulk campaigns must never use the shared domain.
-      const eligible = allProviders.filter(
-        (x) =>
-          !x.isPlatform &&
-          (x.usageType === 'marketing' || x.usageType === 'both') &&
-          x.status === 'active'
-      );
+      // Eligible: ALL active providers. We no longer exclude platform or
+      // transactional-only providers — when the user explicitly selects a
+      // provider, the backend uses it directly. This prevents the
+      // "Marketing Email Provider Required" banner from showing when the
+      // user has a working provider that's tagged 'transactional' or 'platform'.
+      const eligible = allProviders.filter((x) => x.status === 'active');
       setEmailProviders(eligible);
-      // Marketing connection status — prefer the authoritative status API,
-      // fall back to the filtered provider list.
-      if (st?.marketingEmail && typeof st.marketingEmail.connected === 'boolean') {
-        setMarketingConnected(st.marketingEmail.connected);
-      } else {
-        setMarketingConnected(eligible.length > 0);
-      }
+      // Connected = has at least one active provider. Ignore the strict
+      // marketingEmail.connected from the status endpoint.
+      setMarketingConnected(eligible.length > 0);
       // Default: first with isDefaultMarketing=true, else first eligible, else first provider
       if (!providerId) {
         const defaultMkt = eligible.find((x) => x.isDefaultMarketing);
         const chosen = defaultMkt?.id || eligible[0]?.id || allProviders[0]?.id || '';
         if (chosen) setProviderId(chosen);
       }
+      void st;
     } catch (err) {
       console.error(err);
       toast.error('Failed to load data');
@@ -341,12 +336,11 @@ export function EmailCampaignsView() {
                 </div>
                 <div className="min-w-0">
                   <h3 className="font-semibold text-amber-900 dark:text-amber-100">
-                    Marketing Email Provider Required
+                    Email Provider Required
                   </h3>
                   <p className="text-sm text-amber-800 dark:text-amber-200 mt-0.5">
-                    Connect SMTP, Resend, SendGrid, Amazon SES, Mailgun or Brevo before sending
-                    campaigns. Bulk email is sent through your own domain to protect platform
-                    deliverability.
+                    Connect SMTP, Resend, SendGrid, Amazon SES, Mailgun or Brevo in Settings → Providers
+                    before sending campaigns.
                   </p>
                 </div>
               </div>

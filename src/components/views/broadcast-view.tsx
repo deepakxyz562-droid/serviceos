@@ -5,6 +5,7 @@ import {
   Radio, Plus, Search, Send, Clock, Users, CheckCircle2,
   XCircle, Eye, BarChart3, MessageSquare, Calendar,
   AlertCircle, Copy, Trash2, Loader2, Pencil,
+  Mail, Plug, ArrowRight, AlertTriangle, UserCheck,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -18,6 +19,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -80,15 +82,16 @@ const AUDIENCE_TYPES = [
 ];
 
 // ─── Audience Mode helpers ────────────────────────────────────────────────
-// The form exposes 4 conceptual audience modes. These map to the backend
+// The form exposes 5 conceptual audience modes. These map to the backend
 // Campaign fields `audienceType` (all|segment|contact_list|custom),
 // `audienceId` (group id), and `audienceFiltersJson` (JSON string that may
-// carry `{ manualEmails: "a@b.com,c@d.com" }`).
+// carry `{ manualEmails: "a@b.com,c@d.com", customerIds: ["id1","id2"] }`).
 
-type AudienceMode = 'all' | 'segment' | 'custom' | 'mixed';
+type AudienceMode = 'all' | 'segment' | 'custom' | 'mixed' | 'customers';
 
 const AUDIENCE_MODES: { value: AudienceMode; label: string }[] = [
   { value: 'all', label: 'All Contacts' },
+  { value: 'customers', label: 'Specific Customers' },
   { value: 'segment', label: 'Specific Group' },
   { value: 'custom', label: 'Manual Emails' },
   { value: 'mixed', label: 'Group + Manual Emails' },
@@ -99,6 +102,23 @@ interface GroupOption {
   name: string;
   type: string;
   memberCount: number;
+}
+
+interface CustomerOption {
+  id: string;
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+}
+
+interface EmailProvider {
+  id: string;
+  name: string;
+  providerType: string;
+  usageType: string;
+  isDefaultMarketing: boolean;
+  isPlatform: boolean;
+  status: string;
 }
 
 // Pull the `manualEmails` string out of an audienceFiltersJson value.
@@ -113,30 +133,46 @@ function parseManualEmails(filtersJson: string | null | undefined): string {
   }
 }
 
-// Reverse the backend fields into the form's audience mode + group + emails.
+// Pull the `customerIds` array out of an audienceFiltersJson value.
+function parseCustomerIds(filtersJson: string | null | undefined): string[] {
+  if (!filtersJson) return [];
+  try {
+    const parsed = JSON.parse(filtersJson) as Record<string, unknown>;
+    const val = parsed?.customerIds;
+    return Array.isArray(val) ? val.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+// Reverse the backend fields into the form's audience mode + group + emails + customers.
 function deriveAudienceMode(
   audienceType: string,
   audienceId: string | null | undefined,
   filtersJson: string | null | undefined,
-): { mode: AudienceMode; groupId: string; manualEmails: string } {
+): { mode: AudienceMode; groupId: string; manualEmails: string; customerIds: string[] } {
   const manualEmails = parseManualEmails(filtersJson);
+  const customerIds = parseCustomerIds(filtersJson);
   const hasGroup = !!audienceId;
   const hasManual = !!manualEmails.trim();
+  const hasCustomers = customerIds.length > 0;
 
   if (audienceType === 'segment' || audienceType === 'contact_list') {
-    if (hasManual) return { mode: 'mixed', groupId: audienceId || '', manualEmails };
-    if (hasGroup) return { mode: 'segment', groupId: audienceId || '', manualEmails: '' };
+    if (hasManual) return { mode: 'mixed', groupId: audienceId || '', manualEmails, customerIds: [] };
+    if (hasGroup) return { mode: 'segment', groupId: audienceId || '', manualEmails: '', customerIds: [] };
   }
   if (audienceType === 'custom') {
-    if (hasGroup && hasManual) return { mode: 'mixed', groupId: audienceId || '', manualEmails };
-    if (hasManual) return { mode: 'custom', groupId: '', manualEmails };
+    if (hasGroup && hasManual) return { mode: 'mixed', groupId: audienceId || '', manualEmails, customerIds: [] };
+    if (hasCustomers) return { mode: 'customers', groupId: '', manualEmails: '', customerIds };
+    if (hasManual) return { mode: 'custom', groupId: '', manualEmails, customerIds: [] };
   }
-  if (audienceType === 'all' && !hasGroup && !hasManual) {
-    return { mode: 'all', groupId: '', manualEmails: '' };
+  if (audienceType === 'all' && !hasGroup && !hasManual && !hasCustomers) {
+    return { mode: 'all', groupId: '', manualEmails: '', customerIds: [] };
   }
   // Legacy audience types (leads, customers, vip, etc.) — default sensibly.
-  if (hasManual) return { mode: 'custom', groupId: '', manualEmails };
-  return { mode: 'all', groupId: '', manualEmails: '' };
+  if (hasCustomers) return { mode: 'customers', groupId: '', manualEmails: '', customerIds };
+  if (hasManual) return { mode: 'custom', groupId: '', manualEmails, customerIds: [] };
+  return { mode: 'all', groupId: '', manualEmails: '', customerIds: [] };
 }
 
 // Build the backend audience fields from the form values.
@@ -144,6 +180,7 @@ function buildAudiencePayload(
   mode: AudienceMode,
   groupId: string,
   manualEmails: string,
+  customerIds: string[],
 ): { audienceType: string; audienceId?: string; audienceFiltersJson?: string } {
   const cleanEmails = manualEmails
     .split(/[\s,\n]+/)
@@ -153,6 +190,11 @@ function buildAudiencePayload(
   switch (mode) {
     case 'all':
       return { audienceType: 'all' };
+    case 'customers':
+      return {
+        audienceType: 'custom',
+        audienceFiltersJson: JSON.stringify({ customerIds }),
+      };
     case 'segment':
       return {
         audienceType: 'segment',
@@ -238,21 +280,38 @@ export function BroadcastView() {
   const [createForm, setCreateForm] = useState({
     name: '', type: 'promotional' as BroadcastType, channel: 'whatsapp' as BroadcastChannel,
     message: '', mediaUrl: '', ctaText: '', ctaUrl: '',
-    audienceMode: 'all' as AudienceMode, audienceId: '', manualEmails: '',
+    audienceMode: 'all' as AudienceMode, audienceId: '', manualEmails: '', customerIds: [] as string[],
     scheduleDate: '', scheduleTime: '', timezone: 'Asia/Kolkata',
     isRecurring: false, recurringInterval: 'weekly',
   });
   const [groups, setGroups] = useState<GroupOption[]>([]);
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [isLoadingGroups, setIsLoadingGroups] = useState(false);
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
+  const [liveAudienceCount, setLiveAudienceCount] = useState<number | null>(null);
+  const [isLoadingAudienceCount, setIsLoadingAudienceCount] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
     name: '', type: 'promotional' as BroadcastType, channel: 'whatsapp' as BroadcastChannel,
     message: '', mediaUrl: '', ctaText: '', ctaUrl: '',
-    audienceMode: 'all' as AudienceMode, audienceId: '', manualEmails: '',
+    audienceMode: 'all' as AudienceMode, audienceId: '', manualEmails: '', customerIds: [] as string[],
     scheduleDate: '', scheduleTime: '', timezone: 'Asia/Kolkata',
     isRecurring: false, recurringInterval: 'weekly',
+  });
+
+  // ── Send Now dialog state (for email/multi-channel broadcasts) ──
+  const [showSendDialog, setShowSendDialog] = useState(false);
+  const [sendingBroadcast, setSendingBroadcast] = useState<Broadcast | null>(null);
+  const [isSending, setIsSending] = useState(false);
+  const [emailProviders, setEmailProviders] = useState<EmailProvider[]>([]);
+  const [isLoadingProviders, setIsLoadingProviders] = useState(false);
+  const [sendForm, setSendForm] = useState({
+    providerId: '',
+    subject: '',
+    html: '',
+    message: '',
   });
 
   // ── Load broadcasts from API ──
@@ -325,9 +384,111 @@ export function BroadcastView() {
     }
   }, []);
 
+  // ── Load customers for the "Specific Customers" audience selector ──
+  const loadCustomers = useCallback(async () => {
+    setIsLoadingCustomers(true);
+    try {
+      const res = await authFetch('/api/customers?limit=500');
+      if (res.ok) {
+        const result = await res.json();
+        const list = (result.data || result) as CustomerOption[];
+        setCustomers(list);
+      }
+    } catch {
+      // Non-blocking
+    } finally {
+      setIsLoadingCustomers(false);
+    }
+  }, []);
+
+  // ── Load email providers for the Send Now flow ──
+  // Fetches all active providers. Any active provider can be used for sending
+  // (the backend uses it directly when providerId is passed).
+  const loadEmailProviders = useCallback(async () => {
+    setIsLoadingProviders(true);
+    try {
+      const res = await authFetch('/api/email-providers');
+      if (res.ok) {
+        const raw = await res.json();
+        const all = (Array.isArray(raw) ? raw : (raw?.data || [])) as EmailProvider[];
+        const eligible = all.filter(p => p.status === 'active');
+        setEmailProviders(eligible);
+        return eligible;
+      }
+    } catch {
+      // Non-blocking
+    } finally {
+      setIsLoadingProviders(false);
+    }
+    return [];
+  }, []);
+
+  // ── Fetch the live audience count for a given audience config ──
+  // Used by the create/edit form to show "X recipients" as the user picks
+  // the audience mode, group, customers, or manual emails.
+  const fetchLiveAudienceCount = useCallback(async (
+    mode: AudienceMode,
+    groupId: string,
+    manualEmails: string,
+    customerIds: string[],
+    channel: BroadcastChannel,
+  ) => {
+    setIsLoadingAudienceCount(true);
+    try {
+      const audience = buildAudiencePayload(mode, groupId, manualEmails, customerIds);
+      const params = new URLSearchParams();
+      params.set('audienceType', audience.audienceType);
+      if (audience.audienceId) params.set('audienceId', audience.audienceId);
+      if (audience.audienceFiltersJson) params.set('audienceFiltersJson', audience.audienceFiltersJson);
+      params.set('channel', channel);
+      const res = await authFetch(`/api/campaigns/audience-count?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json() as { total?: number; withEmail?: number; withPhone?: number };
+        setLiveAudienceCount(data.total ?? 0);
+      } else {
+        setLiveAudienceCount(null);
+      }
+    } catch {
+      setLiveAudienceCount(null);
+    } finally {
+      setIsLoadingAudienceCount(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadGroups();
-  }, [loadGroups]);
+    loadCustomers();
+  }, [loadGroups, loadCustomers]);
+
+  // ── Recompute live audience count when create form audience fields change ──
+  useEffect(() => {
+    fetchLiveAudienceCount(
+      createForm.audienceMode,
+      createForm.audienceId,
+      createForm.manualEmails,
+      createForm.customerIds,
+      createForm.channel,
+    );
+  }, [
+    createForm.audienceMode, createForm.audienceId, createForm.manualEmails,
+    createForm.customerIds, createForm.channel, fetchLiveAudienceCount,
+  ]);
+
+  // ── Recompute live audience count when edit form audience fields change ──
+  useEffect(() => {
+    if (!showEditDialog) return;
+    fetchLiveAudienceCount(
+      editForm.audienceMode,
+      editForm.audienceId,
+      editForm.manualEmails,
+      editForm.customerIds,
+      editForm.channel,
+    );
+  }, [
+    showEditDialog,
+    editForm.audienceMode, editForm.audienceId, editForm.manualEmails,
+    editForm.customerIds, editForm.channel, fetchLiveAudienceCount,
+  ]);
 
   function mapCampaignStatus(status: string): BroadcastStatus {
     const map: Record<string, BroadcastStatus> = {
@@ -356,8 +517,11 @@ export function BroadcastView() {
     if ((createForm.audienceMode === 'custom' || createForm.audienceMode === 'mixed') && !createForm.manualEmails.trim()) {
       toast.error('Please enter at least one email address'); return;
     }
+    if (createForm.audienceMode === 'customers' && createForm.customerIds.length === 0) {
+      toast.error('Please select at least one customer'); return;
+    }
 
-    const audience = buildAudiencePayload(createForm.audienceMode, createForm.audienceId, createForm.manualEmails);
+    const audience = buildAudiencePayload(createForm.audienceMode, createForm.audienceId, createForm.manualEmails, createForm.customerIds);
 
     setIsCreating(true);
     try {
@@ -393,7 +557,7 @@ export function BroadcastView() {
           audienceType: result.data.audienceType || 'all',
           audienceId: result.data.audienceId || undefined,
           audienceFiltersJson: result.data.audienceFiltersJson || undefined,
-          audienceCount: 0,
+          audienceCount: result.data.totalRecipients || 0,
           scheduledAt: result.data.scheduledAt || undefined,
           sentCount: 0, deliveredCount: 0, readCount: 0, repliedCount: 0, clickedCount: 0, failedCount: 0,
           createdAt: result.data.createdAt,
@@ -404,7 +568,7 @@ export function BroadcastView() {
         setShowCreateDialog(false);
         setCreateForm({
           name: '', type: 'promotional', channel: 'whatsapp', message: '', mediaUrl: '',
-          ctaText: '', ctaUrl: '', audienceMode: 'all', audienceId: '', manualEmails: '',
+          ctaText: '', ctaUrl: '', audienceMode: 'all', audienceId: '', manualEmails: '', customerIds: [],
           scheduleDate: '', scheduleTime: '', timezone: 'Asia/Kolkata',
           isRecurring: false, recurringInterval: 'weekly',
         });
@@ -419,25 +583,116 @@ export function BroadcastView() {
     }
   };
 
-  const handleSendNow = async (id: string) => {
-    setBroadcasts(prev => prev.map(b => b.id === id ? { ...b, status: 'sending' as const } : b));
-    toast.success('Broadcast started sending');
-    try {
-      const res = await authFetch(`/api/campaigns/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ status: 'running' }),
+  // ── Open the Send Now dialog for a broadcast ──
+  // For email/multi-channel broadcasts, this opens a dialog with provider
+  // selection, subject, HTML body, and message fields. For WhatsApp/SMS, we
+  // dispatch directly via /api/campaigns/send (no provider dialog needed).
+  const openSendDialog = async (broadcast: Broadcast) => {
+    setSendingBroadcast(broadcast);
+    if (broadcast.channel === 'email' || broadcast.channel === 'multi') {
+      // Pre-fill the form with the broadcast's message as the HTML body
+      setSendForm({
+        providerId: '',
+        subject: broadcast.name,
+        html: broadcast.message || '',
+        message: broadcast.message || '',
       });
-      if (res.ok) {
-        // Re-fetch to get updated counts from the server
+      // Load providers and pre-select the default
+      const providers = await loadEmailProviders();
+      if (providers.length > 0) {
+        const defaultMkt = providers.find(p => p.isDefaultMarketing);
+        const first = defaultMkt || providers[0];
+        setSendForm(prev => ({ ...prev, providerId: first.id }));
+      }
+      setShowSendDialog(true);
+    } else {
+      // WhatsApp / SMS — dispatch directly via /api/campaigns/send
+      await doSendBroadcast(broadcast, null);
+    }
+  };
+
+  // ── Actually dispatch a broadcast via the unified /api/campaigns/send ──
+  // For email/multi-channel: requires emailConfig (providerId + subject + html).
+  // For WhatsApp/SMS: uses the broadcast's stored message field.
+  // The backend resolves the audience from the stored campaign fields, sends
+  // personalized emails/WhatsApp messages, and updates campaign analytics.
+  const doSendBroadcast = async (
+    broadcast: Broadcast,
+    emailConfig: { providerId: string; subject: string; html: string } | null,
+  ) => {
+    setBroadcasts(prev => prev.map(b => b.id === broadcast.id ? { ...b, status: 'sending' as const } : b));
+    try {
+      const payload: Record<string, unknown> = {
+        campaignId: broadcast.id,
+        name: broadcast.name,
+        channel: broadcast.channel,
+      };
+
+      if (broadcast.channel === 'email' || broadcast.channel === 'multi') {
+        if (!emailConfig) {
+          toast.error('Email configuration is required');
+          setBroadcasts(prev => prev.map(b => b.id === broadcast.id ? { ...b, status: 'draft' as const } : b));
+          return;
+        }
+        payload.subject = emailConfig.subject;
+        payload.html = emailConfig.html;
+        payload.providerId = emailConfig.providerId;
+        if (broadcast.channel === 'multi') {
+          payload.message = broadcast.message || emailConfig.html;
+        }
+      } else {
+        // WhatsApp / SMS — pass the broadcast's message field
+        payload.message = broadcast.message || '';
+      }
+
+      const res = await authFetch('/api/campaigns/send', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && (data as { success?: boolean }).success) {
+        const result = data as { sent?: number; failed?: number; skipped?: number; totalAudience?: number; channel?: string };
+        const channelLabel = result.channel === 'whatsapp' ? 'WhatsApp'
+          : result.channel === 'sms' ? 'SMS'
+          : result.channel === 'multi' ? 'Multi-channel'
+          : 'Broadcast';
+        toast.success(
+          `${channelLabel} sent — ${result.sent || 0} delivered, ${result.failed || 0} failed` +
+          (result.skipped ? `, ${result.skipped} skipped` : '')
+        );
+        setShowSendDialog(false);
         await loadBroadcasts();
       } else {
-        toast.error('Failed to start broadcast');
-        setBroadcasts(prev => prev.map(b => b.id === id ? { ...b, status: 'failed' as const } : b));
+        const errMsg = (data as { message?: string; error?: string }).message || (data as { error?: string }).error || 'Failed to send broadcast';
+        toast.error(errMsg);
+        setBroadcasts(prev => prev.map(b => b.id === broadcast.id ? { ...b, status: 'failed' as const } : b));
       }
     } catch {
-      toast.error('Network error starting broadcast');
-      setBroadcasts(prev => prev.map(b => b.id === id ? { ...b, status: 'failed' as const } : b));
+      toast.error('Network error sending broadcast');
+      setBroadcasts(prev => prev.map(b => b.id === broadcast.id ? { ...b, status: 'failed' as const } : b));
     }
+  };
+
+  // Convenience wrapper for the Send Now button
+  const handleSendNow = (id: string) => {
+    const broadcast = broadcasts.find(b => b.id === id);
+    if (!broadcast) return;
+    openSendDialog(broadcast);
+  };
+
+  // Called from the Send Now dialog's "Send" button
+  const handleConfirmSend = async () => {
+    if (!sendingBroadcast) return;
+    if (!sendForm.subject.trim()) { toast.error('Subject is required'); return; }
+    if (!sendForm.html.trim()) { toast.error('Email body is required'); return; }
+    if (!sendForm.providerId) { toast.error('Please select an email provider'); return; }
+    setIsSending(true);
+    await doSendBroadcast(sendingBroadcast, {
+      providerId: sendForm.providerId,
+      subject: sendForm.subject,
+      html: sendForm.html,
+    });
+    setIsSending(false);
   };
 
   const handleClone = async (broadcast: Broadcast) => {
@@ -463,7 +718,7 @@ export function BroadcastView() {
           audienceType: broadcast.audienceType,
           audienceId: result.data.audienceId || broadcast.audienceId,
           audienceFiltersJson: result.data.audienceFiltersJson || broadcast.audienceFiltersJson,
-          audienceCount: 0,
+          audienceCount: result.data.totalRecipients || 0,
           sentCount: 0, deliveredCount: 0, readCount: 0, repliedCount: 0, clickedCount: 0, failedCount: 0,
           createdAt: result.data.createdAt, timezone: broadcast.timezone, isRecurring: false,
         };
@@ -503,6 +758,7 @@ export function BroadcastView() {
       audienceMode: derived.mode,
       audienceId: derived.groupId,
       manualEmails: derived.manualEmails,
+      customerIds: derived.customerIds,
       scheduleDate: scheduled ? scheduled.toISOString().split('T')[0] : '',
       scheduleTime: scheduled ? scheduled.toTimeString().slice(0, 5) : '',
       timezone: broadcast.timezone || 'Asia/Kolkata',
@@ -512,6 +768,7 @@ export function BroadcastView() {
     setShowDetailDialog(false);
     setShowEditDialog(true);
     if (groups.length === 0) loadGroups();
+    if (customers.length === 0) loadCustomers();
   };
 
   // ── Save edits via PUT /api/broadcasts/[id] ──
@@ -526,8 +783,11 @@ export function BroadcastView() {
     if ((editForm.audienceMode === 'custom' || editForm.audienceMode === 'mixed') && !editForm.manualEmails.trim()) {
       toast.error('Please enter at least one email address'); return;
     }
+    if (editForm.audienceMode === 'customers' && editForm.customerIds.length === 0) {
+      toast.error('Please select at least one customer'); return;
+    }
 
-    const audience = buildAudiencePayload(editForm.audienceMode, editForm.audienceId, editForm.manualEmails);
+    const audience = buildAudiencePayload(editForm.audienceMode, editForm.audienceId, editForm.manualEmails, editForm.customerIds);
 
     setIsEditing(true);
     try {
@@ -831,6 +1091,45 @@ export function BroadcastView() {
                   {AUDIENCE_MODES.map(a => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {createForm.audienceMode === 'customers' && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                    <UserCheck className="size-3" /> Select Customers ({createForm.customerIds.length} selected)
+                  </Label>
+                  <div className="border rounded-md max-h-48 overflow-y-auto">
+                    {isLoadingCustomers ? (
+                      <div className="p-3 text-xs text-muted-foreground">Loading customers...</div>
+                    ) : customers.length === 0 ? (
+                      <div className="p-3 text-xs text-muted-foreground">No customers found</div>
+                    ) : (
+                      customers.map(c => (
+                        <label
+                          key={c.id}
+                          className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer border-b last:border-0"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={createForm.customerIds.includes(c.id)}
+                            onChange={e => {
+                              const next = e.target.checked
+                                ? [...createForm.customerIds, c.id]
+                                : createForm.customerIds.filter(id => id !== c.id);
+                              setCreateForm({ ...createForm, customerIds: next });
+                            }}
+                            className="rounded"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-medium truncate">{c.name}</div>
+                            <div className="text-[10px] text-muted-foreground truncate">
+                              {c.email || 'no email'} · {c.phone || 'no phone'}
+                            </div>
+                          </div>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
               {(createForm.audienceMode === 'segment' || createForm.audienceMode === 'mixed') && (
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Group</Label>
@@ -864,6 +1163,18 @@ export function BroadcastView() {
                   </p>
                 </div>
               )}
+              {/* Live audience count */}
+              <div className="flex items-center gap-1.5 text-[11px]">
+                {isLoadingAudienceCount ? (
+                  <><Loader2 className="size-3 animate-spin" /> <span className="text-muted-foreground">Counting recipients...</span></>
+                ) : liveAudienceCount !== null ? (
+                  <>
+                    <Users className="size-3 text-sky-600" />
+                    <span className="font-medium text-sky-700 dark:text-sky-300">{liveAudienceCount.toLocaleString()} recipient(s)</span>
+                    <span className="text-muted-foreground">will receive this broadcast via {createForm.channel}</span>
+                  </>
+                ) : null}
+              </div>
             </div>
 
             <Separator />
@@ -1078,6 +1389,45 @@ export function BroadcastView() {
                   {AUDIENCE_MODES.map(a => <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>)}
                 </SelectContent>
               </Select>
+              {editForm.audienceMode === 'customers' && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                    <UserCheck className="size-3" /> Select Customers ({editForm.customerIds.length} selected)
+                  </Label>
+                  <div className="border rounded-md max-h-48 overflow-y-auto">
+                    {isLoadingCustomers ? (
+                      <div className="p-3 text-xs text-muted-foreground">Loading customers...</div>
+                    ) : customers.length === 0 ? (
+                      <div className="p-3 text-xs text-muted-foreground">No customers found</div>
+                    ) : (
+                      customers.map(c => (
+                        <label
+                          key={c.id}
+                          className="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer border-b last:border-0"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={editForm.customerIds.includes(c.id)}
+                            onChange={e => {
+                              const next = e.target.checked
+                                ? [...editForm.customerIds, c.id]
+                                : editForm.customerIds.filter(id => id !== c.id);
+                              setEditForm({ ...editForm, customerIds: next });
+                            }}
+                            className="rounded"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs font-medium truncate">{c.name}</div>
+                            <div className="text-[10px] text-muted-foreground truncate">
+                              {c.email || 'no email'} · {c.phone || 'no phone'}
+                            </div>
+                          </div>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
               {(editForm.audienceMode === 'segment' || editForm.audienceMode === 'mixed') && (
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Group</Label>
@@ -1111,6 +1461,18 @@ export function BroadcastView() {
                   </p>
                 </div>
               )}
+              {/* Live audience count */}
+              <div className="flex items-center gap-1.5 text-[11px]">
+                {isLoadingAudienceCount ? (
+                  <><Loader2 className="size-3 animate-spin" /> <span className="text-muted-foreground">Counting recipients...</span></>
+                ) : liveAudienceCount !== null ? (
+                  <>
+                    <Users className="size-3 text-sky-600" />
+                    <span className="font-medium text-sky-700 dark:text-sky-300">{liveAudienceCount.toLocaleString()} recipient(s)</span>
+                    <span className="text-muted-foreground">will receive via {editForm.channel}</span>
+                  </>
+                ) : null}
+              </div>
             </div>
 
             <Separator />
@@ -1168,6 +1530,155 @@ export function BroadcastView() {
             <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleEdit} disabled={!editForm.name || !editForm.message || isEditing}>
               {isEditing ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
               Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Send Now Dialog (email/multi-channel broadcasts) ─────────────── */}
+      <Dialog open={showSendDialog} onOpenChange={setShowSendDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="size-5 text-sky-600" />
+              Send Broadcast: {sendingBroadcast?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Review and send this {sendingBroadcast?.channel === 'multi' ? 'multi-channel' : 'email'} broadcast to your audience.
+              Audience: {sendingBroadcast ? getAudienceDisplayLabel(sendingBroadcast) : ''} ({(sendingBroadcast?.audienceCount || 0).toLocaleString()} recipients)
+            </DialogDescription>
+          </DialogHeader>
+
+          <ScrollArea className="max-h-[65vh] pr-1">
+            <div className="space-y-4 pr-3">
+              {/* No providers warning */}
+              {emailProviders.length === 0 && !isLoadingProviders && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-3">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="size-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                        Email Provider Required
+                      </p>
+                      <p className="text-xs text-amber-800 dark:text-amber-200 mt-0.5">
+                        Connect SMTP, Resend, SendGrid, Amazon SES, Mailgun or Brevo in Settings → Providers before sending.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Audience info */}
+              {sendingBroadcast && (
+                <div className="rounded-md border bg-slate-50 dark:bg-slate-900 p-3 text-xs">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Users className="size-3.5 text-sky-600" />
+                    <span className="font-medium">Audience</span>
+                  </div>
+                  <div className="text-muted-foreground">
+                    {getAudienceDisplayLabel(sendingBroadcast)} · {sendingBroadcast.audienceCount.toLocaleString()} stored recipient(s)
+                  </div>
+                  <div className="text-muted-foreground mt-0.5">
+                    Channel: <span className="font-medium uppercase">{sendingBroadcast.channel}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Subject (email + multi) */}
+              <div className="space-y-2">
+                <Label>Subject</Label>
+                <Input
+                  placeholder="Email subject (supports {{name}})"
+                  value={sendForm.subject}
+                  onChange={e => setSendForm({ ...sendForm, subject: e.target.value })}
+                />
+              </div>
+
+              {/* HTML body */}
+              <div className="space-y-2">
+                <Label>Email Body (HTML, supports variables)</Label>
+                <Textarea
+                  rows={8}
+                  className="font-mono text-xs"
+                  placeholder="<h1>Hello {{name}}</h1>"
+                  value={sendForm.html}
+                  onChange={e => setSendForm({ ...sendForm, html: e.target.value })}
+                />
+                <p className="text-[10px] text-muted-foreground">{sendForm.html.length} characters</p>
+              </div>
+
+              {/* For multi-channel: WhatsApp message body */}
+              {sendingBroadcast?.channel === 'multi' && (
+                <div className="space-y-2">
+                  <Label>WhatsApp / SMS Message (text, supports variables)</Label>
+                  <Textarea
+                    rows={3}
+                    placeholder="Hello {{name}}, ..."
+                    value={sendForm.message}
+                    onChange={e => setSendForm({ ...sendForm, message: e.target.value })}
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    Multi-channel sends email to recipients with email AND WhatsApp to recipients with phone.
+                  </p>
+                </div>
+              )}
+
+              {/* Email Provider dropdown */}
+              <div className="space-y-2">
+                <Label>Email Provider</Label>
+                <Select
+                  value={sendForm.providerId}
+                  onValueChange={v => setSendForm({ ...sendForm, providerId: v })}
+                  disabled={emailProviders.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={
+                        isLoadingProviders
+                          ? 'Loading providers...'
+                          : emailProviders.length === 0
+                            ? 'No providers connected'
+                            : 'Select a provider'
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {emailProviders.map(p => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name} <span className="text-muted-foreground">({p.providerType.toUpperCase()})</span>
+                        {p.isDefaultMarketing ? ' ★' : ''}
+                        {p.isPlatform && <span className="text-muted-foreground ml-1">· platform</span>}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                  <Mail className="size-3" />
+                  All active email providers are listed. If none appear, connect one in Settings → Providers.
+                </p>
+              </div>
+            </div>
+          </ScrollArea>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSendDialog(false)} disabled={isSending}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-sky-600 hover:bg-sky-700"
+              onClick={handleConfirmSend}
+              disabled={
+                isSending ||
+                !sendForm.subject.trim() ||
+                !sendForm.html.trim() ||
+                !sendForm.providerId
+              }
+            >
+              {isSending ? (
+                <><Loader2 className="size-4 mr-1.5 animate-spin" /> Sending...</>
+              ) : (
+                <><Send className="size-4 mr-1.5" /> Send Now</>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
