@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { sendEmail, personalize, getProviderStatus } from '@/lib/email-send'
+import { resolveTenantId } from '@/lib/broadcast-audience'
 
 interface SendCampaignBody {
   name: string
@@ -42,6 +43,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // ── Resolve a real tenantId (admin may have tenantId=null) ─────────────
+    // Previously this used `user.tenantId || 'default'`, but 'default' is not
+    // a real Tenant row → FK violation on NotificationLog.create, and contact
+    // queries returned 0 rows because contacts are stored under the real
+    // tenant id. resolveTenantId returns the first real tenant id (or null).
+    const resolvedTenantId = await resolveTenantId(user.tenantId)
+
     // ── Resolve audience contact IDs ────────────────────────────────────────
     const contactIdSet = new Set<string>()
 
@@ -67,7 +75,7 @@ export async function POST(request: NextRequest) {
 
     if (body.allContacts) {
       const allContacts = await db.contact.findMany({
-        where: { tenantId: user.tenantId || 'default' },
+        where: resolvedTenantId ? { tenantId: resolvedTenantId } : undefined,
         select: { id: true },
       })
       allContacts.forEach((c) => contactIdSet.add(c.id))
@@ -89,7 +97,7 @@ export async function POST(request: NextRequest) {
     // shared platform domain. When the caller did not explicitly choose a
     // provider, refuse early with a 409 so the UI can prompt them to connect one.
     if (!body.providerId && !body.credentialId) {
-      const status = await getProviderStatus(user.tenantId || 'default')
+      const status = await getProviderStatus(resolvedTenantId || 'default')
       if (!status.marketingEmail.connected) {
         return NextResponse.json(
           {
@@ -107,7 +115,7 @@ export async function POST(request: NextRequest) {
     const contacts = await db.contact.findMany({
       where: {
         id: { in: Array.from(contactIdSet) },
-        tenantId: user.tenantId || 'default',
+        ...(resolvedTenantId ? { tenantId: resolvedTenantId } : {}),
       },
       select: {
         id: true, name: true, email: true, phone: true,
@@ -180,7 +188,7 @@ export async function POST(request: NextRequest) {
             message: personalizedHtml,
             status: sendResult.success ? 'sent' : 'failed',
             externalId: sendResult.messageId || null,
-            tenantId: user.tenantId || 'default',
+            tenantId: resolvedTenantId || null,
             metadataJson: JSON.stringify({
               campaignName: body.name,
               campaignId: body.campaignId || null,

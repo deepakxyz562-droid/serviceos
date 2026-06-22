@@ -77,11 +77,28 @@ function parseFilters(filtersJson: string | null | undefined): {
   }
 }
 
-/** Resolve a usable tenantId — falls back to the first tenant when null (admin case). */
-export async function resolveTenantId(tenantId: string | null): Promise<string> {
-  if (tenantId) return tenantId
-  const first = await db.tenant.findFirst({ select: { id: true }, orderBy: { createdAt: 'asc' } })
-  return first?.id || 'default'
+/** Resolve a usable tenantId — falls back to the first tenant when null (admin case).
+ *  Returns null when no tenant exists at all, so callers can pass null to
+ *  nullable-FK columns (NotificationLog.tenantId) without triggering a
+ *  foreign-key constraint violation (the previous 'default' fallback did). */
+export async function resolveTenantId(tenantId: string | null): Promise<string | null> {
+  if (tenantId) {
+    // Verify the tenant actually exists — a stale JWT might carry a tenantId
+    // that was deleted. If it doesn't exist, fall through to the first-tenant
+    // lookup below.
+    try {
+      const exists = await db.tenant.findUnique({ where: { id: tenantId }, select: { id: true } })
+      if (exists) return tenantId
+    } catch {
+      // ignore — fall through
+    }
+  }
+  try {
+    const first = await db.tenant.findFirst({ select: { id: true }, orderBy: { createdAt: 'asc' } })
+    return first?.id || null
+  } catch {
+    return null
+  }
 }
 
 // ─── Main resolver ─────────────────────────────────────────────────────────
@@ -150,7 +167,7 @@ export async function resolveBroadcastAudience(
   if (wantAll) {
     try {
       const all = await db.contact.findMany({
-        where: { tenantId },
+        where: tenantId ? { tenantId } : undefined,
         select: { id: true },
       })
       all.forEach((c) => contactIdSet.add(c.id))
@@ -161,7 +178,7 @@ export async function resolveBroadcastAudience(
   if (contactIdSet.size > 0) {
     try {
       const contacts = await db.contact.findMany({
-        where: { id: { in: Array.from(contactIdSet) }, tenantId },
+        where: { id: { in: Array.from(contactIdSet) }, ...(tenantId ? { tenantId } : {}) },
         select: {
           id: true, name: true, email: true, phone: true,
           company: true, city: true, country: true, status: true,
@@ -206,7 +223,7 @@ export async function resolveBroadcastAudience(
     try {
       // Customer has no tenantId — filter via workspace.tenantId
       const all = await db.customer.findMany({
-        where: { workspace: { tenantId } },
+        where: tenantId ? { workspace: { tenantId } } : undefined,
         select: { id: true },
       })
       all.forEach((c) => customerIdSet.add(c.id))

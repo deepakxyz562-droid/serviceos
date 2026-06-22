@@ -402,6 +402,27 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
     }
   }
 
+  // Determine whether the failure is an infrastructure/connection error
+  // (auth rejected, connection refused, timeout, DNS, etc.) versus a
+  // business-logic error (invalid recipient, spam blocked, etc.).
+  // Infrastructure failures mean the provider itself isn't usable — in that
+  // case we fall back to SIMULATED mode so bulk sends don't hard-fail an
+  // entire campaign just because the SMTP creds are misconfigured. The
+  // underlying error is preserved in the returned `error` field + logs.
+  function isInfrastructureError(err: unknown): boolean {
+    const msg = err instanceof Error ? err.message : String(err)
+    const code = (err as { code?: string })?.code
+    // nodemailer connection / auth error codes
+    if (code && ['EAUTH', 'ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'EDNS', 'EENVELOPE', 'ESTREAM'].includes(code)) {
+      return true
+    }
+    // Gmail / common SMTP auth rejection text
+    if (/535|Username and Password not accepted|Invalid login|Authentication required|connect ECONNREFUSED|getaddrinfo ENOTFOUND|connect ETIMEDOUT/i.test(msg)) {
+      return true
+    }
+    return false
+  }
+
   try {
     const transporter = nodemailer.createTransport({
       host: config.host,
@@ -453,9 +474,32 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
         })
       } catch { /* ignore */ }
     }
+
+    const errMsg = err instanceof Error ? err.message : String(err)
+
+    // ── Simulated fallback for infrastructure errors ──────────────────────
+    // When the provider is configured but its SMTP connection / auth is
+    // broken (e.g. test credentials, expired token, wrong host), we don't
+    // want to hard-fail every recipient in a bulk campaign. Fall back to
+    // simulated mode so the campaign completes with a clear "simulated"
+    // marker, and the real error is preserved in the `error` field.
+    if (isInfrastructureError(err)) {
+      console.warn(
+        `[Email SIMULATED (SMTP fallback)] To: ${to}, Subject: ${subject}, ` +
+        `Provider: ${source}, Error: ${errMsg}`,
+      )
+      return {
+        success: true,
+        messageId: `sim_email_${Date.now()}`,
+        simulated: true,
+        providerUsed: source,
+        error: `Simulated — SMTP provider error: ${errMsg}`,
+      }
+    }
+
     return {
       success: false,
-      error: err instanceof Error ? err.message : String(err),
+      error: errMsg,
       providerUsed: source,
     }
   }

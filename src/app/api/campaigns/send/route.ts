@@ -41,7 +41,7 @@ interface SendLog {
   name: string
   email?: string | null
   phone?: string | null
-  channel: 'email' | 'whatsapp' | 'sms'
+  channel: 'email' | 'whatsapp' | 'sms' | 'multi'
   success: boolean
   messageId?: string
   simulated?: boolean
@@ -118,7 +118,10 @@ export async function POST(request: NextRequest) {
     // early so the UI can prompt the user to connect one.
     if ((channel === 'email' || channel === 'multi') && !body.providerId && !body.credentialId) {
       // Look up the tenant's default marketing EmailProvider directly.
-      const defaultMarketing = await db.emailProvider.findFirst({
+      // First try the user's tenant, then fall back to any active marketing
+      // provider (covers the admin case where tenantId is null and providers
+      // may be stored under a different/default tenant id).
+      let defaultMarketing = await db.emailProvider.findFirst({
         where: {
           tenantId: user.tenantId || undefined,
           status: 'active',
@@ -127,6 +130,16 @@ export async function POST(request: NextRequest) {
         orderBy: [{ isDefaultMarketing: 'desc' }, { createdAt: 'asc' }],
         select: { id: true },
       })
+      if (!defaultMarketing) {
+        defaultMarketing = await db.emailProvider.findFirst({
+          where: {
+            status: 'active',
+            OR: [{ usageType: 'marketing' }, { usageType: 'both' }],
+          },
+          orderBy: [{ isDefaultMarketing: 'desc' }, { createdAt: 'asc' }],
+          select: { id: true },
+        })
+      }
       if (!defaultMarketing) {
         return NextResponse.json(
           {
@@ -364,7 +377,7 @@ async function dispatchToRecipient(
 async function persistNotificationLogs(
   logs: SendLog[],
   body: SendBroadcastBody,
-  tenantId: string,
+  tenantId: string | null,
 ) {
   for (const log of logs) {
     if (log.skipped) continue // skip logging for skipped recipients
@@ -377,10 +390,10 @@ async function persistNotificationLogs(
           recipient,
           recipientName: log.name,
           subject: log.channel === 'email' ? body.subject : null,
-          message: log.channel === 'email' ? body.html : body.message || body.html || '',
+          message: (log.channel === 'email' ? body.html : (body.message || body.html)) || '',
           status: log.success ? 'sent' : 'failed',
           externalId: log.messageId || null,
-          tenantId,
+          tenantId: tenantId || null,
           metadataJson: JSON.stringify({
             campaignName: body.name || null,
             campaignId: body.campaignId || null,
