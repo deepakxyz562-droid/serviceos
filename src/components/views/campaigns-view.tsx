@@ -629,13 +629,27 @@ export function CampaignsView() {
         return;
       }
 
-      toast.success(
-        `Campaign sent — Sent ${data.sent ?? 0}, Delivered ${data.sent ?? 0}` +
-          (data.failed ? `, Failed ${data.failed}` : '') +
-          (data.skipped ? `, Skipped ${data.skipped}` : '') +
-          (data.totalAudience !== undefined ? ` (of ${data.totalAudience})` : ''),
-        { duration: 6000 },
-      );
+      // Surface the actual SMTP error when there are failures, so the user
+      // can diagnose provider misconfiguration (e.g. "Invalid login",
+      // "connect ETIMEDOUT", "Email address is not verified", etc.).
+      const results = Array.isArray(data.results) ? data.results : [];
+      const firstError = results.find((r: { success?: boolean; error?: string }) => !r.success && r.error);
+
+      if (data.failed && firstError) {
+        toast.error(
+          `Campaign sent — ${data.sent ?? 0} sent, ${data.failed} failed.\n` +
+          `First error: ${firstError.error}`,
+          { duration: 10000 },
+        );
+      } else {
+        toast.success(
+          `Campaign sent — Sent ${data.sent ?? 0}, Delivered ${data.sent ?? 0}` +
+            (data.failed ? `, Failed ${data.failed}` : '') +
+            (data.skipped ? `, Skipped ${data.skipped}` : '') +
+            (data.totalAudience !== undefined ? ` (of ${data.totalAudience})` : ''),
+          { duration: 6000 },
+        );
+      }
       setShowSendNowDialog(false);
       setSendNowCampaign(null);
       // Refresh so the user sees updated sentCount/status (backend flips to 'completed').

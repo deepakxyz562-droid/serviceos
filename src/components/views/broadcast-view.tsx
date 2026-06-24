@@ -651,15 +651,29 @@ export function BroadcastView() {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && (data as { success?: boolean }).success) {
-        const result = data as { sent?: number; failed?: number; skipped?: number; totalAudience?: number; channel?: string };
+        const result = data as { sent?: number; failed?: number; skipped?: number; totalAudience?: number; channel?: string; results?: Array<{ success?: boolean; error?: string }> };
         const channelLabel = result.channel === 'whatsapp' ? 'WhatsApp'
           : result.channel === 'sms' ? 'SMS'
           : result.channel === 'multi' ? 'Multi-channel'
           : 'Broadcast';
-        toast.success(
-          `${channelLabel} sent — ${result.sent || 0} delivered, ${result.failed || 0} failed` +
-          (result.skipped ? `, ${result.skipped} skipped` : '')
-        );
+        // Surface the actual SMTP/email error when there are failures, so the
+        // user can diagnose provider misconfiguration instead of seeing a
+        // misleading "sent" toast when emails never reached the provider.
+        const firstError = Array.isArray(result.results)
+          ? result.results.find((r) => !r.success && r.error)
+          : undefined;
+        if (result.failed && firstError) {
+          toast.error(
+            `${channelLabel} — ${result.sent || 0} sent, ${result.failed} failed.\n` +
+            `First error: ${firstError.error}`,
+            { duration: 10000 },
+          );
+        } else {
+          toast.success(
+            `${channelLabel} sent — ${result.sent || 0} delivered, ${result.failed || 0} failed` +
+            (result.skipped ? `, ${result.skipped} skipped` : '')
+          );
+        }
         setShowSendDialog(false);
         await loadBroadcasts();
       } else {

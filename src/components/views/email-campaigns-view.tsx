@@ -197,11 +197,25 @@ export function EmailCampaignsView() {
       }
 
       setLastResult(data);
-      toast.success(
-        `Campaign sent: ${data.sent}/${data.totalAudience} delivered` +
-          (data.failed ? `, ${data.failed} failed` : '') +
-          (data.skipped ? `, ${data.skipped} skipped` : '')
-      );
+      // Surface the actual SMTP error when there are failures, so the user
+      // can diagnose provider misconfiguration instead of seeing a green
+      // "sent" toast when emails never reached the provider.
+      const firstErr = Array.isArray(data.results)
+        ? data.results.find((r: SendResult) => !r.success && r.error)
+        : undefined;
+      if (data.failed && firstErr) {
+        toast.error(
+          `Campaign sent: ${data.sent}/${data.totalAudience} delivered, ${data.failed} failed.\n` +
+          `First error: ${firstErr.error}`,
+          { duration: 10000 },
+        );
+      } else {
+        toast.success(
+          `Campaign sent: ${data.sent}/${data.totalAudience} delivered` +
+            (data.failed ? `, ${data.failed} failed` : '') +
+            (data.skipped ? `, ${data.skipped} skipped` : '')
+        );
+      }
       setDialogOpen(false);
       // Reset name (keep subject/body for easy re-use)
       setCampaignName('');

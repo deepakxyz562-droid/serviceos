@@ -477,12 +477,37 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
 
     const errMsg = err instanceof Error ? err.message : String(err)
 
-    // ── Simulated fallback for infrastructure errors ──────────────────────
-    // When the provider is configured but its SMTP connection / auth is
-    // broken (e.g. test credentials, expired token, wrong host), we don't
-    // want to hard-fail every recipient in a bulk campaign. Fall back to
-    // simulated mode so the campaign completes with a clear "simulated"
-    // marker, and the real error is preserved in the `error` field.
+    // ── CRITICAL: Never simulate marketing/campaign sends ─────────────────
+    // For marketing (campaign/broadcast) sends, the SMTP error MUST be
+    // surfaced as a real failure. The previous behavior swallowed
+    // infrastructure errors (EAUTH, ECONNECTION, ETIMEDOUT, etc.) and
+    // returned `success: true, simulated: true`, which made campaigns
+    // appear to succeed in the UI while the emails never actually reached
+    // the provider (Amazon SES, SendGrid, etc.). This was the root cause
+    // of "SES stats never change after campaign sends" — the SMTP send was
+    // failing (auth, connection, sandbox mode, unverified sender, etc.)
+    // but the simulated fallback hid the error and reported fake success.
+    //
+    // Now: marketing sends return the real error so the campaign/broadcast
+    // UI can show "N failed: <actual SMTP error>" and the user can fix
+    // their provider configuration.
+    if (usageType === 'marketing') {
+      console.error(
+        `[Email FAILED (marketing)] To: ${to}, Subject: ${subject}, ` +
+        `Provider: ${source}, Error: ${errMsg}`,
+      )
+      return {
+        success: false,
+        error: errMsg,
+        providerUsed: source,
+      }
+    }
+
+    // ── Simulated fallback for transactional infrastructure errors ────────
+    // For transactional emails (password reset, invitations, invoices), we
+    // keep the simulated fallback on infrastructure errors so the user flow
+    // doesn't hard-fail. The real error is preserved in the `error` field
+    // and logged so the admin can diagnose provider misconfiguration.
     if (isInfrastructureError(err)) {
       console.warn(
         `[Email SIMULATED (SMTP fallback)] To: ${to}, Subject: ${subject}, ` +
