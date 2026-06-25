@@ -27,6 +27,7 @@ import {
   Plus, Trash2, Edit3, FileText, Clock, Activity, Globe,
   BarChart3, UserCog, Zap, Calendar, Target, Briefcase,
   Filter, Key, Store, FileInput, Receipt, Settings,
+  Plug,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -50,6 +51,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
+import { IntegrationsTab } from '@/components/views/superadmin-integrations-tab';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -1960,6 +1962,9 @@ export function SuperAdminView() {
           <TabsTrigger value="menu-items" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
             <Menu className="size-3.5" /><span className="hidden sm:inline">Menu Items</span>
           </TabsTrigger>
+          <TabsTrigger value="integrations" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
+            <Plug className="size-3.5" /><span className="hidden sm:inline">Integrations</span>
+          </TabsTrigger>
           <TabsTrigger value="users" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
             <UserCog className="size-3.5" /><span className="hidden sm:inline">Users</span>
           </TabsTrigger>
@@ -1973,6 +1978,7 @@ export function SuperAdminView() {
         <TabsContent value="subscriptions"><SubscriptionsTab /></TabsContent>
         <TabsContent value="feature-flags"><FeatureFlagsTab /></TabsContent>
         <TabsContent value="menu-items"><MenuItemsTab /></TabsContent>
+        <TabsContent value="integrations"><IntegrationsTab /></TabsContent>
         <TabsContent value="users"><UsersTab /></TabsContent>
         <TabsContent value="audit-logs"><AuditLogsTab /></TabsContent>
       </Tabs>

@@ -62,6 +62,12 @@ model Tenant {
   invitations       Invitation[]
   subscriptionPayments SubscriptionPayment[]
   billingEvents     BillingEvent[]
+  // Integrations Hub — ads lead capture
+  integrationConnections HubIntegrationConnection[]
+  metaLeadConfig    MetaLeadConfig?
+  metaLeads         MetaLead[]
+  googleAdsLeadConfig GoogleAdsLeadConfig?
+  googleAdsLeads    GoogleAdsLead[]
 
   @@index([slug])
   @@index([plan])
@@ -2803,4 +2809,133 @@ model PaymentMethod {
   @@index([customerId])
   @@index([tenantId])
   @@index([isDefault])
+}
+
+// ==========================================
+// INTEGRATIONS HUB — ADS LEAD CAPTURE
+// ==========================================
+
+// Per-tenant connection state for any integration in the hub
+// (Meta Ads, Google Ads, Shopify, Stripe, etc.). Credentials are
+// stored in credentialsJson (NEVER returned to the client unmasked).
+model HubIntegrationConnection {
+  id              String   @id @default(cuid())
+  tenantId        String
+  integrationKey  String   // meta-ads, google-ads, shopify, ...
+  status          String   @default("disconnected") // connected | disconnected | error | syncing
+  credentialsJson String   @default("{}")            // encrypted credentials (masked on read)
+  configJson      String   @default("{}")            // non-secret config (pageId, formIds, ...)
+  connectedAt     DateTime?
+  lastSyncAt      DateTime?
+  lastSyncStatus  String?
+  errorMessage    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, integrationKey])
+  @@index([tenantId])
+}
+
+// Meta Business Platform (Facebook + Instagram) lead-gen config per tenant.
+// Used to verify Meta webhooks and fetch lead details via the Graph API.
+model MetaLeadConfig {
+  id                  String   @id @default(cuid())
+  tenantId            String   @unique
+  appId               String?
+  appSecret           String?
+  verifyToken         String?
+  pageId              String?
+  pageName            String?
+  pageAccessToken     String?
+  subscriptionVerified Boolean @default(false)
+  autoCreateLeads     Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// A lead captured from a Meta (Facebook/Instagram) Lead Gen form webhook.
+model MetaLead {
+  id                String   @id @default(cuid())
+  tenantId          String
+  leadgenId         String   // Meta leadgen_id
+  formId            String   // Meta form_id
+  formName          String?
+  pageId            String
+  platform          String   @default("facebook") // facebook | instagram
+  adId              String?
+  adName            String?
+  adsetId           String?
+  campaignId        String?
+  campaignName      String?
+  contactName       String?
+  email             String?
+  phone             String?
+  city              String?
+  country           String?
+  customFieldsJson  String   @default("{}")
+  rawDataJson       String   @default("{}")
+  leadStatus        String   @default("new") // new | contacted | qualified | converted | lost
+  convertedContactId String?
+  receivedAt        DateTime @default(now())
+  processedAt       DateTime?
+  createdAt         DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, leadgenId])
+  @@index([tenantId, leadStatus])
+  @@index([tenantId, platform])
+}
+
+// Google Ads lead-form config per tenant. Used to poll the Google Ads API
+// for new lead-form submissions (Google does not push webhooks for lead forms).
+model GoogleAdsLeadConfig {
+  id                String   @id @default(cuid())
+  tenantId          String   @unique
+  clientId          String?
+  clientSecret      String?
+  developerToken    String?
+  refreshToken      String?
+  loginCustomerId   String?  // manager account id (XXX-XXX-XXXX or raw digits)
+  accountName       String?
+  autoCreateLeads   Boolean  @default(true)
+  lastPollAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// A lead captured from a Google Ads Lead Form extension.
+model GoogleAdsLead {
+  id                String   @id @default(cuid())
+  tenantId          String
+  leadId            String   // Google's lead id / resource name
+  formId            String?
+  formName          String?
+  campaignId        String?
+  campaignName      String?
+  adGroupId         String?
+  resourceName      String?
+  contactName       String?
+  email             String?
+  phone             String?
+  postalCode        String?
+  customFieldsJson  String   @default("{}")
+  rawDataJson       String   @default("{}")
+  leadStatus        String   @default("new") // new | contacted | qualified | converted | lost
+  convertedContactId String?
+  submittedAt       DateTime?
+  receivedAt        DateTime @default(now())
+  processedAt       DateTime?
+  createdAt         DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, leadId])
+  @@index([tenantId, leadStatus])
 }
