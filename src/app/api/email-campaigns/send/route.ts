@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { sendEmail, personalize, getProviderStatus } from '@/lib/email-send'
-import { resolveTenantId } from '@/lib/broadcast-audience'
+import { sendEmail, getProviderStatus } from '@/lib/email-send'
+import {
+  resolveBroadcastAudience,
+  resolveTenantId,
+  personalizeForRecipient,
+} from '@/lib/broadcast-audience'
 
 interface SendCampaignBody {
   name: string
@@ -12,9 +16,14 @@ interface SendCampaignBody {
   // Audience selectors — at least one required
   contactIds?: string[]
   groupIds?: string[]
+  customerIds?: string[]
   segmentId?: string
   // Optional: target all tenant contacts (use with care)
   allContacts?: boolean
+  // Optional: stored campaign audience fields (used when no direct selectors passed)
+  audienceType?: string
+  audienceId?: string
+  audienceFiltersJson?: string
   // EmailProvider ID (preferred) OR legacy Credential ID
   providerId?: string
   credentialId?: string
@@ -36,9 +45,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'subject and html are required' }, { status: 400 })
     }
 
-    if (!body.contactIds?.length && !body.groupIds?.length && !body.segmentId && !body.allContacts) {
+    // Validate audience selectors — accept either direct selectors or stored
+    // campaign audience fields (audienceType/audienceId/audienceFiltersJson).
+    const hasDirectSelector =
+      !!body.contactIds?.length ||
+      !!body.groupIds?.length ||
+      !!body.customerIds?.length ||
+      !!body.segmentId ||
+      !!body.allContacts ||
+      !!body.audienceType
+    if (!hasDirectSelector) {
       return NextResponse.json(
-        { error: 'Provide at least one of: contactIds, groupIds, segmentId, or allContacts=true' },
+        { error: 'Provide at least one of: contactIds, groupIds, customerIds, segmentId, allContacts=true, or audienceType' },
         { status: 400 }
       )
     }
@@ -50,44 +68,18 @@ export async function POST(request: NextRequest) {
     // tenant id. resolveTenantId returns the first real tenant id (or null).
     const resolvedTenantId = await resolveTenantId(user.tenantId)
 
-    // ── Resolve audience contact IDs ────────────────────────────────────────
-    const contactIdSet = new Set<string>()
-
-    if (body.contactIds?.length) {
-      body.contactIds.forEach((id) => contactIdSet.add(id))
-    }
-
-    if (body.groupIds?.length) {
-      const memberships = await db.contactGroup.findMany({
-        where: { groupId: { in: body.groupIds } },
-        select: { contactId: true },
-      })
-      memberships.forEach((m) => contactIdSet.add(m.contactId))
-    }
-
-    if (body.segmentId) {
-      const segMembers = await db.segmentMember.findMany({
-        where: { segmentId: body.segmentId },
-        select: { customerId: true },
-      })
-      segMembers.forEach((m) => contactIdSet.add(m.customerId))
-    }
-
-    if (body.allContacts) {
-      const allContacts = await db.contact.findMany({
-        where: resolvedTenantId ? { tenantId: resolvedTenantId } : undefined,
-        select: { id: true },
-      })
-      allContacts.forEach((c) => contactIdSet.add(c.id))
-    }
-
-    if (contactIdSet.size === 0) {
-      return NextResponse.json({
-        success: true,
-        sent: 0,
-        failed: 0,
-        skipped: 0,
-        message: 'No contacts matched the audience criteria',
+    // ── Optionally load the linked Campaign to inherit stored audience ──────
+    // When campaignId is provided, pull the stored audience fields so that
+    // segment / contact_list / custom (manual-email) audiences resolve the
+    // same way they do in /api/campaigns/audience-count.
+    let storedCampaign: Awaited<ReturnType<typeof db.campaign.findUnique>> = null
+    if (body.campaignId) {
+      storedCampaign = await db.campaign.findUnique({
+        where: { id: body.campaignId },
+        select: {
+          id: true, name: true,
+          audienceType: true, audienceId: true, audienceFiltersJson: true,
+        },
       })
     }
 
@@ -111,18 +103,50 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── Fetch the actual contact rows ───────────────────────────────────────
-    const contacts = await db.contact.findMany({
-      where: {
-        id: { in: Array.from(contactIdSet) },
-        ...(resolvedTenantId ? { tenantId: resolvedTenantId } : {}),
-      },
-      select: {
-        id: true, name: true, email: true, phone: true,
-        company: true, city: true, country: true,
-        status: true,
-      },
+    // ── Resolve the audience via the shared broadcast-audience helper ───────
+    // This is the SAME resolver used by /api/campaigns/audience-count and
+    // /api/campaigns/send, so the count shown in the UI matches the actual
+    // recipients sent. It:
+    //   1. Fetches both Contacts AND Customers (the old code only fetched Contacts,
+    //      causing the "Skipped 20 of 20" mismatch when the audience was mostly
+    //      Customers).
+    //   2. Pre-filters by email for channel='email' (so phone-only recipients are
+    //      excluded from the count AND the send, instead of being fetched and then
+    //      skipped one-by-one).
+    //   3. Deduplicates by email/phone so the same person isn't emailed twice.
+    const audience = await resolveBroadcastAudience({
+      tenantId: user.tenantId,
+      // Stored campaign audience fields (used when no direct selectors passed)
+      audienceType: body.audienceType || storedCampaign?.audienceType,
+      audienceId: body.audienceId || storedCampaign?.audienceId,
+      audienceFiltersJson: body.audienceFiltersJson || storedCampaign?.audienceFiltersJson,
+      // Direct selectors (override stored fields)
+      contactIds: body.contactIds,
+      groupIds: body.groupIds,
+      customerIds: body.customerIds,
+      segmentId: body.segmentId,
+      allContacts: body.allContacts,
+      channel: 'email',
     })
+
+    const recipients = audience.recipients
+    const totalAudience = recipients.length
+
+    if (totalAudience === 0) {
+      // No email-eligible recipients — return a clean 0/0/0 result instead of
+      // a confusing "skipped N of N". The audience-count endpoint already
+      // reflects 0 for this case, so the UI is consistent.
+      return NextResponse.json({
+        success: true,
+        campaignName: body.name,
+        totalAudience: 0,
+        sent: 0,
+        failed: 0,
+        skipped: 0,
+        results: [],
+        message: 'No recipients with email addresses matched the audience criteria',
+      })
+    }
 
     // ── Send personalized emails ────────────────────────────────────────────
     const results: Array<{ contactId: string; email: string; success: boolean; messageId?: string; error?: string; simulated?: boolean }> = []
@@ -130,11 +154,12 @@ export async function POST(request: NextRequest) {
     let failedCount = 0
     let skippedCount = 0
 
-    for (const contact of contacts) {
-      // Skip contacts without email
-      if (!contact.email || !contact.email.trim()) {
+    for (const recipient of recipients) {
+      // resolveBroadcastAudience already filtered by email for channel='email',
+      // but double-guard against empty/whitespace emails just in case.
+      if (!recipient.email || !recipient.email.trim()) {
         results.push({
-          contactId: contact.id,
+          contactId: recipient.refId,
           email: '(none)',
           success: false,
           error: 'No email address',
@@ -143,11 +168,11 @@ export async function POST(request: NextRequest) {
         continue
       }
 
-      // Skip unsubscribed
-      if (contact.status === 'unsubscribed') {
+      // Skip unsubscribed contacts (customers are always 'active' per the resolver)
+      if (recipient.status === 'unsubscribed') {
         results.push({
-          contactId: contact.id,
-          email: contact.email,
+          contactId: recipient.refId,
+          email: recipient.email,
           success: false,
           error: 'Contact unsubscribed',
         })
@@ -155,23 +180,16 @@ export async function POST(request: NextRequest) {
         continue
       }
 
-      // Personalize subject + body
-      const vars = {
-        name: contact.name,
-        email: contact.email,
-        phone: contact.phone || undefined,
-        company: contact.company || undefined,
-        city: contact.city || undefined,
-        country: contact.country || undefined,
-      }
-      const personalizedSubject = personalize(body.subject, vars)
-      const personalizedHtml = personalize(body.html, vars)
+      // Personalize subject + body using the shared recipient helper
+      const personalizedSubject = personalizeForRecipient(body.subject, recipient)
+      const personalizedHtml = personalizeForRecipient(body.html, recipient)
+      const personalizedText = body.text ? personalizeForRecipient(body.text, recipient) : undefined
 
       const sendResult = await sendEmail({
-        to: contact.email,
+        to: recipient.email,
         subject: personalizedSubject,
         html: personalizedHtml,
-        text: body.text ? personalize(body.text, vars) : undefined,
+        text: personalizedText,
         providerId: body.providerId,
         credentialId: body.credentialId,
         usageType: 'marketing',
@@ -182,8 +200,8 @@ export async function POST(request: NextRequest) {
         await db.notificationLog.create({
           data: {
             type: 'email',
-            recipient: contact.email,
-            recipientName: contact.name,
+            recipient: recipient.email,
+            recipientName: recipient.name,
             subject: personalizedSubject,
             message: personalizedHtml,
             status: sendResult.success ? 'sent' : 'failed',
@@ -192,7 +210,9 @@ export async function POST(request: NextRequest) {
             metadataJson: JSON.stringify({
               campaignName: body.name,
               campaignId: body.campaignId || null,
-              contactId: contact.id,
+              recipientKey: recipient.key,
+              recipientSource: recipient.source,
+              recipientRefId: recipient.refId,
               providerUsed: sendResult.providerUsed,
               simulated: sendResult.simulated || false,
               error: sendResult.error || null,
@@ -210,8 +230,8 @@ export async function POST(request: NextRequest) {
       }
 
       results.push({
-        contactId: contact.id,
-        email: contact.email,
+        contactId: recipient.refId,
+        email: recipient.email,
         success: sendResult.success,
         messageId: sendResult.messageId,
         error: sendResult.error,
@@ -228,7 +248,7 @@ export async function POST(request: NextRequest) {
         await db.campaign.update({
           where: { id: body.campaignId },
           data: {
-            totalRecipients: contacts.length,
+            totalRecipients: totalAudience,
             sentCount,
             deliveredCount: sentCount,
             failedCount,
@@ -243,7 +263,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       campaignName: body.name,
-      totalAudience: contacts.length,
+      totalAudience,
       sent: sentCount,
       failed: failedCount,
       skipped: skippedCount,
