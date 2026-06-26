@@ -150,6 +150,37 @@ function emailProviderToSmtpConfig(
         }
       }
       return null
+    case 'ses': {
+      // AWS SES SMTP interface. The user provides either:
+      //  (a) smtpHost + smtpUser + smtpPass — handled by the generic check at
+      //      the top of this function (returns before reaching the switch).
+      //  (b) region + smtpUser + smtpPass (IAM-derived SMTP credentials) — we
+      //      derive the host from the region.
+      //  (c) smtpUser + smtpPass only — default to us-east-1 host.
+      //
+      // Without this explicit case, SES providers whose configJson lacks
+      // smtpHost (e.g. only region + IAM SMTP creds were entered) fall through
+      // to `default: return null`, which makes resolveSmtpConfig return
+      // marketingProviderRequired=true and every campaign recipient fails
+      // with MARKETING_PROVIDER_REQUIRED — even though a providerId WAS
+      // supplied.
+      if (data.smtpUser && data.smtpPass) {
+        const region = data.region || 'us-east-1'
+        const host = data.smtpHost || `email-smtp.${region}.amazonaws.com`
+        const port = parseInt(data.smtpPort || '587', 10)
+        return {
+          host,
+          port,
+          secure: data.smtpSecure === 'true' || port === 465,
+          user: data.smtpUser,
+          pass: data.smtpPass,
+          fromName: provider.fromName,
+          fromEmail: provider.fromEmail,
+          replyTo: provider.replyTo || undefined,
+        }
+      }
+      return null
+    }
     default:
       return null
   }
@@ -179,8 +210,24 @@ export async function resolveSmtpConfig(
         if (config) {
           return { config, source: `emailProvider:${provider.id}(${provider.name})`, providerId: provider.id }
         }
+        // Provider found but its config is invalid/incomplete — log so we can
+        // diagnose "MARKETING_PROVIDER_REQUIRED" errors that happen even when
+        // a providerId was supplied. This is the most common cause of the
+        // per-recipient MARKETING_PROVIDER_REQUIRED failure in campaigns.
+        const parsedKeys = (() => {
+          try { return Object.keys(JSON.parse(provider.configJson || '{}') || {}) } catch { return [] }
+        })()
+        console.warn(
+          `[resolveSmtpConfig] providerId=${providerId} found (type=${provider.providerType}, name=${provider.name}) but emailProviderToSmtpConfig returned null. ` +
+          `configJson keys: [${parsedKeys.join(', ')}]. ` +
+          `Ensure SMTP host/user/pass (or provider-specific credentials) are set.`
+        )
+      } else {
+        console.warn(`[resolveSmtpConfig] providerId=${providerId} not found in DB`)
       }
-    } catch { /* fall through */ }
+    } catch (e) {
+      console.error(`[resolveSmtpConfig] providerId=${providerId} lookup threw:`, e)
+    }
   }
 
   // 2. Specific legacy Credential by ID
@@ -382,9 +429,19 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
   // customer-connected marketing provider. Never simulate marketing sends —
   // that would hide the configuration gap from the user.
   if (marketingProviderRequired) {
+    // When a providerId was explicitly supplied but still couldn't be resolved
+    // to a valid SMTP config, include a diagnostic hint so the caller (and the
+    // user looking at campaign results) knows the provider EXISTS but its
+    // credentials are incomplete — rather than thinking no provider is
+    // connected at all.
+    const hint = providerId
+      ? ` — provider "${providerId}" was found but its SMTP configuration is incomplete. Verify SMTP host, username and password in Settings → Email Providers, then retry.`
+      : credentialId
+        ? ` — credential "${credentialId}" could not be resolved to a valid SMTP config.`
+        : ' — connect SMTP, Resend, SendGrid, Amazon SES, Mailgun or Brevo before sending campaigns.'
     return {
       success: false,
-      error: 'MARKETING_PROVIDER_REQUIRED',
+      error: `MARKETING_PROVIDER_REQUIRED${hint}`,
       providerRequired: true,
       providerUsed: 'none',
     }

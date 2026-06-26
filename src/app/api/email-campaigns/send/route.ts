@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { sendEmail } from '@/lib/email-send'
+import { sendEmail, resolveSmtpConfig } from '@/lib/email-send'
 import {
   resolveBroadcastAudience,
   resolveTenantId,
@@ -132,6 +132,42 @@ export async function POST(request: NextRequest) {
       // Auto-assign so sendEmail() below receives a concrete providerId and
       // doesn't re-fail with MARKETING_PROVIDER_REQUIRED per-recipient.
       body.providerId = defaultMarketing.id
+    }
+
+    // ── Pre-flight: validate the resolved provider actually yields a usable
+    // SMTP config BEFORE entering the per-recipient loop.
+    //
+    // This is the critical guard against the "0 sent, N failed —
+    // MARKETING_PROVIDER_REQUIRED" symptom. Without it, the route returns
+    // HTTP 200 (because the gate passed) but every recipient fails inside
+    // sendEmail() because emailProviderToSmtpConfig() returned null for that
+    // provider (e.g. SES provider whose configJson lacks smtpHost, or any
+    // provider with incomplete credentials).
+    //
+    // By resolving the config once up-front we can:
+    //   1. Fail fast with HTTP 409 + a precise, actionable message.
+    //   2. Avoid wasting time attempting (and logging) N failed sends.
+    //   3. Tell the user EXACTLY which provider is broken so they can fix it
+    //      in Settings → Email Providers instead of guessing.
+    const preflight = await resolveSmtpConfig({
+      providerId: body.providerId,
+      credentialId: body.credentialId,
+      usageType: 'marketing',
+    })
+    if (preflight.marketingProviderRequired || !preflight.config) {
+      const providerLabel = body.providerId
+        ? `Provider "${body.providerId}" was found but its SMTP configuration is incomplete — verify the SMTP host, username and password fields in Settings → Email Providers, then retry.`
+        : body.credentialId
+          ? `Credential "${body.credentialId}" could not be resolved to a valid SMTP config.`
+          : 'Connect SMTP, Resend, SendGrid, Amazon SES, Mailgun or Brevo before sending campaigns.'
+      return NextResponse.json(
+        {
+          error: 'MARKETING_PROVIDER_REQUIRED',
+          message: `Marketing Email Provider Required — ${providerLabel}`,
+          providerRequired: true,
+        },
+        { status: 409 }
+      )
     }
 
     // ── Resolve the audience via the shared broadcast-audience helper ───────

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { sendEmail } from '@/lib/email-send'
+import { sendEmail, resolveSmtpConfig } from '@/lib/email-send'
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
 import {
   resolveBroadcastAudience,
@@ -153,6 +153,37 @@ export async function POST(request: NextRequest) {
       }
       // Auto-assign the default so we don't refuse the send.
       body.providerId = defaultMarketing.id
+    }
+
+    // ── Pre-flight: validate the resolved provider yields a usable SMTP config
+    // BEFORE entering the per-recipient loop (email/multi channels only).
+    //
+    // Same guard as /api/email-campaigns/send: without this, the route returns
+    // HTTP 200 but every recipient fails inside sendEmail() because
+    // emailProviderToSmtpConfig() returned null for that provider. Failing
+    // fast with 409 + a precise message is far better UX than "0 sent, N
+    // failed — MARKETING_PROVIDER_REQUIRED".
+    if (channel === 'email' || channel === 'multi') {
+      const preflight = await resolveSmtpConfig({
+        providerId: body.providerId,
+        credentialId: body.credentialId,
+        usageType: 'marketing',
+      })
+      if (preflight.marketingProviderRequired || !preflight.config) {
+        const providerLabel = body.providerId
+          ? `Provider "${body.providerId}" was found but its SMTP configuration is incomplete — verify the SMTP host, username and password fields in Settings → Email Providers, then retry.`
+          : body.credentialId
+            ? `Credential "${body.credentialId}" could not be resolved to a valid SMTP config.`
+            : 'Connect SMTP, Resend, SendGrid, Amazon SES, Mailgun or Brevo before sending campaigns.'
+        return NextResponse.json(
+          {
+            error: 'MARKETING_PROVIDER_REQUIRED',
+            message: `Email Provider Required — ${providerLabel}`,
+            providerRequired: true,
+          },
+          { status: 409 },
+        )
+      }
     }
 
     // ── Dispatch loop ───────────────────────────────────────────────────────
