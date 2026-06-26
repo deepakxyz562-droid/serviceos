@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { sendEmail, getProviderStatus } from '@/lib/email-send'
+import { sendEmail } from '@/lib/email-send'
 import {
   resolveBroadcastAudience,
   resolveTenantId,
@@ -86,11 +86,39 @@ export async function POST(request: NextRequest) {
     // ── Marketing provider gate ─────────────────────────────────────────────
     // Bulk/campaign email must be sent through the tenant's OWN marketing
     // provider (SMTP / Resend / SendGrid / SES / Mailgun / Brevo), never the
-    // shared platform domain. When the caller did not explicitly choose a
-    // provider, refuse early with a 409 so the UI can prompt them to connect one.
+    // shared platform domain.
+    //
+    // When the caller did NOT explicitly choose a provider, look up the
+    // tenant's default marketing EmailProvider and AUTO-ASSIGN it. This is the
+    // same behavior as /api/campaigns/send. Without the auto-assignment, the
+    // gate would PASS (a provider exists) but the downstream sendEmail() call
+    // would receive providerId=undefined and fail per-recipient with
+    // "MARKETING_PROVIDER_REQUIRED" — because sendEmail's resolveSmtpConfig
+    // can't infer the tenant for admin users (tenantId=null).
     if (!body.providerId && !body.credentialId) {
-      const status = await getProviderStatus(resolvedTenantId || 'default')
-      if (!status.marketingEmail.connected) {
+      // First try the user's own tenant, then fall back to any active marketing
+      // provider (covers the admin case where tenantId is null and providers
+      // may be stored under a different tenant id).
+      let defaultMarketing = await db.emailProvider.findFirst({
+        where: {
+          tenantId: user.tenantId || undefined,
+          status: 'active',
+          OR: [{ usageType: 'marketing' }, { usageType: 'both' }],
+        },
+        orderBy: [{ isDefaultMarketing: 'desc' }, { createdAt: 'asc' }],
+        select: { id: true },
+      })
+      if (!defaultMarketing) {
+        defaultMarketing = await db.emailProvider.findFirst({
+          where: {
+            status: 'active',
+            OR: [{ usageType: 'marketing' }, { usageType: 'both' }],
+          },
+          orderBy: [{ isDefaultMarketing: 'desc' }, { createdAt: 'asc' }],
+          select: { id: true },
+        })
+      }
+      if (!defaultMarketing) {
         return NextResponse.json(
           {
             error: 'MARKETING_PROVIDER_REQUIRED',
@@ -101,6 +129,9 @@ export async function POST(request: NextRequest) {
           { status: 409 }
         )
       }
+      // Auto-assign so sendEmail() below receives a concrete providerId and
+      // doesn't re-fail with MARKETING_PROVIDER_REQUIRED per-recipient.
+      body.providerId = defaultMarketing.id
     }
 
     // ── Resolve the audience via the shared broadcast-audience helper ───────
