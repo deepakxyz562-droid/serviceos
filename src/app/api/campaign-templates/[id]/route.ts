@@ -1,9 +1,14 @@
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
+import { detectVariablesFromContent } from '@/lib/template-vars'
 
+/**
+ * GET /api/campaign-templates/[id]
+ * Auth required. Returns template if global or owned by current tenant.
+ */
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -11,14 +16,16 @@ export async function GET(
     if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const tenantId = authUser.tenantId || 'default'
 
     const { id } = await params
-
-    const template = await db.campaignTemplate.findUnique({
-      where: { id },
-    })
+    const template = await db.campaignTemplate.findUnique({ where: { id } })
 
     if (!template) {
+      return NextResponse.json({ error: 'Campaign template not found' }, { status: 404 })
+    }
+    // Ownership: global (tenantId=null) OR owned by current tenant
+    if (template.tenantId !== null && template.tenantId !== tenantId) {
       return NextResponse.json({ error: 'Campaign template not found' }, { status: 404 })
     }
 
@@ -29,6 +36,11 @@ export async function GET(
   }
 }
 
+/**
+ * PUT /api/campaign-templates/[id]
+ * Auth required. Only update templates owned by current tenant (not global).
+ * Accepts all Template Studio fields. tenantId/workspaceId cannot be changed via body.
+ */
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -38,36 +50,59 @@ export async function PUT(
     if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const tenantId = authUser.tenantId || 'default'
 
     const { id } = await params
-    const body = await request.json()
+    const existing = await db.campaignTemplate.findUnique({ where: { id } })
 
+    if (!existing) {
+      return NextResponse.json({ error: 'Campaign template not found' }, { status: 404 })
+    }
+    // Only allow editing tenant's own templates (not global/built-in)
+    if (existing.tenantId !== null && existing.tenantId !== tenantId) {
+      return NextResponse.json({ error: 'Campaign template not found' }, { status: 404 })
+    }
+
+    const body = await request.json()
     const updateData: Record<string, unknown> = {}
 
-    // Only allow specific fields to be updated
-    if (body.name !== undefined) updateData.name = body.name
-    if (body.description !== undefined) updateData.description = body.description
-    if (body.category !== undefined) updateData.category = body.category
-    if (body.content !== undefined) updateData.content = body.content
-    if (body.mediaUrl !== undefined) updateData.mediaUrl = body.mediaUrl
-    if (body.mediaType !== undefined) updateData.mediaType = body.mediaType
-    if (body.ctaText !== undefined) updateData.ctaText = body.ctaText
-    if (body.ctaUrl !== undefined) updateData.ctaUrl = body.ctaUrl
-    if (body.variablesJson !== undefined) updateData.variablesJson = body.variablesJson
-    if (body.isApproved !== undefined) updateData.isApproved = body.isApproved
-    if (body.externalId !== undefined) updateData.externalId = body.externalId
-    if (body.usageCount !== undefined) updateData.usageCount = body.usageCount
-    if (body.tenantId !== undefined) updateData.tenantId = body.tenantId
-    if (body.workspaceId !== undefined) updateData.workspaceId = body.workspaceId
+    // Whitelist editable fields (tenantId/workspaceId deliberately excluded)
+    const allowedFields = [
+      'name', 'description', 'category', 'content', 'mediaUrl', 'mediaType',
+      'ctaText', 'ctaUrl', 'variablesJson', 'isApproved', 'externalId', 'usageCount',
+      'language', 'templateType', 'headerText', 'headerMediaUrl', 'headerMediaType',
+      'footerText', 'buttonsJson', 'status', 'isFavorite', 'tagsJson', 'lastUsedAt',
+    ]
+    for (const field of allowedFields) {
+      if (body[field] !== undefined) {
+        updateData[field] = body[field]
+      }
+    }
+
+    // Derive flat fields from buttons for backward compat
+    if (body.buttons !== undefined) {
+      const ctaButton = Array.isArray(body.buttons) ? body.buttons.find((b: { type: string }) => b.type === 'website') : null
+      if (ctaButton) {
+        updateData.ctaText = ctaButton.text
+        updateData.ctaUrl = ctaButton.value
+      }
+      if (body.headerMediaUrl !== undefined) {
+        updateData.mediaUrl = body.headerMediaUrl
+        updateData.mediaType = body.headerMediaType || null
+      }
+    }
 
     // Auto-detect variables from content if content is being updated
-    if (body.content !== undefined) {
-      const variableMatches = body.content.match(/\{\{(\w+)\}\}/g)
-      if (variableMatches) {
-        const uniqueVars = [...new Set(variableMatches.map((v: string) => v.replace(/\{\{|\}\}/g, '')))]
-        updateData.variablesJson = JSON.stringify(uniqueVars)
-      } else {
-        updateData.variablesJson = '[]'
+    if (body.content !== undefined || body.headerText !== undefined || body.footerText !== undefined) {
+      const detectedVars = detectVariablesFromContent(
+        body.content ?? existing.content,
+        body.headerText ?? existing.headerText,
+        body.footerText ?? existing.footerText,
+        JSON.stringify(body.buttons ?? JSON.parse(existing.buttonsJson || '[]'))
+      )
+      // Only overwrite if user didn't explicitly provide variablesJson
+      if (body.variablesJson === undefined) {
+        updateData.variablesJson = JSON.stringify(detectedVars)
       }
     }
 
@@ -83,8 +118,12 @@ export async function PUT(
   }
 }
 
+/**
+ * DELETE /api/campaign-templates/[id]
+ * Auth required. Only delete templates owned by current tenant (not global).
+ */
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -92,13 +131,19 @@ export async function DELETE(
     if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const tenantId = authUser.tenantId || 'default'
 
     const { id } = await params
+    const existing = await db.campaignTemplate.findUnique({ where: { id } })
 
-    await db.campaignTemplate.delete({
-      where: { id },
-    })
+    if (!existing) {
+      return NextResponse.json({ error: 'Campaign template not found' }, { status: 404 })
+    }
+    if (existing.tenantId !== null && existing.tenantId !== tenantId) {
+      return NextResponse.json({ error: 'Campaign template not found' }, { status: 404 })
+    }
 
+    await db.campaignTemplate.delete({ where: { id } })
     return NextResponse.json({ data: { id, deleted: true } })
   } catch (error) {
     console.error('Error deleting campaign template:', error)

@@ -187,6 +187,7 @@ export type ViewType =
   | 'leadDiscovery' | 'reviews' | 'journeyAutomation'
   | 'marketplace' | 'enterprise' | 'aiCampaignGenerator' | 'webviewEngine' | 'adsIntegration'
   | 'versionHistory' | 'documentCenter' | 'saasDashboard'
+  | 'templateStudio'
   // Audience
   | 'groups' | 'tags' | 'contactImports' | 'contactExports' | 'audienceAnalytics' | 'emailCampaigns'
   // Communication Providers

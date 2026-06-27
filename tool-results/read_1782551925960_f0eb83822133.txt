@@ -1,0 +1,777 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→import { useState, useEffect, useMemo } from 'react';
+     4→     4→import { useAppStore } from '@/store/app-store';
+     5→     5→import { useIsMobile } from '@/hooks/use-mobile';
+     6→     6→import type { ViewType } from '@/types/workflow';
+     7→     7→import {
+     8→     8→  LayoutDashboard,
+     9→     9→  Target,
+    10→    10→  Briefcase,
+    11→    11→  Radio,
+    12→    12→  Users,
+    13→    13→  Workflow,
+    14→    14→  Activity,
+    15→    15→  KeyRound,
+    16→    16→  FileText,
+    17→    17→  BarChart3,
+    18→    18→  Variable,
+    19→    19→  Settings,
+    20→    20→  Wrench,
+    21→    21→  ChevronLeft,
+    22→    22→  ChevronRight,
+    23→    23→  ChevronDown,
+    24→    24→  Plus,
+    25→    25→  LogOut,
+    26→    26→  Crown,
+    27→    27→  Globe,
+    28→    28→  UserCircle,
+    29→    29→  Megaphone,
+    30→    30→  Filter,
+    31→    31→  RefreshCw,
+    32→    32→  Bot,
+    33→    33→  Sparkles,
+    34→    34→  ClipboardList,
+    35→    35→  GitBranch,
+    36→    36→  Kanban,
+    37→    37→  RadioTower,
+    38→    38→  ShieldCheck,
+    39→    39→  ScrollText,
+    40→    40→  UserCog,
+    41→    41→  Eye,
+    42→    42→  MessageSquare,
+    43→    43→  Send,
+    44→    44→  CalendarCheck,
+    45→    45→  Calendar,
+    46→    46→  Star,
+    47→    47→  BookOpen,
+    48→    48→  Receipt,
+    49→    49→  Zap,
+    50→    50→  Search,
+    51→    51→  Shield,
+    52→    52→  CreditCard,
+    53→    53→  Plug,
+    54→    54→  ShoppingBag,
+    55→    55→  Package,
+    56→    56→  FolderTree,
+    57→    57→  Tag as TagIcon,
+    58→    58→  Upload,
+    59→    59→  Download,
+    60→    60→  Mail,
+    61→    61→} from 'lucide-react';
+    62→    62→import { cn } from '@/lib/utils';
+    63→    63→import { Button } from '@/components/ui/button';
+    64→    64→import { Separator } from '@/components/ui/separator';
+    65→    65→import { ScrollArea } from '@/components/ui/scroll-area';
+    66→    66→import {
+    67→    67→  Tooltip,
+    68→    68→  TooltipContent,
+    69→    69→  TooltipTrigger,
+    70→    70→} from '@/components/ui/tooltip';
+    71→    71→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    72→    72→import { Badge } from '@/components/ui/badge';
+    73→    73→import {
+    74→    74→  Sheet,
+    75→    75→  SheetContent,
+    76→    76→  SheetHeader,
+    77→    77→  SheetTitle,
+    78→    78→} from '@/components/ui/sheet';
+    79→    79→import {
+    80→    80→  DropdownMenu,
+    81→    81→  DropdownMenuContent,
+    82→    82→  DropdownMenuItem,
+    83→    83→  DropdownMenuTrigger,
+    84→    84→} from '@/components/ui/dropdown-menu';
+    85→    85→import { toast } from 'sonner';
+    86→    86→
+    87→    87→// ─── Nav item definition ────────────────────────────────────────────────────
+    88→    88→
+    89→    89→interface NavItem {
+    90→    90→  view: ViewType;
+    91→    91→  label: string;
+    92→    92→  icon: React.ElementType;
+    93→    93→  badge?: string;
+    94→    94→}
+    95→    95→
+    96→    96→interface NavSection {
+    97→    97→  title: string;
+    98→    98→  items: NavItem[];
+    99→    99→  collapsible?: boolean;      // if true, section can be collapsed by clicking its title
+   100→   100→  defaultCollapsed?: boolean; // if true, section starts collapsed (desktop expanded mode only)
+   101→   101→}
+   102→   102→
+   103→   103→// ─── Navigation sections — organized by module structure (8 sections) ──────
+   104→   104→
+   105→   105→const ownerNavSections: NavSection[] = [
+   106→   106→  {
+   107→   107→    title: 'Overview',
+   108→   108→    items: [
+   109→   109→      { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+   110→   110→      { view: 'calendar', label: 'Calendar', icon: Calendar },
+   111→   111→      { view: 'reports', label: 'Reports', icon: BarChart3 },
+   112→   112→    ],
+   113→   113→  },
+   114→   114→  {
+   115→   115→    title: 'CRM',
+   116→   116→    items: [
+   117→   117→      { view: 'leads', label: 'Leads', icon: Target },
+   118→   118→      { view: 'customers', label: 'Customers', icon: Users },
+   119→   119→      { view: 'customer360', label: 'Customer 360', icon: UserCircle, badge: '360' },
+   120→   120→      { view: 'salesPipeline', label: 'Pipeline', icon: Kanban },
+   121→   121→    ],
+   122→   122→  },
+   123→   123→  {
+   124→   124→    title: 'Audience',
+   125→   125→    collapsible: true,
+   126→   126→    defaultCollapsed: true,
+   127→   127→    items: [
+   128→   128→      { view: 'contacts', label: 'All Contacts', icon: Users },
+   129→   129→      { view: 'groups', label: 'Groups', icon: FolderTree },
+   130→   130→      { view: 'tags', label: 'Tags', icon: TagIcon },
+   131→   131→      { view: 'segments', label: 'Segments', icon: Filter },
+   132→   132→      { view: 'contactImports', label: 'Imports', icon: Upload },
+   133→   133→      { view: 'contactExports', label: 'Exports', icon: Download },
+   134→   134→      { view: 'audienceAnalytics', label: 'Audience Analytics', icon: BarChart3 },
+   135→   135→    ],
+   136→   136→  },
+   137→   137→  {
+   138→   138→    title: 'Operations',
+   139→   139→    items: [
+   140→   140→      { view: 'booking', label: 'Booking', icon: CalendarCheck },
+   141→   141→      { view: 'jobs', label: 'Jobs', icon: Briefcase },
+   142→   142→      { view: 'dispatch', label: 'Dispatch Board', icon: Radio },
+   143→   143→      { view: 'employees', label: 'Employees', icon: UserCog },
+   144→   144→      { view: 'reviews', label: 'Reviews', icon: Star },
+   145→   145→      { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },
+   146→   146→    ],
+   147→   147→  },
+   148→   148→  {
+   149→   149→    title: 'Marketing',
+   150→   150→    items: [
+   151→   151→      { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
+   152→   152→      { view: 'broadcast', label: 'Broadcast', icon: Send },
+   153→   153→      { view: 'marketingTemplates', label: 'Templates', icon: MessageSquare },
+   154→   154→      { view: 'emailTemplates', label: 'Email Templates', icon: Mail },
+   155→   155→      { view: 'retargeting', label: 'Retargeting', icon: RefreshCw },
+   156→   156→      { view: 'marketingAnalytics', label: 'Analytics', icon: BarChart3 },
+   157→   157→    ],
+   158→   158→  },
+   159→   159→  {
+   160→   160→    title: 'Inbox & Automation',
+   161→   161→    items: [
+   162→   162→      { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
+   163→   163→      { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
+   164→   164→      { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
+   165→   165→      { view: 'workflows', label: 'Workflows', icon: Workflow },
+   166→   166→      { view: 'workflowAutomations', label: 'Automations', icon: GitBranch },
+   167→   167→      { view: 'triggers', label: 'Triggers', icon: Zap },
+   168→   168→      { view: 'formBuilder', label: 'Form Builder', icon: ClipboardList },
+   169→   169→      { view: 'variables', label: 'Variables', icon: Variable },
+   170→   170→      { view: 'executions', label: 'Executions', icon: Activity },
+   171→   171→    ],
+   172→   172→  },
+   173→   173→  {
+   174→   174→    title: 'Finance',
+   175→   175→    items: [
+   176→   176→      { view: 'quotes', label: 'Quotes', icon: Receipt },
+   177→   177→      { view: 'invoices', label: 'Invoices', icon: FileText },
+   178→   178→      { view: 'billing', label: 'Subscription', icon: CreditCard },
+   179→   179→    ],
+   180→   180→  },
+   181→   181→  {
+   182→   182→    title: 'Setup & Admin',
+   183→   183→    collapsible: true,
+   184→   184→    defaultCollapsed: true,
+   185→   185→    items: [
+   186→   186→      { view: 'settings', label: 'Settings', icon: Settings },
+   187→   187→      { view: 'integrations', label: 'Integrations', icon: Plug, badge: 'New' },
+   188→   188→      { view: 'communicationProviders', label: 'Providers', icon: KeyRound },
+   189→   189→      { view: 'emailProviders', label: 'Email Providers', icon: Mail },
+   190→   190→      { view: 'credentials', label: 'Credentials', icon: KeyRound },
+   191→   191→      { view: 'auditLogs', label: 'Audit Logs', icon: ScrollText },
+   192→   192→      { view: 'customerPortal', label: 'Customer Portal', icon: Globe },
+   193→   193→      { view: 'employeePortal', label: 'Employee Portal', icon: HardHat },
+   194→   194→    ],
+   195→   195→  },
+   196→   196→];
+   197→   197→
+   198→   198→const employeeNavSections: NavSection[] = [
+   199→   199→  {
+   200→   200→    title: 'My Work',
+   201→   201→    items: [
+   202→   202→      { view: 'employeePortal', label: 'My Jobs', icon: Briefcase },
+   203→   203→      { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+   204→   204→    ],
+   205→   205→  },
+   206→   206→  {
+   207→   207→    title: 'Account',
+   208→   208→    items: [
+   209→   209→      { view: 'settings', label: 'Settings', icon: Settings },
+   210→   210→    ],
+   211→   211→  },
+   212→   212→];
+   213→   213→
+   214→   214→// ─── Dedicated Superadmin Navigation (mirrors owner structure minus portals) ─
+   215→   215→// Superadmin has a platform-focused sidebar: Admin Panel + Platform on top, then
+   216→   216→// the same 8 module sections as owner (omitting Customer/Employee Portal which
+   217→   217→// are tenant-user features). No collapsible flags — superadmin has fewer items.
+   218→   218→
+   219→   219→const superadminNavSections: NavSection[] = [
+   220→   220→  {
+   221→   221→    title: 'Admin Panel',
+   222→   222→    items: [
+   223→   223→      { view: 'superadmin', label: 'Dashboard', icon: ShieldCheck, badge: 'SA' },
+   224→   224→    ],
+   225→   225→  },
+   226→   226→  {
+   227→   227→    title: 'Platform',
+   228→   228→    items: [
+   229→   229→      { view: 'dashboard', label: 'App Dashboard', icon: LayoutDashboard },
+   230→   230→    ],
+   231→   231→  },
+   232→   232→  {
+   233→   233→    title: 'Overview',
+   234→   234→    items: [
+   235→   235→      { view: 'calendar', label: 'Calendar', icon: Calendar },
+   236→   236→      { view: 'reports', label: 'Reports', icon: BarChart3 },
+   237→   237→    ],
+   238→   238→  },
+   239→   239→  {
+   240→   240→    title: 'CRM',
+   241→   241→    items: [
+   242→   242→      { view: 'leads', label: 'Leads', icon: Target },
+   243→   243→      { view: 'customers', label: 'Customers', icon: Users },
+   244→   244→      { view: 'customer360', label: 'Customer 360', icon: UserCircle, badge: '360' },
+   245→   245→      { view: 'salesPipeline', label: 'Pipeline', icon: Kanban },
+   246→   246→    ],
+   247→   247→  },
+   248→   248→  {
+   249→   249→    title: 'Audience',
+   250→   250→    items: [
+   251→   251→      { view: 'contacts', label: 'All Contacts', icon: Users },
+   252→   252→      { view: 'groups', label: 'Groups', icon: FolderTree },
+   253→   253→      { view: 'tags', label: 'Tags', icon: TagIcon },
+   254→   254→      { view: 'segments', label: 'Segments', icon: Filter },
+   255→   255→      { view: 'contactImports', label: 'Imports', icon: Upload },
+   256→   256→      { view: 'contactExports', label: 'Exports', icon: Download },
+   257→   257→      { view: 'audienceAnalytics', label: 'Audience Analytics', icon: BarChart3 },
+   258→   258→    ],
+   259→   259→  },
+   260→   260→  {
+   261→   261→    title: 'Operations',
+   262→   262→    items: [
+   263→   263→      { view: 'booking', label: 'Booking', icon: CalendarCheck },
+   264→   264→      { view: 'jobs', label: 'Jobs', icon: Briefcase },
+   265→   265→      { view: 'dispatch', label: 'Dispatch Board', icon: Radio },
+   266→   266→      { view: 'employees', label: 'Employees', icon: UserCog },
+   267→   267→      { view: 'reviews', label: 'Reviews', icon: Star },
+   268→   268→      { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },
+   269→   269→    ],
+   270→   270→  },
+   271→   271→  {
+   272→   272→    title: 'Marketing',
+   273→   273→    items: [
+   274→   274→      { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
+   275→   275→      { view: 'broadcast', label: 'Broadcast', icon: Send },
+   276→   276→      { view: 'marketingTemplates', label: 'Templates', icon: MessageSquare },
+   277→   277→      { view: 'emailTemplates', label: 'Email Templates', icon: Mail },
+   278→   278→      { view: 'retargeting', label: 'Retargeting', icon: RefreshCw },
+   279→   279→      { view: 'marketingAnalytics', label: 'Analytics', icon: BarChart3 },
+   280→   280→    ],
+   281→   281→  },
+   282→   282→  {
+   283→   283→    title: 'Inbox & Automation',
+   284→   284→    items: [
+   285→   285→      { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
+   286→   286→      { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
+   287→   287→      { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
+   288→   288→      { view: 'workflows', label: 'Workflows', icon: Workflow },
+   289→   289→      { view: 'workflowAutomations', label: 'Automations', icon: GitBranch },
+   290→   290→      { view: 'triggers', label: 'Triggers', icon: Zap },
+   291→   291→      { view: 'formBuilder', label: 'Form Builder', icon: ClipboardList },
+   292→   292→      { view: 'variables', label: 'Variables', icon: Variable },
+   293→   293→      { view: 'executions', label: 'Executions', icon: Activity },
+   294→   294→    ],
+   295→   295→  },
+   296→   296→  {
+   297→   297→    title: 'Finance',
+   298→   298→    items: [
+   299→   299→      { view: 'quotes', label: 'Quotes', icon: Receipt },
+   300→   300→      { view: 'invoices', label: 'Invoices', icon: FileText },
+   301→   301→      { view: 'billing', label: 'Subscription', icon: CreditCard },
+   302→   302→    ],
+   303→   303→  },
+   304→   304→  {
+   305→   305→    title: 'Setup & Admin',
+   306→   306→    items: [
+   307→   307→      { view: 'settings', label: 'Settings', icon: Settings },
+   308→   308→      { view: 'integrations', label: 'Integrations', icon: Plug, badge: 'New' },
+   309→   309→      { view: 'communicationProviders', label: 'Providers', icon: KeyRound },
+   310→   310→      { view: 'emailProviders', label: 'Email Providers', icon: Mail },
+   311→   311→      { view: 'credentials', label: 'Credentials', icon: KeyRound },
+   312→   312→      { view: 'auditLogs', label: 'Audit Logs', icon: ScrollText },
+   313→   313→    ],
+   314→   314→  },
+   315→   315→];
+   316→   316→
+   317→   317→// ─── HardHat icon (not in lucide) ────────────────────────────────────────
+   318→   318→function HardHat(props: React.SVGProps<SVGSVGElement> & { className?: string }) {
+   319→   319→  return (
+   320→   320→    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className}>
+   321→   321→      <path d="M2 18a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1H3a1 1 0 0 0-1 1v2z"/>
+   322→   322→      <path d="M10 10V5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v5"/>
+   323→   323→      <path d="M4 15v-3a8 8 0 0 1 16 0v3"/>
+   324→   324→    </svg>
+   325→   325→  );
+   326→   326→}
+   327→   327→
+   328→   328→// ─── Props ──────────────────────────────────────────────────────────────────
+   329→   329→
+   330→   330→interface AppSidebarProps {
+   331→   331→  onLogout?: () => void;
+   332→   332→}
+   333→   333→
+   334→   334→// ─── "+ Create" quick-action menu ────────────────────────────────────────────
+   335→   335→
+   336→   336→interface CreateMenuProps {
+   337→   337→  isMobile: boolean;
+   338→   338→  leftSidebarOpen: boolean;
+   339→   339→  onSelect: (view: ViewType) => void;
+   340→   340→}
+   341→   341→
+   342→   342→function CreateMenu({ isMobile, leftSidebarOpen, onSelect }: CreateMenuProps) {
+   343→   343→  const isExpanded = isMobile || leftSidebarOpen;
+   344→   344→  const items: { view: ViewType; label: string; icon: React.ElementType }[] = [
+   345→   345→    { view: 'leads', label: 'New Lead', icon: Target },
+   346→   346→    { view: 'customers', label: 'New Customer', icon: Users },
+   347→   347→    { view: 'booking', label: 'New Booking', icon: CalendarCheck },
+   348→   348→    { view: 'jobs', label: 'New Job', icon: Briefcase },
+   349→   349→    { view: 'invoices', label: 'New Invoice', icon: FileText },
+   350→   350→    { view: 'campaigns', label: 'New Campaign', icon: Megaphone },
+   351→   351→  ];
+   352→   352→
+   353→   353→  return (
+   354→   354→    <DropdownMenu>
+   355→   355→      <DropdownMenuTrigger asChild>
+   356→   356→        <button
+   357→   357→          type="button"
+   358→   358→          aria-label="Create"
+   359→   359→          title="Create"
+   360→   360→          className={cn(
+   361→   361→            'flex items-center rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition-colors shadow-sm shadow-emerald-900/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400',
+   362→   362→            isExpanded ? 'w-full h-9 px-3 gap-2 text-sm' : 'w-full h-9 justify-center'
+   363→   363→          )}
+   364→   364→        >
+   365→   365→          <Plus className="size-4 shrink-0" />
+   366→   366→          {isExpanded && <span className="flex-1 text-left">Create</span>}
+   367→   367→        </button>
+   368→   368→      </DropdownMenuTrigger>
+   369→   369→      <DropdownMenuContent
+   370→   370→        side={isExpanded ? 'bottom' : 'right'}
+   371→   371→        align="start"
+   372→   372→        sideOffset={6}
+   373→   373→        className="w-52 bg-slate-900 border-slate-700 text-slate-200"
+   374→   374→      >
+   375→   375→        {items.map((item) => {
+   376→   376→          const Icon = item.icon;
+   377→   377→          return (
+   378→   378→            <DropdownMenuItem
+   379→   379→              key={item.view}
+   380→   380→              onClick={() => onSelect(item.view)}
+   381→   381→              className="cursor-pointer text-slate-200 hover:bg-emerald-600/20 hover:text-emerald-300 focus:bg-emerald-600/20 focus:text-emerald-300"
+   382→   382→            >
+   383→   383→              <Icon className="size-4 mr-2 text-emerald-400" />
+   384→   384→              <span>{item.label}</span>
+   385→   385→            </DropdownMenuItem>
+   386→   386→          );
+   387→   387→        })}
+   388→   388→      </DropdownMenuContent>
+   389→   389→    </DropdownMenu>
+   390→   390→  );
+   391→   391→}
+   392→   392→
+   393→   393→// ─── Sidebar Content (shared between desktop and mobile) ────────────────────
+   394→   394→
+   395→   395→function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMobile?: boolean }) {
+   396→   396→  const {
+   397→   397→    currentView,
+   398→   398→    setCurrentView,
+   399→   399→    leftSidebarOpen,
+   400→   400→    toggleLeftSidebar,
+   401→   401→    setMobileSidebarOpen,
+   402→   402→    auth,
+   403→   403→  } = useAppStore();
+   404→   404→
+   405→   405→  const [disabledMenus, setDisabledMenus] = useState<string[]>([]);
+   406→   406→  // User-explicit overrides of each section's collapsed state. The effective
+   407→   407→  // collapsed state is derived: override wins if present, otherwise the
+   408→   408→  // section's `defaultCollapsed` flag applies. This avoids a setState-in-effect
+   409→   409→  // for initialization (the override map starts empty and is only mutated by
+   410→   410→  // user clicks).
+   411→   411→  const [collapsedOverrides, setCollapsedOverrides] = useState<Record<string, boolean>>({});
+   412→   412→
+   413→   413→  // Compute isSuperAdmin early (needed in effects and rendering)
+   414→   414→  const isSuperAdmin = !!(auth.user?.isSuperAdmin || auth.user?.role === 'superadmin' || auth.user?.role === 'super_admin' || (auth.user?.role === 'admin' && !auth.user?.tenantId));
+   415→   415→  const isEmployee = auth.user?.role === 'employee';
+   416→   416→
+   417→   417→  // Fetch menu visibility for non-superadmin users. Superadmin bypasses the
+   418→   418→  // fetch entirely (the filter below ignores `disabledMenus` when isSuperAdmin),
+   419→   419→  // so we early-return without touching state — avoids a synchronous setState
+   420→   420→  // in the effect body.
+   421→   421→  useEffect(() => {
+   422→   422→    if (isSuperAdmin) return;
+   423→   423→    async function fetchMenuVisibility() {
+   424→   424→      try {
+   425→   425→        const res = await fetch('/api/menu-visibility');
+   426→   426→        if (res.ok) {
+   427→   427→          const data = await res.json();
+   428→   428→          setDisabledMenus(data.disabledMenus || []);
+   429→   429→        }
+   430→   430→      } catch {
+   431→   431→        // Silently fail - all menus remain visible
+   432→   432→      }
+   433→   433→    }
+   434→   434→    fetchMenuVisibility();
+   435→   435→  }, [auth.user?.role, auth.user?.tenantId, auth.user?.isSuperAdmin, isSuperAdmin]);
+   436→   436→
+   437→   437→  // Effective collapsed state for a section: explicit user override wins,
+   438→   438→  // otherwise fall back to the section's `defaultCollapsed` flag. Non-collapsible
+   439→   439→  // sections are never collapsed.
+   440→   440→  const isSectionCollapsed = (section: NavSection): boolean => {
+   441→   441→    if (!section.collapsible) return false;
+   442→   442→    if (section.title in collapsedOverrides) return collapsedOverrides[section.title];
+   443→   443→    return !!section.defaultCollapsed;
+   444→   444→  };
+   445→   445→
+   446→   446→  const toggleSection = (title: string, currentlyCollapsed: boolean) => {
+   447→   447→    setCollapsedOverrides((prev) => ({ ...prev, [title]: !currentlyCollapsed }));
+   448→   448→  };
+   449→   449→
+   450→   450→  const getUserInitials = () => {
+   451→   451→    if (auth.user?.name) {
+   452→   452→      return auth.user.name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+   453→   453→    }
+   454→   454→    if (auth.user?.email) return auth.user.email.slice(0, 2).toUpperCase();
+   455→   455→    return 'U';
+   456→   456→  };
+   457→   457→
+   458→   458→  const getPlanBadge = () => {
+   459→   459→    const plan = auth.tenant?.plan || 'starter';
+   460→   460→    const colors: Record<string, string> = {
+   461→   461→      starter: 'bg-slate-600/40 text-slate-300 border-slate-500/30',
+   462→   462→      growth: 'bg-emerald-600/30 text-emerald-300 border-emerald-500/30',
+   463→   463→      pro: 'bg-amber-600/30 text-amber-300 border-amber-500/30',
+   464→   464→      enterprise: 'bg-purple-600/30 text-purple-300 border-purple-500/30',
+   465→   465→    };
+   466→   466→    return {
+   467→   467→      label: plan.charAt(0).toUpperCase() + plan.slice(1),
+   468→   468→      className: colors[plan] || colors.starter,
+   469→   469→    };
+   470→   470→  };
+   471→   471→
+   472→   472→  const planBadge = getPlanBadge();
+   473→   473→
+   474→   474→  // Filter nav sections based on disabled menus
+   475→   475→  const filteredNavSections = useMemo(() => {
+   476→   476→    let sections: NavSection[];
+   477→   477→
+   478→   478→    if (isSuperAdmin) {
+   479→   479→      sections = superadminNavSections;
+   480→   480→    } else if (isEmployee) {
+   481→   481→      sections = employeeNavSections;
+   482→   482→    } else {
+   483→   483→      sections = ownerNavSections;
+   484→   484→    }
+   485→   485→
+   486→   486→    // Filter out disabled menus for non-superadmin users
+   487→   487→    if (!isSuperAdmin && disabledMenus.length > 0) {
+   488→   488→      const disabledSet = new Set(disabledMenus);
+   489→   489→      sections = sections
+   490→   490→        .map((section) => ({
+   491→   491→          ...section,
+   492→   492→          items: section.items.filter((item) => !disabledSet.has(item.view)),
+   493→   493→        }))
+   494→   494→        .filter((section) => section.items.length > 0);
+   495→   495→    }
+   496→   496→
+   497→   497→    return sections;
+   498→   498→  }, [isSuperAdmin, isEmployee, disabledMenus]);
+   499→   499→
+   500→   500→  const handleNavClick = (view: ViewType) => {
+   501→   501→    setCurrentView(view);
+   502→   502→    if (isMobile) setMobileSidebarOpen(false);
+   503→   503→  };
+   504→   504→
+   505→   505→  const handleCreateSelect = (view: ViewType) => {
+   506→   506→    setCurrentView(view);
+   507→   507→    if (isMobile) setMobileSidebarOpen(false);
+   508→   508→  };
+   509→   509→
+   510→   510→  const renderNavItem = (item: NavItem) => {
+   511→   511→    const Icon = item.icon;
+   512→   512→    const isActive = currentView === item.view;
+   513→   513→
+   514→   514→    return (
+   515→   515→      <button
+   516→   516→        key={item.view}
+   517→   517→        onClick={() => handleNavClick(item.view)}
+   518→   518→        className={cn(
+   519→   519→          'flex items-center w-full rounded-lg text-sm font-medium transition-all duration-150',
+   520→   520→          isMobile || leftSidebarOpen ? 'h-9 px-3 gap-3' : 'h-9 justify-center',
+   521→   521→          isActive
+   522→   522→            ? 'bg-emerald-500/15 text-emerald-400 shadow-sm'
+   523→   523→            : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200'
+   524→   524→        )}
+   525→   525→      >
+   526→   526→        <Icon className={cn('shrink-0', isActive ? 'size-[18px] text-emerald-400' : 'size-4')} />
+   527→   527→        {(isMobile || leftSidebarOpen) && (
+   528→   528→          <span className="whitespace-nowrap flex-1 text-left text-[13px]">{item.label}</span>
+   529→   529→        )}
+   530→   530→        {(isMobile || leftSidebarOpen) && item.badge && (
+   531→   531→          <Badge variant="outline" className="text-[9px] h-4 px-1.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
+   532→   532→            {item.badge}
+   533→   533→          </Badge>
+   534→   534→        )}
+   535→   535→        {(isMobile || leftSidebarOpen) && item.view === 'billing' && auth.tenant?.planStatus === 'trial' && (
+   536→   536→          <Crown className="size-3 text-amber-400 ml-auto" />
+   537→   537→        )}
+   538→   538→      </button>
+   539→   539→    );
+   540→   540→  };
+   541→   541→
+   542→   542→  // Whether the sidebar is in "expanded" mode (mobile drawer OR desktop expanded).
+   543→   543→  // Used for label visibility, padding, full-width buttons, etc.
+   544→   544→  const isExpandedMode = isMobile || leftSidebarOpen;
+   545→   545→  // Collapsing sections only applies in DESKTOP-EXPANDED mode. Mobile drawer
+   546→   546→  // and icon-only mode ignore the collapsible flag entirely (spec requirement).
+   547→   547→  const isDesktopExpanded = !isMobile && leftSidebarOpen;
+   548→   548→
+   549→   549→  return (
+   550→   550→    <div className="flex flex-col h-full">
+   551→   551→      {/* Logo / Branding */}
+   552→   552→      <div
+   553→   553→        className={cn(
+   554→   554→          'flex items-center h-14 px-4 border-b border-slate-800/60 shrink-0',
+   555→   555→          isExpandedMode ? 'justify-start gap-3' : 'justify-center'
+   556→   556→        )}
+   557→   557→      >
+   558→   558→        <div className={cn(
+   559→   559→          'flex items-center justify-center w-8 h-8 rounded-lg shrink-0 shadow-lg',
+   560→   560→          isSuperAdmin
+   561→   561→            ? 'bg-red-600 shadow-red-500/20'
+   562→   562→            : 'bg-emerald-500 shadow-emerald-500/20'
+   563→   563→        )}>
+   564→   564→          {isSuperAdmin ? (
+   565→   565→            <ShieldCheck className="size-5 text-white" />
+   566→   566→          ) : (
+   567→   567→            <Wrench className="size-5 text-white" />
+   568→   568→          )}
+   569→   569→        </div>
+   570→   570→        {isExpandedMode && (
+   571→   571→          <div className="flex items-center gap-2 min-w-0">
+   572→   572→            <span className="text-lg font-bold tracking-tight whitespace-nowrap text-white">
+   573→   573→              {isSuperAdmin ? 'ServiceOS' : 'ServiceOS'}
+   574→   574→            </span>
+   575→   575→            <Badge variant="outline" className={cn('text-[9px] h-4 px-1.5 border shrink-0', isSuperAdmin ? 'bg-red-500/10 text-red-400 border-red-500/30' : planBadge.className)}>
+   576→   576→              {isSuperAdmin ? 'Admin' : planBadge.label}
+   577→   577→            </Badge>
+   578→   578→          </div>
+   579→   579→        )}
+   580→   580→      </div>
+   581→   581→
+   582→   582→      {/* Superadmin tenant indicator */}
+   583→   583→      {isSuperAdmin && isExpandedMode && (
+   584→   584→        <div className="px-3 py-2 border-b border-slate-800/60 shrink-0">
+   585→   585→          <div className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-red-400/80 bg-red-500/5">
+   586→   586→            <Shield className="size-4 shrink-0" />
+   587→   587→            <span className="text-xs font-medium">Platform Administration</span>
+   588→   588→          </div>
+   589→   589→        </div>
+   590→   590→      )}
+   591→   591→
+   592→   592→      {/* + Create quick-action button (owner/admin only — tenant CRUD actions) */}
+   593→   593→      {!isSuperAdmin && !isEmployee && (
+   594→   594→        <div className="px-3 pt-3 pb-1 shrink-0">
+   595→   595→          <CreateMenu
+   596→   596→            isMobile={isMobile}
+   597→   597→            leftSidebarOpen={leftSidebarOpen}
+   598→   598→            onSelect={handleCreateSelect}
+   599→   599→          />
+   600→   600→        </div>
+   601→   601→      )}
+   602→   602→
+   603→   603→      {/* Navigation Sections */}
+   604→   604→      <ScrollArea className="flex-1 py-2 min-h-0">
+   605→   605→        <div className="flex flex-col gap-0.5">
+   606→   606→          {filteredNavSections.map((section, sectionIdx) => {
+   607→   607→            // Collapsing only applies in DESKTOP-EXPANDED mode. Mobile drawer
+   608→   608→            // and icon-only mode ignore the collapsible flag (spec requirement):
+   609→   609→            //   - mobile: all sections render expanded (plain headers, all items)
+   610→   610→            //   - icon-only: no headers at all, just icons + separators
+   611→   611→            const sectionCollapsed = isDesktopExpanded && isSectionCollapsed(section);
+   612→   612→            const showItems = !isExpandedMode || !sectionCollapsed;
+   613→   613→
+   614→   614→            return (
+   615→   615→              <div key={section.title}>
+   616→   616→                {/* Expanded-mode section header. Only desktop-expanded
+   617→   617→                    collapsible sections get the clickable toggle button;
+   618→   618→                    mobile always gets a plain (non-collapsible) header. */}
+   619→   619→                {isExpandedMode && (
+   620→   620→                  (isDesktopExpanded && section.collapsible) ? (
+   621→   621→                    <button
+   622→   622→                      type="button"
+   623→   623→                      onClick={() => toggleSection(section.title, sectionCollapsed)}
+   624→   624→                      className="flex items-center w-full px-4 pt-2.5 pb-1 group/section-header"
+   625→   625→                      aria-expanded={!sectionCollapsed}
+   626→   626→                      aria-label={`Toggle ${section.title} section`}
+   627→   627→                    >
+   628→   628→                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 group-hover/section-header:text-slate-400 flex-1 text-left">
+   629→   629→                        {section.title}
+   630→   630→                      </span>
+   631→   631→                      {sectionCollapsed ? (
+   632→   632→                        <ChevronRight className="size-3 text-slate-500 group-hover/section-header:text-slate-400" />
+   633→   633→                      ) : (
+   634→   634→                        <ChevronDown className="size-3 text-slate-500 group-hover/section-header:text-slate-400" />
+   635→   635→                      )}
+   636→   636→                    </button>
+   637→   637→                  ) : (
+   638→   638→                    <div className="px-4 pt-2.5 pb-1">
+   639→   639→                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+   640→   640→                        {section.title}
+   641→   641→                      </span>
+   642→   642→                    </div>
+   643→   643→                  )
+   644→   644→                )}
+   645→   645→                {/* Icon-only mode: separator between sections (skip before first) */}
+   646→   646→                {!isExpandedMode && sectionIdx > 0 && (
+   647→   647→                  <div className="px-3 my-1.5">
+   648→   648→                    <Separator className="bg-slate-800/60" />
+   649→   649→                  </div>
+   650→   650→                )}
+   651→   651→                {showItems && (
+   652→   652→                  <nav className="flex flex-col gap-0.5 px-2">
+   653→   653→                    {section.items.map((item) => {
+   654→   654→                      if (isExpandedMode) return renderNavItem(item);
+   655→   655→                      return (
+   656→   656→                        <Tooltip key={item.view}>
+   657→   657→                          <TooltipTrigger asChild>
+   658→   658→                            {renderNavItem(item)}
+   659→   659→                          </TooltipTrigger>
+   660→   660→                          <TooltipContent side="right" sideOffset={8}>
+   661→   661→                            {item.label}
+   662→   662→                          </TooltipContent>
+   663→   663→                        </Tooltip>
+   664→   664→                      );
+   665→   665→                    })}
+   666→   666→                  </nav>
+   667→   667→                )}
+   668→   668→              </div>
+   669→   669→            );
+   670→   670→          })}
+   671→   671→        </div>
+   672→   672→      </ScrollArea>
+   673→   673→
+   674→   674→      {/* Collapse Toggle (desktop only) */}
+   675→   675→      {!isMobile && (
+   676→   676→        <button
+   677→   677→          onClick={toggleLeftSidebar}
+   678→   678→          className="absolute -right-3 top-20 z-10 flex items-center justify-center w-6 h-6 rounded-full bg-slate-800 border border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors shadow-md"
+   679→   679→          aria-label={leftSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+   680→   680→        >
+   681→   681→          {leftSidebarOpen ? <ChevronLeft className="size-3" /> : <ChevronRight className="size-3" />}
+   682→   682→        </button>
+   683→   683→      )}
+   684→   684→
+   685→   685→      <Separator className="bg-slate-800/60" />
+   686→   686→
+   687→   687→      {/* User Section */}
+   688→   688→      <div
+   689→   689→        className={cn(
+   690→   690→          'flex items-center gap-3 p-3 shrink-0',
+   691→   691→          isExpandedMode ? '' : 'justify-center'
+   692→   692→        )}
+   693→   693→      >
+   694→   694→        <Avatar className="size-8 shrink-0">
+   695→   695→          <AvatarFallback className={cn('text-white text-xs', isSuperAdmin ? 'bg-red-600' : 'bg-emerald-600')}>
+   696→   696→            {getUserInitials()}
+   697→   697→          </AvatarFallback>
+   698→   698→        </Avatar>
+   699→   699→        {isExpandedMode && (
+   700→   700→          <div className="flex-1 min-w-0">
+   701→   701→            <p className="text-sm font-medium text-slate-200 truncate">
+   702→   702→              {auth.user?.name || 'Demo User'}
+   703→   703→            </p>
+   704→   704→            <p className="text-xs text-slate-500 truncate">
+   705→   705→              {auth.user?.email || 'demo@serviceos.io'}
+   706→   706→            </p>
+   707→   707→          </div>
+   708→   708→        )}
+   709→   709→        {isExpandedMode && onLogout && (
+   710→   710→          <Button
+   711→   711→            variant="ghost"
+   712→   712→            size="icon"
+   713→   713→            className="text-slate-500 hover:text-white hover:bg-slate-800/70 h-8 w-8 shrink-0"
+   714→   714→            onClick={onLogout}
+   715→   715→          >
+   716→   716→            <LogOut className="size-4" />
+   717→   717→          </Button>
+   718→   718→        )}
+   719→   719→        {!isMobile && !leftSidebarOpen && onLogout && (
+   720→   720→          <Tooltip>
+   721→   721→            <TooltipTrigger asChild>
+   722→   722→              <Button
+   723→   723→                variant="ghost"
+   724→   724→                size="icon"
+   725→   725→                className="text-slate-500 hover:text-white hover:bg-slate-800/70 h-8 w-8 shrink-0 absolute bottom-3 right-1"
+   726→   726→                onClick={onLogout}
+   727→   727→              >
+   728→   728→                <LogOut className="size-4" />
+   729→   729→              </Button>
+   730→   730→            </TooltipTrigger>
+   731→   731→            <TooltipContent side="right" sideOffset={8}>
+   732→   732→              Log out
+   733→   733→            </TooltipContent>
+   734→   734→          </Tooltip>
+   735→   735→        )}
+   736→   736→      </div>
+   737→   737→
+   738→   738→    </div>
+   739→   739→  );
+   740→   740→}
+   741→   741→
+   742→   742→// ─── Main Component ──────────────────────────────────────────────────────
+   743→   743→
+   744→   744→export function AppSidebar({ onLogout }: AppSidebarProps) {
+   745→   745→  const { leftSidebarOpen, mobileSidebarOpen, setMobileSidebarOpen } = useAppStore();
+   746→   746→  const isMobile = useIsMobile();
+   747→   747→
+   748→   748→  // Mobile: render as Sheet (drawer)
+   749→   749→  if (isMobile) {
+   750→   750→    return (
+   751→   751→      <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
+   752→   752→        <SheetContent
+   753→   753→          side="left"
+   754→   754→          className="w-[280px] p-0 bg-slate-950 border-r-slate-800/60"
+   755→   755→        >
+   756→   756→          <SheetHeader className="sr-only">
+   757→   757→            <SheetTitle>Navigation</SheetTitle>
+   758→   758→          </SheetHeader>
+   759→   759→          <SidebarContent onLogout={onLogout} isMobile />
+   760→   760→        </SheetContent>
+   761→   761→      </Sheet>
+   762→   762→    );
+   763→   763→  }
+   764→   764→
+   765→   765→  // Desktop: render as fixed sidebar
+   766→   766→  return (
+   767→   767→    <aside
+   768→   768→      className={cn(
+   769→   769→        'relative flex flex-col bg-slate-950 text-white transition-all duration-300 ease-in-out shrink-0 h-screen overflow-hidden',
+   770→   770→        leftSidebarOpen ? 'w-60' : 'w-16'
+   771→   771→      )}
+   772→   772→    >
+   773→   773→      <SidebarContent onLogout={onLogout} />
+   774→   774→    </aside>
+   775→   775→  );
+   776→   776→}
+   777→   777→

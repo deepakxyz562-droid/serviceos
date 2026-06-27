@@ -93,6 +93,9 @@ const EmailCampaignsView = lazy(() => import('@/components/views/email-campaigns
 const EmailProvidersView = lazy(() => import('@/components/views/email-providers-view').then(m => ({ default: m.EmailProvidersView })));
 const EmailTemplatesView = lazy(() => import('@/components/views/email-templates-view').then(m => ({ default: m.EmailTemplatesView })));
 
+// Template Studio
+const TemplateStudioView = lazy(() => import('@/components/templates/template-studio-view').then(m => ({ default: m.TemplateStudioView })));
+
 // Super Admin
 const SuperAdminView = lazy(() => import('@/components/views/superadmin-view').then(m => ({ default: m.SuperAdminView })));
 
@@ -170,6 +173,8 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   emailCampaigns: EmailCampaignsView,
   emailProviders: EmailProvidersView,
   emailTemplates: EmailTemplatesView,
+  // Template Studio
+  templateStudio: TemplateStudioView,
   // Super Admin
   superadmin: SuperAdminView,
 };

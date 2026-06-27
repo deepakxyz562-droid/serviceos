@@ -98,6 +98,12 @@ export async function POST(request: NextRequest) {
       textBody,
       variablesJson,
       isDefault,
+      language,
+      status,
+      isFavorite,
+      tagsJson,
+      attachmentsJson,
+      brandKitId,
     } = body as Record<string, unknown>;
 
     // Validate required fields
@@ -165,6 +171,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Normalize optional JSON fields
+    const encodeJsonField = (val: unknown, defaultVal = '[]'): string => {
+      if (val === undefined || val === null) return defaultVal
+      if (typeof val === 'string') { try { JSON.parse(val); return val } catch { return defaultVal } }
+      if (Array.isArray(val) || typeof val === 'object') return JSON.stringify(val)
+      return defaultVal
+    }
+
     const created = await db.emailTemplate.create({
       data: {
         name: name.trim(),
@@ -183,6 +197,12 @@ export async function POST(request: NextRequest) {
         isDefault: Boolean(isDefault),
         tenantId,
         workspaceId: user.workspaceId || null,
+        language: typeof language === 'string' && language.trim() ? language.trim() : 'en',
+        status: typeof status === 'string' && ['draft', 'published'].includes(status) ? status : 'published',
+        isFavorite: Boolean(isFavorite),
+        tagsJson: encodeJsonField(tagsJson),
+        attachmentsJson: encodeJsonField(attachmentsJson),
+        brandKitId: typeof brandKitId === 'string' && brandKitId.trim() ? brandKitId.trim() : null,
       },
     });
 

@@ -122,6 +122,12 @@ export async function PUT(request: NextRequest, { params }: Params) {
       textBody,
       variablesJson,
       isDefault,
+      language,
+      status,
+      isFavorite,
+      tagsJson,
+      attachmentsJson,
+      brandKitId,
     } = body as Record<string, unknown>;
 
     const updateData: Record<string, unknown> = {};
@@ -268,6 +274,25 @@ export async function PUT(request: NextRequest, { params }: Params) {
       }
       if (isDefault !== undefined) {
         updateData.isDefault = Boolean(isDefault);
+      }
+      // Template Studio extension fields (custom templates only)
+      if (language !== undefined) {
+        updateData.language = typeof language === 'string' && language.trim() ? language.trim() : 'en';
+      }
+      if (status !== undefined) {
+        updateData.status = typeof status === 'string' && ['draft', 'published'].includes(status) ? status : 'published';
+      }
+      if (isFavorite !== undefined) {
+        updateData.isFavorite = Boolean(isFavorite);
+      }
+      if (tagsJson !== undefined) {
+        try { updateData.tagsJson = typeof tagsJson === 'string' ? tagsJson : JSON.stringify(tagsJson ?? []); } catch { /* ignore */ }
+      }
+      if (attachmentsJson !== undefined) {
+        try { updateData.attachmentsJson = typeof attachmentsJson === 'string' ? attachmentsJson : JSON.stringify(attachmentsJson ?? []); } catch { /* ignore */ }
+      }
+      if (brandKitId !== undefined) {
+        updateData.brandKitId = typeof brandKitId === 'string' && brandKitId.trim() ? brandKitId.trim() : null;
       }
     }
 
