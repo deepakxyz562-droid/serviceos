@@ -12,14 +12,17 @@ export async function GET(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    const tenantId = user.tenantId || 'default'
-
     const { searchParams } = new URL(request.url)
     const folder = searchParams.get('folder')
 
-    const where: Record<string, unknown> = {
-      OR: [{ tenantId: null }, { tenantId }],
+    // Build the where clause based on user's tenant
+    // - Tenant users see: shared (null) + their own tenant's images
+    // - Super-admin (no tenant) sees: ALL images
+    const where: Record<string, unknown> = {}
+    if (user.tenantId) {
+      where.OR = [{ tenantId: null }, { tenantId: user.tenantId }]
     }
+    // If no tenantId (super-admin), no filter → sees everything
     if (folder) where.folder = folder
 
     const images = await db.imageLibrary.findMany({
@@ -48,7 +51,7 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    const tenantId = user.tenantId || 'default'
+    const tenantId = user.tenantId || null  // null = global/shared image visible to all tenants
 
     const body = await request.json()
 

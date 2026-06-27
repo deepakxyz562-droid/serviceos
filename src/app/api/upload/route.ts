@@ -69,7 +69,8 @@ export async function POST(request: NextRequest) {
       ? (rawBucket as StorageBucket)
       : 'template-assets'
 
-    const companyId = user.tenantId || 'default'
+    const companyId = user.tenantId || 'default'  // Storage path prefix (folder org)
+    const imageLibraryTenantId = user.tenantId || null  // DB: null = global/shared
 
     // Generate a unique filename to avoid collisions
     const ext = path.extname(file.name) || `.${file.type.split('/')[1]}`
@@ -92,7 +93,7 @@ export async function POST(request: NextRequest) {
       try {
         const record = await db.imageLibrary.create({
           data: {
-            tenantId: companyId,
+            tenantId: imageLibraryTenantId,
             name: file.name,
             url,
             folder,
