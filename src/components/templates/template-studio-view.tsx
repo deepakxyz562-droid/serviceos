@@ -277,7 +277,7 @@ const api = {
   },
 }
 
-async function uploadFile(file: File): Promise<{
+async function uploadFile(file: File, options?: { bucket?: string; folder?: string }): Promise<{
   url: string
   name: string
   mediaType: string
@@ -285,6 +285,8 @@ async function uploadFile(file: File): Promise<{
 }> {
   const fd = new FormData()
   fd.append('file', file)
+  if (options?.bucket) fd.append('bucket', options.bucket)
+  if (options?.folder) fd.append('folder', options.folder)
   const r = await fetch('/api/upload', { method: 'POST', body: fd })
   const j = await r.json()
   if (!r.ok) throw new Error(j.error || 'Upload failed')
@@ -1110,7 +1112,11 @@ function EmailTemplateCard({
 }
 
 /* ========================================================================== */
-/* Email Template Editor (Full-page view, Pabbly email-builder pattern)       */
+/* Email Template Editor (Pabbly HTML Email Builder pattern)                   */
+/*                                                                             */
+/* Layout: Left (55%) = Live preview with device toggle                        */
+/*         Right (45%) = Code editor with Import HTML / Upload Image           */
+/* Top bar: Back, name, status, auto-save, Test, Save                         */
 /* ========================================================================== */
 
 interface EmailEditorPageProps {
@@ -1134,13 +1140,48 @@ function EmailEditorPage({ template, onClose, onSaved }: EmailEditorPageProps) {
   const [isFavorite, setIsFavorite] = React.useState(template?.isFavorite || false)
   const [previewDevice, setPreviewDevice] = React.useState<EmailPreviewDevice>('desktop')
   const [focusedField, setFocusedField] = React.useState<'subject' | 'body'>('body')
-  const [editorMode, setEditorMode] = React.useState<'visual' | 'code'>('visual')
   const [saving, setSaving] = React.useState(false)
   const [sendingTest, setSendingTest] = React.useState(false)
   const [testEmailTo, setTestEmailTo] = React.useState('')
   const [autoSaveState, setAutoSaveState] = React.useState<'idle' | 'saving' | 'saved'>('idle')
   const [showTestDialog, setShowTestDialog] = React.useState(false)
-  const [varsOpen, setVarsOpen] = React.useState(true)
+  const [showSettings, setShowSettings] = React.useState(false)
+  const [showVars, setShowVars] = React.useState(false)
+  const [uploadingImage, setUploadingImage] = React.useState(false)
+
+  // Undo/redo history
+  const [history, setHistory] = React.useState<string[]>([template?.htmlBody || ''])
+  const [historyIndex, setHistoryIndex] = React.useState(0)
+  const skipHistoryRef = React.useRef(false)
+
+  const pushHistory = React.useCallback((val: string) => {
+    if (skipHistoryRef.current) { skipHistoryRef.current = false; return }
+    setHistory((prev) => {
+      const next = prev.slice(0, historyIndex + 1)
+      if (next[next.length - 1] === val) return prev
+      return [...next, val]
+    })
+    setHistoryIndex((prev) => prev + 1)
+  }, [historyIndex])
+
+  const canUndo = historyIndex > 0
+  const canRedo = historyIndex < history.length - 1
+
+  const handleUndo = () => {
+    if (!canUndo) return
+    const newIndex = historyIndex - 1
+    skipHistoryRef.current = true
+    setHtmlBody(history[newIndex])
+    setHistoryIndex(newIndex)
+  }
+
+  const handleRedo = () => {
+    if (!canRedo) return
+    const newIndex = historyIndex + 1
+    skipHistoryRef.current = true
+    setHtmlBody(history[newIndex])
+    setHistoryIndex(newIndex)
+  }
 
   // Auto-save draft (debounce 3s)
   const autoSaveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1165,12 +1206,19 @@ function EmailEditorPage({ template, onClose, onSaved }: EmailEditorPageProps) {
     }
   }, [name, slug, category, subject, description, htmlBody, status, language, isFavorite, tags, isEdit, template])
 
+  const handleHtmlChange = (val: string) => {
+    setHtmlBody(val)
+    pushHistory(val)
+  }
+
   const handleInsertVariable = (key: string) => {
     const token = `{{${key}}}`
     if (focusedField === 'subject') {
       setSubject((s) => `${s}${token}`)
     } else {
-      setHtmlBody((h) => `${h}<span class="merge-tag">${token}</span> `)
+      const newBody = `${htmlBody}${token} `
+      setHtmlBody(newBody)
+      pushHistory(newBody)
     }
     toast.success(`Inserted {{${key}}}`)
   }
@@ -1180,6 +1228,30 @@ function EmailEditorPage({ template, onClose, onSaved }: EmailEditorPageProps) {
     if (!v || tags.includes(v)) { setTagInput(''); return }
     setTags([...tags, v])
     setTagInput('')
+  }
+
+  const handleImportHtml = () => {
+    const html = window.prompt('Paste your HTML:', htmlBody)
+    if (html !== null) {
+      handleHtmlChange(html)
+      toast.success('HTML imported')
+    }
+  }
+
+  const handleUploadImage = async (file: File) => {
+    setUploadingImage(true)
+    try {
+      const res = await uploadFile(file, { bucket: 'template-assets', folder: 'email' })
+      const imgTag = `<img src="${res.url}" alt="${res.name}" style="max-width:100%;height:auto;" />`
+      const newBody = `${htmlBody}\n${imgTag}`
+      setHtmlBody(newBody)
+      pushHistory(newBody)
+      toast.success('Image uploaded and inserted')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Upload failed')
+    } finally {
+      setUploadingImage(false)
+    }
   }
 
   const handleSave = async () => {
@@ -1229,241 +1301,340 @@ function EmailEditorPage({ template, onClose, onSaved }: EmailEditorPageProps) {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Top bar */}
-      <div className="flex items-center gap-3 border-b px-4 py-3">
-        <Button variant="ghost" size="sm" onClick={onClose} className="mr-1">
-          <ArrowLeft className="mr-1.5 size-3.5" /> Back
+    <div className="flex h-full flex-col bg-background">
+      {/* ─── Top Bar ─── */}
+      <div className="flex items-center gap-2 border-b bg-background px-3 py-2">
+        <Button variant="ghost" size="sm" onClick={onClose} className="gap-1.5 shrink-0">
+          <ArrowLeft className="size-4" /> Back
         </Button>
+
+        <div className="h-5 w-px bg-border" />
+
+        {/* Template name */}
         <Input
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Template Name"
-          className="max-w-xs border-0 shadow-none focus-visible:ring-0"
+          className="max-w-[200px] border-0 shadow-none focus-visible:ring-0 text-sm font-medium"
         />
-        <div className="flex items-center gap-2">
-          <Select value={status} onValueChange={setStatus}>
-            <SelectTrigger size="sm" className="w-[120px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="published">Published</SelectItem>
-            </SelectContent>
-          </Select>
-          {autoSaveState === 'saving' && (
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <Loader2 className="size-3 animate-spin" /> Saving...
-            </span>
-          )}
-          {autoSaveState === 'saved' && (
-            <span className="text-xs text-emerald-600">Saved</span>
-          )}
-        </div>
+
+        {/* Status dropdown */}
+        <Select value={status} onValueChange={setStatus}>
+          <SelectTrigger size="sm" className="w-[110px] h-8">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="draft">Draft</SelectItem>
+            <SelectItem value="published">Published</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Auto-save indicator */}
+        {autoSaveState === 'saving' && (
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+            <Loader2 className="size-3 animate-spin" /> Saving...
+          </span>
+        )}
+        {autoSaveState === 'saved' && (
+          <span className="text-xs text-emerald-600">Auto-saved</span>
+        )}
+
         <div className="flex-1" />
-        <Button variant="outline" size="sm" onClick={() => setShowTestDialog(true)} disabled={!isEdit}>
-          <Send className="mr-1.5 size-3.5" /> Test
+
+        {/* Settings button */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1.5"
+          onClick={() => setShowSettings(!showSettings)}
+        >
+          <Wrench className="size-3.5" /> Settings
         </Button>
-        <Button size="sm" onClick={() => void handleSave()} disabled={saving}>
-          {saving ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Save className="mr-1.5 size-3.5" />}
+
+        {/* Test email */}
+        <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setShowTestDialog(true)} disabled={!isEdit}>
+          <Send className="size-3.5" /> Test
+        </Button>
+
+        {/* Save */}
+        <Button size="sm" className="h-8 gap-1.5" onClick={() => void handleSave()} disabled={saving}>
+          {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
           Save
         </Button>
       </div>
 
-      {/* Subject + category row */}
-      <div className="flex items-center gap-3 border-b px-4 py-2">
-        <Label className="shrink-0 text-xs text-muted-foreground">Subject:</Label>
-        <Input
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          onFocus={() => setFocusedField('subject')}
-          placeholder="Welcome to {{company.name}}, {{customer.name}}!"
-          className="flex-1 border-0 shadow-none focus-visible:ring-0"
-        />
-        <Label className="shrink-0 text-xs text-muted-foreground">Category:</Label>
-        <Select value={category} onValueChange={setCategory}>
-          <SelectTrigger size="sm" className="w-[140px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="transactional">Transactional</SelectItem>
-            <SelectItem value="marketing">Marketing</SelectItem>
-            <SelectItem value="system">System</SelectItem>
-          </SelectContent>
-        </Select>
+      {/* ─── Subject + Category Row ─── */}
+      <div className="flex items-center gap-3 border-b bg-muted/30 px-4 py-2">
+        <div className="flex items-center gap-2 flex-1">
+          <Label className="shrink-0 text-xs font-medium text-muted-foreground">Subject:</Label>
+          <Input
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            onFocus={() => setFocusedField('subject')}
+            placeholder="Welcome to {{company.name}}, {{customer.name}}!"
+            className="flex-1 border-0 bg-transparent shadow-none focus-visible:ring-0 text-sm"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <Label className="shrink-0 text-xs font-medium text-muted-foreground">Category:</Label>
+          <Select value={category} onValueChange={setCategory}>
+            <SelectTrigger size="sm" className="w-[130px] h-8">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="transactional">Transactional</SelectItem>
+              <SelectItem value="marketing">Marketing</SelectItem>
+              <SelectItem value="system">System</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      {/* Main editor area: left (2/3) + right (1/3) */}
+      {/* ─── Main Split: Left Preview + Right Code Editor ─── */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left panel: editor */}
-        <div className="flex flex-1 flex-col overflow-y-auto p-4">
-          {/* Visual/Code toggle */}
-          <div className="mb-3 flex items-center gap-2">
-            <div className="inline-flex items-center rounded-md border bg-muted/40 p-0.5">
-              <Button
-                type="button"
-                size="sm"
-                variant={editorMode === 'visual' ? 'default' : 'ghost'}
-                className="h-7 px-3 text-xs"
-                onClick={() => setEditorMode('visual')}
-              >
-                <Eye className="mr-1 size-3.5" /> Visual
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={editorMode === 'code' ? 'default' : 'ghost'}
-                className="h-7 px-3 text-xs"
-                onClick={() => setEditorMode('code')}
-              >
-                <Code2 className="mr-1 size-3.5" /> Code
-              </Button>
+        {/* LEFT PANEL: Live Preview */}
+        <div className="flex flex-1 flex-col border-r bg-muted/20 min-w-0">
+          {/* Preview toolbar */}
+          <div className="flex items-center gap-2 border-b bg-background px-3 py-1.5">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Preview</span>
+            <div className="flex-1" />
+
+            {/* Undo/Redo */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={handleUndo} disabled={!canUndo}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Undo</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={handleRedo} disabled={!canRedo}>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13"/></svg>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Redo</TooltipContent>
+            </Tooltip>
+
+            <div className="h-4 w-px bg-border" />
+
+            {/* Device toggles */}
+            <div className="inline-flex items-center gap-0.5 rounded-md border bg-muted/40 p-0.5">
+              {(['desktop', 'tablet', 'mobile'] as EmailPreviewDevice[]).map((d) => {
+                const Icon = d === 'desktop' ? Monitor : d === 'tablet' ? Tablet : Smartphone
+                return (
+                  <Tooltip key={d}>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={previewDevice === d ? 'default' : 'ghost'}
+                        className="h-7 w-7 p-0"
+                        onClick={() => setPreviewDevice(d)}
+                      >
+                        <Icon className="size-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">{d.charAt(0).toUpperCase() + d.slice(1)}</TooltipContent>
+                  </Tooltip>
+                )
+              })}
             </div>
-            {editorMode === 'code' && (
+          </div>
+
+          {/* Preview content */}
+          <div className="flex-1 overflow-auto p-4 flex justify-center bg-muted/30">
+            <div className={cn(
+              'w-full transition-all duration-200',
+              previewDevice === 'mobile' ? 'max-w-[375px]' : previewDevice === 'tablet' ? 'max-w-[768px]' : 'max-w-[900px]'
+            )}>
+              <EmailPreview
+                htmlContent={htmlBody}
+                subject={subject}
+                fromName="Your Company"
+                device={previewDevice}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT PANEL: Code Editor */}
+        <div className="flex w-full flex-col lg:w-[45%] min-w-0">
+          {/* Code editor header */}
+          <div className="flex items-center gap-2 border-b bg-background px-3 py-1.5">
+            <div className="flex items-center gap-2">
+              <Code2 className="size-4 text-primary" />
+              <span className="text-sm font-semibold">HTML Email Builder</span>
+            </div>
+            <div className="flex-1" />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1.5 text-xs"
+              onClick={handleImportHtml}
+            >
+              <FileText className="size-3" /> Import HTML
+            </Button>
+            <label className="inline-flex">
+              <input
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleUploadImage(f) }}
+              />
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => {
-                  const html = window.prompt('Paste your HTML:', htmlBody)
-                  if (html !== null) setHtmlBody(html)
-                }}
+                className="h-7 gap-1.5 text-xs"
+                asChild
+                disabled={uploadingImage}
               >
-                Import HTML
+                <span>
+                  {uploadingImage ? <Loader2 className="size-3 animate-spin" /> : <Upload className="size-3" />}
+                  Upload Image
+                </span>
               </Button>
-            )}
+            </label>
           </div>
 
-          {editorMode === 'visual' ? (
-            <div onFocus={() => setFocusedField('body')}>
-              <RichTextEditor
-                value={htmlBody}
-                onChange={setHtmlBody}
-                placeholder="Write your email content here..."
-                ariaLabel="Email HTML body editor"
-                onInsertVariable={varsOpen ? undefined : () => setVarsOpen(true)}
-              />
-            </div>
-          ) : (
-            <Textarea
+          {/* Custom HTML Code label */}
+          <div className="border-b bg-muted/40 px-3 py-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Custom HTML Code</span>
+          </div>
+
+          {/* Code textarea */}
+          <div className="flex-1 overflow-hidden">
+            <textarea
               value={htmlBody}
-              onChange={(e) => setHtmlBody(e.target.value)}
-              className="min-h-[400px] flex-1 resize-none font-mono text-sm"
-              placeholder="<html>&#10;  <body>&#10;    ...&#10;  </body>&#10;</html>"
+              onChange={(e) => handleHtmlChange(e.target.value)}
+              onFocus={() => setFocusedField('body')}
+              className="size-full resize-none bg-background p-3 font-mono text-xs leading-relaxed text-foreground outline-none"
+              placeholder={`<html>\n  <body>\n    <h1>Hello {{customer.name}},</h1>\n    <p>Welcome to our service!</p>\n  </body>\n</html>`}
+              spellCheck={false}
             />
+          </div>
+
+          {/* Bottom action bar */}
+          <div className="flex items-center gap-2 border-t bg-muted/30 px-3 py-1.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 text-xs"
+              onClick={() => setShowVars(!showVars)}
+            >
+              <VariableIcon className="size-3" />
+              {showVars ? 'Hide Variables' : 'Insert Variables'}
+            </Button>
+            <div className="flex-1" />
+            <span className="text-[10px] text-muted-foreground">{htmlBody.length} chars</span>
+          </div>
+
+          {/* Variable picker (collapsible) */}
+          {showVars && (
+            <div className="max-h-56 overflow-y-auto border-t bg-background p-2">
+              <VariablePicker onInsert={handleInsertVariable} compact />
+            </div>
           )}
         </div>
-
-        {/* Right panel: preview + properties */}
-        <aside className="hidden w-80 shrink-0 flex-col overflow-y-auto border-l xl:flex">
-          {/* Preview */}
-          <div className="border-b p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Preview</Label>
-              <div className="inline-flex items-center gap-0.5 rounded-md border bg-muted/40 p-0.5">
-                {(['desktop', 'tablet', 'mobile'] as EmailPreviewDevice[]).map((d) => {
-                  const Icon = d === 'desktop' ? Monitor : d === 'tablet' ? Tablet : Smartphone
-                  return (
-                    <Tooltip key={d}>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={previewDevice === d ? 'default' : 'ghost'}
-                          className="h-7 w-7 p-0"
-                          onClick={() => setPreviewDevice(d)}
-                        >
-                          <Icon className="size-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom">{d.charAt(0).toUpperCase() + d.slice(1)}</TooltipContent>
-                    </Tooltip>
-                  )
-                })}
-              </div>
-            </div>
-            <EmailPreview
-              htmlContent={htmlBody}
-              subject={subject}
-              fromName="Your Company"
-              device={previewDevice}
-            />
-          </div>
-
-          {/* Properties */}
-          <div className="flex flex-col gap-3 p-4">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Properties</h3>
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">Language</Label>
-              <Select value={language} onValueChange={setLanguage}>
-                <SelectTrigger size="sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="en">English</SelectItem>
-                  <SelectItem value="es">Spanish</SelectItem>
-                  <SelectItem value="hi">Hindi</SelectItem>
-                  <SelectItem value="ar">Arabic</SelectItem>
-                  <SelectItem value="fr">French</SelectItem>
-                  <SelectItem value="de">German</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex items-center justify-between rounded-md border px-3 py-2">
-              <Label className="text-xs">Favorite</Label>
-              <Switch checked={isFavorite} onCheckedChange={setIsFavorite} />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">Tags</Label>
-              <div className="flex gap-1.5">
-                <Input
-                  value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag() } }}
-                  placeholder="Add tag..."
-                  className="text-xs"
-                />
-                <Button type="button" size="sm" variant="outline" onClick={handleAddTag}>
-                  <Plus className="size-3.5" />
-                </Button>
-              </div>
-              {tags.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {tags.map((t) => (
-                    <Badge key={t} variant="secondary" className="gap-1 text-xs">
-                      {t}
-                      <button type="button" onClick={() => setTags(tags.filter((x) => x !== t))} className="rounded-sm hover:bg-muted-foreground/20" aria-label={`Remove ${t}`}>
-                        <X className="size-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <Separator />
-
-            {/* Variable picker */}
-            <Collapsible open={varsOpen} onOpenChange={setVarsOpen}>
-              <CollapsibleTrigger asChild>
-                <Button variant="ghost" size="sm" className="w-full justify-between">
-                  <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                    <VariableIcon className="size-3.5" /> Variables
-                  </span>
-                  {varsOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="mt-2">
-                <VariablePicker onInsert={handleInsertVariable} compact />
-              </CollapsibleContent>
-            </Collapsible>
-          </div>
-        </aside>
       </div>
 
-      {/* Test email dialog */}
+      {/* ─── Settings Panel (slide-in from right) ─── */}
+      {showSettings && (
+        <div className="absolute inset-y-0 right-0 z-50 w-72 border-l bg-background shadow-lg flex flex-col">
+          <div className="flex items-center justify-between border-b px-4 py-3">
+            <h3 className="text-sm font-semibold">Template Settings</h3>
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setShowSettings(false)}>
+              <X className="size-4" />
+            </Button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex flex-col gap-4">
+              {/* Description */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs">Description</Label>
+                <Textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Brief description of this template..."
+                  className="min-h-[80px] text-sm"
+                />
+              </div>
+
+              {/* Language */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs">Language</Label>
+                <Select value={language} onValueChange={setLanguage}>
+                  <SelectTrigger size="sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="es">Spanish</SelectItem>
+                    <SelectItem value="hi">Hindi</SelectItem>
+                    <SelectItem value="ar">Arabic</SelectItem>
+                    <SelectItem value="fr">French</SelectItem>
+                    <SelectItem value="de">German</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Favorite */}
+              <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                <Label className="text-xs">Favorite</Label>
+                <Switch checked={isFavorite} onCheckedChange={setIsFavorite} />
+              </div>
+
+              {/* Tags */}
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs">Tags</Label>
+                <div className="flex gap-1.5">
+                  <Input
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddTag() } }}
+                    placeholder="Add tag..."
+                    className="text-xs"
+                  />
+                  <Button type="button" size="sm" variant="outline" onClick={handleAddTag}>
+                    <Plus className="size-3.5" />
+                  </Button>
+                </div>
+                {tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {tags.map((t) => (
+                      <Badge key={t} variant="secondary" className="gap-1 text-xs">
+                        {t}
+                        <button type="button" onClick={() => setTags(tags.filter((x) => x !== t))} className="rounded-sm hover:bg-muted-foreground/20" aria-label={`Remove ${t}`}>
+                          <X className="size-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <Separator />
+
+              {/* Template info */}
+              <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+                {template && (
+                  <>
+                    <span>ID: {template.id}</span>
+                    <span>Slug: {template.slug}</span>
+                    <span>Created: {template.createdAt ? new Date(template.createdAt).toLocaleDateString() : 'N/A'}</span>
+                    <span>Updated: {template.updatedAt ? new Date(template.updatedAt).toLocaleDateString() : 'N/A'}</span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Test email dialog ─── */}
       <Dialog open={showTestDialog} onOpenChange={setShowTestDialog}>
         <DialogContent>
           <DialogHeader>
@@ -1858,7 +2029,7 @@ function WhatsAppEditorPage({ template, onClose, onSaved }: WhatsAppEditorPagePr
   const handleHeaderUpload = async (file: File) => {
     setUploadingHeader(true)
     try {
-      const res = await uploadFile(file)
+      const res = await uploadFile(file, { bucket: 'template-assets', folder: 'whatsapp' })
       setHeaderMediaUrl(res.url)
       toast.success('Header media uploaded')
     } catch (e) {
@@ -2502,7 +2673,7 @@ function BrandKitView() {
   const handleLogoUpload = async (file: File) => {
     setLogoUploading(true)
     try {
-      const res = await uploadFile(file)
+      const res = await uploadFile(file, { bucket: 'company-assets', folder: 'logo' })
       setBrand((b) => ({ ...b, logoUrl: res.url }))
       toast.success('Logo uploaded')
     } catch (e) {
@@ -2743,11 +2914,12 @@ function ImageLibraryView() {
     setUploading(true)
     try {
       for (const file of Array.from(files)) {
-        const res = await uploadFile(file)
+        const folder = activeFolder === 'all' ? 'general' : activeFolder
+        const res = await uploadFile(file, { bucket: 'template-assets', folder })
         await api.post('/api/image-library', {
           name: res.name,
           url: res.url,
-          folder: activeFolder === 'all' ? 'general' : activeFolder,
+          folder,
           mediaType: res.mediaType,
           size: res.size,
         })

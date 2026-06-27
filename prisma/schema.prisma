@@ -3021,3 +3021,20 @@ model TemplatePack {
   @@index([category])
   @@index([industry])
 }
+
+model TemplateAsset {
+  id          String   @id @default(cuid())
+  companyId   String   // tenantId / company_id
+  bucket      String   // bucket name: template-assets, campaign-assets, etc.
+  filePath    String   // company_1/email/logo.png
+  fileName    String   // original file name
+  mimeType    String   // image/png
+  size        Int      @default(0)
+  folder      String   @default("general") // email, whatsapp, general
+  uploadedBy  String?  // user id
+  createdAt   DateTime @default(now())
+
+  @@index([companyId, bucket])
+  @@index([companyId, folder])
+  @@index([bucket])
+}
