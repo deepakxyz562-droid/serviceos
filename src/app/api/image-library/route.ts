@@ -38,6 +38,9 @@ export async function GET(request: NextRequest) {
  * POST /api/image-library
  * Register an uploaded image (URL is obtained from /api/upload separately).
  * Body: { name, url, folder, mediaType, size, width?, height? }
+ *
+ * Folder accepts any string: logos, promotions, service, seasonal, uploaded,
+ * email, whatsapp, general, etc. Invalid/empty falls back to "uploaded".
  */
 export async function POST(request: NextRequest) {
   try {
@@ -53,8 +56,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'url is required' }, { status: 400 })
     }
 
-    const validFolders = ['logos', 'promotions', 'service', 'seasonal', 'uploaded']
-    const folder = validFolders.includes(body.folder) ? body.folder : 'uploaded'
+    // Accept any folder name; default to "uploaded" if empty/missing
+    const folder = (typeof body.folder === 'string' && body.folder.trim()) ? body.folder.trim() : 'uploaded'
 
     const image = await db.imageLibrary.create({
       data: {

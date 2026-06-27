@@ -277,20 +277,22 @@ const api = {
   },
 }
 
-async function uploadFile(file: File, options?: { bucket?: string; folder?: string }): Promise<{
+async function uploadFile(file: File, options?: { bucket?: string; folder?: string; saveToLibrary?: boolean }): Promise<{
   url: string
   name: string
   mediaType: string
   size: number
+  imageLibraryId?: string
 }> {
   const fd = new FormData()
   fd.append('file', file)
   if (options?.bucket) fd.append('bucket', options.bucket)
   if (options?.folder) fd.append('folder', options.folder)
+  if (options?.saveToLibrary === false) fd.append('saveToLibrary', 'false')
   const r = await fetch('/api/upload', { method: 'POST', body: fd })
   const j = await r.json()
   if (!r.ok) throw new Error(j.error || 'Upload failed')
-  return j as { url: string; name: string; mediaType: string; size: number }
+  return j as { url: string; name: string; mediaType: string; size: number; imageLibraryId?: string }
 }
 
 /* ========================================================================== */
@@ -1112,6 +1114,251 @@ function EmailTemplateCard({
 }
 
 /* ========================================================================== */
+/* Image Picker (shared by Email & WhatsApp editors)                          */
+/*                                                                             */
+/* A dialog that lets the user:                                                */
+/*   1. Browse & select an image from the Image Vault                         */
+/*   2. Upload a new image (which is also saved to the vault automatically)   */
+/* ========================================================================== */
+
+interface ImagePickerProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  /** Called when user selects an image (from vault or freshly uploaded). */
+  onSelect: (image: { url: string; name: string; mediaType: string; size: number }) => void
+  /** Optional: restrict upload folder. Defaults to "general". */
+  folder?: string
+  /** Optional: restrict accepted file types. Defaults to "image/*". */
+  accept?: string
+}
+
+function ImagePicker({ open, onOpenChange, onSelect, folder = 'general', accept = 'image/*' }: ImagePickerProps) {
+  const [vaultImages, setVaultImages] = React.useState<ImageLibraryItem[]>([])
+  const [loadingVault, setLoadingVault] = React.useState(false)
+  const [uploading, setUploading] = React.useState(false)
+  const [search, setSearch] = React.useState('')
+  const [activeTab, setActiveTab] = React.useState<'vault' | 'upload'>('vault')
+
+  // Load vault images when dialog opens
+  React.useEffect(() => {
+    if (open) {
+      void loadVault()
+      setActiveTab('vault')
+      setSearch('')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  const loadVault = async () => {
+    setLoadingVault(true)
+    try {
+      const res = await api.get('/api/image-library')
+      const data = Array.isArray(res) ? res : (res?.data ?? [])
+      setVaultImages(data as ImageLibraryItem[])
+    } catch {
+      // use empty
+    } finally {
+      setLoadingVault(false)
+    }
+  }
+
+  const filteredVault = React.useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return vaultImages
+    return vaultImages.filter((img) => img.name.toLowerCase().includes(q))
+  }, [vaultImages, search])
+
+  const handleUploadAndSelect = async (file: File) => {
+    setUploading(true)
+    try {
+      // /api/upload saves to ImageLibrary automatically (saveToLibrary=true by default)
+      const res = await uploadFile(file, { bucket: 'template-assets', folder })
+      toast.success('Image uploaded')
+      onSelect({ url: res.url, name: res.name, mediaType: res.mediaType, size: res.size })
+      onOpenChange(false)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const handleSelectFromVault = (img: ImageLibraryItem) => {
+    onSelect({ url: img.url, name: img.name, mediaType: img.mediaType, size: img.size })
+    onOpenChange(false)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ImageIcon className="size-5 text-primary" />
+            Select Image
+          </DialogTitle>
+          <DialogDescription>
+            Choose an image from your vault or upload a new one.
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Tabs: Vault / Upload New */}
+        <div className="flex border-b">
+          <button
+            type="button"
+            onClick={() => setActiveTab('vault')}
+            className={cn(
+              'flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+              activeTab === 'vault'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <ImageIcon className="size-4" />
+            Image Vault
+            {vaultImages.length > 0 && (
+              <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                {vaultImages.length}
+              </Badge>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('upload')}
+            className={cn(
+              'flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+              activeTab === 'upload'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <Upload className="size-4" />
+            Upload New
+          </button>
+        </div>
+
+        <div className="min-h-[320px] max-h-[400px] overflow-y-auto">
+          {activeTab === 'vault' ? (
+            <div className="flex flex-col gap-3 p-1">
+              {/* Search bar */}
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  type="search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search images..."
+                  className="pl-8 h-9"
+                />
+              </div>
+
+              {loadingVault ? (
+                <div className="grid grid-cols-3 gap-2">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Skeleton key={i} className="aspect-square w-full rounded-lg" />
+                  ))}
+                </div>
+              ) : filteredVault.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-center">
+                  <ImageIcon className="size-10 text-muted-foreground/40" />
+                  <p className="mt-2 text-sm font-medium text-muted-foreground">No images found</p>
+                  <p className="text-xs text-muted-foreground">
+                    Upload images to your vault to use them in templates.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-3 gap-1.5"
+                    onClick={() => setActiveTab('upload')}
+                  >
+                    <Upload className="size-3.5" /> Upload Image
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {filteredVault.map((img) => (
+                    <button
+                      key={img.id}
+                      type="button"
+                      onClick={() => handleSelectFromVault(img)}
+                      className="group relative overflow-hidden rounded-lg border bg-card shadow-sm transition-all hover:ring-2 hover:ring-primary hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <div className="aspect-square bg-muted">
+                        <img
+                          src={img.url}
+                          alt={img.name}
+                          className="size-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                      {/* Hover overlay */}
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                        <span className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground">
+                          Select
+                        </span>
+                      </div>
+                      {/* Name */}
+                      <div className="p-1.5">
+                        <span className="block truncate text-[11px] text-foreground">{img.name}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-4 p-6">
+              {/* Drag-drop area */}
+              <label className="flex w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/30 px-6 py-10 transition-colors hover:border-primary/50 hover:bg-primary/5">
+                <input
+                  type="file"
+                  accept={accept}
+                  className="sr-only"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) void handleUploadAndSelect(f)
+                  }}
+                />
+                {uploading ? (
+                  <>
+                    <Loader2 className="size-8 animate-spin text-primary" />
+                    <p className="mt-3 text-sm font-medium text-muted-foreground">Uploading...</p>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="size-8 text-muted-foreground/50" />
+                    <p className="mt-3 text-sm font-medium text-muted-foreground">
+                      Click to upload or drag and drop
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground/70">
+                      PNG, JPG, GIF, WebP, SVG (max 10MB)
+                    </p>
+                  </>
+                )}
+              </label>
+
+              {/* Or select from vault */}
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <div className="h-px flex-1 bg-border" />
+                <span>or</span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+                onClick={() => setActiveTab('vault')}
+              >
+                <ImageIcon className="size-3.5" /> Browse Image Vault
+              </Button>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/* ========================================================================== */
 /* Email Template Editor (Pabbly HTML Email Builder pattern)                   */
 /*                                                                             */
 /* Layout: Left (55%) = Live preview with device toggle                        */
@@ -1148,6 +1395,7 @@ function EmailEditorPage({ template, onClose, onSaved }: EmailEditorPageProps) {
   const [showSettings, setShowSettings] = React.useState(false)
   const [showVars, setShowVars] = React.useState(false)
   const [uploadingImage, setUploadingImage] = React.useState(false)
+  const [showImagePicker, setShowImagePicker] = React.useState(false)
 
   // Undo/redo history
   const [history, setHistory] = React.useState<string[]>([template?.htmlBody || ''])
@@ -1252,6 +1500,15 @@ function EmailEditorPage({ template, onClose, onSaved }: EmailEditorPageProps) {
     } finally {
       setUploadingImage(false)
     }
+  }
+
+  /** Called when user selects an image from the ImagePicker (vault or upload). */
+  const handleImageSelect = (image: { url: string; name: string; mediaType: string; size: number }) => {
+    const imgTag = `<img src="${image.url}" alt="${image.name}" style="max-width:100%;height:auto;" />`
+    const newBody = `${htmlBody}\n${imgTag}`
+    setHtmlBody(newBody)
+    pushHistory(newBody)
+    toast.success('Image inserted')
   }
 
   const handleSave = async () => {
@@ -1477,27 +1734,16 @@ function EmailEditorPage({ template, onClose, onSaved }: EmailEditorPageProps) {
             >
               <FileText className="size-3" /> Import HTML
             </Button>
-            <label className="inline-flex">
-              <input
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleUploadImage(f) }}
-              />
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-7 gap-1.5 text-xs"
-                asChild
-                disabled={uploadingImage}
-              >
-                <span>
-                  {uploadingImage ? <Loader2 className="size-3 animate-spin" /> : <Upload className="size-3" />}
-                  Upload Image
-                </span>
-              </Button>
-            </label>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1.5 text-xs"
+              onClick={() => setShowImagePicker(true)}
+            >
+              <ImageIcon className="size-3" />
+              Add Image
+            </Button>
           </div>
 
           {/* Custom HTML Code label */}
@@ -1654,6 +1900,14 @@ function EmailEditorPage({ template, onClose, onSaved }: EmailEditorPageProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ─── Image Picker ─── */}
+      <ImagePicker
+        open={showImagePicker}
+        onOpenChange={setShowImagePicker}
+        onSelect={handleImageSelect}
+        folder="email"
+      />
     </div>
   )
 }
@@ -2008,6 +2262,7 @@ function WhatsAppEditorPage({ template, onClose, onSaved }: WhatsAppEditorPagePr
   const [varsOpen, setVarsOpen] = React.useState(false)
   const [aiLoading, setAiLoading] = React.useState<string | null>(null)
   const [aiPrompt, setAiPrompt] = React.useState('')
+  const [showImagePicker, setShowImagePicker] = React.useState(false)
 
   const bodyRef = React.useRef<HTMLTextAreaElement>(null)
 
@@ -2037,6 +2292,12 @@ function WhatsAppEditorPage({ template, onClose, onSaved }: WhatsAppEditorPagePr
     } finally {
       setUploadingHeader(false)
     }
+  }
+
+  /** Called when user selects an image from the ImagePicker for the WhatsApp header. */
+  const handleHeaderImageSelect = (image: { url: string; name: string; mediaType: string; size: number }) => {
+    setHeaderMediaUrl(image.url)
+    toast.success('Header image selected')
   }
 
   const addQuickReply = () => {
@@ -2221,20 +2482,16 @@ function WhatsAppEditorPage({ template, onClose, onSaved }: WhatsAppEditorPagePr
                     <X className="size-3.5" />
                   </Button>
                 ) : (
-                  <label className="inline-flex">
-                    <input
-                      type="file"
-                      accept={templateType === 'image' ? 'image/*' : templateType === 'video' ? 'video/mp4' : 'application/pdf'}
-                      className="sr-only"
-                      onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleHeaderUpload(f) }}
-                    />
-                    <Button type="button" variant="outline" size="sm" asChild>
-                      <span>
-                        {uploadingHeader ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Upload className="mr-1.5 size-3.5" />}
-                        Upload
-                      </span>
-                    </Button>
-                  </label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowImagePicker(true)}
+                    disabled={uploadingHeader}
+                  >
+                    {uploadingHeader ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <ImageIcon className="mr-1.5 size-3.5" />}
+                    Select Image
+                  </Button>
                 )}
               </div>
             )}
@@ -2468,6 +2725,14 @@ function WhatsAppEditorPage({ template, onClose, onSaved }: WhatsAppEditorPagePr
           </div>
         </aside>
       </div>
+
+      {/* ─── Image Picker ─── */}
+      <ImagePicker
+        open={showImagePicker}
+        onOpenChange={setShowImagePicker}
+        onSelect={handleHeaderImageSelect}
+        folder="whatsapp"
+      />
     </div>
   )
 }
@@ -2643,6 +2908,7 @@ function BrandKitView() {
   const [saving, setSaving] = React.useState(false)
   const [brand, setBrand] = React.useState<BrandKit>({})
   const [logoUploading, setLogoUploading] = React.useState(false)
+  const [showLogoPicker, setShowLogoPicker] = React.useState(false)
 
   const load = React.useCallback(async () => {
     setLoading(true)
@@ -2681,6 +2947,11 @@ function BrandKitView() {
     } finally {
       setLogoUploading(false)
     }
+  }
+
+  const handleLogoSelect = (image: { url: string; name: string; mediaType: string; size: number }) => {
+    setBrand((b) => ({ ...b, logoUrl: image.url }))
+    toast.success('Logo selected')
   }
 
   const updateField = (field: keyof BrandKit, value: string | boolean | null) => {
@@ -2754,20 +3025,10 @@ function BrandKitView() {
                       <ImageIcon className="size-5 text-muted-foreground" />
                     </div>
                   )}
-                  <label className="inline-flex">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="sr-only"
-                      onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleLogoUpload(f) }}
-                    />
-                    <Button type="button" variant="outline" size="sm" asChild disabled={logoUploading}>
-                      <span>
-                        {logoUploading ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Upload className="mr-1.5 size-3.5" />}
-                        Upload
-                      </span>
-                    </Button>
-                  </label>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setShowLogoPicker(true)} disabled={logoUploading}>
+                    {logoUploading ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <ImageIcon className="mr-1.5 size-3.5" />}
+                    Select Image
+                  </Button>
                   {brand.logoUrl && (
                     <Button type="button" variant="ghost" size="sm" onClick={() => updateField('logoUrl', null)}>
                       <X className="size-3.5" />
@@ -2866,6 +3127,14 @@ function BrandKitView() {
           </Card>
         </div>
       </div>
+
+      {/* ─── Logo Image Picker ─── */}
+      <ImagePicker
+        open={showLogoPicker}
+        onOpenChange={setShowLogoPicker}
+        onSelect={handleLogoSelect}
+        folder="logos"
+      />
     </div>
   )
 }
@@ -2915,14 +3184,8 @@ function ImageLibraryView() {
     try {
       for (const file of Array.from(files)) {
         const folder = activeFolder === 'all' ? 'general' : activeFolder
-        const res = await uploadFile(file, { bucket: 'template-assets', folder })
-        await api.post('/api/image-library', {
-          name: res.name,
-          url: res.url,
-          folder,
-          mediaType: res.mediaType,
-          size: res.size,
-        })
+        // /api/upload already creates the ImageLibrary record when saveToLibrary is true (default)
+        await uploadFile(file, { bucket: 'template-assets', folder })
       }
       toast.success('Images uploaded')
       await load()

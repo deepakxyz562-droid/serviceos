@@ -11,11 +11,12 @@ import path from 'path'
  * Falls back to local filesystem when Supabase is not configured.
  *
  * FormData fields:
- *   - file      (File)     – required
- *   - bucket    (string)   – optional, defaults to "template-assets"
- *   - folder    (string)   – optional, defaults to "general"
+ *   - file           (File)     – required
+ *   - bucket         (string)   – optional, defaults to "template-assets"
+ *   - folder         (string)   – optional, defaults to "general"
+ *   - saveToLibrary  (string)   – optional, "true" (default) or "false"
  *
- * Returns { url, name, mediaType, size, path }
+ * Returns { url, name, mediaType, size, path, imageLibraryId? }
  */
 
 const ALLOWED_MIME = [
@@ -61,6 +62,7 @@ export async function POST(request: NextRequest) {
     // Resolve bucket & folder
     const rawBucket = (formData.get('bucket') as string) || 'template-assets'
     const folder = (formData.get('folder') as string) || 'general'
+    const saveToLibrary = (formData.get('saveToLibrary') as string) !== 'false'
 
     const validBuckets = Object.values(STORAGE_BUCKETS) as readonly string[]
     const bucket: StorageBucket = validBuckets.includes(rawBucket)
@@ -83,22 +85,27 @@ export async function POST(request: NextRequest) {
       contentType: file.type,
     })
 
-    // Save a record in the ImageLibrary table for quick lookup
-    try {
-      await db.imageLibrary.create({
-        data: {
-          tenantId: companyId,
-          name: file.name,
-          url,
-          folder,
-          mediaType: file.type,
-          size: file.size,
-          uploadedBy: user.id,
-        },
-      })
-    } catch (dbErr) {
-      // Non-fatal — the file is already stored; just log the DB error
-      console.error('[Upload] ImageLibrary record failed:', dbErr)
+    let imageLibraryId: string | undefined
+
+    // Save a record in the ImageLibrary table for the vault
+    if (saveToLibrary) {
+      try {
+        const record = await db.imageLibrary.create({
+          data: {
+            tenantId: companyId,
+            name: file.name,
+            url,
+            folder,
+            mediaType: file.type,
+            size: file.size,
+            uploadedBy: user.id,
+          },
+        })
+        imageLibraryId = record.id
+      } catch (dbErr) {
+        // Non-fatal — the file is already stored; just log the DB error
+        console.error('[Upload] ImageLibrary record failed:', dbErr)
+      }
     }
 
     return NextResponse.json(
@@ -108,6 +115,7 @@ export async function POST(request: NextRequest) {
         mediaType: file.type,
         size: file.size,
         path: filePath,
+        imageLibraryId,
       },
       { status: 201 }
     )
