@@ -151,8 +151,6 @@ const ownerNavSections: NavSection[] = [
     items: [
       { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
       { view: 'broadcast', label: 'Broadcast', icon: Send },
-      { view: 'marketingTemplates', label: 'Templates', icon: MessageSquare },
-      { view: 'emailTemplates', label: 'Email Templates', icon: Mail },
       { view: 'templateStudio', label: 'Template Studio', icon: LayoutTemplate },
       { view: 'retargeting', label: 'Retargeting', icon: RefreshCw },
       { view: 'marketingAnalytics', label: 'Analytics', icon: BarChart3 },
@@ -275,8 +273,6 @@ const superadminNavSections: NavSection[] = [
     items: [
       { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
       { view: 'broadcast', label: 'Broadcast', icon: Send },
-      { view: 'marketingTemplates', label: 'Templates', icon: MessageSquare },
-      { view: 'emailTemplates', label: 'Email Templates', icon: Mail },
       { view: 'templateStudio', label: 'Template Studio', icon: LayoutTemplate },
       { view: 'retargeting', label: 'Retargeting', icon: RefreshCw },
       { view: 'marketingAnalytics', label: 'Analytics', icon: BarChart3 },
