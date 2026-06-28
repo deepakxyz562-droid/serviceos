@@ -126,6 +126,37 @@ const TABLE_MAP: Record<string, string> = {
   securityEvent: 'SecurityEvent',
   auditLogEntry: 'AuditLogEntry',
   otpVerification: 'OtpVerification',
+  // ── Template Studio & Marketing ──
+  brandKit: 'BrandKit',
+  imageLibrary: 'ImageLibrary',
+  templatePack: 'TemplatePack',
+  templateAsset: 'TemplateAsset',
+  emailProvider: 'EmailProvider',
+  emailTemplate: 'EmailTemplate',
+  // ── Billing & Payments ──
+  subscriptionPayment: 'SubscriptionPayment',
+  billingEvent: 'BillingEvent',
+  plan: 'Plan',
+  recurringInvoice: 'RecurringInvoice',
+  paymentMethod: 'PaymentMethod',
+  // ── E-Commerce ──
+  ecommerceOrder: 'EcommerceOrder',
+  ecommerceProduct: 'EcommerceProduct',
+  ecommerceSyncLog: 'EcommerceSyncLog',
+  // ── Contact Management ──
+  tag: 'Tag',
+  contactTag: 'ContactTag',
+  group: 'Group',
+  contactGroup: 'ContactGroup',
+  contactImport: 'ContactImport',
+  contactExport: 'ContactExport',
+  // ── Integrations ──
+  integrationConnection: 'IntegrationConnection',
+  hubIntegrationConnection: 'HubIntegrationConnection',
+  metaLeadConfig: 'MetaLeadConfig',
+  metaLead: 'MetaLead',
+  googleAdsLeadConfig: 'GoogleAdsLeadConfig',
+  googleAdsLead: 'GoogleAdsLead',
 };
 
 // Known missing tables in Supabase (return empty results gracefully)

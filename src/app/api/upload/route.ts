@@ -87,6 +87,7 @@ export async function POST(request: NextRequest) {
     })
 
     let imageLibraryId: string | undefined
+    let dbWarning: string | undefined
 
     // Save a record in the ImageLibrary table for the vault
     if (saveToLibrary) {
@@ -104,8 +105,19 @@ export async function POST(request: NextRequest) {
         })
         imageLibraryId = record.id
       } catch (dbErr) {
-        // Non-fatal — the file is already stored; just log the DB error
-        console.error('[Upload] ImageLibrary record failed:', dbErr)
+        // Log the full error so we can diagnose RLS / schema issues
+        const errMsg = dbErr instanceof Error ? dbErr.message : String(dbErr)
+        console.error('[Upload] ImageLibrary record failed:', errMsg)
+
+        // If this is an RLS error on Supabase, provide a clear hint
+        if (errMsg.includes('new row violates row-level security') || errMsg.includes('policy')) {
+          console.error('[Upload] HINT: Run this SQL in Supabase SQL Editor:')
+          console.error('[Upload]   ALTER TABLE "ImageLibrary" ENABLE ROW LEVEL SECURITY;')
+          console.error('[Upload]   CREATE POLICY "service_role_all_ImageLibrary" ON "ImageLibrary" FOR ALL USING (auth.role() = \'service_role\') WITH CHECK (auth.role() = \'service_role\');')
+        }
+
+        // Return a warning so the client knows the DB save failed
+        dbWarning = 'File uploaded to storage but ImageLibrary DB record failed: ' + errMsg
       }
     }
 
@@ -117,6 +129,7 @@ export async function POST(request: NextRequest) {
         size: file.size,
         path: filePath,
         imageLibraryId,
+        warning: dbWarning,
       },
       { status: 201 }
     )
