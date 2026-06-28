@@ -165,6 +165,24 @@ const MISSING_TABLES = new Set<string>([
   // have been migrated to Supabase — removed from missing list
 ]);
 
+// Tables that do NOT have an `updatedAt` column in Supabase.
+// The create() method auto-adds `updatedAt` to all inserts, but these tables
+// don't have that column, so PostgREST will reject it. Listing them here lets
+// us skip the auto-add and avoid an unnecessary retry round-trip.
+const TABLES_WITHOUT_UPDATED_AT = new Set<string>([
+  'ImageLibrary',
+  'BrandKit',
+  'TemplatePack',
+  'TemplateAsset',
+  'Execution',
+  'ContactGroup',
+  'ContactTag',
+  'ContactImport',
+  'ContactExport',
+  'MetaLead',
+  'GoogleAdsLead',
+]);
+
 // ── Relation Mapping ───────────────────────────────────────────────────────
 // Maps model→relationName→{targetTable, fkColumn, isMany}
 // Used for client-side joins when PostgREST FK relationships aren't available
@@ -818,8 +836,10 @@ class SupabaseModel {
       serialized.createdAt = new Date().toISOString();
     }
 
-    // Auto-set updatedAt if not provided
-    if (!('updatedAt' in serialized) && !('updated_at' in serialized)) {
+    // Auto-set updatedAt if not provided — but only for tables that actually have
+    // this column. Many tables (ImageLibrary, BrandKit, Execution, etc.) don't have
+    // updatedAt, and adding it causes PostgREST to reject the insert.
+    if (!('updatedAt' in serialized) && !('updated_at' in serialized) && !TABLES_WITHOUT_UPDATED_AT.has(this.tableName)) {
       serialized.updatedAt = new Date().toISOString();
     }
 
@@ -835,17 +855,22 @@ class SupabaseModel {
     // can recover from multiple bad columns in a single create() call
     // (e.g. a table that has neither `createdAt` nor `updatedAt`).
     // PostgREST error formats:
-    //   "Could not find the `createdAt` column of `Execution` in the schema cache"
-    //   'column "updatedAt" of relation "Execution" does not exist'
+    //   "Could not find the 'createdAt' column of 'Execution' in the schema cache"  (Supabase/PostgREST v11+)
+    //   "Could not find the `createdAt` column of `Execution` in the schema cache"  (older PostgREST)
+    //   'column "updatedAt" of relation "Execution" does not exist'  (PostgreSQL)
     let retryCount = 0;
     while (error && retryCount < 4) {
       const msg = error.message || '';
       const missingColMatch = msg.match(
-        /(?:Could not find the `?(\w+)`? column of|column "(\w+)" of relation)/
+        /(?:Could not find the ['`"]?(\w+)['`"]? column of|column "(\w+)" of relation)/
       );
-      if (!missingColMatch) break;
+      if (!missingColMatch) {
+        console.warn(`[SupabaseDB] create retry on ${this.tableName}: error did not match missing-column pattern: "${msg}"`);
+        break;
+      }
       const badCol = missingColMatch[1] || missingColMatch[2];
       if (!badCol || !(badCol in serialized)) break;
+      console.log(`[SupabaseDB] create retry on ${this.tableName}: stripping missing column "${badCol}" and retrying`);
       delete serialized[badCol];
       retryCount++;
       const retry = await this.client
@@ -858,7 +883,7 @@ class SupabaseModel {
     }
 
     if (error) {
-      console.error(`[SupabaseDB] create error on ${this.tableName}:`, error.message, error.details);
+      console.error(`[SupabaseDB] create error on ${this.tableName}:`, error.message, error.details, error.code);
       throw new Error(`Failed to create ${this.tableName}: ${error.message}`);
     }
 
@@ -936,11 +961,11 @@ class SupabaseModel {
 
     // If the error is about a missing column, strip that column and retry.
     // PostgREST error messages look like:
-    //   'Could not find the `createdAt` column of `ContactGroup` in the schema cache'
-    //   'column "updatedAt" of relation "ContactGroup" does not exist'
+    //   "Could not find the 'createdAt' column of 'ContactGroup' in the schema cache"  (Supabase/PostgREST v11+)
+    //   'column "updatedAt" of relation "ContactGroup" does not exist'  (PostgreSQL)
     if (result.error) {
       const missingColMatch = result.error.match(
-        /(?:Could not find the `?(\w+)`? column|column "(\w+)" of relation)/
+        /(?:Could not find the ['`"]?(\w+)['`"]? column|column "(\w+)" of relation)/
       );
       if (missingColMatch) {
         const badCol = missingColMatch[1] || missingColMatch[2];
@@ -983,7 +1008,7 @@ class SupabaseModel {
       if (rowErr) {
         // If the error is about a missing column, strip it from remaining rows
         const colMatch = rowErr.message?.match(
-          /(?:Could not find the `?(\w+)`? column|column "(\w+)" of relation)/
+          /(?:Could not find the ['`"]?(\w+)['`"]? column|column "(\w+)" of relation)/
         );
         if (colMatch) {
           const badCol = colMatch[1] || colMatch[2];
@@ -1018,8 +1043,8 @@ class SupabaseModel {
 
     // Auto-set updatedAt — Prisma does this with @updatedAt at the application layer,
     // but PostgREST has no such feature. Without this, updatedAt stays stale.
-    // Only set it if it's not already provided; some tables don't have this column.
-    if (!('updatedAt' in serialized)) {
+    // Only set it if it's not already provided AND the table actually has this column.
+    if (!('updatedAt' in serialized) && !TABLES_WITHOUT_UPDATED_AT.has(this.tableName)) {
       serialized.updatedAt = new Date().toISOString();
     }
 
@@ -1039,7 +1064,7 @@ class SupabaseModel {
     while (error && retryCount < 4) {
       const msg = error.message || '';
       const missingColMatch = msg.match(
-        /(?:Could not find the `?(\w+)`? column of|column "(\w+)" of relation)/
+        /(?:Could not find the ['`"]?(\w+)['`"]? column of|column "(\w+)" of relation)/
       );
       if (!missingColMatch) break;
       const badCol = missingColMatch[1] || missingColMatch[2];
@@ -1091,7 +1116,7 @@ class SupabaseModel {
     while (error && retryCount < 4) {
       const msg = error.message || '';
       const missingColMatch = msg.match(
-        /(?:Could not find the `?(\w+)`? column of|column "(\w+)" of relation)/
+        /(?:Could not find the ['`"]?(\w+)['`"]? column of|column "(\w+)" of relation)/
       );
       if (!missingColMatch) break;
       const badCol = missingColMatch[1] || missingColMatch[2];
