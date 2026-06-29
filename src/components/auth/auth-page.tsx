@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -116,6 +116,15 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
   // Top-level tab
   const [loginTab, setLoginTab] = useState<LoginTab>('business');
   const [isLoading, setIsLoading] = useState(false);
+  const [googleConfigured, setGoogleConfigured] = useState(false);
+
+  // Check if Google OAuth is configured
+  useEffect(() => {
+    fetch('/api/auth/google/config?XTransformPort=3000')
+      .then(res => res.json())
+      .then(data => setGoogleConfigured(data.configured))
+      .catch(() => setGoogleConfigured(false));
+  }, []);
 
   // Business Login state
   const [businessTab, setBusinessTab] = useState<BusinessTab>('login');
@@ -308,6 +317,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
                 </div>
               </motion.div>
 
+              {googleConfigured && (
               <motion.div custom={4} variants={fadeUp} initial="hidden" animate="visible">
                 <Button
                   type="button"
@@ -322,6 +332,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
                   Continue with Google
                 </Button>
               </motion.div>
+              )}
 
               <motion.div custom={5} variants={fadeUp} initial="hidden" animate="visible" className="text-center pt-1">
                 <p className="text-sm text-slate-500">
@@ -412,6 +423,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
                 </div>
               </motion.div>
 
+              {googleConfigured && (
               <motion.div custom={8} variants={fadeUp} initial="hidden" animate="visible">
                 <Button
                   type="button"
@@ -426,6 +438,7 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
                   Continue with Google
                 </Button>
               </motion.div>
+              )}
 
               <motion.div custom={9} variants={fadeUp} initial="hidden" animate="visible" className="text-center pt-1">
                 <p className="text-sm text-slate-500">

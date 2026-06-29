@@ -287,7 +287,7 @@ export function AppHeader() {
                   {auth.user?.name || 'Demo User'}
                 </span>
                 <span className="text-xs text-muted-foreground font-normal">
-                  {auth.user?.email || 'demo@serviceos.io'}
+                  {auth.user?.email || 'demo@serviceos.cc'}
                 </span>
               </div>
             </DropdownMenuLabel>

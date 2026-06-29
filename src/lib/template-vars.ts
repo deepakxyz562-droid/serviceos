@@ -70,7 +70,7 @@ export const VARIABLE_CATEGORIES: VariableCategory[] = [
       { key: 'invoice.number', label: 'Invoice Number', example: 'INV-2024-0042' },
       { key: 'invoice.due_date', label: 'Due Date', example: 'Jan 30, 2025' },
       { key: 'invoice.amount', label: 'Amount', example: '$250.00' },
-      { key: 'invoice.payment_link', label: 'Payment Link', example: 'https://pay.serviceos.com/inv/42' },
+      { key: 'invoice.payment_link', label: 'Payment Link', example: 'https://serviceos.cc/pay/inv/42' },
     ],
   },
   {
@@ -78,9 +78,9 @@ export const VARIABLE_CATEGORIES: VariableCategory[] = [
     icon: 'Building2',
     variables: [
       { key: 'company.name', label: 'Company Name', example: 'ServiceOS Pro' },
-      { key: 'company.logo', label: 'Logo', example: 'https://app.serviceos.com/logo.png' },
-      { key: 'company.website', label: 'Website', example: 'https://serviceos.com' },
-      { key: 'company.email', label: 'Email', example: 'hello@serviceos.com' },
+      { key: 'company.logo', label: 'Logo', example: 'https://serviceos.cc/logo.png' },
+      { key: 'company.website', label: 'Website', example: 'https://serviceos.cc' },
+      { key: 'company.email', label: 'Email', example: 'hello@serviceos.cc' },
       { key: 'company.phone', label: 'Phone', example: '+1 555-0100' },
     ],
   },

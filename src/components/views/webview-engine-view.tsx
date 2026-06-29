@@ -34,11 +34,11 @@ interface Webview {
 // ─── Mock Data ──────────────────────────────────────────────────────────────
 
 const MOCK_WEBVIEWS: Webview[] = [
-  { id: 'w1', name: 'Book Service', type: 'booking', url: 'https://app.serviceos.com/book', views: 1245, clicks: 892, conversions: 456, status: 'active', createdAt: '2025-01-15' },
-  { id: 'w2', name: 'Pay Invoice', type: 'payment', url: 'https://app.serviceos.com/pay', views: 890, clicks: 734, conversions: 612, status: 'active', createdAt: '2025-02-01' },
-  { id: 'w3', name: 'Approve Quote', type: 'quote_approval', url: 'https://app.serviceos.com/quote', views: 456, clicks: 345, conversions: 234, status: 'active', createdAt: '2025-02-20' },
-  { id: 'w4', name: 'Customer Portal', type: 'portal', url: 'https://app.serviceos.com/portal', views: 2345, clicks: 1890, conversions: 1567, status: 'active', createdAt: '2025-01-01' },
-  { id: 'w5', name: 'View Invoice', type: 'invoice', url: 'https://app.serviceos.com/invoice', views: 678, clicks: 567, conversions: 445, status: 'inactive', createdAt: '2025-03-01' },
+  { id: 'w1', name: 'Book Service', type: 'booking', url: 'https://serviceos.cc/book', views: 1245, clicks: 892, conversions: 456, status: 'active', createdAt: '2025-01-15' },
+  { id: 'w2', name: 'Pay Invoice', type: 'payment', url: 'https://serviceos.cc/pay', views: 890, clicks: 734, conversions: 612, status: 'active', createdAt: '2025-02-01' },
+  { id: 'w3', name: 'Approve Quote', type: 'quote_approval', url: 'https://serviceos.cc/quote', views: 456, clicks: 345, conversions: 234, status: 'active', createdAt: '2025-02-20' },
+  { id: 'w4', name: 'Customer Portal', type: 'portal', url: 'https://serviceos.cc/portal', views: 2345, clicks: 1890, conversions: 1567, status: 'active', createdAt: '2025-01-01' },
+  { id: 'w5', name: 'View Invoice', type: 'invoice', url: 'https://serviceos.cc/invoice', views: 678, clicks: 567, conversions: 445, status: 'inactive', createdAt: '2025-03-01' },
 ];
 
 const WEBVIEW_TYPES = [
@@ -176,7 +176,7 @@ export function WebviewEngineView() {
             </div>
             <div className="space-y-2">
               <Label>URL *</Label>
-              <Input placeholder="https://app.serviceos.com/..." value={createForm.url} onChange={e => setCreateForm({ ...createForm, url: e.target.value })} />
+              <Input placeholder="https://serviceos.cc/..." value={createForm.url} onChange={e => setCreateForm({ ...createForm, url: e.target.value })} />
             </div>
           </div>
           <DialogFooter>

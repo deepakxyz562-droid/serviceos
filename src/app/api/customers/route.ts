@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search')
 
     // Scope to the user's workspace. If the user has no direct workspaceId
-    // (e.g. super-admin / admin@serviceos.com), resolve via their tenantId →
+    // (e.g. super-admin / admin@serviceos.cc), resolve via their tenantId →
     // first workspace in that tenant. If they also have no tenantId, fall
     // back to the first workspace in the system so the UI still works for
     // the demo admin (instead of silently returning an empty list).

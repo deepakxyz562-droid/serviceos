@@ -18,7 +18,7 @@ export async function GET() {
       isConfigured: configured,
       mode: configured ? 'live' : 'demo',
       phoneNumberId: maskString(config.phoneNumberId),
-      webhookUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://your-domain.com'}/api/whatsapp/callback`,
+      webhookUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://serviceos.cc'}/api/whatsapp/callback`,
       apiVersion: WHATSAPP_API_VERSION,
       verifyTokenSet: !!config.verifyToken && config.verifyToken !== 'flowforge_verify_token',
     });

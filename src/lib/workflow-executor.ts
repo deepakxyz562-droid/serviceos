@@ -214,18 +214,19 @@ async function fetchDynamicListData(
     let url = resolveExpression(source.url, context);
 
     // Normalize URLs for server-side fetch:
-    // - If URL starts with / (relative), prepend localhost
+    // - If URL starts with / (relative), prepend the app URL
     // - If URL contains a preview domain (*.space-z.ai), replace with localhost:3000
     //   because server-side fetch can't resolve the preview domain
+    const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
     if (url.startsWith('/')) {
-      url = `http://localhost:3000${url}`;
+      url = `${appBaseUrl}${url}`;
     } else if (url.includes('.space-z.ai')) {
       try {
         const parsedUrl = new URL(url);
-        url = `http://localhost:3000${parsedUrl.pathname}${parsedUrl.search}`;
+        url = `${appBaseUrl}${parsedUrl.pathname}${parsedUrl.search}`;
       } catch {
         // If URL parsing fails, try replacing the origin directly
-        url = url.replace(/https?:\/\/[^/]+\.space-z\.ai/, 'http://localhost:3000');
+        url = url.replace(/https?:\/\/[^/]+\.space-z\.ai/, appBaseUrl);
       }
     }
 
@@ -598,7 +599,7 @@ async function buildWhatsAppPayload(
       const dataEndpointConfig = config.dataEndpointConfig as DataEndpointConfig | undefined;
       if (dataEndpointConfig?.enabled && dataEndpointConfig?.path) {
         // Build the internal data endpoint URL — must use absolute URL for server-side fetch
-        const dataEndpointUrl = `http://localhost:3000/api/whatsapp/data/${dataEndpointConfig.path}`;
+        const dataEndpointUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/whatsapp/data/${dataEndpointConfig.path}`;
         // If the dynamic source is not already configured with this URL, override it
         if (!dynamicSource?.enabled || !dynamicSource?.url?.includes(dataEndpointConfig.path)) {
           dynamicSource = {

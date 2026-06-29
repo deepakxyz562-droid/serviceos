@@ -16,6 +16,8 @@ const nextConfig: NextConfig = {
     "21.0.10.43",
     "space-z.ai",
     ".space-z.ai",
+    "serviceos.cc",
+    ".serviceos.cc",
     "0.0.0.0",
     "127.0.0.1",
     "localhost",

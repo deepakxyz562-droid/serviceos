@@ -2002,10 +2002,11 @@ export function WhatsAppConfigPanel({ node }: WhatsAppConfigPanelProps) {
                                   className="w-full h-7 text-[10px] gap-1.5 border-orange-300 text-orange-700 hover:bg-orange-50"
                                   onClick={() => {
                                     if (!dataEndpointConfig.path) return;
-                                    // Use localhost:3000 for server-side fetch compatibility.
+                                    // Use the app URL for server-side fetch compatibility.
                                     // The workflow executor runs server-side and can't resolve
-                                    // the preview domain URL, so we store the localhost URL.
-                                    const url = `http://localhost:3000/api/whatsapp/data/${dataEndpointConfig.path}`;
+                                    // the preview domain URL, so we store the app base URL.
+                                    const appBaseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+                                    const url = `${appBaseUrl}/api/whatsapp/data/${dataEndpointConfig.path}`;
                                     setListDynamicSource((prev) => ({
                                       ...prev,
                                       enabled: true,

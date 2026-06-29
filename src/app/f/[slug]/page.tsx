@@ -82,7 +82,7 @@ export default async function HostedFormPage({ params }: { params: Promise<{ slu
           redirectUrl={redirectUrl}
         />
         <div style={{ padding: '12px 24px', textAlign: 'center', borderTop: '1px solid #f3f4f6' }}>
-          <a href="https://serviceos.com" target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: '#9ca3af', textDecoration: 'none' }}>Powered by ServiceOS</a>
+          <a href="https://serviceos.cc" target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: '#9ca3af', textDecoration: 'none' }}>Powered by ServiceOS</a>
         </div>
       </div>
     </div>

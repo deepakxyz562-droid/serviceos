@@ -709,7 +709,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
               {auth.user?.name || 'Demo User'}
             </p>
             <p className="text-xs text-slate-500 truncate">
-              {auth.user?.email || 'demo@serviceos.io'}
+              {auth.user?.email || 'demo@serviceos.cc'}
             </p>
           </div>
         )}

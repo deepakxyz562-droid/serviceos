@@ -554,7 +554,7 @@ function HeroSection({ onGetStarted, onTryDemo }: { onGetStarted: () => void; on
                 </div>
                 <div className="flex-1 flex justify-center">
                   <div className="px-4 py-1 rounded-md bg-white/5 text-xs text-zinc-500 border border-white/5">
-                    app.serviceos.io/dashboard
+                    app.serviceos.cc/dashboard
                   </div>
                 </div>
               </div>

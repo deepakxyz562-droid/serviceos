@@ -1,8 +1,9 @@
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
+import { DEFAULT_KB_ARTICLES } from '@/lib/kb-default-articles';
 
-// GET /api/knowledge-base — List articles with filters
+// GET /api/knowledge-base — List articles with filters (auto-seeds defaults on first fetch)
 export async function GET(request: NextRequest) {
   try {
     const user = await getAuthUser(request);
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    const [articles, total] = await Promise.all([
+    let [articles, total] = await Promise.all([
       db.knowledgeArticle.findMany({
         where,
         orderBy: { [sortBy]: sortOrder === 'desc' ? 'desc' : 'asc' },
@@ -53,6 +54,41 @@ export async function GET(request: NextRequest) {
       }),
       db.knowledgeArticle.count({ where }),
     ]);
+
+    // Auto-seed default KB articles on first fetch if table is empty for this tenant
+    if (total === 0) {
+      console.log('[KnowledgeBase] No articles found, auto-seeding defaults...');
+      for (const article of DEFAULT_KB_ARTICLES) {
+        try {
+          await db.knowledgeArticle.create({
+            data: {
+              title: article.title,
+              content: article.content,
+              category: article.category,
+              tagsJson: article.tagsJson,
+              isPublic: article.isPublic,
+              isActive: true,
+              sortOrder: article.sortOrder,
+              authorId: user.id,
+              tenantId: user.tenantId,
+            },
+          });
+        } catch (err) {
+          console.error('[KnowledgeBase] Failed to seed article:', article.title, err);
+        }
+      }
+      // Re-fetch after seeding
+      [articles, total] = await Promise.all([
+        db.knowledgeArticle.findMany({
+          where,
+          orderBy: { [sortBy]: sortOrder === 'desc' ? 'desc' : 'asc' },
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        db.knowledgeArticle.count({ where }),
+      ]);
+      console.log(`[KnowledgeBase] ✅ Seeded ${total} default articles`);
+    }
 
     return NextResponse.json({
       articles,

@@ -2,12 +2,12 @@
  * ServiceOS Subdomain Detection Library
  *
  * Handles subdomain extraction, validation, and URL construction
- * for the multi-tenant SaaS architecture deployed on Netlify.
+ * for the multi-tenant SaaS architecture.
  *
  * Subdomain convention:
- *   - Root domain: serviceosapp.netlify.app → landing page / generic login
- *   - Super admin: admin.serviceosapp.netlify.app → admin dashboard
- *   - Tenant: {slug}.serviceosapp.netlify.app → company workspace
+ *   - Root domain: serviceos.cc → landing page / generic login
+ *   - Super admin: admin.serviceos.cc → admin dashboard
+ *   - Tenant: {slug}.serviceos.cc → company workspace
  */
 
 // ─── Subdomain Extraction ──────────────────────────────────────────────────────
@@ -16,9 +16,9 @@
  * Extract subdomain from a hostname.
  *
  * Examples:
- *   "abc-plumbing.serviceosapp.netlify.app" → "abc-plumbing"
- *   "admin.serviceosapp.netlify.app"         → "admin"
- *   "serviceosapp.netlify.app"               → null (root domain)
+ *   "abc-plumbing.serviceos.cc" → "abc-plumbing"
+ *   "admin.serviceos.cc"         → "admin"
+ *   "serviceos.cc"               → null (root domain)
  *   "localhost:3000"                          → null (dev)
  *   "192.168.1.1:3000"                        → null (IP)
  *
@@ -38,7 +38,7 @@ export function extractSubdomain(hostname: string): string | null {
 
   // Determine the "root" hostname from NEXT_PUBLIC_APP_URL so we can
   // figure out what constitutes a subdomain relative to our deployment.
-  // For "https://serviceosapp.netlify.app" the root host is "serviceosapp.netlify.app"
+  // For "https://serviceos.cc" the root host is "serviceos.cc"
   // and any extra prefix label is a tenant/admin subdomain.
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
   let rootHost = '';
@@ -54,7 +54,7 @@ export function extractSubdomain(hostname: string): string | null {
   }
 
   // If the hostname ends with ".{rootHost}", the subdomain is the prefix.
-  // e.g., "abc.serviceosapp.netlify.app" endsWith ".serviceosapp.netlify.app"
+  // e.g., "abc.serviceos.cc" endsWith ".serviceos.cc"
   if (rootHost && host.endsWith(`.${rootHost}`)) {
     const subdomain = host.slice(0, host.length - rootHost.length - 1);
     // "www" is treated as no subdomain (canonical root)
@@ -64,7 +64,7 @@ export function extractSubdomain(hostname: string): string | null {
 
   // Fallback for custom domains or when NEXT_PUBLIC_APP_URL is not set:
   // For *.netlify.app: subdomain is the first part when we have 4+ parts
-  // e.g., abc.serviceosapp.netlify.app → parts = ['abc', 'serviceosapp', 'netlify', 'app']
+  // e.g., abc.serviceos.cc → parts = ['abc', 'serviceos', 'cc']
   if (parts.length >= 4) {
     const subdomain = parts[0];
     if (subdomain === 'www') return null;
@@ -100,10 +100,10 @@ export function isSuperAdminSubdomain(subdomain: string | null): boolean {
  * Build the full subdomain URL for a tenant.
  *
  * @param tenantSlug - The tenant's slug (used as subdomain)
- * @returns Full URL like "https://abc-plumbing.serviceosapp.netlify.app"
+ * @returns Full URL like "https://abc-plumbing.serviceos.cc"
  */
 export function buildTenantUrl(tenantSlug: string): string {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://serviceosapp.netlify.app';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://serviceos.cc';
   const url = new URL(appUrl);
   return `${url.protocol}//${tenantSlug}.${url.host}`;
 }
@@ -111,10 +111,10 @@ export function buildTenantUrl(tenantSlug: string): string {
 /**
  * Build the super admin URL.
  *
- * @returns Full URL like "https://admin.serviceosapp.netlify.app"
+ * @returns Full URL like "https://admin.serviceos.cc"
  */
 export function buildSuperAdminUrl(): string {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://serviceosapp.netlify.app';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://serviceos.cc';
   const url = new URL(appUrl);
   return `${url.protocol}//admin.${url.host}`;
 }
@@ -122,10 +122,10 @@ export function buildSuperAdminUrl(): string {
 /**
  * Get the root domain URL (no subdomain).
  *
- * @returns Full URL like "https://serviceosapp.netlify.app"
+ * @returns Full URL like "https://serviceos.cc"
  */
 export function getRootDomainUrl(): string {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://serviceosapp.netlify.app';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://serviceos.cc';
   return appUrl.replace(/\/+$/, '');
 }
 
@@ -134,7 +134,7 @@ export function getRootDomainUrl(): string {
 /**
  * Get cookie domain that works across subdomains.
  *
- * For "serviceosapp.netlify.app" → ".serviceosapp.netlify.app"
+ * For "serviceos.cc" → ".serviceos.cc"
  * For localhost → undefined (browser default)
  *
  * The leading dot allows cookies to be shared across all subdomains,
@@ -156,7 +156,7 @@ export function getCookieDomain(): string | undefined {
       return undefined;
     }
 
-    // Add leading dot for subdomain sharing: ".serviceosapp.netlify.app"
+    // Add leading dot for subdomain sharing: ".serviceos.cc"
     return `.${host}`;
   } catch {
     return undefined;

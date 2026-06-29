@@ -797,7 +797,7 @@ export function FormBuilderView() {
   const siteOrigin = typeof window !== 'undefined' ? window.location.origin : '';
 
   // The hosted form route is /f/[slug] (see src/app/f/[slug]/page.tsx).
-  // Previously this pointed to a non-existent https://app.serviceos.io/form/{slug} — wrong domain + wrong path.
+  // Previously this pointed to a non-existent https://app.serviceos.cc/form/{slug} — wrong domain + wrong path.
   const getFormLink = (form: FormItem) => {
     const slug = form.slug || form.id;
     return `${siteOrigin}/f/${slug}`;

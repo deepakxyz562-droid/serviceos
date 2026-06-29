@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     // Simulate WhatsApp Business API call
     // In production, this would call the WhatsApp Business API
     const messageId = `wa_msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
-    const formLink = `${process.env.NEXT_PUBLIC_APP_URL || 'https://app.serviceos.io'}/form/${formId}`
+    const formLink = `${process.env.NEXT_PUBLIC_APP_URL || 'https://serviceos.cc'}/form/${formId}`
 
     // Create a notification log for the sent form
     const notificationLog = await db.notificationLog.create({

@@ -781,7 +781,7 @@ function InboxView() {
 function ProfileView() {
   const { auth } = useAppStore();
   const employeeName = auth.user?.name || 'Alex Rivera';
-  const employeeEmail = auth.user?.email || 'alex.rivera@serviceos.com';
+  const employeeEmail = auth.user?.email || 'alex.rivera@serviceos.cc';
 
   return (
     <div className="space-y-6">

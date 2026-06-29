@@ -32,7 +32,7 @@ const TRIAL_TEMPLATES: TrialTemplateDef[] = [
     name: 'Trial Started',
     subject: 'Welcome to {{appName}} — your 14-day trial has begun 🎉',
     variablesJson:
-      '[{"key":"tenantName","label":"Tenant Name","required":true,"example":"AquaFlow"},{"key":"trialEndsAt","label":"Trial End Date","required":true,"example":"July 4, 2026"},{"key":"appName","label":"App Name","required":true,"example":"ServiceOS"},{"key":"loginUrl","label":"Login URL","required":true,"example":"https://app.serviceos.com"}]',
+      '[{"key":"tenantName","label":"Tenant Name","required":true,"example":"AquaFlow"},{"key":"trialEndsAt","label":"Trial End Date","required":true,"example":"July 4, 2026"},{"key":"appName","label":"App Name","required":true,"example":"ServiceOS"},{"key":"loginUrl","label":"Login URL","required":true,"example":"https://serviceos.cc"}]',
     htmlBody: `<!DOCTYPE html>
 <html>
   <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1f2937;">
@@ -62,7 +62,7 @@ Questions? Just reply to this email.`,
     name: 'Trial Ending Soon (3 days)',
     subject: 'Your {{appName}} trial ends in 3 days — add a payment method',
     variablesJson:
-      '[{"key":"tenantName","label":"Tenant Name","required":true,"example":"AquaFlow"},{"key":"trialEndsAt","label":"Trial End Date","required":true,"example":"July 4, 2026"},{"key":"appName","label":"App Name","required":true,"example":"ServiceOS"},{"key":"billingUrl","label":"Billing URL","required":true,"example":"https://app.serviceos.com/billing"}]',
+      '[{"key":"tenantName","label":"Tenant Name","required":true,"example":"AquaFlow"},{"key":"trialEndsAt","label":"Trial End Date","required":true,"example":"July 4, 2026"},{"key":"appName","label":"App Name","required":true,"example":"ServiceOS"},{"key":"billingUrl","label":"Billing URL","required":true,"example":"https://serviceos.cc/billing"}]',
     htmlBody: `<!DOCTYPE html>
 <html>
   <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1f2937;">
@@ -92,7 +92,7 @@ No card needed during the trial — only if you decide to continue.`,
     name: 'Pre-charge Reminder (1 day)',
     subject: 'URGENT: Your {{appName}} trial ends tomorrow',
     variablesJson:
-      '[{"key":"tenantName","label":"Tenant Name","required":true,"example":"AquaFlow"},{"key":"trialEndsAt","label":"Trial End Date","required":true,"example":"July 4, 2026"},{"key":"appName","label":"App Name","required":true,"example":"ServiceOS"},{"key":"billingUrl","label":"Billing URL","required":true,"example":"https://app.serviceos.com/billing"},{"key":"planName","label":"Plan Name","required":true,"example":"Growth"},{"key":"planPrice","label":"Plan Price","required":true,"example":"$79/month"}]',
+      '[{"key":"tenantName","label":"Tenant Name","required":true,"example":"AquaFlow"},{"key":"trialEndsAt","label":"Trial End Date","required":true,"example":"July 4, 2026"},{"key":"appName","label":"App Name","required":true,"example":"ServiceOS"},{"key":"billingUrl","label":"Billing URL","required":true,"example":"https://serviceos.cc/billing"},{"key":"planName","label":"Plan Name","required":true,"example":"Growth"},{"key":"planPrice","label":"Plan Price","required":true,"example":"$79/month"}]',
     htmlBody: `<!DOCTYPE html>
 <html>
   <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1f2937;">
@@ -127,7 +127,7 @@ If you don't add a payment method, your account will be paused but your data wil
     name: 'Trial Expired',
     subject: 'Your {{appName}} trial has expired — add a payment method to continue',
     variablesJson:
-      '[{"key":"tenantName","label":"Tenant Name","required":true,"example":"AquaFlow"},{"key":"appName","label":"App Name","required":true,"example":"ServiceOS"},{"key":"billingUrl","label":"Billing URL","required":true,"example":"https://app.serviceos.com/billing"},{"key":"dataPreservedUntil","label":"Data Preserved Until","required":true,"example":"August 4, 2026"}]',
+      '[{"key":"tenantName","label":"Tenant Name","required":true,"example":"AquaFlow"},{"key":"appName","label":"App Name","required":true,"example":"ServiceOS"},{"key":"billingUrl","label":"Billing URL","required":true,"example":"https://serviceos.cc/billing"},{"key":"dataPreservedUntil","label":"Data Preserved Until","required":true,"example":"August 4, 2026"}]',
     htmlBody: `<!DOCTYPE html>
 <html>
   <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1f2937;">

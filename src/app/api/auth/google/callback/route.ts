@@ -143,7 +143,7 @@ export async function GET(request: NextRequest) {
     // Determine the redirect URI that was used when initiating the OAuth flow
     // This must match exactly what was sent to Google in the authorization URL
     const redirectUri = state.redirectUri || 
-      `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/auth/google/callback`;
+      `${process.env.NEXT_PUBLIC_APP_URL || 'https://serviceos.cc'}/api/auth/google/callback`;
     console.log('[Google OAuth Callback] Using redirect URI:', redirectUri);
 
     // Exchange code for tokens

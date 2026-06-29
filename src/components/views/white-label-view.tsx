@@ -55,9 +55,9 @@ const initialEmailTemplates: EmailTemplate[] = [
 ];
 
 const dnsRecords: DNSRecord[] = [
-  { type: 'CNAME', host: 'app', value: 'cname.serviceos.io', verified: true },
+  { type: 'CNAME', host: 'app', value: 'cname.serviceos.cc', verified: true },
   { type: 'TXT', host: '@', value: 'serviceos-verification=abc123def456', verified: true },
-  { type: 'CNAME', host: 'portal', value: 'cname.serviceos.io', verified: false },
+  { type: 'CNAME', host: 'portal', value: 'cname.serviceos.cc', verified: false },
 ];
 
 // ─── Main Component ─────────────────────────────────────────────────

@@ -69,7 +69,7 @@ export async function POST() {
         provider: 'woocommerce',
         name: 'ServiceOS WooCommerce Store',
         status: 'connected',
-        storeUrl: 'https://store.serviceos.com',
+        storeUrl: 'https://store.serviceos.cc',
         accessToken: 'ck_demo_consumer_key_x1y2z3',
         apiSecret: 'cs_demo_consumer_secret_a9b8c7',
         scopesJson: JSON.stringify(['read', 'write']),

@@ -61,7 +61,7 @@ export async function POST(
     }
 
     // Generate webhook URL for this integration
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://serviceos.cc'
     const webhookPath = `/api/webhooks/ecommerce/${integration.provider}/${id}`
     const webhookUrl = `${appUrl}${webhookPath}`
 

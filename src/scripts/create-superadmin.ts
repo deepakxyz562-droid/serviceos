@@ -7,7 +7,7 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  const email = 'admin@serviceos.io';
+  const email = 'admin@serviceos.cc';
   const password = 'Admin@2024';
   const name = 'Super Admin';
 

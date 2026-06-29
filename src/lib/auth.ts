@@ -113,7 +113,7 @@ export function getAppUrl(request?: { headers: { get(name: string): string | nul
     }
   }
 
-  return 'http://localhost:3000';
+  return 'https://serviceos.cc';
 }
 
 // In HTTPS-through-proxy setups, Node sees HTTP internally,

@@ -22,7 +22,7 @@ import { renderTrialTemplate } from '@/lib/billing-seed';
 import { logBillingEvent } from '@/lib/billing-events';
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || process.env.APP_NAME || 'ServiceOS';
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'http://localhost:3000';
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || 'https://serviceos.cc';
 
 export interface TrialReminderResult {
   tenantId: string;
