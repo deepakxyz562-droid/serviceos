@@ -5,14 +5,26 @@ import { resolveBroadcastAudience } from '@/lib/broadcast-audience'
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
     const type = searchParams.get('type')
-    const tenantId = searchParams.get('tenantId')
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
 
     const where: Record<string, unknown> = {}
+    // Always scope to the authenticated user's tenant (unless super admin)
+    if (user.tenantId && !user.isSuperAdmin) {
+      where.tenantId = user.tenantId
+    } else if (user.tenantId) {
+      // Super admin: optionally filter by tenantId query param
+      const queryTenantId = searchParams.get('tenantId')
+      if (queryTenantId) where.tenantId = queryTenantId
+    }
     if (status) where.status = status
     if (type) {
       const types = type.split(',')
@@ -22,7 +34,6 @@ export async function GET(request: NextRequest) {
         where.type = { in: types }
       }
     }
-    if (tenantId) where.tenantId = tenantId
 
     const skip = (page - 1) * limit
 

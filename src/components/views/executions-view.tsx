@@ -150,7 +150,7 @@ function formatDateShort(dateStr: string) {
 
 export function ExecutionsView() {
   const { setCurrentView, setCurrentWorkflowId } = useAppStore();
-  const [executions] = useState<ExecutionItem[]>(MOCK_EXECUTIONS);
+  const [executions] = useState<ExecutionItem[]>([]);
   const [loading] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -176,7 +176,7 @@ export function ExecutionsView() {
   // Load execution details when selected
   const openDetail = (exec: ExecutionItem) => {
     setSelectedExecution(exec);
-    setNodeData(MOCK_NODE_DATA[exec.id] || []);
+    setNodeData([]);
   };
 
   const openWorkflow = (workflowId: string) => {

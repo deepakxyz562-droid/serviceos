@@ -356,64 +356,18 @@ function formatBillingEventLabel(type: string): string {
 // ─── Fallback Data ───────────────────────────────────────────────────────────
 
 const FALLBACK_DATA: SubscriptionData = {
-  plan: 'growth',
-  status: 'trialing',
+  plan: 'starter',
+  status: 'trial',
   billingCycle: 'monthly',
   trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-  renewalDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+  renewalDate: null,
   usage: {
-    jobs: { used: 347, limit: 1000 },
-    workflows: { used: 23, limit: 50 },
-    users: { used: 3, limit: 5 },
+    jobs: { used: 0, limit: 100 },
+    workflows: { used: 0, limit: 10 },
+    users: { used: 1, limit: 1 },
   },
-  paymentMethod: {
-    brand: 'Visa',
-    last4: '4242',
-    expiryMonth: 12,
-    expiryYear: 2027,
-  },
-  billingHistory: [
-    {
-      id: 'INV-001',
-      date: '2025-02-01',
-      description: 'Growth Plan - Monthly',
-      amount: 79,
-      status: 'Paid',
-      invoiceUrl: '#',
-    },
-    {
-      id: 'INV-002',
-      date: '2025-01-01',
-      description: 'Growth Plan - Monthly',
-      amount: 79,
-      status: 'Paid',
-      invoiceUrl: '#',
-    },
-    {
-      id: 'INV-003',
-      date: '2024-12-01',
-      description: 'Growth Plan - Monthly',
-      amount: 79,
-      status: 'Paid',
-      invoiceUrl: '#',
-    },
-    {
-      id: 'INV-004',
-      date: '2024-11-01',
-      description: 'Growth Plan - Monthly',
-      amount: 79,
-      status: 'Paid',
-      invoiceUrl: '#',
-    },
-    {
-      id: 'INV-005',
-      date: '2024-10-01',
-      description: 'Growth Plan - Monthly',
-      amount: 79,
-      status: 'Pending',
-      invoiceUrl: '#',
-    },
-  ],
+  paymentMethod: null,
+  billingHistory: [],
 };
 
 // ─── PayPal Checkout Dialog ──────────────────────────────────────────────────
@@ -711,10 +665,12 @@ export function BillingView() {
       ...FALLBACK_DATA,
       ...json,
       usage: (json.usage as SubscriptionData['usage']) || FALLBACK_DATA.usage,
-      paymentMethod: (json.paymentMethod as SubscriptionData['paymentMethod']) || FALLBACK_DATA.paymentMethod,
-      billingHistory: (json.billingHistory as BillingRecord[]) || FALLBACK_DATA.billingHistory,
-      renewalDate: (json.renewalDate as string) || FALLBACK_DATA.renewalDate,
-      paypalPayerEmail: (json.paypalPayerEmail as string | null) || null,
+      // Only use paymentMethod from the API — never fall back to fake data.
+      // A trial/new user with no card on file should see null, not a phantom Visa.
+      paymentMethod: (json.paymentMethod as SubscriptionData['paymentMethod']) ?? null,
+      billingHistory: (json.billingHistory as BillingRecord[]) ?? [],
+      renewalDate: (json.renewalDate as string) ?? null,
+      paypalPayerEmail: (json.paypalPayerEmail as string | null) ?? null,
       paymentProvider: (json.paymentProvider as string) || 'none',
       isTrialExpired: (json.isTrialExpired as boolean) || false,
       daysRemainingInTrial: (json.daysRemainingInTrial as number | null) ?? null,
@@ -1051,13 +1007,26 @@ export function BillingView() {
             </div>
           )}
 
-          {/* Trial-days-remaining banner (Phase 1) */}
+          {/* Trial-days-remaining banner with upgrade CTA */}
           {!isTrialExpired && (data.status === 'trial' || data.status === 'trialing') && trialDays > 0 && (
-            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/30">
-              <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              <span className="text-sm font-medium text-amber-800 dark:text-amber-300">
-                {trialDays} {trialDays === 1 ? 'day' : 'days'} remaining in your trial
-              </span>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/30">
+              <div className="flex items-center gap-2 flex-1">
+                <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                <span className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                  {trialDays} {trialDays === 1 ? 'day' : 'days'} remaining in your free trial
+                </span>
+              </div>
+              <Button
+                size="sm"
+                className="bg-emerald-600 text-white hover:bg-emerald-700 h-8 text-xs"
+                onClick={() => {
+                  const growthPlan = effectivePlans.find(p => p.id === 'growth');
+                  if (growthPlan) handleUpgrade(growthPlan);
+                }}
+              >
+                <Zap className="mr-1.5 h-3.5 w-3.5" />
+                Upgrade Now
+              </Button>
             </div>
           )}
 
@@ -1288,41 +1257,61 @@ export function BillingView() {
             <Shield className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
             Payment Method
           </CardTitle>
-          <CardDescription>Your default payment method on file</CardDescription>
+          <CardDescription>
+            {data.paymentProvider === 'paypal' || data.paymentMethod
+              ? 'Your default payment method on file'
+              : 'No payment method on file'}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-900/20">
-                {data.paymentProvider === 'paypal' ? (
+            {data.paymentProvider === 'paypal' ? (
+              /* PayPal connected */
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-900/20">
                   <Wallet className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                ) : (
+                </div>
+                <div>
+                  <p className="font-medium flex items-center gap-2">
+                    PayPal
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-blue-300 text-blue-600">Active</Badge>
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {data.paypalPayerEmail || 'Connected'}
+                  </p>
+                </div>
+              </div>
+            ) : data.paymentMethod ? (
+              /* Credit/debit card on file */
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-900/20">
                   <CreditCard className="h-6 w-6 text-muted-foreground" />
-                )}
+                </div>
+                <div>
+                  <p className="font-medium">
+                    {data.paymentMethod.brand} ending in {data.paymentMethod.last4}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Expires {String(data.paymentMethod.expiryMonth).padStart(2, '0')}/{data.paymentMethod.expiryYear}
+                  </p>
+                </div>
               </div>
-              <div>
-                {data.paymentProvider === 'paypal' ? (
-                  <>
-                    <p className="font-medium flex items-center gap-2">
-                      PayPal
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-blue-300 text-blue-600">Active</Badge>
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {data.paypalPayerEmail || 'Connected'}
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="font-medium">
-                      {data.paymentMethod?.brand || 'Visa'} ending in {data.paymentMethod?.last4 || '4242'}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Expires {String(data.paymentMethod?.expiryMonth ?? 12).padStart(2, '0')}/{data.paymentMethod?.expiryYear ?? 2027}
-                    </p>
-                  </>
-                )}
+            ) : (
+              /* No payment method — trial or new user */
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted/50 dark:bg-muted/20">
+                  <CreditCard className="h-6 w-6 text-muted-foreground/40" />
+                </div>
+                <div>
+                  <p className="font-medium text-muted-foreground">No payment method added</p>
+                  <p className="text-sm text-muted-foreground/70">
+                    {(data.status === 'trial' || data.status === 'trialing')
+                      ? 'Add a payment method to upgrade your plan'
+                      : 'Add a payment method to subscribe'}
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
             <div className="flex gap-2">
               {/* Cancel Subscription / Cancel Trial button
                   Visible for: active, trial, trialing statuses (NOT for cancelled/expired)
@@ -1343,19 +1332,21 @@ export function BillingView() {
                     : 'Cancel Subscription'}
                 </Button>
               )}
-              {data.paymentProvider !== 'paypal' &&
-                data.status !== 'active' &&
-                data.status !== 'trial' &&
-                data.status !== 'trialing' &&
-                data.status !== 'past_due' && (
-                  <Button
-                    variant="outline"
-                    className="hover:border-emerald-400 hover:text-emerald-700 dark:hover:border-emerald-600 dark:hover:text-emerald-400"
-                    onClick={() => toast.info('Payment method update is not available in demo mode.')}
-                  >
-                    Update Payment Method
-                  </Button>
-                )}
+              {/* Upgrade CTA for trial users with no payment method */}
+              {!data.paymentMethod && data.paymentProvider !== 'paypal' &&
+                (data.status === 'trial' || data.status === 'trialing') && (
+                <Button
+                  size="sm"
+                  className="bg-emerald-600 text-white hover:bg-emerald-700"
+                  onClick={() => {
+                    const growthPlan = effectivePlans.find(p => p.id === 'growth');
+                    if (growthPlan) handleUpgrade(growthPlan);
+                  }}
+                >
+                  <Zap className="mr-1.5 h-3.5 w-3.5" />
+                  Upgrade Plan
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>

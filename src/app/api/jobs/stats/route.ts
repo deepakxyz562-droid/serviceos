@@ -1,5 +1,46 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser } from '@/lib/auth';
+
+function emptyJobStats() {
+  return {
+    overview: {
+      total: 0,
+      today: 0,
+      thisWeek: 0,
+      thisMonth: 0,
+      completedLast30Days: 0,
+    },
+    byStatus: {
+      pending: 0,
+      assigned: 0,
+      in_progress: 0,
+      completed: 0,
+      cancelled: 0,
+    },
+    byPriority: {
+      low: 0,
+      medium: 0,
+      high: 0,
+      urgent: 0,
+    },
+    byType: {},
+    revenue: {
+      total: 0,
+      today: 0,
+      thisMonth: 0,
+      inProgress: 0,
+      projected: 0,
+      currency: 'USD',
+    },
+    performance: {
+      avgCompletionHours: 0,
+      assignmentRate: 0,
+      avgEmployeeRating: 0,
+      totalEmployees: 0,
+    },
+  };
+}
 
 /**
  * GET /api/jobs/stats
@@ -13,6 +54,35 @@ import { db } from '@/lib/db';
  */
 export async function GET() {
   try {
+    const authUser = await getAuthUser();
+
+    // If not authenticated, return empty stats
+    if (!authUser) {
+      return NextResponse.json(emptyJobStats());
+    }
+
+    // Super admins can see all data
+    const isSuperAdmin = authUser.isSuperAdmin || (authUser.role === 'admin' && !authUser.tenantId);
+
+    // For non-super-admins, resolve workspace IDs from their tenant
+    let workspaceIds: string[] = [];
+    if (!isSuperAdmin) {
+      if (!authUser.tenantId) {
+        return NextResponse.json(emptyJobStats());
+      }
+      const tenantWorkspaces = await db.workspace.findMany({
+        where: { tenantId: authUser.tenantId },
+        select: { id: true },
+      });
+      workspaceIds = tenantWorkspaces.map((w: { id: string }) => w.id);
+      if (workspaceIds.length === 0) {
+        return NextResponse.json(emptyJobStats());
+      }
+    }
+
+    // Build workspace filter for Job and Employee queries
+    const workspaceFilter = isSuperAdmin ? {} : { workspaceId: { in: workspaceIds } };
+
     // Calculate date boundaries
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -36,29 +106,33 @@ export async function GET() {
       recentCompleted,
     ] = await Promise.all([
       // Total jobs count
-      db.job.count(),
+      db.job.count({ where: workspaceFilter }),
 
       // Jobs by status
       db.job.groupBy({
         by: ['status'],
+        where: workspaceFilter,
         _count: { id: true },
       }),
 
       // Jobs by priority
       db.job.groupBy({
         by: ['priority'],
+        where: workspaceFilter,
         _count: { id: true },
       }),
 
       // Jobs by type
       db.job.groupBy({
         by: ['type'],
+        where: workspaceFilter,
         _count: { id: true },
       }),
 
       // Today's jobs
       db.job.count({
         where: {
+          ...workspaceFilter,
           createdAt: {
             gte: todayStart,
             lt: todayEnd,
@@ -69,6 +143,7 @@ export async function GET() {
       // This week's jobs
       db.job.count({
         where: {
+          ...workspaceFilter,
           createdAt: {
             gte: weekStart,
           },
@@ -78,6 +153,7 @@ export async function GET() {
       // This month's jobs
       db.job.count({
         where: {
+          ...workspaceFilter,
           createdAt: {
             gte: monthStart,
           },
@@ -86,7 +162,7 @@ export async function GET() {
 
       // Completed jobs (for revenue simulation)
       db.job.findMany({
-        where: { status: 'completed' },
+        where: { ...workspaceFilter, status: 'completed' },
         select: {
           id: true,
           type: true,
@@ -98,6 +174,7 @@ export async function GET() {
 
       // Average employee rating for assigned jobs
       db.employee.aggregate({
+        where: workspaceFilter,
         _avg: { rating: true },
         _count: { id: true },
       }),
@@ -105,6 +182,7 @@ export async function GET() {
       // Recent completed jobs (last 30 days)
       db.job.count({
         where: {
+          ...workspaceFilter,
           status: 'completed',
           actualEndTime: {
             gte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000),
@@ -184,7 +262,7 @@ export async function GET() {
 
     // In-progress revenue (partial, estimated at 50% completion)
     const inProgressJobs = await db.job.findMany({
-      where: { status: 'in_progress' },
+      where: { ...workspaceFilter, status: 'in_progress' },
       select: { type: true, priority: true },
     });
 
@@ -198,6 +276,7 @@ export async function GET() {
     // Average completion time (for completed jobs with both dates)
     const completedWithDuration = await db.job.findMany({
       where: {
+        ...workspaceFilter,
         status: 'completed',
         actualEndTime: { not: null },
       },

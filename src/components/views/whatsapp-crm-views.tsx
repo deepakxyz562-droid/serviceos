@@ -44,6 +44,17 @@ const mockTimeline = [
 
 export function Customer360View() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState<typeof mockCustomer | null>(null);
+  const [timeline, setTimeline] = useState<typeof mockTimeline>([]);
+
+  const handleSearch = () => {
+    // In a real app, this would fetch from API. For now, show empty state.
+    if (!searchQuery.trim()) {
+      setSelectedCustomer(null);
+      setTimeline([]);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       <div className="flex items-center gap-3">
@@ -57,47 +68,66 @@ export function Customer360View() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
         <Input placeholder="Search customers..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-9" />
       </div>
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex flex-col md:flex-row md:items-start gap-6">
-            <div className="flex items-start gap-4">
-              <Avatar className="size-16"><AvatarFallback className="bg-emerald-100 text-emerald-700 text-xl font-bold">SM</AvatarFallback></Avatar>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-lg font-bold">{mockCustomer.name}</h2>
-                  {mockCustomer.tags.map(tag => <Badge key={tag} variant="outline" className="text-[10px]">{tag}</Badge>)}
+      {!selectedCustomer ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <UserCircle className="h-12 w-12 text-muted-foreground/40 mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-1">No customer selected</h3>
+          <p className="text-sm text-muted-foreground max-w-md">
+            Search for a customer by name or phone number to view their complete profile and interaction history.
+          </p>
+        </div>
+      ) : (
+        <>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex flex-col md:flex-row md:items-start gap-6">
+                <div className="flex items-start gap-4">
+                  <Avatar className="size-16"><AvatarFallback className="bg-emerald-100 text-emerald-700 text-xl font-bold">{selectedCustomer.name.split(' ').map(n => n[0]).join('')}</AvatarFallback></Avatar>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-lg font-bold">{selectedCustomer.name}</h2>
+                      {selectedCustomer.tags.map(tag => <Badge key={tag} variant="outline" className="text-[10px]">{tag}</Badge>)}
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">{selectedCustomer.email} &middot; {selectedCustomer.phone}</p>
+                    <div className="mt-2 w-48">
+                      <div className="flex justify-between text-xs mb-1"><span className="text-muted-foreground">Value Score</span><span className="font-semibold text-emerald-600">{selectedCustomer.valueScore}/100</span></div>
+                      <Progress value={selectedCustomer.valueScore} className="h-2" />
+                    </div>
+                  </div>
                 </div>
-                <p className="text-sm text-muted-foreground mt-1">{mockCustomer.email} &middot; {mockCustomer.phone}</p>
-                <div className="mt-2 w-48">
-                  <div className="flex justify-between text-xs mb-1"><span className="text-muted-foreground">Value Score</span><span className="font-semibold text-emerald-600">{mockCustomer.valueScore}/100</span></div>
-                  <Progress value={mockCustomer.valueScore} className="h-2" />
-                </div>
-              </div>
-            </div>
-            <div className="md:ml-auto grid grid-cols-3 gap-4 text-center">
-              <div><p className="text-xs text-muted-foreground">Total Spent</p><p className="text-lg font-bold">${mockCustomer.totalSpent.toLocaleString()}</p></div>
-              <div><p className="text-xs text-muted-foreground">Lifetime Jobs</p><p className="text-lg font-bold">{mockCustomer.lifetimeJobs}</p></div>
-              <div><p className="text-xs text-muted-foreground">Value Score</p><p className="text-lg font-bold text-emerald-600">{mockCustomer.valueScore}</p></div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-sm">Activity Timeline</CardTitle></CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {mockTimeline.map((event, i) => { const Icon = event.icon; return (
-              <div key={i} className="flex items-start gap-3">
-                <div className={cn('p-2 rounded-full shrink-0', event.bg)}><Icon className={cn('size-4', event.color)} /></div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2"><p className="text-sm font-medium">{event.title}</p><span className="text-[10px] text-muted-foreground shrink-0">{event.time}</span></div>
-                  <p className="text-xs text-muted-foreground mt-0.5">{event.desc}</p>
+                <div className="md:ml-auto grid grid-cols-3 gap-4 text-center">
+                  <div><p className="text-xs text-muted-foreground">Total Spent</p><p className="text-lg font-bold">${selectedCustomer.totalSpent.toLocaleString()}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Lifetime Jobs</p><p className="text-lg font-bold">{selectedCustomer.lifetimeJobs}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Value Score</p><p className="text-lg font-bold text-emerald-600">{selectedCustomer.valueScore}</p></div>
                 </div>
               </div>
-            ); })}
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-3"><CardTitle className="text-sm">Activity Timeline</CardTitle></CardHeader>
+            <CardContent>
+              {timeline.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <Clock className="h-8 w-8 text-muted-foreground/40 mb-2" />
+                  <p className="text-sm text-muted-foreground">No activity recorded yet</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {timeline.map((event, i) => { const Icon = event.icon; return (
+                    <div key={i} className="flex items-start gap-3">
+                      <div className={cn('p-2 rounded-full shrink-0', event.bg)}><Icon className={cn('size-4', event.color)} /></div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2"><p className="text-sm font-medium">{event.title}</p><span className="text-[10px] text-muted-foreground shrink-0">{event.time}</span></div>
+                        <p className="text-xs text-muted-foreground mt-0.5">{event.desc}</p>
+                      </div>
+                    </div>
+                  ); })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
     </div>
   );
 }
@@ -119,10 +149,11 @@ const campStatusColors: Record<string, string> = {
 };
 
 export function CampaignsView() {
+  const [campaigns, setCampaigns] = useState<typeof mockCampaigns>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const filtered = mockCampaigns.filter(c => searchQuery === '' || c.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  const totalSent = mockCampaigns.reduce((s, c) => s + c.sent, 0);
-  const deliveryRate = totalSent > 0 ? ((mockCampaigns.reduce((s, c) => s + c.delivered, 0) / totalSent) * 100).toFixed(1) : '0';
+  const filtered = campaigns.filter(c => searchQuery === '' || c.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const totalSent = campaigns.reduce((s, c) => s + c.sent, 0);
+  const deliveryRate = totalSent > 0 ? ((campaigns.reduce((s, c) => s + c.delivered, 0) / totalSent) * 100).toFixed(1) : '0';
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -134,11 +165,21 @@ export function CampaignsView() {
         <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2"><Plus className="size-4" />Create Campaign</Button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Active Campaigns" value={mockCampaigns.filter(c => c.status === 'Active').length.toString()} icon={Megaphone} color="text-emerald-600" bg="bg-emerald-50" />
+        <StatCard title="Active Campaigns" value={campaigns.filter(c => c.status === 'Active').length.toString()} icon={Megaphone} color="text-emerald-600" bg="bg-emerald-50" />
         <StatCard title="Messages Sent" value={totalSent.toLocaleString()} icon={Send} color="text-teal-600" bg="bg-teal-50" />
         <StatCard title="Delivery Rate" value={`${deliveryRate}%`} icon={Target} color="text-green-600" bg="bg-green-50" />
-        <StatCard title="Conversion Rate" value="12.4%" icon={TrendingUp} color="text-emerald-700" bg="bg-emerald-50" />
+        <StatCard title="Conversion Rate" value="0%" icon={TrendingUp} color="text-emerald-700" bg="bg-emerald-50" />
       </div>
+      {campaigns.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Megaphone className="h-12 w-12 text-muted-foreground/40 mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-1">No campaigns yet</h3>
+          <p className="text-sm text-muted-foreground max-w-md">
+            Create your first WhatsApp campaign to start reaching your customers with targeted messages and promotions.
+          </p>
+          <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700"><Plus className="size-4 mr-1.5" />Create Campaign</Button>
+        </div>
+      ) : (
       <Card>
         <CardHeader className="pb-4">
           <div className="relative w-full sm:w-72">
@@ -163,6 +204,7 @@ export function CampaignsView() {
           </div>
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }
@@ -176,9 +218,10 @@ const mockSegments = [
 ];
 
 export function SegmentsView() {
+  const [segments, setSegments] = useState<typeof mockSegments>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const filtered = mockSegments.filter(s => searchQuery === '' || s.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  const totalMembers = mockSegments.reduce((s, seg) => s + seg.members, 0);
+  const filtered = segments.filter(s => searchQuery === '' || s.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const totalMembers = segments.reduce((s, seg) => s + seg.members, 0);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -190,10 +233,21 @@ export function SegmentsView() {
         <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2"><Plus className="size-4" />Create Segment</Button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <StatCard title="Total Segments" value={mockSegments.length.toString()} icon={Layers} color="text-emerald-600" bg="bg-emerald-50" />
+        <StatCard title="Total Segments" value={segments.length.toString()} icon={Layers} color="text-emerald-600" bg="bg-emerald-50" />
         <StatCard title="Total Members" value={totalMembers.toLocaleString()} icon={Users} color="text-teal-600" bg="bg-teal-50" />
-        <StatCard title="Avg Segment Size" value={Math.round(totalMembers / mockSegments.length).toString()} icon={BarChart3} color="text-green-600" bg="bg-green-50" />
+        <StatCard title="Avg Segment Size" value={segments.length > 0 ? Math.round(totalMembers / segments.length).toString() : '0'} icon={BarChart3} color="text-green-600" bg="bg-green-50" />
       </div>
+      {segments.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Layers className="h-12 w-12 text-muted-foreground/40 mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-1">No segments yet</h3>
+          <p className="text-sm text-muted-foreground max-w-md">
+            Create customer segments to organize your audience and send targeted WhatsApp campaigns.
+          </p>
+          <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700"><Plus className="size-4 mr-1.5" />Create Segment</Button>
+        </div>
+      ) : (
+      <>
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
         <Input placeholder="Search segments..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-9" />
@@ -218,6 +272,8 @@ export function SegmentsView() {
           </Card>
         ))}
       </div>
+      </>
+      )}
     </div>
   );
 }
@@ -231,7 +287,8 @@ const mockRules = [
 ];
 
 export function RetargetingView() {
-  const avgConversion = (mockRules.reduce((s, r) => s + r.rate, 0) / mockRules.length).toFixed(1);
+  const [rules, setRules] = useState<typeof mockRules>([]);
+  const avgConversion = rules.length > 0 ? (rules.reduce((s, r) => s + r.rate, 0) / rules.length).toFixed(1) : '0';
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -242,16 +299,26 @@ export function RetargetingView() {
         <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2"><Plus className="size-4" />Create Rule</Button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Active Rules" value={mockRules.filter(r => r.status === 'active').length.toString()} subtitle={`of ${mockRules.length} total`} icon={Target} color="text-emerald-600" bg="bg-emerald-50" />
-        <StatCard title="Triggered Today" value={mockRules.reduce((s, r) => s + r.triggered, 0).toString()} icon={TrendingUp} color="text-amber-600" bg="bg-amber-50" />
-        <StatCard title="Messages Sent" value="255" subtitle="via automated rules" icon={MessageSquare} color="text-teal-600" bg="bg-teal-50" />
+        <StatCard title="Active Rules" value={rules.filter(r => r.status === 'active').length.toString()} subtitle={`of ${rules.length} total`} icon={Target} color="text-emerald-600" bg="bg-emerald-50" />
+        <StatCard title="Triggered Today" value={rules.reduce((s, r) => s + r.triggered, 0).toString()} icon={TrendingUp} color="text-amber-600" bg="bg-amber-50" />
+        <StatCard title="Messages Sent" value="0" subtitle="via automated rules" icon={MessageSquare} color="text-teal-600" bg="bg-teal-50" />
         <StatCard title="Avg Conversion" value={`${avgConversion}%`} subtitle="across all rules" icon={TrendingUp} color="text-emerald-700" bg="bg-emerald-50" />
       </div>
+      {rules.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Target className="h-12 w-12 text-muted-foreground/40 mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-1">No retargeting rules yet</h3>
+          <p className="text-sm text-muted-foreground max-w-md">
+            Create retargeting rules to automatically follow up with customers based on their behavior.
+          </p>
+          <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700"><Plus className="size-4 mr-1.5" />Create Rule</Button>
+        </div>
+      ) : (
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-sm">Rule Performance</CardTitle></CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {mockRules.map(rule => (
+            {rules.map(rule => (
               <div key={rule.id} className="flex items-center justify-between p-3 rounded-lg border">
                 <div>
                   <p className="text-sm font-medium">{rule.name}</p>
@@ -266,6 +333,7 @@ export function RetargetingView() {
           </div>
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }
@@ -281,6 +349,7 @@ const mockBroadcasts = [
 const bStatusColors: Record<string, string> = { sent: 'bg-emerald-100 text-emerald-700 border-emerald-200', scheduled: 'bg-amber-100 text-amber-700 border-amber-200', draft: 'bg-slate-100 text-slate-600 border-slate-200' };
 
 export function BroadcastView() {
+  const [broadcasts, setBroadcasts] = useState<typeof mockBroadcasts>([]);
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -291,16 +360,26 @@ export function BroadcastView() {
         <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2"><Plus className="size-4" />Create Broadcast</Button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Broadcasts Sent" value={mockBroadcasts.filter(b => b.status === 'sent').length.toString()} icon={Radio} color="text-emerald-600" bg="bg-emerald-50" />
-        <StatCard title="Recipients Reached" value={mockBroadcasts.reduce((s, b) => s + b.delivered, 0).toLocaleString()} icon={Users} color="text-teal-600" bg="bg-teal-50" />
-        <StatCard title="Response Rate" value="9.8%" icon={TrendingUp} color="text-green-600" bg="bg-green-50" />
-        <StatCard title="Opt-out Rate" value="0.23%" icon={Eye} color="text-rose-600" bg="bg-rose-50" />
+        <StatCard title="Broadcasts Sent" value={broadcasts.filter(b => b.status === 'sent').length.toString()} icon={Radio} color="text-emerald-600" bg="bg-emerald-50" />
+        <StatCard title="Recipients Reached" value={broadcasts.reduce((s, b) => s + b.delivered, 0).toLocaleString()} icon={Users} color="text-teal-600" bg="bg-teal-50" />
+        <StatCard title="Response Rate" value="0%" icon={TrendingUp} color="text-green-600" bg="bg-green-50" />
+        <StatCard title="Opt-out Rate" value="0%" icon={Eye} color="text-rose-600" bg="bg-rose-50" />
       </div>
+      {broadcasts.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Radio className="h-12 w-12 text-muted-foreground/40 mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-1">No broadcasts yet</h3>
+          <p className="text-sm text-muted-foreground max-w-md">
+            Create a WhatsApp broadcast to send bulk messages to your segmented audiences.
+          </p>
+          <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700"><Plus className="size-4 mr-1.5" />Create Broadcast</Button>
+        </div>
+      ) : (
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-sm">All Broadcasts</CardTitle></CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {mockBroadcasts.map(b => (
+            {broadcasts.map(b => (
               <div key={b.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors">
                 <div>
                   <p className="text-sm font-medium">{b.name}</p>
@@ -315,6 +394,7 @@ export function BroadcastView() {
           </div>
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }
@@ -330,6 +410,7 @@ const mockForms = [
 const formTypeColors: Record<string, string> = { Lead: 'bg-emerald-100 text-emerald-700 border-emerald-200', Booking: 'bg-teal-100 text-teal-700 border-teal-200', Feedback: 'bg-amber-100 text-amber-700 border-amber-200', Quote: 'bg-sky-100 text-sky-700 border-sky-200' };
 
 export function FormBuilderView() {
+  const [forms, setForms] = useState<typeof mockForms>([]);
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -340,13 +421,23 @@ export function FormBuilderView() {
         <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2"><Plus className="size-4" />Create Form</Button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Total Forms" value={mockForms.length.toString()} subtitle={`${mockForms.filter(f => f.status === 'active').length} active`} icon={FileText} color="text-emerald-600" bg="bg-emerald-50" />
-        <StatCard title="Total Submissions" value={mockForms.reduce((s, f) => s + f.submissions, 0).toLocaleString()} icon={CheckCircle2} color="text-teal-600" bg="bg-teal-50" />
-        <StatCard title="Avg Conversion" value={`${(mockForms.reduce((s, f) => s + f.conversion, 0) / mockForms.length).toFixed(1)}%`} icon={TrendingUp} color="text-green-600" bg="bg-green-50" />
-        <StatCard title="WhatsApp Replies" value="1,247" subtitle="automated" icon={MessageSquare} color="text-emerald-700" bg="bg-emerald-50" />
+        <StatCard title="Total Forms" value={forms.length.toString()} subtitle={`${forms.filter(f => f.status === 'active').length} active`} icon={FileText} color="text-emerald-600" bg="bg-emerald-50" />
+        <StatCard title="Total Submissions" value={forms.reduce((s, f) => s + f.submissions, 0).toLocaleString()} icon={CheckCircle2} color="text-teal-600" bg="bg-teal-50" />
+        <StatCard title="Avg Conversion" value={forms.length > 0 ? `${(forms.reduce((s, f) => s + f.conversion, 0) / forms.length).toFixed(1)}%` : '0%'} icon={TrendingUp} color="text-green-600" bg="bg-green-50" />
+        <StatCard title="WhatsApp Replies" value="0" subtitle="automated" icon={MessageSquare} color="text-emerald-700" bg="bg-emerald-50" />
       </div>
+      {forms.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <FileText className="h-12 w-12 text-muted-foreground/40 mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-1">No forms yet</h3>
+          <p className="text-sm text-muted-foreground max-w-md">
+            Create WhatsApp forms to collect leads, bookings, and feedback with automated replies.
+          </p>
+          <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700"><Plus className="size-4 mr-1.5" />Create Form</Button>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {mockForms.map(form => (
+        {forms.map(form => (
           <Card key={form.id} className="hover:shadow-md transition-shadow cursor-pointer">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-3">
@@ -370,6 +461,7 @@ export function FormBuilderView() {
           </Card>
         ))}
       </div>
+      )}
     </div>
   );
 }
@@ -385,9 +477,10 @@ const mockWebviews = [
 const wvTypeColors: Record<string, string> = { booking: 'bg-teal-100 text-teal-700 border-teal-200', payment: 'bg-emerald-100 text-emerald-700 border-emerald-200', portal: 'bg-violet-100 text-violet-700 border-violet-200', invoice: 'bg-sky-100 text-sky-700 border-sky-200' };
 
 export function WebviewEngineView() {
-  const totalViews = mockWebviews.reduce((s, w) => s + w.views, 0);
-  const totalClicks = mockWebviews.reduce((s, w) => s + w.clicks, 0);
-  const avgConv = (mockWebviews.reduce((s, w) => s + w.rate, 0) / mockWebviews.length).toFixed(1);
+  const [webviews, setWebviews] = useState<typeof mockWebviews>([]);
+  const totalViews = webviews.reduce((s, w) => s + w.views, 0);
+  const totalClicks = webviews.reduce((s, w) => s + w.clicks, 0);
+  const avgConv = webviews.length > 0 ? (webviews.reduce((s, w) => s + w.rate, 0) / webviews.length).toFixed(1) : '0';
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -398,13 +491,23 @@ export function WebviewEngineView() {
         <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2"><Plus className="size-4" />Create Webview</Button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Active Webviews" value={mockWebviews.filter(w => w.status === 'active').length.toString()} subtitle={`of ${mockWebviews.length} total`} icon={Monitor} color="text-emerald-600" bg="bg-emerald-50" />
-        <StatCard title="Total Views" value={totalViews.toLocaleString()} subtitle="+22% this week" icon={Eye} color="text-teal-600" bg="bg-teal-50" />
+        <StatCard title="Active Webviews" value={webviews.filter(w => w.status === 'active').length.toString()} subtitle={`of ${webviews.length} total`} icon={Monitor} color="text-emerald-600" bg="bg-emerald-50" />
+        <StatCard title="Total Views" value={totalViews.toLocaleString()} icon={Eye} color="text-teal-600" bg="bg-teal-50" />
         <StatCard title="Total Clicks" value={totalClicks.toLocaleString()} icon={MousePointerClick} color="text-green-600" bg="bg-green-50" />
         <StatCard title="Avg Conversion" value={`${avgConv}%`} icon={TrendingUp} color="text-emerald-700" bg="bg-emerald-50" />
       </div>
+      {webviews.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Monitor className="h-12 w-12 text-muted-foreground/40 mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-1">No webviews yet</h3>
+          <p className="text-sm text-muted-foreground max-w-md">
+            Create a WhatsApp webview to embed web experiences like booking portals and payment pages inside conversations.
+          </p>
+          <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700"><Plus className="size-4 mr-1.5" />Create Webview</Button>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {mockWebviews.map(wv => (
+        {webviews.map(wv => (
           <Card key={wv.id} className="hover:shadow-md transition-shadow cursor-pointer">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-3">
@@ -429,6 +532,7 @@ export function WebviewEngineView() {
           </Card>
         ))}
       </div>
+      )}
     </div>
   );
 }

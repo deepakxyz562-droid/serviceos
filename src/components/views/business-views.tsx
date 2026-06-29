@@ -43,6 +43,7 @@ const mockBots = [
 const botStatusColors: Record<string, string> = { active: 'bg-emerald-100 text-emerald-700 border-emerald-200', paused: 'bg-amber-100 text-amber-700 border-amber-200', draft: 'bg-slate-100 text-slate-600 border-slate-200' };
 
 export function ChatbotBuilderView() {
+  const [bots, setBots] = useState<typeof mockBots>([]);
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -53,13 +54,23 @@ export function ChatbotBuilderView() {
         <Button className="bg-emerald-600 hover:bg-emerald-700 gap-2"><Plus className="size-4" />Create Bot</Button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Active Bots" value={mockBots.filter(b => b.status === 'active').length.toString()} icon={Bot} color="text-emerald-600" bg="bg-emerald-50" />
-        <StatCard title="Conversations Today" value={mockBots.reduce((s, b) => s + b.conversations, 0).toString()} icon={MessageSquare} color="text-teal-600" bg="bg-teal-50" />
-        <StatCard title="Resolution Rate" value={`${(mockBots.reduce((s, b) => s + b.resolution, 0) / mockBots.length).toFixed(1)}%`} icon={CheckCircle2} color="text-green-600" bg="bg-green-50" />
-        <StatCard title="Avg Response" value="0.8s" icon={Clock} color="text-emerald-700" bg="bg-emerald-50" />
+        <StatCard title="Active Bots" value={bots.filter(b => b.status === 'active').length.toString()} icon={Bot} color="text-emerald-600" bg="bg-emerald-50" />
+        <StatCard title="Conversations Today" value={bots.reduce((s, b) => s + b.conversations, 0).toString()} icon={MessageSquare} color="text-teal-600" bg="bg-teal-50" />
+        <StatCard title="Resolution Rate" value={bots.length > 0 ? `${(bots.reduce((s, b) => s + b.resolution, 0) / bots.length).toFixed(1)}%` : '0%'} icon={CheckCircle2} color="text-green-600" bg="bg-green-50" />
+        <StatCard title="Avg Response" value="0s" icon={Clock} color="text-emerald-700" bg="bg-emerald-50" />
       </div>
+      {bots.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Bot className="h-12 w-12 text-muted-foreground/40 mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-1">No chatbots yet</h3>
+          <p className="text-sm text-muted-foreground max-w-md">
+            Create your first WhatsApp chatbot to automate customer conversations and capture leads 24/7.
+          </p>
+          <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700"><Plus className="size-4 mr-1.5" />Create Bot</Button>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {mockBots.map(bot => (
+        {bots.map(bot => (
           <Card key={bot.id} className="hover:shadow-md transition-shadow cursor-pointer">
             <CardContent className="p-6">
               <div className="flex items-center gap-3 mb-4">
@@ -80,6 +91,7 @@ export function ChatbotBuilderView() {
           </Card>
         ))}
       </div>
+      )}
     </div>
   );
 }
@@ -93,6 +105,7 @@ const mockSuggestions = [
 ];
 
 export function AIAssistantView() {
+  const [suggestions, setSuggestions] = useState<typeof mockSuggestions>([]);
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       <div className="flex items-center gap-3">
@@ -100,14 +113,23 @@ export function AIAssistantView() {
         <div><h1 className="text-xl font-bold">AI Assistant</h1><p className="text-sm text-muted-foreground">AI-powered suggestions, summaries, and insights</p></div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Active Suggestions" value={mockSuggestions.length.toString()} subtitle={`${(mockSuggestions.reduce((s, r) => s + r.confidence, 0) / mockSuggestions.length).toFixed(0)}% avg confidence`} icon={MessageSquare} color="text-emerald-600" bg="bg-emerald-50" />
-        <StatCard title="Conversations Summarized" value="12" subtitle="today" icon={Sparkles} color="text-teal-600" bg="bg-teal-50" />
-        <StatCard title="Intents Detected" value="5" subtitle="4 high confidence" icon={Target} color="text-green-600" bg="bg-green-50" />
-        <StatCard title="Hot Leads" value="1" subtitle="of 4 scored leads" icon={Zap} color="text-red-600" bg="bg-red-50" />
+        <StatCard title="Active Suggestions" value={suggestions.length.toString()} subtitle={suggestions.length > 0 ? `${(suggestions.reduce((s, r) => s + r.confidence, 0) / suggestions.length).toFixed(0)}% avg confidence` : 'No data'} icon={MessageSquare} color="text-emerald-600" bg="bg-emerald-50" />
+        <StatCard title="Conversations Summarized" value="0" subtitle="today" icon={Sparkles} color="text-teal-600" bg="bg-teal-50" />
+        <StatCard title="Intents Detected" value="0" subtitle="today" icon={Target} color="text-green-600" bg="bg-green-50" />
+        <StatCard title="Hot Leads" value="0" subtitle="scored leads" icon={Zap} color="text-red-600" bg="bg-red-50" />
       </div>
+      {suggestions.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Sparkles className="h-12 w-12 text-muted-foreground/40 mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-1">No AI suggestions yet</h3>
+          <p className="text-sm text-muted-foreground max-w-md">
+            AI-powered reply suggestions and conversation insights will appear here when you have active WhatsApp conversations.
+          </p>
+        </div>
+      ) : (
       <div className="space-y-4">
         <h3 className="text-sm font-semibold">Suggested Replies</h3>
-        {mockSuggestions.map(s => (
+        {suggestions.map(s => (
           <Card key={s.id} className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-2">
@@ -126,6 +148,7 @@ export function AIAssistantView() {
           </Card>
         ))}
       </div>
+      )}
     </div>
   );
 }

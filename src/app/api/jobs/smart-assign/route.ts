@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser } from '@/lib/auth';
 
 // Helper: safely parse JSON with fallback
 function safeJsonParse(jsonStr: string, fallback: unknown = []) {
@@ -154,8 +155,25 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Fetch all employees
-    const employees = await db.employee.findMany();
+    // Fetch employees filtered by tenant's workspaces
+    const authUser = await getAuthUser();
+    const isSuperAdmin = authUser?.isSuperAdmin || (authUser?.role === 'admin' && !authUser?.tenantId);
+
+    let employeeFilter: Record<string, unknown> = {};
+    if (!isSuperAdmin && authUser?.tenantId) {
+      const tenantWorkspaces = await db.workspace.findMany({
+        where: { tenantId: authUser.tenantId },
+        select: { id: true },
+      });
+      const workspaceIds = tenantWorkspaces.map((w: { id: string }) => w.id);
+      if (workspaceIds.length > 0) {
+        employeeFilter = { workspaceId: { in: workspaceIds } };
+      }
+    } else if (!isSuperAdmin && !authUser?.tenantId && authUser?.workspaceId) {
+      employeeFilter = { workspaceId: authUser.workspaceId };
+    }
+
+    const employees = await db.employee.findMany({ where: employeeFilter });
 
     if (employees.length === 0) {
       return NextResponse.json({

@@ -136,7 +136,7 @@ const MOCK_CHATBOTS: Chatbot[] = [
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function ChatbotBuilderView() {
-  const [chatbots, setChatbots] = useState<Chatbot[]>(MOCK_CHATBOTS);
+  const [chatbots, setChatbots] = useState<Chatbot[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedBot, setSelectedBot] = useState<Chatbot | null>(null);

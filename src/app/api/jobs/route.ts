@@ -48,6 +48,11 @@ async function resolveWorkspaceId(
 
 export async function GET(request: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
     const type = searchParams.get('type')
@@ -57,6 +62,33 @@ export async function GET(request: NextRequest) {
     const customerId = searchParams.get('customerId')
 
     const where: Record<string, unknown> = {}
+
+    // Scope to user's workspace/tenant (unless super admin)
+    if (user.tenantId && !user.isSuperAdmin) {
+      // Job uses workspaceId, so find all workspaces in this tenant
+      const tenantWorkspaces = await db.workspace.findMany({
+        where: { tenantId: user.tenantId },
+        select: { id: true },
+      });
+      const workspaceIds = tenantWorkspaces.map(w => w.id);
+      if (workspaceIds.length > 0) {
+        where.workspaceId = { in: workspaceIds };
+      } else if (user.workspaceId) {
+        where.workspaceId = user.workspaceId;
+      } else {
+        // No workspaces found — return empty
+        return NextResponse.json([]);
+      }
+    } else if (user.isSuperAdmin) {
+      const queryTenantId = searchParams.get('tenantId');
+      if (queryTenantId) {
+        const tenantWorkspaces = await db.workspace.findMany({
+          where: { tenantId: queryTenantId },
+          select: { id: true },
+        });
+        where.workspaceId = { in: tenantWorkspaces.map(w => w.id) };
+      }
+    }
 
     if (status) where.status = status
     if (type) where.type = type

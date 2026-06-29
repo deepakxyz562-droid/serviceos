@@ -98,7 +98,7 @@ function formatDuration(minutes: number): string {
 
 export function RouteOptimizationView() {
   const [routes, setRoutes] = useState<Route[]>([]);
-  const [employees, setEmployees] = useState(MOCK_EMPLOYEES);
+  const [employees, setEmployees] = useState<typeof MOCK_EMPLOYEES>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');

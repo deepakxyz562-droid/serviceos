@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser } from '@/lib/auth';
 
 function safeJsonParse(str: string | null, fallback: unknown = {}) {
   if (!str) return fallback;
@@ -10,8 +11,54 @@ function safeJsonParse(str: string | null, fallback: unknown = {}) {
   }
 }
 
+function emptyStats() {
+  return {
+    totalWorkflows: 0,
+    activeWorkflows: 0,
+    inactiveWorkflows: 0,
+    totalExecutions: 0,
+    successfulExecutions: 0,
+    failedExecutions: 0,
+    runningExecutions: 0,
+    successRate: 0,
+    avgDurationMs: 0,
+    recentExecutions: [],
+    topWorkflows: [],
+  };
+}
+
 export async function GET() {
   try {
+    const authUser = await getAuthUser();
+
+    // If not authenticated, return empty stats
+    if (!authUser) {
+      return NextResponse.json(emptyStats());
+    }
+
+    // Super admins can see all data
+    const isSuperAdmin = authUser.isSuperAdmin || (authUser.role === 'admin' && !authUser.tenantId);
+
+    // For non-super-admins, resolve workspace IDs from their tenant
+    let workspaceIds: string[] = [];
+    if (!isSuperAdmin) {
+      if (!authUser.tenantId) {
+        return NextResponse.json(emptyStats());
+      }
+      const tenantWorkspaces = await db.workspace.findMany({
+        where: { tenantId: authUser.tenantId },
+        select: { id: true },
+      });
+      workspaceIds = tenantWorkspaces.map((w: { id: string }) => w.id);
+      if (workspaceIds.length === 0) {
+        return NextResponse.json(emptyStats());
+      }
+    }
+
+    // Build filters
+    const workflowFilter = isSuperAdmin ? {} : { workspaceId: { in: workspaceIds } };
+    const executionFilter = isSuperAdmin ? {} : { workflow: { workspaceId: { in: workspaceIds } } };
+
     const [
       totalWorkflows,
       activeWorkflows,
@@ -23,12 +70,13 @@ export async function GET() {
       successfulExecutionsWithDuration,
       workflowsWithExecutionCounts,
     ] = await Promise.all([
-      db.workflow.count(),
-      db.workflow.count({ where: { active: true } }),
-      db.execution.count(),
-      db.execution.count({ where: { status: 'success' } }),
-      db.execution.count({ where: { status: 'error' } }),
+      db.workflow.count({ where: workflowFilter }),
+      db.workflow.count({ where: { ...workflowFilter, active: true } }),
+      db.execution.count({ where: executionFilter }),
+      db.execution.count({ where: { ...executionFilter, status: 'success' } }),
+      db.execution.count({ where: { ...executionFilter, status: 'error' } }),
       db.execution.findMany({
+        where: executionFilter,
         take: 10,
         orderBy: { startedAt: 'desc' },
         include: {
@@ -37,9 +85,10 @@ export async function GET() {
           },
         },
       }),
-      db.execution.count({ where: { status: 'running' } }),
+      db.execution.count({ where: { ...executionFilter, status: 'running' } }),
       db.execution.findMany({
         where: {
+          ...executionFilter,
           status: 'success',
           durationMs: { not: null },
         },
@@ -48,6 +97,7 @@ export async function GET() {
         orderBy: { startedAt: 'desc' },
       }),
       db.workflow.findMany({
+        where: workflowFilter,
         take: 5,
         orderBy: { updatedAt: 'desc' },
         include: {

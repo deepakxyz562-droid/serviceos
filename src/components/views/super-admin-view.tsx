@@ -372,6 +372,8 @@ export function SuperAdminView() {
   const [userSearch, setUserSearch] = useState('');
   const [subStatusFilter, setSubStatusFilter] = useState('all');
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+  const [paypalConfigured, setPaypalConfigured] = useState(false);
+  const [paypalIsSandbox, setPaypalIsSandbox] = useState(false);
 
   // ─── Data Fetching ───────────────────────────────────────────────────────
 
@@ -415,6 +417,18 @@ export function SuperAdminView() {
       setError(err instanceof Error ? err.message : 'Failed to load admin data');
     } finally {
       setLoading(false);
+    }
+
+    // Fetch PayPal config separately (non-critical)
+    try {
+      const paypalRes = await fetch('/api/paypal/config');
+      if (paypalRes.ok) {
+        const paypalData = await paypalRes.json();
+        setPaypalConfigured(!!paypalData.configured);
+        setPaypalIsSandbox(!!paypalData.isSandbox);
+      }
+    } catch {
+      // PayPal config fetch is non-critical
     }
   }, []);
 
@@ -1225,10 +1239,10 @@ export function SuperAdminView() {
               <Card>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="size-4 text-emerald-500" />
+                    <CheckCircle2 className={`size-4 ${paypalConfigured ? 'text-emerald-500' : 'text-muted-foreground/40'}`} />
                     <div>
                       <p className="text-xs text-muted-foreground">PayPal</p>
-                      <p className="text-lg font-bold">Configured</p>
+                      <p className="text-lg font-bold">{paypalConfigured ? (paypalIsSandbox ? 'Sandbox' : 'Live') : 'Not Set'}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -1244,20 +1258,44 @@ export function SuperAdminView() {
                   <CardTitle className="text-base">PayPal Configuration</CardTitle>
                   <CardDescription>Payment gateway settings</CardDescription>
                 </div>
-                <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">Connected</Badge>
+                {paypalConfigured ? (
+                  <Badge className={paypalIsSandbox ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200'}>
+                    {paypalIsSandbox ? 'Sandbox' : 'Live'}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-muted-foreground">Not Configured</Badge>
+                )}
               </div>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center gap-4 p-4 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg">
-                <div className="flex items-center justify-center size-12 rounded-full bg-emerald-100">
-                  <CreditCard className="size-6 text-emerald-600" />
+              {paypalConfigured ? (
+                <div className={`flex items-center gap-4 p-4 rounded-lg ${paypalIsSandbox ? 'bg-amber-50 dark:bg-amber-950/30' : 'bg-emerald-50 dark:bg-emerald-950/30'}`}>
+                  <div className={`flex items-center justify-center size-12 rounded-full ${paypalIsSandbox ? 'bg-amber-100' : 'bg-emerald-100'}`}>
+                    <CreditCard className={`size-6 ${paypalIsSandbox ? 'text-amber-600' : 'text-emerald-600'}`} />
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">PayPal Business Account</p>
+                    <p className={`text-xs ${paypalIsSandbox ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                      {paypalIsSandbox ? 'Sandbox mode — for testing only' : 'Live mode — accepting real payments'}
+                    </p>
+                    <p className={`text-xs mt-0.5 ${paypalIsSandbox ? 'text-amber-500' : 'text-emerald-600'}`}>
+                      {paypalIsSandbox ? 'Test payments only' : 'Accepting payments'}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-medium text-sm">PayPal Business Account</p>
-                  <p className="text-xs text-muted-foreground">Sandbox mode active</p>
-                  <p className="text-xs text-emerald-600 mt-0.5">Accepting payments</p>
+              ) : (
+                <div className="flex items-center gap-4 p-4 rounded-lg bg-muted/30">
+                  <div className="flex items-center justify-center size-12 rounded-full bg-muted/50">
+                    <CreditCard className="size-6 text-muted-foreground/40" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm text-muted-foreground">PayPal not connected</p>
+                    <p className="text-xs text-muted-foreground/70">
+                      Add PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET to your .env file to enable PayPal payments.
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
 

@@ -310,12 +310,12 @@ export function WorkflowsView() {
             successRate: 0,
           };
         });
-        setWorkflows(apiWorkflows.length > 0 ? apiWorkflows : MOCK_WORKFLOWS);
+        setWorkflows(apiWorkflows);
       } else {
-        setWorkflows(MOCK_WORKFLOWS);
+        setWorkflows([]);
       }
     } catch {
-      setWorkflows(MOCK_WORKFLOWS);
+      setWorkflows([]);
     } finally {
       setLoading(false);
     }

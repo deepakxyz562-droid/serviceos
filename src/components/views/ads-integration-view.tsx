@@ -42,7 +42,7 @@ const MOCK_ADS: AdCampaign[] = [
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function AdsIntegrationView() {
-  const [ads, setAds] = useState<AdCampaign[]>(MOCK_ADS);
+  const [ads, setAds] = useState<AdCampaign[]>([]);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createForm, setCreateForm] = useState({ name: '', platform: 'facebook' as AdCampaign['platform'], budget: '', startDate: '', endDate: '' });
 
@@ -130,6 +130,18 @@ export function AdsIntegrationView() {
       </Card>
 
       {/* Ad Campaign List */}
+      {ads.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Megaphone className="h-12 w-12 text-muted-foreground/40 mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-1">No ad campaigns yet</h3>
+          <p className="text-sm text-muted-foreground max-w-md">
+            Create a Click to WhatsApp ad campaign to drive leads from Facebook and Instagram directly to your WhatsApp.
+          </p>
+          <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowCreateDialog(true)}>
+            <Plus className="size-4 mr-1.5" /> Create Ad Campaign
+          </Button>
+        </div>
+      ) : (
       <div className="space-y-4">
         {ads.map(ad => (
           <Card key={ad.id} className="hover:shadow-md transition-all">
@@ -159,6 +171,7 @@ export function AdsIntegrationView() {
           </Card>
         ))}
       </div>
+      )}
 
       {/* Create Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>

@@ -48,7 +48,7 @@ const MOCK_TEMPLATES: Template[] = [
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function MarketplaceView() {
-  const [templates] = useState<Template[]>(MOCK_TEMPLATES);
+  const [templates] = useState<Template[]>([]);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
@@ -82,6 +82,16 @@ export function MarketplaceView() {
       </div>
 
       {/* Featured Templates */}
+      {templates.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Store className="h-12 w-12 text-muted-foreground/40 mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-1">No templates available yet</h3>
+          <p className="text-sm text-muted-foreground max-w-md">
+            Workflow templates will appear here once they are published. Check back later for automation templates and pre-built workflows.
+          </p>
+        </div>
+      ) : (
+      <>
       <div>
         <h3 className="font-medium text-sm mb-3 flex items-center gap-2"><Sparkles className="size-4 text-emerald-600" /> Featured Templates</h3>
         <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
@@ -158,6 +168,8 @@ export function MarketplaceView() {
           );
         })}
       </div>
+      </>
+      )}
 
       {/* Preview Dialog */}
       <Dialog open={showPreview} onOpenChange={setShowPreview}>

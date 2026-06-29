@@ -619,7 +619,7 @@ function ActionConfigPanel({ action, onChange }: { action: Action; onChange: (co
 // ============================================================
 
 export function WorkflowAutomationsView() {
-  const [automations, setAutomations] = useState<WorkflowAutomation[]>(MOCK_AUTOMATIONS);
+  const [automations, setAutomations] = useState<WorkflowAutomation[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
 

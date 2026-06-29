@@ -649,14 +649,16 @@ export function DashboardView() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-muted-foreground font-medium">Today&apos;s Bookings</p>
                     <p className="text-2xl font-bold mt-1">
-                      {stats.activeJobs.byStatus?.pending || 8}
+                      {stats.activeJobs.byStatus?.pending ?? 0}
                     </p>
+                    {((stats.activeJobs.byStatus?.pending ?? 0) > 0) && (
                     <div className="flex items-center gap-1 mt-1">
                       <TrendingUp className="size-3.5 text-emerald-500" />
                       <span className="text-xs font-medium text-emerald-600">
-                        +12% from yesterday
+                        +{stats.monthlyRevenue.trend || 0}% from yesterday
                       </span>
                     </div>
+                    )}
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <div className="p-2.5 rounded-xl bg-emerald-50">

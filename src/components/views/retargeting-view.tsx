@@ -62,7 +62,7 @@ const ACTION_TYPES = [
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function RetargetingView() {
-  const [rules, setRules] = useState<RetargetingRule[]>(MOCK_RULES);
+  const [rules, setRules] = useState<RetargetingRule[]>([]);
   const [search, setSearch] = useState('');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
 
@@ -148,6 +148,18 @@ export function RetargetingView() {
       </div>
 
       {/* Rules List */}
+      {filteredRules.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Repeat className="h-12 w-12 text-muted-foreground/40 mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-1">No retargeting rules yet</h3>
+          <p className="text-sm text-muted-foreground max-w-md">
+            Create retargeting rules to automatically follow up with customers based on their behavior and actions.
+          </p>
+          <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowCreateDialog(true)}>
+            <Plus className="size-4 mr-1.5" /> Create Rule
+          </Button>
+        </div>
+      ) : (
       <div className="space-y-4">
         {filteredRules.map(rule => (
           <Card key={rule.id} className="hover:shadow-md transition-all">
@@ -192,6 +204,7 @@ export function RetargetingView() {
           </Card>
         ))}
       </div>
+      )}
 
       {/* Create Rule Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>

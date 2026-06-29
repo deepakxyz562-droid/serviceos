@@ -84,7 +84,7 @@ const ACTION_TYPES = ['WhatsApp', 'Email', 'Task', 'Tag', 'CRM Update'];
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function JourneyAutomationView() {
-  const [journeys, setJourneys] = useState<Journey[]>(MOCK_JOURNEYS);
+  const [journeys, setJourneys] = useState<Journey[]>([]);
   const [search, setSearch] = useState('');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null);
@@ -169,6 +169,18 @@ export function JourneyAutomationView() {
       </div>
 
       {/* Journey List */}
+      {filteredJourneys.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <GitBranch className="h-12 w-12 text-muted-foreground/40 mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-1">No journeys yet</h3>
+          <p className="text-sm text-muted-foreground max-w-md">
+            Create customer journey automations to guide leads through your sales pipeline with personalized touchpoints.
+          </p>
+          <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowCreateDialog(true)}>
+            <Plus className="size-4 mr-1.5" /> Create Journey
+          </Button>
+        </div>
+      ) : (
       <div className="space-y-4">
         {filteredJourneys.map(journey => (
           <Card key={journey.id} className="hover:shadow-md transition-all">
@@ -212,6 +224,7 @@ export function JourneyAutomationView() {
           </Card>
         ))}
       </div>
+      )}
 
       {/* Journey Detail */}
       {selectedJourney && (

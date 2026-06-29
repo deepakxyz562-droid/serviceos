@@ -97,11 +97,14 @@ const ROLE_PERMISSIONS: Record<string, boolean[]> = {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function EnterpriseView() {
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [webhookLogs, setWebhookLogs] = useState<WebhookLog[]>([]);
+  const [deliveryLogs, setDeliveryLogs] = useState<DeliveryLog[]>([]);
   const [auditFilter, setAuditFilter] = useState('all');
   const [auditSearch, setAuditSearch] = useState('');
   const [activeTab, setActiveTab] = useState('audit');
 
-  const filteredAuditLogs = MOCK_AUDIT_LOGS.filter(log => {
+  const filteredAuditLogs = auditLogs.filter(log => {
     if (auditFilter !== 'all' && log.status !== auditFilter) return false;
     if (auditSearch && !log.action.toLowerCase().includes(auditSearch.toLowerCase()) && !log.user.toLowerCase().includes(auditSearch.toLowerCase())) return false;
     return true;
@@ -173,6 +176,12 @@ export function EnterpriseView() {
                 <Button variant="outline" size="sm"><Download className="size-3 mr-1" /> Export</Button>
               </div>
               <ScrollArea className="max-h-96">
+                {auditLogs.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <FileText className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                    <p className="text-sm text-muted-foreground">No audit logs yet. Activity will be recorded here.</p>
+                  </div>
+                ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -197,6 +206,7 @@ export function EnterpriseView() {
                     ))}
                   </TableBody>
                 </Table>
+                )}
               </ScrollArea>
             </CardContent>
           </Card>
@@ -346,10 +356,16 @@ export function EnterpriseView() {
           <Card>
             <CardContent className="p-4">
               <ScrollArea className="max-h-96">
+                {webhookLogs.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <Globe className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                    <p className="text-sm text-muted-foreground">No webhook logs yet. Webhook calls will be recorded here.</p>
+                  </div>
+                ) : (
                 <Table>
                   <TableHeader><TableRow><TableHead>URL</TableHead><TableHead>Method</TableHead><TableHead>Status</TableHead><TableHead>Duration</TableHead><TableHead>Time</TableHead></TableRow></TableHeader>
                   <TableBody>
-                    {MOCK_WEBHOOK_LOGS.map(log => (
+                    {webhookLogs.map(log => (
                       <TableRow key={log.id}>
                         <TableCell className="text-xs font-mono max-w-[200px] truncate">{log.url}</TableCell>
                         <TableCell><Badge variant="secondary" className="text-[10px]">{log.method}</Badge></TableCell>
@@ -360,6 +376,7 @@ export function EnterpriseView() {
                     ))}
                   </TableBody>
                 </Table>
+                )}
               </ScrollArea>
             </CardContent>
           </Card>
@@ -370,10 +387,16 @@ export function EnterpriseView() {
           <Card>
             <CardContent className="p-4">
               <ScrollArea className="max-h-96">
+                {deliveryLogs.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <Database className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                    <p className="text-sm text-muted-foreground">No delivery logs yet. Message delivery statuses will appear here.</p>
+                  </div>
+                ) : (
                 <Table>
                   <TableHeader><TableRow><TableHead>Recipient</TableHead><TableHead>Channel</TableHead><TableHead>Status</TableHead><TableHead>Message ID</TableHead><TableHead>Time</TableHead></TableRow></TableHeader>
                   <TableBody>
-                    {MOCK_DELIVERY_LOGS.map(log => (
+                    {deliveryLogs.map(log => (
                       <TableRow key={log.id}>
                         <TableCell className="text-sm">{log.recipient}</TableCell>
                         <TableCell><Badge variant="outline" className="text-[10px]">{log.channel}</Badge></TableCell>
@@ -384,6 +407,7 @@ export function EnterpriseView() {
                     ))}
                   </TableBody>
                 </Table>
+                )}
               </ScrollArea>
             </CardContent>
           </Card>

@@ -236,10 +236,10 @@ export function WhatsAppView() {
         const data = await res.json();
         setConversations(data.conversations || []);
       } else {
-        setConversations(getDemoConversations());
+        setConversations([]);
       }
     } catch {
-      setConversations(getDemoConversations());
+      setConversations([]);
     } finally {
       setLoadingConvos(false);
     }

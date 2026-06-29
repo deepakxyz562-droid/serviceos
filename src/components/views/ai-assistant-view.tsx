@@ -103,6 +103,10 @@ const SENTIMENT_COLORS: Record<string, string> = {
 
 export function AiAssistantView() {
   const [activeTab, setActiveTab] = useState('suggestions');
+  const [suggestedReplies, setSuggestedReplies] = useState<SuggestedReply[]>([]);
+  const [summaries, setSummaries] = useState<ConversationSummary[]>([]);
+  const [intents, setIntents] = useState<DetectedIntent[]>([]);
+  const [leadScores, setLeadScores] = useState<LeadScore[]>([]);
   const [selectedSuggestion, setSelectedSuggestion] = useState<SuggestedReply | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
 
@@ -136,11 +140,11 @@ export function AiAssistantView() {
       {/* Stats */}
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-5">
         {[
-          { label: 'Suggestions', value: MOCK_SUGGESTED_REPLIES.length, icon: MessageSquare, color: 'text-blue-600' },
-          { label: 'Summaries', value: MOCK_SUMMARIES.length, icon: Brain, color: 'text-purple-600' },
-          { label: 'Intents Detected', value: MOCK_INTENTS.length, icon: Zap, color: 'text-orange-600' },
-          { label: 'Lead Scores', value: MOCK_LEAD_SCORES.length, icon: TrendingUp, color: 'text-emerald-600' },
-          { label: 'Avg Confidence', value: '91%', icon: BarChart3, color: 'text-green-600' },
+          { label: 'Suggestions', value: suggestedReplies.length, icon: MessageSquare, color: 'text-blue-600' },
+          { label: 'Summaries', value: summaries.length, icon: Brain, color: 'text-purple-600' },
+          { label: 'Intents Detected', value: intents.length, icon: Zap, color: 'text-orange-600' },
+          { label: 'Lead Scores', value: leadScores.length, icon: TrendingUp, color: 'text-emerald-600' },
+          { label: 'Avg Confidence', value: '0%', icon: BarChart3, color: 'text-green-600' },
         ].map(stat => {
           const Icon = stat.icon;
           return (
@@ -163,8 +167,17 @@ export function AiAssistantView() {
 
         {/* Suggested Replies */}
         <TabsContent value="suggestions">
+          {suggestedReplies.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <MessageSquare className="h-12 w-12 text-muted-foreground/40 mb-4" />
+              <h3 className="text-lg font-semibold text-foreground mb-1">No suggested replies yet</h3>
+              <p className="text-sm text-muted-foreground max-w-md">
+                AI-generated reply suggestions will appear here when you have active WhatsApp conversations.
+              </p>
+            </div>
+          ) : (
           <div className="space-y-4">
-            {MOCK_SUGGESTED_REPLIES.map(suggestion => (
+            {suggestedReplies.map(suggestion => (
               <Card key={suggestion.id} className="hover:shadow-md transition-all">
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-4">
@@ -193,12 +206,22 @@ export function AiAssistantView() {
               </Card>
             ))}
           </div>
+          )}
         </TabsContent>
 
         {/* Summaries */}
         <TabsContent value="summaries">
+          {summaries.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Brain className="h-12 w-12 text-muted-foreground/40 mb-4" />
+              <h3 className="text-lg font-semibold text-foreground mb-1">No summaries yet</h3>
+              <p className="text-sm text-muted-foreground max-w-md">
+                AI-generated conversation summaries will appear here as conversations are analyzed.
+              </p>
+            </div>
+          ) : (
           <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-            {MOCK_SUMMARIES.map(summary => (
+            {summaries.map(summary => (
               <Card key={summary.id} className="hover:shadow-md transition-all">
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-center justify-between">
@@ -221,14 +244,24 @@ export function AiAssistantView() {
               </Card>
             ))}
           </div>
+          )}
         </TabsContent>
 
         {/* Intents */}
         <TabsContent value="intents">
+          {intents.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Zap className="h-12 w-12 text-muted-foreground/40 mb-4" />
+              <h3 className="text-lg font-semibold text-foreground mb-1">No intents detected yet</h3>
+              <p className="text-sm text-muted-foreground max-w-md">
+                AI-detected intents from customer messages will appear here as conversations are processed.
+              </p>
+            </div>
+          ) : (
           <Card>
             <CardContent className="p-4">
               <div className="space-y-3">
-                {MOCK_INTENTS.map(intent => (
+                {intents.map(intent => (
                   <div key={intent.id} className="flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors">
                     <Avatar className="size-8"><AvatarFallback className="bg-emerald-100 text-emerald-700 text-xs">{intent.customerName[0]}</AvatarFallback></Avatar>
                     <div className="flex-1 min-w-0">
@@ -245,12 +278,22 @@ export function AiAssistantView() {
               </div>
             </CardContent>
           </Card>
+          )}
         </TabsContent>
 
         {/* Lead Scoring */}
         <TabsContent value="leads">
+          {leadScores.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <TrendingUp className="h-12 w-12 text-muted-foreground/40 mb-4" />
+              <h3 className="text-lg font-semibold text-foreground mb-1">No lead scores yet</h3>
+              <p className="text-sm text-muted-foreground max-w-md">
+                AI-powered lead scoring will appear here as your customer base grows.
+              </p>
+            </div>
+          ) : (
           <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-            {MOCK_LEAD_SCORES.map(lead => (
+            {leadScores.map(lead => (
               <Card key={lead.id} className="hover:shadow-md transition-all">
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-center justify-between">
@@ -279,6 +322,7 @@ export function AiAssistantView() {
               </Card>
             ))}
           </div>
+          )}
         </TabsContent>
 
         {/* Auto Tags */}

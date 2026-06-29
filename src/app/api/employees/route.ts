@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
+import { getAuthUser } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   try {
@@ -7,14 +8,49 @@ export async function GET(request: NextRequest) {
     const role = searchParams.get('role')
     const status = searchParams.get('status')
     const search = searchParams.get('search')
-    const workspaceId = searchParams.get('workspaceId')
+    const workspaceIdParam = searchParams.get('workspaceId')
     const userId = searchParams.get('userId')
+
+    const authUser = await getAuthUser()
+
+    // If not authenticated, return empty list
+    if (!authUser) {
+      return NextResponse.json([])
+    }
+
+    const isSuperAdmin = authUser.isSuperAdmin || (authUser.role === 'admin' && !authUser.tenantId)
 
     const where: Record<string, unknown> = {}
 
+    // If not super admin, filter by workspace scope
+    if (!isSuperAdmin) {
+      // Use the explicitly provided workspaceId, or fall back to the auth user's workspaceId
+      const effectiveWorkspaceId = workspaceIdParam || authUser.workspaceId
+      if (effectiveWorkspaceId) {
+        where.workspaceId = effectiveWorkspaceId
+      } else if (authUser.tenantId) {
+        // No workspaceId available, filter by tenant's workspaces
+        const tenantWorkspaces = await db.workspace.findMany({
+          where: { tenantId: authUser.tenantId },
+          select: { id: true },
+        })
+        const workspaceIds = tenantWorkspaces.map((w: { id: string }) => w.id)
+        if (workspaceIds.length > 0) {
+          where.workspaceId = { in: workspaceIds }
+        } else {
+          return NextResponse.json([])
+        }
+      } else {
+        // No tenantId and no workspaceId — no data access
+        return NextResponse.json([])
+      }
+    } else if (workspaceIdParam) {
+      // Super admin with explicit workspace filter
+      where.workspaceId = workspaceIdParam
+    }
+
     if (role) where.role = role
     if (status) where.status = status
-    if (workspaceId) where.workspaceId = workspaceId
     if (userId) where.userId = userId
     if (search) {
       where.OR = [

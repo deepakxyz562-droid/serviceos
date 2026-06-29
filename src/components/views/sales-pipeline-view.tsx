@@ -60,7 +60,7 @@ const ASSIGNEES = ['Sarah Johnson', 'Mike Chen', 'Priya Patel', 'David Brown', '
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function SalesPipelineView() {
-  const [deals, setDeals] = useState<Deal[]>(MOCK_DEALS);
+  const [deals, setDeals] = useState<Deal[]>([]);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createForm, setCreateForm] = useState({ title: '', value: '', customerName: '', assignee: 'Sarah Johnson', stage: 'new_lead' });
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
@@ -146,7 +146,22 @@ export function SalesPipelineView() {
         </CardContent>
       </Card>
 
+      {/* Empty State */}
+      {deals.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Briefcase className="h-12 w-12 text-muted-foreground/40 mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-1">No deals yet</h3>
+          <p className="text-sm text-muted-foreground max-w-md">
+            Start tracking your sales pipeline by adding your first deal. Deals move through stages from new lead to won or lost.
+          </p>
+          <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowCreateDialog(true)}>
+            <Plus className="size-4 mr-1.5" /> Add Your First Deal
+          </Button>
+        </div>
+      )}
+
       {/* Kanban Board */}
+      {deals.length > 0 && (
       <div className="overflow-x-auto pb-4">
         <div className="flex gap-4 min-w-max">
           {STAGES.map(stage => {
@@ -202,6 +217,7 @@ export function SalesPipelineView() {
           })}
         </div>
       </div>
+      )}
 
       {/* Deal Detail */}
       <Dialog open={!!selectedDeal} onOpenChange={() => setSelectedDeal(null)}>

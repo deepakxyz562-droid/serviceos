@@ -2,10 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { toISOString } from '@/lib/utils';
 import { getExchangeRate, convertCurrency } from '@/lib/currency';
+import { getAuthUser } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
   try {
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const where: Record<string, unknown> = {};
+    if (user.tenantId && !user.isSuperAdmin) {
+      where.tenantId = user.tenantId;
+    }
+
     const quotes = await db.quote.findMany({
+      where,
       include: { customer: true },
       orderBy: { createdAt: 'desc' },
     });

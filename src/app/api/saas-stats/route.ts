@@ -11,55 +11,59 @@ export async function GET() {
   try {
     const authUser = await getAuthUser();
 
-    // If not authenticated, return demo data for the dashboard preview
+    // If not authenticated or no tenant, return zero stats
     if (!authUser) {
-      return NextResponse.json(getDemoData());
+      return NextResponse.json(getZeroStats());
     }
 
     const tenantId = authUser.tenantId;
-    if (!tenantId) {
-      return NextResponse.json(getDemoData());
+    const isSuperAdmin = authUser.isSuperAdmin || (authUser.role === 'admin' && !tenantId);
+
+    if (!tenantId && !isSuperAdmin) {
+      return NextResponse.json(getZeroStats());
     }
 
     // Check cache first
-    const cacheKey = `saas-stats:${tenantId}`;
+    const cacheKey = `saas-stats:${tenantId || 'superadmin'}`;
     const cached = cache.get<Record<string, unknown>>(cacheKey);
     if (cached) {
       return NextResponse.json(cached);
     }
 
+    // Build tenant filter: super admins see all data, others only their tenant
+    const tenantFilter = isSuperAdmin && !tenantId ? {} : { tenantId };
+
     // ── Group 1: Tenant-scoped queries (Lead + Invoice) ──────────────────────
-    // These don't need workspaceIds, so run them first
-    const totalLeadsCount = await db.lead.count({ where: { tenantId } });
+    const totalLeadsCount = await db.lead.count({ where: tenantFilter });
 
     const leadsByStatus = await db.lead.groupBy({
       by: ['status'],
-      where: { tenantId },
+      where: tenantFilter,
       _count: { status: true },
       _sum: { value: true },
     });
 
     const leadsBySource = await db.lead.groupBy({
       by: ['source'],
-      where: { tenantId },
+      where: tenantFilter,
       _count: { source: true },
     });
 
     const paidInvoices = await db.invoice.aggregate({
-      where: { tenantId, status: 'paid' },
+      where: { ...tenantFilter, status: 'paid' },
       _sum: { total: true },
     });
 
-    const leadsWon = await db.lead.count({ where: { tenantId, status: 'won' } });
+    const leadsWon = await db.lead.count({ where: { ...tenantFilter, status: 'won' } });
 
-    const lastMonthLeads = await getLastMonthLeadsCount(tenantId);
+    const lastMonthLeads = tenantId ? await getLastMonthLeadsCount(tenantId) : 0;
 
-    const lastMonthRevenue = await getLastMonthRevenue(tenantId);
+    const lastMonthRevenue = tenantId ? await getLastMonthRevenue(tenantId) : 0;
 
-    const monthlyRevenueData = await getMonthlyRevenue(tenantId);
+    const monthlyRevenueData = tenantId ? await getMonthlyRevenue(tenantId) : [];
 
     const recentLeads = await db.lead.findMany({
-      where: { tenantId },
+      where: tenantFilter,
       orderBy: { createdAt: 'desc' },
       take: 5,
       select: {
@@ -73,30 +77,28 @@ export async function GET() {
     });
 
     // ── Group 2: Workspace-scoped queries (Job + Employee) ──────────────────
-    // Get workspace IDs for this tenant
+    // Get workspace IDs for this tenant (or all workspaces for super admins)
     const tenantWorkspaces = await db.workspace.findMany({
-      where: { tenantId },
+      where: isSuperAdmin && !tenantId ? {} : { tenantId },
       select: { id: true },
     });
     const workspaceIds = tenantWorkspaces.map((w: { id: string }) => w.id);
     const hasWorkspaces = workspaceIds.length > 0;
 
-    const totalJobsCount = await db.job.count({
-      where: hasWorkspaces ? { workspaceId: { in: workspaceIds } } : { id: 'none' },
-    });
+    const workspaceFilter = hasWorkspaces ? { workspaceId: { in: workspaceIds } } : { id: 'none' };
+
+    const totalJobsCount = await db.job.count({ where: workspaceFilter });
 
     const jobsByStatus = await db.job.groupBy({
       by: ['status'],
-      where: hasWorkspaces ? { workspaceId: { in: workspaceIds } } : { id: 'none' },
+      where: workspaceFilter,
       _count: { status: true },
     });
 
-    const totalEmployees = await db.employee.count({
-      where: hasWorkspaces ? { workspaceId: { in: workspaceIds } } : { id: 'none' },
-    });
+    const totalEmployees = await db.employee.count({ where: workspaceFilter });
 
     const recentJobs = await db.job.findMany({
-      where: hasWorkspaces ? { workspaceId: { in: workspaceIds } } : { id: 'none' },
+      where: workspaceFilter,
       orderBy: { createdAt: 'desc' },
       take: 5,
       select: {
@@ -109,7 +111,7 @@ export async function GET() {
     });
 
     const topEmployees = await db.employee.findMany({
-      where: hasWorkspaces ? { workspaceId: { in: workspaceIds } } : { id: 'none' },
+      where: workspaceFilter,
       orderBy: { completedJobs: 'desc' },
       take: 10,
       select: {
@@ -207,8 +209,7 @@ export async function GET() {
     return NextResponse.json(result);
   } catch (error) {
     console.error('SaaS stats error:', error);
-    // Return demo data on error so the dashboard still renders
-    return NextResponse.json(getDemoData());
+    return NextResponse.json(getZeroStats());
   }
 }
 
@@ -283,52 +284,19 @@ async function getMonthlyRevenue(tenantId: string) {
   return result;
 }
 
-function getDemoData() {
+function getZeroStats() {
   return {
-    totalLeads: { count: 247, trend: 12 },
+    totalLeads: { count: 0, trend: 0 },
     activeJobs: {
-      count: 38,
-      byStatus: { pending: 8, in_progress: 18, on_hold: 4, completed: 6, cancelled: 2 },
+      count: 0,
+      byStatus: {},
     },
-    monthlyRevenue: { amount: 345000, trend: 8 },
-    teamPerformance: { avgRating: 4.2, completedJobs: 156 },
-    leadPipeline: [
-      { stage: 'new', count: 45, value: 567000 },
-      { stage: 'contacted', count: 32, value: 412000 },
-      { stage: 'qualified', count: 28, value: 389000 },
-      { stage: 'proposal', count: 18, value: 234000 },
-      { stage: 'won', count: 15, value: 195000 },
-      { stage: 'lost', count: 8, value: 89000 },
-    ],
-    revenueTrend: [
-      { month: 'Jan', revenue: 220000 },
-      { month: 'Feb', revenue: 265000 },
-      { month: 'Mar', revenue: 298000 },
-      { month: 'Apr', revenue: 312000 },
-      { month: 'May', revenue: 330000 },
-      { month: 'Jun', revenue: 345000 },
-    ],
-    leadSources: [
-      { source: 'website', count: 78 },
-      { source: 'whatsapp', count: 52 },
-      { source: 'manual', count: 38 },
-      { source: 'referral', count: 34 },
-      { source: 'google', count: 28 },
-      { source: 'facebook', count: 17 },
-    ],
-    recentLeads: [
-      { id: '1', name: 'Priya Sharma', source: 'website', status: 'new', value: 45000, date: '2026-06-04T10:30:00Z' },
-      { id: '2', name: 'Rajesh Kumar', source: 'whatsapp', status: 'contacted', value: 32000, date: '2026-06-03T14:20:00Z' },
-      { id: '3', name: 'Anita Desai', source: 'referral', status: 'qualified', value: 68000, date: '2026-06-02T09:15:00Z' },
-      { id: '4', name: 'Vikram Patel', source: 'google', status: 'proposal', value: 52000, date: '2026-06-01T16:45:00Z' },
-      { id: '5', name: 'Meera Joshi', source: 'facebook', status: 'new', value: 28000, date: '2026-05-31T11:00:00Z' },
-    ],
-    recentJobs: [
-      { id: '1', title: 'Kitchen Renovation', assignee: 'Amit Singh', status: 'in_progress', scheduledDate: '2026-06-05T09:00:00Z' },
-      { id: '2', title: 'Bathroom Repair', assignee: 'Suresh Yadav', status: 'pending', scheduledDate: '2026-06-06T10:00:00Z' },
-      { id: '3', title: 'Office Painting', assignee: 'Deepak Verma', status: 'completed', scheduledDate: '2026-06-04T08:00:00Z' },
-      { id: '4', title: 'AC Installation', assignee: 'Ravi Gupta', status: 'in_progress', scheduledDate: '2026-06-07T14:00:00Z' },
-      { id: '5', title: 'Plumbing Fix', assignee: 'Sunil Rao', status: 'on_hold', scheduledDate: '2026-06-08T11:00:00Z' },
-    ],
+    monthlyRevenue: { amount: 0, trend: 0 },
+    teamPerformance: { avgRating: 0, completedJobs: 0 },
+    leadPipeline: [],
+    revenueTrend: [],
+    leadSources: [],
+    recentLeads: [],
+    recentJobs: [],
   };
 }
