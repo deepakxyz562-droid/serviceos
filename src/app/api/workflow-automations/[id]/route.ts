@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser } from '@/lib/auth';
 import { toISOString } from '@/lib/utils';
 
 export async function GET(
@@ -7,6 +8,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
     const { id } = await params;
     const automation = await db.workflowAutomation.findUnique({
       where: { id },
@@ -14,6 +20,11 @@ export async function GET(
 
     if (!automation) {
       return NextResponse.json({ error: 'Automation not found' }, { status: 404 });
+    }
+
+    // Verify tenant ownership
+    if (automation.tenantId && automation.tenantId !== authUser.tenantId) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
     const formatted = {
@@ -44,6 +55,11 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
     const { id } = await params;
     const body = await req.json();
     const { name, description, triggerType, conditions, conditionLogic, actions, active } = body;
@@ -51,6 +67,11 @@ export async function PUT(
     const existing = await db.workflowAutomation.findUnique({ where: { id } });
     if (!existing) {
       return NextResponse.json({ error: 'Automation not found' }, { status: 404 });
+    }
+
+    // Verify tenant ownership
+    if (existing.tenantId && existing.tenantId !== authUser.tenantId) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
     const updateData: any = {};
@@ -79,10 +100,20 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
     const { id } = await params;
     const existing = await db.workflowAutomation.findUnique({ where: { id } });
     if (!existing) {
       return NextResponse.json({ error: 'Automation not found' }, { status: 404 });
+    }
+
+    // Verify tenant ownership
+    if (existing.tenantId && existing.tenantId !== authUser.tenantId) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
     await db.workflowAutomation.delete({ where: { id } });

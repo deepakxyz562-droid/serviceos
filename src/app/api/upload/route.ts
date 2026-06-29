@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
-import { uploadFile, STORAGE_BUCKETS, type StorageBucket } from '@/lib/supabase-storage'
+import { uploadFile, STORAGE_BUCKETS, type StorageBucket, isS3Configured, ensureS3Bucket } from '@/lib/supabase-storage'
 import { db } from '@/lib/db'
 import { randomUUID } from 'crypto'
 import path from 'path'
 
 /**
  * POST /api/upload
- * Multipart file upload with Supabase Storage support.
- * Falls back to local filesystem when Supabase is not configured.
+ * Multipart file upload with S3 → Supabase → local fallback.
+ *
+ * Storage priority:
+ *   1. AWS S3 (if AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY + AWS_S3_BUCKET configured)
+ *   2. Supabase Storage (if NEXT_PUBLIC_SUPABASE_URL + keys configured)
+ *   3. Local filesystem (public/uploads/...)
  *
  * FormData fields:
  *   - file           (File)     – required
@@ -16,8 +20,11 @@ import path from 'path'
  *   - folder         (string)   – optional, defaults to "general"
  *   - saveToLibrary  (string)   – optional, "true" (default) or "false"
  *
- * Returns { url, name, mediaType, size, path, imageLibraryId? }
+ * Returns { url, name, mediaType, size, path, imageLibraryId?, storage? }
  */
+
+// Auto-ensure S3 bucket on first upload (one-time setup)
+let s3BucketEnsured = false
 
 const ALLOWED_MIME = [
   'image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'image/svg+xml',
@@ -76,7 +83,16 @@ export async function POST(request: NextRequest) {
     const ext = path.extname(file.name) || `.${file.type.split('/')[1]}`
     const uniqueName = `${randomUUID()}${ext}`
 
-    // Upload via the storage helper (Supabase or local fallback)
+    // Auto-ensure S3 bucket on first upload
+    if (isS3Configured() && !s3BucketEnsured) {
+      const result = await ensureS3Bucket()
+      s3BucketEnsured = result.ok
+      if (!result.ok) {
+        console.warn('[Upload] S3 bucket setup failed:', result.message)
+      }
+    }
+
+    // Upload via the storage helper (S3 → Supabase → local fallback)
     const { path: filePath, url } = await uploadFile({
       bucket,
       file,
@@ -86,6 +102,8 @@ export async function POST(request: NextRequest) {
       contentType: file.type,
     })
 
+    // Determine which storage was actually used
+    const storage = isS3Configured() ? 's3' : (isSupabaseStorageConfigured() ? 'supabase' : 'local')
     let imageLibraryId: string | undefined
     let dbWarning: string | undefined
 
@@ -129,6 +147,7 @@ export async function POST(request: NextRequest) {
         size: file.size,
         path: filePath,
         imageLibraryId,
+        storage,
         warning: dbWarning,
       },
       { status: 201 }

@@ -27,7 +27,7 @@ import {
   Plus, Trash2, Edit3, FileText, Clock, Activity, Globe,
   BarChart3, UserCog, Zap, Calendar, Target, Briefcase,
   Filter, Key, Store, FileInput, Receipt, Settings,
-  Plug,
+  Plug, Database, HardDrive,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -426,6 +426,24 @@ export function SuperAdminView() {
     return arr as MenuItemDef[];
   }, [menuData, globalMenuData, menuScope]);
 
+  // ─── Storage Status ──────────────────────────────────────────────────────
+  const [storageStatus, setStorageStatus] = useState<{
+    activeProvider: string;
+    providers: {
+      s3: { configured: boolean; bucket?: string; region?: string };
+      supabase: { configured: boolean };
+      local: { configured: boolean; path: string };
+    };
+    bucketSetup?: { ok: boolean; message: string };
+  } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/storage/status')
+      .then((r) => r.json())
+      .then((data) => setStorageStatus(data))
+      .catch(() => {});
+  }, []);
+
   // Auto-select first tenant for feature flags
   useEffect(() => {
     if (tenants.length > 0 && !selectedTenantForFlags) {
@@ -624,6 +642,81 @@ export function SuperAdminView() {
                 </div>
               ))}
             </div>
+          </CardContent>
+        </Card>
+
+        {/* File Storage */}
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-sm font-medium text-white">File Storage</CardTitle>
+                <CardDescription className="text-xs text-slate-400">Image & file upload storage provider</CardDescription>
+              </div>
+              {storageStatus ? (
+                <Badge className={storageStatus.activeProvider === 's3' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : storageStatus.activeProvider === 'supabase' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'}>
+                  {storageStatus.activeProvider === 's3' ? 'AWS S3' : storageStatus.activeProvider === 'supabase' ? 'Supabase' : 'Local'}
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-slate-500">Checking...</Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {storageStatus?.activeProvider === 's3' ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-4 p-4 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
+                  <div className="flex items-center justify-center size-12 rounded-full bg-emerald-500/10">
+                    <Database className="size-6 text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm text-white">AWS S3 Bucket</p>
+                    <p className="text-xs text-slate-400">
+                      {storageStatus.providers.s3.bucket} ({storageStatus.providers.s3.region})
+                    </p>
+                    <p className="text-xs mt-0.5 text-emerald-400">
+                      {storageStatus.bucketSetup?.ok ? '✓ Bucket ready — accepting uploads' : storageStatus.bucketSetup?.message || 'Checking...'}
+                    </p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="p-2 rounded-lg bg-slate-800/50">
+                    <p className="text-[10px] text-slate-500">S3</p>
+                    <p className="text-xs font-semibold text-emerald-400">Active</p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-800/50">
+                    <p className="text-[10px] text-slate-500">Supabase</p>
+                    <p className="text-xs font-semibold text-slate-400">{storageStatus.providers.supabase.configured ? 'Available' : 'Not Set'}</p>
+                  </div>
+                  <div className="p-2 rounded-lg bg-slate-800/50">
+                    <p className="text-[10px] text-slate-500">Local</p>
+                    <p className="text-xs font-semibold text-slate-500">Fallback</p>
+                  </div>
+                </div>
+              </div>
+            ) : storageStatus?.activeProvider === 'supabase' ? (
+              <div className="flex items-center gap-4 p-4 rounded-lg bg-blue-500/5 border border-blue-500/20">
+                <div className="flex items-center justify-center size-12 rounded-full bg-blue-500/10">
+                  <Database className="size-6 text-blue-400" />
+                </div>
+                <div>
+                  <p className="font-medium text-sm text-white">Supabase Storage</p>
+                  <p className="text-xs text-slate-400">Files stored in Supabase buckets</p>
+                  <p className="text-xs mt-0.5 text-blue-400">Active — set AWS_S3_BUCKET in .env to upgrade to S3</p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-4 p-4 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                <div className="flex items-center justify-center size-12 rounded-full bg-amber-500/10">
+                  <HardDrive className="size-6 text-amber-400" />
+                </div>
+                <div>
+                  <p className="font-medium text-sm text-white">Local Filesystem</p>
+                  <p className="text-xs text-amber-400">Files stored on server disk — not recommended for production</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Set AWS S3 credentials in .env for cloud storage</p>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

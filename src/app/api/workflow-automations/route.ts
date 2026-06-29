@@ -1,10 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser } from '@/lib/auth';
 import { toISOString } from '@/lib/utils';
 
 export async function GET(req: NextRequest) {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    const tenantId = authUser.tenantId;
+    if (!tenantId) {
+      return NextResponse.json({ error: 'No tenant associated with user' }, { status: 400 });
+    }
+
     const automations = await db.workflowAutomation.findMany({
+      where: { tenantId },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -33,6 +45,16 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    const tenantId = authUser.tenantId;
+    if (!tenantId) {
+      return NextResponse.json({ error: 'No tenant associated with user' }, { status: 400 });
+    }
+
     const body = await req.json();
     const { name, description, triggerType, conditions, conditionLogic, actions, active } = body;
 
@@ -49,6 +71,8 @@ export async function POST(req: NextRequest) {
         conditionsJson: JSON.stringify(conditions || []),
         actionsJson: JSON.stringify(actions || []),
         active: active !== undefined ? active : true,
+        tenantId,
+        createdById: authUser.id,
       },
     });
 

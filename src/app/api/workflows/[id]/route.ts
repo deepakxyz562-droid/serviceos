@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser } from '@/lib/auth';
 
 function safeJsonParse(str: string | null, fallback: unknown = null) {
   if (!str) return fallback;
@@ -15,6 +16,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
     const { id } = await params;
     const workflow = await db.workflow.findUnique({
       where: { id },
@@ -30,6 +36,14 @@ export async function GET(
       );
     }
 
+    // Verify tenant ownership
+    if (workflow.tenantId && workflow.tenantId !== authUser.tenantId) {
+      return NextResponse.json(
+        { error: 'Access denied' },
+        { status: 403 }
+      );
+    }
+
     return NextResponse.json({
       id: workflow.id,
       name: workflow.name,
@@ -40,6 +54,7 @@ export async function GET(
       active: workflow.active,
       tags: safeJsonParse(workflow.tags, []),
       folderId: workflow.folderId,
+      tenantId: workflow.tenantId,
       workspaceId: workflow.workspaceId,
       createdById: workflow.createdById,
       createdAt: workflow.createdAt,
@@ -57,6 +72,11 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
     const { id } = await params;
     const body = await request.json();
 
@@ -65,6 +85,14 @@ export async function PUT(
       return NextResponse.json(
         { error: 'Workflow not found' },
         { status: 404 }
+      );
+    }
+
+    // Verify tenant ownership
+    if (existing.tenantId && existing.tenantId !== authUser.tenantId) {
+      return NextResponse.json(
+        { error: 'Access denied' },
+        { status: 403 }
       );
     }
 
@@ -110,6 +138,7 @@ export async function PUT(
       active: workflow.active,
       tags: safeJsonParse(workflow.tags, []),
       folderId: workflow.folderId,
+      tenantId: workflow.tenantId,
       workspaceId: workflow.workspaceId,
       createdById: workflow.createdById,
       createdAt: workflow.createdAt,
@@ -126,6 +155,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
     const { id } = await params;
 
     const existing = await db.workflow.findUnique({ where: { id } });
@@ -133,6 +167,14 @@ export async function DELETE(
       return NextResponse.json(
         { error: 'Workflow not found' },
         { status: 404 }
+      );
+    }
+
+    // Verify tenant ownership
+    if (existing.tenantId && existing.tenantId !== authUser.tenantId) {
+      return NextResponse.json(
+        { error: 'Access denied' },
+        { status: 403 }
       );
     }
 

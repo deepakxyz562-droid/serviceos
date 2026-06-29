@@ -308,37 +308,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Define plan details
+    // Define plan details — keep in sync with billing-seed.ts and paypal.ts
     const planDetails: Record<string, { amount: number; maxUsers: number; maxJobs: number; maxWorkflows: number; features: Record<string, boolean> }> = {
       starter: {
-        amount: 0,
+        amount: 29,
         maxUsers: 1,
         maxJobs: 100,
         maxWorkflows: 10,
         features: {
-          whatsappIntegration: false,
+          whatsappIntegration: true,
           customWorkflows: false,
           apiAccess: false,
           prioritySupport: false,
         },
       },
       growth: {
-        amount: 25,
+        amount: 79,
         maxUsers: 5,
-        maxJobs: 500,
+        maxJobs: 1000,
         maxWorkflows: 50,
         features: {
           whatsappIntegration: true,
           customWorkflows: true,
           apiAccess: false,
-          prioritySupport: false,
+          prioritySupport: true,
         },
       },
       pro: {
-        amount: 50,
+        amount: 149,
         maxUsers: 20,
-        maxJobs: 2000,
-        maxWorkflows: 200,
+        maxJobs: 99999,
+        maxWorkflows: 999,
         features: {
           whatsappIntegration: true,
           customWorkflows: true,

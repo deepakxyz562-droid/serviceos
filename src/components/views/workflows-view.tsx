@@ -30,7 +30,7 @@ import {
   MessageCircle, MessageSquarePlus, MailCheck, Banknote, CreditCard,
   Receipt, FileCheck2, WifiOff, Globe, MousePointerClick, TimerReset,
   Tag, PlusCircle, Bell, Save, Bot, Store,
-  Settings2, ChevronDown, ChevronUp, Sparkles,
+  Settings2, ChevronDown, ChevronUp, Sparkles, Wand2, LayoutTemplate,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -241,6 +241,134 @@ function detectTriggerType(nodes: { id: string; name: string; type: string }[]):
   return 'manual';
 }
 
+// ─── Workflow Templates ────────────────────────────────────────────────────
+
+interface WorkflowTemplate {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  icon: typeof Zap;
+  triggerType: string;
+  nodes: { id: string; name: string; type: string }[];
+  edges: { id: string; source: string; target: string }[];
+}
+
+const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
+  {
+    id: 'lead-followup',
+    name: 'Lead Follow-up',
+    description: 'Auto-send WhatsApp message when a new lead is created',
+    category: 'CRM',
+    icon: UserPlus,
+    triggerType: 'webhook',
+    nodes: [
+      { id: 'n1', name: 'New Lead Trigger', type: 'trigger' },
+      { id: 'n2', name: 'Wait 30 min', type: 'delay' },
+      { id: 'n3', name: 'Send WhatsApp', type: 'action' },
+    ],
+    edges: [
+      { id: 'e1', source: 'n1', target: 'n2' },
+      { id: 'e2', source: 'n2', target: 'n3' },
+    ],
+  },
+  {
+    id: 'job-assignment',
+    name: 'Job Assignment',
+    description: 'Assign new jobs to available employees and notify them',
+    category: 'Operations',
+    icon: Briefcase,
+    triggerType: 'event',
+    nodes: [
+      { id: 'n1', name: 'Job Created', type: 'trigger' },
+      { id: 'n2', name: 'Find Available Employee', type: 'action' },
+      { id: 'n3', name: 'Assign Job', type: 'action' },
+      { id: 'n4', name: 'Send Notification', type: 'action' },
+    ],
+    edges: [
+      { id: 'e1', source: 'n1', target: 'n2' },
+      { id: 'e2', source: 'n2', target: 'n3' },
+      { id: 'e3', source: 'n3', target: 'n4' },
+    ],
+  },
+  {
+    id: 'invoice-reminder',
+    name: 'Invoice Reminder',
+    description: 'Send payment reminders for overdue invoices',
+    category: 'Finance',
+    icon: Banknote,
+    triggerType: 'schedule',
+    nodes: [
+      { id: 'n1', name: 'Daily Schedule', type: 'trigger' },
+      { id: 'n2', name: 'Find Overdue Invoices', type: 'action' },
+      { id: 'n3', name: 'Send Reminder Email', type: 'action' },
+      { id: 'n4', name: 'Send WhatsApp Reminder', type: 'action' },
+    ],
+    edges: [
+      { id: 'e1', source: 'n1', target: 'n2' },
+      { id: 'e2', source: 'n2', target: 'n3' },
+      { id: 'e3', source: 'n2', target: 'n4' },
+    ],
+  },
+  {
+    id: 'customer-feedback',
+    name: 'Customer Feedback',
+    description: 'Request review after job completion',
+    category: 'CRM',
+    icon: MessageCircle,
+    triggerType: 'event',
+    nodes: [
+      { id: 'n1', name: 'Job Completed', type: 'trigger' },
+      { id: 'n2', name: 'Wait 24 hours', type: 'delay' },
+      { id: 'n3', name: 'Send Review Request', type: 'action' },
+    ],
+    edges: [
+      { id: 'e1', source: 'n1', target: 'n2' },
+      { id: 'e2', source: 'n2', target: 'n3' },
+    ],
+  },
+  {
+    id: 'booking-confirmation',
+    name: 'Booking Confirmation',
+    description: 'Auto-confirm bookings and send WhatsApp confirmation',
+    category: 'Operations',
+    icon: CalendarCheck,
+    triggerType: 'webhook',
+    nodes: [
+      { id: 'n1', name: 'Booking Created', type: 'trigger' },
+      { id: 'n2', name: 'Check Availability', type: 'condition' },
+      { id: 'n3', name: 'Confirm Booking', type: 'action' },
+      { id: 'n4', name: 'Send WhatsApp Confirmation', type: 'action' },
+    ],
+    edges: [
+      { id: 'e1', source: 'n1', target: 'n2' },
+      { id: 'e2', source: 'n2', target: 'n3' },
+      { id: 'e3', source: 'n3', target: 'n4' },
+    ],
+  },
+  {
+    id: 'quote-approval',
+    name: 'Quote Approval Flow',
+    description: 'Auto-convert accepted quotes to invoices',
+    category: 'Finance',
+    icon: Receipt,
+    triggerType: 'event',
+    nodes: [
+      { id: 'n1', name: 'Quote Accepted', type: 'trigger' },
+      { id: 'n2', name: 'Create Invoice', type: 'action' },
+      { id: 'n3', name: 'Send Invoice Email', type: 'action' },
+      { id: 'n4', name: 'Update Lead Status', type: 'action' },
+    ],
+    edges: [
+      { id: 'e1', source: 'n1', target: 'n2' },
+      { id: 'e2', source: 'n2', target: 'n3' },
+      { id: 'e3', source: 'n2', target: 'n4' },
+    ],
+  },
+];
+
+const TEMPLATE_CATEGORIES = ['All', 'CRM', 'Operations', 'Finance'];
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function WorkflowsView() {
@@ -269,6 +397,13 @@ export function WorkflowsView() {
   const [createForm, setCreateForm] = useState({
     name: '', triggerType: 'webhook', description: '',
   });
+
+  // Template & AI creation
+  const [createMode, setCreateMode] = useState<'blank' | 'template' | 'ai'>('blank');
+  const [selectedTemplate, setSelectedTemplate] = useState<WorkflowTemplate | null>(null);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [templateCategoryFilter, setTemplateCategoryFilter] = useState('All');
 
   // Loading states for async operations
   const [togglingId, setTogglingId] = useState<string | null>(null);
@@ -477,12 +612,24 @@ export function WorkflowsView() {
     if (!createForm.name.trim()) { toast.error('Workflow name is required'); return; }
     
     setCreating(true);
+
+    // Determine nodes and edges based on creation mode
+    let nodes: { id: string; name: string; type: string }[] = [];
+    let edges: { id: string; source: string; target: string }[] = [];
+
+    if (createMode === 'template' && selectedTemplate) {
+      nodes = selectedTemplate.nodes;
+      edges = selectedTemplate.edges;
+    } else {
+      nodes = [{ id: 'n1', name: TRIGGER_CONFIG[createForm.triggerType]?.label || 'Trigger', type: 'trigger' }];
+      edges = [];
+    }
+
     const newWorkflow: WorkflowItem = {
       id: `wf-${Date.now()}`, name: createForm.name.trim(),
       description: createForm.description.trim() || null,
-      triggerType: createForm.triggerType,
-      nodes: [{ id: 'n1', name: TRIGGER_CONFIG[createForm.triggerType]?.label || 'Trigger', type: 'trigger' }],
-      edges: [], active: false, tags: [],
+      triggerType: createMode === 'template' && selectedTemplate ? selectedTemplate.triggerType : createForm.triggerType,
+      nodes, edges, active: false, tags: createMode === 'template' ? ['template'] : [],
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       executionCount: 0, lastRunAt: null, successRate: 0,
     };
@@ -495,14 +642,13 @@ export function WorkflowsView() {
           name: createForm.name.trim(),
           description: createForm.description.trim() || null,
           nodes: newWorkflow.nodes,
-          edges: [],
-          tags: [],
+          edges: newWorkflow.edges,
+          tags: newWorkflow.tags,
         }),
       });
       
       if (res.ok) {
         const data = await res.json();
-        // Use the API-returned ID so canvas can load it
         newWorkflow.id = data.id;
         toast.success('Workflow created');
       } else {
@@ -515,7 +661,54 @@ export function WorkflowsView() {
     setWorkflows(prev => [newWorkflow, ...prev]);
     setShowCreateDialog(false);
     setCreateForm({ name: '', triggerType: 'webhook', description: '' });
+    setCreateMode('blank');
+    setSelectedTemplate(null);
     setCreating(false);
+  };
+
+  // ─── AI Generate Workflow ────────────────────────────────────────────
+
+  const handleAIGenerate = async () => {
+    if (!aiPrompt.trim() || isGenerating) return;
+    setIsGenerating(true);
+
+    try {
+      const res = await fetch('/api/ai/generate-workflow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: aiPrompt.trim() }),
+      });
+
+      if (!res.ok) throw new Error('Failed to generate workflow');
+      const data = await res.json();
+      const workflow = data.workflow;
+
+      const createRes = await fetch('/api/workflows', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: workflow.name || `AI: ${aiPrompt.slice(0, 50)}`,
+          nodes: workflow.nodes || [],
+          edges: workflow.edges || [],
+          tags: ['ai-generated'],
+        }),
+      });
+
+      if (!createRes.ok) throw new Error('Failed to create workflow');
+      const newWf = await createRes.json();
+
+      toast.success('AI workflow created! Opening in canvas...');
+      setCurrentWorkflowId(newWf.id);
+      setCurrentView('canvas');
+      setShowCreateDialog(false);
+      setAiPrompt('');
+      setCreateMode('blank');
+    } catch (error) {
+      console.error('Failed to generate workflow:', error);
+      toast.error('Failed to generate workflow. Please try again.');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   // ─── Save Workflow (detail dialog save button) ────────────────────────
@@ -636,7 +829,14 @@ export function WorkflowsView() {
           <Button variant="outline" size="sm" onClick={fetchWorkflows} disabled={loading}>
             <RefreshCw className={cn('size-3.5 mr-1.5', loading && 'animate-spin')} /> Refresh
           </Button>
-          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowCreateDialog(true)}>
+          <Button
+            className="gap-1.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-sm"
+            size="sm"
+            onClick={() => { setCreateMode('ai'); setShowCreateDialog(true); }}
+          >
+            <Wand2 className="size-3.5" /> AI Generate
+          </Button>
+          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => { setCreateMode('blank'); setShowCreateDialog(true); }}>
             <Plus className="size-4 mr-1.5" /> New Workflow
           </Button>
         </div>
@@ -1118,39 +1318,201 @@ export function WorkflowsView() {
       </Tabs>
 
       {/* Create Workflow Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="sm:max-w-md">
+      <Dialog open={showCreateDialog} onOpenChange={(open) => { setShowCreateDialog(open); if (!open) { setCreateMode('blank'); setSelectedTemplate(null); setAiPrompt(''); } }}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create Workflow</DialogTitle>
-            <DialogDescription>Set up a new automated workflow for your business</DialogDescription>
+            <DialogTitle className="flex items-center gap-2">
+              {createMode === 'ai' ? <><Sparkles className="size-5 text-emerald-500" /> Generate with AI</> 
+                : createMode === 'template' ? <><LayoutTemplate className="size-5 text-emerald-500" /> Start from Template</>
+                : <><Plus className="size-5" /> Create Workflow</>}
+            </DialogTitle>
+            <DialogDescription>
+              {createMode === 'ai' ? 'Describe what you want to automate and AI will build it for you'
+                : createMode === 'template' ? 'Choose a pre-built workflow template to get started quickly'
+                : 'Set up a new automated workflow for your business'}
+            </DialogDescription>
           </DialogHeader>
+
+          {/* Mode Tabs */}
+          <div className="flex gap-1 p-1 bg-muted/50 rounded-lg">
+            {[
+              { key: 'blank' as const, label: 'Blank', icon: Plus },
+              { key: 'template' as const, label: 'Templates', icon: LayoutTemplate },
+              { key: 'ai' as const, label: 'AI Generate', icon: Wand2 },
+            ].map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                onClick={() => setCreateMode(key)}
+                className={cn(
+                  'flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium transition-colors',
+                  createMode === key
+                    ? 'bg-background shadow-sm text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <Icon className="size-3.5" />
+                {label}
+              </button>
+            ))}
+          </div>
+
           <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Workflow Name *</Label>
-              <Input placeholder="e.g., Lead Follow-up Automation" value={createForm.name} onChange={e => setCreateForm({ ...createForm, name: e.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <Label>Trigger Type</Label>
-              <Select value={createForm.triggerType} onValueChange={v => setCreateForm({ ...createForm, triggerType: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(TRIGGER_CONFIG).map(([key, cfg]) => {
-                    const Icon = cfg.icon;
-                    return <SelectItem key={key} value={key}><span className="flex items-center gap-2"><Icon className="size-3.5" />{cfg.label}</span></SelectItem>;
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Description</Label>
-              <Textarea placeholder="Describe what this workflow does..." value={createForm.description} onChange={e => setCreateForm({ ...createForm, description: e.target.value })} rows={3} />
-            </div>
+            {createMode === 'ai' ? (
+              /* AI Prompt Mode */
+              <div className="space-y-3">
+                <Textarea
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  placeholder="Describe the workflow you want to create... e.g., 'When a new lead comes in, wait 30 minutes, then send a WhatsApp message'"
+                  className="min-h-[120px] resize-none"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                      handleAIGenerate();
+                    }
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">Press Ctrl+Enter to generate</p>
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">Try an example:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      'Send WhatsApp when a new lead is created',
+                      'Daily report of completed jobs via email',
+                      'Auto-assign jobs to available employees',
+                      'Payment reminder for overdue invoices',
+                    ].map((example) => (
+                      <button
+                        key={example}
+                        onClick={() => setAiPrompt(example)}
+                        className={cn(
+                          'text-xs px-3 py-1.5 rounded-full border transition-colors',
+                          aiPrompt === example
+                            ? 'bg-emerald-50 border-emerald-300 text-emerald-700'
+                            : 'hover:bg-emerald-50 hover:border-emerald-200 text-muted-foreground'
+                        )}
+                      >
+                        {example}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : createMode === 'template' ? (
+              /* Template Selection Mode */
+              <div className="space-y-3">
+                {/* Category Filter */}
+                <div className="flex gap-1.5">
+                  {TEMPLATE_CATEGORIES.map((cat) => (
+                    <button
+                      key={cat}
+                      onClick={() => setTemplateCategoryFilter(cat)}
+                      className={cn(
+                        'px-3 py-1 rounded-full text-xs font-medium transition-colors',
+                        templateCategoryFilter === cat
+                          ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                          : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                      )}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+                {/* Template Cards */}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {WORKFLOW_TEMPLATES
+                    .filter((t) => templateCategoryFilter === 'All' || t.category === templateCategoryFilter)
+                    .map((template) => {
+                      const Icon = template.icon;
+                      const isSelected = selectedTemplate?.id === template.id;
+                      return (
+                        <button
+                          key={template.id}
+                          onClick={() => {
+                            setSelectedTemplate(isSelected ? null : template);
+                            setCreateForm({
+                              name: template.name,
+                              triggerType: template.triggerType,
+                              description: template.description,
+                            });
+                          }}
+                          className={cn(
+                            'text-left p-3 rounded-lg border-2 transition-all',
+                            isSelected
+                              ? 'border-emerald-500 bg-emerald-50/50 shadow-sm'
+                              : 'border-border hover:border-emerald-300 hover:bg-emerald-50/30'
+                          )}
+                        >
+                          <div className="flex items-start gap-2">
+                            <div className={cn('flex h-8 w-8 items-center justify-center rounded-lg shrink-0', isSelected ? 'bg-emerald-100' : 'bg-muted/50')}>
+                              <Icon className={cn('size-4', isSelected ? 'text-emerald-600' : 'text-muted-foreground')} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{template.name}</p>
+                              <p className="text-xs text-muted-foreground line-clamp-2">{template.description}</p>
+                              <div className="flex items-center gap-1.5 mt-1">
+                                <Badge variant="outline" className="text-[9px] px-1.5 py-0">{template.category}</Badge>
+                                <span className="text-[10px] text-muted-foreground">{template.nodes.length} steps</span>
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                </div>
+                {selectedTemplate && (
+                  <div className="space-y-2">
+                    <Label>Workflow Name</Label>
+                    <Input value={createForm.name} onChange={e => setCreateForm({ ...createForm, name: e.target.value })} />
+                    <Label>Description</Label>
+                    <Textarea value={createForm.description} onChange={e => setCreateForm({ ...createForm, description: e.target.value })} rows={2} />
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Blank Mode - original form */
+              <div className="space-y-2">
+                <div className="space-y-2">
+                  <Label>Workflow Name *</Label>
+                  <Input placeholder="e.g., Lead Follow-up Automation" value={createForm.name} onChange={e => setCreateForm({ ...createForm, name: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Trigger Type</Label>
+                  <Select value={createForm.triggerType} onValueChange={v => setCreateForm({ ...createForm, triggerType: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(TRIGGER_CONFIG).map(([key, cfg]) => {
+                        const Icon = cfg.icon;
+                        return <SelectItem key={key} value={key}><span className="flex items-center gap-2"><Icon className="size-3.5" />{cfg.label}</span></SelectItem>;
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Description</Label>
+                  <Textarea placeholder="Describe what this workflow does..." value={createForm.description} onChange={e => setCreateForm({ ...createForm, description: e.target.value })} rows={3} />
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setShowCreateDialog(false)}>Cancel</Button>
-            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreate} disabled={!createForm.name.trim() || creating}>
-              {creating ? <><Loader2 className="size-4 mr-1.5 animate-spin" /> Creating...</> : 'Create Workflow'}
-            </Button>
+            {createMode === 'ai' ? (
+              <Button
+                className="gap-1.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white"
+                onClick={handleAIGenerate}
+                disabled={!aiPrompt.trim() || isGenerating}
+              >
+                {isGenerating ? <><Loader2 className="size-4 animate-spin" /> Generating...</> : <><Sparkles className="size-4" /> Generate Workflow</>}
+              </Button>
+            ) : createMode === 'template' ? (
+              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreate} disabled={!selectedTemplate || !createForm.name.trim() || creating}>
+                {creating ? <><Loader2 className="size-4 mr-1.5 animate-spin" /> Creating...</> : <><LayoutTemplate className="size-4 mr-1.5" /> Use Template</>}
+              </Button>
+            ) : (
+              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreate} disabled={!createForm.name.trim() || creating}>
+                {creating ? <><Loader2 className="size-4 mr-1.5 animate-spin" /> Creating...</> : 'Create Workflow'}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser } from '@/lib/auth';
 
 function safeJsonParse(str: string | null, fallback: unknown = null) {
   if (!str) return fallback;
@@ -12,6 +13,16 @@ function safeJsonParse(str: string | null, fallback: unknown = null) {
 
 export async function GET(request: NextRequest) {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    const tenantId = authUser.tenantId;
+    if (!tenantId) {
+      return NextResponse.json({ error: 'No tenant associated with user' }, { status: 400 });
+    }
+
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search') || '';
     const active = searchParams.get('active');
@@ -19,12 +30,12 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50', 10);
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: any = { tenantId };
 
     if (search) {
       where.OR = [
-        { name: { contains: search } },
-        { description: { contains: search } },
+        { name: { contains: search }, tenantId },
+        { description: { contains: search }, tenantId },
       ];
     }
 
@@ -56,6 +67,7 @@ export async function GET(request: NextRequest) {
         active: w.active,
         tags: safeJsonParse(w.tags, []),
         folderId: w.folderId,
+        tenantId: w.tenantId,
         workspaceId: w.workspaceId,
         createdById: w.createdById,
         createdAt: w.createdAt,
@@ -77,6 +89,16 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    const tenantId = authUser.tenantId;
+    if (!tenantId) {
+      return NextResponse.json({ error: 'No tenant associated with user' }, { status: 400 });
+    }
+
     const body = await request.json();
 
     const workflow = await db.workflow.create({
@@ -89,8 +111,9 @@ export async function POST(request: NextRequest) {
         tags: JSON.stringify(body.tags || []),
         active: false,
         folderId: body.folderId || null,
+        tenantId,
         workspaceId: body.workspaceId || null,
-        createdById: body.createdById || null,
+        createdById: authUser.id,
       },
     });
 
@@ -105,6 +128,7 @@ export async function POST(request: NextRequest) {
         active: workflow.active,
         tags: safeJsonParse(workflow.tags, []),
         folderId: workflow.folderId,
+        tenantId: workflow.tenantId,
         workspaceId: workflow.workspaceId,
         createdById: workflow.createdById,
         createdAt: workflow.createdAt,

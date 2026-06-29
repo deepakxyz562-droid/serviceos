@@ -40,6 +40,8 @@ import {
   Settings,
   Percent,
   Radio,
+  Database,
+  HardDrive,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -374,6 +376,7 @@ export function SuperAdminView() {
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [paypalConfigured, setPaypalConfigured] = useState(false);
   const [paypalIsSandbox, setPaypalIsSandbox] = useState(false);
+  const [storageStatus, setStorageStatus] = useState<{ activeProvider: string; providers: { s3: { configured: boolean; bucket?: string; region?: string }; supabase: { configured: boolean }; local: { configured: boolean; path: string } }; bucketSetup?: { ok: boolean; message: string } } | null>(null);
 
   // ─── Data Fetching ───────────────────────────────────────────────────────
 
@@ -429,6 +432,17 @@ export function SuperAdminView() {
       }
     } catch {
       // PayPal config fetch is non-critical
+    }
+
+    // Fetch storage status (non-critical)
+    try {
+      const storageRes = await fetch('/api/storage/status');
+      if (storageRes.ok) {
+        const storageData = await storageRes.json();
+        setStorageStatus(storageData);
+      }
+    } catch {
+      // Storage status fetch is non-critical
     }
   }, []);
 
@@ -1247,6 +1261,17 @@ export function SuperAdminView() {
                   </div>
                 </CardContent>
               </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2">
+                    <Database className={`size-4 ${storageStatus?.activeProvider === 's3' ? 'text-emerald-500' : 'text-muted-foreground/40'}`} />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Storage</p>
+                      <p className="text-lg font-bold">{storageStatus?.activeProvider === 's3' ? 'S3' : storageStatus?.activeProvider === 'supabase' ? 'Supabase' : 'Local'}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           )}
 
@@ -1293,6 +1318,83 @@ export function SuperAdminView() {
                     <p className="text-xs text-muted-foreground/70">
                       Add PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET to your .env file to enable PayPal payments.
                     </p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* S3 Storage Configuration */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">File Storage</CardTitle>
+                  <CardDescription>Image &amp; file upload storage provider</CardDescription>
+                </div>
+                {storageStatus ? (
+                  <Badge className={storageStatus.activeProvider === 's3' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : storageStatus.activeProvider === 'supabase' ? 'bg-blue-100 text-blue-800 border-blue-200' : 'bg-amber-100 text-amber-800 border-amber-200'}>
+                    {storageStatus.activeProvider === 's3' ? 'AWS S3' : storageStatus.activeProvider === 'supabase' ? 'Supabase' : 'Local'}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-muted-foreground">Checking...</Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {storageStatus?.activeProvider === 's3' ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-4 p-4 rounded-lg bg-emerald-50 dark:bg-emerald-950/30">
+                    <div className="flex items-center justify-center size-12 rounded-full bg-emerald-100">
+                      <Database className="size-6 text-emerald-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">AWS S3 Bucket</p>
+                      <p className="text-xs text-muted-foreground">
+                        {storageStatus.providers.s3.bucket} ({storageStatus.providers.s3.region})
+                      </p>
+                      <p className="text-xs mt-0.5 text-emerald-600">
+                        {storageStatus.bucketSetup?.ok ? '✓ Bucket ready — accepting uploads' : storageStatus.bucketSetup?.message || 'Checking...'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="p-2 rounded-lg bg-muted/30">
+                      <p className="text-[10px] text-muted-foreground">S3</p>
+                      <p className="text-xs font-semibold text-emerald-600">Active</p>
+                    </div>
+                    <div className="p-2 rounded-lg bg-muted/30">
+                      <p className="text-[10px] text-muted-foreground">Supabase</p>
+                      <p className="text-xs font-semibold">{storageStatus.providers.supabase.configured ? 'Available' : 'Not Set'}</p>
+                    </div>
+                    <div className="p-2 rounded-lg bg-muted/30">
+                      <p className="text-[10px] text-muted-foreground">Local</p>
+                      <p className="text-xs font-semibold text-muted-foreground">Fallback</p>
+                    </div>
+                  </div>
+                </div>
+              ) : storageStatus?.activeProvider === 'supabase' ? (
+                <div className="flex items-center gap-4 p-4 rounded-lg bg-blue-50 dark:bg-blue-950/30">
+                  <div className="flex items-center justify-center size-12 rounded-full bg-blue-100">
+                    <Database className="size-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">Supabase Storage</p>
+                    <p className="text-xs text-muted-foreground">Files stored in Supabase buckets</p>
+                    <p className="text-xs mt-0.5 text-blue-600">Active — set AWS_S3_BUCKET in .env to upgrade to S3</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-4 p-4 rounded-lg bg-amber-50 dark:bg-amber-950/30">
+                    <div className="flex items-center justify-center size-12 rounded-full bg-amber-100">
+                      <HardDrive className="size-6 text-amber-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">Local Filesystem</p>
+                      <p className="text-xs text-amber-600">Files stored on server disk — not recommended for production</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Set AWS S3 credentials in .env for cloud storage</p>
+                    </div>
                   </div>
                 </div>
               )}

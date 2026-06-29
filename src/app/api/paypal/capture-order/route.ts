@@ -90,24 +90,24 @@ export async function POST(request: NextRequest) {
       ? parseFloat(captureUnit.amount.value)
       : price;
 
-    // Plan details
+    // Plan details — keep in sync with billing-seed.ts and paypal.ts PAYPAL_PLANS
     const planDetails: Record<string, { amount: number; maxUsers: number; maxJobs: number; maxWorkflows: number; features: Record<string, boolean> }> = {
       starter: {
-        amount: 10,
+        amount: 29,
         maxUsers: 1,
         maxJobs: 100,
         maxWorkflows: 10,
         features: { whatsappIntegration: true, customWorkflows: false, apiAccess: false, prioritySupport: false },
       },
       growth: {
-        amount: 25,
+        amount: 79,
         maxUsers: 5,
         maxJobs: 1000,
         maxWorkflows: 50,
         features: { whatsappIntegration: true, customWorkflows: true, apiAccess: false, prioritySupport: true },
       },
       pro: {
-        amount: 50,
+        amount: 149,
         maxUsers: 999,
         maxJobs: 99999,
         maxWorkflows: 999,
