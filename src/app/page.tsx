@@ -254,6 +254,51 @@ export default function HomePage() {
     setUnauthView('landing');
   }, []);
 
+  const handleTryDemo = useCallback(async () => {
+    try {
+      toast.loading('Setting up your live demo...', { id: 'demo-login' });
+      const response = await fetch('/api/demo-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        toast.dismiss('demo-login');
+        toast.error(err.error || 'Failed to start demo. Please try again.');
+        return;
+      }
+
+      const data = await response.json();
+
+      // Set auth state
+      const authData = {
+        isAuthenticated: true,
+        user: data.user,
+        tenant: data.tenant || null,
+      };
+      setAuth(authData);
+
+      // Store in localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('serviceos_auth', JSON.stringify({
+          ...authData,
+          token: data.token,
+          isDemo: true,
+        }));
+      }
+
+      toast.dismiss('demo-login');
+      toast.success('Welcome to the ABC Plumbing demo! Explore everything freely.', {
+        duration: 5000,
+      });
+    } catch (err) {
+      toast.dismiss('demo-login');
+      toast.error('Something went wrong. Please try again.');
+      console.error('Demo login error:', err);
+    }
+  }, [setAuth]);
+
   const handleAuthSuccess = useCallback(
     (user: any, tenant?: any) => {
       const authData = {
@@ -413,6 +458,7 @@ export default function HomePage() {
       <LandingPage
         onGetStarted={handleShowAuth}
         onSignIn={handleShowAuth}
+        onTryDemo={handleTryDemo}
       />
       <PWAInstallBanner />
       <IOSInstallBanner />

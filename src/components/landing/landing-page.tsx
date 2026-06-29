@@ -58,6 +58,7 @@ import { Separator } from '@/components/ui/separator';
 interface LandingPageProps {
   onGetStarted: () => void;
   onSignIn: () => void;
+  onTryDemo?: () => void;
 }
 
 // ─── Animation Variants ─────────────────────────────────────────────────────
@@ -446,7 +447,7 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
 
 // ─── Hero Section ───────────────────────────────────────────────────────────
 
-function HeroSection({ onGetStarted }: { onGetStarted: () => void }) {
+function HeroSection({ onGetStarted, onTryDemo }: { onGetStarted: () => void; onTryDemo?: () => void }) {
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-black">
       {/* Background gradients */}
@@ -500,7 +501,7 @@ function HeroSection({ onGetStarted }: { onGetStarted: () => void }) {
             From leads to invoices — run your entire field service business on ServiceOS.
           </motion.p>
 
-          <motion.div variants={staggerItem} className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
+          <motion.div variants={staggerItem} className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
             <Button
               size="lg"
               onClick={onGetStarted}
@@ -509,6 +510,16 @@ function HeroSection({ onGetStarted }: { onGetStarted: () => void }) {
               Start Free Trial
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
+            {onTryDemo && (
+              <Button
+                size="lg"
+                onClick={onTryDemo}
+                className="bg-white text-black font-semibold px-8 h-12 text-base shadow-lg shadow-white/20 hover:bg-zinc-100"
+              >
+                <Sparkles className="w-4 h-4 mr-2" />
+                Try Live Demo
+              </Button>
+            )}
             <Button
               variant="outline"
               size="lg"
@@ -518,6 +529,15 @@ function HeroSection({ onGetStarted }: { onGetStarted: () => void }) {
               Watch Demo
             </Button>
           </motion.div>
+
+          {/* Demo hint */}
+          {onTryDemo && (
+            <motion.div variants={staggerItem} className="mb-16">
+              <p className="text-zinc-500 text-sm">
+                🚀 Try the live demo — explore a real plumbing business with 2,000 customers, 300 bookings, and 500 invoices. No signup needed.
+              </p>
+            </motion.div>
+          )}
 
           {/* Mock Dashboard Preview */}
           <motion.div
@@ -1233,11 +1253,11 @@ function Footer() {
 
 // ─── Main Export ─────────────────────────────────────────────────────────────
 
-export function LandingPage({ onGetStarted, onSignIn }: LandingPageProps) {
+export function LandingPage({ onGetStarted, onSignIn, onTryDemo }: LandingPageProps) {
   return (
     <div className="min-h-screen bg-black">
       <Navbar onGetStarted={onGetStarted} onSignIn={onSignIn} />
-      <HeroSection onGetStarted={onGetStarted} />
+      <HeroSection onGetStarted={onGetStarted} onTryDemo={onTryDemo} />
       <TargetIndustriesSection />
       <HowItWorksSection />
       <CoreFlowSection />
