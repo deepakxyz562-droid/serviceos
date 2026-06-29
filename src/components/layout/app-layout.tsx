@@ -99,6 +99,10 @@ const TemplateStudioView = lazy(() => import('@/components/templates/template-st
 // Super Admin
 const SuperAdminView = lazy(() => import('@/components/views/superadmin-view').then(m => ({ default: m.SuperAdminView })));
 
+// Help & Support Center
+const HelpCenterView = lazy(() => import('@/components/views/help-center-view').then(m => ({ default: m.HelpCenterView })));
+const HelpAdminView = lazy(() => import('@/components/views/help-admin-view').then(m => ({ default: m.HelpAdminView })));
+
 // ─── View mapping ───────────────────────────────────────────────────────────
 
 const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentType>> = {
@@ -177,6 +181,14 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   templateStudio: TemplateStudioView,
   // Super Admin
   superadmin: SuperAdminView,
+  // Help & Support Center
+  helpCenter: HelpCenterView,
+  helpTicketDetail: HelpCenterView,
+  helpAdminTickets: HelpAdminView,
+  helpAdminTicketDetail: HelpAdminView,
+  helpAdminKB: HelpAdminView,
+  helpAdminCategories: HelpAdminView,
+  helpAdminAnnouncements: HelpAdminView,
 };
 
 // ─── Loading fallback ────────────────────────────────────────────────────────

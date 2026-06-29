@@ -157,6 +157,12 @@ const TABLE_MAP: Record<string, string> = {
   metaLead: 'MetaLead',
   googleAdsLeadConfig: 'GoogleAdsLeadConfig',
   googleAdsLead: 'GoogleAdsLead',
+  // ── Help & Support Center ──
+  supportCategory: 'SupportCategory',
+  supportTicket: 'SupportTicket',
+  ticketMessage: 'TicketMessage',
+  ticketAttachment: 'TicketAttachment',
+  announcement: 'Announcement',
 };
 
 // Known missing tables in Supabase (return empty results gracefully)
@@ -181,6 +187,7 @@ const TABLES_WITHOUT_UPDATED_AT = new Set<string>([
   'ContactExport',
   'MetaLead',
   'GoogleAdsLead',
+  'TicketAttachment',
 ]);
 
 // ── Relation Mapping ───────────────────────────────────────────────────────

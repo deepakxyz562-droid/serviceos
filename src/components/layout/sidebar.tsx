@@ -59,6 +59,9 @@ import {
   Upload,
   Download,
   Mail,
+  LifeBuoy,
+  Ticket,
+  Megaphone as MegaphoneIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -191,6 +194,7 @@ const ownerNavSections: NavSection[] = [
       { view: 'auditLogs', label: 'Audit Logs', icon: ScrollText },
       { view: 'customerPortal', label: 'Customer Portal', icon: Globe },
       { view: 'employeePortal', label: 'Employee Portal', icon: HardHat },
+      { view: 'helpCenter', label: 'Help & Support', icon: LifeBuoy },
     ],
   },
 ];
@@ -309,6 +313,10 @@ const superadminNavSections: NavSection[] = [
       { view: 'emailProviders', label: 'Email Providers', icon: Mail },
       { view: 'credentials', label: 'Credentials', icon: KeyRound },
       { view: 'auditLogs', label: 'Audit Logs', icon: ScrollText },
+      { view: 'helpAdminTickets', label: 'Support Tickets', icon: Ticket },
+      { view: 'helpAdminKB', label: 'Knowledge Base', icon: BookOpen },
+      { view: 'helpAdminCategories', label: 'Categories', icon: FolderTree },
+      { view: 'helpAdminAnnouncements', label: 'Announcements', icon: MegaphoneIcon },
     ],
   },
 ];

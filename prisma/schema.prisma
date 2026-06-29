@@ -3038,3 +3038,143 @@ model TemplateAsset {
   @@index([companyId, folder])
   @@index([bucket])
 }
+
+// ==========================================
+// HELP & SUPPORT CENTER
+// ==========================================
+
+model SupportCategory {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String
+  description String?
+  icon        String   @default("FolderOpen")
+  color       String   @default("#0f766e")
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  isSystem    Boolean  @default(false)  // system categories can't be deleted
+  parentId    String?  // for nested categories
+  tenantId    String?  // null = global (super-admin managed)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  parent     SupportCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children   SupportCategory[] @relation("CategoryHierarchy")
+  tickets    SupportTicket[]
+
+  @@unique([slug, tenantId])
+  @@index([tenantId])
+  @@index([isActive])
+  @@index([parentId])
+}
+
+model SupportTicket {
+  id              String   @id @default(cuid())
+  ticketNumber    String   @unique  // auto-generated: SUP-2026-000125
+  subject         String
+  description     String
+  categoryId      String?
+  priority        String   @default("medium")  // low, medium, high, urgent
+  status          String   @default("open")     // open, in_progress, waiting_customer, resolved, closed
+  type            String   @default("general")  // general, bug, feature, billing, technical
+  source          String   @default("web")      // web, email, whatsapp, api
+  tagsJson        String   @default("[]")
+  metadataJson    String   @default("{}")
+  // Reporter (tenant user)
+  reporterId      String
+  reporterEmail   String?
+  reporterName    String?
+  tenantId        String
+  // Assignee (super-admin/support agent)
+  assigneeId      String?
+  assigneeName    String?
+  // Resolution
+  resolution      String?
+  resolvedAt      DateTime?
+  closedAt        DateTime?
+  // Satisfaction
+  satisfactionRating Int?
+  satisfactionComment String?
+  // Timestamps
+  firstResponseAt DateTime?
+  lastMessageAt   DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  category    SupportCategory?  @relation(fields: [categoryId], references: [id])
+  messages    TicketMessage[]
+  attachments TicketAttachment[]
+
+  @@index([tenantId])
+  @@index([reporterId])
+  @@index([assigneeId])
+  @@index([status])
+  @@index([priority])
+  @@index([categoryId])
+  @@index([ticketNumber])
+  @@index([createdAt])
+}
+
+model TicketMessage {
+  id          String   @id @default(cuid())
+  ticketId    String
+  content     String
+  contentType String   @default("text")  // text, html, markdown
+  authorId    String
+  authorName  String?
+  authorRole  String   @default("user")  // user, admin, agent, system
+  isInternal  Boolean  @default(false)   // internal notes (not visible to user)
+  metadataJson String  @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  ticket      SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  attachments TicketAttachment[]
+
+  @@index([ticketId])
+  @@index([authorId])
+  @@index([createdAt])
+}
+
+model TicketAttachment {
+  id          String   @id @default(cuid())
+  messageId   String?
+  ticketId    String
+  fileName    String
+  filePath    String
+  fileSize    Int      @default(0)
+  mimeType    String
+  uploadedBy  String
+  createdAt   DateTime @default(now())
+
+  ticket  SupportTicket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  message TicketMessage? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId])
+  @@index([messageId])
+}
+
+model Announcement {
+  id          String   @id @default(cuid())
+  title       String
+  content     String
+  type        String   @default("info")  // new_feature, maintenance, bug_fix, system_update, info
+  priority    String   @default("normal") // low, normal, high, critical
+  status      String   @default("draft")  // draft, published, archived
+  targetRole  String   @default("all")    // all, tenant, superadmin
+  icon        String   @default("Bell")
+  color       String   @default("#0f766e")
+  isPinned    Boolean  @default(false)
+  publishedAt DateTime?
+  expiresAt   DateTime?
+  tenantId    String?  // null = global (visible to all tenants)
+  authorId    String?
+  authorName  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([type])
+  @@index([publishedAt])
+}

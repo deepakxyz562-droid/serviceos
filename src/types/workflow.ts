@@ -192,5 +192,7 @@ export type ViewType =
   | 'groups' | 'tags' | 'contactImports' | 'contactExports' | 'audienceAnalytics' | 'emailCampaigns'
   // Communication Providers
   | 'emailProviders' | 'emailTemplates'
+  // Help & Support Center
+  | 'helpCenter' | 'helpTicketDetail' | 'helpAdminTickets' | 'helpAdminTicketDetail' | 'helpAdminKB' | 'helpAdminCategories' | 'helpAdminAnnouncements'
   // Super Admin
   | 'superadmin';
