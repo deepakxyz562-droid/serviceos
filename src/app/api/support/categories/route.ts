@@ -2,7 +2,29 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
-// GET /api/support/categories — List categories
+// Default categories to auto-seed on first fetch if table is empty
+const DEFAULT_CATEGORIES = [
+  { name: 'Account & Billing', slug: 'account-billing', icon: 'CreditCard', color: '#0f766e', sortOrder: 1 },
+  { name: 'Technical Issues', slug: 'technical-issues', icon: 'Wrench', color: '#dc2626', sortOrder: 2 },
+  { name: 'Feature Request', slug: 'feature-request', icon: 'Sparkles', color: '#7c3aed', sortOrder: 3 },
+  { name: 'Getting Started', slug: 'getting-started', icon: 'Rocket', color: '#ea580c', sortOrder: 4 },
+  { name: 'Integrations', slug: 'integrations', icon: 'Plug', color: '#0891b2', sortOrder: 5 },
+  { name: 'WhatsApp & Messaging', slug: 'whatsapp-messaging', icon: 'MessageSquare', color: '#16a34a', sortOrder: 6 },
+  { name: 'Jobs & Scheduling', slug: 'jobs-scheduling', icon: 'Briefcase', color: '#4f46e5', sortOrder: 7 },
+  { name: 'CRM & Leads', slug: 'crm-leads', icon: 'Target', color: '#be185d', sortOrder: 8 },
+  { name: 'Invoices & Payments', slug: 'invoices-payments', icon: 'Receipt', color: '#0d9488', sortOrder: 9 },
+  { name: 'Reports & Analytics', slug: 'reports-analytics', icon: 'BarChart3', color: '#6366f1', sortOrder: 10 },
+  { name: 'Team Management', slug: 'team-management', icon: 'Users', color: '#059669', sortOrder: 11 },
+  { name: 'Security & Privacy', slug: 'security-privacy', icon: 'Shield', color: '#9333ea', sortOrder: 12 },
+  { name: 'Mobile App', slug: 'mobile-app', icon: 'Smartphone', color: '#e11d48', sortOrder: 13 },
+  { name: 'API & Developer', slug: 'api-developer', icon: 'Code', color: '#0284c7', sortOrder: 14 },
+  { name: 'Data Export & Import', slug: 'data-export-import', icon: 'Database', color: '#ca8a04', sortOrder: 15 },
+  { name: 'Workflow Automation', slug: 'workflow-automation', icon: 'Workflow', color: '#6d28d9', sortOrder: 16 },
+  { name: 'Campaign & Marketing', slug: 'campaign-marketing', icon: 'Megaphone', color: '#db2777', sortOrder: 17 },
+  { name: 'General', slug: 'general', icon: 'HelpCircle', color: '#64748b', sortOrder: 18 },
+];
+
+// GET /api/support/categories — List categories (auto-seeds defaults on first fetch)
 export async function GET(request: NextRequest) {
   try {
     const user = await getAuthUser();
@@ -24,10 +46,29 @@ export async function GET(request: NextRequest) {
     if (isActive !== null) where.isActive = isActive === 'true';
     if (isSystem !== null) where.isSystem = isSystem === 'true';
 
-    const categories = await db.supportCategory.findMany({
+    let categories = await db.supportCategory.findMany({
       where,
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     });
+
+    // Auto-seed default categories on first fetch if table is empty
+    if (categories.length === 0) {
+      console.log('[SupportCategories] No categories found, auto-seeding defaults...');
+      for (const cat of DEFAULT_CATEGORIES) {
+        try {
+          await db.supportCategory.create({
+            data: { ...cat, isSystem: true, isActive: true, tenantId: null },
+          });
+        } catch {
+          // Skip if already exists (unique slug constraint — race condition safety)
+        }
+      }
+      // Re-fetch after seeding
+      categories = await db.supportCategory.findMany({
+        where,
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      });
+    }
 
     return NextResponse.json(categories);
   } catch (error) {
