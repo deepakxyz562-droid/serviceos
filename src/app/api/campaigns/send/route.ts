@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { sendEmail, resolveSmtpConfig } from '@/lib/email-send'
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
+import { checkWhatsAppCredits, deductWhatsAppCredit } from '@/lib/credit-management'
 import {
   resolveBroadcastAudience,
   resolveTenantId,
@@ -79,6 +80,21 @@ export async function POST(request: NextRequest) {
     }
 
     const channel = body.channel || (campaign?.channel as SendBroadcastBody['channel']) || 'email'
+
+    // ── Credit check for WhatsApp/SMS/Multi channel ────────────────────────
+    if ((channel === 'whatsapp' || channel === 'sms' || channel === 'multi') && user.tenantId) {
+      const creditCheck = await checkWhatsAppCredits(user.tenantId)
+      if (!creditCheck.allowed) {
+        return NextResponse.json(
+          {
+            error: creditCheck.reason || 'WhatsApp credits exhausted',
+            creditExhausted: true,
+            creditStatus: creditCheck,
+          },
+          { status: 403 },
+        )
+      }
+    }
 
     // ── Validate inputs per channel ─────────────────────────────────────────
     if ((channel === 'email' || channel === 'multi') && (!body.subject || !body.html)) {
@@ -311,6 +327,13 @@ async function dispatchToRecipient(
       message,
     })
 
+    // Deduct credit after successful WhatsApp send
+    if (result.success && tenantId) {
+      await deductWhatsAppCredit(tenantId, 1).catch(err =>
+        console.error('[Campaign] Credit deduction failed:', err)
+      )
+    }
+
     return {
       ...baseLog,
       channel: 'whatsapp',
@@ -331,6 +354,14 @@ async function dispatchToRecipient(
       to: recipient.phone,
       message,
     })
+
+    // Deduct credit after successful SMS (via WhatsApp) send
+    if (result.success && tenantId) {
+      await deductWhatsAppCredit(tenantId, 1).catch(err =>
+        console.error('[Campaign] Credit deduction failed:', err)
+      )
+    }
+
     return {
       ...baseLog,
       channel: 'sms',
@@ -381,6 +412,12 @@ async function dispatchToRecipient(
         anySuccess = true
         messageId = messageId || waResult.messageId
         simulated = simulated || !!waResult.simulated
+        // Deduct credit after successful WhatsApp send
+        if (tenantId) {
+          await deductWhatsAppCredit(tenantId, 1).catch(err =>
+            console.error('[Campaign] Credit deduction failed:', err)
+          )
+        }
       } else {
         lastError = lastError || waResult.error
       }

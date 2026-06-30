@@ -52,6 +52,7 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
+import { WhatsAppCreditBanner } from '@/components/whatsapp-credit-banner';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -1028,6 +1029,20 @@ export function BillingView() {
                 Upgrade Now
               </Button>
             </div>
+          )}
+
+          {/* WhatsApp Credit Banner for trial users */}
+          {(data.status === 'trial' || data.status === 'trialing') && (
+            <WhatsAppCreditBanner
+              onUpgradeClick={() => {
+                const growthPlan = effectivePlans.find(p => p.id === 'growth');
+                if (growthPlan) handleUpgrade(growthPlan);
+              }}
+              onConnectMetaClick={() => {
+                const event = new CustomEvent('navigate', { detail: 'integrations' })
+                window.dispatchEvent(event)
+              }}
+            />
           )}
 
           {/* Pending downgrade banner (Phase 3) */}

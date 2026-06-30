@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser } from '@/lib/auth';
+import { checkWhatsAppCredits, deductWhatsAppCredit } from '@/lib/credit-management';
 
 const WHATSAPP_API_BASE = 'https://graph.facebook.com/v25.0';
 
@@ -10,12 +12,36 @@ function safeJsonParse(str: string | null, fallback: unknown = {}) {
 
 export async function POST(request: NextRequest) {
   try {
+    // ── Auth check ────────────────────────────────────────────────────
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     const { to, message, type, credentialId, interactive, templateLanguage, templateName } = body;
 
     if (!to || !message) {
       return NextResponse.json({ error: 'to and message are required' }, { status: 400 });
     }
+
+    // ── Credit check ──────────────────────────────────────────────────
+    if (user.tenantId) {
+      const creditCheck = await checkWhatsAppCredits(user.tenantId);
+
+      if (!creditCheck.allowed) {
+        return NextResponse.json(
+          {
+            error: creditCheck.reason || 'WhatsApp credits exhausted',
+            creditExhausted: true,
+            creditStatus: creditCheck,
+          },
+          { status: 403 },
+        );
+      }
+    }
+
+    // ── Send via WhatsApp API ─────────────────────────────────────────
 
     // If a credential ID is provided, use real WhatsApp API
     if (credentialId) {
@@ -37,8 +63,6 @@ export async function POST(request: NextRequest) {
 
       // Build WhatsApp API payload
       let recipientPhone = to.replace(/\D/g, '');
-      // Auto-correct: if phone number is 10 digits (common Indian format without country code),
-      // prepend 91 (India country code). This handles cases like 8505945123 → 918505945123
       if (/^\d{10}$/.test(recipientPhone)) {
         recipientPhone = `91${recipientPhone}`;
       }
@@ -88,7 +112,6 @@ export async function POST(request: NextRequest) {
         const errorCode = responseData?.error?.code;
         let errorMessage = responseData?.error?.message || `WhatsApp API error: ${response.status}`;
 
-        // Provide user-friendly guidance for common error codes
         if (errorCode === 131030) {
           errorMessage = `Recipient phone number "${recipientPhone}" not in allowed list. Add this number as a test contact in Meta Business Suite > WhatsApp > Phone Numbers, or use a template message instead.`;
         } else if (errorCode === 131000) {
@@ -113,6 +136,11 @@ export async function POST(request: NextRequest) {
           },
           { status: response.status },
         );
+      }
+
+      // ── Deduct credit on successful send ───────────────────────────
+      if (user.tenantId) {
+        await deductWhatsAppCredit(user.tenantId, 1);
       }
 
       return NextResponse.json(responseData);
@@ -140,6 +168,11 @@ export async function POST(request: NextRequest) {
         note: 'No credential provided. Configure a WhatsApp credential for real message delivery.',
       },
     };
+
+    // Deduct credit even for simulated sends (to track usage)
+    if (user.tenantId) {
+      await deductWhatsAppCredit(user.tenantId, 1);
+    }
 
     return NextResponse.json(simulatedResponse);
   } catch (error) {

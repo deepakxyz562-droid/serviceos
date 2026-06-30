@@ -121,6 +121,18 @@ model Subscription {
   emailUsageCount         Int      @default(0)
   smsUsageCount           Int      @default(0)
   storageUsageMb          Float    @default(0)
+  // ── Trial credit system ──────────────────────────────────────────────
+  // Trial users get limited WhatsApp credits managed by super admin.
+  // Platform provides shared WhatsApp API for trial users.
+  // When credits exhausted, user must connect own Meta account or upgrade.
+  trialWhatsappCredits    Int      @default(10)   // credits given at trial start
+  trialWhatsappUsed       Int      @default(0)    // credits used during trial
+  platformWhatsappEnabled Boolean  @default(true) // uses platform shared WhatsApp
+  ownWhatsappConnected    Boolean  @default(false) // user connected own Meta account
+  // ── Email provider status ────────────────────────────────────────────
+  // Operational (transactional) email is free via platform provider.
+  // Marketing email requires user's own provider.
+  ownEmailProviderConnected Boolean @default(false) // user connected own email provider
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 

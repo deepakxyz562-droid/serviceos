@@ -162,6 +162,17 @@ interface AuditLog {
   createdAt: string | null;
 }
 
+interface CreditInfo {
+  tenantId: string;
+  tenantName: string;
+  plan: string;
+  trialWhatsappCredits: number;
+  trialWhatsappUsed: number;
+  platformWhatsappEnabled: boolean;
+  ownWhatsappConnected: boolean;
+  ownEmailProviderConnected: boolean;
+}
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const MENU_SECTIONS = [
@@ -444,6 +455,69 @@ export function SuperAdminView() {
       .catch(() => {});
   }, []);
 
+  // ─── Credit Data ────────────────────────────────────────────────────────
+  const [creditsData, setCreditsData] = useState<CreditInfo[]>([]);
+  const [creditsLoading, setCreditsLoading] = useState(false);
+
+  const fetchAllCredits = useCallback(async () => {
+    if (tenants.length === 0) return;
+    setCreditsLoading(true);
+    try {
+      const results: CreditInfo[] = [];
+      for (const tenant of tenants) {
+        try {
+          const res = await fetch(`/api/admin/credits?tenantId=${tenant.id}`);
+          if (res.ok) {
+            const data = await res.json();
+            const sub = data.subscription;
+            results.push({
+              tenantId: tenant.id,
+              tenantName: tenant.name,
+              plan: tenant.plan,
+              trialWhatsappCredits: sub?.trialWhatsappCredits ?? 10,
+              trialWhatsappUsed: sub?.trialWhatsappUsed ?? 0,
+              platformWhatsappEnabled: sub?.platformWhatsappEnabled ?? true,
+              ownWhatsappConnected: sub?.ownWhatsappConnected ?? false,
+              ownEmailProviderConnected: sub?.ownEmailProviderConnected ?? false,
+            });
+          } else {
+            results.push({
+              tenantId: tenant.id,
+              tenantName: tenant.name,
+              plan: tenant.plan,
+              trialWhatsappCredits: 10,
+              trialWhatsappUsed: 0,
+              platformWhatsappEnabled: true,
+              ownWhatsappConnected: false,
+              ownEmailProviderConnected: false,
+            });
+          }
+        } catch {
+          results.push({
+            tenantId: tenant.id,
+            tenantName: tenant.name,
+            plan: tenant.plan,
+            trialWhatsappCredits: 10,
+            trialWhatsappUsed: 0,
+            platformWhatsappEnabled: true,
+            ownWhatsappConnected: false,
+            ownEmailProviderConnected: false,
+          });
+        }
+      }
+      setCreditsData(results);
+    } finally {
+      setCreditsLoading(false);
+    }
+  }, [tenants]);
+
+  useEffect(() => {
+    if (tenants.length > 0 && creditsData.length === 0) {
+      fetchAllCredits();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenants.length]);
+
   // Auto-select first tenant for feature flags
   useEffect(() => {
     if (tenants.length > 0 && !selectedTenantForFlags) {
@@ -616,6 +690,71 @@ export function SuperAdminView() {
           </Card>
         </div>
 
+        {/* Credits Overview */}
+        <Card className="bg-slate-900 border-slate-800">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Wallet className="size-4 text-emerald-400" />
+                <CardTitle className="text-sm font-medium text-white">Trial Credits Overview</CardTitle>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => fetchAllCredits()}
+                disabled={creditsLoading}
+                className="h-7 text-xs text-slate-400 hover:text-white"
+              >
+                {creditsLoading ? <Loader2 className="size-3 mr-1 animate-spin" /> : <RefreshCw className="size-3 mr-1" />} Refresh
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {creditsData.length === 0 ? (
+              <div className="flex items-center justify-center py-8 text-slate-500">
+                <Loader2 className="size-4 mr-2 animate-spin" /> Loading credit data...
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                  <div className="size-9 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
+                    <Clock className="size-4 text-amber-400" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-slate-400">Trial Tenants</p>
+                    <p className="text-lg font-bold text-amber-400">{creditsData.filter((c) => c.plan === 'trial').length}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-sky-500/5 border border-sky-500/20">
+                  <div className="size-9 rounded-full bg-sky-500/10 flex items-center justify-center shrink-0">
+                    <BarChart3 className="size-4 text-sky-400" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-slate-400">Avg Credits Used</p>
+                    <p className="text-lg font-bold text-sky-400">
+                      {(() => {
+                        const trial = creditsData.filter((c) => c.plan === 'trial');
+                        return trial.length > 0 ? (trial.reduce((s, c) => s + c.trialWhatsappUsed, 0) / trial.length).toFixed(1) : '0';
+                      })()}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-red-500/5 border border-red-500/20">
+                  <div className="size-9 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
+                    <AlertTriangle className="size-4 text-red-400" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-slate-400">Exhausted Credits</p>
+                    <p className="text-lg font-bold text-red-400">
+                      {creditsData.filter((c) => c.plan === 'trial' && c.trialWhatsappUsed >= c.trialWhatsappCredits).length}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Platform Alerts */}
         <Card className="bg-slate-900 border-slate-800">
           <CardHeader className="pb-2">
@@ -740,6 +879,14 @@ export function SuperAdminView() {
     const [createDialog, setCreateDialog] = useState(false);
     const [newTenantForm, setNewTenantForm] = useState({ name: '', email: '', plan: 'starter', ownerName: '', password: '' });
     const [creating, setCreating] = useState(false);
+    const [creditEditTenant, setCreditEditTenant] = useState<CreditInfo | null>(null);
+    const [creditEditForm, setCreditEditForm] = useState({
+      trialWhatsappCredits: 10,
+      platformWhatsappEnabled: true,
+      ownWhatsappConnected: false,
+      ownEmailProviderConnected: false,
+    });
+    const [creditSaving, setCreditSaving] = useState(false);
 
     const filteredTenants = useMemo(() => {
       return tenants.filter((t) => {
@@ -840,6 +987,54 @@ export function SuperAdminView() {
       }
     };
 
+    const handleCreditEdit = (tenant: Tenant) => {
+      const existing = creditsData.find((c) => c.tenantId === tenant.id);
+      const creditInfo: CreditInfo = existing ?? {
+        tenantId: tenant.id,
+        tenantName: tenant.name,
+        plan: tenant.plan,
+        trialWhatsappCredits: 10,
+        trialWhatsappUsed: 0,
+        platformWhatsappEnabled: true,
+        ownWhatsappConnected: false,
+        ownEmailProviderConnected: false,
+      };
+      setCreditEditTenant(creditInfo);
+      setCreditEditForm({
+        trialWhatsappCredits: creditInfo.trialWhatsappCredits,
+        platformWhatsappEnabled: creditInfo.platformWhatsappEnabled,
+        ownWhatsappConnected: creditInfo.ownWhatsappConnected,
+        ownEmailProviderConnected: creditInfo.ownEmailProviderConnected,
+      });
+    };
+
+    const handleCreditSave = async () => {
+      if (!creditEditTenant) return;
+      setCreditSaving(true);
+      try {
+        const res = await fetch('/api/admin/credits', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenantId: creditEditTenant.tenantId,
+            ...creditEditForm,
+          }),
+        });
+        if (res.ok) {
+          toast.success('Credit settings updated');
+          setCreditEditTenant(null);
+          fetchAllCredits();
+        } else {
+          const data = await res.json();
+          toast.error(data.error || 'Failed to update credit settings');
+        }
+      } catch {
+        toast.error('Network error');
+      } finally {
+        setCreditSaving(false);
+      }
+    };
+
     return (
       <div className="space-y-4">
         {/* Search, Filters, Create */}
@@ -898,53 +1093,81 @@ export function SuperAdminView() {
                     <TableHead className="text-slate-400">Name</TableHead>
                     <TableHead className="text-slate-400">Plan</TableHead>
                     <TableHead className="text-slate-400">Status</TableHead>
+                    <TableHead className="text-slate-400 text-center">WA Credits</TableHead>
+                    <TableHead className="text-slate-400 text-center">Email</TableHead>
                     <TableHead className="text-slate-400 text-right">MRR</TableHead>
                     <TableHead className="text-slate-400 text-center">Users</TableHead>
-                    <TableHead className="text-slate-400">Created</TableHead>
                     <TableHead className="text-slate-400 text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredTenants.map((tenant) => (
-                    <TableRow key={tenant.id} className="border-slate-800 hover:bg-slate-800/50">
-                      <TableCell className="font-medium text-white">{tenant.name}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadge(tenant.plan))}>
-                          {tenant.plan}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={cn('capitalize text-[10px]', getStatusBadge(tenant.suspendedAt ? 'suspended' : tenant.planStatus))}>
-                          {tenant.suspendedAt ? 'suspended' : tenant.planStatus}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right text-slate-300">{format(tenant.mrr)}</TableCell>
-                      <TableCell className="text-center text-slate-300">{tenant.userCount}</TableCell>
-                      <TableCell className="text-slate-400 text-sm">{formatDate(tenant.createdAt)}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="sm" className="h-7 px-2 text-slate-400 hover:text-white" onClick={() => setViewTenant(tenant)}>
-                            <Eye className="size-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="sm" className="h-7 px-2 text-slate-400 hover:text-emerald-400" onClick={() => { setEditPlanDialog(tenant); setNewPlan(tenant.plan); }}>
-                            <Edit3 className="size-3.5" />
-                          </Button>
-                          {tenant.suspendedAt || tenant.planStatus === 'suspended' ? (
-                            <Button variant="ghost" size="sm" className="h-7 px-2 text-emerald-400 hover:text-emerald-300" onClick={() => { setSuspendReason(''); setSuspendDialog({ tenant, action: 'reactivate' }); }}>
-                              <Play className="size-3.5" />
-                            </Button>
+                  {filteredTenants.map((tenant) => {
+                    const tenantCredit = creditsData.find((c) => c.tenantId === tenant.id);
+                    const isPaidWithOwnWhatsApp = tenantCredit && tenantCredit.plan !== 'trial' && tenantCredit.ownWhatsappConnected;
+                    return (
+                      <TableRow key={tenant.id} className="border-slate-800 hover:bg-slate-800/50">
+                        <TableCell className="font-medium text-white">{tenant.name}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadge(tenant.plan))}>
+                            {tenant.plan}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={cn('capitalize text-[10px]', getStatusBadge(tenant.suspendedAt ? 'suspended' : tenant.planStatus))}>
+                            {tenant.suspendedAt ? 'suspended' : tenant.planStatus}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {!tenantCredit ? (
+                            <span className="text-[10px] text-slate-500">—</span>
+                          ) : isPaidWithOwnWhatsApp ? (
+                            <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px]">Unlimited</Badge>
                           ) : (
-                            <Button variant="ghost" size="sm" className="h-7 px-2 text-red-400 hover:text-red-300" onClick={() => { setSuspendReason(''); setSuspendDialog({ tenant, action: 'suspend' }); }}>
-                              <Ban className="size-3.5" />
-                            </Button>
+                            <span className={cn(
+                              'text-xs',
+                              tenantCredit.trialWhatsappUsed >= tenantCredit.trialWhatsappCredits ? 'text-red-400 font-medium' : 'text-slate-400',
+                            )}>
+                              {tenantCredit.trialWhatsappUsed}/{tenantCredit.trialWhatsappCredits}
+                            </span>
                           )}
-                          <Button variant="ghost" size="sm" className="h-7 px-2 text-red-400 hover:text-red-300" onClick={() => setSuspendDialog({ tenant, action: 'delete' })}>
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {tenantCredit?.ownEmailProviderConnected ? (
+                            <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px]">Own</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-slate-500 text-[10px] border-slate-700">Platform</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right text-slate-300">{format(tenant.mrr)}</TableCell>
+                        <TableCell className="text-center text-slate-300">{tenant.userCount}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button variant="ghost" size="sm" className="h-7 px-2 text-slate-400 hover:text-emerald-400" onClick={() => handleCreditEdit(tenant)} title="Edit Credits">
+                              <Wallet className="size-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-7 px-2 text-slate-400 hover:text-white" onClick={() => setViewTenant(tenant)}>
+                              <Eye className="size-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-7 px-2 text-slate-400 hover:text-emerald-400" onClick={() => { setEditPlanDialog(tenant); setNewPlan(tenant.plan); }}>
+                              <Edit3 className="size-3.5" />
+                            </Button>
+                            {tenant.suspendedAt || tenant.planStatus === 'suspended' ? (
+                              <Button variant="ghost" size="sm" className="h-7 px-2 text-emerald-400 hover:text-emerald-300" onClick={() => { setSuspendReason(''); setSuspendDialog({ tenant, action: 'reactivate' }); }}>
+                                <Play className="size-3.5" />
+                              </Button>
+                            ) : (
+                              <Button variant="ghost" size="sm" className="h-7 px-2 text-red-400 hover:text-red-300" onClick={() => { setSuspendReason(''); setSuspendDialog({ tenant, action: 'suspend' }); }}>
+                                <Ban className="size-3.5" />
+                              </Button>
+                            )}
+                            <Button variant="ghost" size="sm" className="h-7 px-2 text-red-400 hover:text-red-300" onClick={() => setSuspendDialog({ tenant, action: 'delete' })}>
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </ScrollArea>
@@ -1091,6 +1314,70 @@ export function SuperAdminView() {
               <Button variant="outline" onClick={() => setCreateDialog(false)} className="border-slate-700 text-slate-300">Cancel</Button>
               <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreateTenant} disabled={creating || !newTenantForm.name.trim() || !newTenantForm.email.trim()}>
                 {creating ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Plus className="size-4 mr-1.5" />} Create
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Credit Edit Dialog */}
+        <Dialog open={!!creditEditTenant} onOpenChange={(open) => { if (!open) setCreditEditTenant(null); }}>
+          <DialogContent className="bg-slate-900 border-slate-800 text-white sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Wallet className="size-5 text-emerald-400" /> Edit Credit Settings
+              </DialogTitle>
+              <DialogDescription className="text-slate-400">
+                Manage credits for {creditEditTenant?.tenantName}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-slate-300">Trial WhatsApp Credits</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={creditEditForm.trialWhatsappCredits}
+                  onChange={(e) => setCreditEditForm((p) => ({ ...p, trialWhatsappCredits: parseInt(e.target.value) || 0 }))}
+                  className="bg-slate-800 border-slate-700 text-white"
+                />
+                <p className="text-[11px] text-slate-500">Current usage: {creditEditTenant?.trialWhatsappUsed ?? 0} credits used</p>
+              </div>
+              <Separator className="bg-slate-800" />
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-slate-300">Platform WhatsApp</Label>
+                  <p className="text-[11px] text-slate-500">Enable platform-provided WhatsApp</p>
+                </div>
+                <Switch
+                  checked={creditEditForm.platformWhatsappEnabled}
+                  onCheckedChange={(checked) => setCreditEditForm((p) => ({ ...p, platformWhatsappEnabled: checked }))}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-slate-300">Own WhatsApp Connected</Label>
+                  <p className="text-[11px] text-slate-500">Tenant has connected their own WhatsApp</p>
+                </div>
+                <Switch
+                  checked={creditEditForm.ownWhatsappConnected}
+                  onCheckedChange={(checked) => setCreditEditForm((p) => ({ ...p, ownWhatsappConnected: checked }))}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-slate-300">Own Email Provider</Label>
+                  <p className="text-[11px] text-slate-500">Tenant has connected their own email provider</p>
+                </div>
+                <Switch
+                  checked={creditEditForm.ownEmailProviderConnected}
+                  onCheckedChange={(checked) => setCreditEditForm((p) => ({ ...p, ownEmailProviderConnected: checked }))}
+                />
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setCreditEditTenant(null)} className="border-slate-700 text-slate-300">Cancel</Button>
+              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreditSave} disabled={creditSaving}>
+                {creditSaving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <CheckCircle2 className="size-4 mr-1.5" />} Save
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1991,6 +2278,287 @@ export function SuperAdminView() {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // 8. CREDITS TAB
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  function CreditsTab() {
+    const [search, setSearch] = useState('');
+    const [editDialog, setEditDialog] = useState<CreditInfo | null>(null);
+    const [editForm, setEditForm] = useState({
+      trialWhatsappCredits: 10,
+      platformWhatsappEnabled: true,
+      ownWhatsappConnected: false,
+      ownEmailProviderConnected: false,
+    });
+    const [saving, setSaving] = useState(false);
+
+    const filteredCredits = useMemo(() => {
+      if (!search) return creditsData;
+      const q = search.toLowerCase();
+      return creditsData.filter((c) => c.tenantName.toLowerCase().includes(q));
+    }, [creditsData, search]);
+
+    // Stats
+    const trialTenants = creditsData.filter((c) => c.plan === 'trial');
+    const avgCreditsUsed = trialTenants.length > 0
+      ? (trialTenants.reduce((s, c) => s + c.trialWhatsappUsed, 0) / trialTenants.length).toFixed(1)
+      : '0';
+    const exhaustedTenants = trialTenants.filter((c) => c.trialWhatsappUsed >= c.trialWhatsappCredits);
+
+    const handleEdit = (credit: CreditInfo) => {
+      setEditDialog(credit);
+      setEditForm({
+        trialWhatsappCredits: credit.trialWhatsappCredits,
+        platformWhatsappEnabled: credit.platformWhatsappEnabled,
+        ownWhatsappConnected: credit.ownWhatsappConnected,
+        ownEmailProviderConnected: credit.ownEmailProviderConnected,
+      });
+    };
+
+    const handleSave = async () => {
+      if (!editDialog) return;
+      setSaving(true);
+      try {
+        const res = await fetch('/api/admin/credits', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenantId: editDialog.tenantId,
+            ...editForm,
+          }),
+        });
+        if (res.ok) {
+          toast.success('Credit settings updated successfully');
+          setEditDialog(null);
+          fetchAllCredits();
+        } else {
+          const data = await res.json();
+          toast.error(data.error || 'Failed to update credit settings');
+        }
+      } catch {
+        toast.error('Network error');
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    return (
+      <div className="space-y-4">
+        {/* Credit Overview Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Card className="bg-slate-900 border-slate-900 hover:border-slate-800 transition-colors">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="size-10 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+                <Clock className="size-5 text-amber-400" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Trial Tenants</p>
+                <p className="text-xl font-bold text-amber-400">{trialTenants.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-slate-900 border-slate-900 hover:border-slate-800 transition-colors">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="size-10 rounded-lg bg-sky-500/10 flex items-center justify-center shrink-0">
+                <BarChart3 className="size-5 text-sky-400" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Avg Credits Used</p>
+                <p className="text-xl font-bold text-sky-400">{avgCreditsUsed}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-slate-900 border-slate-900 hover:border-slate-800 transition-colors">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="size-10 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
+                <AlertTriangle className="size-5 text-red-400" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Exhausted Credits</p>
+                <p className="text-xl font-bold text-red-400">{exhaustedTenants.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Search + Refresh */}
+        <div className="flex gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+            <Input
+              placeholder="Search tenants..."
+              className="pl-9 bg-slate-900 border-slate-800 text-white placeholder:text-slate-500"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchAllCredits()}
+            disabled={creditsLoading}
+            className="border-slate-700 text-slate-300 hover:text-white h-9"
+          >
+            {creditsLoading ? <Loader2 className="size-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="size-3.5 mr-1.5" />}
+            Refresh
+          </Button>
+        </div>
+
+        {/* Table */}
+        {creditsLoading && creditsData.length === 0 ? <TableSkeleton /> : filteredCredits.length === 0 ? (
+          <Card className="bg-slate-900 border-slate-800 border-dashed">
+            <CardContent className="flex flex-col items-center justify-center py-16 text-slate-500">
+              <Wallet className="size-14 mb-4 opacity-30" />
+              <p className="text-lg font-medium">No credit data found</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="bg-slate-900 border-slate-800">
+            <ScrollArea className="max-h-96">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-slate-800 hover:bg-transparent">
+                    <TableHead className="text-slate-400">Tenant</TableHead>
+                    <TableHead className="text-slate-400">Plan</TableHead>
+                    <TableHead className="text-slate-400 text-center">WhatsApp Credits</TableHead>
+                    <TableHead className="text-slate-400 text-center">Platform WA</TableHead>
+                    <TableHead className="text-slate-400 text-center">Own WA</TableHead>
+                    <TableHead className="text-slate-400 text-center">Email Provider</TableHead>
+                    <TableHead className="text-slate-400 text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredCredits.map((credit) => {
+                    const isPaidWithOwnWhatsApp = credit.plan !== 'trial' && credit.ownWhatsappConnected;
+                    return (
+                      <TableRow key={credit.tenantId} className="border-slate-800 hover:bg-slate-800/50">
+                        <TableCell className="font-medium text-white">{credit.tenantName}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadge(credit.plan))}>
+                            {credit.plan}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {isPaidWithOwnWhatsApp ? (
+                            <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px]">Unlimited</Badge>
+                          ) : (
+                            <div className="flex items-center justify-center gap-2">
+                              <Progress
+                                value={credit.trialWhatsappCredits > 0 ? (credit.trialWhatsappUsed / credit.trialWhatsappCredits) * 100 : 0}
+                                className="h-1.5 w-16"
+                              />
+                              <span className={cn(
+                                'text-xs',
+                                credit.trialWhatsappUsed >= credit.trialWhatsappCredits ? 'text-red-400 font-medium' : 'text-slate-400',
+                              )}>
+                                {credit.trialWhatsappUsed}/{credit.trialWhatsappCredits}
+                              </span>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {credit.platformWhatsappEnabled ? (
+                            <CheckCircle2 className="size-4 text-emerald-400 inline-block" />
+                          ) : (
+                            <XCircle className="size-4 text-red-400 inline-block" />
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {credit.ownWhatsappConnected ? (
+                            <CheckCircle2 className="size-4 text-emerald-400 inline-block" />
+                          ) : (
+                            <XCircle className="size-4 text-slate-500 inline-block" />
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {credit.ownEmailProviderConnected ? (
+                            <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px]">Own</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-slate-500 text-[10px] border-slate-700">Platform</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="ghost" size="sm" className="h-7 px-2 text-slate-400 hover:text-emerald-400" onClick={() => handleEdit(credit)}>
+                            <Edit3 className="size-3.5" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </Card>
+        )}
+
+        {/* Edit Credits Dialog */}
+        <Dialog open={!!editDialog} onOpenChange={(open) => { if (!open) setEditDialog(null); }}>
+          <DialogContent className="bg-slate-900 border-slate-800 text-white sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Wallet className="size-5 text-emerald-400" /> Edit Credit Settings
+              </DialogTitle>
+              <DialogDescription className="text-slate-400">
+                Manage credits for {editDialog?.tenantName}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-slate-300">Trial WhatsApp Credits</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={editForm.trialWhatsappCredits}
+                  onChange={(e) => setEditForm((p) => ({ ...p, trialWhatsappCredits: parseInt(e.target.value) || 0 }))}
+                  className="bg-slate-800 border-slate-700 text-white"
+                />
+                <p className="text-[11px] text-slate-500">Current usage: {editDialog?.trialWhatsappUsed ?? 0} credits used</p>
+              </div>
+              <Separator className="bg-slate-800" />
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-slate-300">Platform WhatsApp</Label>
+                  <p className="text-[11px] text-slate-500">Enable platform-provided WhatsApp</p>
+                </div>
+                <Switch
+                  checked={editForm.platformWhatsappEnabled}
+                  onCheckedChange={(checked) => setEditForm((p) => ({ ...p, platformWhatsappEnabled: checked }))}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-slate-300">Own WhatsApp Connected</Label>
+                  <p className="text-[11px] text-slate-500">Tenant has connected their own WhatsApp</p>
+                </div>
+                <Switch
+                  checked={editForm.ownWhatsappConnected}
+                  onCheckedChange={(checked) => setEditForm((p) => ({ ...p, ownWhatsappConnected: checked }))}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-slate-300">Own Email Provider</Label>
+                  <p className="text-[11px] text-slate-500">Tenant has connected their own email provider</p>
+                </div>
+                <Switch
+                  checked={editForm.ownEmailProviderConnected}
+                  onCheckedChange={(checked) => setEditForm((p) => ({ ...p, ownEmailProviderConnected: checked }))}
+                />
+              </div>
+            </div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setEditDialog(null)} className="border-slate-700 text-slate-300">Cancel</Button>
+              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSave} disabled={saving}>
+                {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <CheckCircle2 className="size-4 mr-1.5" />} Save
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // Fallback stats helper
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -2064,6 +2632,9 @@ export function SuperAdminView() {
           <TabsTrigger value="audit-logs" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
             <FileText className="size-3.5" /><span className="hidden sm:inline">Audit Logs</span>
           </TabsTrigger>
+          <TabsTrigger value="credits" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
+            <Wallet className="size-3.5" /><span className="hidden sm:inline">Credits</span>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="dashboard"><DashboardTab /></TabsContent>
@@ -2074,6 +2645,7 @@ export function SuperAdminView() {
         <TabsContent value="integrations"><IntegrationsTab /></TabsContent>
         <TabsContent value="users"><UsersTab /></TabsContent>
         <TabsContent value="audit-logs"><AuditLogsTab /></TabsContent>
+        <TabsContent value="credits"><CreditsTab /></TabsContent>
       </Tabs>
     </div>
   );

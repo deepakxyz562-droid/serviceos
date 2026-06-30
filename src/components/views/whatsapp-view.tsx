@@ -25,6 +25,7 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { useRealtime } from '@/hooks/use-realtime';
 import { WhatsAppWorkflowTemplates } from '@/components/whatsapp/whatsapp-workflow-templates';
+import { WhatsAppCreditBanner } from '@/components/whatsapp-credit-banner';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -552,6 +553,20 @@ export function WhatsAppView() {
           </Button>
         </div>
       </div>
+
+      {/* WhatsApp Credit Banner */}
+      <WhatsAppCreditBanner
+        onUpgradeClick={() => {
+          // Navigate to billing view
+          const event = new CustomEvent('navigate', { detail: 'billing' })
+          window.dispatchEvent(event)
+        }}
+        onConnectMetaClick={() => {
+          // Navigate to WhatsApp config / integrations
+          const event = new CustomEvent('navigate', { detail: 'integrations' })
+          window.dispatchEvent(event)
+        }}
+      />
 
       {/* Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">

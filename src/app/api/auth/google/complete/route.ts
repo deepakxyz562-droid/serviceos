@@ -95,11 +95,17 @@ export async function POST(request: NextRequest) {
         maxJobs: 100,
         maxWorkflows: 10,
         featuresJson: JSON.stringify({
-          whatsappIntegration: false,
+          whatsappIntegration: true,
           customWorkflows: false,
           apiAccess: false,
           prioritySupport: false,
         }),
+        // Trial credit system defaults
+        trialWhatsappCredits: 10,
+        trialWhatsappUsed: 0,
+        platformWhatsappEnabled: true,
+        ownWhatsappConnected: false,
+        ownEmailProviderConnected: false,
       },
     });
 
