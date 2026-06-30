@@ -249,6 +249,24 @@ export async function POST(request: NextRequest) {
       console.error('[BookingsCreate] Owner notification failed:', ownerErr)
     }
 
+    // ─── Send WhatsApp confirmation to customer ────────────────────
+    if (booking.status === 'confirmed' && finalCustomerPhone) {
+      try {
+        const { notifyCustomerBookingConfirmed } = await import('@/lib/whatsapp-notifications');
+        await notifyCustomerBookingConfirmed({
+          id: booking.id,
+          title: booking.title,
+          customerName: finalCustomerName,
+          customerPhone: finalCustomerPhone,
+          scheduledAt: booking.scheduledAt?.toISOString() || null,
+          tenantId: booking.tenantId,
+          customerId: finalCustomerId || undefined,
+        });
+      } catch (custNotifyErr) {
+        console.error('[BookingsCreate] Customer WhatsApp notification failed:', custNotifyErr);
+      }
+    }
+
     // ─── Auto-create deposit invoice if setting enabled ───────────
     try {
       const invSettings = await getInvoiceSettings(user.tenantId)

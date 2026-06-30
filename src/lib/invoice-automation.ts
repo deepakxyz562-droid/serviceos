@@ -758,12 +758,63 @@ export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = 
 
 export async function markInvoicePaid(invoiceId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const invoice = await db.invoice.findUnique({ where: { id: invoiceId } })
+    const invoice = await db.invoice.findUnique({
+      where: { id: invoiceId },
+      include: { customer: true, tenant: true },
+    })
     if (!invoice) return { success: false, error: 'Invoice not found' }
     await db.invoice.update({
       where: { id: invoiceId },
       data: { status: 'paid', paidAt: new Date() },
     })
+
+    // ─── Send WhatsApp payment confirmation to customer ──────────
+    try {
+      const customerPhone = invoice.customer?.phone || invoice.customerPhone
+      if (customerPhone) {
+        const { sendJobNotification } = await import('@/lib/whatsapp-notifications')
+        const invoiceNumber = invoice.invoiceNumber || invoice.id.slice(-8).toUpperCase()
+        const total = `${invoice.currency || 'USD'} ${Number(invoice.total).toFixed(2)}`
+        const message = [
+          '✅ Payment Confirmed',
+          '',
+          `Thank you, ${invoice.customer?.name || 'Customer'}!`,
+          `We've received your payment of ${total} for invoice #${invoiceNumber}.`,
+          '',
+          '🎉 Payment confirmed!',
+        ].join('\n')
+
+        await sendJobNotification({
+          to: customerPhone,
+          message,
+          recipientName: invoice.customer?.name,
+          recipientRole: 'customer',
+          subject: `Payment Confirmed: #${invoiceNumber}`,
+          tenantId: invoice.tenantId || undefined,
+        })
+      }
+    } catch (notifyErr) {
+      console.error('[InvoiceAutomation] Payment confirmation WhatsApp failed:', notifyErr)
+    }
+
+    // ─── Emit payment.received event ─────────────────────────────
+    try {
+      const { EventBus } = await import('@/lib/event-bus')
+      await EventBus.emit('payment.received', {
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        amount: Number(invoice.total),
+        currency: invoice.currency,
+        customerId: invoice.customerId,
+        customerName: invoice.customer?.name,
+        tenantId: invoice.tenantId,
+        resourceType: 'invoice',
+        resourceId: invoice.id,
+      }, { tenantId: invoice.tenantId || undefined })
+    } catch (eventErr) {
+      console.error('[InvoiceAutomation] payment.received event failed:', eventErr)
+    }
+
     return { success: true }
   } catch (err) {
     return { success: false, error: String(err) }

@@ -178,9 +178,51 @@ async function executeAction(
   try {
     switch (action.type) {
       case 'send_whatsapp': {
-        // In production, this would call the WhatsApp API
-        console.log(`[TriggerEngine] Sending WhatsApp to ${action.config.recipient}: ${action.config.template}`)
-        return { success: true, result: { sent: true, recipient: action.config.recipient } }
+        // Send real WhatsApp message via the notification system
+        try {
+          const { sendJobNotification } = await import('@/lib/whatsapp-notifications')
+          const recipient = action.config.recipient || action.config.phone || action.config.to
+          const message = action.config.message || action.config.template || action.config.body || ''
+          
+          if (!recipient) {
+            return { success: false, error: 'No recipient specified for WhatsApp message' }
+          }
+          
+          // Resolve recipient from payload data if it's a template variable
+          let resolvedRecipient = recipient
+          if (recipient.startsWith('{{') && recipient.endsWith('}}')) {
+            const path = recipient.slice(2, -2).trim()
+            const value = getNestedValue(payload.data, path)
+            if (value) resolvedRecipient = String(value)
+          }
+          
+          // Resolve message from payload data if it contains template variables
+          let resolvedMessage = message
+          const varMatches = message.match(/\{\{([^}]+)\}\}/g)
+          if (varMatches) {
+            for (const match of varMatches) {
+              const path = match.slice(2, -2).trim()
+              const value = getNestedValue(payload.data, path)
+              if (value !== undefined && value !== null) {
+                resolvedMessage = resolvedMessage.replace(match, String(value))
+              }
+            }
+          }
+          
+          const result = await sendJobNotification({
+            to: resolvedRecipient,
+            message: resolvedMessage,
+            recipientName: action.config.recipientName || undefined,
+            recipientRole: action.config.recipientRole || undefined,
+            subject: action.config.subject || 'WhatsApp Notification',
+            tenantId: payload.tenantId || undefined,
+          })
+          
+          return { success: result.success, result: { sent: result.success, recipient: resolvedRecipient } }
+        } catch (waErr) {
+          console.error('[TriggerEngine] WhatsApp send failed:', waErr)
+          return { success: false, error: String(waErr) }
+        }
       }
       case 'send_notification': {
         if (action.config.userId || payload.tenantId) {

@@ -414,6 +414,51 @@ export async function POST(request: NextRequest) {
         });
 
         assignedEmployee = topMatch.employee;
+
+        // ─── Send WhatsApp notification to the assigned employee ───────
+        try {
+          const { notifyEmployeeJobAssigned, notifyCustomerJobAssigned } = await import('@/lib/whatsapp-notifications');
+
+          // Fetch the updated job with full details for notification
+          const notifJob = await db.job.findUnique({
+            where: { id: job.id },
+            include: {
+              customer: { select: { id: true, name: true, phone: true } },
+            },
+          });
+
+          if (notifJob) {
+            const jobForNotif = {
+              id: notifJob.id,
+              jobNumber: notifJob.jobNumber,
+              title: notifJob.title,
+              customerName: notifJob.customer?.name || notifJob.customerName,
+              customerPhone: notifJob.customer?.phone || notifJob.customerPhone,
+              address: notifJob.address,
+              scheduledAt: notifJob.scheduledAt,
+              scheduledTime: notifJob.scheduledTime,
+              customerId: notifJob.customerId,
+              tenantId: notifJob.tenantId,
+            };
+
+            await notifyEmployeeJobAssigned(jobForNotif, {
+              id: assignedEmployee.id,
+              name: assignedEmployee.name,
+              phone: assignedEmployee.phone,
+            });
+
+            // Also notify the customer about the technician assignment
+            if (jobForNotif.customerPhone) {
+              await notifyCustomerJobAssigned(jobForNotif, {
+                id: assignedEmployee.id,
+                name: assignedEmployee.name,
+                phone: assignedEmployee.phone,
+              });
+            }
+          }
+        } catch (notifyErr) {
+          console.error('[SmartAssign] WhatsApp notification failed:', notifyErr);
+        }
       }
     }
 

@@ -1,0 +1,1065 @@
+     1→/**
+     2→ * Invoice Automation
+     3→ * ───────────────────
+     4→ * Enterprise invoice workflow engine for ServiceOS.
+     5→ *
+     6→ * Supports the four invoice creation methods requested:
+     7→ *   1. Manual           — manager creates from the Invoices page
+     8→ *   2. Automatic        — workflow triggers (job.completed, booking.confirmed, etc.)
+     9→ *   3. Approval Required — created in "pending_approval" status for manager review
+    10→ *   4. Recurring        — schedule-based generation (AMC / subscriptions)
+    11→ *
+    12→ * Plus actions usable from workflows or the UI:
+    13→ *   - create_invoice (from job / booking / standalone)
+    14→ *   - create_deposit_invoice (advance payment on booking)
+    15→ *   - create_recurring_invoice (AMC / monthly)
+    16→ *   - send_invoice (email + WhatsApp)
+    17→ *   - mark_paid
+    18→ *   - send_reminder
+    19→ *
+    20→ * Settings live in `tenant.settingsJson.invoiceAutomation`.
+    21→ */
+    22→
+    23→import { db } from '@/lib/db'
+    24→import { sendEmail } from '@/lib/email-send'
+    25→import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
+    26→import { getExchangeRate, convertCurrency } from '@/lib/currency'
+    27→import { notifyOwner } from '@/lib/owner-notifications'
+    28→
+    29→// ─── Settings ────────────────────────────────────────────────────────────────
+    30→
+    31→export interface InvoiceAutomationSettings {
+    32→  /** Auto-create invoice when a job is marked complete */
+    33→  autoCreateOnJobComplete: boolean
+    34→  /** Auto-email the invoice when it's created */
+    35→  autoSendEmail: boolean
+    36→  /** Auto-send a WhatsApp copy when the invoice is created */
+    37→  autoSendWhatsApp: boolean
+    38→  /** Create a deposit/advance invoice when a booking is confirmed */
+    39→  createDepositOnBooking: boolean
+    40→  /** Deposit percentage (e.g. 30 = 30%) */
+    41→  depositPercentage: number
+    42→  /** Enable recurring invoice schedules */
+    43→  enableRecurring: boolean
+    44→  /** Default tax % applied to auto-invoices */
+    45→  defaultTaxPercent: number
+    46→  /** Invoice creation method: manual | automatic | approval_required | recurring */
+    47→  creationMethod: 'manual' | 'automatic' | 'approval_required' | 'recurring'
+    48→  /** Number of days from creation until an invoice is due */
+    49→  defaultDueDays: number
+    50→}
+    51→
+    52→export const DEFAULT_INVOICE_SETTINGS: InvoiceAutomationSettings = {
+    53→  // Auto-create an invoice the moment a job is marked complete — core ServiceOS
+    54→  // value proposition. Tenants can turn this off from the invoice settings dialog.
+    55→  autoCreateOnJobComplete: true,
+    56→  // Auto-email the invoice to the customer immediately after creation. Email
+    57→  // delivery failures are non-fatal (the invoice is still created as 'draft'
+    58→  // and only flipped to 'sent' when the email succeeds).
+    59→  autoSendEmail: true,
+    60→  autoSendWhatsApp: false,
+    61→  createDepositOnBooking: false,
+    62→  depositPercentage: 30,
+    63→  enableRecurring: false,
+    64→  defaultTaxPercent: 0,
+    65→  creationMethod: 'automatic',
+    66→  defaultDueDays: 15,
+    67→}
+    68→
+    69→function safeParse(str: string | null | undefined, fallback: unknown = {}): unknown {
+    70→  if (!str) return fallback
+    71→  try { return JSON.parse(str) } catch { return fallback }
+    72→}
+    73→
+    74→/**
+    75→ * Read invoice automation settings for a tenant.
+    76→ */
+    77→export async function getInvoiceSettings(tenantId: string | null | undefined): Promise<InvoiceAutomationSettings> {
+    78→  if (!tenantId) return { ...DEFAULT_INVOICE_SETTINGS }
+    79→  try {
+    80→    const tenant = await db.tenant.findUnique({
+    81→      where: { id: tenantId },
+    82→      select: { settingsJson: true, currency: true },
+    83→    })
+    84→    if (!tenant) return { ...DEFAULT_INVOICE_SETTINGS }
+    85→    const settings = safeParse(tenant.settingsJson, {}) as Record<string, unknown>
+    86→    const inv = (settings.invoiceAutomation as Record<string, unknown> | undefined) || {}
+    87→    return {
+    88→      ...DEFAULT_INVOICE_SETTINGS,
+    89→      ...inv,
+    90→    } as InvoiceAutomationSettings
+    91→  } catch {
+    92→    return { ...DEFAULT_INVOICE_SETTINGS }
+    93→  }
+    94→}
+    95→
+    96→/**
+    97→ * Persist invoice automation settings for a tenant.
+    98→ */
+    99→export async function saveInvoiceSettings(tenantId: string, patch: Partial<InvoiceAutomationSettings>): Promise<InvoiceAutomationSettings> {
+   100→  const tenant = await db.tenant.findUnique({
+   101→    where: { id: tenantId },
+   102→    select: { settingsJson: true },
+   103→  })
+   104→  const current = safeParse(tenant?.settingsJson, {}) as Record<string, unknown>
+   105→  const merged: InvoiceAutomationSettings = {
+   106→    ...(DEFAULT_INVOICE_SETTINGS),
+   107→    ...((current.invoiceAutomation as Record<string, unknown>) || {}),
+   108→    ...patch,
+   109→  }
+   110→  const nextSettings = { ...current, invoiceAutomation: merged }
+   111→  await db.tenant.update({
+   112→    where: { id: tenantId },
+   113→    data: { settingsJson: JSON.stringify(nextSettings) },
+   114→  })
+   115→  return merged
+   116→}
+   117→
+   118→// ─── Number generation ───────────────────────────────────────────────────────
+   119→
+   120→export async function generateInvoiceNumber(tenantId: string | null): Promise<string> {
+   121→  // The `number` field is GLOBALLY unique (not per-tenant), so we must avoid
+   122→  // collisions with invoices from other tenants. We try a sequential per-tenant
+   123→  // number first, then fall back to a timestamp-suffixed number on collision.
+   124→  const prefix = 'INV'
+   125→  const where = tenantId ? { tenantId } : {}
+   126→  const count = await db.invoice.count({ where })
+   127→  const sequential = `${prefix}-${String(count + 1).padStart(4, '0')}`
+   128→
+   129→  // Check if the sequential number is already taken (by another tenant)
+   130→  const existing = await db.invoice.findUnique({ where: { number: sequential } })
+   131→  if (!existing) return sequential
+   132→
+   133→  // Collision — append a short timestamp suffix to guarantee uniqueness.
+   134→  // Use a counter too so two rapid collisions in the same millisecond differ.
+   135→  const suffix = Date.now().toString(36).toUpperCase().slice(-5)
+   136→  const counter = Math.floor(Math.random() * 36).toString(36).toUpperCase()
+   137→  return `${prefix}-${String(count + 1).padStart(4, '0')}-${suffix}${counter}`
+   138→}
+   139→
+   140→// ─── Currency helpers ────────────────────────────────────────────────────────
+   141→
+   142→async function resolveCurrency(tenantId: string | null | undefined): Promise<{ base: string; rate: (tx: string) => number }> {
+   143→  let base = 'USD'
+   144→  if (tenantId) {
+   145→    try {
+   146→      const t = await db.tenant.findUnique({ where: { id: tenantId }, select: { currency: true } })
+   147→      if (t?.currency) base = t.currency
+   148→    } catch { /* ignore */ }
+   149→  }
+   150→  return {
+   151→    base,
+   152→    rate: (tx: string) => (tx === base ? 1 : getExchangeRate(tx, base)),
+   153→  }
+   154→}
+   155→
+   156→// ─── Core: create invoice from a completed job ───────────────────────────────
+   157→
+   158→export interface AutoInvoiceResult {
+   159→  success: boolean
+   160→  invoiceId?: string
+   161→  number?: string
+   162→  total?: number
+   163→  error?: string
+   164→  skipped?: boolean
+   165→  reason?: string
+   166→  /** True when the invoice was created but the auto-send (email/WhatsApp) failed. */
+   167→  sendFailed?: boolean
+   168→  /** Aggregated error message from the failed auto-send. */
+   169→  sendError?: string
+   170→  /** The per-channel send result (email + WhatsApp). */
+   171→  sendResult?: { email?: { success: boolean; error?: string; simulated?: boolean }; whatsapp?: { success: boolean; error?: string; simulated?: boolean } }
+   172→}
+   173→
+   174→/**
+   175→ * In-memory per-job lock that prevents two concurrent requests from both
+   176→ * passing the "no invoice exists yet" check and creating duplicate invoices.
+   177→ *
+   178→ * This handles the race between:
+   179→ *   - POST /api/jobs/lifecycle { action: 'complete' }  → fireAndForget(autoCreateInvoiceFromJob)
+   180→ *   - POST /api/jobs/[id]/complete-proof               → COD invoice creation
+   181→ *
+   182→ * Both paths call this lock before checking/creating. On a multi-server
+   183→ * deployment a distributed lock (Redis SETNX etc.) would be needed, but
+   184→ * ServiceOS runs as a single Next.js process so this is sufficient.
+   185→ */
+   186→const _invoiceLockForJob = new Map<string, Promise<AutoInvoiceResult>>()
+   187→
+   188→async function withJobInvoiceLock<T extends AutoInvoiceResult>(
+   189→  jobId: string,
+   190→  fn: () => Promise<T>,
+   191→): Promise<T> {
+   192→  // If another request is already creating an invoice for this job, wait for
+   193→  // it to finish and return its result (the caller will then see `skipped`
+   194→  // because the invoice now exists).
+   195→  const existing = _invoiceLockForJob.get(jobId)
+   196→  if (existing) {
+   197→    return existing as Promise<T>
+   198→  }
+   199→  const p = (async () => {
+   200→    try {
+   201→      return await fn()
+   202→    } finally {
+   203→      // Clear the lock once the operation completes (success or failure).
+   204→      // Use a microtask delay so concurrent callers that started while we
+   205→      // were running still see the lock and join our promise.
+   206→      queueMicrotask(() => _invoiceLockForJob.delete(jobId))
+   207→    }
+   208→  })()
+   209→  _invoiceLockForJob.set(jobId, p)
+   210→  return p as Promise<T>
+   211→}
+   212→
+   213→/**
+   214→ * Resolve the monetary value of a job using a sensible fallback chain.
+   215→ * Used by auto-invoice so the invoice amount reflects
+   216→ * REAL data instead of a hard-coded $50/hr rate.
+   217→ *
+   218→ * Priority:
+   219→ *   1. job.quotedAmount   — explicitly agreed price (set on Create Job form,
+   220→ *                           OR carried over from lead.value during conversion)
+   221→ *   2. job.amountCollected — COD payment already collected by the technician
+   222→ *   3. Lead.value         — if the job was converted from a lead (an explicit
+   223→ *                           negotiated quote beats the generic catalog price)
+   224→ *   4. Service.basePrice  — the linked service catalog entry's default price
+   225→ *   5. estimatedDuration × DEFAULT_HOURLY_RATE  — last-resort fallback
+   226→ *
+   227→ * NOTE: Lead.value is checked BEFORE Service.basePrice. A lead's value is an
+   228→ * explicitly negotiated quote between the business and the customer, while a
+   229→ * Service.basePrice is just a catalog default. If a lead was converted before
+   230→ * the quotedAmount carry-over fix was deployed (so job.quotedAmount is null),
+   231→ * the lead's value should still win over the service catalog price — that is
+   232→ * the amount the customer actually agreed to pay.
+   233→ */
+   234→const DEFAULT_HOURLY_RATE = 50
+   235→export async function resolveJobAmount(job: {
+   236→  quotedAmount?: number | null
+   237→  amountCollected?: number | null
+   238→  serviceId?: string | null
+   239→  estimatedDuration?: number | null
+   240→  id: string
+   241→}): Promise<{ amount: number; source: string }> {
+   242→  // 1. Explicitly quoted amount (set on the job, or carried from lead.value)
+   243→  if (job.quotedAmount && job.quotedAmount > 0) {
+   244→    return { amount: job.quotedAmount, source: 'quoted_amount' }
+   245→  }
+   246→  // 2. COD amount already collected
+   247→  if (job.amountCollected && job.amountCollected > 0) {
+   248→    return { amount: job.amountCollected, source: 'cod_collected' }
+   249→  }
+   250→  // 3. Lead value (if this job was converted from a lead) — explicit
+   251→  //    negotiated quote beats the generic service catalog price.
+   252→  try {
+   253→    const lead = await db.lead.findFirst({
+   254→      where: { jobId: job.id },
+   255→      select: { value: true },
+   256→    })
+   257→    if (lead && lead.value > 0) {
+   258→      return { amount: lead.value, source: 'lead_value' }
+   259→    }
+   260→  } catch { /* ignore — fall through */ }
+   261→  // 4. Service catalog base price
+   262→  if (job.serviceId) {
+   263→    try {
+   264→      const svc = await db.service.findUnique({
+   265→        where: { id: job.serviceId },
+   266→        select: { basePrice: true, name: true },
+   267→      })
+   268→      if (svc && svc.basePrice > 0) {
+   269→        return { amount: svc.basePrice, source: 'service_base_price' }
+   270→      }
+   271→    } catch { /* ignore — fall through */ }
+   272→  }
+   273→  // 5. Last resort: estimated duration × default hourly rate
+   274→  if (job.estimatedDuration && job.estimatedDuration > 0) {
+   275→    return {
+   276→      amount: Math.round((job.estimatedDuration / 60) * DEFAULT_HOURLY_RATE),
+   277→      source: 'estimated_duration_fallback',
+   278→    }
+   279→  }
+   280→  // Absolute fallback
+   281→  return { amount: DEFAULT_HOURLY_RATE, source: 'default_flat' }
+   282→}
+   283→
+   284→/**
+   285→ * Auto-create an invoice from a completed job.
+   286→ * - Wrapped in a per-job lock to prevent duplicate invoices from concurrent
+   287→ *   requests (e.g. lifecycle complete + complete-proof running at the same
+   288→ *   time, or the user double-clicking "Complete").
+   289→ * - Skips if an invoice already exists for the job.
+   290→ * - Uses resolveJobAmount() so the invoice amount reflects REAL data
+   291→ *   (quotedAmount → amountCollected → Service.basePrice → Lead.value →
+   292→ *    estimatedDuration × rate) instead of a hard-coded $50/hr.
+   293→ * - Honors the tenant's defaultTaxPercent and defaultDueDays.
+   294→ */
+   295→export async function autoCreateInvoiceFromJob(jobId: string): Promise<AutoInvoiceResult> {
+   296→  return withJobInvoiceLock(jobId, async () => {
+   297→    try {
+   298→      const job = await db.job.findUnique({
+   299→        where: { id: jobId },
+   300→        include: { customer: true },
+   301→      })
+   302→      if (!job) return { success: false, error: 'Job not found' }
+   303→
+   304→      // Resolve tenant: job.workspaceId is a Workspace ID (not a Tenant ID), so
+   305→      // look up the Workspace to get its tenantId. Fall back to the first tenant.
+   306→      let tenantId: string | null = null
+   307→      if (job.workspaceId) {
+   308→        try {
+   309→          const ws = await db.workspace.findUnique({
+   310→            where: { id: job.workspaceId },
+   311→            select: { tenantId: true },
+   312→          })
+   313→          tenantId = ws?.tenantId || null
+   314→        } catch { /* ignore */ }
+   315→      }
+   316→      if (!tenantId) {
+   317→        // Last resort: first tenant
+   318→        try {
+   319→          const t = await db.tenant.findFirst({ select: { id: true } })
+   320→          tenantId = t?.id || null
+   321→        } catch { /* ignore */ }
+   322→      }
+   323→      if (!tenantId) return { success: false, error: 'No tenant for job' }
+   324→
+   325→      const settings = await getInvoiceSettings(tenantId)
+   326→
+   327→      // ── Respect the "Auto Create Invoice on Job Completion" toggle ──
+   328→      // The settings dialog exposes this switch; without this check, invoices were
+   329→      // being created on EVERY job completion regardless of the toggle value.
+   330→      if (!settings.autoCreateOnJobComplete) {
+   331→        return { success: false, skipped: true, reason: 'autoCreateOnJobComplete is disabled' }
+   332→      }
+   333→
+   334→      // Idempotency: skip if an invoice already exists for this job (re-check
+   335→      // inside the lock so concurrent callers see the invoice the first one
+   336→      // created and bail out).
+   337→      const existing = await db.invoice.findFirst({ where: { jobId } })
+   338→      if (existing) {
+   339→        return { success: false, skipped: true, reason: 'Invoice already exists for this job', invoiceId: existing.id, number: existing.number }
+   340→      }
+   341→
+   342→      // Need a customer to invoice — accept customerId, customerPhone, OR
+   343→      // customerName (previously only id/phone were accepted, which caused
+   344→      // invoices to be silently skipped for jobs that only had a name).
+   345→      if (!job.customerId && !job.customerPhone && !job.customerName) {
+   346→        return { success: false, skipped: true, reason: 'Job has no customer to invoice' }
+   347→      }
+   348→
+   349→      // ── Ensure the invoice has a linked Customer record ──────────────
+   350→      // sendInvoice() resolves the recipient from `invoice.customer` (the
+   351→      // linked Customer row), falling back to `invoice.job.customerEmail/Phone`.
+   352→      // If the job was created directly (not from a lead) the user may have
+   353→      // typed customerName/Phone/Email on the form WITHOUT selecting an
+   354→      // existing Customer — so job.customerId is null.
+   355→      //
+   356→      // PREVIOUS BUG: The find-or-create block was gated on
+   357→      //   `(job.customerPhone || job.customerEmail) && job.workspaceId`
+   358→      // which meant jobs with ONLY customerName (no phone/email), OR jobs
+   359→      // with no workspaceId, produced invoices with customerId=null. If the
+   360→      // job also lacked customerEmail/customerPhone, sendInvoice() had no
+   361→      // recipient at all → both channels returned success:false → invoice
+   362→      // stayed in 'draft' and could not be sent even manually.
+   363→      //
+   364→      // FIX: Always try to find-or-create a Customer when there's ANY
+   365→      // customer identifier (name, phone, email, or existing customerId).
+   366→      // If the job has no workspaceId, resolve one from the tenant's first
+   367→      // workspace. This ensures the invoice is always linked to a Customer
+   368→      // row, and sendInvoice() can resolve recipients from it.
+   369→      let invoiceCustomerId = job.customerId || null
+   370→      if (!invoiceCustomerId && (job.customerName || job.customerPhone || job.customerEmail)) {
+   371→        try {
+   372→          // Resolve a workspaceId — prefer the job's, else first workspace
+   373→          // for the tenant. Customer.workspaceId is required by the schema.
+   374→          let customerWorkspaceId = job.workspaceId
+   375→          if (!customerWorkspaceId && tenantId) {
+   376→            const firstWs = await db.workspace.findFirst({
+   377→              where: { tenantId },
+   378→              select: { id: true },
+   379→            })
+   380→            customerWorkspaceId = firstWs?.id || null
+   381→          }
+   382→          if (customerWorkspaceId) {
+   383→            // Find by phone (most unique), then by email, then by name
+   384→            const existingCustomer = await db.customer.findFirst({
+   385→              where: {
+   386→                OR: [
+   387→                  ...(job.customerPhone ? [{ phone: job.customerPhone }] : []),
+   388→                  ...(job.customerEmail ? [{ email: job.customerEmail }] : []),
+   389→                  ...(job.customerName ? [{ name: job.customerName }] : []),
+   390→                ],
+   391→                workspaceId: customerWorkspaceId,
+   392→              },
+   393→            })
+   394→            if (existingCustomer) {
+   395→              invoiceCustomerId = existingCustomer.id
+   396→              // Backfill missing contact info on the Customer from the job
+   397→              // (e.g. the Customer existed with only a name, but the job
+   398→              // captured a phone/email — enrich the Customer record).
+   399→              const needsUpdate =
+   400→                (job.customerPhone && !existingCustomer.phone) ||
+   401→                (job.customerEmail && !existingCustomer.email)
+   402→              if (needsUpdate) {
+   403→                try {
+   404→                  await db.customer.update({
+   405→                    where: { id: existingCustomer.id },
+   406→                    data: {
+   407→                      ...(job.customerPhone && !existingCustomer.phone ? { phone: job.customerPhone } : {}),
+   408→                      ...(job.customerEmail && !existingCustomer.email ? { email: job.customerEmail } : {}),
+   409→                    },
+   410→                  })
+   411→                } catch { /* non-critical enrichment */ }
+   412→              }
+   413→            } else {
+   414→              // Create a Customer from the job's customer fields.
+   415→              // NOTE: Customer.phone is a non-nullable String in the Prisma
+   416→              // schema, so we use '' (empty string) instead of null when the
+   417→              // job has no phone. Using null here previously caused a
+   418→              // PrismaClientValidationError that was silently caught, leaving
+   419→              // the invoice with customerId=null.
+   420→              const created = await db.customer.create({
+   421→                data: {
+   422→                  name: job.customerName || 'Unknown Customer',
+   423→                  phone: job.customerPhone || '',
+   424→                  email: job.customerEmail || null,
+   425→                  workspaceId: customerWorkspaceId,
+   426→                },
+   427→              })
+   428→              invoiceCustomerId = created.id
+   429→            }
+   430→            // Link the job to this customer for future reference
+   431→            if (invoiceCustomerId && invoiceCustomerId !== job.customerId) {
+   432→              try {
+   433→                await db.job.update({ where: { id: jobId }, data: { customerId: invoiceCustomerId } })
+   434→              } catch { /* non-critical */ }
+   435→            }
+   436→          }
+   437→        } catch (e) {
+   438→          console.error('[InvoiceAutomation] find-or-create customer error:', e)
+   439→          // Non-fatal — proceed with null customerId. sendInvoice() will
+   440→          // still try to fall back to job.customerEmail/customerPhone.
+   441→        }
+   442→      }
+   443→
+   444→      const { base, rate } = await resolveCurrency(tenantId)
+   445→      const taxPercent = settings.defaultTaxPercent || 0
+   446→
+   447→      // ── Resolve the REAL invoice amount (Bug 3 fix) ──
+   448→      // Uses quotedAmount → amountCollected → Service.basePrice → Lead.value
+   449→      // → estimatedDuration × rate, instead of a hard-coded $50/hr.
+   450→      const { amount: resolvedAmount, source: amountSource } = await resolveJobAmount(job)
+   451→
+   452→      // Build a single line item for the job
+   453→      const lineItem = {
+   454→        description: job.title || `Job #${job.jobNumber || job.id.slice(-6)}`,
+   455→        quantity: 1,
+   456→        rate: resolvedAmount,
+   457→        notes: job.description || '',
+   458→      }
+   459→      const items = [lineItem]
+   460→      const subtotal = items.reduce((s, it) => s + it.quantity * it.rate, 0)
+   461→      const tax = subtotal * (taxPercent / 100)
+   462→      const total = subtotal + tax
+   463→
+   464→      const number = await generateInvoiceNumber(tenantId)
+   465→      const dueDate = new Date()
+   466→      dueDate.setDate(dueDate.getDate() + (settings.defaultDueDays || 15))
+   467→
+   468→      // If COD payment was already collected, mark the invoice as 'paid'.
+   469→      const isCodPaid = !!(job.amountCollected && job.amountCollected > 0)
+   470→      const status = isCodPaid
+   471→        ? 'paid'
+   472→        : (settings.creationMethod === 'approval_required' ? 'pending_approval' : 'draft')
+   473→
+   474→      // Resolve the recipient email/phone for logging purposes. sendInvoice()
+   475→      // does its own resolution (customer.email → job.customerEmail), but we
+   476→      // compute a rough check here so we can log a clear warning when the
+   477→      // send fails due to a missing recipient.
+   478→      const recipientEmailFromJob = !!(job.customerEmail)
+   479→      const recipientPhoneFromJob = !!(job.customerPhone)
+   480→
+   481→      const invoice = await db.invoice.create({
+   482→        data: {
+   483→          number,
+   484→          tenantId,
+   485→          jobId,
+   486→          customerId: invoiceCustomerId,
+   487→          employeeId: job.assigneeId || null,
+   488→          amount: subtotal,
+   489→          tax,
+   490→          discount: 0,
+   491→          total,
+   492→          currency: base,
+   493→          exchangeRate: rate(base),
+   494→          baseCurrency: base,
+   495→          baseAmount: total,
+   496→          status,
+   497→          invoiceType: 'job_completion',
+   498→          dueDate,
+   499→          paidAt: isCodPaid ? new Date() : null,
+   500→          itemsJson: JSON.stringify(items),
+   501→          notes: `Auto-created from completed job #${job.jobNumber || job.id.slice(-6)} (amount source: ${amountSource})`,
+   502→        },
+   503→      })
+   504→
+   505→      // Auto-send (email + WhatsApp) if enabled and not already paid (COD
+   506→      // invoices are handed over in person, no need to email).
+   507→      //
+   508→      // We capture the send result and log a WARNING if it failed, so the
+   509→      // fire-and-forget caller (job lifecycle) records WHY the invoice
+   510→      // stayed in 'draft'. Previously the result was awaited but never
+   511→      // inspected, so send failures were silently swallowed and the user
+   512→      // saw a draft invoice with no indication that sending was attempted
+   513→      // and failed.
+   514→      let sendResult: { email?: { success: boolean; error?: string; simulated?: boolean }; whatsapp?: { success: boolean; error?: string; simulated?: boolean } } | undefined
+   515→      let sendFailed = false
+   516→      let sendError: string | undefined
+   517→      if (!isCodPaid && (settings.autoSendEmail || settings.autoSendWhatsApp)) {
+   518→        try {
+   519→          sendResult = await sendInvoice(invoice.id, {
+   520→            sendEmail: settings.autoSendEmail,
+   521→            sendWhatsApp: settings.autoSendWhatsApp,
+   522→          })
+   523→          // Check if all attempted channels failed
+   524→          const channels = [sendResult?.email, sendResult?.whatsapp].filter(Boolean) as { success: boolean; error?: string }[]
+   525→          const anySuccess = channels.some((c) => c.success)
+   526→          if (channels.length > 0 && !anySuccess) {
+   527→            sendFailed = true
+   528→            const errors = channels.map((c) => c.error).filter(Boolean)
+   529→            sendError = errors.join('; ')
+   530→            console.warn(
+   531→              `[InvoiceAutomation] Auto-created invoice ${invoice.number} but SEND FAILED: ${sendError}. ` +
+   532→              `Invoice remains in 'draft'. Recipient email: ${recipientEmailFromJob ? 'yes' : 'no'}, phone: ${recipientPhoneFromJob ? 'yes' : 'no'}. ` +
+   533→              `Link a Customer with email/phone or edit the invoice to add recipient info, then click Send.`
+   534→            )
+   535→          } else if (sendResult?.email?.simulated || sendResult?.whatsapp?.simulated) {
+   536→            console.log(`[InvoiceAutomation] Auto-created invoice ${invoice.number} — send SIMULATED (no provider configured).`)
+   537→          }
+   538→        } catch (sendErr) {
+   539→          sendFailed = true
+   540→          sendError = String(sendErr)
+   541→          console.warn(`[InvoiceAutomation] Auto-created invoice ${invoice.number} but sendInvoice() threw: ${sendError}`)
+   542→        }
+   543→      }
+   544→
+   545→      console.log(`[InvoiceAutomation] Auto-created invoice ${invoice.number} for job ${jobId} (amount: ${resolvedAmount} via ${amountSource}, status: ${status}, sendFailed: ${sendFailed})`)
+   546→      return { success: true, invoiceId: invoice.id, number: invoice.number, total: invoice.total, sendFailed, sendError, sendResult }
+   547→    } catch (err) {
+   548→      console.error('[InvoiceAutomation] autoCreateInvoiceFromJob error:', err)
+   549→      return { success: false, error: String(err) }
+   550→    }
+   551→  })
+   552→}
+   553→
+   554→// ─── Core: create deposit invoice from a booking ─────────────────────────────
+   555→
+   556→export async function createDepositInvoiceFromBooking(bookingId: string, percentage?: number): Promise<AutoInvoiceResult> {
+   557→  try {
+   558→    const booking = await db.booking.findUnique({
+   559→      where: { id: bookingId },
+   560→    })
+   561→    if (!booking) return { success: false, error: 'Booking not found' }
+   562→
+   563→    const tenantId = booking.tenantId
+   564→    if (!tenantId) return { success: false, error: 'Booking has no tenant' }
+   565→
+   566→    const settings = await getInvoiceSettings(tenantId)
+   567→    const pct = percentage ?? settings.depositPercentage ?? 30
+   568→
+   569→    // Estimate the booking value from the linked service (if any)
+   570→    let servicePrice = 0
+   571→    if (booking.serviceId) {
+   572→      try {
+   573→        const svc = await db.service.findUnique({ where: { id: booking.serviceId }, select: { basePrice: true, name: true } })
+   574→        if (svc?.basePrice) servicePrice = Number(svc.basePrice)
+   575→      } catch { /* ignore */ }
+   576→    }
+   577→    const depositAmount = servicePrice > 0 ? Math.round(servicePrice * (pct / 100)) : 0
+   578→
+   579→    if (depositAmount <= 0) {
+   580→      return { success: false, skipped: true, reason: 'No service price to compute deposit' }
+   581→    }
+   582→
+   583→    const { base, rate } = await resolveCurrency(tenantId)
+   584→    const number = await generateInvoiceNumber(tenantId)
+   585→    const dueDate = new Date()
+   586→    dueDate.setDate(dueDate.getDate() + (settings.defaultDueDays || 15))
+   587→
+   588→    const items = [{
+   589→      description: `Deposit (${pct}%) for: ${booking.title}`,
+   590→      quantity: 1,
+   591→      rate: depositAmount,
+   592→      notes: `Advance payment for booking scheduled at ${booking.scheduledAt?.toISOString() || 'TBD'}`,
+   593→    }]
+   594→    const subtotal = depositAmount
+   595→    const tax = subtotal * ((settings.defaultTaxPercent || 0) / 100)
+   596→    const total = subtotal + tax
+   597→
+   598→    const invoice = await db.invoice.create({
+   599→      data: {
+   600→        number,
+   601→        tenantId,
+   602→        bookingId: booking.id,
+   603→        customerId: booking.customerId || null,
+   604→        amount: subtotal,
+   605→        tax,
+   606→        discount: 0,
+   607→        total,
+   608→        currency: base,
+   609→        exchangeRate: rate(base),
+   610→        baseCurrency: base,
+   611→        baseAmount: total,
+   612→        status: 'sent',
+   613→        invoiceType: 'deposit',
+   614→        sentAt: new Date(),
+   615→        dueDate,
+   616→        itemsJson: JSON.stringify(items),
+   617→        notes: `Deposit invoice for booking ${booking.title}`,
+   618→      },
+   619→    })
+   620→
+   621→    // Auto-send the deposit invoice if those toggles are on
+   622→    if (settings.autoSendEmail || settings.autoSendWhatsApp) {
+   623→      try {
+   624→        await sendInvoice(invoice.id, {
+   625→          sendEmail: settings.autoSendEmail,
+   626→          sendWhatsApp: settings.autoSendWhatsApp,
+   627→        })
+   628→      } catch (sendErr) {
+   629→        console.error('[InvoiceAutomation] deposit sendInvoice error:', sendErr)
+   630→      }
+   631→    }
+   632→
+   633→    return { success: true, invoiceId: invoice.id, number: invoice.number, total: invoice.total }
+   634→  } catch (err) {
+   635→    console.error('[InvoiceAutomation] createDepositInvoiceFromBooking error:', err)
+   636→    return { success: false, error: String(err) }
+   637→  }
+   638→}
+   639→
+   640→// ─── Core: send invoice (email + WhatsApp) ───────────────────────────────────
+   641→
+   642→export interface SendInvoiceOptions {
+   643→  sendEmail?: boolean
+   644→  sendWhatsApp?: boolean
+   645→}
+   646→
+   647→export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = { sendEmail: true, sendWhatsApp: true }): Promise<{ email?: { success: boolean; error?: string; simulated?: boolean }; whatsapp?: { success: boolean; error?: string; simulated?: boolean } }> {
+   648→  const invoice = await db.invoice.findUnique({
+   649→    where: { id: invoiceId },
+   650→    include: { customer: true, tenant: true, job: true },
+   651→  })
+   652→  if (!invoice) return { email: { success: false, error: 'Invoice not found' } }
+   653→
+   654→  const result: { email?: { success: boolean; error?: string; simulated?: boolean }; whatsapp?: { success: boolean; error?: string; simulated?: boolean } } = {}
+   655→
+   656→  // Build a compact text summary
+   657→  const items = safeParse(invoice.itemsJson, []) as Array<{ description: string; quantity: number; rate: number }>
+   658→  const itemsText = items.map((it, i) => `${i + 1}. ${it.description} ×${it.quantity} = $${(it.quantity * it.rate).toFixed(2)}`).join('\n')
+   659→  const customerName = invoice.customer?.name || invoice.job?.customerName || 'Customer'
+   660→  const invoiceTotal = `$${Number(invoice.total).toFixed(2)} ${invoice.currency}`
+   661→
+   662→  // ── Resolve recipient email & phone ──────────────────────────────
+   663→  // Prefer the linked Customer record; fall back to the job's customer
+   664→  // fields (for invoices where no Customer row exists). This ensures the
+   665→  // send flow has a recipient even for direct-created jobs that were
+   666→  // completed before the find-or-create-customer fix was deployed.
+   667→  const recipientEmail = invoice.customer?.email || invoice.job?.customerEmail || null
+   668→  const recipientPhone = invoice.customer?.phone || invoice.job?.customerPhone || null
+   669→
+   670→  // Log a clear warning when there's no recipient at all — this is the #1
+   671→  // cause of "invoice stuck in draft" reports. The per-channel errors
+   672→  // below will also be returned to the caller, but this console.warn
+   673→  // makes the issue immediately visible in server logs.
+   674→  if (!recipientEmail && !recipientPhone && (opts.sendEmail || opts.sendWhatsApp)) {
+   675→    console.warn(
+   676→      `[InvoiceAutomation] sendInvoice(${invoice.number}): no recipient email AND no recipient phone. ` +
+   677→      `customerId=${invoice.customerId || 'null'}, job.customerEmail=${invoice.job?.customerEmail || 'null'}, ` +
+   678→      `job.customerPhone=${invoice.job?.customerPhone || 'null'}. ` +
+   679→      `Invoice will remain in 'draft'. Link a Customer with contact info or edit the invoice.`
+   680→    )
+   681→  }
+   682→
+   683→  // ─── Email ─────────────────────────────────────────────────────
+   684→  if (opts.sendEmail && recipientEmail) {
+   685→    const subject = `Invoice ${invoice.number} from ${invoice.tenant?.name || 'ServiceOS'}`
+   686→    const html = [
+   687→      `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">`,
+   688→      `<h2 style="color: #0f172a;">Invoice ${invoice.number}</h2>`,
+   689→      `<p>Hi ${customerName},</p>`,
+   690→      `<p>Please find your invoice below. Thank you for your business!</p>`,
+   691→      `<table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">`,
+   692→      `<tr><td style="padding: 8px; background: #f9fafb; font-weight: 600; border: 1px solid #e5e7eb;">Invoice #</td><td style="padding: 8px; border: 1px solid #e5e7eb;">${invoice.number}</td></tr>`,
+   693→      `<tr><td style="padding: 8px; background: #f9fafb; font-weight: 600; border: 1px solid #e5e7eb;">Total Due</td><td style="padding: 8px; border: 1px solid #e5e7eb; font-weight: 700; color: #059669;">${invoiceTotal}</td></tr>`,
+   694→      invoice.dueDate ? `<tr><td style="padding: 8px; background: #f9fafb; font-weight: 600; border: 1px solid #e5e7eb;">Due Date</td><td style="padding: 8px; border: 1px solid #e5e7eb;">${new Date(invoice.dueDate).toLocaleDateString()}</td></tr>` : '',
+   695→      `</table>`,
+   696→      `<h3 style="margin-top: 24px;">Line Items</h3>`,
+   697→      `<pre style="background: #f9fafb; padding: 12px; border-radius: 8px; white-space: pre-wrap;">${itemsText || 'No items'}</pre>`,
+   698→      invoice.notes ? `<p style="margin-top: 16px;"><strong>Notes:</strong> ${invoice.notes}</p>` : '',
+   699→      `<hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />`,
+   700→      `<p style="font-size: 12px; color: #9ca3af;">— Sent from ${invoice.tenant?.name || 'ServiceOS'}</p>`,
+   701→      `</div>`,
+   702→    ].filter(Boolean).join('\n')
+   703→    const text = `Invoice ${invoice.number}\nTotal: ${invoiceTotal}\nDue: ${invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : 'N/A'}\n\nItems:\n${itemsText}\n\n— ${invoice.tenant?.name || 'ServiceOS'}`
+   704→    try {
+   705→      const r = await sendEmail({ to: recipientEmail, subject, html, text, usageType: 'transactional' })
+   706→      result.email = { success: !!r.success, error: r.error, simulated: r.simulated }
+   707→    } catch (err) {
+   708→      result.email = { success: false, error: String(err) }
+   709→    }
+   710→  } else if (opts.sendEmail) {
+   711→    result.email = { success: false, error: 'Customer has no email address' }
+   712→  }
+   713→
+   714→  // ─── WhatsApp ──────────────────────────────────────────────────
+   715→  if (opts.sendWhatsApp && recipientPhone) {
+   716→    const waMessage = [
+   717→      `🧾 *Invoice ${invoice.number}*`,
+   718→      '',
+   719→      `Hi ${customerName}, your invoice from ${invoice.tenant?.name || 'ServiceOS'}:`,
+   720→      '',
+   721→      `*Total:* ${invoiceTotal}`,
+   722→      invoice.dueDate ? `*Due:* ${new Date(invoice.dueDate).toLocaleDateString()}` : '',
+   723→      '',
+   724→      '*Line Items:*',
+   725→      itemsText || 'No items',
+   726→      '',
+   727→      'Thank you for your business!',
+   728→    ].filter(Boolean).join('\n')
+   729→    try {
+   730→      const r = await sendWhatsAppMessage({ to: recipientPhone, message: waMessage })
+   731→      result.whatsapp = { success: !!r.success, error: r.error, simulated: r.simulated }
+   732→    } catch (err) {
+   733→      result.whatsapp = { success: false, error: String(err) }
+   734→    }
+   735→  } else if (opts.sendWhatsApp) {
+   736→    result.whatsapp = { success: false, error: 'Customer has no phone number' }
+   737→  }
+   738→
+   739→  // ── Flip invoice status to 'sent' if ANY channel succeeded ────
+   740→  // PREVIOUS BUG: The status flip was only inside the email success block,
+   741→  // so when email had no recipient but WhatsApp succeeded, the invoice
+   742→  // stayed in 'draft' even though WhatsApp was delivered. Now we check
+   743→  // both channels after both have run.
+   744→  const anyChannelSuccess =
+   745→    (result.email?.success === true) || (result.whatsapp?.success === true)
+   746→  if (anyChannelSuccess && invoice.status === 'draft') {
+   747→    try {
+   748→      await db.invoice.update({ where: { id: invoiceId }, data: { status: 'sent', sentAt: new Date() } })
+   749→    } catch (err) {
+   750→      console.error(`[InvoiceAutomation] sendInvoice(${invoice.number}): failed to flip status to 'sent':`, err)
+   751→    }
+   752→  }
+   753→
+   754→  return result
+   755→}
+   756→
+   757→// ─── Core: mark invoice paid ─────────────────────────────────────────────────
+   758→
+   759→export async function markInvoicePaid(invoiceId: string): Promise<{ success: boolean; error?: string }> {
+   760→  try {
+   761→    const invoice = await db.invoice.findUnique({ where: { id: invoiceId } })
+   762→    if (!invoice) return { success: false, error: 'Invoice not found' }
+   763→    await db.invoice.update({
+   764→      where: { id: invoiceId },
+   765→      data: { status: 'paid', paidAt: new Date() },
+   766→    })
+   767→    return { success: true }
+   768→  } catch (err) {
+   769→    return { success: false, error: String(err) }
+   770→  }
+   771→}
+   772→
+   773→// ─── Core: send reminder ─────────────────────────────────────────────────────
+   774→
+   775→export async function sendInvoiceReminder(invoiceId: string): Promise<{ success: boolean; error?: string; email?: boolean; whatsapp?: boolean }> {
+   776→  const invoice = await db.invoice.findUnique({
+   777→    where: { id: invoiceId },
+   778→    include: { customer: true, tenant: true },
+   779→  })
+   780→  if (!invoice) return { success: false, error: 'Invoice not found' }
+   781→  if (invoice.status === 'paid') return { success: false, error: 'Invoice already paid' }
+   782→
+   783→  const customerName = invoice.customer?.name || 'Customer'
+   784→  const invoiceTotal = `$${Number(invoice.total).toFixed(2)} ${invoice.currency}`
+   785→  let emailSent = false
+   786→  let whatsappSent = false
+   787→
+   788→  if (invoice.customer?.email) {
+   789→    try {
+   790→      await sendEmail({
+   791→        to: invoice.customer.email,
+   792→        subject: `Reminder: Invoice ${invoice.number} is due`,
+   793→        html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px"><h2>Payment Reminder</h2><p>Hi ${customerName},</p><p>This is a friendly reminder that invoice <strong>${invoice.number}</strong> for <strong>${invoiceTotal}</strong> ${invoice.dueDate ? `is due on ${new Date(invoice.dueDate).toLocaleDateString()}` : 'is now due'}.</p><p>Please complete payment at your earliest convenience.</p><p>— ${invoice.tenant?.name || 'ServiceOS'}</p></div>`,
+   794→        text: `Reminder: Invoice ${invoice.number} for ${invoiceTotal} is due. Please complete payment.\n\n— ${invoice.tenant?.name || 'ServiceOS'}`,
+   795→        usageType: 'transactional',
+   796→      })
+   797→      emailSent = true
+   798→    } catch (err) {
+   799→      console.error('[InvoiceAutomation] reminder email failed:', err)
+   800→    }
+   801→  }
+   802→
+   803→  if (invoice.customer?.phone) {
+   804→    try {
+   805→      await sendWhatsAppMessage({
+   806→        to: invoice.customer.phone,
+   807→        message: `Friendly reminder: Your invoice ${invoice.number} for ${invoiceTotal} ${invoice.dueDate ? `(due ${new Date(invoice.dueDate).toLocaleDateString()})` : 'is now due'}. Please complete payment. Thank you! — ${invoice.tenant?.name || 'ServiceOS'}`,
+   808→      })
+   809→      whatsappSent = true
+   810→    } catch (err) {
+   811→      console.error('[InvoiceAutomation] reminder WhatsApp failed:', err)
+   812→    }
+   813→  }
+   814→
+   815→  return { success: emailSent || whatsappSent, email: emailSent, whatsapp: whatsappSent }
+   816→}
+   817→
+   818→// ─── Core: approve a pending_approval invoice ────────────────────────────────
+   819→// Used by the "Approval Required" creation method: a manager reviews the
+   820→// pending_approval invoice and approves it, which flips it to "sent" and
+   821→// emails + WhatsApps the customer.
+   822→
+   823→export async function approveInvoice(invoiceId: string): Promise<{ success: boolean; error?: string; invoiceId?: string; number?: string; sendResult?: { email?: { success: boolean; simulated?: boolean; error?: string }; whatsapp?: { success: boolean; simulated?: boolean; error?: string } } }> {
+   824→  try {
+   825→    const invoice = await db.invoice.findUnique({ where: { id: invoiceId } })
+   826→    if (!invoice) return { success: false, error: 'Invoice not found' }
+   827→    if (invoice.status !== 'pending_approval') {
+   828→      return { success: false, error: `Invoice is not pending approval (current status: ${invoice.status})` }
+   829→    }
+   830→    // Flip to 'sent' and stamp sentAt
+   831→    await db.invoice.update({
+   832→      where: { id: invoiceId },
+   833→      data: { status: 'sent', sentAt: new Date() },
+   834→    })
+   835→    // Send to customer via email + WhatsApp — capture the result so the
+   836→    // caller (API → UI) can surface a "simulated" notice when no real
+   837→    // provider is configured. Without this, the UI would claim "Invoice
+   838→    // approved and sent to customer" even when the send was simulated.
+   839→    let sendResult: { email?: { success: boolean; simulated?: boolean; error?: string }; whatsapp?: { success: boolean; simulated?: boolean; error?: string } } | undefined
+   840→    try {
+   841→      sendResult = await sendInvoice(invoiceId, { sendEmail: true, sendWhatsApp: true })
+   842→    } catch (sendErr) {
+   843→      console.error('[InvoiceAutomation] approveInvoice send error:', sendErr)
+   844→    }
+   845→    return { success: true, invoiceId, number: invoice.number, sendResult }
+   846→  } catch (err) {
+   847→    console.error('[InvoiceAutomation] approveInvoice error:', err)
+   848→    return { success: false, error: String(err) }
+   849→  }
+   850→}
+   851→
+   852→// ─── Core: recurring invoice schedules ───────────────────────────────────────
+   853→
+   854→export interface RecurringInvoiceInput {
+   855→  name: string
+   856→  customerId?: string | null
+   857→  jobId?: string | null
+   858→  frequency?: 'weekly' | 'monthly' | 'quarterly' | 'yearly'
+   859→  dayOfMonth?: number
+   860→  amount: number
+   861→  taxPercent?: number
+   862→  currency?: string
+   863→  itemsJson?: string
+   864→  notes?: string
+   865→  startDate?: string | Date
+   866→  endDate?: string | Date | null
+   867→  tenantId: string
+   868→  createdById?: string
+   869→}
+   870→
+   871→/**
+   872→ * Create a recurring invoice schedule (AMC / subscription / monthly maintenance).
+   873→ * The schedule's `nextRunAt` is set to the first occurrence; the cron endpoint
+   874→ * /api/cron/recurring-invoices picks up due schedules and generates invoices.
+   875→ */
+   876→export async function createRecurringInvoiceSchedule(input: RecurringInvoiceInput): Promise<{ success: boolean; scheduleId?: string; error?: string }> {
+   877→  try {
+   878→    const frequency = input.frequency || 'monthly'
+   879→    const dayOfMonth = input.dayOfMonth || 1
+   880→    const startDate = input.startDate ? new Date(input.startDate) : new Date()
+   881→
+   882→    const nextRunAt = computeNextRun(startDate, frequency, dayOfMonth)
+   883→
+   884→    const schedule = await db.recurringInvoice.create({
+   885→      data: {
+   886→        name: input.name,
+   887→        tenantId: input.tenantId,
+   888→        customerId: input.customerId || null,
+   889→        jobId: input.jobId || null,
+   890→        frequency,
+   891→        dayOfMonth,
+   892→        amount: input.amount,
+   893→        taxPercent: input.taxPercent || 0,
+   894→        currency: input.currency || 'USD',
+   895→        itemsJson: input.itemsJson || JSON.stringify([{ description: input.name, quantity: 1, rate: input.amount }]),
+   896→        notes: input.notes || null,
+   897→        startDate,
+   898→        endDate: input.endDate ? new Date(input.endDate) : null,
+   899→        nextRunAt,
+   900→        active: true,
+   901→        createdById: input.createdById || null,
+   902→      },
+   903→    })
+   904→    return { success: true, scheduleId: schedule.id }
+   905→  } catch (err) {
+   906→    console.error('[InvoiceAutomation] createRecurringInvoiceSchedule error:', err)
+   907→    return { success: false, error: String(err) }
+   908→  }
+   909→}
+   910→
+   911→/**
+   912→ * Compute the next run date for a recurring schedule.
+   913→ * For monthly/quarterly/yearly: dayOfMonth of the next occurrence.
+   914→ * For weekly: the next occurrence of dayOfWeek (dayOfMonth used as 0-6).
+   915→ */
+   916→export function computeNextRun(from: Date, frequency: string, dayOfMonth: number): Date {
+   917→  const d = new Date(from)
+   918→  if (frequency === 'weekly') {
+   919→    const target = dayOfMonth % 7
+   920→    const cur = d.getDay()
+   921→    let diff = (target - cur + 7) % 7
+   922→    if (diff === 0) diff = 7 // next week if today is the day
+   923→    d.setDate(d.getDate() + diff)
+   924→    d.setHours(9, 0, 0, 0)
+   925→    return d
+   926→  }
+   927→  // monthly / quarterly / yearly
+   928→  const monthStep = frequency === 'quarterly' ? 3 : frequency === 'yearly' ? 12 : 1
+   929→  d.setDate(1)
+   930→  d.setMonth(d.getMonth() + monthStep)
+   931→  const dom = Math.min(dayOfMonth, 28) // clamp to avoid month-length issues
+   932→  d.setDate(dom)
+   933→  d.setHours(9, 0, 0, 0)
+   934→  return d
+   935→}
+   936→
+   937→/**
+   938→ * Generate a single invoice from a recurring schedule (called by the cron runner).
+   939→ * - Marks the schedule's lastRunAt + lastInvoiceId + executionCount
+   940→ * - Computes the next run date
+   941→ * - Auto-sends the invoice via email + WhatsApp (recurring invoices are always sent)
+   942→ */
+   943→export async function generateRecurringInvoice(scheduleId: string): Promise<AutoInvoiceResult & { nextRunAt?: Date }> {
+   944→  try {
+   945→    const schedule = await db.recurringInvoice.findUnique({
+   946→      where: { id: scheduleId },
+   947→      include: { customer: true, tenant: true },
+   948→    })
+   949→    if (!schedule) return { success: false, error: 'Schedule not found' }
+   950→    if (!schedule.active) return { success: false, skipped: true, reason: 'Schedule inactive' }
+   951→    if (schedule.endDate && new Date() > schedule.endDate) {
+   952→      return { success: false, skipped: true, reason: 'Schedule ended' }
+   953→    }
+   954→
+   955→    const settings = await getInvoiceSettings(schedule.tenantId)
+   956→    const taxPercent = schedule.taxPercent || settings.defaultTaxPercent || 0
+   957→    const subtotal = schedule.amount
+   958→    const tax = subtotal * (taxPercent / 100)
+   959→    const total = subtotal + tax
+   960→
+   961→    const number = await generateInvoiceNumber(schedule.tenantId)
+   962→    const dueDate = new Date()
+   963→    dueDate.setDate(dueDate.getDate() + (settings.defaultDueDays || 15))
+   964→
+   965→    const items = safeParse(schedule.itemsJson, []) as Array<{ description: string; quantity: number; rate: number }>
+   966→
+   967→    const invoice = await db.invoice.create({
+   968→      data: {
+   969→        number,
+   970→        tenantId: schedule.tenantId,
+   971→        customerId: schedule.customerId || null,
+   972→        jobId: schedule.jobId || null,
+   973→        recurrenceId: schedule.id,
+   974→        amount: subtotal,
+   975→        tax,
+   976→        discount: 0,
+   977→        total,
+   978→        currency: schedule.currency,
+   979→        exchangeRate: 1,
+   980→        baseCurrency: schedule.currency,
+   981→        baseAmount: total,
+   982→        status: 'sent',
+   983→        invoiceType: 'recurring',
+   984→        sentAt: new Date(),
+   985→        dueDate,
+   986→        itemsJson: JSON.stringify(items),
+   987→        notes: schedule.notes || `Recurring invoice: ${schedule.name}`,
+   988→      },
+   989→    })
+   990→
+   991→    // Auto-send email + WhatsApp
+   992→    try {
+   993→      await sendInvoice(invoice.id, { sendEmail: true, sendWhatsApp: true })
+   994→    } catch (sendErr) {
+   995→      console.error('[InvoiceAutomation] recurring send error:', sendErr)
+   996→    }
+   997→
+   998→    // Advance the schedule
+   999→    const nextRunAt = computeNextRun(new Date(), schedule.frequency, schedule.dayOfMonth)
+  1000→    await db.recurringInvoice.update({
+  1001→      where: { id: scheduleId },
+  1002→      data: {
+  1003→        lastRunAt: new Date(),
+  1004→        lastInvoiceId: invoice.id,
+  1005→        executionCount: { increment: 1 },
+  1006→        nextRunAt,
+  1007→      },
+  1008→    })
+  1009→
+  1010→    return { success: true, invoiceId: invoice.id, number: invoice.number, total: invoice.total, nextRunAt }
+  1011→  } catch (err) {
+  1012→    console.error('[InvoiceAutomation] generateRecurringInvoice error:', err)
+  1013→    return { success: false, error: String(err) }
+  1014→  }
+  1015→}
+  1016→
+  1017→/**
+  1018→ * Process all due recurring invoices. Called by the /api/cron/recurring-invoices endpoint.
+  1019→ * Returns a summary of generated invoices.
+  1020→ */
+  1021→export async function processDueRecurringInvoices(): Promise<{ processed: number; succeeded: number; failed: number; results: AutoInvoiceResult[] }> {
+  1022→  const now = new Date()
+  1023→  const due = await db.recurringInvoice.findMany({
+  1024→    where: { active: true, nextRunAt: { lte: now } },
+  1025→    select: { id: true },
+  1026→  })
+  1027→  const results: AutoInvoiceResult[] = []
+  1028→  let succeeded = 0
+  1029→  let failed = 0
+  1030→  for (const s of due) {
+  1031→    const r = await generateRecurringInvoice(s.id)
+  1032→    results.push(r)
+  1033→    if (r.success) succeeded++
+  1034→    else failed++
+  1035→  }
+  1036→  return { processed: due.length, succeeded, failed, results }
+  1037→}
+  1038→
+  1039→// ─── Convenience: notify owner that an auto-invoice was created ──────────────
+  1040→
+  1041→export async function notifyOwnerInvoiceCreated(invoiceId: string): Promise<void> {
+  1042→  try {
+  1043→    const invoice = await db.invoice.findUnique({
+  1044→      where: { id: invoiceId },
+  1045→      include: { customer: true },
+  1046→    })
+  1047→    if (!invoice || !invoice.tenantId) return
+  1048→    await notifyOwner(invoice.tenantId, {
+  1049→      eventType: 'invoice.created',
+  1050→      eventLabel: 'New Invoice',
+  1051→      whatsappMessage: [
+  1052→        '🧾 *New Invoice Created*',
+  1053→        '',
+  1054→        `*Invoice #:* ${invoice.number}`,
+  1055→        `*Customer:* ${invoice.customer?.name || 'N/A'}`,
+  1056→        `*Amount:* $${Number(invoice.total).toFixed(2)} ${invoice.currency}`,
+  1057→        invoice.dueDate ? `*Due:* ${new Date(invoice.dueDate).toLocaleDateString()}` : '',
+  1058→        `*Status:* ${invoice.status}`,
+  1059→      ].filter(Boolean).join('\n'),
+  1060→    })
+  1061→  } catch (err) {
+  1062→    console.error('[InvoiceAutomation] notifyOwnerInvoiceCreated error:', err)
+  1063→  }
+  1064→}
+  1065→

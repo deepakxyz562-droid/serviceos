@@ -472,6 +472,68 @@ export async function notifyCustomerJobCompleted(
   })
 }
 
+// ==========================================
+// LEAD NOTIFICATIONS
+// ==========================================
+
+export async function notifyEmployeeLeadAssigned(
+  lead: Record<string, unknown>,
+  employee: Record<string, unknown>
+): Promise<void> {
+  const employeePhone = (employee.phone as string) || (employee.whatsappId as string) || ''
+  if (!employeePhone) return
+
+  const message = [
+    '🔔 New Lead Assigned',
+    '',
+    `Name: ${lead.name || 'N/A'}`,
+    `Phone: ${lead.phone || 'N/A'}`,
+    `Source: ${lead.source || 'N/A'}`,
+    `Service: ${lead.serviceType || 'N/A'}`,
+    `Priority: ${lead.priority || 'N/A'}`,
+    `Value: ${lead.value || 'N/A'}`,
+    '',
+    'Please follow up promptly.',
+  ].join('\n')
+
+  await sendJobNotification({
+    to: employeePhone,
+    message,
+    recipientName: (employee.name as string) || undefined,
+    recipientRole: 'employee',
+    subject: `New Lead Assigned: ${lead.name || 'N/A'}`,
+    employeeId: employee.id as string,
+    tenantId: (lead.tenantId as string) || undefined,
+  })
+}
+
+export async function notifyCustomerLeadAssigned(
+  lead: Record<string, unknown>,
+  employee: Record<string, unknown>
+): Promise<void> {
+  const customerPhone = (lead.phone as string) || ''
+  if (!customerPhone) return
+
+  const message = [
+    `👋 Hello ${lead.name || 'there'}!`,
+    '',
+    'Thank you for your interest in our services. ' +
+      `${employee.name || 'A team member'} has been assigned to assist you.`,
+    '',
+    'They will reach out to you shortly. If you need immediate help, feel free to reply to this message.',
+  ].join('\n')
+
+  await sendJobNotification({
+    to: customerPhone,
+    message,
+    recipientName: (lead.name as string) || undefined,
+    recipientRole: 'customer',
+    subject: `Assigned Representative: ${employee.name || 'N/A'}`,
+    employeeId: (employee.id as string) || undefined,
+    tenantId: (lead.tenantId as string) || undefined,
+  })
+}
+
 export async function notifyCustomerBookingConfirmed(job: Record<string, unknown>): Promise<void> {
   const customerPhone = (job.customerPhone as string) || ''
   if (!customerPhone) return

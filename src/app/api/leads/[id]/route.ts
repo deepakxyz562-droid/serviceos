@@ -208,6 +208,29 @@ export async function PUT(
       console.error('[LeadsUpdate] Failed to emit lead.updated event:', eventErr);
     }
 
+    // ─── Send WhatsApp notifications on lead assignment ────────────
+    if (assignedToId !== undefined && assignedToId !== existingLead.assignedToId && lead.assignedTo) {
+      try {
+        const { notifyEmployeeLeadAssigned, notifyCustomerLeadAssigned } = await import('@/lib/whatsapp-notifications');
+
+        // Notify the assigned employee
+        await notifyEmployeeLeadAssigned(
+          { id: lead.id, name: lead.name, phone: lead.phone, source: lead.source, serviceType: lead.serviceType, priority: lead.priority, value: lead.value, tenantId: lead.tenantId },
+          { id: lead.assignedTo.id, name: lead.assignedTo.name, phone: lead.assignedTo.phone }
+        );
+
+        // Notify the customer/lead
+        if (lead.phone) {
+          await notifyCustomerLeadAssigned(
+            { id: lead.id, name: lead.name, phone: lead.phone, tenantId: lead.tenantId },
+            { id: lead.assignedTo.id, name: lead.assignedTo.name, phone: lead.assignedTo.phone }
+          );
+        }
+      } catch (notifyErr) {
+        console.error('[LeadsUpdate] WhatsApp notification failed:', notifyErr);
+      }
+    }
+
     return NextResponse.json({ lead });
   } catch (error) {
     console.error('Update lead error:', error);
