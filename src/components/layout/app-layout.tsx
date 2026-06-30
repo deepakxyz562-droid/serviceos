@@ -28,6 +28,7 @@ const BroadcastView = lazy(() => import('@/components/views/broadcast-view').the
 const CampaignsView = lazy(() => import('@/components/views/campaigns-view').then(m => ({ default: m.CampaignsView })));
 const MarketingTemplatesView = lazy(() => import('@/components/views/marketing-templates-view').then(m => ({ default: m.MarketingTemplatesView })));
 const OmnichannelView = lazy(() => import('@/components/views/omnichannel-view').then(m => ({ default: m.OmnichannelView })));
+const WhatsAppView = lazy(() => import('@/components/views/whatsapp-view').then(m => ({ default: m.WhatsAppView })));
 
 // Automation
 const WorkflowsView = lazy(() => import('@/components/views/workflows-view').then(m => ({ default: m.WorkflowsView })));
@@ -120,6 +121,7 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   campaigns: CampaignsView,
   marketingTemplates: MarketingTemplatesView,
   omnichannel: OmnichannelView,
+  whatsapp: WhatsAppView,
   // Automation
   workflows: WorkflowsView,
   canvas: CanvasView,

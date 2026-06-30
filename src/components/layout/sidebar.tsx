@@ -163,6 +163,7 @@ const ownerNavSections: NavSection[] = [
     title: 'Inbox & Automation',
     items: [
       { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
+      { view: 'whatsapp', label: 'WhatsApp', icon: MessageSquare },
       { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
       { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
       { view: 'workflows', label: 'Workflows', icon: Workflow },
@@ -286,6 +287,7 @@ const superadminNavSections: NavSection[] = [
     title: 'Inbox & Automation',
     items: [
       { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
+      { view: 'whatsapp', label: 'WhatsApp', icon: MessageSquare },
       { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
       { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
       { view: 'workflows', label: 'Workflows', icon: Workflow },

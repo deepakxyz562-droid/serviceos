@@ -52,6 +52,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { IntegrationsTab } from '@/components/views/superadmin-integrations-tab';
+import { ProvidersTab } from '@/components/views/superadmin-providers-tab';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -2626,6 +2627,9 @@ export function SuperAdminView() {
           <TabsTrigger value="integrations" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
             <Plug className="size-3.5" /><span className="hidden sm:inline">Integrations</span>
           </TabsTrigger>
+          <TabsTrigger value="providers" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
+            <Settings2 className="size-3.5" /><span className="hidden sm:inline">Providers</span>
+          </TabsTrigger>
           <TabsTrigger value="users" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
             <UserCog className="size-3.5" /><span className="hidden sm:inline">Users</span>
           </TabsTrigger>
@@ -2643,6 +2647,7 @@ export function SuperAdminView() {
         <TabsContent value="feature-flags"><FeatureFlagsTab /></TabsContent>
         <TabsContent value="menu-items"><MenuItemsTab /></TabsContent>
         <TabsContent value="integrations"><IntegrationsTab /></TabsContent>
+        <TabsContent value="providers"><ProvidersTab /></TabsContent>
         <TabsContent value="users"><UsersTab /></TabsContent>
         <TabsContent value="audit-logs"><AuditLogsTab /></TabsContent>
         <TabsContent value="credits"><CreditsTab /></TabsContent>

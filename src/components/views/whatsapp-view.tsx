@@ -26,6 +26,8 @@ import { toast } from 'sonner';
 import { useRealtime } from '@/hooks/use-realtime';
 import { WhatsAppWorkflowTemplates } from '@/components/whatsapp/whatsapp-workflow-templates';
 import { WhatsAppCreditBanner } from '@/components/whatsapp-credit-banner';
+import { WhatsAppSetupWizard } from '@/components/whatsapp/whatsapp-setup-wizard';
+import { WhatsAppTemplateCatalog } from '@/components/whatsapp/whatsapp-template-catalog';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -639,6 +641,9 @@ export function WhatsAppView() {
           </TabsTrigger>
           <TabsTrigger value="analytics" className="gap-1.5">
             <BarChart3 className="size-3.5" /> Analytics
+          </TabsTrigger>
+          <TabsTrigger value="templates" className="gap-1.5">
+            <FileText className="size-3.5" /> Templates
           </TabsTrigger>
         </TabsList>
 
@@ -1413,6 +1418,18 @@ export function WhatsAppView() {
                 </div>
               </CardContent>
             </Card>
+          </div>
+        </TabsContent>
+
+        {/* ═══ Tab: Templates (WhatsApp Template Catalog + Setup Wizard) ═══ */}
+        <TabsContent value="templates" className="space-y-6">
+          <WhatsAppTemplateCatalog />
+          <Separator />
+          <div>
+            <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <Settings className="size-4" /> Setup Wizard
+            </h3>
+            <WhatsAppSetupWizard />
           </div>
         </TabsContent>
       </Tabs>
