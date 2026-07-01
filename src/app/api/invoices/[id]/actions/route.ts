@@ -48,6 +48,10 @@ export async function POST(
         const channels = [result.email, result.whatsapp].filter(Boolean);
         const anySuccess = channels.some((c) => c?.success);
         const anyRequested = channels.length > 0;
+        // Update invoice status to 'sent' if any channel succeeded
+        if (anySuccess && invoice.status === 'draft') {
+          await db.invoice.update({ where: { id }, data: { status: 'sent', sentAt: new Date() } }).catch(() => {});
+        }
         return NextResponse.json({
           success: anyRequested ? anySuccess : false,
           action,
@@ -57,7 +61,9 @@ export async function POST(
 
       case 'mark_paid': {
         const result = await markInvoicePaid(id);
-        return NextResponse.json({ success: result.success, action, error: result.error });
+        // Fetch the updated invoice to return the new status
+        const updatedInvoice = result.success ? await db.invoice.findUnique({ where: { id }, select: { id: true, number: true, status: true, paidAt: true } }) : null;
+        return NextResponse.json({ success: result.success, action, error: result.error, invoice: updatedInvoice });
       }
 
       case 'reminder': {

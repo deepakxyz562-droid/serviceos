@@ -654,8 +654,10 @@ export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = 
   const result: { email?: { success: boolean; error?: string; simulated?: boolean }; whatsapp?: { success: boolean; error?: string; simulated?: boolean } } = {}
 
   // Build a compact text summary
-  const items = safeParse(invoice.itemsJson, []) as Array<{ description: string; quantity: number; rate: number }>
-  const itemsText = items.map((it, i) => `${i + 1}. ${it.description} ×${it.quantity} = $${(it.quantity * it.rate).toFixed(2)}`).join('\n')
+  const rawItems = safeParse(invoice.itemsJson, []) as Array<{ description: string; quantity: number; rate: number; unitPrice: number; amount: number }> | { items?: Array<{ description: string; quantity: number; rate: number; unitPrice: number; amount: number }> }
+  // itemsJson may be a flat array OR a wrapper like {items: [...], breakdown: {...}}
+  const items = Array.isArray(rawItems) ? rawItems : (rawItems?.items || [])
+  const itemsText = items.map((it, i) => `${i + 1}. ${it.description} ×${it.quantity} = $${((it.rate || it.unitPrice || 0) * it.quantity).toFixed(2)}`).join('\n')
   const customerName = invoice.customer?.name || invoice.job?.customerName || 'Customer'
   const invoiceTotal = `$${Number(invoice.total).toFixed(2)} ${invoice.currency}`
 

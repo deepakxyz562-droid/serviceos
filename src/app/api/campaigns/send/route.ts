@@ -209,7 +209,7 @@ export async function POST(request: NextRequest) {
     let skippedCount = 0
 
     for (const recipient of recipients) {
-      const log = await dispatchToRecipient(recipient, channel, body)
+      const log = await dispatchToRecipient(recipient, channel, body, user.tenantId)
       logs.push(log)
       if (log.skipped) {
         skippedCount++
@@ -268,6 +268,7 @@ async function dispatchToRecipient(
   recipient: BroadcastRecipient,
   channel: NonNullable<SendBroadcastBody['channel']>,
   body: SendBroadcastBody,
+  tenantId?: string | null,
 ): Promise<SendLog> {
   const baseLog: SendLog = {
     recipientKey: recipient.key,
