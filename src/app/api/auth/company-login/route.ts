@@ -54,14 +54,16 @@ export async function POST(request: NextRequest) {
     });
 
     if (!tenant) {
+      console.warn(`[Company Login] No tenant found for slug: "${slug}"`);
       return NextResponse.json(
         { error: 'Company not found. Please check your company link.' },
         { status: 404 }
       );
     }
 
-    const workspace = tenant.workspaces[0] || null;
+    const workspace = tenant.workspaces?.[0] || null;
     const normalizedEmail = String(email).toLowerCase().trim();
+    console.log(`[Company Login] slug=${slug}, email=${normalizedEmail}, role=${normalizedRole}, tenant=${tenant.name}, workspace=${workspace?.id || 'none'}`);
 
     // 2. Authenticate based on role
     if (normalizedRole === 'customer') {
@@ -104,11 +106,15 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Update lastLoginAt
-      await db.customer.update({
-        where: { id: customer.id },
-        data: { lastLoginAt: new Date() },
-      });
+      // Update lastLoginAt (non-critical — don't fail login if this errors)
+      try {
+        await db.customer.update({
+          where: { id: customer.id },
+          data: { lastLoginAt: new Date() },
+        });
+      } catch (updateErr) {
+        console.warn('[Company Login] Failed to update customer lastLoginAt:', updateErr instanceof Error ? updateErr.message : updateErr);
+      }
 
       // Synthesize auth user for the portal
       const authUser = {
@@ -139,8 +145,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Admin / Employee auth via User table
+    // Use select to only fetch needed columns — avoids crashes if Supabase
+    // is missing newly-added columns like loginCount, mfaEnabled, etc.
     const user = await db.user.findUnique({
       where: { email: normalizedEmail },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        passwordHash: true,
+        role: true,
+        isActive: true,
+        isSuperAdmin: true,
+        tenantId: true,
+        workspaceId: true,
+        avatar: true,
+      },
     });
 
     if (!user || !user.passwordHash) {
@@ -183,14 +203,38 @@ export async function POST(request: NextRequest) {
     if (normalizedRole === 'employee') {
       if (user.role === 'owner') {
         // Check if this owner is also listed as an employee
-        const employeeRecord = await db.employee.findFirst({
-          where: { userId: user.id, workspaceId: { not: null } },
-        });
-        if (!employeeRecord) {
-          return NextResponse.json(
-            { error: 'Please use the admin login page for this account.' },
-            { status: 403 }
-          );
+        try {
+          const employeeRecord = await db.employee.findFirst({
+            where: { userId: user.id, workspaceId: { not: null } },
+            select: { id: true },
+          });
+          if (!employeeRecord) {
+            return NextResponse.json(
+              { error: 'Please use the admin login page for this account.' },
+              { status: 403 }
+            );
+          }
+        } catch (empErr) {
+          // If the Employee table is missing columns, fall back to a simpler query
+          console.warn('[Company Login] Employee findFirst with workspaceId filter failed, trying simpler query:', empErr instanceof Error ? empErr.message : empErr);
+          try {
+            const employeeRecord = await db.employee.findFirst({
+              where: { userId: user.id },
+              select: { id: true },
+            });
+            if (!employeeRecord) {
+              return NextResponse.json(
+                { error: 'Please use the admin login page for this account.' },
+                { status: 403 }
+              );
+            }
+          } catch (empErr2) {
+            console.error('[Company Login] Employee lookup failed entirely:', empErr2 instanceof Error ? empErr2.message : empErr2);
+            return NextResponse.json(
+              { error: 'Login failed: unable to verify employee status. Please contact support or run database migrations.' },
+              { status: 500 }
+            );
+          }
         }
       }
       // Managers/admins/employees can all use the employee portal if they have an Employee record
@@ -203,14 +247,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update lastLoginAt + loginCount
-    await db.user.update({
-      where: { id: user.id },
-      data: {
-        lastLoginAt: new Date(),
-        loginCount: { increment: 1 },
-      },
-    });
+    // Update lastLoginAt + loginCount (non-critical — don't fail login if DB update errors)
+    // This is wrapped in try/catch because the Supabase database might be missing
+    // the loginCount column if migrations haven't been run yet.
+    try {
+      await db.user.update({
+        where: { id: user.id },
+        data: {
+          lastLoginAt: new Date(),
+          loginCount: { increment: 1 },
+        },
+      });
+    } catch (updateErr) {
+      // Try a simpler update without loginCount (column might not exist in Supabase)
+      console.warn('[Company Login] Full user update failed (likely missing loginCount column), trying simpler update:', updateErr instanceof Error ? updateErr.message : updateErr);
+      try {
+        await db.user.update({
+          where: { id: user.id },
+          data: { lastLoginAt: new Date() },
+        });
+      } catch (simpleUpdateErr) {
+        // Even simpler update failed — log but don't block login
+        console.warn('[Company Login] Even simple user update failed, continuing without tracking:', simpleUpdateErr instanceof Error ? simpleUpdateErr.message : simpleUpdateErr);
+      }
+    }
 
     // When logging in via the employee portal, override the role to 'employee'
     // so the frontend routes to the employee portal layout. Also look up the
@@ -218,11 +278,15 @@ export async function POST(request: NextRequest) {
     const effectiveRole = normalizedRole === 'employee' ? 'employee' : user.role;
     let employeeId: string | null = null;
     if (normalizedRole === 'employee') {
-      const emp = await db.employee.findFirst({
-        where: { userId: user.id },
-        select: { id: true },
-      });
-      employeeId = emp?.id || null;
+      try {
+        const emp = await db.employee.findFirst({
+          where: { userId: user.id },
+          select: { id: true },
+        });
+        employeeId = emp?.id || null;
+      } catch (empErr) {
+        console.warn('[Company Login] Employee lookup failed, continuing without employeeId:', empErr instanceof Error ? empErr.message : empErr);
+      }
     }
 
     const authUser = {
