@@ -252,9 +252,13 @@ export async function POST(request: NextRequest) {
     response.cookies.set({ ...COOKIE_OPTIONS, value: token });
     return response;
   } catch (error) {
-    console.error('[Company Login Error]', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const errStack = error instanceof Error ? error.stack : undefined;
+    console.error('[Company Login Error]', errMsg, errStack);
+    // Return a more descriptive error so the user can understand what went wrong
+    // instead of a generic "Login failed" message
     return NextResponse.json(
-      { error: 'Login failed. Please try again.' },
+      { error: `Login failed: ${errMsg}. Please try again.` },
       { status: 500 }
     );
   }
