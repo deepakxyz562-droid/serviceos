@@ -1,0 +1,1574 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback } from 'react';
+     4→import {
+     5→  LayoutDashboard,
+     6→  Briefcase,
+     7→  CalendarDays,
+     8→  Clock,
+     9→  Inbox,
+    10→  UserCircle,
+    11→  Zap,
+    12→  LogOut,
+    13→  Menu,
+    14→  Bell,
+    15→  Moon,
+    16→  Sun,
+    17→  ChevronDown,
+    18→  Settings,
+    19→  CheckCircle2,
+    20→  AlertCircle,
+    21→  Timer,
+    22→  MapPin,
+    23→  Phone,
+    24→  Mail,
+    25→  Lock,
+    26→  Camera,
+    27→  Send,
+    28→  ArrowRight,
+    29→  TrendingUp,
+    30→  Users,
+    31→  Calendar,
+    32→  MessageSquare,
+    33→  Star,
+    34→  Loader2,
+    35→} from 'lucide-react';
+    36→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    37→import { Button } from '@/components/ui/button';
+    38→import { Badge } from '@/components/ui/badge';
+    39→import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+    40→import { Separator } from '@/components/ui/separator';
+    41→import { Input } from '@/components/ui/input';
+    42→import { Label } from '@/components/ui/label';
+    43→import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+    44→import { ScrollArea } from '@/components/ui/scroll-area';
+    45→import {
+    46→  DropdownMenu,
+    47→  DropdownMenuContent,
+    48→  DropdownMenuItem,
+    49→  DropdownMenuSeparator,
+    50→  DropdownMenuTrigger,
+    51→} from '@/components/ui/dropdown-menu';
+    52→import {
+    53→  Table,
+    54→  TableBody,
+    55→  TableCell,
+    56→  TableHead,
+    57→  TableHeader,
+    58→  TableRow,
+    59→} from '@/components/ui/table';
+    60→import { cn } from '@/lib/utils';
+    61→import { useAppStore } from '@/store/app-store';
+    62→import { useIsMobile } from '@/hooks/use-mobile';
+    63→
+    64→// ─── Types ──────────────────────────────────────────────────────────────────
+    65→
+    66→type EmployeeSubView = 'home' | 'my-jobs' | 'schedule' | 'attendance' | 'inbox' | 'profile';
+    67→
+    68→type JobStatus = 'assigned' | 'in_progress' | 'completed' | 'pending' | 'cancelled';
+    69→type JobPriority = 'high' | 'medium' | 'low';
+    70→
+    71→interface EmployeeRecord {
+    72→  id: string;
+    73→  name: string;
+    74→  email?: string;
+    75→  phone?: string;
+    76→  status?: string;
+    77→  role?: string;
+    78→  rating?: number;
+    79→  employeeId?: string;
+    80→}
+    81→
+    82→interface JobCustomer {
+    83→  id: string;
+    84→  name: string;
+    85→  phone: string;
+    86→  email: string;
+    87→  address: string;
+    88→}
+    89→
+    90→interface Job {
+    91→  id: string;
+    92→  jobNumber: string;
+    93→  title: string;
+    94→  status: JobStatus;
+    95→  priority: JobPriority;
+    96→  type: string;
+    97→  address: string;
+    98→  assigneeId: string;
+    99→  customerId: string;
+   100→  quotedAmount: number;
+   101→  scheduledAt: string | null;
+   102→  createdAt: string;
+   103→  customer: JobCustomer | null;
+   104→}
+   105→
+   106→interface EmployeeJobsResponse {
+   107→  employee: { id: string; name: string; status: string };
+   108→  jobs: Job[];
+   109→}
+   110→
+   111→interface EmployeePortalLayoutProps {
+   112→  onLogout?: () => void;
+   113→}
+   114→
+   115→interface MenuItem {
+   116→  id: EmployeeSubView;
+   117→  label: string;
+   118→  icon: React.ElementType;
+   119→}
+   120→
+   121→// ─── Constants ──────────────────────────────────────────────────────────────
+   122→
+   123→const menuItems: MenuItem[] = [
+   124→  { id: 'home', label: 'Home', icon: LayoutDashboard },
+   125→  { id: 'my-jobs', label: 'My Jobs', icon: Briefcase },
+   126→  { id: 'schedule', label: 'Schedule', icon: CalendarDays },
+   127→  { id: 'attendance', label: 'Attendance', icon: Clock },
+   128→  { id: 'inbox', label: 'Inbox', icon: Inbox },
+   129→  { id: 'profile', label: 'Profile', icon: UserCircle },
+   130→];
+   131→
+   132→const pageTitleMap: Record<EmployeeSubView, string> = {
+   133→  home: 'Home',
+   134→  'my-jobs': 'My Jobs',
+   135→  schedule: 'Schedule',
+   136→  attendance: 'Attendance',
+   137→  inbox: 'Inbox',
+   138→  profile: 'Profile',
+   139→};
+   140→
+   141→const STATUS_LABEL_MAP: Record<JobStatus, string> = {
+   142→  assigned: 'Assigned',
+   143→  in_progress: 'In Progress',
+   144→  completed: 'Completed',
+   145→  pending: 'Pending',
+   146→  cancelled: 'Cancelled',
+   147→};
+   148→
+   149→// ─── Placeholder data (kept for Attendance & Inbox) ─────────────────────────
+   150→// TODO: Replace with real API data once /api/employees/[id]/attendance and
+   151→// /api/employees/[id]/messages endpoints are implemented. These are demo-only.
+   152→
+   153→// PLACEHOLDER: Inbox messages — not real data
+   154→const placeholderMessages = [
+   155→  { id: '1', from: 'Sarah Chen', subject: 'Schedule change for next week', preview: 'Hi, I wanted to let you know that your Monday shift has been moved to...', time: '10 min ago', unread: true },
+   156→  { id: '2', from: 'Operations Team', subject: 'New job assignment: HVAC Installation', preview: 'You have been assigned a new job. Please review the details and confirm...', time: '1 hr ago', unread: true },
+   157→  { id: '3', from: 'Mike Johnson', subject: 'RE: Equipment request', preview: 'The tools you requested are now available at the main warehouse. You can...', time: '3 hrs ago', unread: false },
+   158→  { id: '4', from: 'HR Department', subject: 'Monthly payslip available', preview: 'Your payslip for February 2026 is now available for download in the...', time: 'Yesterday', unread: false },
+   159→  { id: '5', from: 'David Park', subject: 'Customer feedback - Job #2847', preview: 'The customer left a 5-star review for your recent service. Great work!', time: 'Yesterday', unread: true },
+   160→  { id: '6', from: 'System', subject: 'Attendance reminder', preview: 'This is a reminder to check in for your shift today. Your scheduled...', time: '2 days ago', unread: false },
+   161→];
+   162→
+   163→// PLACEHOLDER: Weekly attendance — not real data
+   164→const attendanceData = [
+   165→  { day: 'Monday', checkIn: '08:02', checkOut: '17:15', status: 'Present', hours: '9h 13m' },
+   166→  { day: 'Tuesday', checkIn: '07:55', checkOut: '17:30', status: 'Present', hours: '9h 35m' },
+   167→  { day: 'Wednesday', checkIn: '08:10', checkOut: '17:05', status: 'Present', hours: '8h 55m' },
+   168→  { day: 'Thursday', checkIn: '08:00', checkOut: '17:20', status: 'Present', hours: '9h 20m' },
+   169→  { day: 'Friday', checkIn: '—', checkOut: '—', status: 'Today', hours: '—' },
+   170→];
+   171→
+   172→// ─── Status color helper ────────────────────────────────────────────────────
+   173→
+   174→function getStatusBadge(status: string) {
+   175→  switch (status) {
+   176→    case 'assigned':
+   177→      return <Badge className="bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300 border-0 hover:bg-violet-100">{STATUS_LABEL_MAP[status as JobStatus] ?? status}</Badge>;
+   178→    case 'in_progress':
+   179→      return <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-0 hover:bg-blue-100">{STATUS_LABEL_MAP[status as JobStatus] ?? status}</Badge>;
+   180→    case 'pending':
+   181→      return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-0 hover:bg-amber-100">{STATUS_LABEL_MAP[status as JobStatus] ?? status}</Badge>;
+   182→    case 'completed':
+   183→      return <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-0 hover:bg-emerald-100">{STATUS_LABEL_MAP[status as JobStatus] ?? status}</Badge>;
+   184→    case 'cancelled':
+   185→      return <Badge className="bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-0 hover:bg-red-100">{STATUS_LABEL_MAP[status as JobStatus] ?? status}</Badge>;
+   186→    // Attendance statuses (kept for AttendanceView)
+   187→    case 'Present':
+   188→      return <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-0 hover:bg-emerald-100">{status}</Badge>;
+   189→    case 'Today':
+   190→      return <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-0 hover:bg-blue-100">{status}</Badge>;
+   191→    case 'Absent':
+   192→      return <Badge className="bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-0 hover:bg-red-100">{status}</Badge>;
+   193→    default:
+   194→      return <Badge variant="outline">{status}</Badge>;
+   195→  }
+   196→}
+   197→
+   198→function getPriorityDot(priority: string) {
+   199→  switch (priority) {
+   200→    case 'high':
+   201→      return <span className="size-2 rounded-full bg-red-500" />;
+   202→    case 'medium':
+   203→      return <span className="size-2 rounded-full bg-amber-500" />;
+   204→    case 'low':
+   205→      return <span className="size-2 rounded-full bg-emerald-500" />;
+   206→    default:
+   207→      return null;
+   208→  }
+   209→}
+   210→
+   211→// ─── Utility: format date helpers ───────────────────────────────────────────
+   212→
+   213→function formatTime(dateStr: string): string {
+   214→  try {
+   215→    const d = new Date(dateStr);
+   216→    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+   217→  } catch {
+   218→    return '—';
+   219→  }
+   220→}
+   221→
+   222→function formatDate(dateStr: string): string {
+   223→  try {
+   224→    const d = new Date(dateStr);
+   225→    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+   226→  } catch {
+   227→    return '—';
+   228→  }
+   229→}
+   230→
+   231→function isToday(dateStr: string | null): boolean {
+   232→  if (!dateStr) return false;
+   233→  try {
+   234→    const d = new Date(dateStr);
+   235→    const now = new Date();
+   236→    return d.getFullYear() === now.getFullYear() &&
+   237→      d.getMonth() === now.getMonth() &&
+   238→      d.getDate() === now.getDate();
+   239→  } catch {
+   240→    return false;
+   241→  }
+   242→}
+   243→
+   244→function isThisWeek(dateStr: string | null): boolean {
+   245→  if (!dateStr) return false;
+   246→  try {
+   247→    const d = new Date(dateStr);
+   248→    const now = new Date();
+   249→    const startOfWeek = new Date(now);
+   250→    startOfWeek.setDate(now.getDate() - now.getDay());
+   251→    startOfWeek.setHours(0, 0, 0, 0);
+   252→    const endOfWeek = new Date(startOfWeek);
+   253→    endOfWeek.setDate(startOfWeek.getDate() + 7);
+   254→    return d >= startOfWeek && d < endOfWeek;
+   255→  } catch {
+   256→    return false;
+   257→  }
+   258→}
+   259→
+   260→function getDayName(date: Date): string {
+   261→  return date.toLocaleDateString('en-US', { weekday: 'short' });
+   262→}
+   263→
+   264→function getGreeting(): string {
+   265→  const h = new Date().getHours();
+   266→  if (h < 12) return 'Good morning';
+   267→  if (h < 17) return 'Good afternoon';
+   268→  return 'Good evening';
+   269→}
+   270→
+   271→function formatTodayDate(): string {
+   272→  return new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+   273→}
+   274→
+   275→// ─── Shared data hook ───────────────────────────────────────────────────────
+   276→
+   277→function useEmployeeJobs(employeeId: string | null) {
+   278→  const [jobs, setJobs] = useState<Job[]>([]);
+   279→  const [loading, setLoading] = useState(!!employeeId);
+   280→  const [error, setError] = useState<string | null>(null);
+   281→
+   282→  const fetchJobs = useCallback(async () => {
+   283→    if (!employeeId) return;
+   284→    try {
+   285→      const res = await fetch(`/api/employees/${employeeId}/jobs?XTransformPort=3000`);
+   286→      if (!res.ok) throw new Error(`Failed to fetch jobs (${res.status})`);
+   287→      const data: EmployeeJobsResponse = await res.json();
+   288→      setJobs(data.jobs ?? []);
+   289→      setError(null);
+   290→      setLoading(false);
+   291→    } catch (err: any) {
+   292→      setError(err.message || 'Failed to load jobs');
+   293→      setLoading(false);
+   294→    }
+   295→  }, [employeeId]);
+   296→
+   297→  useEffect(() => {
+   298→    fetchJobs();
+   299→  }, [fetchJobs]);
+   300→
+   301→  return { jobs, loading, error, refetch: fetchJobs };
+   302→}
+   303→
+   304→function useEmployeeRecord(employeeId: string | null) {
+   305→  const [employee, setEmployee] = useState<EmployeeRecord | null>(null);
+   306→  const [loading, setLoading] = useState(!!employeeId);
+   307→  const [error, setError] = useState<string | null>(null);
+   308→
+   309→  useEffect(() => {
+   310→    if (!employeeId) return;
+   311→    let cancelled = false;
+   312→    const controller = new AbortController();
+   313→
+   314→    async function fetchEmployee() {
+   315→      try {
+   316→        const res = await fetch('/api/employees?XTransformPort=3000', { signal: controller.signal });
+   317→        if (!res.ok) throw new Error(`Failed to fetch employee (${res.status})`);
+   318→        const data = await res.json();
+   319→        // The API might return an array or a single object; handle both
+   320→        const list: EmployeeRecord[] = Array.isArray(data) ? data : data.employees ?? [data];
+   321→        const found = list.find((e: EmployeeRecord) => e.id === employeeId || e.employeeId === employeeId);
+   322→        if (!cancelled) {
+   323→          setEmployee(found ?? list[0] ?? null);
+   324→          setLoading(false);
+   325→        }
+   326→      } catch (err: any) {
+   327→        if (!cancelled && err.name !== 'AbortError') {
+   328→          setError(err.message || 'Failed to load employee');
+   329→          setLoading(false);
+   330→        }
+   331→      }
+   332→    }
+   333→
+   334→    fetchEmployee();
+   335→    return () => {
+   336→      cancelled = true;
+   337→      controller.abort();
+   338→    };
+   339→  }, [employeeId]);
+   340→
+   341→  return { employee, loading, error };
+   342→}
+   343→
+   344→// ─── Loading skeleton ───────────────────────────────────────────────────────
+   345→
+   346→function LoadingSkeleton({ lines = 3 }: { lines?: number }) {
+   347→  return (
+   348→    <div className="space-y-3 p-4">
+   349→      {Array.from({ length: lines }).map((_, i) => (
+   350→        <div key={i} className="flex items-center gap-3">
+   351→          <div className="size-10 rounded-lg bg-muted animate-pulse" />
+   352→          <div className="flex-1 space-y-2">
+   353→            <div className="h-4 bg-muted rounded animate-pulse w-3/4" />
+   354→            <div className="h-3 bg-muted rounded animate-pulse w-1/2" />
+   355→          </div>
+   356→        </div>
+   357→      ))}
+   358→    </div>
+   359→  );
+   360→}
+   361→
+   362→function ErrorCard({ message, onRetry }: { message: string; onRetry?: () => void }) {
+   363→  return (
+   364→    <Card>
+   365→      <CardContent className="p-6 text-center">
+   366→        <AlertCircle className="size-10 mx-auto mb-2 text-red-500" />
+   367→        <p className="text-sm text-muted-foreground mb-3">{message}</p>
+   368→        {onRetry && (
+   369→          <Button variant="outline" size="sm" onClick={onRetry}>
+   370→            Try Again
+   371→          </Button>
+   372→        )}
+   373→      </CardContent>
+   374→    </Card>
+   375→  );
+   376→}
+   377→
+   378→// ─── Sub-View: Home ─────────────────────────────────────────────────────────
+   379→
+   380→function HomeView({ employeeId }: { employeeId: string }) {
+   381→  const { auth } = useAppStore();
+   382→  const { jobs, loading, error, refetch } = useEmployeeJobs(employeeId);
+   383→  const { employee } = useEmployeeRecord(employeeId);
+   384→
+   385→  const employeeName = employee?.name || auth.user?.name || auth.user?.email || 'Employee';
+   386→  const firstName = employeeName.split(' ')[0] || 'Employee';
+   387→
+   388→  // Compute stats from real data
+   389→  const activeJobs = jobs.filter((j) => j.status === 'assigned' || j.status === 'in_progress');
+   390→  const completedJobs = jobs.filter((j) => j.status === 'completed');
+   391→  const thisWeekJobs = jobs.filter((j) => isThisWeek(j.scheduledAt));
+   392→  const rating = employee?.rating ?? auth.user?.rating ?? 0;
+   393→
+   394→  // Today's schedule from real data
+   395→  const todayJobs = jobs.filter((j) => isToday(j.scheduledAt));
+   396→
+   397→  // Build notifications from recent job changes
+   398→  const notifications: { icon: React.ElementType; color: string; bg: string; text: string; time: string }[] = [];
+   399→  jobs.slice(0, 6).forEach((job) => {
+   400→    const created = new Date(job.createdAt);
+   401→    const timeAgo = getTimeAgo(created);
+   402→    if (job.status === 'assigned') {
+   403→      notifications.push({
+   404→        icon: Briefcase, color: 'text-violet-500', bg: 'bg-violet-100 dark:bg-violet-900/30',
+   405→        text: `New job assigned: ${job.title}`, time: timeAgo,
+   406→      });
+   407→    } else if (job.status === 'in_progress') {
+   408→      notifications.push({
+   409→        icon: Timer, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30',
+   410→        text: `Job in progress: ${job.title}`, time: timeAgo,
+   411→      });
+   412→    } else if (job.status === 'completed') {
+   413→      notifications.push({
+   414→        icon: CheckCircle2, color: 'text-emerald-500', bg: 'bg-emerald-100 dark:bg-emerald-900/30',
+   415→        text: `Job completed: ${job.title}`, time: timeAgo,
+   416→      });
+   417→    } else if (job.status === 'pending') {
+   418→      notifications.push({
+   419→        icon: AlertCircle, color: 'text-amber-500', bg: 'bg-amber-100 dark:bg-amber-900/30',
+   420→        text: `Pending job: ${job.title}`, time: timeAgo,
+   421→      });
+   422→    }
+   423→  });
+   424→
+   425→  const completedCount = completedJobs.length;
+   426→  const avgResolution = completedCount > 0 ? '—' : '—';
+   427→
+   428→  if (error) {
+   429→    return <ErrorCard message={error} onRetry={refetch} />;
+   430→  }
+   431→
+   432→  return (
+   433→    <div className="space-y-6">
+   434→      {/* Welcome card */}
+   435→      <Card className="border-0 bg-gradient-to-br from-emerald-600 to-emerald-700 text-white shadow-lg">
+   436→        <CardContent className="p-6">
+   437→          <div className="flex items-start justify-between">
+   438→            <div>
+   439→              <h2 className="text-2xl font-bold">{getGreeting()}, {firstName}! 👋</h2>
+   440→              <p className="mt-1 text-emerald-100">Here&apos;s your overview for today, {formatTodayDate()}.</p>
+   441→            </div>
+   442→            <div className="hidden sm:flex size-16 rounded-full bg-white/20 items-center justify-center backdrop-blur-sm">
+   443→              <Zap className="size-8 text-white" />
+   444→            </div>
+   445→          </div>
+   446→        </CardContent>
+   447→      </Card>
+   448→
+   449→      {/* Stats grid */}
+   450→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+   451→        <Card>
+   452→          <CardContent className="p-4 flex items-center gap-3">
+   453→            <div className="size-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
+   454→              <Briefcase className="size-5 text-blue-600 dark:text-blue-400" />
+   455→            </div>
+   456→            <div>
+   457→              {loading ? (
+   458→                <div className="h-7 w-8 bg-muted rounded animate-pulse" />
+   459→              ) : (
+   460→                <p className="text-2xl font-bold text-foreground">{activeJobs.length}</p>
+   461→              )}
+   462→              <p className="text-xs text-muted-foreground">Active Jobs</p>
+   463→            </div>
+   464→          </CardContent>
+   465→        </Card>
+   466→        <Card>
+   467→          <CardContent className="p-4 flex items-center gap-3">
+   468→            <div className="size-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0">
+   469→              <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400" />
+   470→            </div>
+   471→            <div>
+   472→              {loading ? (
+   473→                <div className="h-7 w-8 bg-muted rounded animate-pulse" />
+   474→              ) : (
+   475→                <p className="text-2xl font-bold text-foreground">{completedCount}</p>
+   476→              )}
+   477→              <p className="text-xs text-muted-foreground">Completed</p>
+   478→            </div>
+   479→          </CardContent>
+   480→        </Card>
+   481→        <Card>
+   482→          <CardContent className="p-4 flex items-center gap-3">
+   483→            <div className="size-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
+   484→              <Calendar className="size-5 text-amber-600 dark:text-amber-400" />
+   485→            </div>
+   486→            <div>
+   487→              {loading ? (
+   488→                <div className="h-7 w-8 bg-muted rounded animate-pulse" />
+   489→              ) : (
+   490→                <p className="text-2xl font-bold text-foreground">{thisWeekJobs.length}</p>
+   491→              )}
+   492→              <p className="text-xs text-muted-foreground">This Week</p>
+   493→            </div>
+   494→          </CardContent>
+   495→        </Card>
+   496→        <Card>
+   497→          <CardContent className="p-4 flex items-center gap-3">
+   498→            <div className="size-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center shrink-0">
+   499→              <Star className="size-5 text-purple-600 dark:text-purple-400" />
+   500→            </div>
+   501→            <div>
+   502→              {loading ? (
+   503→                <div className="h-7 w-8 bg-muted rounded animate-pulse" />
+   504→              ) : (
+   505→                <p className="text-2xl font-bold text-foreground">{rating > 0 ? rating.toFixed(1) : '—'}</p>
+   506→              )}
+   507→              <p className="text-xs text-muted-foreground">Rating</p>
+   508→            </div>
+   509→          </CardContent>
+   510→        </Card>
+   511→      </div>
+   512→
+   513→      <div className="grid lg:grid-cols-2 gap-6">
+   514→        {/* Today's Schedule */}
+   515→        <Card>
+   516→          <CardHeader>
+   517→            <CardTitle className="text-base">Today&apos;s Schedule</CardTitle>
+   518→            <CardDescription>Your appointments and tasks for today</CardDescription>
+   519→          </CardHeader>
+   520→          <CardContent className="space-y-3">
+   521→            {loading ? (
+   522→              <LoadingSkeleton lines={3} />
+   523→            ) : todayJobs.length === 0 ? (
+   524→              <div className="text-center py-8 text-muted-foreground">
+   525→                <CalendarDays className="size-10 mx-auto mb-2 opacity-50" />
+   526→                <p className="text-sm">No jobs scheduled for today.</p>
+   527→              </div>
+   528→            ) : (
+   529→              todayJobs.map((job) => (
+   530→                <div key={job.id} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+   531→                  <div className="text-xs font-mono text-muted-foreground min-w-[70px] pt-0.5">
+   532→                    {job.scheduledAt ? formatTime(job.scheduledAt) : 'TBD'}
+   533→                  </div>
+   534→                  <div className="flex-1 min-w-0">
+   535→                    <p className="text-sm font-medium text-foreground truncate">{job.title}</p>
+   536→                    <Badge variant="outline" className="mt-1 text-[10px] h-5">{job.type || 'Job'}</Badge>
+   537→                  </div>
+   538→                  <ArrowRight className="size-4 text-muted-foreground shrink-0 mt-0.5" />
+   539→                </div>
+   540→              ))
+   541→            )}
+   542→          </CardContent>
+   543→        </Card>
+   544→
+   545→        {/* Recent Notifications */}
+   546→        <Card>
+   547→          <CardHeader>
+   548→            <CardTitle className="text-base">Recent Notifications</CardTitle>
+   549→            <CardDescription>Latest updates and alerts</CardDescription>
+   550→          </CardHeader>
+   551→          <CardContent className="space-y-3">
+   552→            {loading ? (
+   553→              <LoadingSkeleton lines={4} />
+   554→            ) : notifications.length === 0 ? (
+   555→              <div className="text-center py-8 text-muted-foreground">
+   556→                <Bell className="size-10 mx-auto mb-2 opacity-50" />
+   557→                <p className="text-sm">No notifications yet.</p>
+   558→              </div>
+   559→            ) : (
+   560→              notifications.slice(0, 4).map((item, idx) => (
+   561→                <div key={idx} className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
+   562→                  <div className={cn('size-8 rounded-full flex items-center justify-center shrink-0', item.bg)}>
+   563→                    <item.icon className={cn('size-4', item.color)} />
+   564→                  </div>
+   565→                  <div className="flex-1 min-w-0">
+   566→                    <p className="text-sm text-foreground truncate">{item.text}</p>
+   567→                    <p className="text-xs text-muted-foreground mt-0.5">{item.time}</p>
+   568→                  </div>
+   569→                </div>
+   570→              ))
+   571→            )}
+   572→          </CardContent>
+   573→        </Card>
+   574→      </div>
+   575→
+   576→      {/* Performance Card */}
+   577→      <Card>
+   578→        <CardHeader>
+   579→          <CardTitle className="text-base">Performance This Month</CardTitle>
+   580→          <CardDescription>Your key metrics for {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</CardDescription>
+   581→        </CardHeader>
+   582→        <CardContent>
+   583→          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   584→            <div className="text-center p-4 rounded-lg bg-muted/50">
+   585→              <TrendingUp className="size-5 text-emerald-500 mx-auto mb-2" />
+   586→              <p className="text-xl font-bold text-foreground">{activeJobs.length > 0 ? Math.round((completedJobs.length / jobs.length) * 100) : 0}%</p>
+   587→              <p className="text-xs text-muted-foreground">Completion Rate</p>
+   588→            </div>
+   589→            <div className="text-center p-4 rounded-lg bg-muted/50">
+   590→              <Users className="size-5 text-blue-500 mx-auto mb-2" />
+   591→              <p className="text-xl font-bold text-foreground">{rating > 0 ? `${rating.toFixed(1)}/5` : '—'}</p>
+   592→              <p className="text-xs text-muted-foreground">Customer Rating</p>
+   593→            </div>
+   594→            <div className="text-center p-4 rounded-lg bg-muted/50">
+   595→              <Timer className="size-5 text-amber-500 mx-auto mb-2" />
+   596→              <p className="text-xl font-bold text-foreground">{avgResolution}</p>
+   597→              <p className="text-xs text-muted-foreground">Avg. Resolution</p>
+   598→            </div>
+   599→            <div className="text-center p-4 rounded-lg bg-muted/50">
+   600→              <CheckCircle2 className="size-5 text-purple-500 mx-auto mb-2" />
+   601→              <p className="text-xl font-bold text-foreground">{completedCount}</p>
+   602→              <p className="text-xs text-muted-foreground">Jobs Completed</p>
+   603→            </div>
+   604→          </div>
+   605→        </CardContent>
+   606→      </Card>
+   607→    </div>
+   608→  );
+   609→}
+   610→
+   611→// ─── Sub-View: My Jobs ──────────────────────────────────────────────────────
+   612→
+   613→function MyJobsView({ employeeId }: { employeeId: string }) {
+   614→  const [filter, setFilter] = useState<string>('all');
+   615→  const { jobs, loading, error, refetch } = useEmployeeJobs(employeeId);
+   616→
+   617→  const filteredJobs = filter === 'all'
+   618→    ? jobs
+   619→    : jobs.filter((j) => j.status === filter);
+   620→
+   621→  const filterOptions: { value: string; label: string }[] = [
+   622→    { value: 'all', label: 'All' },
+   623→    { value: 'assigned', label: 'Assigned' },
+   624→    { value: 'in_progress', label: 'In Progress' },
+   625→    { value: 'pending', label: 'Pending' },
+   626→    { value: 'completed', label: 'Completed' },
+   627→  ];
+   628→
+   629→  if (error) {
+   630→    return <ErrorCard message={error} onRetry={refetch} />;
+   631→  }
+   632→
+   633→  return (
+   634→    <div className="space-y-6">
+   635→      <Card>
+   636→        <CardHeader>
+   637→          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+   638→            <div>
+   639→              <CardTitle className="text-base">Assigned Jobs</CardTitle>
+   640→              <CardDescription>View and manage your current job assignments</CardDescription>
+   641→            </div>
+   642→            <div className="flex gap-2 flex-wrap">
+   643→              {filterOptions.map((f) => (
+   644→                <Button
+   645→                  key={f.value}
+   646→                  variant={filter === f.value ? 'default' : 'outline'}
+   647→                  size="sm"
+   648→                  className={cn(
+   649→                    'text-xs h-8',
+   650→                    filter === f.value && 'bg-emerald-600 hover:bg-emerald-700 text-white'
+   651→                  )}
+   652→                  onClick={() => setFilter(f.value)}
+   653→                >
+   654→                  {f.label}
+   655→                </Button>
+   656→              ))}
+   657→            </div>
+   658→          </div>
+   659→        </CardHeader>
+   660→        <CardContent>
+   661→          <div className="space-y-3">
+   662→            {loading ? (
+   663→              <LoadingSkeleton lines={4} />
+   664→            ) : filteredJobs.length === 0 ? (
+   665→              <div className="text-center py-8 text-muted-foreground">
+   666→                <Briefcase className="size-10 mx-auto mb-2 opacity-50" />
+   667→                <p>No jobs found for this filter.</p>
+   668→              </div>
+   669→            ) : (
+   670→              filteredJobs.map((job) => (
+   671→                <div
+   672→                  key={job.id}
+   673→                  className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-lg border border-border hover:border-emerald-300 dark:hover:border-emerald-700 transition-colors hover:bg-muted/30"
+   674→                >
+   675→                  <div className="flex items-start gap-3 flex-1 min-w-0">
+   676→                    <div className="flex items-center gap-1.5 shrink-0 mt-1">
+   677→                      {getPriorityDot(job.priority)}
+   678→                      <span className="text-[10px] text-muted-foreground uppercase font-medium">{job.priority}</span>
+   679→                    </div>
+   680→                    <div className="flex-1 min-w-0">
+   681→                      <p className="text-sm font-medium text-foreground truncate">{job.title}</p>
+   682→                      {job.address && (
+   683→                        <div className="flex items-center gap-2 mt-1">
+   684→                          <MapPin className="size-3 text-muted-foreground shrink-0" />
+   685→                          <span className="text-xs text-muted-foreground truncate">{job.address}</span>
+   686→                        </div>
+   687→                      )}
+   688→                      <div className="flex items-center gap-2 mt-1">
+   689→                        <Calendar className="size-3 text-muted-foreground shrink-0" />
+   690→                        <span className="text-xs text-muted-foreground">
+   691→                          {job.scheduledAt ? `${formatDate(job.scheduledAt)}, ${formatTime(job.scheduledAt)}` : 'Not scheduled'}
+   692→                        </span>
+   693→                      </div>
+   694→                      {job.customer && (
+   695→                        <div className="flex items-center gap-2 mt-1">
+   696→                          <UserCircle className="size-3 text-muted-foreground shrink-0" />
+   697→                          <span className="text-xs text-muted-foreground truncate">{job.customer.name}</span>
+   698→                        </div>
+   699→                      )}
+   700→                    </div>
+   701→                  </div>
+   702→                  <div className="flex items-center gap-3 sm:shrink-0">
+   703→                    {getStatusBadge(job.status)}
+   704→                    <Button variant="ghost" size="sm" className="text-xs h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30">
+   705→                      View <ArrowRight className="size-3 ml-1" />
+   706→                    </Button>
+   707→                  </div>
+   708→                </div>
+   709→              ))
+   710→            )}
+   711→          </div>
+   712→        </CardContent>
+   713→      </Card>
+   714→
+   715→      {/* Job summary */}
+   716→      <div className="grid grid-cols-3 gap-4">
+   717→        <Card>
+   718→          <CardContent className="p-4 text-center">
+   719→            {loading ? (
+   720→              <div className="h-7 w-8 bg-muted rounded animate-pulse mx-auto" />
+   721→            ) : (
+   722→              <p className="text-2xl font-bold text-amber-600">{jobs.filter((j) => j.status === 'pending').length}</p>
+   723→            )}
+   724→            <p className="text-xs text-muted-foreground mt-1">Pending</p>
+   725→          </CardContent>
+   726→        </Card>
+   727→        <Card>
+   728→          <CardContent className="p-4 text-center">
+   729→            {loading ? (
+   730→              <div className="h-7 w-8 bg-muted rounded animate-pulse mx-auto" />
+   731→            ) : (
+   732→              <p className="text-2xl font-bold text-blue-600">
+   733→                {jobs.filter((j) => j.status === 'assigned' || j.status === 'in_progress').length}
+   734→              </p>
+   735→            )}
+   736→            <p className="text-xs text-muted-foreground mt-1">Active</p>
+   737→          </CardContent>
+   738→        </Card>
+   739→        <Card>
+   740→          <CardContent className="p-4 text-center">
+   741→            {loading ? (
+   742→              <div className="h-7 w-8 bg-muted rounded animate-pulse mx-auto" />
+   743→            ) : (
+   744→              <p className="text-2xl font-bold text-emerald-600">{jobs.filter((j) => j.status === 'completed').length}</p>
+   745→            )}
+   746→            <p className="text-xs text-muted-foreground mt-1">Completed</p>
+   747→          </CardContent>
+   748→        </Card>
+   749→      </div>
+   750→    </div>
+   751→  );
+   752→}
+   753→
+   754→// ─── Sub-View: Schedule ─────────────────────────────────────────────────────
+   755→
+   756→function ScheduleView({ employeeId }: { employeeId: string }) {
+   757→  const { jobs, loading, error, refetch } = useEmployeeJobs(employeeId);
+   758→
+   759→  // Build weekly schedule from real job data
+   760→  const now = new Date();
+   761→  const startOfWeek = new Date(now);
+   762→  startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday
+   763→  startOfWeek.setHours(0, 0, 0, 0);
+   764→
+   765→  const weekDays: { date: Date; dayName: string; isToday: boolean; jobs: Job[] }[] = [];
+   766→  for (let i = 0; i < 7; i++) {
+   767→    const d = new Date(startOfWeek);
+   768→    d.setDate(startOfWeek.getDate() + i);
+   769→    const dayJobs = jobs.filter((j) => {
+   770→      if (!j.scheduledAt) return false;
+   771→      const jd = new Date(j.scheduledAt);
+   772→      return jd.getFullYear() === d.getFullYear() &&
+   773→        jd.getMonth() === d.getMonth() &&
+   774→        jd.getDate() === d.getDate();
+   775→    });
+   776→    weekDays.push({
+   777→      date: d,
+   778→      dayName: getDayName(d),
+   779→      isToday: d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate(),
+   780→      jobs: dayJobs,
+   781→    });
+   782→  }
+   783→
+   784→  // Upcoming highlights: future jobs sorted by date
+   785→  const upcomingJobs = jobs
+   786→    .filter((j) => j.scheduledAt && new Date(j.scheduledAt) >= now && j.status !== 'completed' && j.status !== 'cancelled')
+   787→    .sort((a, b) => new Date(a.scheduledAt!).getTime() - new Date(b.scheduledAt!).getTime())
+   788→    .slice(0, 4);
+   789→
+   790→  const weekEnd = new Date(startOfWeek);
+   791→  weekEnd.setDate(startOfWeek.getDate() + 6);
+   792→  const weekLabel = `${formatDate(startOfWeek.toISOString())} – ${formatDate(weekEnd.toISOString())}, ${weekEnd.getFullYear()}`;
+   793→
+   794→  if (error) {
+   795→    return <ErrorCard message={error} onRetry={refetch} />;
+   796→  }
+   797→
+   798→  return (
+   799→    <div className="space-y-6">
+   800→      {/* Week overview */}
+   801→      <Card>
+   802→        <CardHeader>
+   803→          <div className="flex items-center justify-between">
+   804→            <div>
+   805→              <CardTitle className="text-base">Weekly Schedule</CardTitle>
+   806→              <CardDescription>{weekLabel}</CardDescription>
+   807→            </div>
+   808→          </div>
+   809→        </CardHeader>
+   810→        <CardContent>
+   811→          {loading ? (
+   812→            <LoadingSkeleton lines={7} />
+   813→          ) : (
+   814→            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
+   815→              {weekDays.map((day) => (
+   816→                <div
+   817→                  key={day.dayName}
+   818→                  className={cn(
+   819→                    'rounded-lg border p-3 min-h-[120px] transition-colors',
+   820→                    day.isToday
+   821→                      ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20'
+   822→                      : 'border-border hover:border-emerald-300 dark:hover:border-emerald-700'
+   823→                  )}
+   824→                >
+   825→                  <div className="flex items-center justify-between mb-2">
+   826→                    <span className={cn(
+   827→                      'text-sm font-semibold',
+   828→                      day.isToday ? 'text-emerald-700 dark:text-emerald-400' : 'text-foreground'
+   829→                    )}>
+   830→                      {day.dayName}
+   831→                    </span>
+   832→                    {day.isToday && (
+   833→                      <Badge className="bg-emerald-600 text-white text-[10px] h-5 border-0">Today</Badge>
+   834→                    )}
+   835→                  </div>
+   836→                  {day.jobs.length > 0 ? (
+   837→                    <div className="space-y-1.5">
+   838→                      {day.jobs.map((job) => (
+   839→                        <div key={job.id} className="text-xs p-1.5 rounded bg-muted/70 text-foreground">
+   840→                          <span className="font-mono text-muted-foreground">
+   841→                            {job.scheduledAt ? formatTime(job.scheduledAt) : 'TBD'}
+   842→                          </span>
+   843→                          <span className="block truncate">{job.title}</span>
+   844→                        </div>
+   845→                      ))}
+   846→                    </div>
+   847→                  ) : (
+   848→                    <p className="text-xs text-muted-foreground italic">No tasks</p>
+   849→                  )}
+   850→                </div>
+   851→              ))}
+   852→            </div>
+   853→          )}
+   854→        </CardContent>
+   855→      </Card>
+   856→
+   857→      {/* Upcoming highlights */}
+   858→      <Card>
+   859→        <CardHeader>
+   860→          <CardTitle className="text-base">Upcoming Highlights</CardTitle>
+   861→          <CardDescription>Important events and deadlines</CardDescription>
+   862→        </CardHeader>
+   863→        <CardContent className="space-y-3">
+   864→          {loading ? (
+   865→            <LoadingSkeleton lines={4} />
+   866→          ) : upcomingJobs.length === 0 ? (
+   867→            <div className="text-center py-8 text-muted-foreground">
+   868→              <CalendarDays className="size-10 mx-auto mb-2 opacity-50" />
+   869→              <p className="text-sm">No upcoming jobs.</p>
+   870→            </div>
+   871→          ) : (
+   872→            upcomingJobs.map((job) => {
+   873→              const schedDate = new Date(job.scheduledAt!);
+   874→              const monthStr = schedDate.toLocaleDateString('en-US', { month: 'short' });
+   875→              const dayStr = schedDate.getDate().toString();
+   876→              const isUrgent = job.priority === 'high';
+   877→              return (
+   878→                <div key={job.id} className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
+   879→                  <div className={cn(
+   880→                    'size-10 rounded-lg flex flex-col items-center justify-center shrink-0',
+   881→                    isUrgent ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-muted'
+   882→                  )}>
+   883→                    <span className="text-[10px] font-bold text-muted-foreground">{monthStr}</span>
+   884→                    <span className="text-xs font-bold text-foreground">{dayStr}</span>
+   885→                  </div>
+   886→                  <div className="flex-1 min-w-0">
+   887→                    <p className="text-sm font-medium text-foreground truncate">{job.title}</p>
+   888→                    <p className="text-xs text-muted-foreground">
+   889→                      {formatTime(job.scheduledAt!)} • {job.type || 'Job'}
+   890→                    </p>
+   891→                  </div>
+   892→                  {isUrgent && (
+   893→                    <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-0 text-[10px] h-5">
+   894→                      Urgent
+   895→                    </Badge>
+   896→                  )}
+   897→                </div>
+   898→              );
+   899→            })
+   900→          )}
+   901→        </CardContent>
+   902→      </Card>
+   903→    </div>
+   904→  );
+   905→}
+   906→
+   907→// ─── Sub-View: Attendance ───────────────────────────────────────────────────
+   908→
+   909→function AttendanceView() {
+   910→  // TODO: Replace placeholder attendanceData with real API data from /api/employees/[id]/attendance
+   911→  const [checkedIn, setCheckedIn] = useState(false);
+   912→  const [checkInTime, setCheckInTime] = useState<string | null>(null);
+   913→
+   914→  const handleCheckIn = () => {
+   915→    const now = new Date();
+   916→    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+   917→    setCheckedIn(true);
+   918→    setCheckInTime(timeStr);
+   919→  };
+   920→
+   921→  const handleCheckOut = () => {
+   922→    setCheckedIn(false);
+   923→  };
+   924→
+   925→  return (
+   926→    <div className="space-y-6">
+   927→      {/* Check-in card */}
+   928→      <Card className={cn(
+   929→        'border-0 shadow-lg',
+   930→        checkedIn
+   931→          ? 'bg-gradient-to-br from-emerald-600 to-emerald-700 text-white'
+   932→          : 'bg-gradient-to-br from-slate-700 to-slate-800 text-white'
+   933→      )}>
+   934→        <CardContent className="p-6">
+   935→          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+   936→            <div>
+   937→              <h3 className="text-lg font-semibold">
+   938→                {checkedIn ? 'You are checked in' : 'Ready to start your day?'}
+   939→              </h3>
+   940→              <p className="text-sm opacity-80 mt-1">
+   941→                {checkedIn
+   942→                  ? `Checked in at ${checkInTime} — Have a productive day!`
+   943→                  : 'Check in to mark your attendance for today.'
+   944→                }
+   945→              </p>
+   946→            </div>
+   947→            <div className="flex gap-2">
+   948→              {!checkedIn ? (
+   949→                <Button
+   950→                  onClick={handleCheckIn}
+   951→                  className="bg-white text-slate-800 hover:bg-white/90 font-semibold"
+   952→                >
+   953→                  <Clock className="size-4 mr-2" />
+   954→                  Check In
+   955→                </Button>
+   956→              ) : (
+   957→                <Button
+   958→                  onClick={handleCheckOut}
+   959→                  variant="outline"
+   960→                  className="border-white/30 text-white hover:bg-white/10"
+   961→                >
+   962→                  <Clock className="size-4 mr-2" />
+   963→                  Check Out
+   964→                </Button>
+   965→              )}
+   966→            </div>
+   967→          </div>
+   968→          {checkedIn && (
+   969→            <div className="mt-4 flex items-center gap-3">
+   970→              <span className="relative flex size-3">
+   971→                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+   972→                <span className="relative inline-flex rounded-full size-3 bg-green-300" />
+   973→              </span>
+   974→              <span className="text-sm text-emerald-100">Active session</span>
+   975→            </div>
+   976→          )}
+   977→        </CardContent>
+   978→      </Card>
+   979→
+   980→      {/* This week */}
+   981→      <Card>
+   982→        <CardHeader>
+   983→          <CardTitle className="text-base">This Week&apos;s Attendance</CardTitle>
+   984→          <CardDescription>March 2 – 6, 2026 (placeholder data)</CardDescription>
+   985→        </CardHeader>
+   986→        <CardContent>
+   987→          <div className="overflow-x-auto">
+   988→            <Table>
+   989→              <TableHeader>
+   990→                <TableRow>
+   991→                  <TableHead>Day</TableHead>
+   992→                  <TableHead>Check In</TableHead>
+   993→                  <TableHead>Check Out</TableHead>
+   994→                  <TableHead>Hours</TableHead>
+   995→                  <TableHead>Status</TableHead>
+   996→                </TableRow>
+   997→              </TableHeader>
+   998→              <TableBody>
+   999→                {attendanceData.map((row) => (
+  1000→                  <TableRow key={row.day}>
+  1001→                    <TableCell className="font-medium">{row.day}</TableCell>
+  1002→                    <TableCell className="font-mono text-sm">{row.checkIn}</TableCell>
+  1003→                    <TableCell className="font-mono text-sm">{row.checkOut}</TableCell>
+  1004→                    <TableCell className="font-mono text-sm">{row.hours}</TableCell>
+  1005→                    <TableCell>{getStatusBadge(row.status)}</TableCell>
+  1006→                  </TableRow>
+  1007→                ))}
+  1008→              </TableBody>
+  1009→            </Table>
+  1010→          </div>
+  1011→        </CardContent>
+  1012→      </Card>
+  1013→
+  1014→      {/* Monthly summary — PLACEHOLDER: hardcoded values */}
+  1015→      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+  1016→        <Card>
+  1017→          <CardContent className="p-4 text-center">
+  1018→            <p className="text-2xl font-bold text-emerald-600">18</p>
+  1019→            <p className="text-xs text-muted-foreground mt-1">Days Present</p>
+  1020→          </CardContent>
+  1021→        </Card>
+  1022→        <Card>
+  1023→          <CardContent className="p-4 text-center">
+  1024→            <p className="text-2xl font-bold text-red-600">1</p>
+  1025→            <p className="text-xs text-muted-foreground mt-1">Days Absent</p>
+  1026→          </CardContent>
+  1027→        </Card>
+  1028→        <Card>
+  1029→          <CardContent className="p-4 text-center">
+  1030→            <p className="text-2xl font-bold text-amber-600">1</p>
+  1031→            <p className="text-xs text-muted-foreground mt-1">Late Arrivals</p>
+  1032→          </CardContent>
+  1033→        </Card>
+  1034→        <Card>
+  1035→          <CardContent className="p-4 text-center">
+  1036→            <p className="text-2xl font-bold text-blue-600">162h</p>
+  1037→            <p className="text-xs text-muted-foreground mt-1">Total Hours</p>
+  1038→          </CardContent>
+  1039→        </Card>
+  1040→      </div>
+  1041→    </div>
+  1042→  );
+  1043→}
+  1044→
+  1045→// ─── Sub-View: Inbox ────────────────────────────────────────────────────────
+  1046→
+  1047→function InboxView() {
+  1048→  const [selectedMessage, setSelectedMessage] = useState<string | null>(null);
+  1049→  const unreadCount = placeholderMessages.filter(m => m.unread).length;
+  1050→
+  1051→  return (
+  1052→    <div className="space-y-6">
+  1053→      {/* TODO: Replace placeholder messages with real API data from /api/employees/[id]/messages */}
+  1054→      {/* Inbox header */}
+  1055→      <div className="flex items-center justify-between">
+  1056→        <div className="flex items-center gap-2">
+  1057→          <h3 className="text-sm font-medium text-foreground">Messages</h3>
+  1058→          {unreadCount > 0 && (
+  1059→            <Badge className="bg-emerald-600 text-white border-0 h-5 text-[10px]">
+  1060→              {unreadCount} new
+  1061→            </Badge>
+  1062→          )}
+  1063→        </div>
+  1064→        <Button variant="outline" size="sm" className="h-8 text-xs">
+  1065→          Mark all read
+  1066→        </Button>
+  1067→      </div>
+  1068→
+  1069→      {/* Messages */}
+  1070→      <Card>
+  1071→        <CardContent className="p-0">
+  1072→          <div className="divide-y divide-border">
+  1073→            {placeholderMessages.map((msg) => (
+  1074→              <button
+  1075→                key={msg.id}
+  1076→                onClick={() => setSelectedMessage(selectedMessage === msg.id ? null : msg.id)}
+  1077→                className={cn(
+  1078→                  'w-full text-left p-4 hover:bg-muted/50 transition-colors',
+  1079→                  msg.unread && 'bg-emerald-50/50 dark:bg-emerald-950/10',
+  1080→                  selectedMessage === msg.id && 'bg-muted/80'
+  1081→                )}
+  1082→              >
+  1083→                <div className="flex items-start gap-3">
+  1084→                  <Avatar className="size-9 shrink-0">
+  1085→                    <AvatarFallback className={cn(
+  1086→                      'text-xs font-medium',
+  1087→                      msg.unread
+  1088→                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+  1089→                        : 'bg-muted text-muted-foreground'
+  1090→                    )}>
+  1091→                      {msg.from.split(' ').map(n => n[0]).join('').slice(0, 2)}
+  1092→                    </AvatarFallback>
+  1093→                  </Avatar>
+  1094→                  <div className="flex-1 min-w-0">
+  1095→                    <div className="flex items-center justify-between gap-2">
+  1096→                      <span className={cn(
+  1097→                        'text-sm truncate',
+  1098→                        msg.unread ? 'font-semibold text-foreground' : 'font-medium text-foreground'
+  1099→                      )}>
+  1100→                        {msg.from}
+  1101→                      </span>
+  1102→                      <span className="text-[11px] text-muted-foreground shrink-0">{msg.time}</span>
+  1103→                    </div>
+  1104→                    <p className={cn(
+  1105→                      'text-sm truncate mt-0.5',
+  1106→                      msg.unread ? 'font-medium text-foreground' : 'text-muted-foreground'
+  1107→                    )}>
+  1108→                      {msg.subject}
+  1109→                    </p>
+  1110→                    <p className="text-xs text-muted-foreground truncate mt-0.5">{msg.preview}</p>
+  1111→                  </div>
+  1112→                  {msg.unread && (
+  1113→                    <span className="size-2.5 rounded-full bg-emerald-500 shrink-0 mt-1.5" />
+  1114→                  )}
+  1115→                </div>
+  1116→              </button>
+  1117→            ))}
+  1118→          </div>
+  1119→        </CardContent>
+  1120→      </Card>
+  1121→
+  1122→      {/* Compose card */}
+  1123→      <Card>
+  1124→        <CardHeader>
+  1125→          <CardTitle className="text-base">Quick Reply</CardTitle>
+  1126→          <CardDescription>Send a message to your team</CardDescription>
+  1127→        </CardHeader>
+  1128→        <CardContent>
+  1129→          <div className="space-y-3">
+  1130→            <div>
+  1131→              <Label htmlFor="msg-to" className="text-xs">To</Label>
+  1132→              <Input id="msg-to" placeholder="Select recipient..." className="mt-1 h-9 text-sm" />
+  1133→            </div>
+  1134→            <div>
+  1135→              <Label htmlFor="msg-body" className="text-xs">Message</Label>
+  1136→              <textarea
+  1137→                id="msg-body"
+  1138→                placeholder="Type your message..."
+  1139→                rows={3}
+  1140→                className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+  1141→              />
+  1142→            </div>
+  1143→            <div className="flex justify-end">
+  1144→              <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" size="sm">
+  1145→                <Send className="size-3.5 mr-1.5" />
+  1146→                Send Message
+  1147→              </Button>
+  1148→            </div>
+  1149→          </div>
+  1150→        </CardContent>
+  1151→      </Card>
+  1152→    </div>
+  1153→  );
+  1154→}
+  1155→
+  1156→// ─── Sub-View: Profile ──────────────────────────────────────────────────────
+  1157→
+  1158→function ProfileView({ employeeId }: { employeeId: string }) {
+  1159→  const { auth } = useAppStore();
+  1160→  const { employee } = useEmployeeRecord(employeeId);
+  1161→
+  1162→  const employeeName = employee?.name || auth.user?.name || 'Employee';
+  1163→  const employeeEmail = employee?.email || auth.user?.email || '';
+  1164→  const employeePhone = employee?.phone || '';
+  1165→  const employeeRole = employee?.role || 'Field Service Technician';
+  1166→  const employeeStatus = employee?.status || 'active';
+  1167→  const displayId = employee?.employeeId || employee?.id || employeeId;
+  1168→
+  1169→  return (
+  1170→    <div className="space-y-6">
+  1171→      {/* Profile header */}
+  1172→      <Card>
+  1173→        <CardContent className="p-6">
+  1174→          <div className="flex flex-col sm:flex-row items-center gap-4">
+  1175→            <div className="relative">
+  1176→              <Avatar className="size-20">
+  1177→                <AvatarFallback className="text-2xl font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+  1178→                  {employeeName.split(' ').map(n => n[0]).join('').slice(0, 2)}
+  1179→                </AvatarFallback>
+  1180→              </Avatar>
+  1181→              <button className="absolute bottom-0 right-0 size-7 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-md hover:bg-emerald-700 transition-colors">
+  1182→                <Camera className="size-3.5" />
+  1183→              </button>
+  1184→            </div>
+  1185→            <div className="text-center sm:text-left">
+  1186→              <h2 className="text-xl font-bold text-foreground">{employeeName}</h2>
+  1187→              <p className="text-sm text-muted-foreground">{employeeRole}</p>
+  1188→              <div className="flex items-center gap-4 mt-2 justify-center sm:justify-start">
+  1189→                <Badge className={cn(
+  1190→                  'border-0',
+  1191→                  employeeStatus === 'active'
+  1192→                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+  1193→                    : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
+  1194→                )}>
+  1195→                  {employeeStatus.charAt(0).toUpperCase() + employeeStatus.slice(1)}
+  1196→                </Badge>
+  1197→                <span className="text-xs text-muted-foreground">Employee ID: {displayId.slice(0, 8).toUpperCase()}</span>
+  1198→              </div>
+  1199→            </div>
+  1200→          </div>
+  1201→        </CardContent>
+  1202→      </Card>
+  1203→
+  1204→      {/* Profile form */}
+  1205→      <Card>
+  1206→        <CardHeader>
+  1207→          <CardTitle className="text-base">Personal Information</CardTitle>
+  1208→          <CardDescription>Update your personal details</CardDescription>
+  1209→        </CardHeader>
+  1210→        <CardContent>
+  1211→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  1212→            <div>
+  1213→              <Label htmlFor="profile-name" className="text-xs">Full Name</Label>
+  1214→              <Input id="profile-name" defaultValue={employeeName} className="mt-1 h-9 text-sm" />
+  1215→            </div>
+  1216→            <div>
+  1217→              <Label htmlFor="profile-email" className="text-xs">Email Address</Label>
+  1218→              <Input id="profile-email" defaultValue={employeeEmail} className="mt-1 h-9 text-sm" />
+  1219→            </div>
+  1220→            <div>
+  1221→              <Label htmlFor="profile-phone" className="text-xs">Phone Number</Label>
+  1222→              <Input id="profile-phone" defaultValue={employeePhone || ''} placeholder="Enter phone number" className="mt-1 h-9 text-sm" />
+  1223→            </div>
+  1224→            <div>
+  1225→              <Label htmlFor="profile-location" className="text-xs">Location</Label>
+  1226→              <Input id="profile-location" defaultValue="" placeholder="Enter location" className="mt-1 h-9 text-sm" />
+  1227→            </div>
+  1228→          </div>
+  1229→          <div className="flex justify-end mt-4">
+  1230→            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" size="sm">
+  1231→              Save Changes
+  1232→            </Button>
+  1233→          </div>
+  1234→        </CardContent>
+  1235→      </Card>
+  1236→
+  1237→      {/* Change password */}
+  1238→      <Card>
+  1239→        <CardHeader>
+  1240→          <CardTitle className="text-base">Change Password</CardTitle>
+  1241→          <CardDescription>Update your account password</CardDescription>
+  1242→        </CardHeader>
+  1243→        <CardContent>
+  1244→          <div className="space-y-4 max-w-md">
+  1245→            <div>
+  1246→              <Label htmlFor="current-password" className="text-xs">Current Password</Label>
+  1247→              <Input id="current-password" type="password" placeholder="Enter current password" className="mt-1 h-9 text-sm" />
+  1248→            </div>
+  1249→            <div>
+  1250→              <Label htmlFor="new-password" className="text-xs">New Password</Label>
+  1251→              <Input id="new-password" type="password" placeholder="Enter new password" className="mt-1 h-9 text-sm" />
+  1252→            </div>
+  1253→            <div>
+  1254→              <Label htmlFor="confirm-password" className="text-xs">Confirm New Password</Label>
+  1255→              <Input id="confirm-password" type="password" placeholder="Confirm new password" className="mt-1 h-9 text-sm" />
+  1256→            </div>
+  1257→            <Button variant="outline" size="sm" className="gap-2">
+  1258→              <Lock className="size-3.5" />
+  1259→              Update Password
+  1260→            </Button>
+  1261→          </div>
+  1262→        </CardContent>
+  1263→      </Card>
+  1264→
+  1265→      {/* Emergency contact */}
+  1266→      <Card>
+  1267→        <CardHeader>
+  1268→          <CardTitle className="text-base">Emergency Contact</CardTitle>
+  1269→          <CardDescription>Emergency contact information on file</CardDescription>
+  1270→        </CardHeader>
+  1271→        <CardContent>
+  1272→          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  1273→            <div>
+  1274→              <Label className="text-xs">Contact Name</Label>
+  1275→              <Input defaultValue="" placeholder="Enter contact name" className="mt-1 h-9 text-sm" />
+  1276→            </div>
+  1277→            <div>
+  1278→              <Label className="text-xs">Relationship</Label>
+  1279→              <Input defaultValue="" placeholder="Enter relationship" className="mt-1 h-9 text-sm" />
+  1280→            </div>
+  1281→            <div>
+  1282→              <Label className="text-xs">Phone Number</Label>
+  1283→              <Input defaultValue="" placeholder="Enter phone number" className="mt-1 h-9 text-sm" />
+  1284→            </div>
+  1285→            <div>
+  1286→              <Label className="text-xs">Alternate Phone</Label>
+  1287→              <Input defaultValue="" placeholder="Enter alternate phone" className="mt-1 h-9 text-sm" />
+  1288→            </div>
+  1289→          </div>
+  1290→          <div className="flex justify-end mt-4">
+  1291→            <Button variant="outline" size="sm">Update Contact</Button>
+  1292→          </div>
+  1293→        </CardContent>
+  1294→      </Card>
+  1295→    </div>
+  1296→  );
+  1297→}
+  1298→
+  1299→// ─── Sidebar Component ──────────────────────────────────────────────────────
+  1300→
+  1301→function EmployeeSidebar({
+  1302→  activeView,
+  1303→  onViewChange,
+  1304→  onLogout,
+  1305→  employeeName,
+  1306→  employeeRole,
+  1307→}: {
+  1308→  activeView: EmployeeSubView;
+  1309→  onViewChange: (view: EmployeeSubView) => void;
+  1310→  onLogout?: () => void;
+  1311→  employeeName: string;
+  1312→  employeeRole: string;
+  1313→}) {
+  1314→  return (
+  1315→    <div className="flex flex-col h-full bg-card">
+  1316→      {/* Logo */}
+  1317→      <div className="p-6 pb-4">
+  1318→        <div className="flex items-center gap-2.5">
+  1319→          <div className="size-9 rounded-lg bg-emerald-600 flex items-center justify-center">
+  1320→            <Zap className="size-5 text-white" />
+  1321→          </div>
+  1322→          <span className="text-lg font-bold text-foreground">ServiceOS</span>
+  1323→        </div>
+  1324→        <div className="mt-3 flex items-center gap-3">
+  1325→          <Avatar className="size-9">
+  1326→            <AvatarFallback className="text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+  1327→              {employeeName.split(' ').map(n => n[0]).join('').slice(0, 2)}
+  1328→            </AvatarFallback>
+  1329→          </Avatar>
+  1330→          <div className="min-w-0">
+  1331→            <p className="text-sm font-medium text-foreground truncate">{employeeName}</p>
+  1332→            <p className="text-xs text-muted-foreground truncate">{employeeRole}</p>
+  1333→          </div>
+  1334→        </div>
+  1335→      </div>
+  1336→
+  1337→      <Separator />
+  1338→
+  1339→      {/* Menu items */}
+  1340→      <ScrollArea className="flex-1 py-2">
+  1341→        <nav className="px-3 space-y-1">
+  1342→          {menuItems.map((item) => {
+  1343→            const isActive = activeView === item.id;
+  1344→            return (
+  1345→              <button
+  1346→                key={item.id}
+  1347→                onClick={() => onViewChange(item.id)}
+  1348→                className={cn(
+  1349→                  'w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors text-left',
+  1350→                  isActive
+  1351→                    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 border-l-[3px] border-emerald-600 pl-[9px]'
+  1352→                    : 'text-muted-foreground hover:bg-muted hover:text-foreground border-l-[3px] border-transparent pl-[9px]'
+  1353→                )}
+  1354→              >
+  1355→                <item.icon className="size-[18px] shrink-0" />
+  1356→                <span>{item.label}</span>
+  1357→              </button>
+  1358→            );
+  1359→          })}
+  1360→        </nav>
+  1361→      </ScrollArea>
+  1362→
+  1363→      <Separator />
+  1364→
+  1365→      {/* Logout */}
+  1366→      <div className="p-3">
+  1367→        <button
+  1368→          onClick={onLogout}
+  1369→          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium text-muted-foreground hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400 transition-colors"
+  1370→        >
+  1371→          <LogOut className="size-[18px]" />
+  1372→          <span>Logout</span>
+  1373→        </button>
+  1374→      </div>
+  1375→    </div>
+  1376→  );
+  1377→}
+  1378→
+  1379→// ─── Main Component ─────────────────────────────────────────────────────────
+  1380→
+  1381→export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
+  1382→  const [activeView, setActiveView] = useState<EmployeeSubView>('home');
+  1383→  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  1384→  const isMobile = useIsMobile();
+  1385→  const { auth } = useAppStore();
+  1386→
+  1387→  const employeeId = auth.user?.employeeId ?? null;
+  1388→  const { employee } = useEmployeeRecord(employeeId);
+  1389→
+  1390→  const employeeName = employee?.name || auth.user?.name || 'Employee';
+  1391→  const employeeRole = employee?.role || 'Field Service Technician';
+  1392→
+  1393→  const handleViewChange = (view: EmployeeSubView) => {
+  1394→    setActiveView(view);
+  1395→    setMobileSidebarOpen(false);
+  1396→  };
+  1397→
+  1398→  // Render the active sub-view
+  1399→  const renderSubView = () => {
+  1400→    if (!employeeId) {
+  1401→      return (
+  1402→        <Card>
+  1403→          <CardContent className="p-8 text-center">
+  1404→            <AlertCircle className="size-12 mx-auto mb-3 text-amber-500" />
+  1405→            <h3 className="text-lg font-semibold text-foreground mb-2">Employee ID Not Found</h3>
+  1406→            <p className="text-sm text-muted-foreground mb-4">
+  1407→              Your account is not linked to an employee record. Please log out and try again, or contact your administrator.
+  1408→            </p>
+  1409→            <Button onClick={onLogout} variant="outline" size="sm">
+  1410→              <LogOut className="size-4 mr-2" />
+  1411→              Re-login
+  1412→            </Button>
+  1413→          </CardContent>
+  1414→        </Card>
+  1415→      );
+  1416→    }
+  1417→
+  1418→    switch (activeView) {
+  1419→      case 'home':
+  1420→        return <HomeView employeeId={employeeId} />;
+  1421→      case 'my-jobs':
+  1422→        return <MyJobsView employeeId={employeeId} />;
+  1423→      case 'schedule':
+  1424→        return <ScheduleView employeeId={employeeId} />;
+  1425→      case 'attendance':
+  1426→        return <AttendanceView />;
+  1427→      case 'inbox':
+  1428→        return <InboxView />;
+  1429→      case 'profile':
+  1430→        return <ProfileView employeeId={employeeId} />;
+  1431→      default:
+  1432→        return <HomeView employeeId={employeeId} />;
+  1433→    }
+  1434→  };
+  1435→
+  1436→  return (
+  1437→    <div className="h-[100dvh] flex overflow-hidden bg-background">
+  1438→      {/* Desktop sidebar */}
+  1439→      {!isMobile && (
+  1440→        <aside className="w-64 shrink-0 border-r border-border bg-card">
+  1441→          <EmployeeSidebar
+  1442→            activeView={activeView}
+  1443→            onViewChange={handleViewChange}
+  1444→            onLogout={onLogout}
+  1445→            employeeName={employeeName}
+  1446→            employeeRole={employeeRole}
+  1447→          />
+  1448→        </aside>
+  1449→      )}
+  1450→
+  1451→      {/* Mobile sidebar (Sheet) */}
+  1452→      {isMobile && (
+  1453→        <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
+  1454→          <SheetContent side="left" className="w-64 p-0">
+  1455→            <SheetHeader className="sr-only">
+  1456→              <SheetTitle>Navigation Menu</SheetTitle>
+  1457→              <SheetDescription>Employee portal navigation</SheetDescription>
+  1458→            </SheetHeader>
+  1459→            <EmployeeSidebar
+  1460→              activeView={activeView}
+  1461→              onViewChange={handleViewChange}
+  1462→              onLogout={onLogout}
+  1463→              employeeName={employeeName}
+  1464→              employeeRole={employeeRole}
+  1465→            />
+  1466→          </SheetContent>
+  1467→        </Sheet>
+  1468→      )}
+  1469→
+  1470→      {/* Main content area */}
+  1471→      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+  1472→        {/* Header */}
+  1473→        <header className="h-14 shrink-0 border-b border-border bg-card flex items-center justify-between px-4">
+  1474→          <div className="flex items-center gap-3">
+  1475→            {isMobile && (
+  1476→              <Button
+  1477→                variant="ghost"
+  1478→                size="icon"
+  1479→                className="size-9 -ml-1"
+  1480→                onClick={() => setMobileSidebarOpen(true)}
+  1481→              >
+  1482→                <Menu className="size-5" />
+  1483→                <span className="sr-only">Open menu</span>
+  1484→              </Button>
+  1485→            )}
+  1486→            <h1 className="text-base font-semibold text-foreground">
+  1487→              {pageTitleMap[activeView]}
+  1488→            </h1>
+  1489→          </div>
+  1490→
+  1491→          <div className="flex items-center gap-2">
+  1492→            {/* Dark mode toggle */}
+  1493→            <ThemeToggleButton />
+  1494→
+  1495→            {/* Notification bell */}
+  1496→            <Button variant="ghost" size="icon" className="size-9 relative">
+  1497→              <Bell className="size-[18px]" />
+  1498→              <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-red-500" />
+  1499→              <span className="sr-only">Notifications</span>
+  1500→            </Button>
+  1501→
+  1502→            {/* Avatar dropdown */}
+  1503→            <DropdownMenu>
+  1504→              <DropdownMenuTrigger asChild>
+  1505→                <Button variant="ghost" className="h-9 px-2 gap-2">
+  1506→                  <Avatar className="size-7">
+  1507→                    <AvatarFallback className="text-[10px] font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+  1508→                      {employeeName.split(' ').map(n => n[0]).join('').slice(0, 2)}
+  1509→                    </AvatarFallback>
+  1510→                  </Avatar>
+  1511→                  <ChevronDown className="size-3.5 text-muted-foreground" />
+  1512→                </Button>
+  1513→              </DropdownMenuTrigger>
+  1514→              <DropdownMenuContent align="end" className="w-48">
+  1515→                <DropdownMenuItem onClick={() => setActiveView('profile')}>
+  1516→                  <UserCircle className="size-4 mr-2" />
+  1517→                  Profile
+  1518→                </DropdownMenuItem>
+  1519→                <DropdownMenuItem onClick={() => setActiveView('inbox')}>
+  1520→                  <Settings className="size-4 mr-2" />
+  1521→                  Settings
+  1522→                </DropdownMenuItem>
+  1523→                <DropdownMenuSeparator />
+  1524→                <DropdownMenuItem onClick={onLogout} className="text-red-600 focus:text-red-600">
+  1525→                  <LogOut className="size-4 mr-2" />
+  1526→                  Logout
+  1527→                </DropdownMenuItem>
+  1528→              </DropdownMenuContent>
+  1529→            </DropdownMenu>
+  1530→          </div>
+  1531→        </header>
+  1532→
+  1533→        {/* Content */}
+  1534→        <main className="flex-1 overflow-auto bg-muted/30 p-4 lg:p-6">
+  1535→          {renderSubView()}
+  1536→        </main>
+  1537→      </div>
+  1538→    </div>
+  1539→  );
+  1540→}
+  1541→
+  1542→// ─── Theme Toggle Button ────────────────────────────────────────────────────
+  1543→
+  1544→function ThemeToggleButton() {
+  1545→  const { darkMode, toggleDarkMode } = useAppStore();
+  1546→
+  1547→  return (
+  1548→    <Button
+  1549→      variant="ghost"
+  1550→      size="icon"
+  1551→      className="size-9"
+  1552→      onClick={toggleDarkMode}
+  1553→    >
+  1554→      {darkMode ? <Sun className="size-[18px]" /> : <Moon className="size-[18px]" />}
+  1555→      <span className="sr-only">Toggle dark mode</span>
+  1556→    </Button>
+  1557→  );
+  1558→}
+  1559→
+  1560→// ─── Utility: time ago ──────────────────────────────────────────────────────
+  1561→
+  1562→function getTimeAgo(date: Date): string {
+  1563→  const now = new Date();
+  1564→  const diffMs = now.getTime() - date.getTime();
+  1565→  const diffMins = Math.floor(diffMs / 60000);
+  1566→  if (diffMins < 1) return 'Just now';
+  1567→  if (diffMins < 60) return `${diffMins} min ago`;
+  1568→  const diffHours = Math.floor(diffMins / 60);
+  1569→  if (diffHours < 24) return `${diffHours} hr${diffHours > 1 ? 's' : ''} ago`;
+  1570→  const diffDays = Math.floor(diffHours / 24);
+  1571→  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  1572→  return formatDate(date.toISOString());
+  1573→}
+  1574→

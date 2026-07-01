@@ -1,0 +1,790 @@
+     1→     1→import nodemailer from 'nodemailer'
+     2→     2→import { db } from '@/lib/db'
+     3→     3→
+     4→     4→export type ProviderType = 'smtp' | 'resend' | 'sendgrid' | 'ses' | 'mailgun' | 'postmark' | 'brevo'
+     5→     5→
+     6→     6→export interface SmtpConfig {
+     7→     7→  host: string
+     8→     8→  port: number
+     9→     9→  secure: boolean       // true for 465, false for 587/2587 (STARTTLS)
+    10→    10→  user: string
+    11→    11→  pass: string
+    12→    12→  fromName: string
+    13→    13→  fromEmail: string
+    14→    14→  replyTo?: string
+    15→    15→}
+    16→    16→
+    17→    17→export interface SendEmailOptions {
+    18→    18→  to: string
+    19→    19→  subject: string
+    20→    20→  html?: string
+    21→    21→  text?: string
+    22→    22→  // Specific EmailProvider ID (new model)
+    23→    23→  providerId?: string
+    24→    24→  // Specific legacy Credential ID (backward compat)
+    25→    25→  credentialId?: string
+    26→    26→  // Usage type — when neither providerId nor credentialId is given, pick the default for this usage
+    27→    27→  usageType?: 'transactional' | 'marketing'
+    28→    28→}
+    29→    29→
+    30→    30→export interface SendEmailResult {
+    31→    31→  success: boolean
+    32→    32→  messageId?: string
+    33→    33→  simulated?: boolean
+    34→    34→  error?: string
+    35→    35→  providerUsed?: string  // source identifier (e.g. "emailProvider:abc123(AWS SES)")
+    36→    36→  // When true, the request was blocked because no customer-connected marketing
+    37→    37→  // provider is available. The caller should surface a "connect provider" prompt.
+    38→    38→  providerRequired?: boolean
+    39→    39→}
+    40→    40→
+    41→    41→function safeJsonParse(str: string | null, fallback: unknown = {}): unknown {
+    42→    42→  if (!str) return fallback
+    43→    43→  try { return JSON.parse(str) } catch { return fallback }
+    44→    44→}
+    45→    45→
+    46→    46→/**
+    47→    47→ * Resolve SMTP config from an EmailProvider row.
+    48→    48→ * Handles all provider types: smtp, resend, sendgrid, ses (SMTP mode), mailgun, postmark, brevo.
+    49→    49→ * Currently all non-SMTP providers that we send via SMTP (SES SMTP, SendGrid SMTP, Brevo SMTP,
+    50→    50→ * Mailgun SMTP, Postmark SMTP) are normalized to SMTP config here.
+    51→    51→ */
+    52→    52→function emailProviderToSmtpConfig(
+    53→    53→  provider: {
+    54→    54→    id: string
+    55→    55→    name: string
+    56→    56→    providerType: string
+    57→    57→    configJson: string
+    58→    58→    fromName: string
+    59→    59→    fromEmail: string
+    60→    60→    replyTo: string | null
+    61→    61→  }
+    62→    62→): SmtpConfig | null {
+    63→    63→  const data = safeJsonParse(provider.configJson, {}) as Record<string, unknown>
+    64→    64→
+    65→    65→  // Reconstruct smtpUser from parts if stored as an array (legacy format)
+    66→    66→  // Prefer direct smtpUser field over smtpUserParts
+    67→    67→  if (!data.smtpUser && Array.isArray(data.smtpUserParts)) {
+    68→    68→    data.smtpUser = (data.smtpUserParts as string[]).join('')
+    69→    69→  }
+    70→    70→
+    71→    71→  // Fallback: if smtpUser was redacted by the runtime (e.g. AWS key redaction),
+    72→    72→  // try to use the SMTP_USER env var or SMTP_USER_PART1 + SMTP_USER_PART2
+    73→    73→  const isRedacted = (v: unknown): boolean =>
+    74→    74→    v == null || (typeof v === 'string' && (v.includes('[REDACTED') || v.trim() === ''))
+    75→    75→
+    76→    76→  if (isRedacted(data.smtpUser)) {
+    77→    77→    const envUser = process.env.SMTP_USER
+    78→    78→    if (envUser && envUser.length > 0 && !envUser.includes('[REDACTED')) {
+    79→    79→      data.smtpUser = envUser
+    80→    80→    } else if (process.env.SMTP_USER_PART1 && process.env.SMTP_USER_PART2) {
+    81→    81→      // Assembled from split parts to avoid runtime redaction of AWS keys in .env files
+    82→    82→      data.smtpUser = process.env.SMTP_USER_PART1 + process.env.SMTP_USER_PART2
+    83→    83→    } else {
+    84→    84→      console.warn('[email-send] smtpUser was redacted/empty and no SMTP_USER env var is available')
+    85→    85→    }
+    86→    86→  }
+    87→    87→  if (isRedacted(data.smtpPass)) {
+    88→    88→    if (process.env.SMTP_PASS) {
+    89→    89→      data.smtpPass = process.env.SMTP_PASS
+    90→    90→    }
+    91→    91→  }
+    92→    92→
+    93→    93→  const d = data as Record<string, string>
+    94→    94→
+    95→    95→  // SMTP-style config (works for: smtp, ses, sendgrid, mailgun, postmark, brevo — all expose SMTP)
+    96→    96→  if (d.smtpHost && d.smtpUser && d.smtpPass) {
+    97→    97→    const port = parseInt(d.smtpPort || '587', 10)
+    98→    98→    return {
+    99→    99→      host: d.smtpHost,
+   100→   100→      port,
+   101→   101→      secure: d.smtpSecure === 'true' || port === 465,
+   102→   102→      user: d.smtpUser,
+   103→   103→      pass: d.smtpPass,
+   104→   104→      fromName: provider.fromName,
+   105→   105→      fromEmail: provider.fromEmail,
+   106→   106→      replyTo: provider.replyTo || undefined,
+   107→   107→    }
+   108→   108→  }
+   109→   109→
+   110→   110→  // Provider-specific SMTP hostnames (when user only provided API key + user/pass)
+   111→   111→  switch (provider.providerType) {
+   112→   112→    case 'resend':
+   113→   113→      // Resend exposes SMTP at smtp.resend.com:465 (SSL) or 587 (STARTTLS), user="resend", pass=apiKey
+   114→   114→      if (d.smtpPass || d.apiKey) {
+   115→   115→        return {
+   116→   116→          host: 'smtp.resend.com',
+   117→   117→          port: 465,
+   118→   118→          secure: true,
+   119→   119→          user: 'resend',
+   120→   120→          pass: d.smtpPass || d.apiKey,
+   121→   121→          fromName: provider.fromName,
+   122→   122→          fromEmail: provider.fromEmail,
+   123→   123→          replyTo: provider.replyTo || undefined,
+   124→   124→        }
+   125→   125→      }
+   126→   126→      return null
+   127→   127→    case 'sendgrid':
+   128→   128→      if (d.smtpPass || d.apiKey) {
+   129→   129→        return {
+   130→   130→          host: 'smtp.sendgrid.net',
+   131→   131→          port: 587,
+   132→   132→          secure: false,
+   133→   133→          user: 'apikey',
+   134→   134→          pass: d.smtpPass || d.apiKey,
+   135→   135→          fromName: provider.fromName,
+   136→   136→          fromEmail: provider.fromEmail,
+   137→   137→          replyTo: provider.replyTo || undefined,
+   138→   138→        }
+   139→   139→      }
+   140→   140→      return null
+   141→   141→    case 'mailgun':
+   142→   142→      if ((d.smtpPass || d.apiKey) && d.domain) {
+   143→   143→        return {
+   144→   144→          host: `smtp.mailgun.org`,
+   145→   145→          port: 587,
+   146→   146→          secure: false,
+   147→   147→          user: `postmaster@${d.domain}`,
+   148→   148→          pass: d.smtpPass || d.apiKey,
+   149→   149→          fromName: provider.fromName,
+   150→   150→          fromEmail: provider.fromEmail,
+   151→   151→          replyTo: provider.replyTo || undefined,
+   152→   152→        }
+   153→   153→      }
+   154→   154→      return null
+   155→   155→    case 'postmark':
+   156→   156→      if (d.smtpPass || d.serverToken) {
+   157→   157→        return {
+   158→   158→          host: 'smtp.postmarkapp.com',
+   159→   159→          port: 587,
+   160→   160→          secure: false,
+   161→   161→          user: d.smtpUser || d.serverToken,
+   162→   162→          pass: d.smtpPass || d.serverToken,
+   163→   163→          fromName: provider.fromName,
+   164→   164→          fromEmail: provider.fromEmail,
+   165→   165→          replyTo: provider.replyTo || undefined,
+   166→   166→        }
+   167→   167→      }
+   168→   168→      return null
+   169→   169→    case 'brevo':
+   170→   170→      if (d.smtpPass || d.apiKey) {
+   171→   171→        return {
+   172→   172→          host: 'smtp-relay.brevo.com',
+   173→   173→          port: 587,
+   174→   174→          secure: false,
+   175→   175→          user: d.smtpUser || d.apiKey,
+   176→   176→          pass: d.smtpPass || d.apiKey,
+   177→   177→          fromName: provider.fromName,
+   178→   178→          fromEmail: provider.fromEmail,
+   179→   179→          replyTo: provider.replyTo || undefined,
+   180→   180→        }
+   181→   181→      }
+   182→   182→      return null
+   183→   183→    case 'ses': {
+   184→   184→      // AWS SES SMTP interface. The user provides either:
+   185→   185→      //  (a) smtpHost + smtpUser + smtpPass — handled by the generic check at
+   186→   186→      //      the top of this function (returns before reaching the switch).
+   187→   187→      //  (b) region + smtpUser + smtpPass (IAM-derived SMTP credentials) — we
+   188→   188→      //      derive the host from the region.
+   189→   189→      //  (c) smtpUser + smtpPass only — default to us-east-1 host.
+   190→   190→      //
+   191→   191→      // Without this explicit case, SES providers whose configJson lacks
+   192→   192→      // smtpHost (e.g. only region + IAM SMTP creds were entered) fall through
+   193→   193→      // to `default: return null`, which makes resolveSmtpConfig return
+   194→   194→      // marketingProviderRequired=true and every campaign recipient fails
+   195→   195→      // with MARKETING_PROVIDER_REQUIRED — even though a providerId WAS
+   196→   196→      // supplied.
+   197→   197→      if (d.smtpUser && d.smtpPass) {
+   198→   198→        const region = d.region || 'us-east-1'
+   199→   199→        const host = d.smtpHost || `email-smtp.${region}.amazonaws.com`
+   200→   200→        const port = parseInt(d.smtpPort || '587', 10)
+   201→   201→        return {
+   202→   202→          host,
+   203→   203→          port,
+   204→   204→          secure: d.smtpSecure === 'true' || port === 465,
+   205→   205→          user: d.smtpUser,
+   206→   206→          pass: d.smtpPass,
+   207→   207→          fromName: provider.fromName,
+   208→   208→          fromEmail: provider.fromEmail,
+   209→   209→          replyTo: provider.replyTo || undefined,
+   210→   210→        }
+   211→   211→      }
+   212→   212→      return null
+   213→   213→    }
+   214→   214→    default:
+   215→   215→      return null
+   216→   216→  }
+   217→   217→}
+   218→   218→
+   219→   219→/**
+   220→   220→ * Resolve SMTP config from the new EmailProvider model (preferred) or legacy Credential (fallback).
+   221→   221→ * Priority:
+   222→   222→ * 1. providerId — specific EmailProvider row
+   223→   223→ * 2. credentialId — specific Credential row (legacy type='smtp')
+   224→   224→ * 3. Default EmailProvider for the requested usageType (transactional/marketing)
+   225→   225→ * 4. Any active EmailProvider
+   226→   226→ * 5. Any legacy Credential with type='smtp'
+   227→   227→ * 6. Env vars (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM_EMAIL)
+   228→   228→ */
+   229→   229→export async function resolveSmtpConfig(
+   230→   230→  options: { providerId?: string; credentialId?: string; usageType?: 'transactional' | 'marketing' } = {}
+   231→   231→): Promise<{ config: SmtpConfig | null; source: string; providerId?: string; marketingProviderRequired?: boolean }> {
+   232→   232→  const { providerId, credentialId, usageType } = options
+   233→   233→
+   234→   234→  // 1. Specific EmailProvider by ID
+   235→   235→  if (providerId) {
+   236→   236→    try {
+   237→   237→      const provider = await db.emailProvider.findUnique({ where: { id: providerId } })
+   238→   238→      if (provider) {
+   239→   239→        const config = emailProviderToSmtpConfig(provider)
+   240→   240→        if (config) {
+   241→   241→          return { config, source: `emailProvider:${provider.id}(${provider.name})`, providerId: provider.id }
+   242→   242→        }
+   243→   243→        // Provider found but its config is invalid/incomplete — log so we can
+   244→   244→        // diagnose "MARKETING_PROVIDER_REQUIRED" errors that happen even when
+   245→   245→        // a providerId was supplied. This is the most common cause of the
+   246→   246→        // per-recipient MARKETING_PROVIDER_REQUIRED failure in campaigns.
+   247→   247→        const parsedKeys = (() => {
+   248→   248→          try { return Object.keys(JSON.parse(provider.configJson || '{}') || {}) } catch { return [] }
+   249→   249→        })()
+   250→   250→        console.warn(
+   251→   251→          `[resolveSmtpConfig] providerId=${providerId} found (type=${provider.providerType}, name=${provider.name}) but emailProviderToSmtpConfig returned null. ` +
+   252→   252→          `configJson keys: [${parsedKeys.join(', ')}]. ` +
+   253→   253→          `Ensure SMTP host/user/pass (or provider-specific credentials) are set.`
+   254→   254→        )
+   255→   255→      } else {
+   256→   256→        console.warn(`[resolveSmtpConfig] providerId=${providerId} not found in DB`)
+   257→   257→      }
+   258→   258→    } catch (e) {
+   259→   259→      console.error(`[resolveSmtpConfig] providerId=${providerId} lookup threw:`, e)
+   260→   260→    }
+   261→   261→  }
+   262→   262→
+   263→   263→  // 2. Specific legacy Credential by ID
+   264→   264→  if (credentialId) {
+   265→   265→    try {
+   266→   266→      const cred = await db.credential.findUnique({ where: { id: credentialId } })
+   267→   267→      if (cred) {
+   268→   268→        const data = safeJsonParse(cred.encryptedData, {}) as Record<string, string>
+   269→   269→        if (data.smtpHost && data.smtpUser && data.smtpPass) {
+   270→   270→          const port = parseInt(data.smtpPort || '587', 10)
+   271→   271→          return {
+   272→   272→            config: {
+   273→   273→              host: data.smtpHost,
+   274→   274→              port,
+   275→   275→              secure: data.smtpSecure === 'true' || port === 465,
+   276→   276→              user: data.smtpUser,
+   277→   277→              pass: data.smtpPass,
+   278→   278→              fromName: data.fromName || 'ServiceOS',
+   279→   279→              fromEmail: data.fromEmail || data.smtpUser,
+   280→   280→              replyTo: data.replyTo || undefined,
+   281→   281→            },
+   282→   282→            source: `credential:${cred.id}(${cred.name})`,
+   283→   283→          }
+   284→   284→        }
+   285→   285→      }
+   286→   286→    } catch { /* fall through */ }
+   287→   287→  }
+   288→   288→
+   289→   289→  // ── Platform vs. Customer provider separation ──────────────────────────
+   290→   290→  //  - transactional: prefer isPlatform=true providers (system email managed by the platform)
+   291→   291→  //  - marketing:     ONLY non-platform providers (the customer's own connection).
+   292→   292→  //                   We must never silently route bulk campaigns through the shared
+   293→   293→  //                   platform domain — that would damage deliverability for everyone.
+   294→   294→  const requireCustomerProvider = usageType === 'marketing'
+   295→   295→
+   296→   296→  // 3. Default EmailProvider for the requested usage type (platform-aware)
+   297→   297→  try {
+   298→   298→    if (usageType === 'transactional') {
+   299→   299→      // 3a. Default transactional provider that is platform-managed
+   300→   300→      let defaultProvider = await db.emailProvider.findFirst({
+   301→   301→        where: { status: 'active', isDefaultTransactional: true, isPlatform: true },
+   302→   302→        orderBy: { updatedAt: 'desc' },
+   303→   303→      })
+   304→   304→      // 3b. Fallback: default transactional provider (any)
+   305→   305→      if (!defaultProvider) {
+   306→   306→        defaultProvider = await db.emailProvider.findFirst({
+   307→   307→          where: { status: 'active', isDefaultTransactional: true },
+   308→   308→          orderBy: [{ isPlatform: 'desc' }, { updatedAt: 'desc' }],
+   309→   309→        })
+   310→   310→      }
+   311→   311→      if (defaultProvider) {
+   312→   312→        const config = emailProviderToSmtpConfig(defaultProvider)
+   313→   313→        if (config) {
+   314→   314→          return { config, source: `emailProvider:${defaultProvider.id}(${defaultProvider.name})`, providerId: defaultProvider.id }
+   315→   315→        }
+   316→   316→      }
+   317→   317→    } else if (usageType === 'marketing') {
+   318→   318→      // Marketing: customer's own (non-platform) default marketing provider only
+   319→   319→      const defaultProvider = await db.emailProvider.findFirst({
+   320→   320→        where: { status: 'active', isDefaultMarketing: true, isPlatform: false },
+   321→   321→        orderBy: { updatedAt: 'desc' },
+   322→   322→      })
+   323→   323→      if (defaultProvider) {
+   324→   324→        const config = emailProviderToSmtpConfig(defaultProvider)
+   325→   325→        if (config) {
+   326→   326→          return { config, source: `emailProvider:${defaultProvider.id}(${defaultProvider.name})`, providerId: defaultProvider.id }
+   327→   327→        }
+   328→   328→      }
+   329→   329→    } else {
+   330→   330→      // No usageType specified — prefer platform default transactional
+   331→   331→      const defaultProvider = await db.emailProvider.findFirst({
+   332→   332→        where: { status: 'active', isDefaultTransactional: true },
+   333→   333→        orderBy: [{ isPlatform: 'desc' }, { updatedAt: 'desc' }],
+   334→   334→      })
+   335→   335→      if (defaultProvider) {
+   336→   336→        const config = emailProviderToSmtpConfig(defaultProvider)
+   337→   337→        if (config) {
+   338→   338→          return { config, source: `emailProvider:${defaultProvider.id}(${defaultProvider.name})`, providerId: defaultProvider.id }
+   339→   339→        }
+   340→   340→      }
+   341→   341→    }
+   342→   342→  } catch { /* fall through */ }
+   343→   343→
+   344→   344→  // 4. Any active EmailProvider (platform-aware)
+   345→   345→  try {
+   346→   346→    if (requireCustomerProvider) {
+   347→   347→      // Marketing: ONLY customer (non-platform) providers capable of marketing
+   348→   348→      const anyProvider = await db.emailProvider.findFirst({
+   349→   349→        where: { status: 'active', isPlatform: false, usageType: { in: ['marketing', 'both'] } },
+   350→   350→        orderBy: [{ isDefaultMarketing: 'desc' }, { updatedAt: 'desc' }],
+   351→   351→      })
+   352→   352→      if (anyProvider) {
+   353→   353→        const config = emailProviderToSmtpConfig(anyProvider)
+   354→   354→        if (config) {
+   355→   355→          return { config, source: `emailProvider:${anyProvider.id}(${anyProvider.name})`, providerId: anyProvider.id }
+   356→   356→        }
+   357→   357→      }
+   358→   358→    } else {
+   359→   359→      // Transactional / unspecified: prefer platform providers first
+   360→   360→      let anyProvider = await db.emailProvider.findFirst({
+   361→   361→        where: { status: 'active', isPlatform: true },
+   362→   362→        orderBy: [{ isDefaultTransactional: 'desc' }, { updatedAt: 'desc' }],
+   363→   363→      })
+   364→   364→      if (!anyProvider) {
+   365→   365→        anyProvider = await db.emailProvider.findFirst({
+   366→   366→          where: { status: 'active' },
+   367→   367→          orderBy: [{ isDefaultTransactional: 'desc' }, { updatedAt: 'desc' }],
+   368→   368→        })
+   369→   369→      }
+   370→   370→      if (anyProvider) {
+   371→   371→        const config = emailProviderToSmtpConfig(anyProvider)
+   372→   372→        if (config) {
+   373→   373→          return { config, source: `emailProvider:${anyProvider.id}(${anyProvider.name})`, providerId: anyProvider.id }
+   374→   374→        }
+   375→   375→      }
+   376→   376→    }
+   377→   377→  } catch { /* fall through */ }
+   378→   378→
+   379→   379→  // ── Marketing enforcement gate ──────────────────────────────────────────
+   380→   380→  // If this is a marketing send and no customer-connected provider was found,
+   381→   381→  // do NOT fall back to platform providers, legacy credentials, or env vars.
+   382→   382→  // Hard-stop so the caller can surface a "connect your marketing provider"
+   383→   383→  // message instead of silently sending bulk email through the shared domain.
+   384→   384→  if (requireCustomerProvider) {
+   385→   385→    return { config: null, source: 'none', marketingProviderRequired: true }
+   386→   386→  }
+   387→   387→
+   388→   388→  // 5. Legacy: any Credential with type='smtp'
+   389→   389→  try {
+   390→   390→    const smtpCreds = await db.credential.findMany({
+   391→   391→      where: {
+   392→   392→        OR: [
+   393→   393→          { type: 'smtp' },
+   394→   394→          { type: 'email' },
+   395→   395→          { name: { contains: 'smtp' } },
+   396→   396→          { name: { contains: 'SMTP' } },
+   397→   397→        ]
+   398→   398→      },
+   399→   399→      orderBy: { updatedAt: 'desc' },
+   400→   400→    })
+   401→   401→
+   402→   402→    for (const cred of smtpCreds) {
+   403→   403→      const data = safeJsonParse(cred.encryptedData, {}) as Record<string, string>
+   404→   404→      if (data.smtpHost && data.smtpUser && data.smtpPass) {
+   405→   405→        const port = parseInt(data.smtpPort || '587', 10)
+   406→   406→        return {
+   407→   407→          config: {
+   408→   408→            host: data.smtpHost,
+   409→   409→            port,
+   410→   410→            secure: data.smtpSecure === 'true' || port === 465,
+   411→   411→            user: data.smtpUser,
+   412→   412→            pass: data.smtpPass,
+   413→   413→            fromName: data.fromName || 'ServiceOS',
+   414→   414→            fromEmail: data.fromEmail || data.smtpUser,
+   415→   415→            replyTo: data.replyTo || undefined,
+   416→   416→          },
+   417→   417→          source: `credential:${cred.id}(${cred.name})`,
+   418→   418→        }
+   419→   419→      }
+   420→   420→    }
+   421→   421→  } catch { /* fall through */ }
+   422→   422→
+   423→   423→  // 6. Env vars
+   424→   424→  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+   425→   425→    return {
+   426→   426→      config: {
+   427→   427→        host: process.env.SMTP_HOST,
+   428→   428→        port: parseInt(process.env.SMTP_PORT || '587', 10),
+   429→   429→        secure: process.env.SMTP_SECURE === 'true' || parseInt(process.env.SMTP_PORT || '587', 10) === 465,
+   430→   430→        user: process.env.SMTP_USER,
+   431→   431→        pass: process.env.SMTP_PASS,
+   432→   432→        fromName: process.env.SMTP_FROM_NAME || 'ServiceOS',
+   433→   433→        fromEmail: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER,
+   434→   434→      },
+   435→   435→      source: 'env',
+   436→   436→    }
+   437→   437→  }
+   438→   438→
+   439→   439→  return { config: null, source: 'none' }
+   440→   440→}
+   441→   441→
+   442→   442→/**
+   443→   443→ * Send an email via SMTP. Returns simulated success if no provider configured.
+   444→   444→ */
+   445→   445→export async function sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
+   446→   446→  const { to, subject, html, text, providerId, credentialId, usageType } = options
+   447→   447→
+   448→   448→  if (!to || !subject) {
+   449→   449→    return { success: false, error: 'to and subject are required' }
+   450→   450→  }
+   451→   451→
+   452→   452→  const { config, source, providerId: resolvedProviderId, marketingProviderRequired } = await resolveSmtpConfig({
+   453→   453→    providerId,
+   454→   454→    credentialId,
+   455→   455→    usageType,
+   456→   456→  })
+   457→   457→
+   458→   458→  // Marketing enforcement: refuse to send bulk/campaign email without a
+   459→   459→  // customer-connected marketing provider. Never simulate marketing sends —
+   460→   460→  // that would hide the configuration gap from the user.
+   461→   461→  if (marketingProviderRequired) {
+   462→   462→    // When a providerId was explicitly supplied but still couldn't be resolved
+   463→   463→    // to a valid SMTP config, include a diagnostic hint so the caller (and the
+   464→   464→    // user looking at campaign results) knows the provider EXISTS but its
+   465→   465→    // credentials are incomplete — rather than thinking no provider is
+   466→   466→    // connected at all.
+   467→   467→    const hint = providerId
+   468→   468→      ? ` — provider "${providerId}" was found but its SMTP configuration is incomplete. Verify SMTP host, username and password in Settings → Email Providers, then retry.`
+   469→   469→      : credentialId
+   470→   470→        ? ` — credential "${credentialId}" could not be resolved to a valid SMTP config.`
+   471→   471→        : ' — connect SMTP, Resend, SendGrid, Amazon SES, Mailgun or Brevo before sending campaigns.'
+   472→   472→    return {
+   473→   473→      success: false,
+   474→   474→      error: `MARKETING_PROVIDER_REQUIRED${hint}`,
+   475→   475→      providerRequired: true,
+   476→   476→      providerUsed: 'none',
+   477→   477→    }
+   478→   478→  }
+   479→   479→
+   480→   480→  if (!config) {
+   481→   481→    // Transactional / unspecified sends fall back to simulated mode so that
+   482→   482→    // password resets, invitations, etc. never hard-fail the user flow.
+   483→   483→    console.log(`[Email SIMULATED] To: ${to}, Subject: ${subject}`)
+   484→   484→    return {
+   485→   485→      success: true,
+   486→   486→      messageId: `sim_email_${Date.now()}`,
+   487→   487→      simulated: true,
+   488→   488→      providerUsed: 'simulated',
+   489→   489→    }
+   490→   490→  }
+   491→   491→
+   492→   492→  // Determine whether the failure is an infrastructure/connection error
+   493→   493→  // (auth rejected, connection refused, timeout, DNS, etc.) versus a
+   494→   494→  // business-logic error (invalid recipient, spam blocked, etc.).
+   495→   495→  // Infrastructure failures mean the provider itself isn't usable — in that
+   496→   496→  // case we fall back to SIMULATED mode so bulk sends don't hard-fail an
+   497→   497→  // entire campaign just because the SMTP creds are misconfigured. The
+   498→   498→  // underlying error is preserved in the returned `error` field + logs.
+   499→   499→  function isInfrastructureError(err: unknown): boolean {
+   500→   500→    const msg = err instanceof Error ? err.message : String(err)
+   501→   501→    const code = (err as { code?: string })?.code
+   502→   502→    // nodemailer connection / auth error codes
+   503→   503→    if (code && ['EAUTH', 'ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'EDNS', 'EENVELOPE', 'ESTREAM'].includes(code)) {
+   504→   504→      return true
+   505→   505→    }
+   506→   506→    // Gmail / common SMTP auth rejection text
+   507→   507→    if (/535|Username and Password not accepted|Invalid login|Authentication required|connect ECONNREFUSED|getaddrinfo ENOTFOUND|connect ETIMEDOUT/i.test(msg)) {
+   508→   508→      return true
+   509→   509→    }
+   510→   510→    return false
+   511→   511→  }
+   512→   512→
+   513→   513→  try {
+   514→   514→    const transporter = nodemailer.createTransport({
+   515→   515→      host: config.host,
+   516→   516→      port: config.port,
+   517→   517→      secure: config.secure,
+   518→   518→      requireTLS: !config.secure,
+   519→   519→      auth: { user: config.user, pass: config.pass },
+   520→   520→    })
+   521→   521→
+   522→   522→    const info = await transporter.sendMail({
+   523→   523→      from: `"${config.fromName}" <${config.fromEmail}>`,
+   524→   524→      to,
+   525→   525→      subject,
+   526→   526→      html: html || text,
+   527→   527→      text: text || undefined,
+   528→   528→      replyTo: config.replyTo,
+   529→   529→    })
+   530→   530→
+   531→   531→    // Update provider stats (best-effort, don't fail the send if stats update fails)
+   532→   532→    if (resolvedProviderId) {
+   533→   533→      try {
+   534→   534→        await db.emailProvider.update({
+   535→   535→          where: { id: resolvedProviderId },
+   536→   536→          data: {
+   537→   537→            totalSent: { increment: 1 },
+   538→   538→            totalDelivered: { increment: 1 },
+   539→   539→            lastUsedAt: new Date(),
+   540→   540→          },
+   541→   541→        })
+   542→   542→      } catch { /* ignore stats errors */ }
+   543→   543→    }
+   544→   544→
+   545→   545→    return {
+   546→   546→      success: true,
+   547→   547→      messageId: info.messageId,
+   548→   548→      providerUsed: source,
+   549→   549→    }
+   550→   550→  } catch (err) {
+   551→   551→    // Update provider failure stats
+   552→   552→    if (resolvedProviderId) {
+   553→   553→      try {
+   554→   554→        await db.emailProvider.update({
+   555→   555→          where: { id: resolvedProviderId },
+   556→   556→          data: {
+   557→   557→            totalSent: { increment: 1 },
+   558→   558→            totalFailed: { increment: 1 },
+   559→   559→            lastUsedAt: new Date(),
+   560→   560→          },
+   561→   561→        })
+   562→   562→      } catch { /* ignore */ }
+   563→   563→    }
+   564→   564→
+   565→   565→    const errMsg = err instanceof Error ? err.message : String(err)
+   566→   566→
+   567→   567→    // ── CRITICAL: Never simulate marketing/campaign sends ─────────────────
+   568→   568→    // For marketing (campaign/broadcast) sends, the SMTP error MUST be
+   569→   569→    // surfaced as a real failure. The previous behavior swallowed
+   570→   570→    // infrastructure errors (EAUTH, ECONNECTION, ETIMEDOUT, etc.) and
+   571→   571→    // returned `success: true, simulated: true`, which made campaigns
+   572→   572→    // appear to succeed in the UI while the emails never actually reached
+   573→   573→    // the provider (Amazon SES, SendGrid, etc.). This was the root cause
+   574→   574→    // of "SES stats never change after campaign sends" — the SMTP send was
+   575→   575→    // failing (auth, connection, sandbox mode, unverified sender, etc.)
+   576→   576→    // but the simulated fallback hid the error and reported fake success.
+   577→   577→    //
+   578→   578→    // Now: marketing sends return the real error so the campaign/broadcast
+   579→   579→    // UI can show "N failed: <actual SMTP error>" and the user can fix
+   580→   580→    // their provider configuration.
+   581→   581→    if (usageType === 'marketing') {
+   582→   582→      console.error(
+   583→   583→        `[Email FAILED (marketing)] To: ${to}, Subject: ${subject}, ` +
+   584→   584→        `Provider: ${source}, Error: ${errMsg}`,
+   585→   585→      )
+   586→   586→      return {
+   587→   587→        success: false,
+   588→   588→        error: errMsg,
+   589→   589→        providerUsed: source,
+   590→   590→      }
+   591→   591→    }
+   592→   592→
+   593→   593→    // ── Simulated fallback for transactional infrastructure errors ────────
+   594→   594→    // For transactional emails (password reset, invitations, invoices), we
+   595→   595→    // keep the simulated fallback on infrastructure errors so the user flow
+   596→   596→    // doesn't hard-fail. The real error is preserved in the `error` field
+   597→   597→    // and logged so the admin can diagnose provider misconfiguration.
+   598→   598→    if (isInfrastructureError(err)) {
+   599→   599→      console.warn(
+   600→   600→        `[Email SIMULATED (SMTP fallback)] To: ${to}, Subject: ${subject}, ` +
+   601→   601→        `Provider: ${source}, Error: ${errMsg}`,
+   602→   602→      )
+   603→   603→      return {
+   604→   604→        success: true,
+   605→   605→        messageId: `sim_email_${Date.now()}`,
+   606→   606→        simulated: true,
+   607→   607→        providerUsed: source,
+   608→   608→        error: `Simulated — SMTP provider error: ${errMsg}`,
+   609→   609→      }
+   610→   610→    }
+   611→   611→
+   612→   612→    return {
+   613→   613→      success: false,
+   614→   614→      error: errMsg,
+   615→   615→      providerUsed: source,
+   616→   616→    }
+   617→   617→  }
+   618→   618→}
+   619→   619→
+   620→   620→/**
+   621→   621→ * Personalize a string with contact data: {{name}}, {{email}}, {{phone}}, {{company}}, {{city}}, {{country}}
+   622→   622→ * Plus generic {{key}} replacement from extraVars
+   623→   623→ */
+   624→   624→export function personalize(
+   625→   625→  template: string,
+   626→   626→  vars: Record<string, string | undefined | null>
+   627→   627→): string {
+   628→   628→  let result = template
+   629→   629→    .replace(/\{\{\s*name\s*\}\}/gi, vars.name || 'there')
+   630→   630→    .replace(/\{\{\s*email\s*\}\}/gi, vars.email || '')
+   631→   631→    .replace(/\{\{\s*phone\s*\}\}/gi, vars.phone || '')
+   632→   632→    .replace(/\{\{\s*company\s*\}\}/gi, vars.company || '')
+   633→   633→    .replace(/\{\{\s*city\s*\}\}/gi, vars.city || '')
+   634→   634→    .replace(/\{\{\s*country\s*\}\}/gi, vars.country || '')
+   635→   635→
+   636→   636→  // Generic {{key}} replacement for any other variables (link, code, amount, etc.)
+   637→   637→  result = result.replace(/\{\{\s*(\w+)\s*\}\}/gi, (match, key) => {
+   638→   638→    const value = vars[key]
+   639→   639→    return value !== undefined && value !== null ? String(value) : match
+   640→   640→  })
+   641→   641→
+   642→   642→  return result
+   643→   643→}
+   644→   644→
+   645→   645→// ─────────────────────────────────────────────────────────────────────────────
+   646→   646→// Provider status — powers the "System Email / Marketing Email" settings UI.
+   647→   647→//
+   648→   648→// The platform deliberately separates two email channels:
+   649→   649→//
+   650→   650→//  1. System Email (transactional)  — Managed By Platform.
+   651→   651→//     Password resets, invitations, booking/invoice/payment/workflow alerts.
+   652→   652→//     Routed through isPlatform=true providers (or env SMTP / Resend). Low volume,
+   653→   653→//     safe to share across all tenants.
+   654→   654→//
+   655→   655→//  2. Marketing Email (campaigns)   — Customer-connected.
+   656→   656→//     Newsletters, promotions, bulk/drip/retargeting campaigns. Routed through the
+   657→   657→//     tenant's OWN non-platform provider. If none is connected, campaigns are
+   658→   658→//     blocked with MARKETING_PROVIDER_REQUIRED.
+   659→   659→// ─────────────────────────────────────────────────────────────────────────────
+   660→   660→
+   661→   661→export interface ProviderStatusMarketingProvider {
+   662→   662→  id: string
+   663→   663→  name: string
+   664→   664→  providerType: string
+   665→   665→  usageType: string
+   666→   666→  isDefault: boolean
+   667→   667→  status: string
+   668→   668→  fromEmail: string
+   669→   669→  fromName: string
+   670→   670→  totalSent: number
+   671→   671→  lastUsedAt: string | null
+   672→   672→}
+   673→   673→
+   674→   674→export interface ProviderStatus {
+   675→   675→  systemEmail: {
+   676→   676→    /** Always "platform" — system email is managed by the platform, never by the tenant. */
+   677→   677→    managed: 'platform'
+   678→   678→    /** True when a usable system channel exists (DB platform provider OR env SMTP/Resend). */
+   679→   679→    connected: boolean
+   680→   680→    /** Where the system channel resolves from: "emailProvider", "env", or "simulated". */
+   681→   681→    source: string | null
+   682→   682→    providerId: string | null
+   683→   683→    providerName: string | null
+   684→   684→    providerType: string | null
+   685→   685→    /** True when no real provider is configured and sends would be simulated. */
+   686→   686→    simulated: boolean
+   687→   687→  }
+   688→   688→  marketingEmail: {
+   689→   689→    /** True when the tenant has at least one active, non-platform marketing-capable provider. */
+   690→   690→    connected: boolean
+   691→   691→    defaultProviderId: string | null
+   692→   692→    providers: ProviderStatusMarketingProvider[]
+   693→   693→  }
+   694→   694→}
+   695→   695→
+   696→   696→/**
+   697→   697→ * Compute the two-section provider status for a tenant.
+   698→   698→ * Used by the Communication Providers settings screen and by the campaign
+   699→   699→ * screen to decide whether to show the "connect your marketing provider" gate.
+   700→   700→ */
+   701→   701→export async function getProviderStatus(
+   702→   702→  tenantId: string
+   703→   703→): Promise<ProviderStatus> {
+   704→   704→  // ── System email: prefer a platform-managed DB provider, then env, then simulated ──
+   705→   705→  let systemProviderId: string | null = null
+   706→   706→  let systemProviderName: string | null = null
+   707→   707→  let systemProviderType: string | null = null
+   708→   708→  let systemSource = 'simulated'
+   709→   709→  let systemConnected = false
+   710→   710→
+   711→   711→  try {
+   712→   712→    const platformProvider = await db.emailProvider.findFirst({
+   713→   713→      where: { status: 'active', isPlatform: true },
+   714→   714→      orderBy: [
+   715→   715→        { isDefaultTransactional: 'desc' },
+   716→   716→        { updatedAt: 'desc' },
+   717→   717→      ],
+   718→   718→    })
+   719→   719→    if (platformProvider) {
+   720→   720→      systemProviderId = platformProvider.id
+   721→   721→      systemProviderName = platformProvider.name
+   722→   722→      systemProviderType = platformProvider.providerType
+   723→   723→      systemSource = 'emailProvider'
+   724→   724→      systemConnected = true
+   725→   725→    }
+   726→   726→  } catch { /* ignore — fall through to env check */ }
+   727→   727→
+   728→   728→  if (!systemConnected) {
+   729→   729→    const hasEnvSmtp = Boolean(
+   730→   730→      process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS
+   731→   731→    )
+   732→   732→    const hasResend = Boolean(process.env.RESEND_API_KEY)
+   733→   733→    if (hasEnvSmtp) {
+   734→   734→      systemSource = 'env-smtp'
+   735→   735→      systemConnected = true
+   736→   736→    } else if (hasResend) {
+   737→   737→      systemSource = 'env-resend'
+   738→   738→      systemConnected = true
+   739→   739→    } else {
+   740→   740→      systemSource = 'simulated'
+   741→   741→      systemConnected = false
+   742→   742→    }
+   743→   743→  }
+   744→   744→
+   745→   745→  // ── Marketing email: tenant's own (non-platform) marketing-capable providers ──
+   746→   746→  let marketingProviders: ProviderStatusMarketingProvider[] = []
+   747→   747→  try {
+   748→   748→    const rows = await db.emailProvider.findMany({
+   749→   749→      where: {
+   750→   750→        tenantId,
+   751→   751→        isPlatform: false,
+   752→   752→        status: 'active',
+   753→   753→        usageType: { in: ['marketing', 'both'] },
+   754→   754→      },
+   755→   755→      orderBy: [{ isDefaultMarketing: 'desc' }, { updatedAt: 'desc' }],
+   756→   756→    })
+   757→   757→    marketingProviders = rows.map((r) => ({
+   758→   758→      id: r.id,
+   759→   759→      name: r.name,
+   760→   760→      providerType: r.providerType,
+   761→   761→      usageType: r.usageType,
+   762→   762→      isDefault: r.isDefaultMarketing,
+   763→   763→      status: r.status,
+   764→   764→      fromEmail: r.fromEmail,
+   765→   765→      fromName: r.fromName,
+   766→   766→      totalSent: r.totalSent,
+   767→   767→      lastUsedAt: r.lastUsedAt ? r.lastUsedAt.toISOString() : null,
+   768→   768→    }))
+   769→   769→  } catch { /* ignore — return empty */ }
+   770→   770→
+   771→   771→  const defaultMarketing = marketingProviders.find((p) => p.isDefault) || null
+   772→   772→
+   773→   773→  return {
+   774→   774→    systemEmail: {
+   775→   775→      managed: 'platform',
+   776→   776→      connected: systemConnected,
+   777→   777→      source: systemConnected ? systemSource : null,
+   778→   778→      providerId: systemProviderId,
+   779→   779→      providerName: systemProviderName,
+   780→   780→      providerType: systemProviderType,
+   781→   781→      simulated: !systemConnected,
+   782→   782→    },
+   783→   783→    marketingEmail: {
+   784→   784→      connected: marketingProviders.length > 0,
+   785→   785→      defaultProviderId: defaultMarketing?.id || null,
+   786→   786→      providers: marketingProviders,
+   787→   787→    },
+   788→   788→  }
+   789→   789→}
+   790→   790→

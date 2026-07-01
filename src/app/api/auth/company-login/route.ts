@@ -177,12 +177,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Role validation
-    if (normalizedRole === 'employee' && user.role === 'owner') {
-      // Owners should use admin login, not employee
-      return NextResponse.json(
-        { error: 'Please use the admin login page for this account.' },
-        { status: 403 }
-      );
+    // For employee login: check if this user is also an Employee record
+    // (managers/admins can be employees too). Only block owners who are NOT
+    // in the Employee table from using the employee login.
+    if (normalizedRole === 'employee') {
+      if (user.role === 'owner') {
+        // Check if this owner is also listed as an employee
+        const employeeRecord = await db.employee.findFirst({
+          where: { userId: user.id, workspaceId: { not: null } },
+        });
+        if (!employeeRecord) {
+          return NextResponse.json(
+            { error: 'Please use the admin login page for this account.' },
+            { status: 403 }
+          );
+        }
+      }
+      // Managers/admins/employees can all use the employee portal if they have an Employee record
     }
 
     if (normalizedRole === 'admin' && user.role === 'employee') {
@@ -201,15 +212,29 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // When logging in via the employee portal, override the role to 'employee'
+    // so the frontend routes to the employee portal layout. Also look up the
+    // Employee record to attach the employeeId.
+    const effectiveRole = normalizedRole === 'employee' ? 'employee' : user.role;
+    let employeeId: string | null = null;
+    if (normalizedRole === 'employee') {
+      const emp = await db.employee.findFirst({
+        where: { userId: user.id },
+        select: { id: true },
+      });
+      employeeId = emp?.id || null;
+    }
+
     const authUser = {
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role,
+      role: effectiveRole,
       tenantId: tenant.id,
       workspaceId: user.workspaceId || workspace?.id || null,
       avatar: user.avatar,
       isSuperAdmin: user.isSuperAdmin || false,
+      employeeId,
     };
 
     const token = generateToken(authUser);

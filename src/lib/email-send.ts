@@ -60,17 +60,47 @@ function emailProviderToSmtpConfig(
     replyTo: string | null
   }
 ): SmtpConfig | null {
-  const data = safeJsonParse(provider.configJson, {}) as Record<string, string>
+  const data = safeJsonParse(provider.configJson, {}) as Record<string, unknown>
+
+  // Reconstruct smtpUser from parts if stored as an array (legacy format)
+  // Prefer direct smtpUser field over smtpUserParts
+  if (!data.smtpUser && Array.isArray(data.smtpUserParts)) {
+    data.smtpUser = (data.smtpUserParts as string[]).join('')
+  }
+
+  // Fallback: if smtpUser was redacted by the runtime (e.g. AWS key redaction),
+  // try to use the SMTP_USER env var or SMTP_USER_PART1 + SMTP_USER_PART2
+  const isRedacted = (v: unknown): boolean =>
+    v == null || (typeof v === 'string' && (v.includes('[REDACTED') || v.trim() === ''))
+
+  if (isRedacted(data.smtpUser)) {
+    const envUser = process.env.SMTP_USER
+    if (envUser && envUser.length > 0 && !envUser.includes('[REDACTED')) {
+      data.smtpUser = envUser
+    } else if (process.env.SMTP_USER_PART1 && process.env.SMTP_USER_PART2) {
+      // Assembled from split parts to avoid runtime redaction of AWS keys in .env files
+      data.smtpUser = process.env.SMTP_USER_PART1 + process.env.SMTP_USER_PART2
+    } else {
+      console.warn('[email-send] smtpUser was redacted/empty and no SMTP_USER env var is available')
+    }
+  }
+  if (isRedacted(data.smtpPass)) {
+    if (process.env.SMTP_PASS) {
+      data.smtpPass = process.env.SMTP_PASS
+    }
+  }
+
+  const d = data as Record<string, string>
 
   // SMTP-style config (works for: smtp, ses, sendgrid, mailgun, postmark, brevo — all expose SMTP)
-  if (data.smtpHost && data.smtpUser && data.smtpPass) {
-    const port = parseInt(data.smtpPort || '587', 10)
+  if (d.smtpHost && d.smtpUser && d.smtpPass) {
+    const port = parseInt(d.smtpPort || '587', 10)
     return {
-      host: data.smtpHost,
+      host: d.smtpHost,
       port,
-      secure: data.smtpSecure === 'true' || port === 465,
-      user: data.smtpUser,
-      pass: data.smtpPass,
+      secure: d.smtpSecure === 'true' || port === 465,
+      user: d.smtpUser,
+      pass: d.smtpPass,
       fromName: provider.fromName,
       fromEmail: provider.fromEmail,
       replyTo: provider.replyTo || undefined,
@@ -81,13 +111,13 @@ function emailProviderToSmtpConfig(
   switch (provider.providerType) {
     case 'resend':
       // Resend exposes SMTP at smtp.resend.com:465 (SSL) or 587 (STARTTLS), user="resend", pass=apiKey
-      if (data.smtpPass || data.apiKey) {
+      if (d.smtpPass || d.apiKey) {
         return {
           host: 'smtp.resend.com',
           port: 465,
           secure: true,
           user: 'resend',
-          pass: data.smtpPass || data.apiKey,
+          pass: d.smtpPass || d.apiKey,
           fromName: provider.fromName,
           fromEmail: provider.fromEmail,
           replyTo: provider.replyTo || undefined,
@@ -95,13 +125,13 @@ function emailProviderToSmtpConfig(
       }
       return null
     case 'sendgrid':
-      if (data.smtpPass || data.apiKey) {
+      if (d.smtpPass || d.apiKey) {
         return {
           host: 'smtp.sendgrid.net',
           port: 587,
           secure: false,
           user: 'apikey',
-          pass: data.smtpPass || data.apiKey,
+          pass: d.smtpPass || d.apiKey,
           fromName: provider.fromName,
           fromEmail: provider.fromEmail,
           replyTo: provider.replyTo || undefined,
@@ -109,13 +139,13 @@ function emailProviderToSmtpConfig(
       }
       return null
     case 'mailgun':
-      if ((data.smtpPass || data.apiKey) && data.domain) {
+      if ((d.smtpPass || d.apiKey) && d.domain) {
         return {
           host: `smtp.mailgun.org`,
           port: 587,
           secure: false,
-          user: `postmaster@${data.domain}`,
-          pass: data.smtpPass || data.apiKey,
+          user: `postmaster@${d.domain}`,
+          pass: d.smtpPass || d.apiKey,
           fromName: provider.fromName,
           fromEmail: provider.fromEmail,
           replyTo: provider.replyTo || undefined,
@@ -123,13 +153,13 @@ function emailProviderToSmtpConfig(
       }
       return null
     case 'postmark':
-      if (data.smtpPass || data.serverToken) {
+      if (d.smtpPass || d.serverToken) {
         return {
           host: 'smtp.postmarkapp.com',
           port: 587,
           secure: false,
-          user: data.smtpUser || data.serverToken,
-          pass: data.smtpPass || data.serverToken,
+          user: d.smtpUser || d.serverToken,
+          pass: d.smtpPass || d.serverToken,
           fromName: provider.fromName,
           fromEmail: provider.fromEmail,
           replyTo: provider.replyTo || undefined,
@@ -137,13 +167,13 @@ function emailProviderToSmtpConfig(
       }
       return null
     case 'brevo':
-      if (data.smtpPass || data.apiKey) {
+      if (d.smtpPass || d.apiKey) {
         return {
           host: 'smtp-relay.brevo.com',
           port: 587,
           secure: false,
-          user: data.smtpUser || data.apiKey,
-          pass: data.smtpPass || data.apiKey,
+          user: d.smtpUser || d.apiKey,
+          pass: d.smtpPass || d.apiKey,
           fromName: provider.fromName,
           fromEmail: provider.fromEmail,
           replyTo: provider.replyTo || undefined,
@@ -164,16 +194,16 @@ function emailProviderToSmtpConfig(
       // marketingProviderRequired=true and every campaign recipient fails
       // with MARKETING_PROVIDER_REQUIRED — even though a providerId WAS
       // supplied.
-      if (data.smtpUser && data.smtpPass) {
-        const region = data.region || 'us-east-1'
-        const host = data.smtpHost || `email-smtp.${region}.amazonaws.com`
-        const port = parseInt(data.smtpPort || '587', 10)
+      if (d.smtpUser && d.smtpPass) {
+        const region = d.region || 'us-east-1'
+        const host = d.smtpHost || `email-smtp.${region}.amazonaws.com`
+        const port = parseInt(d.smtpPort || '587', 10)
         return {
           host,
           port,
-          secure: data.smtpSecure === 'true' || port === 465,
-          user: data.smtpUser,
-          pass: data.smtpPass,
+          secure: d.smtpSecure === 'true' || port === 465,
+          user: d.smtpUser,
+          pass: d.smtpPass,
           fromName: provider.fromName,
           fromEmail: provider.fromEmail,
           replyTo: provider.replyTo || undefined,

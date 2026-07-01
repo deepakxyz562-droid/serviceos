@@ -38,7 +38,9 @@ export async function GET() {
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.role,
+        // Use role from JWT (may be overridden to 'employee' for employee portal)
+        // rather than DB role (which is the canonical role like 'manager'/'admin')
+        role: authUser.role || user.role,
         phone: user.phone,
         tenantId: user.tenantId,
         workspaceId: user.workspaceId,
@@ -47,6 +49,8 @@ export async function GET() {
         isActive: user.isActive,
         lastLoginAt: user.lastLoginAt,
         createdAt: user.createdAt,
+        // Include employeeId from JWT if present (set during employee portal login)
+        employeeId: authUser.employeeId || null,
       },
       tenant: user.tenant
         ? {

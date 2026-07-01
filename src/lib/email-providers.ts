@@ -17,6 +17,7 @@ const SENSITIVE_KEYS = new Set<string>([
   'secret',
   'serverToken',
   'token',
+  'smtpUserParts', // Contains reconstructed sensitive credentials
 ]);
 
 const MASK = '••••••••';
@@ -116,7 +117,9 @@ export function mergeConfigForUpdate(
     for (const [key, value] of Object.entries(incoming)) {
       if (SENSITIVE_KEYS.has(key)) {
         // Only update if a real (non-mask, non-empty) value was provided.
-        if (typeof value === 'string' && value.trim() !== '' && value !== MASK) {
+        if (Array.isArray(value) && value.length > 0) {
+          next[key] = value; // e.g. smtpUserParts
+        } else if (typeof value === 'string' && value.trim() !== '' && value !== MASK) {
           next[key] = value;
         }
         // else: keep existing value

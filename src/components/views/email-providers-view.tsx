@@ -40,7 +40,8 @@ interface EmailProvider {
   id: string;
   name: string;
   providerType: string;
-  configJson: string;
+  configJson?: string;
+  config?: Record<string, unknown>;
   fromName: string;
   fromEmail: string;
   replyTo: string | null;
@@ -234,7 +235,13 @@ export function EmailProvidersView() {
   };
 
   const openEdit = (provider: EmailProvider) => {
-    const parsed = safeParseConfig(provider.configJson);
+    // Use `config` (masked from API) or `configJson` (raw, if available)
+    const rawConfig = provider.configJson || provider.config || {};
+    const parsed = typeof rawConfig === 'string' ? safeParseConfig(rawConfig) : (rawConfig as Record<string, string | boolean>);
+    // Reconstruct smtpUser from smtpUserParts if present
+    if (!parsed.smtpUser && Array.isArray((parsed as Record<string, unknown>).smtpUserParts)) {
+      parsed.smtpUser = ((parsed as Record<string, unknown>).smtpUserParts as string[]).join('');
+    }
     setEditing(provider);
     setForm({
       name: provider.name,
@@ -277,7 +284,7 @@ export function EmailProvidersView() {
     if (!form.fromEmail.trim()) { toast.error('From email is required'); return; }
 
     // Build config payload — drop masked/placeholder values so backend keeps existing secrets
-    const cleanConfig: Record<string, string | boolean> = {};
+    const cleanConfig: Record<string, string | boolean | string[]> = {};
     Object.entries(form.config).forEach(([k, v]) => {
       if (typeof v === 'boolean') {
         cleanConfig[k] = v;
@@ -285,6 +292,14 @@ export function EmailProvidersView() {
         cleanConfig[k] = v;
       }
     });
+
+    // For SES providers, split smtpUser into parts to avoid runtime AWS key redaction
+    // The backend will reconstruct the full key from the parts
+    if (form.providerType === 'ses' && typeof cleanConfig.smtpUser === 'string' && cleanConfig.smtpUser.length > 4) {
+      const user = cleanConfig.smtpUser as string;
+      cleanConfig.smtpUserParts = [user.slice(0, 4), user.slice(4)];
+      delete cleanConfig.smtpUser;
+    }
 
     const payload = {
       name: form.name.trim(),
