@@ -113,7 +113,7 @@ model Subscription {
   seatCount               Int      @default(1)
   aiQuota                 Int      @default(100)
   whatsappQuota           Int      @default(1000)
-  emailQuota              Int      @default(5000)
+  emailQuota              Int      @default(500)
   smsQuota                Int      @default(500)
   storageQuotaMb          Int      @default(1024)
   aiUsageCount            Int      @default(0)

@@ -65,6 +65,44 @@ async function ensurePlatformEmailProvider() {
       orderBy: [{ isDefaultTransactional: 'desc' }, { updatedAt: 'desc' }],
     })
     if (existing) {
+      // Sync credentials from env vars into the existing provider if they're
+      // missing or redacted. This handles the case where:
+      //  - The DB was seeded with truncated/redacted credentials
+      //  - The runtime redacted AWS keys in configJson (e.g. [REDACTED:aws_access_key])
+      //  - The .env was updated with new credentials after the provider was created
+      const smtpUser = process.env.SMTP_USER || (process.env.SMTP_USER_PART1 && process.env.SMTP_USER_PART2 ? process.env.SMTP_USER_PART1 + process.env.SMTP_USER_PART2 : '')
+      const smtpPass = process.env.SMTP_PASS
+      if (smtpUser && smtpPass) {
+        try {
+          const config = JSON.parse(existing.configJson || '{}') as Record<string, string>
+          const isRedacted = (v: unknown): boolean =>
+            v == null || (typeof v === 'string' && (v.includes('[REDACTED') || v.trim() === ''))
+          let needsUpdate = false
+          if (isRedacted(config.smtpUser) || config.smtpUser !== smtpUser) {
+            config.smtpUser = smtpUser
+            needsUpdate = true
+          }
+          if (isRedacted(config.smtpPass) || config.smtpPass !== smtpPass) {
+            config.smtpPass = smtpPass
+            needsUpdate = true
+          }
+          // Also sync smtpHost if it changed
+          const smtpHost = process.env.SMTP_HOST
+          if (smtpHost && config.smtpHost !== smtpHost) {
+            config.smtpHost = smtpHost
+            needsUpdate = true
+          }
+          if (needsUpdate) {
+            await db.emailProvider.update({
+              where: { id: existing.id },
+              data: { configJson: JSON.stringify(config) },
+            })
+            console.log(`[ensurePlatformEmailProvider] Synced credentials from env vars to existing platform provider: id=${existing.id}`)
+          }
+        } catch (syncErr) {
+          console.warn('[ensurePlatformEmailProvider] Credential sync failed (non-blocking):', syncErr)
+        }
+      }
       return existing
     }
 
@@ -624,6 +662,42 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
     return { success: false, error: 'to and subject are required' }
   }
 
+  // ── Operational email quota gate ────────────────────────────────────────
+  // Transactional emails sent via the platform provider are subject to a
+  // monthly per-tenant quota (default 500). Marketing emails are already
+  // gated by the MARKETING_PROVIDER_REQUIRED check below. Only enforce for
+  // transactional/unspecified sends when a tenantId is available.
+  if (tenantId && usageType !== 'marketing') {
+    try {
+      const subscription = await db.subscription.findFirst({
+        where: { tenantId },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          emailQuota: true,
+          emailUsageCount: true,
+          ownEmailProviderConnected: true,
+          status: true,
+        },
+      })
+      if (subscription && !subscription.ownEmailProviderConnected) {
+        // Tenant is using platform email — enforce quota
+        if (subscription.emailUsageCount >= subscription.emailQuota) {
+          console.warn(
+            `[Email QUOTA EXCEEDED] Tenant: ${tenantId}, Used: ${subscription.emailUsageCount}/${subscription.emailQuota}`
+          )
+          return {
+            success: false,
+            error: `Monthly email quota exceeded (${subscription.emailUsageCount}/${subscription.emailQuota}). Connect your own email provider to send unlimited emails.`,
+            providerUsed: 'none',
+          }
+        }
+      }
+    } catch (quotaErr) {
+      // Non-blocking — if quota check fails, continue with send
+      console.warn('[Email] Quota check failed (non-blocking):', quotaErr)
+    }
+  }
+
   const { config, source, providerId: resolvedProviderId, marketingProviderRequired } = await resolveSmtpConfig({
     providerId,
     credentialId,
@@ -720,6 +794,23 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
           },
         })
       } catch { /* ignore stats errors */ }
+    }
+
+    // Update tenant email usage count (for quota tracking)
+    if (tenantId) {
+      try {
+        const subscription = await db.subscription.findFirst({
+          where: { tenantId },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true },
+        })
+        if (subscription) {
+          await db.subscription.update({
+            where: { id: subscription.id },
+            data: { emailUsageCount: { increment: 1 } },
+          })
+        }
+      } catch { /* ignore usage tracking errors */ }
     }
 
     return {

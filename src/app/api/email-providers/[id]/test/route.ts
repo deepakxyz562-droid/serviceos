@@ -22,12 +22,17 @@ export async function POST(request: NextRequest, { params }: Params) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const tenantId = user.tenantId || 'default';
     const { id } = await params;
 
-    // Verify provider exists and belongs to this tenant.
+    // Verify provider exists.
+    // Super admins (isSuperAdmin or tenantId=null) can test any provider
+    // including platform providers. Tenant users can only test providers
+    // belonging to their own tenant OR platform providers.
+    const isSuperAdmin = user.isSuperAdmin || !user.tenantId;
     const provider = await db.emailProvider.findFirst({
-      where: { id, tenantId },
+      where: isSuperAdmin
+        ? { id }
+        : { id, OR: [{ tenantId: user.tenantId! }, { isPlatform: true }] },
     });
     if (!provider) {
       return NextResponse.json(

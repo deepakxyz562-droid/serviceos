@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { getWhatsAppConfig } from '@/lib/whatsapp-config'
+import { checkWhatsAppCredits, deductWhatsAppCredit } from '@/lib/credit-management'
 
 const WHATSAPP_API_BASE = 'https://graph.facebook.com/v25.0'
 
@@ -140,6 +141,24 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
 
   if (!to || !message) {
     return { success: false, error: 'to and message are required' }
+  }
+
+  // ── Credit gate: check if WhatsApp sending is allowed ──────────────────
+  // When a tenantId is provided, check their credit status before sending.
+  // Own-connected WhatsApp accounts bypass credit limits; platform WhatsApp
+  // requires remaining trial credits (default 10) or active paid subscription.
+  if (tenantId) {
+    const creditStatus = await checkWhatsAppCredits(tenantId)
+    if (!creditStatus.allowed) {
+      console.warn(
+        `[WhatsApp BLOCKED] To: ${to}, Tenant: ${tenantId}, Reason: ${creditStatus.reason || 'credits exhausted'}`
+      )
+      return {
+        success: false,
+        error: creditStatus.reason || 'WhatsApp credits exhausted. Connect your Meta Business Account to continue.',
+        credentialUsed: 'none',
+      }
+    }
   }
 
   let accessToken = ''
@@ -406,6 +425,18 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
 
     const msgId = responseData?.messages?.[0]?.id || `real_${Date.now()}`
     console.log(`[WhatsApp SENT] To: ${recipientPhone}, MsgId: ${msgId}, Via: ${credentialSource}`)
+
+    // ── Deduct credit after successful send ────────────────────────────────
+    // Only deduct for platform (trial) usage — own-connected accounts have
+    // unlimited messaging through their own Meta Business account.
+    if (tenantId && !credentialSource.includes('/own')) {
+      try {
+        await deductWhatsAppCredit(tenantId, 1)
+      } catch (deductErr) {
+        console.warn('[WhatsApp] Failed to deduct credit (non-blocking):', deductErr)
+      }
+    }
+
     return { success: true, messageId: msgId, credentialUsed: credentialSource }
   } catch (error) {
     console.error('[WhatsApp SEND FAILED]', error)

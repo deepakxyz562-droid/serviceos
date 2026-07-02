@@ -9,7 +9,7 @@
  *
  * Current SES configuration (ap-south-1):
  *   IAM user: ses-smtp-user.20260630-122722
- *   SMTP user: AKIA2PPO3JBYFJO4G5O
+ *   SMTP user: (read from SMTP_USER env var)
  *   SMTP pass: BInFKprST5upb+sYW5/U4dPAW7n3BZirdZL2FXFWNdPE
  *   SMTP host: email-smtp.ap-south-1.amazonaws.com
  *   Port: 587 (STARTTLS)
@@ -28,8 +28,8 @@ async function main() {
   // SES SMTP configuration — UPDATE THESE WHEN CREDENTIALS CHANGE
   const SES_HOST = 'email-smtp.ap-south-1.amazonaws.com';
   const SES_PORT = '587';
-  const SES_USER = 'AKIA2PPO3JBYFJO4G5O';
-  const SES_PASS = 'BInFKprST5upb+sYW5/U4dPAW7n3BZirdZL2FXFWNdPE';
+  const SES_USER = process.env.SMTP_USER || 'AKIA2PPO3JNBYFJO4G5O';
+  const SES_PASS = process.env.SMTP_PASS || 'BInFKprST5upb+sYW5/U4dPAW7n3BZirdZL2FXFWNdPE';
   const SES_REGION = 'ap-south-1';
 
   // From / reply-to: verified email addresses in SES

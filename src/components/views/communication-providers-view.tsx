@@ -306,6 +306,22 @@ export function CommunicationProvidersView() {
   const [statusLoading, setStatusLoading] = useState(true);
   const [statusError, setStatusError] = useState<string | null>(null);
 
+  // ─── WhatsApp Credit & Email Usage Status ──────────────────────────────
+  const [waCreditStatus, setWaCreditStatus] = useState<{
+    allowed: boolean;
+    remainingCredits: number;
+    usedCredits: number;
+    totalCredits: number;
+    isTrial: boolean;
+    ownWhatsappConnected: boolean;
+    reason?: string;
+  } | null>(null);
+  const [emailUsageStatus, setEmailUsageStatus] = useState<{
+    emailQuota: number;
+    emailUsageCount: number;
+    ownEmailProviderConnected: boolean;
+  } | null>(null);
+
   const setActiveView = useAppStore((s) => s.setActiveView);
 
   const fetchEmailStatus = useCallback(async () => {
@@ -329,6 +345,28 @@ export function CommunicationProvidersView() {
   useEffect(() => {
     fetchEmailStatus();
   }, [fetchEmailStatus]);
+
+  // Fetch WhatsApp credit status and email usage
+  const fetchCreditStatus = useCallback(async () => {
+    try {
+      const waRes = await fetch('/api/credits/whatsapp');
+      if (waRes.ok) {
+        const data = await waRes.json();
+        setWaCreditStatus(data);
+      }
+    } catch { /* ignore */ }
+    try {
+      const emailRes = await fetch('/api/credits/email-usage');
+      if (emailRes.ok) {
+        const data = await emailRes.json();
+        setEmailUsageStatus(data);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    fetchCreditStatus();
+  }, [fetchCreditStatus]);
 
   // ─── Computed ───────────────────────────────────────────────────────────
 
@@ -1100,6 +1138,34 @@ export function CommunicationProvidersView() {
                 <p className="text-xs text-muted-foreground">
                   This channel is managed by the platform. You cannot reconfigure it.
                 </p>
+                {/* Email usage quota display */}
+                {emailUsageStatus && !emailUsageStatus.ownEmailProviderConnected && (
+                  <div className="rounded-md border bg-muted/40 p-3 mt-2">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-medium text-muted-foreground">Operational Email Usage</span>
+                      <span className="text-xs font-bold">
+                        {emailUsageStatus.emailUsageCount} / {emailUsageStatus.emailQuota}
+                      </span>
+                    </div>
+                    <Progress
+                      value={emailUsageStatus.emailQuota > 0 ? (emailUsageStatus.emailUsageCount / emailUsageStatus.emailQuota) * 100 : 0}
+                      className="h-2"
+                    />
+                    <p className="text-[11px] text-muted-foreground mt-1.5">
+                      {Math.max(0, emailUsageStatus.emailQuota - emailUsageStatus.emailUsageCount)} remaining this month
+                      {emailUsageStatus.emailUsageCount >= emailUsageStatus.emailQuota && (
+                        <span className="text-amber-600 dark:text-amber-400 font-medium block mt-0.5">
+                          Quota exceeded — connect your own email provider for unlimited emails.
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
+                {emailUsageStatus && emailUsageStatus.ownEmailProviderConnected && (
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
+                    ✓ Using your own email provider — unlimited operational emails.
+                  </p>
+                )}
               </CardContent>
             </Card>
 
@@ -1199,6 +1265,96 @@ export function CommunicationProvidersView() {
                     ))}
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* ── Card 3: WhatsApp Trial Credits ── */}
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center justify-center size-10 rounded-full bg-emerald-100 dark:bg-emerald-900/40 shrink-0">
+                      <MessageSquare className="size-5 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <CardTitle className="text-base">WhatsApp</CardTitle>
+                      <p className="text-xs text-muted-foreground">
+                        Booking confirmations, reminders, job updates
+                      </p>
+                    </div>
+                  </div>
+                  {waCreditStatus ? (
+                    waCreditStatus.ownWhatsappConnected ? (
+                      <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-800 shrink-0">
+                        <CheckCircle2 className="size-3 mr-0.5" /> Connected
+                      </Badge>
+                    ) : waCreditStatus.remainingCredits > 0 ? (
+                      <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-800 shrink-0">
+                        <MessageSquare className="size-3 mr-0.5" /> Trial Mode
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/40 dark:text-rose-300 dark:border-rose-800 shrink-0">
+                        <AlertCircle className="size-3 mr-0.5" /> Credits Used
+                      </Badge>
+                    )
+                  ) : null}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {waCreditStatus && waCreditStatus.ownWhatsappConnected ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">
+                      ✓ Your own Meta Business Account is connected — unlimited messaging.
+                    </p>
+                    {whatsappProviders.filter(p => !p.isPlatform).map((p) => (
+                      <div key={p.id} className="flex items-center justify-between rounded-md border bg-muted/40 p-2.5">
+                        <div>
+                          <span className="text-sm font-medium">{p.name}</span>
+                          <p className="text-xs text-muted-foreground">{p.provider}</p>
+                        </div>
+                        <Badge variant="outline" className="text-[10px] uppercase shrink-0">Connected</Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : waCreditStatus ? (
+                  <div className="space-y-3">
+                    <div className="rounded-md border bg-muted/40 p-3">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-medium text-muted-foreground">WhatsApp Trial Messages</span>
+                        <span className="text-xs font-bold">
+                          {waCreditStatus.usedCredits} / {waCreditStatus.totalCredits}
+                        </span>
+                      </div>
+                      <Progress
+                        value={waCreditStatus.totalCredits > 0 ? (waCreditStatus.usedCredits / waCreditStatus.totalCredits) * 100 : 0}
+                        className="h-2"
+                      />
+                      <p className="text-[11px] text-muted-foreground mt-1.5">
+                        {Math.max(0, waCreditStatus.remainingCredits)} free messages remaining
+                        {waCreditStatus.remainingCredits <= 0 && (
+                          <span className="text-amber-600 dark:text-amber-400 font-medium block mt-0.5">
+                            You&apos;ve used all free WhatsApp test messages. Connect your Meta Business Account to continue sending WhatsApp messages.
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Connect your Meta Business Account for unlimited WhatsApp messaging.
+                    </p>
+                    <Button
+                      className="bg-emerald-600 hover:bg-emerald-700"
+                      size="sm"
+                      onClick={() => { resetForm(); setFormType('whatsapp'); setShowAddDialog(true); }}
+                    >
+                      <Plus className="size-4 mr-1.5" /> Connect Meta Business
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-2 w-full" />
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
