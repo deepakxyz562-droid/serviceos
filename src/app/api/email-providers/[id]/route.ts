@@ -19,11 +19,13 @@ export async function GET(request: NextRequest, { params }: Params) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const tenantId = user.tenantId || 'default';
+    const isSuperAdmin = user.isSuperAdmin || !user.tenantId;
     const { id } = await params;
 
     const provider = await db.emailProvider.findFirst({
-      where: { id, tenantId },
+      where: isSuperAdmin
+        ? { id }
+        : { id, OR: [{ tenantId: user.tenantId! }, { isPlatform: true }] },
     });
     if (!provider) {
       return NextResponse.json(
@@ -60,11 +62,14 @@ export async function PUT(request: NextRequest, { params }: Params) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const tenantId = user.tenantId || 'default';
+    const isSuperAdmin = user.isSuperAdmin || !user.tenantId;
+    const tenantId = user.tenantId;
     const { id } = await params;
 
     const existing = await db.emailProvider.findFirst({
-      where: { id, tenantId },
+      where: isSuperAdmin
+        ? { id }
+        : { id, OR: [{ tenantId: tenantId! }, { isPlatform: true }] },
     });
     if (!existing) {
       return NextResponse.json(
@@ -236,11 +241,13 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const tenantId = user.tenantId || 'default';
+    const isSuperAdmin = user.isSuperAdmin || !user.tenantId;
     const { id } = await params;
 
     const existing = await db.emailProvider.findFirst({
-      where: { id, tenantId },
+      where: isSuperAdmin
+        ? { id }
+        : { id, OR: [{ tenantId: user.tenantId! }, { isPlatform: true }] },
     });
     if (!existing) {
       return NextResponse.json(
@@ -251,7 +258,7 @@ export async function DELETE(request: NextRequest, { params }: Params) {
 
     // Count remaining providers for this tenant (excluding the one to delete).
     const remaining = await db.emailProvider.count({
-      where: { tenantId, NOT: { id } },
+      where: { tenantId: existing.tenantId, NOT: { id } },
     });
     if (remaining === 0) {
       return NextResponse.json(

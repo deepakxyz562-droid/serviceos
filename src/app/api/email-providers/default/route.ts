@@ -19,10 +19,13 @@ export async function POST() {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const tenantId = user.tenantId || 'default';
-
+    // Super admins may not have a tenantId — search across all tenants for platform providers
+    const isSuperAdmin = user.isSuperAdmin || !user.tenantId;
+    const tenantId = user.tenantId;
     const providers = await db.emailProvider.findMany({
-      where: { tenantId, status: 'active' },
+      where: isSuperAdmin
+        ? { status: 'active' }
+        : { status: 'active', OR: [{ tenantId: tenantId! }, { isPlatform: true }] },
       orderBy: { updatedAt: 'desc' },
     });
 
@@ -90,7 +93,8 @@ export async function PUT(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const tenantId = user.tenantId || 'default';
+    const isSuperAdmin = user.isSuperAdmin || !user.tenantId;
+    const tenantId = user.tenantId;
 
     const body = await request.json();
     const { id, usageType } = body as Record<string, unknown>;
@@ -111,9 +115,11 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    // Verify the target provider belongs to this tenant.
+    // Verify the target provider exists (super admins can set any, tenant users only their own)
     const provider = await db.emailProvider.findFirst({
-      where: { id, tenantId },
+      where: isSuperAdmin
+        ? { id }
+        : { id, OR: [{ tenantId: tenantId! }, { isPlatform: true }] },
     });
     if (!provider) {
       return NextResponse.json(

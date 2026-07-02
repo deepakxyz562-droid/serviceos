@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
           message: html || text || '',
           status: result.success ? 'sent' : 'failed',
           externalId: result.messageId || null,
-          tenantId: user.tenantId || 'default',
+          tenantId: user.tenantId || undefined,
           metadataJson: JSON.stringify({
             contactId: contactId || null,
             providerUsed: result.providerUsed,

@@ -448,7 +448,7 @@ export async function resolveSmtpConfig(
         orderBy: { updatedAt: 'desc' },
       })
       // 3a2. Fallback: default transactional platform provider from any tenant
-      if (!defaultProvider && tenantId) {
+      if (!defaultProvider) {
         defaultProvider = await db.emailProvider.findFirst({
           where: { status: 'active', isDefaultTransactional: true, isPlatform: true },
           orderBy: { updatedAt: 'desc' },
@@ -462,7 +462,7 @@ export async function resolveSmtpConfig(
         })
       }
       // 3b2. Fallback: default transactional provider from any tenant
-      if (!defaultProvider && tenantId) {
+      if (!defaultProvider) {
         defaultProvider = await db.emailProvider.findFirst({
           where: { status: 'active', isDefaultTransactional: true },
           orderBy: [{ isPlatform: 'desc' }, { updatedAt: 'desc' }],
@@ -477,9 +477,27 @@ export async function resolveSmtpConfig(
         })
       }
       // 3c2. Fallback: any active transactional/both provider from any tenant
-      if (!defaultProvider && tenantId) {
+      if (!defaultProvider) {
         defaultProvider = await db.emailProvider.findFirst({
           where: { status: 'active', usageType: { in: ['transactional', 'both'] } },
+          orderBy: [{ isDefaultTransactional: 'desc' }, { isPlatform: 'desc' }, { updatedAt: 'desc' }],
+        })
+      }
+      // 3c3. Stronger fallback: any active provider at all (regardless of usageType)
+      // from this tenant. Handles the case where provider was set to 'marketing'
+      // but it's the only one and transactional email still needs to go out.
+      if (!defaultProvider) {
+        defaultProvider = await db.emailProvider.findFirst({
+          where: { status: 'active', ...tenantWhere },
+          orderBy: [{ isDefaultTransactional: 'desc' }, { isPlatform: 'desc' }, { updatedAt: 'desc' }],
+        })
+      }
+      // 3c4. Strongest fallback: any active provider from any tenant.
+      // Transactional emails (password resets, invoices, invitations) must never
+      // be silently simulated — if ANY provider exists, use it.
+      if (!defaultProvider) {
+        defaultProvider = await db.emailProvider.findFirst({
+          where: { status: 'active' },
           orderBy: [{ isDefaultTransactional: 'desc' }, { isPlatform: 'desc' }, { updatedAt: 'desc' }],
         })
       }
@@ -489,6 +507,15 @@ export async function resolveSmtpConfig(
           console.log(`[resolveSmtpConfig] Resolved to: ${defaultProvider.name} | fromEmail: ${defaultProvider.fromEmail} | tenantId: ${defaultProvider.tenantId} | isDefaultTx: ${defaultProvider.isDefaultTransactional} | isPlatform: ${defaultProvider.isPlatform}`)
           return { config, source: `emailProvider:${defaultProvider.id}(${defaultProvider.name})`, providerId: defaultProvider.id }
         }
+        // Provider found but config is invalid — log diagnostic info
+        const parsedKeys = (() => { try { return Object.keys(JSON.parse(defaultProvider.configJson || '{}')) } catch { return [] } })()
+        console.warn(
+          `[resolveSmtpConfig] Step 3 transactional: found provider "${defaultProvider.name}" (id=${defaultProvider.id}, type=${defaultProvider.providerType}, tenantId=${defaultProvider.tenantId}) ` +
+          `but emailProviderToSmtpConfig returned null. configJson keys: [${parsedKeys.join(', ')}]. ` +
+          `The provider's SMTP credentials may be missing or redacted.`
+        )
+      } else {
+        console.warn(`[resolveSmtpConfig] Step 3 transactional: NO provider found after all fallbacks (tenantId=${tenantId || 'none'})`)
       }
     } else if (usageType === 'marketing') {
       // Marketing: customer's own (non-platform) default marketing provider only
@@ -649,6 +676,13 @@ export async function resolveSmtpConfig(
     }
   }
 
+  console.warn(
+    `[resolveSmtpConfig] ALL resolution paths failed! ` +
+    `usageType=${usageType || 'none'}, tenantId=${tenantId || 'none'}, ` +
+    `providerId=${providerId || 'none'}, credentialId=${credentialId || 'none'}. ` +
+    `No EmailProvider, Credential, or SMTP env vars found. ` +
+    `Email will be SIMULATED. Add an email provider in Settings → Email Providers.`
+  )
   return { config: null, source: 'none' }
 }
 

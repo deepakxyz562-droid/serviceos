@@ -100,7 +100,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'fromEmail is required' }, { status: 400 });
     }
 
-    const finalTenantId = typeof tenantId === 'string' && tenantId.trim() ? tenantId.trim() : 'platform';
+    // If no tenantId specified, attach to the first real tenant (not a fake 'platform' string).
+    // This ensures the provider is discoverable by resolveSmtpConfig when invoices,
+    // invitations, etc. look for providers belonging to a real tenantId.
+    let finalTenantId = typeof tenantId === 'string' && tenantId.trim() ? tenantId.trim() : undefined;
+    if (!finalTenantId) {
+      const firstTenant = await db.tenant.findFirst({ orderBy: { createdAt: 'asc' } });
+      finalTenantId = firstTenant?.id || 'platform';
+    }
     const finalUsageType = typeof usageType === 'string' && ['transactional', 'marketing', 'both'].includes(usageType)
       ? usageType
       : 'both';

@@ -19,13 +19,18 @@ export async function GET(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const tenantId = user.tenantId || 'default';
+    // Super admins (tenantId=null) can see all providers;
+    // tenant users see only their own tenant's providers + platform providers.
+    const isSuperAdmin = user.isSuperAdmin || !user.tenantId;
+    const tenantId = user.tenantId || undefined; // undefined = no tenant filter
 
     const { searchParams } = new URL(request.url);
     const usageType = searchParams.get('usageType');
     const status = searchParams.get('status');
 
-    const where: Record<string, unknown> = { tenantId };
+    const where: Record<string, unknown> = isSuperAdmin
+      ? {}
+      : { OR: [{ tenantId: user.tenantId! }, { isPlatform: true }] };
     if (usageType && ['transactional', 'marketing', 'both'].includes(usageType)) {
       where.usageType = usageType;
     }
@@ -72,7 +77,20 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const tenantId = user.tenantId || 'default';
+    // For super admins without a tenantId, attach the provider to the first tenant
+    // (or leave it as a cross-tenant platform provider if isPlatform=true).
+    // Never use 'default' as a fake tenantId — it breaks provider resolution.
+    const isSuperAdmin = user.isSuperAdmin || !user.tenantId;
+    let tenantId = user.tenantId;
+    if (!tenantId && !isSuperAdmin) {
+      return NextResponse.json({ error: 'No tenant associated with your account' }, { status: 400 });
+    }
+    if (!tenantId && isSuperAdmin) {
+      // Super admin creating a provider — if isPlatform, attach to first tenant;
+      // otherwise require the tenant to be specified in the body or use first tenant.
+      const firstTenant = await db.tenant.findFirst({ orderBy: { createdAt: 'asc' } });
+      tenantId = firstTenant?.id || 'platform';
+    }
 
     const body = await request.json();
     const {

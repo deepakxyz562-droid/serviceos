@@ -27,7 +27,14 @@ export async function GET() {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const tenantId = user.tenantId || 'default';
+    // Super admins without a tenantId should see the first tenant's status
+    let tenantId = user.tenantId;
+    if (!tenantId) {
+      // For super admins, use the first tenant so getProviderStatus can find real providers
+      const { db } = await import('@/lib/db');
+      const firstTenant = await db.tenant.findFirst({ orderBy: { createdAt: 'asc' } });
+      tenantId = firstTenant?.id || 'default';
+    }
     const status = await getProviderStatus(tenantId);
     return NextResponse.json(status);
   } catch (error) {
