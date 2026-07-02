@@ -439,181 +439,126 @@ export async function resolveSmtpConfig(
     } catch { /* non-blocking — continue even if auto-creation fails */ }
   }
 
-  // 3. Default EmailProvider for the requested usage type (platform-aware)
+  // 3 & 4. Find an EmailProvider with valid SMTP config.
+  //
+  // CRITICAL FIX: Previous implementation had a bug where finding a provider
+  // with INVALID config (e.g. redacted credentials) would BLOCK the resolution
+  // from finding a WORKING provider. The old code used `if (!defaultProvider)`
+  // guards — once a provider was found, all subsequent sub-queries were skipped,
+  // even if that provider's config was null. This caused invoice emails to fail
+  // with "no provider configured" while test emails (which pass providerId
+  // directly) worked fine.
+  //
+  // The fix: use a unified list of queries ordered by preference, and try each
+  // candidate until we find one with valid SMTP config. If a provider's config
+  // is invalid, we log a warning and continue to the next candidate.
   try {
+    // Build ordered list of candidate queries based on usageType
+    const candidateQueries: Array<{ where: Record<string, unknown>; orderBy: Record<string, unknown>[] | Record<string, unknown>; label: string }> = []
+
     if (usageType === 'transactional') {
-      // 3a. Default transactional provider belonging to this tenant (platform-managed)
-      let defaultProvider = await db.emailProvider.findFirst({
-        where: { status: 'active', isDefaultTransactional: true, isPlatform: true, ...tenantWhere },
-        orderBy: { updatedAt: 'desc' },
-      })
-      // 3a2. Fallback: default transactional platform provider from any tenant
-      if (!defaultProvider) {
-        defaultProvider = await db.emailProvider.findFirst({
-          where: { status: 'active', isDefaultTransactional: true, isPlatform: true },
-          orderBy: { updatedAt: 'desc' },
-        })
-      }
-      // 3b. Fallback: default transactional provider (any) from this tenant
-      if (!defaultProvider) {
-        defaultProvider = await db.emailProvider.findFirst({
-          where: { status: 'active', isDefaultTransactional: true, ...tenantWhere },
-          orderBy: [{ isPlatform: 'desc' }, { updatedAt: 'desc' }],
-        })
-      }
-      // 3b2. Fallback: default transactional provider from any tenant
-      if (!defaultProvider) {
-        defaultProvider = await db.emailProvider.findFirst({
-          where: { status: 'active', isDefaultTransactional: true },
-          orderBy: [{ isPlatform: 'desc' }, { updatedAt: 'desc' }],
-        })
-      }
-      // 3c. NEW: Any active transactional/both provider for this tenant (even if
-      // isDefaultTransactional is false — many users don't set this flag)
-      if (!defaultProvider) {
-        defaultProvider = await db.emailProvider.findFirst({
-          where: { status: 'active', usageType: { in: ['transactional', 'both'] }, ...tenantWhere },
-          orderBy: [{ isDefaultTransactional: 'desc' }, { isPlatform: 'desc' }, { updatedAt: 'desc' }],
-        })
-      }
-      // 3c2. Fallback: any active transactional/both provider from any tenant
-      if (!defaultProvider) {
-        defaultProvider = await db.emailProvider.findFirst({
-          where: { status: 'active', usageType: { in: ['transactional', 'both'] } },
-          orderBy: [{ isDefaultTransactional: 'desc' }, { isPlatform: 'desc' }, { updatedAt: 'desc' }],
-        })
-      }
-      // 3c3. Stronger fallback: any active provider at all (regardless of usageType)
-      // from this tenant. Handles the case where provider was set to 'marketing'
-      // but it's the only one and transactional email still needs to go out.
-      if (!defaultProvider) {
-        defaultProvider = await db.emailProvider.findFirst({
-          where: { status: 'active', ...tenantWhere },
-          orderBy: [{ isDefaultTransactional: 'desc' }, { isPlatform: 'desc' }, { updatedAt: 'desc' }],
-        })
-      }
-      // 3c4. Strongest fallback: any active provider from any tenant.
-      // Transactional emails (password resets, invoices, invitations) must never
-      // be silently simulated — if ANY provider exists, use it.
-      if (!defaultProvider) {
-        defaultProvider = await db.emailProvider.findFirst({
-          where: { status: 'active' },
-          orderBy: [{ isDefaultTransactional: 'desc' }, { isPlatform: 'desc' }, { updatedAt: 'desc' }],
-        })
-      }
-      if (defaultProvider) {
-        const config = emailProviderToSmtpConfig(defaultProvider)
-        if (config) {
-          console.log(`[resolveSmtpConfig] Resolved to: ${defaultProvider.name} | fromEmail: ${defaultProvider.fromEmail} | tenantId: ${defaultProvider.tenantId} | isDefaultTx: ${defaultProvider.isDefaultTransactional} | isPlatform: ${defaultProvider.isPlatform}`)
-          return { config, source: `emailProvider:${defaultProvider.id}(${defaultProvider.name})`, providerId: defaultProvider.id }
-        }
-        // Provider found but config is invalid — log diagnostic info
-        const parsedKeys = (() => { try { return Object.keys(JSON.parse(defaultProvider.configJson || '{}')) } catch { return [] } })()
-        console.warn(
-          `[resolveSmtpConfig] Step 3 transactional: found provider "${defaultProvider.name}" (id=${defaultProvider.id}, type=${defaultProvider.providerType}, tenantId=${defaultProvider.tenantId}) ` +
-          `but emailProviderToSmtpConfig returned null. configJson keys: [${parsedKeys.join(', ')}]. ` +
-          `The provider's SMTP credentials may be missing or redacted.`
-        )
-      } else {
-        console.warn(`[resolveSmtpConfig] Step 3 transactional: NO provider found after all fallbacks (tenantId=${tenantId || 'none'})`)
-      }
+      // 3a. Default transactional platform provider for this tenant
+      candidateQueries.push(
+        { where: { status: 'active', isDefaultTransactional: true, isPlatform: true, ...tenantWhere }, orderBy: { updatedAt: 'desc' }, label: '3a:defaultTx+platform+tenant' },
+        { where: { status: 'active', isDefaultTransactional: true, isPlatform: true }, orderBy: { updatedAt: 'desc' }, label: '3a2:defaultTx+platform' },
+        { where: { status: 'active', isDefaultTransactional: true, ...tenantWhere }, orderBy: [{ isPlatform: 'desc' }, { updatedAt: 'desc' }], label: '3b:defaultTx+tenant' },
+        { where: { status: 'active', isDefaultTransactional: true }, orderBy: [{ isPlatform: 'desc' }, { updatedAt: 'desc' }], label: '3b2:defaultTx' },
+        { where: { status: 'active', usageType: { in: ['transactional', 'both'] }, ...tenantWhere }, orderBy: [{ isDefaultTransactional: 'desc' }, { isPlatform: 'desc' }, { updatedAt: 'desc' }], label: '3c:txBoth+tenant' },
+        { where: { status: 'active', usageType: { in: ['transactional', 'both'] } }, orderBy: [{ isDefaultTransactional: 'desc' }, { isPlatform: 'desc' }, { updatedAt: 'desc' }], label: '3c2:txBoth' },
+        { where: { status: 'active', ...tenantWhere }, orderBy: [{ isDefaultTransactional: 'desc' }, { isPlatform: 'desc' }, { updatedAt: 'desc' }], label: '3c3:anyActive+tenant' },
+        { where: { status: 'active' }, orderBy: [{ isDefaultTransactional: 'desc' }, { isPlatform: 'desc' }, { updatedAt: 'desc' }], label: '3c4:anyActive' },
+      )
     } else if (usageType === 'marketing') {
       // Marketing: customer's own (non-platform) default marketing provider only
-      let defaultProvider = await db.emailProvider.findFirst({
-        where: { status: 'active', isDefaultMarketing: true, isPlatform: false, ...tenantWhere },
-        orderBy: { updatedAt: 'desc' },
-      })
-      if (!defaultProvider && tenantId) {
-        defaultProvider = await db.emailProvider.findFirst({
-          where: { status: 'active', isDefaultMarketing: true, isPlatform: false },
-          orderBy: { updatedAt: 'desc' },
-        })
-      }
-      if (defaultProvider) {
-        const config = emailProviderToSmtpConfig(defaultProvider)
-        if (config) {
-          console.log(`[resolveSmtpConfig] Resolved to: ${defaultProvider.name} | fromEmail: ${defaultProvider.fromEmail} | tenantId: ${defaultProvider.tenantId}`)
-          return { config, source: `emailProvider:${defaultProvider.id}(${defaultProvider.name})`, providerId: defaultProvider.id }
-        }
+      candidateQueries.push(
+        { where: { status: 'active', isDefaultMarketing: true, isPlatform: false, ...tenantWhere }, orderBy: { updatedAt: 'desc' }, label: '3m:defaultMkt+tenant' },
+      )
+      if (tenantId) {
+        candidateQueries.push(
+          { where: { status: 'active', isDefaultMarketing: true, isPlatform: false }, orderBy: { updatedAt: 'desc' }, label: '3m2:defaultMkt' },
+        )
       }
     } else {
       // No usageType specified — prefer platform default transactional
-      let defaultProvider = await db.emailProvider.findFirst({
-        where: { status: 'active', isDefaultTransactional: true, ...tenantWhere },
-        orderBy: [{ isPlatform: 'desc' }, { updatedAt: 'desc' }],
-      })
-      if (!defaultProvider && tenantId) {
-        defaultProvider = await db.emailProvider.findFirst({
-          where: { status: 'active', isDefaultTransactional: true },
-          orderBy: [{ isPlatform: 'desc' }, { updatedAt: 'desc' }],
-        })
-      }
-      if (defaultProvider) {
-        const config = emailProviderToSmtpConfig(defaultProvider)
-        if (config) {
-          console.log(`[resolveSmtpConfig] Resolved to: ${defaultProvider.name} | fromEmail: ${defaultProvider.fromEmail} | tenantId: ${defaultProvider.tenantId}`)
-          return { config, source: `emailProvider:${defaultProvider.id}(${defaultProvider.name})`, providerId: defaultProvider.id }
-        }
+      candidateQueries.push(
+        { where: { status: 'active', isDefaultTransactional: true, ...tenantWhere }, orderBy: [{ isPlatform: 'desc' }, { updatedAt: 'desc' }], label: '3u:defaultTx+tenant' },
+      )
+      if (tenantId) {
+        candidateQueries.push(
+          { where: { status: 'active', isDefaultTransactional: true }, orderBy: [{ isPlatform: 'desc' }, { updatedAt: 'desc' }], label: '3u2:defaultTx' },
+        )
       }
     }
-  } catch (e) {
-    console.error('[resolveSmtpConfig] Step 3 (default provider lookup) threw:', e)
-  }
 
-  // 4. Any active EmailProvider (platform-aware)
-  try {
-    if (requireCustomerProvider) {
-      // Marketing: ONLY customer (non-platform) providers capable of marketing
-      let anyProvider = await db.emailProvider.findFirst({
-        where: { status: 'active', isPlatform: false, usageType: { in: ['marketing', 'both'] }, ...tenantWhere },
-        orderBy: [{ isDefaultMarketing: 'desc' }, { updatedAt: 'desc' }],
-      })
-      if (!anyProvider && tenantId) {
-        anyProvider = await db.emailProvider.findFirst({
-          where: { status: 'active', isPlatform: false, usageType: { in: ['marketing', 'both'] } },
-          orderBy: [{ isDefaultMarketing: 'desc' }, { updatedAt: 'desc' }],
-        })
+    // Step 4 queries: broader fallbacks (only for non-marketing)
+    if (!requireCustomerProvider) {
+      candidateQueries.push(
+        { where: { status: 'active', isPlatform: true, ...tenantWhere }, orderBy: [{ isDefaultTransactional: 'desc' }, { updatedAt: 'desc' }], label: '4:platform+tenant' },
+      )
+      if (tenantId) {
+        candidateQueries.push(
+          { where: { status: 'active', isPlatform: true }, orderBy: [{ isDefaultTransactional: 'desc' }, { updatedAt: 'desc' }], label: '4b:platform' },
+        )
       }
-      if (anyProvider) {
-        const config = emailProviderToSmtpConfig(anyProvider)
-        if (config) {
-          return { config, source: `emailProvider:${anyProvider.id}(${anyProvider.name})`, providerId: anyProvider.id }
-        }
+      candidateQueries.push(
+        { where: { status: 'active', ...tenantWhere }, orderBy: [{ isDefaultTransactional: 'desc' }, { updatedAt: 'desc' }], label: '4c:any+tenant' },
+      )
+      if (tenantId) {
+        candidateQueries.push(
+          { where: { status: 'active' }, orderBy: [{ isDefaultTransactional: 'desc' }, { updatedAt: 'desc' }], label: '4d:any' },
+        )
       }
     } else {
-      // Transactional / unspecified: prefer platform providers belonging to this tenant first
-      let anyProvider = await db.emailProvider.findFirst({
-        where: { status: 'active', isPlatform: true, ...tenantWhere },
-        orderBy: [{ isDefaultTransactional: 'desc' }, { updatedAt: 'desc' }],
-      })
-      if (!anyProvider && tenantId) {
-        anyProvider = await db.emailProvider.findFirst({
-          where: { status: 'active', isPlatform: true },
-          orderBy: [{ isDefaultTransactional: 'desc' }, { updatedAt: 'desc' }],
-        })
-      }
-      if (!anyProvider) {
-        anyProvider = await db.emailProvider.findFirst({
-          where: { status: 'active', ...tenantWhere },
-          orderBy: [{ isDefaultTransactional: 'desc' }, { updatedAt: 'desc' }],
-        })
-      }
-      if (!anyProvider && tenantId) {
-        anyProvider = await db.emailProvider.findFirst({
-          where: { status: 'active' },
-          orderBy: [{ isDefaultTransactional: 'desc' }, { updatedAt: 'desc' }],
-        })
-      }
-      if (anyProvider) {
-        const config = emailProviderToSmtpConfig(anyProvider)
-        if (config) {
-          console.log(`[resolveSmtpConfig] Step 4 fallback resolved to: ${anyProvider.name} | fromEmail: ${anyProvider.fromEmail} | tenantId: ${anyProvider.tenantId}`)
-          return { config, source: `emailProvider:${anyProvider.id}(${anyProvider.name})`, providerId: anyProvider.id }
-        }
+      // Marketing fallbacks: non-platform marketing/both providers
+      candidateQueries.push(
+        { where: { status: 'active', isPlatform: false, usageType: { in: ['marketing', 'both'] }, ...tenantWhere }, orderBy: [{ isDefaultMarketing: 'desc' }, { updatedAt: 'desc' }], label: '4m:mktBoth+tenant' },
+      )
+      if (tenantId) {
+        candidateQueries.push(
+          { where: { status: 'active', isPlatform: false, usageType: { in: ['marketing', 'both'] } }, orderBy: [{ isDefaultMarketing: 'desc' }, { updatedAt: 'desc' }], label: '4m2:mktBoth' },
+        )
       }
     }
+
+    // Try each candidate query in order; skip providers with invalid config
+    const triedProviderIds = new Set<string>() // Avoid trying the same provider twice
+    for (const query of candidateQueries) {
+      try {
+        const excludeIds = Array.from(triedProviderIds)
+        const whereClause: Record<string, unknown> = { ...query.where }
+        if (excludeIds.length > 0) {
+          whereClause.id = { notIn: excludeIds }
+        }
+        const provider = await db.emailProvider.findFirst({
+          where: whereClause,
+          orderBy: query.orderBy,
+        })
+        if (!provider) continue
+
+        triedProviderIds.add(provider.id)
+        const config = emailProviderToSmtpConfig(provider)
+        if (config) {
+          console.log(`[resolveSmtpConfig] Resolved via ${query.label}: ${provider.name} | fromEmail: ${provider.fromEmail} | tenantId: ${provider.tenantId} | isDefaultTx: ${provider.isDefaultTransactional} | isPlatform: ${provider.isPlatform}`)
+          return { config, source: `emailProvider:${provider.id}(${provider.name})`, providerId: provider.id }
+        }
+        // Provider found but config is invalid — log diagnostic info and continue
+        const parsedKeys = (() => { try { return Object.keys(JSON.parse(provider.configJson || '{}')) } catch { return [] } })()
+        console.warn(
+          `[resolveSmtpConfig] ${query.label}: found provider "${provider.name}" (id=${provider.id}, type=${provider.providerType}, tenantId=${provider.tenantId}) ` +
+          `but emailProviderToSmtpConfig returned null. configJson keys: [${parsedKeys.join(', ')}]. Skipping to next candidate.`
+        )
+      } catch (queryErr) {
+        console.warn(`[resolveSmtpConfig] ${query.label} query threw:`, queryErr)
+      }
+    }
+
+    if (triedProviderIds.size > 0) {
+      console.warn(`[resolveSmtpConfig] Tried ${triedProviderIds.size} provider(s) but none had valid SMTP config (tenantId=${tenantId || 'none'})`)
+    } else {
+      console.warn(`[resolveSmtpConfig] Step 3-4: NO provider found (tenantId=${tenantId || 'none'})`)
+    }
   } catch (e) {
-    console.error('[resolveSmtpConfig] Step 4 (any provider lookup) threw:', e)
+    console.error('[resolveSmtpConfig] Step 3-4 (provider lookup) threw:', e)
   }
 
   // ── Marketing enforcement gate ──────────────────────────────────────────
