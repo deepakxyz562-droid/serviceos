@@ -81,7 +81,7 @@ interface EmailChannelStatus {
   systemEmail: {
     managed: 'platform';
     connected: boolean;
-    source: 'emailProvider' | 'env-smtp' | 'env-resend' | 'simulated' | string | null;
+    source: 'emailProvider' | 'simulated' | string | null;
     providerId: string | null;
     providerName: string | null;
     providerType: string | null;
@@ -1111,7 +1111,7 @@ export function CommunicationProvidersView() {
                     <p className="text-sm">
                       <span className="font-medium text-amber-700 dark:text-amber-400">Simulated</span>{' '}
                       <span className="text-muted-foreground">
-                        (configure <code className="px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-[11px]">RESEND_API_KEY</code> or SMTP env)
+                        (add an email provider in SuperAdmin → Settings → Providers)
                       </span>
                     </p>
                   ) : emailStatus.systemEmail.source === 'emailProvider' && emailStatus.systemEmail.providerName ? (
@@ -1120,16 +1120,6 @@ export function CommunicationProvidersView() {
                       <span className="text-muted-foreground">
                         via {emailStatus.systemEmail.providerType?.toUpperCase() || 'Provider'}
                       </span>
-                    </p>
-                  ) : emailStatus.systemEmail.source === 'env-smtp' ? (
-                    <p className="text-sm">
-                      <span className="font-medium">Environment SMTP</span>{' '}
-                      <span className="text-muted-foreground">(SMTP_HOST / SMTP_USER env)</span>
-                    </p>
-                  ) : emailStatus.systemEmail.source === 'env-resend' ? (
-                    <p className="text-sm">
-                      <span className="font-medium">Resend</span>{' '}
-                      <span className="text-muted-foreground">(RESEND_API_KEY env)</span>
                     </p>
                   ) : (
                     <p className="text-sm text-muted-foreground">Connected</p>

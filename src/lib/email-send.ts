@@ -46,139 +46,17 @@ function safeJsonParse(str: string | null, fallback: unknown = {}): unknown {
 }
 
 /**
- * Auto-ensure a platform EmailProvider exists in the DB.
- *
- * If no platform email provider (isPlatform=true, status='active') is found,
- * AND SMTP env vars (SMTP_HOST, SMTP_USER, SMTP_PASS) are available, creates one
- * attached to the first tenant. This ensures the provider is discoverable by
- * resolveSmtpConfig() and other systems (e.g. invoice email flow) that don't
- * pass an explicit providerId.
- *
- * Idempotent: if a platform provider already exists, just returns it.
- * Non-blocking: if auto-creation fails, logs the error and returns null.
- */
-async function ensurePlatformEmailProvider() {
-  try {
-    // Check if a platform email provider already exists
-    const existing = await db.emailProvider.findFirst({
-      where: { isPlatform: true, status: 'active' },
-      orderBy: [{ isDefaultTransactional: 'desc' }, { updatedAt: 'desc' }],
-    })
-    if (existing) {
-      // Sync credentials from env vars into the existing provider if they're
-      // missing or redacted. This handles the case where:
-      //  - The DB was seeded with truncated/redacted credentials
-      //  - The runtime redacted AWS keys in configJson (e.g. [REDACTED:aws_access_key])
-      //  - The .env was updated with new credentials after the provider was created
-      const smtpUser = process.env.SMTP_USER || (process.env.SMTP_USER_PART1 && process.env.SMTP_USER_PART2 ? process.env.SMTP_USER_PART1 + process.env.SMTP_USER_PART2 : '')
-      const smtpPass = process.env.SMTP_PASS
-      if (smtpUser && smtpPass) {
-        try {
-          const config = JSON.parse(existing.configJson || '{}') as Record<string, string>
-          const isRedacted = (v: unknown): boolean =>
-            v == null || (typeof v === 'string' && (v.includes('[REDACTED') || v.trim() === ''))
-          let needsUpdate = false
-          if (isRedacted(config.smtpUser) || config.smtpUser !== smtpUser) {
-            config.smtpUser = smtpUser
-            needsUpdate = true
-          }
-          if (isRedacted(config.smtpPass) || config.smtpPass !== smtpPass) {
-            config.smtpPass = smtpPass
-            needsUpdate = true
-          }
-          // Also sync smtpHost if it changed
-          const smtpHost = process.env.SMTP_HOST
-          if (smtpHost && config.smtpHost !== smtpHost) {
-            config.smtpHost = smtpHost
-            needsUpdate = true
-          }
-          if (needsUpdate) {
-            await db.emailProvider.update({
-              where: { id: existing.id },
-              data: { configJson: JSON.stringify(config) },
-            })
-            console.log(`[ensurePlatformEmailProvider] Synced credentials from env vars to existing platform provider: id=${existing.id}`)
-          }
-        } catch (syncErr) {
-          console.warn('[ensurePlatformEmailProvider] Credential sync failed (non-blocking):', syncErr)
-        }
-      }
-      return existing
-    }
-
-    // No platform provider exists — check if SMTP env vars are available
-    const smtpHost = process.env.SMTP_HOST
-    const smtpUser = process.env.SMTP_USER || (process.env.SMTP_USER_PART1 && process.env.SMTP_USER_PART2 ? process.env.SMTP_USER_PART1 + process.env.SMTP_USER_PART2 : '')
-    const smtpPass = process.env.SMTP_PASS
-
-    if (!smtpHost || !smtpUser || !smtpPass) {
-      return null
-    }
-
-    // Find the first tenant to attach the provider to
-    const firstTenant = await db.tenant.findFirst({ orderBy: { createdAt: 'asc' } })
-    if (!firstTenant) {
-      console.warn('[ensurePlatformEmailProvider] No tenant found in DB — cannot auto-create platform email provider')
-      return null
-    }
-
-    // Determine provider type based on host
-    const isSes = smtpHost.includes('amazonaws.com')
-    const providerType: ProviderType = isSes ? 'ses' : 'smtp'
-
-    // Extract region from SES host if applicable
-    const sesRegionMatch = smtpHost.match(/email-smtp\.([a-z0-9-]+)\.amazonaws\.com/)
-    const region = sesRegionMatch ? sesRegionMatch[1] : (process.env.SMTP_REGION || 'us-east-1')
-
-    const fromName = process.env.SMTP_FROM_NAME || 'ServiceOS'
-    const fromEmail = process.env.SMTP_FROM_EMAIL || smtpUser
-    const smtpPort = process.env.SMTP_PORT || '587'
-    const smtpSecure = smtpPort === '465' ? 'true' : 'false'
-
-    const configJson = JSON.stringify({
-      smtpHost,
-      smtpPort,
-      smtpSecure,
-      smtpUser,
-      smtpPass,
-      ...(isSes ? { region } : {}),
-    })
-
-    const provider = await db.emailProvider.create({
-      data: {
-        name: 'Platform Email (Auto-created)',
-        providerType,
-        configJson,
-        fromName,
-        fromEmail,
-        replyTo: fromEmail,
-        usageType: 'both',
-        isDefaultTransactional: true,
-        isDefaultMarketing: false,
-        isPlatform: true,
-        status: 'active',
-        tenantId: firstTenant.id,
-      },
-    })
-
-    console.log(
-      `[ensurePlatformEmailProvider] Auto-created platform email provider: id=${provider.id}, type=${providerType}, ` +
-      `fromEmail=${fromEmail}, tenantId=${firstTenant.id}`
-    )
-    return provider
-  } catch (err) {
-    console.error('[ensurePlatformEmailProvider] Failed to auto-create platform email provider:', err)
-    return null
-  }
-}
-
-/**
  * Resolve SMTP config from an EmailProvider row.
  * Handles all provider types: smtp, resend, sendgrid, ses (SMTP mode), mailgun, postmark, brevo.
  * Currently all non-SMTP providers that we send via SMTP (SES SMTP, SendGrid SMTP, Brevo SMTP,
  * Mailgun SMTP, Postmark SMTP) are normalized to SMTP config here.
+ *
+ * IMPORTANT: This function relies ONLY on the database-stored configJson.
+ * If the credentials in the DB are invalid/incomplete, it returns null.
+ * The SuperAdmin is responsible for maintaining valid provider configurations
+ * through the Settings → Providers UI.
  */
-function emailProviderToSmtpConfig(
+export function emailProviderToSmtpConfig(
   provider: {
     id: string
     name: string
@@ -192,31 +70,8 @@ function emailProviderToSmtpConfig(
   const data = safeJsonParse(provider.configJson, {}) as Record<string, unknown>
 
   // Reconstruct smtpUser from parts if stored as an array (legacy format)
-  // Prefer direct smtpUser field over smtpUserParts
   if (!data.smtpUser && Array.isArray(data.smtpUserParts)) {
     data.smtpUser = (data.smtpUserParts as string[]).join('')
-  }
-
-  // Fallback: if smtpUser was redacted by the runtime (e.g. AWS key redaction),
-  // try to use the SMTP_USER env var or SMTP_USER_PART1 + SMTP_USER_PART2
-  const isRedacted = (v: unknown): boolean =>
-    v == null || (typeof v === 'string' && (v.includes('[REDACTED') || v.trim() === ''))
-
-  if (isRedacted(data.smtpUser)) {
-    const envUser = process.env.SMTP_USER
-    if (envUser && envUser.length > 0 && !envUser.includes('[REDACTED')) {
-      data.smtpUser = envUser
-    } else if (process.env.SMTP_USER_PART1 && process.env.SMTP_USER_PART2) {
-      // Assembled from split parts to avoid runtime redaction of AWS keys in .env files
-      data.smtpUser = process.env.SMTP_USER_PART1 + process.env.SMTP_USER_PART2
-    } else {
-      console.warn('[email-send] smtpUser was redacted/empty and no SMTP_USER env var is available')
-    }
-  }
-  if (isRedacted(data.smtpPass)) {
-    if (process.env.SMTP_PASS) {
-      data.smtpPass = process.env.SMTP_PASS
-    }
   }
 
   const d = data as Record<string, string>
@@ -316,13 +171,6 @@ function emailProviderToSmtpConfig(
       //  (b) region + smtpUser + smtpPass (IAM-derived SMTP credentials) — we
       //      derive the host from the region.
       //  (c) smtpUser + smtpPass only — default to us-east-1 host.
-      //
-      // Without this explicit case, SES providers whose configJson lacks
-      // smtpHost (e.g. only region + IAM SMTP creds were entered) fall through
-      // to `default: return null`, which makes resolveSmtpConfig return
-      // marketingProviderRequired=true and every campaign recipient fails
-      // with MARKETING_PROVIDER_REQUIRED — even though a providerId WAS
-      // supplied.
       if (d.smtpUser && d.smtpPass) {
         const region = d.region || 'us-east-1'
         const host = d.smtpHost || `email-smtp.${region}.amazonaws.com`
@@ -346,14 +194,19 @@ function emailProviderToSmtpConfig(
 }
 
 /**
- * Resolve SMTP config from the new EmailProvider model (preferred) or legacy Credential (fallback).
+ * Resolve SMTP config from EmailProvider model (preferred) or legacy Credential (fallback).
+ *
+ * The database is the SINGLE SOURCE OF TRUTH for email provider credentials.
+ * All provider management is done through the SuperAdmin UI (Settings → Providers).
+ * No .env SMTP variables are needed — the SuperAdmin creates and manages providers
+ * directly in the database.
+ *
  * Priority:
  * 1. providerId — specific EmailProvider row
  * 2. credentialId — specific Credential row (legacy type='smtp')
  * 3. Default EmailProvider for the requested usageType (transactional/marketing)
  * 4. Any active EmailProvider
  * 5. Any legacy Credential with type='smtp'
- * 6. Env vars (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM_EMAIL)
  */
 export async function resolveSmtpConfig(
   options: { providerId?: string; credentialId?: string; usageType?: 'transactional' | 'marketing'; tenantId?: string } = {}
@@ -369,17 +222,14 @@ export async function resolveSmtpConfig(
         if (config) {
           return { config, source: `emailProvider:${provider.id}(${provider.name})`, providerId: provider.id }
         }
-        // Provider found but its config is invalid/incomplete — log so we can
-        // diagnose "MARKETING_PROVIDER_REQUIRED" errors that happen even when
-        // a providerId was supplied. This is the most common cause of the
-        // per-recipient MARKETING_PROVIDER_REQUIRED failure in campaigns.
+        // Provider found but its config is invalid/incomplete
         const parsedKeys = (() => {
           try { return Object.keys(JSON.parse(provider.configJson || '{}') || {}) } catch { return [] }
         })()
         console.warn(
           `[resolveSmtpConfig] providerId=${providerId} found (type=${provider.providerType}, name=${provider.name}) but emailProviderToSmtpConfig returned null. ` +
           `configJson keys: [${parsedKeys.join(', ')}]. ` +
-          `Ensure SMTP host/user/pass (or provider-specific credentials) are set.`
+          `Ensure SMTP host/user/pass (or provider-specific credentials) are set in Settings → Providers.`
         )
       } else {
         console.warn(`[resolveSmtpConfig] providerId=${providerId} not found in DB`)
@@ -423,33 +273,13 @@ export async function resolveSmtpConfig(
   const requireCustomerProvider = usageType === 'marketing'
 
   // Helper: build the base where clause for provider lookups.
-  // When tenantId is provided, we first look for providers belonging to that tenant,
-  // then fall back to any provider. This ensures that a tenant's own configured
-  // provider is always preferred over a platform provider from another tenant.
   const tenantWhere = tenantId ? { tenantId } : {}
 
   console.log(`[resolveSmtpConfig] usageType=${usageType || 'none'}, tenantId=${tenantId || 'none'}`)
 
-  // 2b. Auto-ensure a platform EmailProvider exists from SMTP env vars.
-  //     This bridges the gap where env vars are configured but no DB provider
-  //     was seeded — the auto-created provider will be found by subsequent steps.
-  if (!requireCustomerProvider) {
-    try {
-      await ensurePlatformEmailProvider()
-    } catch { /* non-blocking — continue even if auto-creation fails */ }
-  }
-
-  // 3 & 4. Find an EmailProvider with valid SMTP config.
+  // 3 & 4. Find an EmailProvider with valid SMTP config from the database.
   //
-  // CRITICAL FIX: Previous implementation had a bug where finding a provider
-  // with INVALID config (e.g. redacted credentials) would BLOCK the resolution
-  // from finding a WORKING provider. The old code used `if (!defaultProvider)`
-  // guards — once a provider was found, all subsequent sub-queries were skipped,
-  // even if that provider's config was null. This caused invoice emails to fail
-  // with "no provider configured" while test emails (which pass providerId
-  // directly) worked fine.
-  //
-  // The fix: use a unified list of queries ordered by preference, and try each
+  // CRITICAL FIX: Use a unified list of queries ordered by preference, and try each
   // candidate until we find one with valid SMTP config. If a provider's config
   // is invalid, we log a warning and continue to the next candidate.
   try {
@@ -457,7 +287,6 @@ export async function resolveSmtpConfig(
     const candidateQueries: Array<{ where: Record<string, unknown>; orderBy: Record<string, unknown>[] | Record<string, unknown>; label: string }> = []
 
     if (usageType === 'transactional') {
-      // 3a. Default transactional platform provider for this tenant
       candidateQueries.push(
         { where: { status: 'active', isDefaultTransactional: true, isPlatform: true, ...tenantWhere }, orderBy: { updatedAt: 'desc' }, label: '3a:defaultTx+platform+tenant' },
         { where: { status: 'active', isDefaultTransactional: true, isPlatform: true }, orderBy: { updatedAt: 'desc' }, label: '3a2:defaultTx+platform' },
@@ -469,7 +298,6 @@ export async function resolveSmtpConfig(
         { where: { status: 'active' }, orderBy: [{ isDefaultTransactional: 'desc' }, { isPlatform: 'desc' }, { updatedAt: 'desc' }], label: '3c4:anyActive' },
       )
     } else if (usageType === 'marketing') {
-      // Marketing: customer's own (non-platform) default marketing provider only
       candidateQueries.push(
         { where: { status: 'active', isDefaultMarketing: true, isPlatform: false, ...tenantWhere }, orderBy: { updatedAt: 'desc' }, label: '3m:defaultMkt+tenant' },
       )
@@ -532,8 +360,11 @@ export async function resolveSmtpConfig(
         const provider = await db.emailProvider.findFirst({
           where: whereClause,
           orderBy: query.orderBy,
-        })
-        if (!provider) continue
+        }) as { id: string; name: string; providerType: string; configJson: string; fromEmail: string; fromName: string; replyTo: string | null; tenantId: string; isDefaultTransactional: boolean; isPlatform: boolean; usageType: string; status: string } | null
+        if (!provider) {
+          console.log(`[resolveSmtpConfig] ${query.label}: no provider found`)
+          continue
+        }
 
         triedProviderIds.add(provider.id)
         const config = emailProviderToSmtpConfig(provider)
@@ -556,16 +387,21 @@ export async function resolveSmtpConfig(
       console.warn(`[resolveSmtpConfig] Tried ${triedProviderIds.size} provider(s) but none had valid SMTP config (tenantId=${tenantId || 'none'})`)
     } else {
       console.warn(`[resolveSmtpConfig] Step 3-4: NO provider found (tenantId=${tenantId || 'none'})`)
+      // Additional diagnostic: try a broad query to see if ANY providers exist
+      try {
+        const anyProvider = await db.emailProvider.findFirst({ where: { status: 'active' } })
+        if (anyProvider) {
+          console.warn(`[resolveSmtpConfig] DIAGNOSTIC: Active providers exist in DB but none matched the query criteria. Check tenantId/isPlatform/isDefaultTransactional filters.`)
+        } else {
+          console.warn(`[resolveSmtpConfig] DIAGNOSTIC: NO active email providers exist in the DB. Add a provider via SuperAdmin → Settings → Providers.`)
+        }
+      } catch {}
     }
   } catch (e) {
     console.error('[resolveSmtpConfig] Step 3-4 (provider lookup) threw:', e)
   }
 
   // ── Marketing enforcement gate ──────────────────────────────────────────
-  // If this is a marketing send and no customer-connected provider was found,
-  // do NOT fall back to platform providers, legacy credentials, or env vars.
-  // Hard-stop so the caller can surface a "connect your marketing provider"
-  // message instead of silently sending bulk email through the shared domain.
   if (requireCustomerProvider) {
     return { config: null, source: 'none', marketingProviderRequired: true }
   }
@@ -605,28 +441,12 @@ export async function resolveSmtpConfig(
     }
   } catch { /* fall through */ }
 
-  // 6. Env vars
-  if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-    return {
-      config: {
-        host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT || '587', 10),
-        secure: process.env.SMTP_SECURE === 'true' || parseInt(process.env.SMTP_PORT || '587', 10) === 465,
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-        fromName: process.env.SMTP_FROM_NAME || 'ServiceOS',
-        fromEmail: process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER,
-      },
-      source: 'env',
-    }
-  }
-
   console.warn(
     `[resolveSmtpConfig] ALL resolution paths failed! ` +
     `usageType=${usageType || 'none'}, tenantId=${tenantId || 'none'}, ` +
     `providerId=${providerId || 'none'}, credentialId=${credentialId || 'none'}. ` +
-    `No EmailProvider, Credential, or SMTP env vars found. ` +
-    `Email will be SIMULATED. Add an email provider in Settings → Email Providers.`
+    `No EmailProvider or Credential found in the database. ` +
+    `Email will be SIMULATED. Add an email provider in SuperAdmin → Settings → Providers.`
   )
   return { config: null, source: 'none' }
 }
@@ -642,10 +462,6 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
   }
 
   // ── Operational email quota gate ────────────────────────────────────────
-  // Transactional emails sent via the platform provider are subject to a
-  // monthly per-tenant quota (default 500). Marketing emails are already
-  // gated by the MARKETING_PROVIDER_REQUIRED check below. Only enforce for
-  // transactional/unspecified sends when a tenantId is available.
   if (tenantId && usageType !== 'marketing') {
     try {
       const subscription = await db.subscription.findFirst({
@@ -659,7 +475,6 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
         },
       })
       if (subscription && !subscription.ownEmailProviderConnected) {
-        // Tenant is using platform email — enforce quota
         if (subscription.emailUsageCount >= subscription.emailQuota) {
           console.warn(
             `[Email QUOTA EXCEEDED] Tenant: ${tenantId}, Used: ${subscription.emailUsageCount}/${subscription.emailQuota}`
@@ -672,7 +487,6 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
         }
       }
     } catch (quotaErr) {
-      // Non-blocking — if quota check fails, continue with send
       console.warn('[Email] Quota check failed (non-blocking):', quotaErr)
     }
   }
@@ -685,16 +499,10 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
   })
 
   // Marketing enforcement: refuse to send bulk/campaign email without a
-  // customer-connected marketing provider. Never simulate marketing sends —
-  // that would hide the configuration gap from the user.
+  // customer-connected marketing provider.
   if (marketingProviderRequired) {
-    // When a providerId was explicitly supplied but still couldn't be resolved
-    // to a valid SMTP config, include a diagnostic hint so the caller (and the
-    // user looking at campaign results) knows the provider EXISTS but its
-    // credentials are incomplete — rather than thinking no provider is
-    // connected at all.
     const hint = providerId
-      ? ` — provider "${providerId}" was found but its SMTP configuration is incomplete. Verify SMTP host, username and password in Settings → Email Providers, then retry.`
+      ? ` — provider "${providerId}" was found but its SMTP configuration is incomplete. Verify SMTP host, username and password in Settings → Providers, then retry.`
       : credentialId
         ? ` — credential "${credentialId}" could not be resolved to a valid SMTP config.`
         : ' — connect SMTP, Resend, SendGrid, Amazon SES, Mailgun or Brevo before sending campaigns.'
@@ -707,9 +515,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
   }
 
   if (!config) {
-    // Transactional / unspecified sends fall back to simulated mode so that
-    // password resets, invitations, etc. never hard-fail the user flow.
-    console.warn(`[Email SIMULATED] To: ${to}, Subject: ${subject} — no provider resolved (usageType=${usageType || 'none'}, tenantId=${tenantId || 'none'}). Check EmailProvider records in Settings → Providers.`)
+    console.warn(`[Email SIMULATED] To: ${to}, Subject: ${subject} — no provider resolved (usageType=${usageType || 'none'}, tenantId=${tenantId || 'none'}). Add an email provider in SuperAdmin → Settings → Providers.`)
     return {
       success: true,
       messageId: `sim_email_${Date.now()}`,
@@ -719,20 +525,12 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
   }
 
   // Determine whether the failure is an infrastructure/connection error
-  // (auth rejected, connection refused, timeout, DNS, etc.) versus a
-  // business-logic error (invalid recipient, spam blocked, etc.).
-  // Infrastructure failures mean the provider itself isn't usable — in that
-  // case we fall back to SIMULATED mode so bulk sends don't hard-fail an
-  // entire campaign just because the SMTP creds are misconfigured. The
-  // underlying error is preserved in the returned `error` field + logs.
   function isInfrastructureError(err: unknown): boolean {
     const msg = err instanceof Error ? err.message : String(err)
     const code = (err as { code?: string })?.code
-    // nodemailer connection / auth error codes
     if (code && ['EAUTH', 'ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'EDNS', 'EENVELOPE', 'ESTREAM'].includes(code)) {
       return true
     }
-    // Gmail / common SMTP auth rejection text
     if (/535|Username and Password not accepted|Invalid login|Authentication required|connect ECONNREFUSED|getaddrinfo ENOTFOUND|connect ETIMEDOUT/i.test(msg)) {
       return true
     }
@@ -761,7 +559,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
       replyTo: config.replyTo,
     })
 
-    // Update provider stats (best-effort, don't fail the send if stats update fails)
+    // Update provider stats (best-effort)
     if (resolvedProviderId) {
       try {
         await db.emailProvider.update({
@@ -814,20 +612,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
 
     const errMsg = err instanceof Error ? err.message : String(err)
 
-    // ── CRITICAL: Never simulate marketing/campaign sends ─────────────────
-    // For marketing (campaign/broadcast) sends, the SMTP error MUST be
-    // surfaced as a real failure. The previous behavior swallowed
-    // infrastructure errors (EAUTH, ECONNECTION, ETIMEDOUT, etc.) and
-    // returned `success: true, simulated: true`, which made campaigns
-    // appear to succeed in the UI while the emails never actually reached
-    // the provider (Amazon SES, SendGrid, etc.). This was the root cause
-    // of "SES stats never change after campaign sends" — the SMTP send was
-    // failing (auth, connection, sandbox mode, unverified sender, etc.)
-    // but the simulated fallback hid the error and reported fake success.
-    //
-    // Now: marketing sends return the real error so the campaign/broadcast
-    // UI can show "N failed: <actual SMTP error>" and the user can fix
-    // their provider configuration.
+    // Marketing sends must surface real errors, never simulate
     if (usageType === 'marketing') {
       console.error(
         `[Email FAILED (marketing)] To: ${to}, Subject: ${subject}, ` +
@@ -840,11 +625,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
       }
     }
 
-    // ── Simulated fallback for transactional infrastructure errors ────────
-    // For transactional emails (password reset, invitations, invoices), we
-    // keep the simulated fallback on infrastructure errors so the user flow
-    // doesn't hard-fail. The real error is preserved in the `error` field
-    // and logged so the admin can diagnose provider misconfiguration.
+    // Transactional infrastructure errors fall back to simulated mode
     if (isInfrastructureError(err)) {
       console.warn(
         `[Email SIMULATED (SMTP fallback)] To: ${to}, Subject: ${subject}, ` +
@@ -883,7 +664,6 @@ export function personalize(
     .replace(/\{\{\s*city\s*\}\}/gi, vars.city || '')
     .replace(/\{\{\s*country\s*\}\}/gi, vars.country || '')
 
-  // Generic {{key}} replacement for any other variables (link, code, amount, etc.)
   result = result.replace(/\{\{\s*(\w+)\s*\}\}/gi, (match, key) => {
     const value = vars[key]
     return value !== undefined && value !== null ? String(value) : match
@@ -899,8 +679,8 @@ export function personalize(
 //
 //  1. System Email (transactional)  — Managed By Platform.
 //     Password resets, invitations, booking/invoice/payment/workflow alerts.
-//     Routed through isPlatform=true providers (or env SMTP / Resend). Low volume,
-//     safe to share across all tenants.
+//     Routed through isPlatform=true providers. Low volume, safe to share
+//     across all tenants.
 //
 //  2. Marketing Email (campaigns)   — Customer-connected.
 //     Newsletters, promotions, bulk/drip/retargeting campaigns. Routed through the
@@ -925,9 +705,9 @@ export interface ProviderStatus {
   systemEmail: {
     /** Always "platform" — system email is managed by the platform, never by the tenant. */
     managed: 'platform'
-    /** True when a usable system channel exists (DB platform provider OR env SMTP/Resend). */
+    /** True when a usable system channel exists (DB platform provider). */
     connected: boolean
-    /** Where the system channel resolves from: "emailProvider", "env", or "simulated". */
+    /** Where the system channel resolves from: "emailProvider" or "simulated". */
     source: string | null
     providerId: string | null
     providerName: string | null
@@ -951,7 +731,7 @@ export interface ProviderStatus {
 export async function getProviderStatus(
   tenantId: string
 ): Promise<ProviderStatus> {
-  // ── System email: prefer a platform-managed DB provider, then env, then simulated ──
+  // ── System email: check for platform-managed DB provider ──
   let systemProviderId: string | null = null
   let systemProviderName: string | null = null
   let systemProviderType: string | null = null
@@ -967,30 +747,21 @@ export async function getProviderStatus(
       ],
     })
     if (platformProvider) {
-      systemProviderId = platformProvider.id
-      systemProviderName = platformProvider.name
-      systemProviderType = platformProvider.providerType
-      systemSource = 'emailProvider'
-      systemConnected = true
+      // Validate that the provider has valid SMTP config
+      const config = emailProviderToSmtpConfig(platformProvider)
+      if (config) {
+        systemProviderId = platformProvider.id
+        systemProviderName = platformProvider.name
+        systemProviderType = platformProvider.providerType
+        systemSource = 'emailProvider'
+        systemConnected = true
+      } else {
+        console.warn(`[getProviderStatus] Platform provider "${platformProvider.name}" exists but has invalid config. Marking as disconnected.`)
+        systemSource = 'simulated'
+        systemConnected = false
+      }
     }
-  } catch { /* ignore — fall through to env check */ }
-
-  if (!systemConnected) {
-    const hasEnvSmtp = Boolean(
-      process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS
-    )
-    const hasResend = Boolean(process.env.RESEND_API_KEY)
-    if (hasEnvSmtp) {
-      systemSource = 'env-smtp'
-      systemConnected = true
-    } else if (hasResend) {
-      systemSource = 'env-resend'
-      systemConnected = true
-    } else {
-      systemSource = 'simulated'
-      systemConnected = false
-    }
-  }
+  } catch { /* ignore */ }
 
   // ── Marketing email: tenant's own (non-platform) marketing-capable providers ──
   let marketingProviders: ProviderStatusMarketingProvider[] = []

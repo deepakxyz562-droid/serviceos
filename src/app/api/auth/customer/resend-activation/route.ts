@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Detect if we're in a dev/demo environment (no real email provider configured)
-    const isDev = process.env.NODE_ENV !== 'production' || !process.env.SMTP_HOST;
+    const isDev = process.env.NODE_ENV !== 'production';
 
     return NextResponse.json({
       success: true,

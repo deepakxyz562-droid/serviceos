@@ -784,7 +784,10 @@ class SupabaseModel {
 
     const { data, error } = await query;
     if (error) {
-      console.error(`[SupabaseDB] findMany error on ${this.tableName}:`, error.message);
+      const whereStr = where ? JSON.stringify(where).substring(0, 200) : 'none';
+      console.error(
+        `[SupabaseDB] findMany error on ${this.tableName}: code=${error.code} message="${error.message}" details="${error.details || ''}" hint="${error.hint || ''}" where=${whereStr}`
+      );
       return [];
     }
 
@@ -852,8 +855,12 @@ class SupabaseModel {
 
     const { data, error } = await query.limit(1).single();
     if (error) {
-      if (error.code === 'PGRST116') return null;
-      console.error(`[SupabaseDB] findFirst error on ${this.tableName}:`, error.message);
+      if (error.code === 'PGRST116') return null; // No rows found — not an error
+      // Log detailed error context for production debugging
+      const whereStr = where ? JSON.stringify(where).substring(0, 200) : 'none';
+      console.error(
+        `[SupabaseDB] findFirst error on ${this.tableName}: code=${error.code} message="${error.message}" details="${error.details || ''}" hint="${error.hint || ''}" where=${whereStr}`
+      );
       return null;
     }
 
