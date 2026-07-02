@@ -393,7 +393,8 @@ export function EmployeePortalView() {
       });
       if (res.ok) {
         const updated = await res.json();
-        setCurrentEmployee(updated);
+        // API returns { employee, statusLog } — only set the employee object
+        setCurrentEmployee(updated.employee ?? updated);
         toast.success(`Status changed to ${STATUS_LABELS[newStatus] || newStatus}`);
       } else {
         const err = await res.json();

@@ -32,6 +32,11 @@ import {
   MessageSquare,
   Star,
   Loader2,
+  Play,
+  XCircle,
+  Navigation,
+  FileText,
+  DollarSign,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -42,6 +47,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -60,6 +67,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/app-store';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { toast } from 'sonner';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -91,14 +99,22 @@ interface Job {
   id: string;
   jobNumber: string;
   title: string;
+  description?: string;
   status: JobStatus;
+  assignmentStatus?: string;
   priority: JobPriority;
   type: string;
   address: string;
   assigneeId: string;
+  assigneeName?: string;
+  customerName?: string;
+  customerPhone?: string;
   customerId: string;
   quotedAmount: number;
+  estimatedDuration?: number;
   scheduledAt: string | null;
+  actualStartTime?: string | null;
+  actualEndTime?: string | null;
   createdAt: string;
   customer: JobCustomer | null;
 }
@@ -587,15 +603,369 @@ function HomeView({ employeeId }: { employeeId: string }) {
   );
 }
 
+// ─── Job Detail Sheet (used by MyJobsView & HomeView) ──────────────────────────
+
+function JobDetailSheet({
+  job,
+  open,
+  onClose,
+  onAction,
+  actionLoading,
+}: {
+  job: Job | null;
+  open: boolean;
+  onClose: () => void;
+  onAction: (action: string, jobId: string) => void;
+  actionLoading: string | null;
+}) {
+  const [completeNotes, setCompleteNotes] = useState('');
+  const [showCompleteDialog, setShowCompleteDialog] = useState(false);
+
+  if (!job) return null;
+
+  const isAssigned = job.status === 'assigned';
+  const isInProgress = job.status === 'in_progress';
+  const isCompleted = job.status === 'completed';
+  const isPending = job.status === 'pending';
+  const needsAccept = isAssigned && job.assignmentStatus !== 'accepted';
+
+  const handleStart = () => {
+    onAction('start', job.id);
+  };
+
+  const handleAccept = () => {
+    onAction('accept', job.id);
+  };
+
+  const handleReject = () => {
+    onAction('reject', job.id);
+  };
+
+  const handleComplete = () => {
+    setShowCompleteDialog(true);
+  };
+
+  const confirmComplete = () => {
+    onAction('complete', job.id);
+    setShowCompleteDialog(false);
+    setCompleteNotes('');
+  };
+
+  // Calculate elapsed time for in-progress jobs
+  const elapsed = isInProgress && job.actualStartTime
+    ? (() => {
+        const start = new Date(job.actualStartTime).getTime();
+        const now = Date.now();
+        const diffMin = Math.floor((now - start) / 60000);
+        if (diffMin < 60) return `${diffMin}m`;
+        const hrs = Math.floor(diffMin / 60);
+        const mins = diffMin % 60;
+        return `${hrs}h ${mins}m`;
+      })()
+    : null;
+
+  return (
+    <>
+      <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <div className="flex items-center gap-2">
+              {getStatusBadge(job.status)}
+              {needsAccept && (
+                <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-[10px]">Awaiting Acceptance</Badge>
+              )}
+            </div>
+            <SheetTitle className="text-lg">{job.title}</SheetTitle>
+            {job.jobNumber && (
+              <SheetDescription className="text-xs">Job #{job.jobNumber}</SheetDescription>
+            )}
+          </SheetHeader>
+
+          <div className="mt-6 space-y-5">
+            {/* Description */}
+            {job.description && (
+              <div>
+                <p className="text-sm text-muted-foreground">{job.description}</p>
+              </div>
+            )}
+
+            {/* Job Details Grid */}
+            <div className="grid grid-cols-1 gap-3">
+              {job.customer?.name && (
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                  <UserCircle className="size-4 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-muted-foreground">Customer</p>
+                    <p className="text-sm font-medium truncate">{job.customer.name}</p>
+                  </div>
+                  {job.customer.phone && (
+                    <a href={`tel:${job.customer.phone}`} className="text-emerald-600 hover:text-emerald-700 shrink-0">
+                      <Phone className="size-4" />
+                    </a>
+                  )}
+                </div>
+              )}
+
+              {job.address && (
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                  <MapPin className="size-4 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-muted-foreground">Address</p>
+                    <p className="text-sm font-medium truncate">{job.address}</p>
+                  </div>
+                  <a
+                    href={`https://maps.google.com/?q=${encodeURIComponent(job.address)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-700 shrink-0"
+                  >
+                    <Navigation className="size-4" />
+                  </a>
+                </div>
+              )}
+
+              {job.scheduledAt && (
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                  <Calendar className="size-4 text-muted-foreground shrink-0" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Scheduled</p>
+                    <p className="text-sm font-medium">{formatDate(job.scheduledAt)} at {formatTime(job.scheduledAt)}</p>
+                  </div>
+                </div>
+              )}
+
+              {job.estimatedDuration && (
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                  <Clock className="size-4 text-muted-foreground shrink-0" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Estimated Duration</p>
+                    <p className="text-sm font-medium">{job.estimatedDuration} minutes</p>
+                  </div>
+                </div>
+              )}
+
+              {job.quotedAmount > 0 && (
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                  <DollarSign className="size-4 text-muted-foreground shrink-0" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Quoted Amount</p>
+                    <p className="text-sm font-medium">₹{job.quotedAmount.toLocaleString()}</p>
+                  </div>
+                </div>
+              )}
+
+              {elapsed && (
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                  <Timer className="size-4 text-blue-600 shrink-0" />
+                  <div>
+                    <p className="text-xs text-blue-600">Time Elapsed</p>
+                    <p className="text-sm font-bold text-blue-700">{elapsed}</p>
+                  </div>
+                </div>
+              )}
+
+              {job.type && (
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                  <Briefcase className="size-4 text-muted-foreground shrink-0" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Job Type</p>
+                    <p className="text-sm font-medium capitalize">{job.type}</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                {getPriorityDot(job.priority)}
+                <div>
+                  <p className="text-xs text-muted-foreground">Priority</p>
+                  <p className="text-sm font-medium capitalize">{job.priority}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <Separator />
+            <div className="space-y-3">
+              {needsAccept && (
+                <div className="flex gap-2">
+                  <Button
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                    onClick={handleAccept}
+                    disabled={actionLoading === `accept-${job.id}`}
+                  >
+                    {actionLoading === `accept-${job.id}` ? (
+                      <Loader2 className="size-4 mr-2 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="size-4 mr-2" />
+                    )}
+                    Accept Job
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                    onClick={handleReject}
+                    disabled={actionLoading === `reject-${job.id}`}
+                  >
+                    {actionLoading === `reject-${job.id}` ? (
+                      <Loader2 className="size-4 mr-2 animate-spin" />
+                    ) : (
+                      <XCircle className="size-4 mr-2" />
+                    )}
+                    Reject
+                  </Button>
+                </div>
+              )}
+
+              {isAssigned && !needsAccept && (
+                <Button
+                  className="w-full bg-emerald-600 hover:bg-emerald-700"
+                  onClick={handleStart}
+                  disabled={actionLoading === `start-${job.id}`}
+                >
+                  {actionLoading === `start-${job.id}` ? (
+                    <Loader2 className="size-4 mr-2 animate-spin" />
+                  ) : (
+                    <Play className="size-4 mr-2" />
+                  )}
+                  Start Job
+                </Button>
+              )}
+
+              {isInProgress && (
+                <Button
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  onClick={handleComplete}
+                  disabled={actionLoading === `complete-${job.id}`}
+                >
+                  {actionLoading === `complete-${job.id}` ? (
+                    <Loader2 className="size-4 mr-2 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="size-4 mr-2" />
+                  )}
+                  Complete Job
+                </Button>
+              )}
+
+              {isCompleted && (
+                <div className="text-center py-4">
+                  <CheckCircle2 className="size-12 text-emerald-500 mx-auto mb-2" />
+                  <p className="text-sm font-medium text-emerald-700">Job Completed</p>
+                  {job.actualEndTime && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Completed {formatDate(job.actualEndTime)} at {formatTime(job.actualEndTime)}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {isPending && (
+                <div className="text-center py-4 text-muted-foreground">
+                  <Briefcase className="size-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">This job is pending assignment</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Complete Job Confirmation Dialog */}
+      <Dialog open={showCompleteDialog} onOpenChange={setShowCompleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Complete Job</DialogTitle>
+            <DialogDescription>
+              Mark &quot;{job.title}&quot; as completed? This will notify the customer and may auto-generate an invoice.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <Label htmlFor="complete-notes">Completion Notes (optional)</Label>
+              <Textarea
+                id="complete-notes"
+                placeholder="Add any notes about the job completion..."
+                value={completeNotes}
+                onChange={(e) => setCompleteNotes(e.target.value)}
+                className="mt-2"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCompleteDialog(false)}>Cancel</Button>
+            <Button className="bg-blue-600 hover:bg-blue-700" onClick={confirmComplete}>
+              {actionLoading === `complete-${job.id}` ? (
+                <Loader2 className="size-4 mr-2 animate-spin" />
+              ) : (
+                <CheckCircle2 className="size-4 mr-2" />
+              )}
+              Confirm Complete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 // ─── Sub-View: My Jobs ──────────────────────────────────────────────────────
 
 function MyJobsView({ employeeId }: { employeeId: string }) {
   const [filter, setFilter] = useState<string>('all');
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const { jobs, loading, error, refetch } = useEmployeeJobs(employeeId);
 
   const filteredJobs = filter === 'all'
     ? jobs
     : jobs.filter((j) => j.status === filter);
+
+  // ── Job lifecycle action handler ──
+  const handleLifecycleAction = async (action: string, jobId: string) => {
+    setActionLoading(`${action}-${jobId}`);
+    try {
+      const res = await fetch('/api/jobs/lifecycle?XTransformPort=3000', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, jobId }),
+      });
+      if (res.ok) {
+        const actionLabels: Record<string, string> = {
+          accept: 'accepted',
+          reject: 'rejected',
+          start: 'started',
+          complete: 'completed',
+        };
+        toast.success(`Job ${actionLabels[action] || action} successfully`);
+        await refetch();
+        // Update selected job if it's the one being acted on
+        if (selectedJob?.id === jobId) {
+          const updatedRes = await fetch(`/api/jobs/${jobId}?XTransformPort=3000`);
+          if (updatedRes.ok) {
+            const updatedJob = await updatedRes.json();
+            // Map the API response to our Job interface
+            setSelectedJob({
+              ...selectedJob,
+              status: updatedJob.status,
+              assignmentStatus: updatedJob.assignmentStatus,
+              actualStartTime: updatedJob.actualStartTime,
+              actualEndTime: updatedJob.actualEndTime,
+            });
+          }
+        }
+        // Auto-close the sheet if job was completed or rejected
+        if (action === 'complete' || action === 'reject') {
+          setSelectedJob(null);
+        }
+      } else {
+        const err = await res.json();
+        toast.error(err.error || `Failed to ${action} job`);
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   const filterOptions: { value: string; label: string }[] = [
     { value: 'all', label: 'All' },
@@ -649,7 +1019,8 @@ function MyJobsView({ employeeId }: { employeeId: string }) {
               filteredJobs.map((job) => (
                 <div
                   key={job.id}
-                  className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-lg border border-border hover:border-emerald-300 dark:hover:border-emerald-700 transition-colors hover:bg-muted/30"
+                  className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-lg border border-border hover:border-emerald-300 dark:hover:border-emerald-700 transition-colors hover:bg-muted/30 cursor-pointer"
+                  onClick={() => setSelectedJob(job)}
                 >
                   <div className="flex items-start gap-3 flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 shrink-0 mt-1">
@@ -726,6 +1097,15 @@ function MyJobsView({ employeeId }: { employeeId: string }) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Job Detail Sheet */}
+      <JobDetailSheet
+        job={selectedJob}
+        open={!!selectedJob}
+        onClose={() => setSelectedJob(null)}
+        onAction={handleLifecycleAction}
+        actionLoading={actionLoading}
+      />
     </div>
   );
 }
