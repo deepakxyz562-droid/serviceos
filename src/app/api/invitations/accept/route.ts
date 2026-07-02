@@ -168,6 +168,7 @@ export async function POST(request: NextRequest) {
 
     if (existingUser) {
       // Update the existing user's tenant, workspace, and role
+      // Also set the passwordHash so the user can log in
       user = await db.user.update({
         where: { id: existingUser.id },
         data: {
@@ -178,6 +179,7 @@ export async function POST(request: NextRequest) {
           phone: phone || existingUser.phone || invitation.phone,
           isActive: true,
           lastLoginAt: new Date(),
+          passwordHash,
         },
       });
     } else {

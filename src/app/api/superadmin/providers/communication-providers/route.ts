@@ -59,6 +59,7 @@ export async function GET(request: NextRequest) {
       provider: p.provider,
       status: p.status,
       isDefault: p.isDefault,
+      isPlatform: p.isPlatform,
       sendingEnabled: p.sendingEnabled,
       dailyLimit: p.dailyLimit,
       monthlyLimit: p.monthlyLimit,
@@ -98,7 +99,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, type, provider, config, isDefault, sendingEnabled, dailyLimit, monthlyLimit, tenantId, status: reqStatus } = body;
+    const { name, type, provider, config, isDefault, isPlatform, sendingEnabled, dailyLimit, monthlyLimit, tenantId, status: reqStatus } = body;
 
     if (!name || !type || !provider) {
       return NextResponse.json({ error: 'name, type, and provider are required' }, { status: 400 });
@@ -130,6 +131,7 @@ export async function POST(request: NextRequest) {
         configJson,
         credentialId: null,
         isDefault: isDefault || false,
+        isPlatform: Boolean(isPlatform),
         sendingEnabled: sendingEnabled !== undefined ? sendingEnabled : true,
         dailyLimit: dailyLimit || 1000,
         monthlyLimit: monthlyLimit || 30000,

@@ -124,8 +124,32 @@ export async function POST(request: NextRequest) {
         ? usageType
         : 'both';
 
-    const wantDefaultTransactional = Boolean(isDefaultTransactional);
-    const wantDefaultMarketing = Boolean(isDefaultMarketing);
+    let wantDefaultTransactional = Boolean(isDefaultTransactional);
+    let wantDefaultMarketing = Boolean(isDefaultMarketing);
+
+    // Auto-set default flags if this is the first provider for the tenant.
+    // When no other provider exists, the newly created one should become the
+    // default for transactional (and marketing if usageType allows) so that
+    // invoices, invitations, etc. can actually find a provider to use.
+    const existingProviders = await db.emailProvider.findMany({
+      where: { tenantId },
+      select: { id: true, isDefaultTransactional: true, isDefaultMarketing: true },
+    });
+    const hasDefaultTransactional = existingProviders.some(p => p.isDefaultTransactional);
+    const hasDefaultMarketing = existingProviders.some(p => p.isDefaultMarketing);
+
+    // Auto-set as default transactional if:
+    // - No existing default transactional provider AND
+    // - The new provider is usable for transactional (usageType is 'transactional' or 'both')
+    if (!hasDefaultTransactional && (finalUsageType === 'transactional' || finalUsageType === 'both')) {
+      wantDefaultTransactional = true;
+    }
+    // Auto-set as default marketing if:
+    // - No existing default marketing provider AND
+    // - The new provider is usable for marketing (usageType is 'marketing' or 'both')
+    if (!hasDefaultMarketing && (finalUsageType === 'marketing' || finalUsageType === 'both')) {
+      wantDefaultMarketing = true;
+    }
 
     const configString = encodeProviderConfig(configJson);
 

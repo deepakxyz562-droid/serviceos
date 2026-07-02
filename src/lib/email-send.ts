@@ -46,6 +46,95 @@ function safeJsonParse(str: string | null, fallback: unknown = {}): unknown {
 }
 
 /**
+ * Auto-ensure a platform EmailProvider exists in the DB.
+ *
+ * If no platform email provider (isPlatform=true, status='active') is found,
+ * AND SMTP env vars (SMTP_HOST, SMTP_USER, SMTP_PASS) are available, creates one
+ * attached to the first tenant. This ensures the provider is discoverable by
+ * resolveSmtpConfig() and other systems (e.g. invoice email flow) that don't
+ * pass an explicit providerId.
+ *
+ * Idempotent: if a platform provider already exists, just returns it.
+ * Non-blocking: if auto-creation fails, logs the error and returns null.
+ */
+async function ensurePlatformEmailProvider() {
+  try {
+    // Check if a platform email provider already exists
+    const existing = await db.emailProvider.findFirst({
+      where: { isPlatform: true, status: 'active' },
+      orderBy: [{ isDefaultTransactional: 'desc' }, { updatedAt: 'desc' }],
+    })
+    if (existing) {
+      return existing
+    }
+
+    // No platform provider exists — check if SMTP env vars are available
+    const smtpHost = process.env.SMTP_HOST
+    const smtpUser = process.env.SMTP_USER || (process.env.SMTP_USER_PART1 && process.env.SMTP_USER_PART2 ? process.env.SMTP_USER_PART1 + process.env.SMTP_USER_PART2 : '')
+    const smtpPass = process.env.SMTP_PASS
+
+    if (!smtpHost || !smtpUser || !smtpPass) {
+      return null
+    }
+
+    // Find the first tenant to attach the provider to
+    const firstTenant = await db.tenant.findFirst({ orderBy: { createdAt: 'asc' } })
+    if (!firstTenant) {
+      console.warn('[ensurePlatformEmailProvider] No tenant found in DB — cannot auto-create platform email provider')
+      return null
+    }
+
+    // Determine provider type based on host
+    const isSes = smtpHost.includes('amazonaws.com')
+    const providerType: ProviderType = isSes ? 'ses' : 'smtp'
+
+    // Extract region from SES host if applicable
+    const sesRegionMatch = smtpHost.match(/email-smtp\.([a-z0-9-]+)\.amazonaws\.com/)
+    const region = sesRegionMatch ? sesRegionMatch[1] : (process.env.SMTP_REGION || 'us-east-1')
+
+    const fromName = process.env.SMTP_FROM_NAME || 'ServiceOS'
+    const fromEmail = process.env.SMTP_FROM_EMAIL || smtpUser
+    const smtpPort = process.env.SMTP_PORT || '587'
+    const smtpSecure = smtpPort === '465' ? 'true' : 'false'
+
+    const configJson = JSON.stringify({
+      smtpHost,
+      smtpPort,
+      smtpSecure,
+      smtpUser,
+      smtpPass,
+      ...(isSes ? { region } : {}),
+    })
+
+    const provider = await db.emailProvider.create({
+      data: {
+        name: 'Platform Email (Auto-created)',
+        providerType,
+        configJson,
+        fromName,
+        fromEmail,
+        replyTo: fromEmail,
+        usageType: 'both',
+        isDefaultTransactional: true,
+        isDefaultMarketing: false,
+        isPlatform: true,
+        status: 'active',
+        tenantId: firstTenant.id,
+      },
+    })
+
+    console.log(
+      `[ensurePlatformEmailProvider] Auto-created platform email provider: id=${provider.id}, type=${providerType}, ` +
+      `fromEmail=${fromEmail}, tenantId=${firstTenant.id}`
+    )
+    return provider
+  } catch (err) {
+    console.error('[ensurePlatformEmailProvider] Failed to auto-create platform email provider:', err)
+    return null
+  }
+}
+
+/**
  * Resolve SMTP config from an EmailProvider row.
  * Handles all provider types: smtp, resend, sendgrid, ses (SMTP mode), mailgun, postmark, brevo.
  * Currently all non-SMTP providers that we send via SMTP (SES SMTP, SendGrid SMTP, Brevo SMTP,
@@ -301,6 +390,17 @@ export async function resolveSmtpConfig(
   // provider is always preferred over a platform provider from another tenant.
   const tenantWhere = tenantId ? { tenantId } : {}
 
+  console.log(`[resolveSmtpConfig] usageType=${usageType || 'none'}, tenantId=${tenantId || 'none'}`)
+
+  // 2b. Auto-ensure a platform EmailProvider exists from SMTP env vars.
+  //     This bridges the gap where env vars are configured but no DB provider
+  //     was seeded — the auto-created provider will be found by subsequent steps.
+  if (!requireCustomerProvider) {
+    try {
+      await ensurePlatformEmailProvider()
+    } catch { /* non-blocking — continue even if auto-creation fails */ }
+  }
+
   // 3. Default EmailProvider for the requested usage type (platform-aware)
   try {
     if (usageType === 'transactional') {
@@ -330,10 +430,25 @@ export async function resolveSmtpConfig(
           orderBy: [{ isPlatform: 'desc' }, { updatedAt: 'desc' }],
         })
       }
+      // 3c. NEW: Any active transactional/both provider for this tenant (even if
+      // isDefaultTransactional is false — many users don't set this flag)
+      if (!defaultProvider) {
+        defaultProvider = await db.emailProvider.findFirst({
+          where: { status: 'active', usageType: { in: ['transactional', 'both'] }, ...tenantWhere },
+          orderBy: [{ isDefaultTransactional: 'desc' }, { isPlatform: 'desc' }, { updatedAt: 'desc' }],
+        })
+      }
+      // 3c2. Fallback: any active transactional/both provider from any tenant
+      if (!defaultProvider && tenantId) {
+        defaultProvider = await db.emailProvider.findFirst({
+          where: { status: 'active', usageType: { in: ['transactional', 'both'] } },
+          orderBy: [{ isDefaultTransactional: 'desc' }, { isPlatform: 'desc' }, { updatedAt: 'desc' }],
+        })
+      }
       if (defaultProvider) {
         const config = emailProviderToSmtpConfig(defaultProvider)
         if (config) {
-          console.log(`[resolveSmtpConfig] Resolved to: ${defaultProvider.name} | fromEmail: ${defaultProvider.fromEmail} | tenantId: ${defaultProvider.tenantId}`)
+          console.log(`[resolveSmtpConfig] Resolved to: ${defaultProvider.name} | fromEmail: ${defaultProvider.fromEmail} | tenantId: ${defaultProvider.tenantId} | isDefaultTx: ${defaultProvider.isDefaultTransactional} | isPlatform: ${defaultProvider.isPlatform}`)
           return { config, source: `emailProvider:${defaultProvider.id}(${defaultProvider.name})`, providerId: defaultProvider.id }
         }
       }
@@ -376,7 +491,9 @@ export async function resolveSmtpConfig(
         }
       }
     }
-  } catch { /* fall through */ }
+  } catch (e) {
+    console.error('[resolveSmtpConfig] Step 3 (default provider lookup) threw:', e)
+  }
 
   // 4. Any active EmailProvider (platform-aware)
   try {
@@ -425,11 +542,14 @@ export async function resolveSmtpConfig(
       if (anyProvider) {
         const config = emailProviderToSmtpConfig(anyProvider)
         if (config) {
+          console.log(`[resolveSmtpConfig] Step 4 fallback resolved to: ${anyProvider.name} | fromEmail: ${anyProvider.fromEmail} | tenantId: ${anyProvider.tenantId}`)
           return { config, source: `emailProvider:${anyProvider.id}(${anyProvider.name})`, providerId: anyProvider.id }
         }
       }
     }
-  } catch { /* fall through */ }
+  } catch (e) {
+    console.error('[resolveSmtpConfig] Step 4 (any provider lookup) threw:', e)
+  }
 
   // ── Marketing enforcement gate ──────────────────────────────────────────
   // If this is a marketing send and no customer-connected provider was found,
@@ -536,7 +656,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
   if (!config) {
     // Transactional / unspecified sends fall back to simulated mode so that
     // password resets, invitations, etc. never hard-fail the user flow.
-    console.log(`[Email SIMULATED] To: ${to}, Subject: ${subject}`)
+    console.warn(`[Email SIMULATED] To: ${to}, Subject: ${subject} — no provider resolved (usageType=${usageType || 'none'}, tenantId=${tenantId || 'none'}). Check EmailProvider records in Settings → Providers.`)
     return {
       success: true,
       messageId: `sim_email_${Date.now()}`,

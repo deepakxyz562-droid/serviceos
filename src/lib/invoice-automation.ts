@@ -729,7 +729,7 @@ export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = 
       'Thank you for your business!',
     ].filter(Boolean).join('\n')
     try {
-      const r = await sendWhatsAppMessage({ to: recipientPhone, message: waMessage })
+      const r = await sendWhatsAppMessage({ to: recipientPhone, message: waMessage, tenantId: invoice.tenantId || undefined })
       result.whatsapp = { success: !!r.success, error: r.error, simulated: r.simulated }
     } catch (err) {
       result.whatsapp = { success: false, error: String(err) }
@@ -859,6 +859,7 @@ export async function sendInvoiceReminder(invoiceId: string): Promise<{ success:
       await sendWhatsAppMessage({
         to: invoice.customer.phone,
         message: `Friendly reminder: Your invoice ${invoice.number} for ${invoiceTotal} ${invoice.dueDate ? `(due ${new Date(invoice.dueDate).toLocaleDateString()})` : 'is now due'}. Please complete payment. Thank you! — ${invoice.tenant?.name || 'ServiceOS'}`,
+        tenantId: invoice.tenantId || undefined,
       })
       whatsappSent = true
     } catch (err) {

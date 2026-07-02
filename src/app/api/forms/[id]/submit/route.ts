@@ -349,7 +349,7 @@ export async function POST(
                     form: form.name,
                     ...formData,
                   });
-                  const waRes = await sendWhatsAppMessage({ to: ownerPhone, message: ownerMessage });
+                  const waRes = await sendWhatsAppMessage({ to: ownerPhone, message: ownerMessage, tenantId: validTenantId || undefined });
                   // Best-effort log
                   try {
                     await db.notificationLog.create({
@@ -412,7 +412,7 @@ export async function POST(
                   }
                 }
 
-                const waRes = await sendWhatsAppMessage({ to: customerPhone, message: userMessage });
+                const waRes = await sendWhatsAppMessage({ to: customerPhone, message: userMessage, tenantId: validTenantId || undefined });
                 try {
                   await db.notificationLog.create({
                     data: {

@@ -327,6 +327,7 @@ async function dispatchToRecipient(
     const result = await sendWhatsAppMessage({
       to: recipient.phone,
       message,
+      tenantId: tenantId || undefined,
     })
 
     // Deduct credit after successful WhatsApp send
@@ -355,6 +356,7 @@ async function dispatchToRecipient(
     const result = await sendWhatsAppMessage({
       to: recipient.phone,
       message,
+      tenantId: tenantId || undefined,
     })
 
     // Deduct credit after successful SMS (via WhatsApp) send
@@ -410,6 +412,7 @@ async function dispatchToRecipient(
       const waResult = await sendWhatsAppMessage({
         to: recipient.phone,
         message,
+        tenantId: tenantId || undefined,
       })
       if (waResult.success) {
         anySuccess = true

@@ -61,6 +61,7 @@ export async function checkWhatsAppCredits(tenantId: string): Promise<CreditChec
   }
 
   // Auto-detect WhatsApp connection from CommunicationProvider or Credential
+  // Only counts as "own" if it's a non-platform (tenant-owned) provider
   if (!subscription.ownWhatsappConnected) {
     const hasWhatsAppProvider = await db.communicationProvider.findFirst({
       where: {
@@ -68,10 +69,22 @@ export async function checkWhatsAppCredits(tenantId: string): Promise<CreditChec
         type: 'whatsapp',
         status: 'active',
         sendingEnabled: true,
+        isPlatform: false, // Only tenant's own provider counts
       },
     })
 
-    const hasWhatsAppCredential = !hasWhatsAppProvider ? await db.credential.findFirst({
+    // Also check if they have a platform provider AND have configured it
+    // (for backward compat: any WA provider without isPlatform flag)
+    const hasAnyWhatsAppProvider = !hasWhatsAppProvider ? await db.communicationProvider.findFirst({
+      where: {
+        tenantId,
+        type: 'whatsapp',
+        status: 'active',
+        sendingEnabled: true,
+      },
+    }) : null
+
+    const hasWhatsAppCredential = !hasWhatsAppProvider && !hasAnyWhatsAppProvider ? await db.credential.findFirst({
       where: {
         OR: [
           { type: 'whatsapp' },
@@ -81,13 +94,18 @@ export async function checkWhatsAppCredits(tenantId: string): Promise<CreditChec
       },
     }) : null
 
-    if (hasWhatsAppProvider || hasWhatsAppCredential) {
+    if (hasWhatsAppProvider) {
       // Auto-update the subscription flag
       await db.subscription.update({
         where: { id: subscription.id },
         data: { ownWhatsappConnected: true },
       })
       subscription.ownWhatsappConnected = true
+    } else if (hasAnyWhatsAppProvider) {
+      // Has a WA provider but it might be platform or legacy (no isPlatform set)
+      // Don't auto-set ownWhatsappConnected — they may be using platform WA
+      // But do log for debugging
+      console.log(`[Credits] Tenant ${tenantId} has WA provider(s) but none with isPlatform=false. ownWhatsappConnected stays false.`)
     }
   }
 

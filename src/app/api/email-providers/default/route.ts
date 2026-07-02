@@ -3,6 +3,79 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 
 /**
+ * POST /api/email-providers/default
+ * Auto-repair: ensure every tenant with active providers has a default
+ * transactional and/or marketing provider. This fixes providers that were
+ * created before the auto-default logic was added.
+ * Body: {} (no params needed)
+ *
+ * For each tenant that has active providers but no default transactional
+ * provider, the most recently updated active provider with usageType
+ * 'transactional' or 'both' is promoted. Same for marketing.
+ */
+export async function POST() {
+  try {
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const tenantId = user.tenantId || 'default';
+
+    const providers = await db.emailProvider.findMany({
+      where: { tenantId, status: 'active' },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    const hasDefaultTransactional = providers.some(p => p.isDefaultTransactional);
+    const hasDefaultMarketing = providers.some(p => p.isDefaultMarketing);
+
+    const fixed: string[] = [];
+
+    // Auto-set default transactional
+    if (!hasDefaultTransactional) {
+      const candidate = providers.find(p =>
+        p.usageType === 'transactional' || p.usageType === 'both'
+      ) || providers[0]; // fallback to any active provider
+      if (candidate) {
+        await db.emailProvider.update({
+          where: { id: candidate.id },
+          data: { isDefaultTransactional: true },
+        });
+        fixed.push(`transactional: ${candidate.name} (${candidate.id})`);
+      }
+    }
+
+    // Auto-set default marketing
+    if (!hasDefaultMarketing) {
+      const candidate = providers.find(p =>
+        p.usageType === 'marketing' || p.usageType === 'both'
+      );
+      if (candidate) {
+        await db.emailProvider.update({
+          where: { id: candidate.id },
+          data: { isDefaultMarketing: true },
+        });
+        fixed.push(`marketing: ${candidate.name} (${candidate.id})`);
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      tenantId,
+      hadDefaultTransactional: hasDefaultTransactional,
+      hadDefaultMarketing: hasDefaultMarketing,
+      fixed,
+    });
+  } catch (error) {
+    console.error('Error auto-repairing email provider defaults:', error);
+    return NextResponse.json(
+      { error: 'Failed to auto-repair defaults' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
  * PUT /api/email-providers/default
  * Set a provider as the default for a usage type.
  * Body: { id: string, usageType: 'transactional' | 'marketing' }

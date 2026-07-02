@@ -2243,6 +2243,7 @@ model CommunicationProvider {
   configJson      String   @default("{}")  // Provider-specific config (API keys, tokens, SMTP settings)
   credentialId    String?  // Optional: link to a Credential from the vault instead of duplicating secrets here
   isDefault       Boolean  @default(false)
+  isPlatform      Boolean  @default(false) // true = platform-managed shared provider; false = tenant's own connection
   sendingEnabled  Boolean  @default(true)
   dailyLimit      Int      @default(1000)
   monthlyLimit    Int      @default(30000)
@@ -2265,6 +2266,7 @@ model CommunicationProvider {
   @@index([status])
   @@index([tenantId])
   @@index([credentialId])
+  @@index([isPlatform])
 }
 
 // ==========================================

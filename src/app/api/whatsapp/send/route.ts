@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Send via the shared sendWhatsAppMessage utility ─────────────────
-    // This resolves credentials from: credentialId → CommunicationProvider → env vars
+    // This resolves credentials from: CommunicationProvider (tenant → platform fallback) → Credential → env vars
     const result = await sendWhatsAppMessage({
       to,
       message,
@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
       type: type || 'text',
       templateName,
       templateLanguage,
+      tenantId: user.tenantId || undefined,
     });
 
     if (result.success) {

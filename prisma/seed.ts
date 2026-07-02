@@ -1154,6 +1154,112 @@ async function main() {
   console.log('  ✅ Created workflow and execution for AquaFlow Plumbing\n');
 
   // ══════════════════════════════════════════════════════════════
+  // PLATFORM EMAIL & WHATSAPP PROVIDERS
+  // ══════════════════════════════════════════════════════════════
+  console.log('📧 Seeding platform communication providers...');
+
+  // --- Platform Email Provider (AWS SES) ---
+  const platformEmailProvider = await db.emailProvider.upsert({
+    where: {
+      id: (
+        await db.emailProvider.findFirst({
+          where: { name: 'AWS SES - ServiceOS (Platform)', isPlatform: true },
+          select: { id: true },
+        })
+      )?.id ?? '___not_found___',
+    },
+    update: {
+      providerType: 'ses',
+      isPlatform: true,
+      usageType: 'both',
+      isDefaultTransactional: true,
+      isDefaultMarketing: true,
+      status: 'active',
+      fromName: 'ServiceOS',
+      fromEmail: 'sales@serviceos.cc',
+      replyTo: 'sales@serviceos.cc',
+      configJson: JSON.stringify({
+        smtpHost: 'email-smtp.ap-south-1.amazonaws.com',
+        smtpPort: 587,
+        smtpSecure: false,
+        smtpUser: 'AKIA2PPO3JBYFJO4G5O',
+        smtpPass: 'BInFKprST5upb+sYW5/U4dPAW7n3BZirdZL2FXFWNdPE',
+        region: 'ap-south-1',
+      }),
+      tenantId: tenant1.id,
+    },
+    create: {
+      name: 'AWS SES - ServiceOS (Platform)',
+      providerType: 'ses',
+      isPlatform: true,
+      usageType: 'both',
+      isDefaultTransactional: true,
+      isDefaultMarketing: true,
+      status: 'active',
+      fromName: 'ServiceOS',
+      fromEmail: 'sales@serviceos.cc',
+      replyTo: 'sales@serviceos.cc',
+      configJson: JSON.stringify({
+        smtpHost: 'email-smtp.ap-south-1.amazonaws.com',
+        smtpPort: 587,
+        smtpSecure: false,
+        smtpUser: 'AKIA2PPO3JBYFJO4G5O',
+        smtpPass: 'BInFKprST5upb+sYW5/U4dPAW7n3BZirdZL2FXFWNdPE',
+        region: 'ap-south-1',
+      }),
+      tenantId: tenant1.id,
+    },
+  });
+  console.log('  ✅ Platform email provider (AWS SES) created:', platformEmailProvider.id);
+
+  // --- Platform WhatsApp CommunicationProvider ---
+  const whatsappAccessToken = process.env.WHATSAPP_ACCESS_TOKEN ?? 'EAAeZCCSIuiJMBRzwDZAAoqOao91PHidrTWqJ2QHMbxnu3wQDtfv7GhOdwFMW8LSgZAAK0mX6eptmS94nZCr1PUJzNpoqaL8C6NcinZClBMDbdGVe05RzNYZAL6CjTPiESYxdv0evV671MAenaAO99cAb7JZBKUPl6aEzcnY8v4YPNvsFIdUze4K4ZBRc06Q1rZCFVg83ZAZBaFxUZADx1ZBEAiwfZCaMkfKXaTEZALZBZBaZAd68eOBrKVIawn7Yc43zjM3qhwk8FLykErhKyPZCCbeLfa2Afqy';
+  const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID ?? '1117830511419208';
+  const whatsappWabaId = process.env.WHATSAPP_WABA_ID ?? '2076211023292638';
+
+  const platformWhatsAppProvider = await db.communicationProvider.upsert({
+    where: {
+      id: (
+        await db.communicationProvider.findFirst({
+          where: { type: 'whatsapp', isPlatform: true },
+          select: { id: true },
+        })
+      )?.id ?? '___not_found___',
+    },
+    update: {
+      name: 'WhatsApp Business (Platform)',
+      provider: 'meta',
+      isPlatform: true,
+      isDefault: true,
+      status: 'active',
+      sendingEnabled: true,
+      configJson: JSON.stringify({
+        accessToken: whatsappAccessToken,
+        phoneNumberId: whatsappPhoneNumberId,
+        wabaId: whatsappWabaId,
+      }),
+      tenantId: tenant1.id,
+    },
+    create: {
+      name: 'WhatsApp Business (Platform)',
+      type: 'whatsapp',
+      provider: 'meta',
+      isPlatform: true,
+      isDefault: true,
+      status: 'active',
+      sendingEnabled: true,
+      configJson: JSON.stringify({
+        accessToken: whatsappAccessToken,
+        phoneNumberId: whatsappPhoneNumberId,
+        wabaId: whatsappWabaId,
+      }),
+      tenantId: tenant1.id,
+    },
+  });
+  console.log('  ✅ Platform WhatsApp provider created:', platformWhatsAppProvider.id);
+  console.log('');
+
+  // ══════════════════════════════════════════════════════════════
   // SUMMARY
   // ══════════════════════════════════════════════════════════════
   console.log('════════════════════════════════════════════════════════');
@@ -1188,6 +1294,7 @@ async function main() {
   console.log('  Jobs: 20 (pending: 3, assigned: 3, in_progress: 3, on_hold: 2, completed: 7, cancelled: 2)');
   console.log('  Invoices: 6 (paid: 3, pending: 3) | Subscriptions: 5');
   console.log('  Templates: 8 | Workflows: 1 | Executions: 1');
+  console.log('  Platform Email Provider: AWS SES | Platform WhatsApp Provider: Meta Cloud API');
   console.log('════════════════════════════════════════════════════════');
 }
 

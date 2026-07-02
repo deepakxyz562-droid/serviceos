@@ -10,6 +10,7 @@ interface SendWhatsAppOptions {
   type?: 'text' | 'template'
   templateName?: string
   templateLanguage?: string
+  tenantId?: string  // tenant scope for provider resolution
 }
 
 interface SendWhatsAppResult {
@@ -26,17 +27,116 @@ function safeJsonParse(str: string | null, fallback: unknown = {}) {
 }
 
 /**
+ * Auto-ensure a platform WhatsApp CommunicationProvider exists in the DB.
+ *
+ * If no platform WhatsApp provider (isPlatform=true, type='whatsapp', status='active')
+ * is found, AND WhatsApp env vars (WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID) are
+ * available, creates one attached to the first tenant. This ensures the provider is
+ * discoverable by sendWhatsAppMessage() and other systems.
+ *
+ * Idempotent: if a platform WhatsApp provider already exists, just returns it.
+ * Non-blocking: if auto-creation fails, logs the error and returns null.
+ */
+async function ensurePlatformWhatsAppProvider() {
+  try {
+    // Check if a platform WhatsApp provider already exists
+    const existing = await db.communicationProvider.findFirst({
+      where: { type: 'whatsapp', isPlatform: true, status: 'active' },
+      orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
+    })
+    if (existing) {
+      return existing
+    }
+
+    // No platform WhatsApp provider exists — check if env vars are available
+    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
+    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
+
+    if (!accessToken || !phoneNumberId) {
+      return null
+    }
+
+    // Find the first tenant to attach the provider to
+    const firstTenant = await db.tenant.findFirst({ orderBy: { createdAt: 'asc' } })
+    if (!firstTenant) {
+      console.warn('[ensurePlatformWhatsAppProvider] No tenant found in DB — cannot auto-create platform WhatsApp provider')
+      return null
+    }
+
+    const wabaId = process.env.WHATSAPP_WABA_ID || ''
+
+    const configJson = JSON.stringify({
+      accessToken,
+      phoneNumberId,
+      ...(wabaId ? { wabaId } : {}),
+    })
+
+    const provider = await db.communicationProvider.create({
+      data: {
+        name: 'WhatsApp Business (Platform Auto-created)',
+        type: 'whatsapp',
+        provider: 'meta',
+        isPlatform: true,
+        isDefault: true,
+        status: 'active',
+        sendingEnabled: true,
+        configJson,
+        tenantId: firstTenant.id,
+      },
+    })
+
+    console.log(
+      `[ensurePlatformWhatsAppProvider] Auto-created platform WhatsApp provider: id=${provider.id}, ` +
+      `phoneNumberId=${phoneNumberId}, tenantId=${firstTenant.id}`
+    )
+    return provider
+  } catch (err) {
+    console.error('[ensurePlatformWhatsAppProvider] Failed to auto-create platform WhatsApp provider:', err)
+    return null
+  }
+}
+
+/**
+ * Resolve WhatsApp credentials (accessToken + phoneNumberId) from a CommunicationProvider.
+ * Checks configJson first, then falls back to the linked Credential row.
+ */
+function resolveWACreds(prov: {
+  configJson: string | null
+  credential: { encryptedData: string | null } | null
+}): { accessToken: string; phoneNumberId: string } | null {
+  const cfg = safeJsonParse(prov.configJson, {}) as Record<string, string>
+  let accessToken = cfg.accessToken || ''
+  let phoneNumberId = cfg.phoneNumberId || ''
+
+  // If the provider links to a Credential, the secrets may live there.
+  if (!accessToken && prov.credential) {
+    const credData = safeJsonParse(prov.credential.encryptedData, {}) as Record<string, string>
+    accessToken = credData.accessToken || credData.apiKey || ''
+    if (!phoneNumberId) phoneNumberId = credData.phoneNumberId || ''
+  }
+
+  if (accessToken && phoneNumberId) {
+    return { accessToken, phoneNumberId }
+  }
+  return null
+}
+
+/**
  * Send a WhatsApp message (server-side utility).
  * 
- * Priority:
+ * Resolution priority (when tenantId is provided):
  * 1. If credentialId is provided → use that specific Credential from DB
- * 2. Search DB for any credential that has WhatsApp fields (accessToken + phoneNumberId)
- *    - Checks: type='whatsapp', type='apiKey' with WhatsApp data, or any name containing 'whatsapp'
- * 3. Else if WhatsApp is configured (db/whatsapp-config.json or env vars) → use that
- * 4. Else → return simulated response
+ * 2. Search CommunicationProvider for WhatsApp — tenant-scoped with platform fallback:
+ *    2a. Tenant's own (non-platform) default WhatsApp provider
+ *    2b. Any tenant's own active WhatsApp provider
+ *    2c. Platform (shared) WhatsApp provider from any tenant
+ *    2d. Legacy: any active WhatsApp CommunicationProvider (no tenant/isPlatform filter)
+ * 3. Search legacy Credential vault for WhatsApp credentials
+ * 4. Else if WhatsApp is configured (env vars) → use that
+ * 5. Else → return simulated response
  */
 export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise<SendWhatsAppResult> {
-  const { to, message, credentialId, type = 'text', templateName, templateLanguage } = options
+  const { to, message, credentialId, type = 'text', templateName, templateLanguage, tenantId } = options
 
   if (!to || !message) {
     return { success: false, error: 'to and message are required' }
@@ -63,7 +163,134 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
     }
   }
 
-  // 2. Search DB for any WhatsApp credential (broad search)
+  // 1b. Auto-ensure a platform WhatsApp CommunicationProvider exists from env vars.
+  //     This bridges the gap where WhatsApp env vars are configured but no DB provider
+  //     was seeded — the auto-created provider will be found by step 2c.
+  try {
+    await ensurePlatformWhatsAppProvider()
+  } catch { /* non-blocking — continue even if auto-creation fails */ }
+
+  // 2. Search CommunicationProvider for WhatsApp — tenant-scoped with platform fallback
+  //    Resolution priority (similar to resolveSmtpConfig for emails):
+  //    2a. Tenant's own (non-platform) default WhatsApp provider
+  //    2b. Any tenant's own active WhatsApp provider
+  //    2c. Platform (shared) WhatsApp provider from any tenant
+  //    2d. Legacy: any active WhatsApp CommunicationProvider (no tenant/isPlatform filter)
+  if (!accessToken || !phoneNumberId) {
+    try {
+      // 2a. Tenant's own default WA provider
+      if (tenantId) {
+        const ownDefault = await db.communicationProvider.findFirst({
+          where: {
+            type: 'whatsapp',
+            status: 'active',
+            sendingEnabled: true,
+            isPlatform: false,
+            isDefault: true,
+            tenantId,
+          },
+          orderBy: { updatedAt: 'desc' },
+          include: { credential: true },
+        })
+        if (ownDefault) {
+          const resolved = resolveWACreds(ownDefault)
+          if (resolved) {
+            accessToken = resolved.accessToken
+            phoneNumberId = resolved.phoneNumberId
+            credentialSource = `communicationProvider:${ownDefault.id}(${ownDefault.name}/own-default)`
+          }
+        }
+      }
+
+      // 2b. Any tenant's own active WA provider (not necessarily default)
+      if (!accessToken && tenantId) {
+        const ownAny = await db.communicationProvider.findFirst({
+          where: {
+            type: 'whatsapp',
+            status: 'active',
+            sendingEnabled: true,
+            isPlatform: false,
+            tenantId,
+          },
+          orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
+          include: { credential: true },
+        })
+        if (ownAny) {
+          const resolved = resolveWACreds(ownAny)
+          if (resolved) {
+            accessToken = resolved.accessToken
+            phoneNumberId = resolved.phoneNumberId
+            credentialSource = `communicationProvider:${ownAny.id}(${ownAny.name}/own)`
+          }
+        }
+      }
+
+      // 2c. Platform (shared) WhatsApp provider — from this tenant first, then any tenant
+      if (!accessToken) {
+        let platformProvider = null
+        if (tenantId) {
+          platformProvider = await db.communicationProvider.findFirst({
+            where: {
+              type: 'whatsapp',
+              status: 'active',
+              sendingEnabled: true,
+              isPlatform: true,
+              tenantId,
+            },
+            orderBy: { updatedAt: 'desc' },
+            include: { credential: true },
+          })
+        }
+        if (!platformProvider) {
+          platformProvider = await db.communicationProvider.findFirst({
+            where: {
+              type: 'whatsapp',
+              status: 'active',
+              sendingEnabled: true,
+              isPlatform: true,
+            },
+            orderBy: { updatedAt: 'desc' },
+            include: { credential: true },
+          })
+        }
+        if (platformProvider) {
+          const resolved = resolveWACreds(platformProvider)
+          if (resolved) {
+            accessToken = resolved.accessToken
+            phoneNumberId = resolved.phoneNumberId
+            credentialSource = `communicationProvider:${platformProvider.id}(${platformProvider.name}/platform)`
+          }
+        }
+      }
+
+      // 2d. Legacy fallback: any active WhatsApp provider (no isPlatform/tenantId filter)
+      if (!accessToken) {
+        const waProviders = await db.communicationProvider.findMany({
+          where: {
+            type: 'whatsapp',
+            status: 'active',
+            sendingEnabled: true,
+          },
+          orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
+          include: { credential: true },
+        })
+
+        for (const prov of waProviders) {
+          const resolved = resolveWACreds(prov)
+          if (resolved) {
+            accessToken = resolved.accessToken
+            phoneNumberId = resolved.phoneNumberId
+            credentialSource = `communicationProvider:${prov.id}(${prov.name}/${prov.provider})`
+            break
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[WhatsApp] CommunicationProvider lookup error:', err)
+    }
+  }
+
+  // 3. Search DB for any WhatsApp credential (legacy Credential vault — broad search)
   if (!accessToken || !phoneNumberId) {
     try {
       // First try type='whatsapp', then type='apiKey' with WhatsApp data
@@ -90,48 +317,6 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
       }
     } catch {
       // Fall through to config
-    }
-  }
-
-  // 2b. Search CommunicationProvider for WhatsApp providers configured via the
-  // settings UI (Communication Providers screen). This is the PRIMARY way users
-  // configure WhatsApp — the Credential vault (step 2) is a legacy fallback.
-  // A CommunicationProvider may either store its secrets directly in configJson
-  // OR link to a Credential row via credentialId.
-  if (!accessToken || !phoneNumberId) {
-    try {
-      const waProviders = await db.communicationProvider.findMany({
-        where: {
-          type: 'whatsapp',
-          status: 'active',
-          sendingEnabled: true,
-        },
-        orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
-        include: { credential: true },
-      })
-
-      for (const prov of waProviders) {
-        const cfg = safeJsonParse(prov.configJson, {}) as Record<string, string>
-        let cfgAccessToken = cfg.accessToken || ''
-        let cfgPhoneNumberId = cfg.phoneNumberId || ''
-
-        // If the provider links to a Credential, the secrets live there.
-        if (!cfgAccessToken && prov.credential) {
-          const credData = safeJsonParse(prov.credential.encryptedData, {}) as Record<string, string>
-          cfgAccessToken = credData.accessToken || credData.apiKey || ''
-          // phoneNumberId might be in either place — check both.
-          if (!cfgPhoneNumberId) cfgPhoneNumberId = credData.phoneNumberId || ''
-        }
-
-        if (cfgAccessToken && cfgPhoneNumberId) {
-          accessToken = cfgAccessToken
-          phoneNumberId = cfgPhoneNumberId
-          credentialSource = `communicationProvider:${prov.id}(${prov.name}/${prov.provider})`
-          break
-        }
-      }
-    } catch {
-      // Fall through to config/env
     }
   }
 

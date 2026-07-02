@@ -204,6 +204,10 @@ export function EmailProvidersView() {
   const load = useCallback(async () => {
     setIsLoading(true);
     try {
+      // Auto-repair: ensure default flags are set on existing providers
+      // (fixes providers created before the auto-default logic was added)
+      fetch('/api/email-providers/default', { method: 'POST' }).catch(() => {});
+
       const res = await fetch('/api/email-providers');
       if (!res.ok) throw new Error('Failed to load providers');
       const data = await res.json();

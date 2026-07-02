@@ -167,6 +167,7 @@ export async function notifyOwner(
       const wa = await sendWhatsAppMessage({
         to: owner.phone,
         message: payload.whatsappMessage,
+        tenantId: owner.tenantId || undefined,
       })
       result.whatsapp = {
         sent: wa.success,
