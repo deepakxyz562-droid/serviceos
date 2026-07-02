@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
       html: html || undefined,
       providerId: providerId || undefined,
       usageType: usageType || undefined,
+      tenantId: authUser.tenantId || undefined,
     })
 
     return NextResponse.json({

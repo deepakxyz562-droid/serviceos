@@ -501,6 +501,7 @@ export async function POST(
                   html: userHtml,
                   text: userText,
                   usageType: 'transactional',
+                  tenantId: tenantId || undefined,
                 });
                 if (r.success) emailSentTo.push(customerEmail);
                 try {

@@ -164,6 +164,7 @@ export async function sendTrialReminder(
       html: rendered.html,
       text: rendered.text,
       usageType: 'transactional',
+      tenantId: tenant.id || undefined,
     });
 
     if (sendResult.success) {

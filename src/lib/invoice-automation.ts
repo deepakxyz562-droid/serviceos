@@ -704,7 +704,7 @@ export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = 
     ].filter(Boolean).join('\n')
     const text = `Invoice ${invoice.number}\nTotal: ${invoiceTotal}\nDue: ${invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : 'N/A'}\n\nItems:\n${itemsText}\n\n— ${invoice.tenant?.name || 'ServiceOS'}`
     try {
-      const r = await sendEmail({ to: recipientEmail, subject, html, text, usageType: 'transactional' })
+      const r = await sendEmail({ to: recipientEmail, subject, html, text, usageType: 'transactional', tenantId: invoice.tenantId || undefined })
       result.email = { success: !!r.success, error: r.error, simulated: r.simulated }
     } catch (err) {
       result.email = { success: false, error: String(err) }
@@ -846,6 +846,7 @@ export async function sendInvoiceReminder(invoiceId: string): Promise<{ success:
         html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px"><h2>Payment Reminder</h2><p>Hi ${customerName},</p><p>This is a friendly reminder that invoice <strong>${invoice.number}</strong> for <strong>${invoiceTotal}</strong> ${invoice.dueDate ? `is due on ${new Date(invoice.dueDate).toLocaleDateString()}` : 'is now due'}.</p><p>Please complete payment at your earliest convenience.</p><p>— ${invoice.tenant?.name || 'ServiceOS'}</p></div>`,
         text: `Reminder: Invoice ${invoice.number} for ${invoiceTotal} is due. Please complete payment.\n\n— ${invoice.tenant?.name || 'ServiceOS'}`,
         usageType: 'transactional',
+        tenantId: invoice.tenantId || undefined,
       })
       emailSent = true
     } catch (err) {

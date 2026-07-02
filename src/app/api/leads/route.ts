@@ -228,6 +228,7 @@ export async function POST(request: NextRequest) {
               html,
               text,
               usageType: 'transactional',
+              tenantId: leadTenantId || undefined,
             });
 
             if (result.simulated) {

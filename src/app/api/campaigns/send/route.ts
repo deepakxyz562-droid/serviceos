@@ -301,6 +301,7 @@ async function dispatchToRecipient(
       providerId: body.providerId,
       credentialId: body.credentialId,
       usageType: 'marketing',
+      tenantId: tenantId || undefined,
     })
 
     return {
@@ -393,6 +394,7 @@ async function dispatchToRecipient(
         providerId: body.providerId,
         credentialId: body.credentialId,
         usageType: 'marketing',
+        tenantId: tenantId || undefined,
       })
       if (emailResult.success) {
         anySuccess = true

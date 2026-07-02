@@ -267,6 +267,15 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
   },
   Tenant: {
     subscription: { targetTable: 'Subscription', targetFkColumn: 'tenantId', isMany: true },
+    workspaces: { targetTable: 'Workspace', targetFkColumn: 'tenantId', isMany: true },
+    users: { targetTable: 'User', targetFkColumn: 'tenantId', isMany: true },
+    leads: { targetTable: 'Lead', targetFkColumn: 'tenantId', isMany: true },
+    invoices: { targetTable: 'Invoice', targetFkColumn: 'tenantId', isMany: true },
+    services: { targetTable: 'Service', targetFkColumn: 'tenantId', isMany: true },
+    reviews: { targetTable: 'Review', targetFkColumn: 'tenantId', isMany: true },
+    notifications: { targetTable: 'Notification', targetFkColumn: 'tenantId', isMany: true },
+    quotes: { targetTable: 'Quote', targetFkColumn: 'tenantId', isMany: true },
+    forms: { targetTable: 'Form', targetFkColumn: 'tenantId', isMany: true },
   },
   EventWebhook: {
     workspace: { targetTable: 'Workspace', fkColumn: 'workspaceId' },
@@ -551,13 +560,34 @@ function applyOrderBy(
 
 // ── Helper: Convert dates to ISO strings in data objects ───────────────────
 
-function serializeData(data: Record<string, unknown>): Record<string, unknown> {
+function serializeData(data: Record<string, unknown>, currentRow?: Record<string, unknown>): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(data)) {
     if (value instanceof Date) {
       result[key] = value.toISOString();
     } else if (value === undefined) {
       continue;
+    } else if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+      // Handle Prisma atomic operations: { increment: N }, { decrement: N }, { multiply: N }, { divide: N }, { set: V }
+      const op = value as Record<string, unknown>;
+      if ('increment' in op) {
+        const current = typeof currentRow?.[key] === 'number' ? currentRow[key] : 0;
+        result[key] = (current as number) + (op.increment as number);
+      } else if ('decrement' in op) {
+        const current = typeof currentRow?.[key] === 'number' ? currentRow[key] : 0;
+        result[key] = (current as number) - (op.decrement as number);
+      } else if ('multiply' in op) {
+        const current = typeof currentRow?.[key] === 'number' ? currentRow[key] : 0;
+        result[key] = (current as number) * (op.multiply as number);
+      } else if ('divide' in op) {
+        const current = typeof currentRow?.[key] === 'number' ? currentRow[key] : 0;
+        result[key] = (current as number) / (op.divide as number);
+      } else if ('set' in op) {
+        result[key] = op.set;
+      } else {
+        // Unknown object — skip it rather than sending a malformed value
+        console.warn(`[SupabaseDB] serializeData: skipping unrecognized atomic operation on field "${key}":`, value);
+      }
     } else {
       result[key] = value;
     }
@@ -772,9 +802,15 @@ class SupabaseModel {
   async findUnique(options: FindUniqueOptions): Promise<unknown | null> {
     if (this.isMissingTable) return null;
 
-    const { where, include } = options;
+    const { where, include, select } = options;
 
-    let query = this.client.from(this.tableName).select('*');
+    // Build select string: use specific columns if select is provided, otherwise '*'
+    let selectStr = '*';
+    if (select) {
+      const cols = Object.entries(select).filter(([, v]) => v === true).map(([k]) => k);
+      if (cols.length > 0) selectStr = cols.join(',');
+    }
+    let query = this.client.from(this.tableName).select(selectStr);
 
     for (const [field, value] of Object.entries(where)) {
       if (value !== undefined) {
@@ -792,7 +828,7 @@ class SupabaseModel {
     if (include && data) {
       const resolved = await resolveIncludes(this.tableName, [data as Record<string, unknown>], include);
       await resolveCounts(this.tableName, resolved, include);
-      return resolved[0];
+      return resolved?.[0] ?? data;
     }
 
     return data;
@@ -801,9 +837,15 @@ class SupabaseModel {
   async findFirst(options: FindFirstOptions = {}): Promise<unknown | null> {
     if (this.isMissingTable) return null;
 
-    const { where, include, orderBy } = options;
+    const { where, include, orderBy, select } = options;
 
-    let query = this.client.from(this.tableName).select('*');
+    // Build select string: use specific columns if select is provided, otherwise '*'
+    let selectStr = '*';
+    if (select) {
+      const cols = Object.entries(select).filter(([, v]) => v === true).map(([k]) => k);
+      if (cols.length > 0) selectStr = cols.join(',');
+    }
+    let query = this.client.from(this.tableName).select(selectStr);
 
     if (where) applyWhereFilters(query, where);
     if (orderBy) applyOrderBy(query, orderBy);
@@ -817,7 +859,7 @@ class SupabaseModel {
 
     if (include && data) {
       const resolved = await resolveIncludes(this.tableName, [data as Record<string, unknown>], include);
-      return resolved[0];
+      return resolved?.[0] ?? data;
     }
 
     return data;
@@ -896,7 +938,7 @@ class SupabaseModel {
 
     if (include && result) {
       const resolved = await resolveIncludes(this.tableName, [result as Record<string, unknown>], include);
-      return resolved[0];
+      return resolved?.[0] ?? result;
     }
 
     return result;
@@ -1046,7 +1088,33 @@ class SupabaseModel {
     }
 
     const { where, data, include } = options;
-    const serialized = serializeData(data);
+
+    // Check if data contains any Prisma atomic operations (increment, decrement, etc.)
+    // that require knowing the current row values. If so, fetch the current row first.
+    let currentRow: Record<string, unknown> | undefined;
+    const hasAtomicOp = Object.values(data).some(
+      (v) => v !== null && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Date) &&
+        ('increment' in (v as Record<string, unknown>) || 'decrement' in (v as Record<string, unknown>) ||
+         'multiply' in (v as Record<string, unknown>) || 'divide' in (v as Record<string, unknown>))
+    );
+    if (hasAtomicOp) {
+      try {
+        const fetchQuery = this.client.from(this.tableName).select('*');
+        for (const [field, value] of Object.entries(where)) {
+          if (value !== undefined) {
+            fetchQuery.eq(field, value as string | number | boolean);
+          }
+        }
+        const { data: fetched, error: fetchErr } = await fetchQuery.limit(1).single();
+        if (!fetchErr && fetched) {
+          currentRow = fetched as Record<string, unknown>;
+        }
+      } catch {
+        // If we can't fetch the current row, atomic ops will use default values (0)
+      }
+    }
+
+    const serialized = serializeData(data, currentRow);
 
     // Auto-set updatedAt — Prisma does this with @updatedAt at the application layer,
     // but PostgREST has no such feature. Without this, updatedAt stays stale.
@@ -1096,7 +1164,7 @@ class SupabaseModel {
 
     if (include && result) {
       const resolved = await resolveIncludes(this.tableName, [result as Record<string, unknown>], include);
-      return resolved[0];
+      return resolved?.[0] ?? result;
     }
 
     return result;

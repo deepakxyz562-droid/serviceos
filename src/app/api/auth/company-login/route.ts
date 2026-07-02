@@ -23,6 +23,9 @@ import {
  * For role='admin'/'employee' we authenticate against the User table (passwordHash)
  * and additionally verify the User.tenantId matches the company.
  *
+ * For employee login, if the User record has no passwordHash, we also try
+ * authenticating via the Employee record's linked User account.
+ *
  * On success: sets the serviceos_session http-only cookie + returns { user, tenant }.
  */
 export async function POST(request: NextRequest) {
@@ -147,7 +150,7 @@ export async function POST(request: NextRequest) {
     // Admin / Employee auth via User table
     // Use select to only fetch needed columns — avoids crashes if Supabase
     // is missing newly-added columns like loginCount, mfaEnabled, etc.
-    const user = await db.user.findUnique({
+    let user = await db.user.findUnique({
       where: { email: normalizedEmail },
       select: {
         id: true,
@@ -163,9 +166,55 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    if (!user || !user.passwordHash) {
+    // If no User found by email, but this is an employee login,
+    // also try looking up by Employee record (email field on Employee table)
+    if (!user && normalizedRole === 'employee') {
+      console.log(`[Company Login] No User found for email "${normalizedEmail}", checking Employee table...`);
+      try {
+        const emp = await db.employee.findFirst({
+          where: { email: normalizedEmail },
+          select: { id: true, userId: true, name: true },
+        });
+        if (emp?.userId) {
+          console.log(`[Company Login] Found Employee "${emp.name}" with linked userId, fetching User...`);
+          user = await db.user.findUnique({
+            where: { id: emp.userId },
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              passwordHash: true,
+              role: true,
+              isActive: true,
+              isSuperAdmin: true,
+              tenantId: true,
+              workspaceId: true,
+              avatar: true,
+            },
+          });
+          if (user) {
+            console.log(`[Company Login] Resolved to User: ${user.email} (role: ${user.role})`);
+          }
+        } else if (emp) {
+          console.log(`[Company Login] Found Employee "${emp.name}" but no linked User account (userId is null). Employee needs a User account with passwordHash to login.`);
+        }
+      } catch (empLookupErr) {
+        console.warn('[Company Login] Employee lookup by email failed:', empLookupErr instanceof Error ? empLookupErr.message : empLookupErr);
+      }
+    }
+
+    if (!user) {
+      console.log(`[Company Login] No user account found for email: "${normalizedEmail}"`);
       return NextResponse.json(
         { error: 'Invalid email or password.' },
+        { status: 401 }
+      );
+    }
+
+    if (!user.passwordHash) {
+      console.log(`[Company Login] User "${normalizedEmail}" found but has no passwordHash set. Account needs a password to login.`);
+      return NextResponse.json(
+        { error: 'Your account does not have a password set. Please contact your administrator to set up your login credentials.' },
         { status: 401 }
       );
     }
@@ -179,6 +228,7 @@ export async function POST(request: NextRequest) {
 
     const passwordValid = await verifyPassword(password, user.passwordHash);
     if (!passwordValid) {
+      console.log(`[Company Login] Password mismatch for user: "${normalizedEmail}"`);
       return NextResponse.json(
         { error: 'Invalid email or password.' },
         { status: 401 }

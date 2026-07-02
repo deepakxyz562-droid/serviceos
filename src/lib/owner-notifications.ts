@@ -217,6 +217,7 @@ export async function notifyOwner(
         html: payload.emailHtml || payload.emailText || payload.emailSubject,
         text: payload.emailText,
         usageType: 'transactional',
+        tenantId: owner.tenantId || undefined,
       })
       result.email = {
         sent: !!mail.success,

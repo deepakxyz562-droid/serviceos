@@ -1,0 +1,654 @@
+     1→     1→import { NextRequest, NextResponse } from 'next/server';
+     2→     2→import { db } from '@/lib/db';
+     3→     3→import { sendWhatsAppMessage } from '@/lib/whatsapp-send';
+     4→     4→import { sendEmail } from '@/lib/email-send';
+     5→     5→import { EventBus } from '@/lib/event-bus';
+     6→     6→import { notifyOwner } from '@/lib/owner-notifications';
+     7→     7→
+     8→     8→// ─── POST /api/forms/[id]/submit ───────────────────────────────────────────
+     9→     9→// CRITICAL route: Form submission with action execution
+    10→    10→
+    11→    11→function safeJsonParse(str: string | null | undefined, fallback: unknown = {}): unknown {
+    12→    12→  if (!str) return fallback;
+    13→    13→  try { return JSON.parse(str); } catch { return fallback; }
+    14→    14→}
+    15→    15→
+    16→    16→// Apply field mapping: map form data keys to CRM field keys using fieldMappingJson
+    17→    17→function applyFieldMapping(
+    18→    18→  formData: Record<string, unknown>,
+    19→    19→  fieldMapping: Record<string, string>
+    20→    20→): Record<string, unknown> {
+    21→    21→  const mapped: Record<string, unknown> = {};
+    22→    22→
+    23→    23→  for (const [formField, crmField] of Object.entries(fieldMapping)) {
+    24→    24→    if (formData[formField] !== undefined) {
+    25→    25→      mapped[crmField] = formData[formField];
+    26→    26→    }
+    27→    27→  }
+    28→    28→
+    29→    29→  // Also keep unmapped fields as fallback
+    30→    30→  for (const [key, value] of Object.entries(formData)) {
+    31→    31→    if (mapped[key] === undefined) {
+    32→    32→      mapped[key] = value;
+    33→    33→    }
+    34→    34→  }
+    35→    35→
+    36→    36→  return mapped;
+    37→    37→}
+    38→    38→
+    39→    39→// Replace template variables like {{name}}, {{phone}}, etc. in a template string
+    40→    40→function replaceTemplateVars(template: string, data: Record<string, unknown>): string {
+    41→    41→  return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+    42→    42→    return String(data[key] ?? match);
+    43→    43→  });
+    44→    44→}
+    45→    45→
+    46→    46→export async function POST(
+    47→    47→  request: NextRequest,
+    48→    48→  { params }: { params: Promise<{ id: string }> }
+    49→    49→) {
+    50→    50→  try {
+    51→    51→    const { id } = await params;
+    52→    52→
+    53→    53→    // ─── 1. Get the form ──────────────────────────────────────────────
+    54→    54→    const form = await db.form.findUnique({ where: { id } });
+    55→    55→    if (!form) {
+    56→    56→      return NextResponse.json({ error: 'Form not found' }, { status: 404 });
+    57→    57→    }
+    58→    58→    if (form.status !== 'active') {
+    59→    59→      return NextResponse.json({ error: 'Form is not active' }, { status: 400 });
+    60→    60→    }
+    61→    61→
+    62→    62→    // ─── 2. Parse submission data ─────────────────────────────────────
+    63→    63→    const body = await request.json();
+    64→    64→    const formData: Record<string, unknown> = body.data || body;
+    65→    65→    const source: string = body.source || 'direct';
+    66→    66→    const respondent: string | undefined = body.respondent || formData.phone as string || formData.email as string || undefined;
+    67→    67→    const respondentName: string | undefined = body.respondentName || formData.name as string || undefined;
+    68→    68→
+    69→    69→    // ─── 3. Store the response ────────────────────────────────────────
+    70→    70→    // Defensive: validate tenantId exists before linking (avoids FK errors
+    71→    71→    // when a form was created against a tenant that no longer exists).
+    72→    72→    let validTenantId: string | null = form.tenantId;
+    73→    73→    if (validTenantId) {
+    74→    74→      try {
+    75→    75→        const t = await db.tenant.findUnique({ where: { id: validTenantId }, select: { id: true } });
+    76→    76→        if (!t) validTenantId = null;
+    77→    77→      } catch { validTenantId = null; }
+    78→    78→    }
+    79→    79→
+    80→    80→    const response = await db.formResponse.create({
+    81→    81→      data: {
+    82→    82→        formId: form.id,
+    83→    83→        dataJson: JSON.stringify(formData),
+    84→    84→        respondent: respondent || null,
+    85→    85→        respondentName: respondentName || null,
+    86→    86→        source,
+    87→    87→        tenantId: validTenantId,
+    88→    88→      },
+    89→    89→    });
+    90→    90→
+    91→    91→    // ─── 4. Read submission actions and field mapping ─────────────────
+    92→    92→    const submissionActions: string[] = safeJsonParse(form.submissionActions, []) as string[];
+    93→    93→    const fieldMapping: Record<string, string> = safeJsonParse(form.fieldMappingJson, {}) as Record<string, string>;
+    94→    94→    const mappedData = applyFieldMapping(formData, fieldMapping);
+    95→    95→
+    96→    96→    // ─── 5. Execute each action ───────────────────────────────────────
+    97→    97→    const actionResults: Record<string, unknown> = {};
+    98→    98→
+    99→    99→    for (const action of submissionActions) {
+   100→   100→      try {
+   101→   101→        switch (action) {
+   102→   102→          // ─── CREATE LEAD ────────────────────────────────────────────
+   103→   103→          case 'create_lead': {
+   104→   104→            const name = String(mappedData.name || formData.name || 'Unknown');
+   105→   105→            const phone = String(mappedData.phone || formData.phone || '');
+   106→   106→            const email = mappedData.email ? String(mappedData.email) : formData.email ? String(formData.email) : null;
+   107→   107→            const address = mappedData.address ? String(mappedData.address) : formData.address ? String(formData.address) : null;
+   108→   108→            const serviceType = mappedData.serviceType ? String(mappedData.serviceType) : formData.serviceType ? String(formData.serviceType) : null;
+   109→   109→            const description = mappedData.description ? String(mappedData.description) : formData.description ? String(formData.description) : null;
+   110→   110→
+   111→   111→            const lead = await db.lead.create({
+   112→   112→              data: {
+   113→   113→                name,
+   114→   114→                phone,
+   115→   115→                email,
+   116→   116→                source: source === 'direct' ? 'form' : source,
+   117→   117→                status: 'new',
+   118→   118→                priority: 'medium',
+   119→   119→                value: mappedData.value ? Number(mappedData.value) : 0,
+   120→   120→                description,
+   121→   121→                address,
+   122→   122→                serviceType,
+   123→   123→                tenantId: validTenantId,
+   124→   124→                tagsJson: JSON.stringify(['form_submission', form.type]),
+   125→   125→              },
+   126→   126→            });
+   127→   127→
+   128→   128→            // Update the response with leadId
+   129→   129→            await db.formResponse.update({
+   130→   130→              where: { id: response.id },
+   131→   131→              data: { leadId: lead.id },
+   132→   132→            });
+   133→   133→
+   134→   134→            actionResults.create_lead = { success: true, leadId: lead.id, name: lead.name };
+   135→   135→
+   136→   136→            // Emit lead.created event
+   137→   137→            try {
+   138→   138→              await EventBus.emit('lead.created', {
+   139→   139→                leadId: lead.id,
+   140→   140→                name: lead.name,
+   141→   141→                phone: lead.phone,
+   142→   142→                source: lead.source,
+   143→   143→                tenantId: lead.tenantId,
+   144→   144→                resourceType: 'lead',
+   145→   145→                resourceId: lead.id,
+   146→   146→                summary: `New lead from form: ${form.name}`,
+   147→   147→              }, { tenantId: lead.tenantId || undefined });
+   148→   148→            } catch {}
+   149→   149→            break;
+   150→   150→          }
+   151→   151→
+   152→   152→          // ─── CREATE CUSTOMER ────────────────────────────────────────
+   153→   153→          case 'create_customer': {
+   154→   154→            const name = String(mappedData.name || formData.name || 'Unknown');
+   155→   155→            const phone = String(mappedData.phone || formData.phone || '');
+   156→   156→            const email = mappedData.email ? String(mappedData.email) : formData.email ? String(formData.email) : null;
+   157→   157→            const address = mappedData.address ? String(mappedData.address) : formData.address ? String(formData.address) : null;
+   158→   158→
+   159→   159→            if (!phone) {
+   160→   160→              actionResults.create_customer = { success: false, error: 'Phone is required for customer creation' };
+   161→   161→              break;
+   162→   162→            }
+   163→   163→
+   164→   164→            // Check if customer already exists
+   165→   165→            const existingCustomer = await db.customer.findFirst({
+   166→   166→              where: { phone },
+   167→   167→            });
+   168→   168→
+   169→   169→            if (existingCustomer) {
+   170→   170→              // Link existing customer to the response
+   171→   171→              await db.formResponse.update({
+   172→   172→                where: { id: response.id },
+   173→   173→                data: { customerId: existingCustomer.id },
+   174→   174→              });
+   175→   175→              actionResults.create_customer = { success: true, customerId: existingCustomer.id, existing: true };
+   176→   176→            } else {
+   177→   177→              const customer = await db.customer.create({
+   178→   178→                data: {
+   179→   179→                  name,
+   180→   180→                  phone,
+   181→   181→                  email,
+   182→   182→                  address,
+   183→   183→                  workspaceId: form.workspaceId,
+   184→   184→                },
+   185→   185→              });
+   186→   186→
+   187→   187→              await db.formResponse.update({
+   188→   188→                where: { id: response.id },
+   189→   189→                data: { customerId: customer.id },
+   190→   190→              });
+   191→   191→
+   192→   192→              actionResults.create_customer = { success: true, customerId: customer.id, name: customer.name };
+   193→   193→            }
+   194→   194→            break;
+   195→   195→          }
+   196→   196→
+   197→   197→          // ─── CREATE BOOKING (Job with type "booking") ───────────────
+   198→   198→          case 'create_booking': {
+   199→   199→            const title = String(mappedData.title || formData.title || `Booking from ${form.name}`);
+   200→   200→            const customerPhone = String(mappedData.phone || formData.phone || '');
+   201→   201→            const customerName = String(mappedData.name || formData.name || 'Unknown');
+   202→   202→            const address = mappedData.address ? String(mappedData.address) : formData.address ? String(formData.address) : null;
+   203→   203→            const description = mappedData.description ? String(mappedData.description) : formData.description ? String(formData.description) : null;
+   204→   204→            const scheduledAt = mappedData.scheduledAt ? new Date(String(mappedData.scheduledAt)) : formData.scheduledAt ? new Date(String(formData.scheduledAt)) : null;
+   205→   205→
+   206→   206→            // Try to find a matching customer
+   207→   207→            let customerId: string | null = null;
+   208→   208→            if (customerPhone) {
+   209→   209→              const customer = await db.customer.findFirst({ where: { phone: customerPhone } });
+   210→   210→              if (customer) customerId = customer.id;
+   211→   211→            }
+   212→   212→
+   213→   213→            const job = await db.job.create({
+   214→   214→              data: {
+   215→   215→                title,
+   216→   216→                description,
+   217→   217→                status: 'pending',
+   218→   218→                priority: 'medium',
+   219→   219→                type: 'booking',
+   220→   220→                address,
+   221→   221→                scheduledAt,
+   222→   222→                customerId,
+   223→   223→                customerName,
+   224→   224→                customerPhone,
+   225→   225→                workspaceId: form.workspaceId,
+   226→   226→              },
+   227→   227→            });
+   228→   228→
+   229→   229→            await db.formResponse.update({
+   230→   230→              where: { id: response.id },
+   231→   231→              data: { bookingId: job.id },
+   232→   232→            });
+   233→   233→
+   234→   234→            actionResults.create_booking = { success: true, jobId: job.id, title: job.title };
+   235→   235→            break;
+   236→   236→          }
+   237→   237→
+   238→   238→          // ─── CREATE JOB ─────────────────────────────────────────────
+   239→   239→          case 'create_job': {
+   240→   240→            const title = String(mappedData.title || formData.title || `Job from ${form.name}`);
+   241→   241→            const customerPhone = String(mappedData.phone || formData.phone || '');
+   242→   242→            const customerName = String(mappedData.name || formData.name || 'Unknown');
+   243→   243→            const address = mappedData.address ? String(mappedData.address) : formData.address ? String(formData.address) : null;
+   244→   244→            const description = mappedData.description ? String(mappedData.description) : formData.description ? String(formData.description) : null;
+   245→   245→            const scheduledAt = mappedData.scheduledAt ? new Date(String(mappedData.scheduledAt)) : formData.scheduledAt ? new Date(String(formData.scheduledAt)) : null;
+   246→   246→            const serviceType = mappedData.serviceType ? String(mappedData.serviceType) : null;
+   247→   247→
+   248→   248→            let customerId: string | null = null;
+   249→   249→            if (customerPhone) {
+   250→   250→              const customer = await db.customer.findFirst({ where: { phone: customerPhone } });
+   251→   251→              if (customer) customerId = customer.id;
+   252→   252→            }
+   253→   253→
+   254→   254→            const job = await db.job.create({
+   255→   255→              data: {
+   256→   256→                title,
+   257→   257→                description,
+   258→   258→                status: 'pending',
+   259→   259→                priority: 'medium',
+   260→   260→                type: serviceType || 'service',
+   261→   261→                address,
+   262→   262→                scheduledAt,
+   263→   263→                customerId,
+   264→   264→                customerName,
+   265→   265→                customerPhone,
+   266→   266→                workspaceId: form.workspaceId,
+   267→   267→              },
+   268→   268→            });
+   269→   269→
+   270→   270→            await db.formResponse.update({
+   271→   271→              where: { id: response.id },
+   272→   272→              data: { jobId: job.id },
+   273→   273→            });
+   274→   274→
+   275→   275→            actionResults.create_job = { success: true, jobId: job.id, title: job.title };
+   276→   276→            break;
+   277→   277→          }
+   278→   278→
+   279→   279→          // ─── CREATE QUOTE ───────────────────────────────────────────
+   280→   280→          case 'create_quote': {
+   281→   281→            const title = String(mappedData.title || formData.title || `Quote from ${form.name}`);
+   282→   282→            const customerPhone = String(mappedData.phone || formData.phone || '');
+   283→   283→            const customerName = String(mappedData.name || formData.name || 'Unknown');
+   284→   284→
+   285→   285→            let quoteCustomerId: string | null = null;
+   286→   286→            if (customerPhone) {
+   287→   287→              const customer = await db.customer.findFirst({ where: { phone: customerPhone } });
+   288→   288→              if (customer) quoteCustomerId = customer.id;
+   289→   289→            }
+   290→   290→
+   291→   291→            const itemsJson = mappedData.itemsJson || formData.itemsJson || [];
+   292→   292→            const subtotal = mappedData.subtotal ? Number(mappedData.subtotal) : 0;
+   293→   293→
+   294→   294→            const quote = await db.quote.create({
+   295→   295→              data: {
+   296→   296→                title,
+   297→   297→                description: `Quote requested from form: ${form.name}`,
+   298→   298→                itemsJson: typeof itemsJson === 'string' ? itemsJson : JSON.stringify(itemsJson),
+   299→   299→                subtotal,
+   300→   300→                total: subtotal,
+   301→   301→                status: 'draft',
+   302→   302→                tenantId: validTenantId,
+   303→   303→                customerId: quoteCustomerId,
+   304→   304→              },
+   305→   305→            });
+   306→   306→
+   307→   307→            await db.formResponse.update({
+   308→   308→              where: { id: response.id },
+   309→   309→              data: { quoteId: quote.id },
+   310→   310→            });
+   311→   311→
+   312→   312→            actionResults.create_quote = { success: true, quoteId: quote.id, title: quote.title };
+   313→   313→            break;
+   314→   314→          }
+   315→   315→
+   316→   316→          // ─── STORE RESPONSE (already done above) ────────────────────
+   317→   317→          case 'store_response': {
+   318→   318→            actionResults.store_response = { success: true, responseId: response.id };
+   319→   319→            break;
+   320→   320→          }
+   321→   321→
+   322→   322→          // ─── SEND WHATSAPP ──────────────────────────────────────────
+   323→   323→          case 'send_whatsapp': {
+   324→   324→            const customerPhone = String(mappedData.phone || formData.phone || '');
+   325→   325→            const customerName = String(mappedData.name || formData.name || 'Unknown');
+   326→   326→            const tenantId = validTenantId;
+   327→   327→
+   328→   328→            // Send to owner
+   329→   329→            if (form.whatsappOwnerTemplate) {
+   330→   330→              try {
+   331→   331→                // Resolve owner WhatsApp phone: tenant.whatsappPhone → tenant.phone → owner user phone
+   332→   332→                let ownerPhone = '';
+   333→   333→                if (tenantId) {
+   334→   334→                  const tenant = await db.tenant.findUnique({ where: { id: tenantId } });
+   335→   335→                  ownerPhone = tenant?.whatsappPhone || tenant?.phone || '';
+   336→   336→                }
+   337→   337→                if (!ownerPhone && tenantId) {
+   338→   338→                  const owner = await db.user.findFirst({
+   339→   339→                    where: { tenantId, role: 'owner', isActive: true },
+   340→   340→                    select: { phone: true },
+   341→   341→                  });
+   342→   342→                  if (owner?.phone) ownerPhone = owner.phone;
+   343→   343→                }
+   344→   344→
+   345→   345→                if (ownerPhone) {
+   346→   346→                  const ownerMessage = replaceTemplateVars(form.whatsappOwnerTemplate, {
+   347→   347→                    name: customerName,
+   348→   348→                    phone: customerPhone,
+   349→   349→                    form: form.name,
+   350→   350→                    ...formData,
+   351→   351→                  });
+   352→   352→                  const waRes = await sendWhatsAppMessage({ to: ownerPhone, message: ownerMessage });
+   353→   353→                  // Best-effort log
+   354→   354→                  try {
+   355→   355→                    await db.notificationLog.create({
+   356→   356→                      data: {
+   357→   357→                        type: 'whatsapp',
+   358→   358→                        recipient: ownerPhone,
+   359→   359→                        recipientName: 'Owner',
+   360→   360→                        recipientRole: 'manager',
+   361→   361→                        subject: `New form submission: ${form.name}`,
+   362→   362→                        message: ownerMessage,
+   363→   363→                        status: waRes.success ? 'sent' : 'failed',
+   364→   364→                        externalId: waRes.messageId,
+   365→   365→                        tenantId: tenantId || undefined,
+   366→   366→                        metadataJson: JSON.stringify({ eventType: 'form.submitted', formId: form.id, simulated: !!waRes.simulated, error: waRes.error }),
+   367→   367→                      },
+   368→   368→                    });
+   369→   369→                  } catch (logErr) {
+   370→   370→                    console.error('[FormSubmit] Owner WhatsApp log failed:', logErr);
+   371→   371→                  }
+   372→   372→                  actionResults.send_whatsapp_owner = { success: waRes.success, to: ownerPhone, simulated: !!waRes.simulated, error: waRes.error };
+   373→   373→                } else {
+   374→   374→                  actionResults.send_whatsapp_owner = { success: false, error: 'No owner WhatsApp phone configured' };
+   375→   375→                }
+   376→   376→              } catch (err) {
+   377→   377→                actionResults.send_whatsapp_owner = { success: false, error: String(err) };
+   378→   378→              }
+   379→   379→            }
+   380→   380→
+   381→   381→            // Send to user/form submitter
+   382→   382→            if (form.whatsappUserTemplate && customerPhone) {
+   383→   383→              try {
+   384→   384→                let userMessage = replaceTemplateVars(form.whatsappUserTemplate, {
+   385→   385→                  name: customerName,
+   386→   386→                  form: form.name,
+   387→   387→                  ...formData,
+   388→   388→                });
+   389→   389→
+   390→   390→                // If AI-generated flag is on, use the z-ai SDK directly (server-side)
+   391→   391→                // to enhance the confirmation message. Falls back to template on any error.
+   392→   392→                if (form.whatsappAiGenerated) {
+   393→   393→                  try {
+   394→   394→                    const ZAI = (await import('z-ai-web-dev-sdk')).default;
+   395→   395→                    const zai = await ZAI.create();
+   396→   396→                    const aiResult = await zai.chat.completions.create({
+   397→   397→                      messages: [
+   398→   398→                        {
+   399→   399→                          role: 'system',
+   400→   400→                          content: 'You generate brief, friendly WhatsApp confirmation messages for form submissions. Return ONLY the message text, no quotes, no explanation, under 200 characters.',
+   401→   401→                        },
+   402→   402→                        {
+   403→   403→                          role: 'user',
+   404→   404→                          content: `Form: "${form.name}". Customer: "${customerName}". Data: ${JSON.stringify(formData).slice(0, 400)}. Generate a warm confirmation message.`,
+   405→   405→                        },
+   406→   406→                      ],
+   407→   407→                    });
+   408→   408→                    const aiText = aiResult.choices?.[0]?.message?.content?.trim();
+   409→   409→                    if (aiText) userMessage = aiText;
+   410→   410→                  } catch (aiErr) {
+   411→   411→                    console.error('[FormSubmit] AI WhatsApp generation failed, using template:', aiErr);
+   412→   412→                  }
+   413→   413→                }
+   414→   414→
+   415→   415→                const waRes = await sendWhatsAppMessage({ to: customerPhone, message: userMessage });
+   416→   416→                try {
+   417→   417→                  await db.notificationLog.create({
+   418→   418→                    data: {
+   419→   419→                      type: 'whatsapp',
+   420→   420→                      recipient: customerPhone,
+   421→   421→                      recipientName: customerName,
+   422→   422→                      recipientRole: 'customer',
+   423→   423→                      subject: `Form submission received`,
+   424→   424→                      message: userMessage,
+   425→   425→                      status: waRes.success ? 'sent' : 'failed',
+   426→   426→                      externalId: waRes.messageId,
+   427→   427→                      tenantId: tenantId || undefined,
+   428→   428→                      metadataJson: JSON.stringify({ eventType: 'form.submitted', formId: form.id, simulated: !!waRes.simulated, error: waRes.error }),
+   429→   429→                    },
+   430→   430→                  });
+   431→   431→                } catch (logErr) {
+   432→   432→                  console.error('[FormSubmit] User WhatsApp log failed:', logErr);
+   433→   433→                }
+   434→   434→                actionResults.send_whatsapp_user = { success: waRes.success, to: customerPhone, simulated: !!waRes.simulated, error: waRes.error };
+   435→   435→              } catch (err) {
+   436→   436→                actionResults.send_whatsapp_user = { success: false, error: String(err) };
+   437→   437→              }
+   438→   438→            }
+   439→   439→            break;
+   440→   440→          }
+   441→   441→
+   442→   442→          // ─── SEND EMAIL ─────────────────────────────────────────────
+   443→   443→          case 'send_email': {
+   444→   444→            const customerEmail = String(mappedData.email || formData.email || '');
+   445→   445→            const customerName = String(mappedData.name || formData.name || 'Unknown');
+   446→   446→            const tenantId = validTenantId;
+   447→   447→            let emailSentTo: string[] = [];
+   448→   448→
+   449→   449→            // 1. Email the owner/tenant (form submission alert)
+   450→   450→            if (tenantId) {
+   451→   451→              try {
+   452→   452→                const ownerSubject = `📬 New Form Submission: ${form.name}`;
+   453→   453→                const ownerHtml = [
+   454→   454→                  `<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:600px;margin:0 auto;padding:24px">`,
+   455→   455→                  `<h2 style="color:#0f172a">📬 New Form Submission</h2>`,
+   456→   456→                  `<p><strong>Form:</strong> ${form.name}</p>`,
+   457→   457→                  `<p><strong>Submitter:</strong> ${customerName}${customerEmail ? ` (${customerEmail})` : ''}</p>`,
+   458→   458→                  `<h3>Submitted Data</h3>`,
+   459→   459→                  `<table style="width:100%;border-collapse:collapse;font-size:14px">`,
+   460→   460→                  ...Object.entries(formData).map(([k, v]) =>
+   461→   461→                    `<tr><td style="padding:8px;background:#f9fafb;font-weight:600;border:1px solid #e5e7eb;width:40%">${k}</td><td style="padding:8px;border:1px solid #e5e7eb">${String(v)}</td></tr>`
+   462→   462→                  ),
+   463→   463→                  `</table>`,
+   464→   464→                  `<p style="font-size:12px;color:#9ca3af;margin-top:24px">— Sent from ServiceOS Forms</p>`,
+   465→   465→                  `</div>`,
+   466→   466→                ].join('\n');
+   467→   467→                const ownerText = `New Form Submission\nForm: ${form.name}\nSubmitter: ${customerName}${customerEmail ? ` (${customerEmail})` : ''}\n\nData:\n${Object.entries(formData).map(([k, v]) => `${k}: ${v}`).join('\n')}\n\n— ServiceOS Forms`;
+   468→   468→
+   469→   469→                // notifyOwner handles owner email resolution + sendEmail + NotificationLog
+   470→   470→                const r = await notifyOwner(tenantId, {
+   471→   471→                  eventType: 'form.submitted',
+   472→   472→                  eventLabel: `Form: ${form.name}`,
+   473→   473→                  emailSubject: ownerSubject,
+   474→   474→                  emailHtml: ownerHtml,
+   475→   475→                  emailText: ownerText,
+   476→   476→                });
+   477→   477→                if (r.email.sent) emailSentTo.push(r.ownerEmail || 'owner');
+   478→   478→              } catch (ownerErr) {
+   479→   479→                console.error('[FormSubmit] Owner email failed:', ownerErr);
+   480→   480→              }
+   481→   481→            }
+   482→   482→
+   483→   483→            // 2. Email the customer a confirmation (if they gave an email)
+   484→   484→            if (customerEmail) {
+   485→   485→              try {
+   486→   486→                const userSubject = `✅ We received your submission — ${form.name}`;
+   487→   487→                const userHtml = [
+   488→   488→                  `<div style="font-family:-apple-system,BlinkMacSystemFont,sans-serif;max-width:600px;margin:0 auto;padding:24px">`,
+   489→   489→                  `<h2 style="color:#059669">✅ Submission Received</h2>`,
+   490→   490→                  `<p>Hi ${customerName},</p>`,
+   491→   491→                  `<p>Thank you for submitting the <strong>${form.name}</strong> form. We've received your details and will be in touch shortly.</p>`,
+   492→   492→                  form.completionMessage ? `<p>${form.completionMessage}</p>` : '',
+   493→   493→                  `<p style="font-size:12px;color:#9ca3af;margin-top:24px">— Sent from ServiceOS</p>`,
+   494→   494→                  `</div>`,
+   495→   495→                ].filter(Boolean).join('\n');
+   496→   496→                const userText = `Hi ${customerName},\n\nThank you for submitting the ${form.name} form. We've received your details and will be in touch shortly.\n${form.completionMessage ? `\n${form.completionMessage}\n` : ''}\n— Sent from ServiceOS`;
+   497→   497→
+   498→   498→                const r = await sendEmail({
+   499→   499→                  to: customerEmail,
+   500→   500→                  subject: userSubject,
+   501→   501→                  html: userHtml,
+   502→   502→                  text: userText,
+   503→   503→                  usageType: 'transactional',
+   504→   504→                });
+   505→   505→                if (r.success) emailSentTo.push(customerEmail);
+   506→   506→                try {
+   507→   507→                  await db.notificationLog.create({
+   508→   508→                    data: {
+   509→   509→                      type: 'email',
+   510→   510→                      recipient: customerEmail,
+   511→   511→                      recipientName: customerName,
+   512→   512→                      recipientRole: 'customer',
+   513→   513→                      subject: userSubject,
+   514→   514→                      message: userText,
+   515→   515→                      status: r.success ? 'sent' : 'failed',
+   516→   516→                      externalId: r.messageId,
+   517→   517→                      tenantId: tenantId || undefined,
+   518→   518→                      metadataJson: JSON.stringify({ eventType: 'form.submitted', formId: form.id, simulated: !!r.simulated, error: r.error }),
+   519→   519→                    },
+   520→   520→                  });
+   521→   521→                } catch (logErr) {
+   522→   522→                  console.error('[FormSubmit] Customer email log failed:', logErr);
+   523→   523→                }
+   524→   524→              } catch (custErr) {
+   525→   525→                console.error('[FormSubmit] Customer email failed:', custErr);
+   526→   526→              }
+   527→   527→            }
+   528→   528→
+   529→   529→            actionResults.send_email = {
+   530→   530→              success: emailSentTo.length > 0,
+   531→   531→              recipients: emailSentTo,
+   532→   532→            };
+   533→   533→            break;
+   534→   534→          }
+   535→   535→
+   536→   536→          // ─── TRIGGER WORKFLOW ────────────────────────────────────────
+   537→   537→          case 'trigger_workflow': {
+   538→   538→            // Find active workflow automations with matching trigger
+   539→   539→            try {
+   540→   540→              const automations = await db.workflowAutomation.findMany({
+   541→   541→                where: {
+   542→   542→                  triggerType: 'form.submitted',
+   543→   543→                  active: true,
+   544→   544→                  tenantId: validTenantId || undefined,
+   545→   545→                },
+   546→   546→              });
+   547→   547→
+   548→   548→              const triggered: Record<string, string>[] = [];
+   549→   549→              for (const automation of automations) {
+   550→   550→                try {
+   551→   551→                  // Log execution
+   552→   552→                  await db.workflowAutomation.update({
+   553→   553→                    where: { id: automation.id },
+   554→   554→                    data: {
+   555→   555→                      executionCount: { increment: 1 },
+   556→   556→                      lastExecutedAt: new Date(),
+   557→   557→                      lastExecutionStatus: 'success',
+   558→   558→                    },
+   559→   559→                  });
+   560→   560→                  triggered.push({ automationId: automation.id, name: automation.name });
+   561→   561→                } catch (autoErr) {
+   562→   562→                  console.error('Workflow automation execution error:', autoErr);
+   563→   563→                }
+   564→   564→              }
+   565→   565→
+   566→   566→              actionResults.trigger_workflow = { success: true, triggeredAutomations: triggered };
+   567→   567→            } catch (err) {
+   568→   568→              actionResults.trigger_workflow = { success: false, error: String(err) };
+   569→   569→            }
+   570→   570→            break;
+   571→   571→          }
+   572→   572→
+   573→   573→          // ─── CALL WEBHOOK ───────────────────────────────────────────
+   574→   574→          case 'call_webhook': {
+   575→   575→            const webhookUrl = mappedData.webhookUrl as string || formData.webhookUrl as string || '';
+   576→   576→            if (!webhookUrl) {
+   577→   577→              actionResults.call_webhook = { success: false, error: 'No webhook URL provided' };
+   578→   578→              break;
+   579→   579→            }
+   580→   580→
+   581→   581→            try {
+   582→   582→              const webhookPayload = {
+   583→   583→                formId: form.id,
+   584→   584→                formName: form.name,
+   585→   585→                formType: form.type,
+   586→   586→                responseId: response.id,
+   587→   587→                data: formData,
+   588→   588→                respondent,
+   589→   589→                submittedAt: new Date().toISOString(),
+   590→   590→              };
+   591→   591→
+   592→   592→              const webhookResponse = await fetch(webhookUrl, {
+   593→   593→                method: 'POST',
+   594→   594→                headers: { 'Content-Type': 'application/json' },
+   595→   595→                body: JSON.stringify(webhookPayload),
+   596→   596→                signal: AbortSignal.timeout(10000),
+   597→   597→              });
+   598→   598→
+   599→   599→              actionResults.call_webhook = {
+   600→   600→                success: webhookResponse.ok,
+   601→   601→                status: webhookResponse.status,
+   602→   602→                url: webhookUrl,
+   603→   603→              };
+   604→   604→            } catch (err) {
+   605→   605→              actionResults.call_webhook = { success: false, error: String(err), url: webhookUrl };
+   606→   606→            }
+   607→   607→            break;
+   608→   608→          }
+   609→   609→
+   610→   610→          default:
+   611→   611→            actionResults[action] = { success: false, error: `Unknown action: ${action}` };
+   612→   612→        }
+   613→   613→      } catch (actionErr) {
+   614→   614→        // If one action fails, log the error but continue with other actions
+   615→   615→        console.error(`Action "${action}" failed:`, actionErr);
+   616→   616→        actionResults[action] = { success: false, error: actionErr instanceof Error ? actionErr.message : String(actionErr) };
+   617→   617→      }
+   618→   618→    }
+   619→   619→
+   620→   620→    // ─── 6. Record all action results ─────────────────────────────────
+   621→   621→    await db.formResponse.update({
+   622→   622→      where: { id: response.id },
+   623→   623→      data: { actionsResultsJson: JSON.stringify(actionResults) },
+   624→   624→    });
+   625→   625→
+   626→   626→    // ─── 7. Increment form.submissions count ──────────────────────────
+   627→   627→    await db.form.update({
+   628→   628→      where: { id: form.id },
+   629→   629→      data: { submissions: { increment: 1 } },
+   630→   630→    });
+   631→   631→
+   632→   632→    // ─── 8. Return the response with all created resource IDs ─────────
+   633→   633→    const updatedResponse = await db.formResponse.findUnique({
+   634→   634→      where: { id: response.id },
+   635→   635→    });
+   636→   636→
+   637→   637→    return NextResponse.json({
+   638→   638→      success: true,
+   639→   639→      response: updatedResponse,
+   640→   640→      actionResults,
+   641→   641→    }, { status: 201 });
+   642→   642→  } catch (error) {
+   643→   643→    console.error('Form submission error:', error);
+   644→   644→    // Return a detailed error so the frontend / embed can surface what went
+   645→   645→    // wrong instead of a generic 500. This makes debugging hosted forms much
+   646→   646→    // easier (the original report was a bare 500 with no body).
+   647→   647→    const message = error instanceof Error ? error.message : String(error);
+   648→   648→    return NextResponse.json(
+   649→   649→      { error: 'Failed to process form submission', details: message },
+   650→   650→      { status: 500 }
+   651→   651→    );
+   652→   652→  }
+   653→   653→}
+   654→   654→

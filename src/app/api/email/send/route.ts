@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
       providerId,
       credentialId,
       usageType,
+      tenantId: user.tenantId || undefined,
     })
 
     // Log to NotificationLog (type='email').

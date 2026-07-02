@@ -7,15 +7,16 @@
  *   - AWS SES SMTP credentials (created in AWS Console → SES → SMTP Settings)
  *   - Sender email verified in SES (or SES moved out of sandbox mode)
  *
- * The SMTP credentials the user supplied:
- *   SMTP user: AKIA2PPO3JNBZSEHPLQH
- *   SMTP pass: BOVpNDa2T6R/E8ziSzTd8KM/BB/vUwMt23mVm4XQJhDl
- *   SMTP host: email-smtp.us-east-1.amazonaws.com
+ * Current SES configuration (ap-south-1):
+ *   IAM user: ses-smtp-user.20260630-122722
+ *   SMTP user: AKIA2PPO3JBYFJO4G5O
+ *   SMTP pass: BInFKprST5upb+sYW5/U4dPAW7n3BZirdZL2FXFWNdPE
+ *   SMTP host: email-smtp.ap-south-1.amazonaws.com
  *   Port: 587 (STARTTLS)
+ *   Verified senders: sales@serviceos.cc, support@serviceos.cc
  *
- * Sandbox restriction: SES in sandbox mode only lets you send FROM and TO
- * verified email addresses. The user verified deepakchandra076@gmail.com,
- * so we'll set both fromEmail and replyTo to that address.
+ * NOTE: If the SES SMTP credentials change, update the constants below
+ * and re-run this script. It will upsert the provider record.
  */
 import { PrismaClient } from '@prisma/client';
 
@@ -24,26 +25,30 @@ const db = new PrismaClient();
 async function main() {
   console.log('🌱 Seeding AWS SES as the platform default transactional provider...\n');
 
-  // SES SMTP configuration
-  const SES_HOST = 'email-smtp.us-east-1.amazonaws.com';
+  // SES SMTP configuration — UPDATE THESE WHEN CREDENTIALS CHANGE
+  const SES_HOST = 'email-smtp.ap-south-1.amazonaws.com';
   const SES_PORT = '587';
-  const SES_USER = String.fromCharCode(65,75,73,65,50,80,80,79,51,74,78,66,90,83,69,72,80,76,81,72);
-  const SES_PASS = 'BOVpNDa2T6R/E8ziSzTd8KM/BB/vUwMt23mVm4XQJhDl';
+  const SES_USER = 'AKIA2PPO3JBYFJO4G5O';
+  const SES_PASS = 'BInFKprST5upb+sYW5/U4dPAW7n3BZirdZL2FXFWNdPE';
+  const SES_REGION = 'ap-south-1';
 
-  // From / reply-to: must be a SES-verified email while in sandbox mode.
-  const FROM_EMAIL = 'deepakchandra076@gmail.com';
-  const FROM_NAME  = 'ServiceOS Notifications';
+  // From / reply-to: verified email addresses in SES
+  const FROM_EMAIL = 'sales@serviceos.cc';
+  const FROM_NAME  = 'ServiceOS';
 
-  // Find the demo tenant (ServiceOS Demo Corp). The EmailProvider schema
-  // requires tenantId, so we attach this SES provider to the demo tenant.
+  // Find any tenant. The EmailProvider schema requires tenantId, so we
+  // attach this SES provider to the first tenant we find.
   // Because isPlatform=true, the resolver will use it across all tenants
   // that don't have their own transactional provider configured.
-  const tenant = await db.tenant.findFirst({
+  let tenant = await db.tenant.findFirst({
     where: { slug: 'serviceos-demo' },
     select: { id: true, name: true },
   });
   if (!tenant) {
-    throw new Error('Demo tenant not found. Run `bun run prisma/seed-users.ts` first.');
+    tenant = await db.tenant.findFirst({ select: { id: true, name: true } });
+  }
+  if (!tenant) {
+    throw new Error('No tenant found. Run `bun run prisma/seed-users.ts` first.');
   }
   console.log(`  Attaching to tenant: ${tenant.name} (${tenant.id})`);
 
@@ -53,6 +58,7 @@ async function main() {
     smtpSecure: 'false',   // STARTTLS on 587 — not implicit TLS
     smtpUser: SES_USER,
     smtpPass: SES_PASS,
+    region: SES_REGION,
   });
 
   // First: clear any existing default-transactional flag on other providers
@@ -62,10 +68,9 @@ async function main() {
     data:  { isDefaultTransactional: false },
   });
 
-  // Upsert the SES provider (look it up by name + providerType so re-running
-  // this script doesn't create duplicates)
+  // Upsert the SES provider — look for ANY existing SES platform provider
   const existing = await db.emailProvider.findFirst({
-    where: { name: 'AWS SES (Production)', providerType: 'ses', isPlatform: true },
+    where: { providerType: 'ses', isPlatform: true },
   });
 
   let provider;
@@ -73,13 +78,15 @@ async function main() {
     provider = await db.emailProvider.update({
       where: { id: existing.id },
       data: {
+        name: 'AWS SES - ServiceOS',
         configJson,
         fromName:  FROM_NAME,
         fromEmail: FROM_EMAIL,
         replyTo:   FROM_EMAIL,
         status:    'active',
         isDefaultTransactional: true,
-        usageType: 'transactional',
+        isDefaultMarketing: true,
+        usageType: 'both',
         isPlatform: true,
         tenantId: tenant.id,
       },
@@ -88,40 +95,29 @@ async function main() {
   } else {
     provider = await db.emailProvider.create({
       data: {
-        name: 'AWS SES (Production)',
+        name: 'AWS SES - ServiceOS',
         providerType: 'ses',
         configJson,
         fromName:  FROM_NAME,
         fromEmail: FROM_EMAIL,
         replyTo:   FROM_EMAIL,
-        usageType: 'transactional',
+        usageType: 'both',
         isDefaultTransactional: true,
+        isDefaultMarketing: true,
         isPlatform: true,
         status: 'active',
         tenantId: tenant.id,
-        // workspaceId deliberately NULL — this is a tenant-wide platform provider.
       },
     });
     console.log(`✓ Created new SES provider (id=${provider.id})`);
   }
 
-  // Print the resulting record (with config masked)
-  const masked = {
-    ...provider,
-    configJson: provider.configJson.replace(
-      /"smtpPass":"[^"]+"/,
-      '"smtpPass":"••••••••••••"'
-    ).replace(
-      /"smtpUser":"[^"]+"/,
-      '"smtpUser":"••••••••"'
-    ),
-  };
-  console.log('\nResult:');
-  console.log(JSON.stringify(masked, null, 2));
-
-  console.log('\n✅ Done. New leads will now trigger an email to the tenant owner via AWS SES.');
-  console.log('   (While SES is in sandbox mode, mail can only be sent TO verified addresses');
-  console.log('    like deepakchandra076@gmail.com — request production access in SES to remove this limit.)');
+  console.log('\n✅ Done. Provider details:');
+  console.log(`   name       : ${provider.name}`);
+  console.log(`   fromEmail  : ${provider.fromEmail}`);
+  console.log(`   smtpHost   : ${SES_HOST}`);
+  console.log(`   region     : ${SES_REGION}`);
+  console.log(`   isPlatform : ${provider.isPlatform}`);
 }
 
 main()

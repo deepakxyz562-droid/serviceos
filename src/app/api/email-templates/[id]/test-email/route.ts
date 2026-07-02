@@ -61,6 +61,7 @@ export async function POST(
       html: personalizedHtml,
       text: template.textBody || undefined,
       usageType: 'transactional',
+      tenantId: user.tenantId || undefined,
     })
 
     if (!result.success) {

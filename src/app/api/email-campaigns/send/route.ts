@@ -260,6 +260,7 @@ export async function POST(request: NextRequest) {
         providerId: body.providerId,
         credentialId: body.credentialId,
         usageType: 'marketing',
+        tenantId: user.tenantId || undefined,
       })
 
       // Log each send (don't set customerId — Contact and Customer are different models)
