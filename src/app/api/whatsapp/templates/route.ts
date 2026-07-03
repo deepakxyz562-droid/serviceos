@@ -8,6 +8,56 @@ import { resolveWhatsAppConfig } from '@/lib/whatsapp-config';
 const WHATSAPP_API_BASE = 'https://graph.facebook.com/v25.0';
 
 /**
+ * Strip ALL emojis and emoji-like characters from a string.
+ * Covers Unicode emoji ranges comprehensively.
+ */
+function stripEmojis(text: string): string {
+  return text
+    // Remove emoji modifiers, symbols, and pictographs
+    .replace(/[\u{1F000}-\u{1FFFF}]/gu, '')
+    .replace(/[\u{2600}-\u{27BF}]/gu, '')   // Misc symbols, dingbats
+    .replace(/[\u{FE00}-\u{FE0F}]/gu, '')   // Variation selectors
+    .replace(/[\u{1F900}-\u{1F9FF}]/gu, '') // Supplemental symbols
+    .replace(/[\u{1FA00}-\u{1FA6F}]/gu, '') // Chess symbols, etc.
+    .replace(/[\u{1FA70}-\u{1FAFF}]/gu, '') // Symbols extended
+    .replace(/[\u{2702}-\u{27B0}]/gu, '')   // Dingbats
+    .replace(/[\u{200D}]/gu, '')             // Zero-width joiner
+    .replace(/[\u{20E3}]/gu, '')             // Combining enclosing keycap
+    .replace(/[\u{E0020}-\u{E007F}]/gu, '') // Tags
+    // Clean up any resulting double spaces
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+/**
+ * Ensure body text does not start or end with a variable {{N}}.
+ * If it does, wrap with surrounding text.
+ */
+function ensureBodyNotStartsOrEndsWithVariable(bodyText: string): string {
+  let text = bodyText;
+
+  // Check if body starts with a variable like {{1}}
+  if (/^\{\{\d+\}\}/.test(text)) {
+    text = 'Hello, ' + text;
+  }
+
+  // Check if body ends with a variable like {{1}}
+  if (/\{\{\d+\}\}$/.test(text)) {
+    text = text + ' thank you.';
+  }
+
+  return text;
+}
+
+/**
+ * Strip variable patterns {{N}} from footer text.
+ * Meta does not allow variables in footer.
+ */
+function stripVariablesFromFooter(footerText: string): string {
+  return footerText.replace(/\{\{\d+\}\}/g, '').replace(/\s{2,}/g, ' ').trim();
+}
+
+/**
  * GET /api/whatsapp/templates
  * List WhatsApp templates for the current tenant.
  * Also returns the setup status (whether Meta is connected, templates imported, etc.)
@@ -134,8 +184,11 @@ export async function POST(request: NextRequest) {
       for (const tmpl of templatesToImport) {
         if (existingNameSet.has(tmpl.name)) continue; // Skip duplicates
 
-        // Replace {{company.name}} style references in footer
-        const footerText = tmpl.footerText?.replace(/\{\{2\}\}|\{\{1\}\}/g, companyName) || null;
+        // Replace {{company.name}} style references in footer — also strip any remaining variables
+        let footerText = tmpl.footerText?.replace(/\{\{2\}\}|\{\{1\}\}/g, companyName) || null;
+        if (footerText) {
+          footerText = stripVariablesFromFooter(footerText) || null;
+        }
 
         const detectedVars = detectVariablesFromContent(tmpl.bodyText, tmpl.headerText, footerText);
 
@@ -221,7 +274,7 @@ export async function POST(request: NextRequest) {
           // Update template status to rejected
           await db.campaignTemplate.update({
             where: { id: templateId },
-            data: { status: 'rejected', lastTestError: errMsg },
+            data: { status: 'rejected' },
           });
 
           return NextResponse.json({ error: errMsg, metaError: responseData?.error }, { status: 400 });
@@ -309,7 +362,7 @@ export async function POST(request: NextRequest) {
             const errMsg = responseData?.error?.error_user_msg || responseData?.error?.message || 'Unknown error';
             await db.campaignTemplate.update({
               where: { id: tmpl.id },
-              data: { status: 'rejected', lastTestError: errMsg },
+              data: { status: 'rejected' },
             });
             results.failed++;
             results.errors.push(`${tmpl.name}: ${errMsg}`);
@@ -353,25 +406,64 @@ export async function POST(request: NextRequest) {
 
         const data = await response.json() as { data: Array<{ id: string; name: string; status: string; category: string; language: string }> };
         let synced = 0;
+        let created = 0;
 
         for (const metaTmpl of (data.data || [])) {
-          const local = await db.campaignTemplate.findFirst({
+          // First try matching by externalId
+          let local = await db.campaignTemplate.findFirst({
             where: { externalId: metaTmpl.id, tenantId },
           });
+
+          // If no match by externalId, try matching by name
+          if (!local) {
+            local = await db.campaignTemplate.findFirst({
+              where: { name: metaTmpl.name, tenantId },
+            });
+          }
+
           if (local) {
+            // Update existing record with Meta status and externalId
             await db.campaignTemplate.update({
               where: { id: local.id },
               data: {
+                externalId: metaTmpl.id,
                 status: mapMetaStatusToLocal(metaTmpl.status),
                 isApproved: metaTmpl.status === 'APPROVED',
-                lastTestError: metaTmpl.status === 'REJECTED' ? 'Rejected by Meta' : null,
               },
             });
             synced++;
+          } else {
+            // No local match — create a new CampaignTemplate record for this Meta template
+            // Determine a reasonable category from Meta's category
+            const localCategory = mapMetaCategoryToLocal(metaTmpl.category);
+            const metaCategoryLower = metaTmpl.category?.toLowerCase() || 'utility';
+
+            try {
+              await db.campaignTemplate.create({
+                data: {
+                  name: metaTmpl.name,
+                  description: `Template synced from Meta (${metaTmpl.status})`,
+                  category: localCategory,
+                  content: '', // Body text not available from list endpoint
+                  variablesJson: '[]',
+                  isApproved: metaTmpl.status === 'APPROVED',
+                  tenantId,
+                  workspaceId: null,
+                  language: metaTmpl.language || 'en',
+                  templateType: 'text',
+                  externalId: metaTmpl.id,
+                  status: mapMetaStatusToLocal(metaTmpl.status),
+                  tagsJson: JSON.stringify([metaCategoryLower, localCategory]),
+                },
+              });
+              created++;
+            } catch (createErr) {
+              console.error('[WhatsApp Templates] Failed to create record for Meta template:', metaTmpl.name, createErr);
+            }
           }
         }
 
-        return NextResponse.json({ synced, total: (data.data || []).length });
+        return NextResponse.json({ synced, created, total: (data.data || []).length });
       } catch {
         return NextResponse.json({ error: 'Failed to sync from Meta API' }, { status: 500 });
       }
@@ -402,6 +494,13 @@ function mapToMetaCategory(localCategory: string, tagsJson: string): string {
   if (marketingCategories.includes(localCategory)) return 'MARKETING';
   if (authCategories.includes(localCategory)) return 'AUTHENTICATION';
   return 'UTILITY'; // Default to UTILITY (highest approval rate)
+}
+
+function mapMetaCategoryToLocal(metaCategory: string): string {
+  const lower = metaCategory?.toLowerCase() || '';
+  if (lower === 'authentication') return 'auth';
+  if (lower === 'marketing') return 'promotions';
+  return 'general';
 }
 
 function mapMetaStatusToLocal(metaStatus: string): string {
@@ -449,10 +548,9 @@ function buildMetaTemplatePayload(
 
   // Header — Meta doesn't allow emojis, formatting, or newlines in headers
   if (template.headerText) {
-    const cleanHeader = template.headerText
-      .replace(/[\u{1F000}-\u{1FFFF}]/gu, '') // Remove emojis
-      .replace(/[*_~`]/g, '')                   // Remove markdown formatting
-      .replace(/\n/g, ' ')                      // Replace newlines with space
+    const cleanHeader = stripEmojis(template.headerText)
+      .replace(/[*_~`]/g, '')    // Remove markdown formatting
+      .replace(/\n/g, ' ')       // Replace newlines with space
       .trim();
     if (cleanHeader) {
       components.push({
@@ -463,18 +561,33 @@ function buildMetaTemplatePayload(
     }
   }
 
-  // Body
-  components.push({
-    type: 'BODY',
-    text: template.content,
-  });
-
-  // Footer
-  if (template.footerText) {
+  // Body — different format for AUTHENTICATION vs others
+  if (metaCategory === 'AUTHENTICATION') {
+    // AUTHENTICATION category: BODY must NOT have a text field
+    // Instead use add_safety_recommendation
     components.push({
-      type: 'FOOTER',
-      text: template.footerText,
+      type: 'BODY',
+      add_safety_recommendation: true,
     });
+  } else {
+    // UTILITY / MARKETING: body with text, ensuring compliance
+    let bodyText = stripEmojis(template.content);
+    bodyText = ensureBodyNotStartsOrEndsWithVariable(bodyText);
+    components.push({
+      type: 'BODY',
+      text: bodyText,
+    });
+  }
+
+  // Footer — strip emojis and variables (Meta doesn't allow variables in footer)
+  if (template.footerText) {
+    const cleanFooter = stripEmojis(stripVariablesFromFooter(template.footerText));
+    if (cleanFooter) {
+      components.push({
+        type: 'FOOTER',
+        text: cleanFooter.slice(0, 60), // Meta limit: 60 chars
+      });
+    }
   }
 
   // Buttons
@@ -483,21 +596,32 @@ function buildMetaTemplatePayload(
     if (buttons.length > 0) {
       const metaButtons = buttons.slice(0, 3).map((btn) => {
         // Strip emojis and special chars from button text (Meta restriction)
-        const cleanBtnText = btn.text
-          .replace(/[\u{1F000}-\u{1FFFF}]/gu, '') // Remove emojis
-          .replace(/[*_~`]/g, '')                   // Remove markdown
+        let cleanBtnText = stripEmojis(btn.text)
+          .replace(/[*_~`]/g, '')   // Remove markdown
           .trim()
           .slice(0, 25);
+
+        // Fallback if button text becomes empty after stripping
+        if (!cleanBtnText) cleanBtnText = 'Option';
+
         const btnPayload: Record<string, unknown> = {
           type: btn.type === 'quick_reply' ? 'QUICK_REPLY' : btn.type.toUpperCase(),
-          text: cleanBtnText || 'Option',
+          text: cleanBtnText,
         };
-        if (btn.type === 'URL' && btn.url) {
+
+        if (btn.type.toUpperCase() === 'URL' && btn.url) {
           btnPayload.url = btn.url;
         }
-        if (btn.type === 'CALL' && btn.phoneNumber) {
+        if (btn.type.toUpperCase() === 'CALL' && btn.phoneNumber) {
           btnPayload.phone_number = btn.phoneNumber;
         }
+        if (btn.type.toUpperCase() === 'COPY_CODE') {
+          // COPY_CODE button for AUTHENTICATION templates
+          // Meta requires the button type to be COPY_CODE with otp_type
+          btnPayload.type = 'COPY_CODE';
+          btnPayload.otp_type = 'ONE_TIME_AUTH_CODE';
+        }
+
         return btnPayload;
       });
       components.push({ type: 'BUTTONS', buttons: metaButtons });

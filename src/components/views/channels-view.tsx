@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   MessageSquare, Smartphone, Mail, KeyRound, RadioTower, Plus, Loader2,
   CheckCircle2, XCircle, AlertCircle, Trash2, Wifi, WifiOff, Shield,
-  Globe, Database, Cloud, Send, Star, Eye, EyeOff, Link2,
+  Globe, Database, Cloud, Send, Star, Eye, EyeOff, Link2, RefreshCw, FileText, Clock,
 } from 'lucide-react'
 import { authFetch } from '@/lib/client-auth'
 import { StatCard } from '@/components/shared/stat-card'
@@ -131,25 +131,65 @@ function ProviderCard({ p, onDelete }: { p: CommProvider; onDelete: (id: string)
 
 // ─── WhatsApp Section ─────────────────────────────────────────────────────────
 
+interface TemplateSetupStatus {
+  metaConnected: boolean; providerCount: number; templatesImported: number
+  templatesApproved: number; totalTemplates: number; preBuiltCount: number
+  essentialCount: number; setupStep: number
+}
+
 function WhatsAppSection() {
   const [providers, setProviders] = useState<CommProvider[]>([])
   const [waConfig, setWaConfig] = useState<{ isConfigured: boolean; mode: string; phoneNumberId: string; source: string; verifyTokenSet: boolean } | null>(null)
+  const [setupStatus, setSetupStatus] = useState<TemplateSetupStatus | null>(null)
+  const [templateCounts, setTemplateCounts] = useState<{ submitted: number; approved: number; pending: number; rejected: number }>({ submitted: 0, approved: 0, pending: 0, rejected: 0 })
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)
   const [form, setForm] = useState({ name: '', provider: 'meta_cloud_api', config: {} as Record<string, string>, isDefault: false })
   const [saving, setSaving] = useState(false)
+  const [syncing, setSyncing] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [pr, cr] = await Promise.all([authFetch('/api/communication-providers?type=whatsapp'), authFetch('/api/whatsapp/config')])
+      const [pr, cr, sr] = await Promise.all([
+        authFetch('/api/communication-providers?type=whatsapp'),
+        authFetch('/api/whatsapp/config'),
+        authFetch('/api/whatsapp/templates?setup=true'),
+      ])
       if (pr.ok) { const d = await pr.json(); setProviders((Array.isArray(d) ? d : d.providers || []).filter((p: CommProvider) => p.type === 'whatsapp')) }
       if (cr.ok) setWaConfig(await cr.json())
+      if (sr.ok) {
+        const sd = await sr.json()
+        if (sd.setupStatus) setSetupStatus(sd.setupStatus)
+      }
+      // Fetch template list for accurate counts
+      const tr = await authFetch('/api/whatsapp/templates')
+      if (tr.ok) {
+        const td = await tr.json()
+        const templates: Array<{ externalId: string | null; status: string; isApproved: boolean }> = td.data || []
+        setTemplateCounts({
+          submitted: templates.filter(t => t.externalId).length,
+          approved: templates.filter(t => t.status === 'approved' || t.isApproved).length,
+          pending: templates.filter(t => t.status === 'pending').length,
+          rejected: templates.filter(t => t.status === 'rejected').length,
+        })
+      }
     } catch { toast.error('Failed to load WhatsApp data') }
     finally { setLoading(false) }
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  const handleSync = async () => {
+    setSyncing(true)
+    try {
+      const r = await authFetch('/api/whatsapp/templates', { method: 'POST', body: JSON.stringify({ action: 'sync_status' }) })
+      if (!r.ok) throw new Error((await r.json()).error || 'Sync failed')
+      const result = await r.json()
+      toast.success(`Synced ${result.synced || 0} templates, created ${result.created || 0} new`)
+      load()
+    } catch (e: any) { toast.error(e.message || 'Sync failed') } finally { setSyncing(false) }
+  }
 
   const handleAdd = async () => {
     setSaving(true)
@@ -194,6 +234,30 @@ function WhatsAppSection() {
         <StatCard label="Default" value={def?.name || 'None'} icon={Star} color="text-amber-600" />
         <StatCard label="Sent This Month" value={providers.reduce((s,p) => s+p.sentThisMonth, 0)} icon={Send} color="text-teal-600" />
       </div>
+
+      {/* Template Status Section */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+            <FileText className="size-4" />WhatsApp Templates
+          </h3>
+          <Button size="sm" variant="outline" onClick={handleSync} disabled={syncing || !waConfig?.isConfigured}>
+            {syncing ? <Loader2 className="size-4 mr-1 animate-spin" /> : <RefreshCw className="size-4 mr-1" />}Sync from Meta
+          </Button>
+        </div>
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+          <StatCard label="Submitted" value={templateCounts.submitted} icon={Send} color="text-blue-600" />
+          <StatCard label="Approved" value={templateCounts.approved} icon={CheckCircle2} color="text-emerald-600" />
+          <StatCard label="Pending" value={templateCounts.pending} icon={Clock} color="text-amber-600" />
+          <StatCard label="Rejected" value={templateCounts.rejected} icon={XCircle} color="text-red-500" />
+        </div>
+        {setupStatus && (
+          <p className="text-xs text-muted-foreground">
+            {setupStatus.totalTemplates} local templates, {setupStatus.preBuiltCount} pre-built available ({setupStatus.essentialCount} essential)
+          </p>
+        )}
+      </div>
+
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-muted-foreground">WhatsApp Providers</h3>
         <Button size="sm" onClick={() => setShowAdd(true)}><Plus className="size-4 mr-1" />Add Provider</Button>

@@ -10,6 +10,13 @@
  *
  * Variables use {{1}}, {{2}}, etc. (Meta's positional variable format).
  * ServiceOS auto-maps {{customer.name}} → {{1}} during submission.
+ *
+ * Meta compliance rules enforced here:
+ * - No variables at the start or end of body text
+ * - No emojis in body text, header text, or button text
+ * - Footer text must NOT contain variables
+ * - Button text must be plain text, max 25 chars
+ * - AUTHENTICATION category uses special BODY format (no text field)
  */
 
 export interface WhatsAppPreBuiltTemplate {
@@ -31,7 +38,7 @@ export interface WhatsAppPreBuiltTemplate {
   headerText?: string;
   /** Body text with {{1}}, {{2}} positional variables */
   bodyText: string;
-  /** Footer text (max 60 chars, optional) */
+  /** Footer text (max 60 chars, optional, NO variables allowed) */
   footerText?: string;
   /** Buttons (max 3) */
   buttons?: WhatsAppTemplateButton[];
@@ -75,7 +82,7 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     templateType: 'TEXT',
     headerText: 'New Job Assigned',
     bodyText: 'You have been assigned a new job.\n\nJob: {{1}}\nCustomer: {{2}}\nService: {{3}}\nScheduled: {{4}}\n\nPlease confirm your availability.',
-    footerText: '{{5}}',
+    footerText: 'ServiceOS',
     buttons: [
       { type: 'QUICK_REPLY', text: 'Accept Job' },
       { type: 'QUICK_REPLY', text: 'Reject Job' },
@@ -94,7 +101,7 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     templateType: 'TEXT',
     headerText: 'Service Completed',
     bodyText: 'Your service has been completed.\n\nService: {{1}}\nTechnician: {{2}}\n\nThank you for choosing {{3}}! Please rate your experience.',
-    footerText: '{{3}}',
+    footerText: 'ServiceOS',
     buttons: [
       { type: 'QUICK_REPLY', text: 'Excellent' },
       { type: 'QUICK_REPLY', text: 'Good' },
@@ -117,11 +124,11 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     description: 'Confirm a new booking with date, time, and service details.',
     language: 'en',
     templateType: 'TEXT',
-    bodyText: 'Hi {{1}}! Your booking with {{2}} is confirmed.\n\n📅 Date: {{3}}\n🕐 Time: {{4}}\n🔧 Service: {{5}}\n\nWe look forward to serving you!',
-    footerText: '{{2}}',
+    bodyText: 'Hi {{1}}, your booking with {{2}} is confirmed.\n\nDate: {{3}}\nTime: {{4}}\nService: {{5}}\n\nWe look forward to serving you!',
+    footerText: 'ServiceOS',
     buttons: [
-      { type: 'QUICK_REPLY', text: '✅ Confirm' },
-      { type: 'QUICK_REPLY', text: '🔄 Reschedule' },
+      { type: 'QUICK_REPLY', text: 'Confirm' },
+      { type: 'QUICK_REPLY', text: 'Reschedule' },
     ],
     essential: true,
     industries: ['all'],
@@ -136,10 +143,10 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     language: 'en',
     templateType: 'TEXT',
     bodyText: 'Reminder: You have an appointment with {{1}} tomorrow at {{2}}.\n\nService: {{3}}\n\nPlease reply to confirm or reschedule.',
-    footerText: '{{1}}',
+    footerText: 'ServiceOS',
     buttons: [
-      { type: 'QUICK_REPLY', text: '✅ I\'ll be there' },
-      { type: 'QUICK_REPLY', text: '🔄 Reschedule' },
+      { type: 'QUICK_REPLY', text: "I'll be there" },
+      { type: 'QUICK_REPLY', text: 'Reschedule' },
     ],
     essential: true,
     industries: ['all'],
@@ -153,8 +160,8 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     description: 'Notify customer that a technician has been assigned to their job.',
     language: 'en',
     templateType: 'TEXT',
-    bodyText: 'Hi {{1}}! {{2}} has been assigned to your job #{{3}}.\n\nThey will reach out to you shortly.',
-    footerText: '{{4}}',
+    bodyText: 'Hi {{1}}, {{2}} has been assigned to your job #{{3}}.\n\nThey will reach out to you shortly.',
+    footerText: 'ServiceOS',
     essential: true,
     industries: ['field_service', 'home_services', 'maintenance'],
     exampleValues: ['John', 'Raj Kumar', '10234', 'ServiceOS'],
@@ -167,10 +174,10 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     description: 'Notify customer that the technician is heading to their location.',
     language: 'en',
     templateType: 'TEXT',
-    bodyText: 'Great news, {{1}}! Your technician {{2}} is on the way and will arrive shortly.\n\n📞 You can reach them at: {{3}}',
-    footerText: '{{4}}',
+    bodyText: 'Great news, {{1}}! Your technician {{2}} is on the way and will arrive shortly.\n\nYou can reach them at: {{3}}',
+    footerText: 'ServiceOS',
     buttons: [
-      { type: 'CALL', text: '📞 Call Technician', phoneNumber: '{{3}}' },
+      { type: 'CALL', text: 'Call Technician', phoneNumber: '{{3}}' },
     ],
     essential: true,
     industries: ['field_service', 'home_services', 'delivery', 'maintenance'],
@@ -184,10 +191,10 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     description: 'Notify customer that their job has been completed.',
     language: 'en',
     templateType: 'TEXT',
-    bodyText: 'Hi {{1}}, your job #{{2}} has been completed! ✅\n\nWe hope you\'re satisfied with the service. Your feedback means a lot to us!',
-    footerText: '{{3}}',
+    bodyText: 'Hi {{1}}, your job #{{2}} has been completed!\n\nWe hope you are satisfied with the service. Your feedback means a lot to us!',
+    footerText: 'ServiceOS',
     buttons: [
-      { type: 'QUICK_REPLY', text: '⭐ Rate Service' },
+      { type: 'QUICK_REPLY', text: 'Rate Service' },
     ],
     essential: true,
     industries: ['field_service', 'home_services', 'maintenance'],
@@ -202,13 +209,13 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     language: 'en',
     templateType: 'TEXT',
     bodyText: 'Hi {{1}}, this is a friendly reminder that your invoice #{{2}} for {{3}} is due on {{4}}.\n\nPay now to avoid late fees:',
-    footerText: '{{5}}',
+    footerText: 'ServiceOS',
     buttons: [
-      { type: 'URL', text: '💳 Pay Now', url: '{{6}}', example: ['https://pay.serviceos.com/inv/10234'] },
+      { type: 'URL', text: 'Pay Now', url: '{{5}}', example: ['https://pay.serviceos.com/inv/10234'] },
     ],
     essential: true,
     industries: ['all'],
-    exampleValues: ['John', 'INV-10234', '₹2,500', 'Jan 20, 2025', 'ServiceOS', 'https://pay.serviceos.com/inv/10234'],
+    exampleValues: ['John', 'INV-10234', '$2,500', 'Jan 20, 2025', 'https://pay.serviceos.com/inv/10234'],
   },
   {
     key: 'utility_payment_confirmation',
@@ -218,11 +225,11 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     description: 'Confirm that a payment has been received successfully.',
     language: 'en',
     templateType: 'TEXT',
-    bodyText: 'Thank you, {{1}}! We\'ve received your payment of {{2}} for invoice #{{3}}.\n\n🎉 Payment confirmed!',
-    footerText: '{{4}}',
+    bodyText: 'Thank you, {{1}}! We have received your payment of {{2}} for invoice #{{3}}.\n\nPayment confirmed!',
+    footerText: 'ServiceOS',
     essential: false,
     industries: ['all'],
-    exampleValues: ['John', '₹2,500', 'INV-10234', 'ServiceOS'],
+    exampleValues: ['John', '$2,500', 'INV-10234', 'ServiceOS'],
   },
   {
     key: 'utility_quote_ready',
@@ -232,15 +239,15 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     description: 'Notify customer that their quote is ready for review.',
     language: 'en',
     templateType: 'TEXT',
-    bodyText: 'Hi {{1}}! Your quote from {{2}} is ready.\n\n📝 Quote #: {{3}}\n💰 Amount: {{4}}\n📅 Valid until: {{5}}',
-    footerText: '{{2}}',
+    bodyText: 'Hi {{1}}, your quote from {{2}} is ready.\n\nQuote #: {{3}}\nAmount: {{4}}\nValid until: {{5}}',
+    footerText: 'ServiceOS',
     buttons: [
-      { type: 'URL', text: '📋 View Quote', url: '{{6}}', example: ['https://app.serviceos.com/quote/10234'] },
-      { type: 'QUICK_REPLY', text: '✅ Accept' },
+      { type: 'URL', text: 'View Quote', url: '{{6}}', example: ['https://app.serviceos.com/quote/10234'] },
+      { type: 'QUICK_REPLY', text: 'Accept' },
     ],
     essential: false,
     industries: ['all'],
-    exampleValues: ['John', 'ServiceOS', 'QT-10234', '₹5,000', 'Jan 30, 2025', 'https://app.serviceos.com/quote/10234'],
+    exampleValues: ['John', 'ServiceOS', 'QT-10234', '$5,000', 'Jan 30, 2025', 'https://app.serviceos.com/quote/10234'],
   },
   {
     key: 'utility_appointment_rescheduled',
@@ -250,11 +257,11 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     description: 'Notify customer about a rescheduled appointment.',
     language: 'en',
     templateType: 'TEXT',
-    bodyText: 'Hi {{1}}, your appointment with {{2}} has been rescheduled.\n\n📅 New Date: {{3}}\n🕐 New Time: {{4}}\n\nIf this doesn\'t work, please let us know.',
-    footerText: '{{2}}',
+    bodyText: 'Hi {{1}}, your appointment with {{2}} has been rescheduled.\n\nNew Date: {{3}}\nNew Time: {{4}}\n\nIf this does not work for you, please let us know.',
+    footerText: 'ServiceOS',
     buttons: [
-      { type: 'QUICK_REPLY', text: '✅ Confirmed' },
-      { type: 'QUICK_REPLY', text: '🔄 Reschedule again' },
+      { type: 'QUICK_REPLY', text: 'Confirmed' },
+      { type: 'QUICK_REPLY', text: 'Reschedule again' },
     ],
     essential: false,
     industries: ['all'],
@@ -268,14 +275,14 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     description: 'Update customer on their order status (shipped, delivered, etc.).',
     language: 'en',
     templateType: 'TEXT',
-    bodyText: 'Hi {{1}}! Your order #{{2}} status has been updated.\n\n📦 Status: {{3}}\n📍 {{4}}',
-    footerText: '{{5}}',
+    bodyText: 'Hi {{1}}, your order #{{2}} status has been updated.\n\nStatus: {{3}}\n{{4}}',
+    footerText: 'ServiceOS',
     buttons: [
-      { type: 'URL', text: '📦 Track Order', url: '{{6}}', example: ['https://track.serviceos.com/ORD-10234'] },
+      { type: 'URL', text: 'Track Order', url: '{{5}}', example: ['https://track.serviceos.com/ORD-10234'] },
     ],
     essential: false,
     industries: ['ecommerce', 'retail', 'delivery'],
-    exampleValues: ['John', 'ORD-10234', 'Shipped', 'In transit — arriving tomorrow', 'ServiceOS', 'https://track.serviceos.com/ORD-10234'],
+    exampleValues: ['John', 'ORD-10234', 'Shipped', 'In transit - arriving tomorrow', 'https://track.serviceos.com/ORD-10234'],
   },
 
   // ═══════════════════════════════════════════
@@ -290,11 +297,11 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     description: 'Welcome new leads who have shown interest in your services.',
     language: 'en',
     templateType: 'TEXT',
-    bodyText: 'Welcome to {{1}}, {{2}}! 🎉\n\nThank you for your interest! We\'re excited to help you with {{3}}.\n\nOur team will reach out shortly. In the meantime, feel free to explore our services!',
-    footerText: '{{1}}',
+    bodyText: 'Welcome to {{1}}, {{2}}!\n\nThank you for your interest! We are excited to help you with {{3}}.\n\nOur team will reach out shortly. In the meantime, feel free to explore our services!',
+    footerText: 'ServiceOS',
     buttons: [
-      { type: 'URL', text: '🌐 Visit Website', url: '{{4}}', example: ['https://serviceos.com'] },
-      { type: 'QUICK_REPLY', text: '📞 Call me' },
+      { type: 'URL', text: 'Visit Website', url: '{{4}}', example: ['https://serviceos.com'] },
+      { type: 'QUICK_REPLY', text: 'Call me' },
     ],
     essential: true,
     industries: ['all'],
@@ -308,11 +315,11 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     description: 'Follow up with leads who haven\'t responded yet.',
     language: 'en',
     templateType: 'TEXT',
-    bodyText: 'Hi {{1}}! This is {{2}} following up on your inquiry about {{3}}.\n\nAre you still interested? We\'d love to help!',
-    footerText: '{{2}}',
+    bodyText: 'Hi {{1}}! This is {{2}} following up on your inquiry about {{3}}.\n\nAre you still interested? We would love to help!',
+    footerText: 'ServiceOS',
     buttons: [
-      { type: 'QUICK_REPLY', text: '✅ Yes, I am' },
-      { type: 'QUICK_REPLY', text: '❌ Not anymore' },
+      { type: 'QUICK_REPLY', text: 'Yes, I am' },
+      { type: 'QUICK_REPLY', text: 'Not anymore' },
     ],
     essential: true,
     industries: ['all'],
@@ -326,10 +333,10 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     description: 'Send seasonal promotions and special offers to customers.',
     language: 'en',
     templateType: 'TEXT',
-    bodyText: '🎉 Special Offer from {{1}}!\n\n{{2}} — {{3}} off on {{4}}!\n\n⏰ Offer valid until {{5}}. Don\'t miss out!',
-    footerText: '{{1}}',
+    bodyText: 'Special Offer from {{1}}!\n\n{{2}} - {{3}} off on {{4}}!\n\nOffer valid until {{5}}. Do not miss out!',
+    footerText: 'ServiceOS',
     buttons: [
-      { type: 'URL', text: '🛒 Claim Offer', url: '{{6}}', example: ['https://serviceos.com/offer'] },
+      { type: 'URL', text: 'Claim Offer', url: '{{6}}', example: ['https://serviceos.com/offer'] },
     ],
     essential: false,
     industries: ['all'],
@@ -343,10 +350,10 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     description: 'Re-engage leads who didn\'t convert with a special discount.',
     language: 'en',
     templateType: 'TEXT',
-    bodyText: 'Hi {{1}}, we noticed you haven\'t moved forward yet.\n\nWe\'d love to offer you {{2}} off your first service with {{3}}! 💸\n\nReply to claim this exclusive offer.',
+    bodyText: 'Hi {{1}}, we noticed you haven\'t moved forward yet.\n\nWe would love to offer you {{2}} off your first service with {{3}}!\n\nReply to claim this exclusive offer.',
     footerText: 'Limited time offer',
     buttons: [
-      { type: 'QUICK_REPLY', text: '🎁 Claim Offer' },
+      { type: 'QUICK_REPLY', text: 'Claim Offer' },
     ],
     essential: false,
     industries: ['all'],
@@ -360,10 +367,10 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     description: 'Request a review from satisfied customers after service completion.',
     language: 'en',
     templateType: 'TEXT',
-    bodyText: 'Hi {{1}}! We hope you loved your recent service with {{2}}. ⭐\n\nYour feedback helps us improve! Would you mind leaving a quick review?',
-    footerText: '{{2}}',
+    bodyText: 'Hi {{1}}! We hope you loved your recent service with {{2}}.\n\nYour feedback helps us improve! Would you mind leaving a quick review?',
+    footerText: 'ServiceOS',
     buttons: [
-      { type: 'URL', text: '⭐ Leave Review', url: '{{3}}', example: ['https://g.page/review/serviceos'] },
+      { type: 'URL', text: 'Leave Review', url: '{{3}}', example: ['https://g.page/review/serviceos'] },
     ],
     essential: true,
     industries: ['all'],
@@ -377,18 +384,22 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     description: 'Ask happy customers to refer friends and family.',
     language: 'en',
     templateType: 'TEXT',
-    bodyText: 'Hi {{1}}! Love our service? Share the joy! 🎁\n\nRefer a friend to {{2}} and you BOTH get {{3}} off your next service!\n\nShare your unique link:',
-    footerText: '{{2}}',
+    bodyText: 'Hi {{1}}! Love our service? Share the joy!\n\nRefer a friend to {{2}} and you BOTH get {{3}} off your next service!\n\nShare your unique link:',
+    footerText: 'ServiceOS',
     buttons: [
-      { type: 'URL', text: '🔗 Share Referral Link', url: '{{4}}', example: ['https://serviceos.com/ref/ABC123'] },
+      { type: 'URL', text: 'Share Referral Link', url: '{{4}}', example: ['https://serviceos.com/ref/ABC123'] },
     ],
     essential: false,
     industries: ['all'],
-    exampleValues: ['John', 'ServiceOS', '₹500', 'https://serviceos.com/ref/ABC123'],
+    exampleValues: ['John', 'ServiceOS', '$500', 'https://serviceos.com/ref/ABC123'],
   },
 
   // ═══════════════════════════════════════════
   // AUTHENTICATION TEMPLATES — OTP / Login codes
+  // NOTE: AUTH category uses special format - BODY has no text field,
+  // uses add_safety_recommendation instead. COPY_CODE button required.
+  // The bodyText here is for local preview only; the buildMetaTemplatePayload
+  // function will construct the correct Meta API format.
   // ═══════════════════════════════════════════
 
   {
@@ -399,10 +410,10 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     description: 'Send one-time passwords for login verification.',
     language: 'en',
     templateType: 'TEXT',
-    bodyText: '{{1}} is your verification code for {{2}}.\n\nThis code expires in {{3}} minutes. Do not share this code with anyone.',
-    footerText: '{{2}}',
+    bodyText: '{{1}} is your verification code for {{2}}. This code expires in {{3}} minutes. Do not share this code with anyone.',
+    footerText: 'Do not share this code',
     buttons: [
-      { type: 'COPY_CODE', text: '📋 Copy Code' },
+      { type: 'COPY_CODE', text: 'Copy Code' },
     ],
     essential: true,
     industries: ['all'],
@@ -416,10 +427,10 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
     description: 'Verify a new account registration via WhatsApp.',
     language: 'en',
     templateType: 'TEXT',
-    bodyText: 'Welcome to {{1}}! Your verification code is {{2}}.\n\nEnter this code to verify your account. This code expires in {{3}} minutes.',
-    footerText: '{{1}}',
+    bodyText: 'Your verification code for {{1}} is {{2}}. Enter this code to verify your account. This code expires in {{3}} minutes.',
+    footerText: 'Do not share this code',
     buttons: [
-      { type: 'COPY_CODE', text: '📋 Copy Code' },
+      { type: 'COPY_CODE', text: 'Copy Code' },
     ],
     essential: false,
     industries: ['all'],
