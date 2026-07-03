@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { PRE_BUILT_WHATSAPP_TEMPLATES, type WhatsAppPreBuiltTemplate } from '@/lib/whatsapp-prebuilt-templates';
 import { detectVariablesFromContent } from '@/lib/template-vars';
+import { resolveWhatsAppConfig } from '@/lib/whatsapp-config';
 
 const WHATSAPP_API_BASE = 'https://graph.facebook.com/v25.0';
 
@@ -181,24 +182,18 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Template not found' }, { status: 404 });
       }
 
-      // Find WhatsApp provider credentials
-      const provider = await db.communicationProvider.findFirst({
-        where: { type: 'whatsapp', status: 'active', sendingEnabled: true },
-        orderBy: [{ isDefault: 'desc' }],
-      });
+      // Resolve WhatsApp credentials via DB fallback chain (tenant own → platform → env)
+      const waConfig = await resolveWhatsAppConfig(tenantId);
 
-      if (!provider) {
+      if (!waConfig.accessToken || !waConfig.phoneNumberId) {
         return NextResponse.json({ error: 'No active WhatsApp provider configured. Connect Meta first.' }, { status: 400 });
       }
 
-      // Extract credentials from provider
-      let config: Record<string, string> = {};
-      try { config = JSON.parse(provider.configJson); } catch { /* empty */ }
-      const accessToken = config.accessToken || '';
-      const wabaId = config.wabaId || config.businessAccountId || '';
+      const accessToken = waConfig.accessToken;
+      const wabaId = waConfig.wabaId || '';
 
-      if (!accessToken || !wabaId) {
-        return NextResponse.json({ error: 'WhatsApp provider missing access token or business account ID. Update provider config.' }, { status: 400 });
+      if (!wabaId) {
+        return NextResponse.json({ error: 'WhatsApp provider missing business account ID (wabaId). Update provider config.' }, { status: 400 });
       }
 
       // Map local category to Meta category
@@ -269,22 +264,17 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ message: 'No pending templates to submit', submitted: 0 });
       }
 
-      const provider = await db.communicationProvider.findFirst({
-        where: { type: 'whatsapp', status: 'active', sendingEnabled: true },
-        orderBy: [{ isDefault: 'desc' }],
-      });
+      const waConfig = await resolveWhatsAppConfig(tenantId);
 
-      if (!provider) {
+      if (!waConfig.accessToken || !waConfig.phoneNumberId) {
         return NextResponse.json({ error: 'No active WhatsApp provider configured.' }, { status: 400 });
       }
 
-      let config: Record<string, string> = {};
-      try { config = JSON.parse(provider.configJson); } catch { /* empty */ }
-      const accessToken = config.accessToken || '';
-      const wabaId = config.wabaId || config.businessAccountId || '';
+      const accessToken = waConfig.accessToken;
+      const wabaId = waConfig.wabaId || '';
 
-      if (!accessToken || !wabaId) {
-        return NextResponse.json({ error: 'WhatsApp provider missing credentials.' }, { status: 400 });
+      if (!wabaId) {
+        return NextResponse.json({ error: 'WhatsApp provider missing business account ID.' }, { status: 400 });
       }
 
       const results = { submitted: 0, failed: 0, errors: [] as string[] };
@@ -335,22 +325,17 @@ export async function POST(request: NextRequest) {
 
     // ─── SYNC status from Meta for all templates ──────────────────
     if (action === 'sync_status') {
-      const provider = await db.communicationProvider.findFirst({
-        where: { type: 'whatsapp', status: 'active', sendingEnabled: true },
-        orderBy: [{ isDefault: 'desc' }],
-      });
+      const waConfig = await resolveWhatsAppConfig(tenantId);
 
-      if (!provider) {
+      if (!waConfig.accessToken || !waConfig.phoneNumberId) {
         return NextResponse.json({ error: 'No active WhatsApp provider.' }, { status: 400 });
       }
 
-      let config: Record<string, string> = {};
-      try { config = JSON.parse(provider.configJson); } catch { /* empty */ }
-      const accessToken = config.accessToken || '';
-      const wabaId = config.wabaId || config.businessAccountId || '';
+      const accessToken = waConfig.accessToken;
+      const wabaId = waConfig.wabaId || '';
 
-      if (!accessToken || !wabaId) {
-        return NextResponse.json({ error: 'Provider missing credentials.' }, { status: 400 });
+      if (!wabaId) {
+        return NextResponse.json({ error: 'Provider missing business account ID.' }, { status: 400 });
       }
 
       try {
@@ -462,13 +447,20 @@ function buildMetaTemplatePayload(
   // Build components
   const components: Record<string, unknown>[] = [];
 
-  // Header
+  // Header — Meta doesn't allow emojis, formatting, or newlines in headers
   if (template.headerText) {
-    components.push({
-      type: 'HEADER',
-      format: 'TEXT',
-      text: template.headerText,
-    });
+    const cleanHeader = template.headerText
+      .replace(/[\u{1F000}-\u{1FFFF}]/gu, '') // Remove emojis
+      .replace(/[*_~`]/g, '')                   // Remove markdown formatting
+      .replace(/\n/g, ' ')                      // Replace newlines with space
+      .trim();
+    if (cleanHeader) {
+      components.push({
+        type: 'HEADER',
+        format: 'TEXT',
+        text: cleanHeader.slice(0, 60), // Meta limit: 60 chars
+      });
+    }
   }
 
   // Body
@@ -490,9 +482,15 @@ function buildMetaTemplatePayload(
     const buttons = JSON.parse(template.buttonsJson) as Array<{ type: string; text: string; url?: string; phoneNumber?: string }>;
     if (buttons.length > 0) {
       const metaButtons = buttons.slice(0, 3).map((btn) => {
+        // Strip emojis and special chars from button text (Meta restriction)
+        const cleanBtnText = btn.text
+          .replace(/[\u{1F000}-\u{1FFFF}]/gu, '') // Remove emojis
+          .replace(/[*_~`]/g, '')                   // Remove markdown
+          .trim()
+          .slice(0, 25);
         const btnPayload: Record<string, unknown> = {
-          type: btn.type === 'quick_reply' ? 'QUICK_REPLY' : btn.type,
-          text: btn.text.slice(0, 25),
+          type: btn.type === 'quick_reply' ? 'QUICK_REPLY' : btn.type.toUpperCase(),
+          text: cleanBtnText || 'Option',
         };
         if (btn.type === 'URL' && btn.url) {
           btnPayload.url = btn.url;

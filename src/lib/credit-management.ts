@@ -148,15 +148,36 @@ export async function checkWhatsAppCredits(tenantId: string): Promise<CreditChec
     }
   }
 
-  // ── Paid plans without own WhatsApp: still need Meta connection ──────
+  // ── Paid plans without own WhatsApp: 10 free platform credits ───────
+  // Same rule as trial: 10 free messages via platform WhatsApp, then must
+  // connect their own Meta account. Once they connect own WA → unlimited.
   if (isPaid && !subscription.ownWhatsappConnected) {
-    // Allow platform WhatsApp for paid users who haven't connected yet
     if (subscription.platformWhatsappEnabled) {
+      const totalCredits = subscription.trialWhatsappCredits
+      const usedCredits = subscription.trialWhatsappUsed
+      const remainingCredits = Math.max(0, totalCredits - usedCredits)
+
+      if (remainingCredits > 0) {
+        return {
+          allowed: true,
+          remainingCredits,
+          usedCredits,
+          totalCredits,
+          isTrial: false,
+          ownWhatsappConnected: false,
+          platformWhatsappEnabled: true,
+          planStatus,
+          plan,
+        }
+      }
+
+      // Credits exhausted — must connect own WhatsApp
       return {
-        allowed: true,
-        remainingCredits: -1, // unlimited for paid using platform
-        usedCredits: subscription.whatsappUsageCount,
-        totalCredits: -1,
+        allowed: false,
+        reason: 'Your platform WhatsApp credits are exhausted. Connect your own WhatsApp Business account to continue messaging.',
+        remainingCredits: 0,
+        usedCredits,
+        totalCredits,
         isTrial: false,
         ownWhatsappConnected: false,
         platformWhatsappEnabled: true,
@@ -251,10 +272,14 @@ export async function checkWhatsAppCredits(tenantId: string): Promise<CreditChec
 
 /**
  * Deduct one WhatsApp credit after a successful send.
- * For trial users, decrements trialWhatsappUsed.
- * For all users, increments whatsappUsageCount.
+ * For users using platform WhatsApp (no own connection), decrements trialWhatsappUsed.
+ * For all users, increments whatsappUsageCount (analytics).
+ *
+ * @param tenantId - The tenant to deduct from
+ * @param count - Number of credits to deduct
+ * @param isOwnUsage - If true, this is own WA usage (only track usage, don't deduct trial credits)
  */
-export async function deductWhatsAppCredit(tenantId: string, count: number = 1): Promise<CreditDeductResult> {
+export async function deductWhatsAppCredit(tenantId: string, count: number = 1, isOwnUsage: boolean = false): Promise<CreditDeductResult> {
   try {
     const subscription = await db.subscription.findFirst({
       where: { tenantId },
@@ -269,8 +294,10 @@ export async function deductWhatsAppCredit(tenantId: string, count: number = 1):
       whatsappUsageCount: { increment: count },
     }
 
-    // For trial users, also increment trial usage
-    if (subscription.status === 'trial') {
+    // For users using platform WhatsApp (not their own), also increment trial usage
+    // This applies to both trial AND paid users who haven't connected their own WA
+    // If isOwnUsage is true, the caller already determined this is own WA usage — skip trial deduction
+    if (!isOwnUsage && !subscription.ownWhatsappConnected) {
       updateData.trialWhatsappUsed = { increment: count }
     }
 
@@ -279,9 +306,13 @@ export async function deductWhatsAppCredit(tenantId: string, count: number = 1):
       data: updateData,
     })
 
-    const remaining = subscription.status === 'trial'
-      ? Math.max(0, subscription.trialWhatsappCredits - subscription.trialWhatsappUsed - count)
-      : -1 // unlimited for paid
+    // Calculate remaining credits
+    let remaining: number
+    if (subscription.ownWhatsappConnected) {
+      remaining = -1 // unlimited when using own WA
+    } else {
+      remaining = Math.max(0, subscription.trialWhatsappCredits - subscription.trialWhatsappUsed - count)
+    }
 
     return { success: true, remainingCredits: remaining }
   } catch (error) {

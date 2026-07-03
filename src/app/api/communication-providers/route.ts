@@ -81,8 +81,14 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type')
 
     const where: Record<string, unknown> = {}
-    if (tenantId) where.tenantId = tenantId
     if (type) where.type = type
+    // Show both tenant's own providers AND platform providers (SuperAdmin-configured)
+    if (tenantId) {
+      where.OR = [
+        { tenantId },
+        { isPlatform: true, status: 'active' },
+      ]
+    }
 
     const providers = await db.communicationProvider.findMany({
       where,

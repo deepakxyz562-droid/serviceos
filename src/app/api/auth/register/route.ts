@@ -109,6 +109,16 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Auto-import notification WhatsApp templates for the new tenant
+    // (New Job Assigned, Technician Assigned, On The Way, Job Completed, Service Completed)
+    try {
+      const { autoImportNotificationTemplates } = await import('@/lib/auto-import-templates')
+      await autoImportNotificationTemplates(tenant.id, workspace.id, businessName)
+    } catch (importErr) {
+      console.warn('[Register] Failed to auto-import notification templates:', importErr)
+      // Non-blocking — user can import manually later
+    }
+
     // Generate JWT token
     const authUser = {
       id: user.id,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getWhatsAppConfig } from '@/lib/whatsapp-config';
+import { resolveWhatsAppConfig } from '@/lib/whatsapp-config';
 import { executeWorkflow, type NodeOutput } from '@/lib/workflow-executor';
 
 /**
@@ -9,7 +9,7 @@ import { executeWorkflow, type NodeOutput } from '@/lib/workflow-executor';
  */
 export async function GET(request: NextRequest) {
   try {
-    const config = getWhatsAppConfig();
+    const config = await resolveWhatsAppConfig();
     const { searchParams } = new URL(request.url);
     const mode = searchParams.get('hub.mode');
     const token = searchParams.get('hub.verify_token');

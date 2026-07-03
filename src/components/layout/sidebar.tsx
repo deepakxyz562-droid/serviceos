@@ -189,9 +189,7 @@ const ownerNavSections: NavSection[] = [
     items: [
       { view: 'settings', label: 'Settings', icon: Settings },
       { view: 'integrations', label: 'Integrations', icon: Plug, badge: 'New' },
-      { view: 'communicationProviders', label: 'Providers', icon: KeyRound },
-      { view: 'emailProviders', label: 'Email Providers', icon: Mail },
-      { view: 'credentials', label: 'Credentials', icon: KeyRound },
+      { view: 'channels', label: 'Channels & Credentials', icon: RadioTower },
       { view: 'auditLogs', label: 'Audit Logs', icon: ScrollText },
       { view: 'customerPortal', label: 'Customer Portal', icon: Globe },
       { view: 'employeePortal', label: 'Employee Portal', icon: HardHat },
@@ -311,9 +309,7 @@ const superadminNavSections: NavSection[] = [
     items: [
       { view: 'settings', label: 'Settings', icon: Settings },
       { view: 'integrations', label: 'Integrations', icon: Plug, badge: 'New' },
-      { view: 'communicationProviders', label: 'Providers', icon: KeyRound },
-      { view: 'emailProviders', label: 'Email Providers', icon: Mail },
-      { view: 'credentials', label: 'Credentials', icon: KeyRound },
+      { view: 'channels', label: 'Channels & Credentials', icon: RadioTower },
       { view: 'auditLogs', label: 'Audit Logs', icon: ScrollText },
       { view: 'helpAdminTickets', label: 'Support Tickets', icon: Ticket },
       { view: 'helpAdminKB', label: 'Knowledge Base', icon: BookOpen },

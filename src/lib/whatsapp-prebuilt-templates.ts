@@ -60,6 +60,55 @@ export const PRE_BUILT_WHATSAPP_TEMPLATES: WhatsAppPreBuiltTemplate[] = [
   // UTILITY TEMPLATES — Business-critical messages
   // ═══════════════════════════════════════════
 
+  // ═══════════════════════════════════════════
+  // NOTIFICATION TEMPLATES — Job lifecycle notifications
+  // (These match the WhatsApp notifications sent by whatsapp-notifications.ts)
+  // ═══════════════════════════════════════════
+
+  {
+    key: 'notification_new_job_assigned',
+    name: 'New Job Assigned',
+    metaCategory: 'UTILITY',
+    businessCategory: 'jobs',
+    description: 'Notify technician that a new job has been assigned to them with details.',
+    language: 'en',
+    templateType: 'TEXT',
+    headerText: 'New Job Assigned',
+    bodyText: 'You have been assigned a new job.\n\nJob: {{1}}\nCustomer: {{2}}\nService: {{3}}\nScheduled: {{4}}\n\nPlease confirm your availability.',
+    footerText: '{{5}}',
+    buttons: [
+      { type: 'QUICK_REPLY', text: 'Accept Job' },
+      { type: 'QUICK_REPLY', text: 'Reject Job' },
+    ],
+    essential: true,
+    industries: ['field_service', 'home_services', 'maintenance'],
+    exampleValues: ['10234', 'John Customer', 'Pipe Repair', 'Jan 15, 2025', 'ServiceOS'],
+  },
+  {
+    key: 'notification_service_completed',
+    name: 'Service Completed',
+    metaCategory: 'UTILITY',
+    businessCategory: 'jobs',
+    description: 'Notify customer that their service has been completed and request a rating.',
+    language: 'en',
+    templateType: 'TEXT',
+    headerText: 'Service Completed',
+    bodyText: 'Your service has been completed.\n\nService: {{1}}\nTechnician: {{2}}\n\nThank you for choosing {{3}}! Please rate your experience.',
+    footerText: '{{3}}',
+    buttons: [
+      { type: 'QUICK_REPLY', text: 'Excellent' },
+      { type: 'QUICK_REPLY', text: 'Good' },
+      { type: 'QUICK_REPLY', text: 'Average' },
+    ],
+    essential: true,
+    industries: ['field_service', 'home_services', 'maintenance'],
+    exampleValues: ['Pipe Repair', 'Raj Kumar', 'ServiceOS'],
+  },
+
+  // ═══════════════════════════════════════════
+  // UTILITY TEMPLATES — Business-critical messages
+  // ═══════════════════════════════════════════
+
   {
     key: 'utility_booking_confirmation',
     name: 'Booking Confirmation',

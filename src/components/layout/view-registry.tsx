@@ -64,6 +64,7 @@ const SegmentsView = lazy(() => import('@/components/views/segments-view').then(
 const MarketingAnalyticsView = lazy(() => import('@/components/views/marketing-analytics-view').then(m => ({ default: m.MarketingAnalyticsView })));
 const ServiceCatalogView = lazy(() => import('@/components/views/service-catalog-view').then(m => ({ default: m.ServiceCatalogView })));
 const CommunicationProvidersView = lazy(() => import('@/components/views/communication-providers-view').then(m => ({ default: m.CommunicationProvidersView })));
+const ChannelsView = lazy(() => import('@/components/views/channels-view'));
 const ReviewsView = lazy(() => import('@/components/views/reviews-view').then(m => ({ default: m.ReviewsView })));
 const LeadDiscoveryView = lazy(() => import('@/components/views/lead-discovery-view').then(m => ({ default: m.LeadDiscoveryView })));
 const JourneyAutomationView = lazy(() => import('@/components/views/journey-automation-view').then(m => ({ default: m.JourneyAutomationView })));
@@ -150,6 +151,7 @@ const lazyViews: Partial<Record<ViewType, ComponentType>> = {
   marketingAnalytics: MarketingAnalyticsView,
   serviceCatalog: ServiceCatalogView,
   communicationProviders: CommunicationProvidersView,
+  channels: ChannelsView,
   reviews: ReviewsView,
   leadDiscovery: LeadDiscoveryView,
   journeyAutomation: JourneyAutomationView,

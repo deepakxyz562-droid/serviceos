@@ -1,4 +1,7 @@
 import { db } from '@/lib/db'
+import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
+import { resolveWhatsAppConfig } from '@/lib/whatsapp-config'
+import { deductWhatsAppCredit } from '@/lib/credit-management'
 
 // ==========================================
 // TYPES
@@ -26,75 +29,76 @@ interface SendResult {
 }
 
 // ==========================================
-// INTERNAL WHATSAPP SEND
+// INTERNAL WHATSAPP SEND (uses DB-resolved credentials)
 // ==========================================
 
-async function sendWhatsAppMessage(
+async function sendNotificationWhatsAppMessage(
   to: string,
   message: string,
   type?: string,
-  interactive?: Record<string, unknown>
+  interactive?: Record<string, unknown>,
+  tenantId?: string
 ): Promise<SendResult> {
-  // Try to find a WhatsApp credential in the database
-  const credential = await db.credential.findFirst({
-    where: { type: 'whatsapp' },
-    orderBy: { createdAt: 'desc' },
-  })
-
-  if (credential) {
-    // Send real WhatsApp message via the API
-    try {
-      const credData = JSON.parse(credential.encryptedData) as Record<string, string>
-      const WHATSAPP_API_BASE = 'https://graph.facebook.com/v25.0'
-
-      let recipientPhone = to.replace(/\D/g, '')
-      // Auto-correct: if phone number is 10 digits, prepend country code
-      if (/^\d{10}$/.test(recipientPhone)) {
-        recipientPhone = `91${recipientPhone}`
-      }
-
-      let payload: Record<string, unknown>
-      if (type === 'interactive' && interactive) {
-        payload = {
-          messaging_product: 'whatsapp',
-          to: recipientPhone,
-          type: 'interactive',
-          interactive,
-        }
-      } else {
-        payload = {
-          messaging_product: 'whatsapp',
-          to: recipientPhone,
-          type: 'text',
-          text: { body: message, preview_url: false },
-        }
-      }
-
-      const response = await fetch(`${WHATSAPP_API_BASE}/${credData.phoneNumberId}/messages`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${credData.accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      })
-
-      const data = (await response.json()) as Record<string, unknown>
-      const messages = data.messages as Array<{ id: string }> | undefined
-      const errorObj = data.error as Record<string, unknown> | undefined
-
-      return {
-        success: response.ok,
-        externalId: messages?.[0]?.id,
-        error: !response.ok ? (errorObj?.message as string) || `WhatsApp API error: ${response.status}` : undefined,
-      }
-    } catch (e) {
-      return { success: false, error: String(e) }
+  // For text messages, use the unified sendWhatsAppMessage (tenant own → platform fallback)
+  if (type !== 'interactive' || !interactive) {
+    const result = await sendWhatsAppMessage({ to, message, tenantId })
+    return {
+      success: result.success,
+      error: result.error,
+      externalId: result.messageId,
+      simulated: result.simulated,
     }
   }
 
-  // No credential - simulate and log
-  return { success: true, externalId: `sim_${Date.now()}`, simulated: true }
+  // For interactive messages, resolve credentials from DB and send directly
+  try {
+    const config = await resolveWhatsAppConfig(tenantId)
+
+    if (!config.accessToken || !config.phoneNumberId) {
+      return { success: true, externalId: `sim_${Date.now()}`, simulated: true }
+    }
+
+    let recipientPhone = to.replace(/\D/g, '')
+    if (/^\d{10}$/.test(recipientPhone)) {
+      recipientPhone = `91${recipientPhone}`
+    }
+
+    const WHATSAPP_API_BASE = 'https://graph.facebook.com/v25.0'
+    const payload = {
+      messaging_product: 'whatsapp',
+      to: recipientPhone,
+      type: 'interactive',
+      interactive,
+    }
+
+    const response = await fetch(`${WHATSAPP_API_BASE}/${config.phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${config.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    })
+
+    const data = (await response.json()) as Record<string, unknown>
+    const messages = data.messages as Array<{ id: string }> | undefined
+    const errorObj = data.error as Record<string, unknown> | undefined
+
+    if (response.ok) {
+      // Deduct credit for platform usage
+      if (tenantId && config.source === 'platform') {
+        try { await deductWhatsAppCredit(tenantId, 1) } catch { /* non-blocking */ }
+      }
+      return { success: true, externalId: messages?.[0]?.id || `real_${Date.now()}` }
+    }
+
+    return {
+      success: false,
+      error: (errorObj?.message as string) || `WhatsApp API error: ${response.status}`,
+    }
+  } catch (e) {
+    return { success: false, error: String(e) }
+  }
 }
 
 // ==========================================
@@ -106,7 +110,7 @@ export async function sendJobNotification(payload: NotificationPayload): Promise
 
   // 1. Attempt to send the WhatsApp message
   try {
-    sendResult = await sendWhatsAppMessage(payload.to, payload.message, payload.type, payload.interactive)
+    sendResult = await sendNotificationWhatsAppMessage(payload.to, payload.message, payload.type, payload.interactive, payload.tenantId)
   } catch (e) {
     console.error('WhatsApp send error:', e)
     sendResult = { success: false, error: String(e) }

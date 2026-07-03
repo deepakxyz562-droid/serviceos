@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send';
 import { getAuthUser } from '@/lib/auth';
-import { checkWhatsAppCredits, deductWhatsAppCredit } from '@/lib/credit-management';
+import { checkWhatsAppCredits } from '@/lib/credit-management';
 
 export async function POST(request: NextRequest) {
   try {
@@ -47,12 +47,10 @@ export async function POST(request: NextRequest) {
     });
 
     if (result.success) {
-      // ── Deduct credit on successful send ───────────────────────────
-      if (user.tenantId) {
-        await deductWhatsAppCredit(user.tenantId, 1).catch(err =>
-          console.error('[WhatsAppSend] Credit deduction failed:', err)
-        );
-      }
+      // Credit deduction is handled inside sendWhatsAppMessage:
+      //   - Platform usage: increments both whatsappUsageCount + trialWhatsappUsed
+      //   - Own WA usage:   increments only whatsappUsageCount (unlimited)
+      // No double deduction here.
 
       return NextResponse.json({
         success: true,

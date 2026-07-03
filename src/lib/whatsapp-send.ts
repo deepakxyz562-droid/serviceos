@@ -1,5 +1,4 @@
 import { db } from '@/lib/db'
-import { getWhatsAppConfig } from '@/lib/whatsapp-config'
 import { checkWhatsAppCredits, deductWhatsAppCredit } from '@/lib/credit-management'
 
 const WHATSAPP_API_BASE = 'https://graph.facebook.com/v25.0'
@@ -11,7 +10,7 @@ interface SendWhatsAppOptions {
   type?: 'text' | 'template'
   templateName?: string
   templateLanguage?: string
-  tenantId?: string  // tenant scope for provider resolution
+  tenantId?: string
 }
 
 interface SendWhatsAppResult {
@@ -28,78 +27,8 @@ function safeJsonParse(str: string | null, fallback: unknown = {}) {
 }
 
 /**
- * Auto-ensure a platform WhatsApp CommunicationProvider exists in the DB.
- *
- * If no platform WhatsApp provider (isPlatform=true, type='whatsapp', status='active')
- * is found, AND WhatsApp env vars (WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID) are
- * available, creates one attached to the first tenant. This ensures the provider is
- * discoverable by sendWhatsAppMessage() and other systems.
- *
- * Idempotent: if a platform WhatsApp provider already exists, just returns it.
- * Non-blocking: if auto-creation fails, logs the error and returns null.
- */
-async function ensurePlatformWhatsAppProvider() {
-  try {
-    // Check if a platform WhatsApp provider already exists
-    const existing = await db.communicationProvider.findFirst({
-      where: { type: 'whatsapp', isPlatform: true, status: 'active' },
-      orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
-    })
-    if (existing) {
-      return existing
-    }
-
-    // No platform WhatsApp provider exists — check if env vars are available
-    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
-    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
-
-    if (!accessToken || !phoneNumberId) {
-      return null
-    }
-
-    // Find the first tenant to attach the provider to
-    const firstTenant = await db.tenant.findFirst({ orderBy: { createdAt: 'asc' } })
-    if (!firstTenant) {
-      console.warn('[ensurePlatformWhatsAppProvider] No tenant found in DB — cannot auto-create platform WhatsApp provider')
-      return null
-    }
-
-    const wabaId = process.env.WHATSAPP_WABA_ID || ''
-
-    const configJson = JSON.stringify({
-      accessToken,
-      phoneNumberId,
-      ...(wabaId ? { wabaId } : {}),
-    })
-
-    const provider = await db.communicationProvider.create({
-      data: {
-        name: 'WhatsApp Business (Platform Auto-created)',
-        type: 'whatsapp',
-        provider: 'meta',
-        isPlatform: true,
-        isDefault: true,
-        status: 'active',
-        sendingEnabled: true,
-        configJson,
-        tenantId: firstTenant.id,
-      },
-    })
-
-    console.log(
-      `[ensurePlatformWhatsAppProvider] Auto-created platform WhatsApp provider: id=${provider.id}, ` +
-      `phoneNumberId=${phoneNumberId}, tenantId=${firstTenant.id}`
-    )
-    return provider
-  } catch (err) {
-    console.error('[ensurePlatformWhatsAppProvider] Failed to auto-create platform WhatsApp provider:', err)
-    return null
-  }
-}
-
-/**
- * Resolve WhatsApp credentials (accessToken + phoneNumberId) from a CommunicationProvider.
- * Checks configJson first, then falls back to the linked Credential row.
+ * Resolve WhatsApp credentials from a CommunicationProvider.
+ * Checks configJson first, then linked Credential row.
  */
 function resolveWACreds(prov: {
   configJson: string | null
@@ -109,7 +38,6 @@ function resolveWACreds(prov: {
   let accessToken = cfg.accessToken || ''
   let phoneNumberId = cfg.phoneNumberId || ''
 
-  // If the provider links to a Credential, the secrets may live there.
   if (!accessToken && prov.credential) {
     const credData = safeJsonParse(prov.credential.encryptedData, {}) as Record<string, string>
     accessToken = credData.accessToken || credData.apiKey || ''
@@ -124,17 +52,21 @@ function resolveWACreds(prov: {
 
 /**
  * Send a WhatsApp message (server-side utility).
- * 
+ *
  * Resolution priority (when tenantId is provided):
  * 1. If credentialId is provided → use that specific Credential from DB
  * 2. Search CommunicationProvider for WhatsApp — tenant-scoped with platform fallback:
  *    2a. Tenant's own (non-platform) default WhatsApp provider
  *    2b. Any tenant's own active WhatsApp provider
- *    2c. Platform (shared) WhatsApp provider from any tenant
- *    2d. Legacy: any active WhatsApp CommunicationProvider (no tenant/isPlatform filter)
+ *    2c. Platform (shared) WhatsApp provider (SuperAdmin-configured)
+ *    2d. Legacy: any active WhatsApp CommunicationProvider
  * 3. Search legacy Credential vault for WhatsApp credentials
- * 4. Else if WhatsApp is configured (env vars) → use that
- * 5. Else → return simulated response
+ * 4. Else → return simulated response
+ *
+ * NO .env fallback — all credentials come from the database.
+ * SuperAdmin configures platform WhatsApp via admin panel.
+ * If user hasn't added their own Meta details, platform provider is used
+ * (10 free trial credits for users without own WhatsApp).
  */
 export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise<SendWhatsAppResult> {
   const { to, message, credentialId, type = 'text', templateName, templateLanguage, tenantId } = options
@@ -143,10 +75,7 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
     return { success: false, error: 'to and message are required' }
   }
 
-  // ── Credit gate: check if WhatsApp sending is allowed ──────────────────
-  // When a tenantId is provided, check their credit status before sending.
-  // Own-connected WhatsApp accounts bypass credit limits; platform WhatsApp
-  // requires remaining trial credits (default 10) or active paid subscription.
+  // ── Credit gate ──────────────────────────────────────────────────────
   if (tenantId) {
     const creditStatus = await checkWhatsAppCredits(tenantId)
     if (!creditStatus.allowed) {
@@ -165,7 +94,7 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
   let phoneNumberId = ''
   let credentialSource = ''
 
-  // 1. Try to use a specific stored credential by ID
+  // 1. Try specific stored credential by ID
   if (credentialId) {
     try {
       const credential = await db.credential.findUnique({ where: { id: credentialId } })
@@ -177,37 +106,16 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
           credentialSource = `credential:${credential.id}`
         }
       }
-    } catch {
-      // Fall through to next method
-    }
+    } catch { /* fall through */ }
   }
 
-  // 1b. Auto-ensure a platform WhatsApp CommunicationProvider exists from env vars.
-  //     This bridges the gap where WhatsApp env vars are configured but no DB provider
-  //     was seeded — the auto-created provider will be found by step 2c.
-  try {
-    await ensurePlatformWhatsAppProvider()
-  } catch { /* non-blocking — continue even if auto-creation fails */ }
-
-  // 2. Search CommunicationProvider for WhatsApp — tenant-scoped with platform fallback
-  //    Resolution priority (similar to resolveSmtpConfig for emails):
-  //    2a. Tenant's own (non-platform) default WhatsApp provider
-  //    2b. Any tenant's own active WhatsApp provider
-  //    2c. Platform (shared) WhatsApp provider from any tenant
-  //    2d. Legacy: any active WhatsApp CommunicationProvider (no tenant/isPlatform filter)
+  // 2. CommunicationProvider resolution — tenant own → platform → legacy
   if (!accessToken || !phoneNumberId) {
     try {
       // 2a. Tenant's own default WA provider
       if (tenantId) {
         const ownDefault = await db.communicationProvider.findFirst({
-          where: {
-            type: 'whatsapp',
-            status: 'active',
-            sendingEnabled: true,
-            isPlatform: false,
-            isDefault: true,
-            tenantId,
-          },
+          where: { type: 'whatsapp', status: 'active', sendingEnabled: true, isPlatform: false, isDefault: true, tenantId },
           orderBy: { updatedAt: 'desc' },
           include: { credential: true },
         })
@@ -221,16 +129,10 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
         }
       }
 
-      // 2b. Any tenant's own active WA provider (not necessarily default)
+      // 2b. Any tenant's own active WA provider
       if (!accessToken && tenantId) {
         const ownAny = await db.communicationProvider.findFirst({
-          where: {
-            type: 'whatsapp',
-            status: 'active',
-            sendingEnabled: true,
-            isPlatform: false,
-            tenantId,
-          },
+          where: { type: 'whatsapp', status: 'active', sendingEnabled: true, isPlatform: false, tenantId },
           orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
           include: { credential: true },
         })
@@ -244,30 +146,19 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
         }
       }
 
-      // 2c. Platform (shared) WhatsApp provider — from this tenant first, then any tenant
+      // 2c. Platform (shared) WhatsApp provider — SuperAdmin-configured
       if (!accessToken) {
         let platformProvider = null
         if (tenantId) {
           platformProvider = await db.communicationProvider.findFirst({
-            where: {
-              type: 'whatsapp',
-              status: 'active',
-              sendingEnabled: true,
-              isPlatform: true,
-              tenantId,
-            },
+            where: { type: 'whatsapp', status: 'active', sendingEnabled: true, isPlatform: true, tenantId },
             orderBy: { updatedAt: 'desc' },
             include: { credential: true },
           })
         }
         if (!platformProvider) {
           platformProvider = await db.communicationProvider.findFirst({
-            where: {
-              type: 'whatsapp',
-              status: 'active',
-              sendingEnabled: true,
-              isPlatform: true,
-            },
+            where: { type: 'whatsapp', status: 'active', sendingEnabled: true, isPlatform: true },
             orderBy: { updatedAt: 'desc' },
             include: { credential: true },
           })
@@ -282,18 +173,13 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
         }
       }
 
-      // 2d. Legacy fallback: any active WhatsApp provider (no isPlatform/tenantId filter)
+      // 2d. Legacy fallback: any active WhatsApp provider
       if (!accessToken) {
         const waProviders = await db.communicationProvider.findMany({
-          where: {
-            type: 'whatsapp',
-            status: 'active',
-            sendingEnabled: true,
-          },
+          where: { type: 'whatsapp', status: 'active', sendingEnabled: true },
           orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
           include: { credential: true },
         })
-
         for (const prov of waProviders) {
           const resolved = resolveWACreds(prov)
           if (resolved) {
@@ -309,22 +195,13 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
     }
   }
 
-  // 3. Search DB for any WhatsApp credential (legacy Credential vault — broad search)
+  // 3. Legacy Credential vault
   if (!accessToken || !phoneNumberId) {
     try {
-      // First try type='whatsapp', then type='apiKey' with WhatsApp data
       const whatsappCreds = await db.credential.findMany({
-        where: {
-          OR: [
-            { type: 'whatsapp' },
-            { type: 'apiKey' },
-            { name: { contains: 'whatsapp' } },
-            { name: { contains: 'WhatsApp' } },
-          ]
-        },
+        where: { OR: [{ type: 'whatsapp' }, { type: 'apiKey' }, { name: { contains: 'whatsapp' } }, { name: { contains: 'WhatsApp' } }] },
         orderBy: { updatedAt: 'desc' },
       })
-
       for (const cred of whatsappCreds) {
         const credData = safeJsonParse(cred.encryptedData, {}) as Record<string, string>
         if (credData.accessToken && credData.phoneNumberId) {
@@ -334,22 +211,10 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
           break
         }
       }
-    } catch {
-      // Fall through to config
-    }
+    } catch { /* fall through */ }
   }
 
-  // 3. Try local config / env vars
-  if (!accessToken || !phoneNumberId) {
-    const config = getWhatsAppConfig()
-    if (config.accessToken && config.phoneNumberId) {
-      accessToken = config.accessToken
-      phoneNumberId = config.phoneNumberId
-      credentialSource = 'config'
-    }
-  }
-
-  // 4. If still not configured, return simulated
+  // 4. No credentials found → simulated
   if (!accessToken || !phoneNumberId) {
     console.log(`[WhatsApp SIMULATED] To: ${to}, Message: ${message.substring(0, 100)}...`)
     return {
@@ -361,7 +226,6 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
 
   // Format recipient phone number
   let recipientPhone = to.replace(/\D/g, '')
-  // Auto-correct: if phone number is 10 digits (common Indian format), prepend 91
   if (/^\d{10}$/.test(recipientPhone)) {
     recipientPhone = `91${recipientPhone}`
   }
@@ -375,10 +239,7 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
       messaging_product: 'whatsapp',
       to: recipientPhone,
       type: 'template',
-      template: {
-        name: templateName || message,
-        language: { code: templateLanguage || 'en_US' },
-      },
+      template: { name: templateName || message, language: { code: templateLanguage || 'en_US' } },
     }
   } else {
     payload = {
@@ -393,10 +254,7 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
     const url = `${WHATSAPP_API_BASE}/${phoneNumberId}/messages`
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
 
@@ -408,9 +266,9 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
       const errorDetails = JSON.stringify(responseData?.error || {})
 
       if (errorCode === 131030) {
-        errorMessage = `Recipient "${recipientPhone}" not in allowed list. Add as test contact in Meta Business Suite > WhatsApp > Phone Numbers, or use a template message instead.`
+        errorMessage = `Recipient "${recipientPhone}" not in allowed list. Add as test contact in Meta Business Suite, or use a template message.`
       } else if (errorCode === 131000) {
-        errorMessage = `Invalid phone number "${recipientPhone}". Include country code (e.g., 91XXXXXXXXXX) with no spaces or plus sign.`
+        errorMessage = `Invalid phone number "${recipientPhone}". Include country code (e.g., 91XXXXXXXXXX).`
       } else if (errorCode === 132000) {
         errorMessage = `Template parameter mismatch. Check your template definition in Meta Business Suite.`
       } else if (errorCode === 190 || response.status === 401) {
@@ -426,12 +284,12 @@ export async function sendWhatsAppMessage(options: SendWhatsAppOptions): Promise
     const msgId = responseData?.messages?.[0]?.id || `real_${Date.now()}`
     console.log(`[WhatsApp SENT] To: ${recipientPhone}, MsgId: ${msgId}, Via: ${credentialSource}`)
 
-    // ── Deduct credit after successful send ────────────────────────────────
-    // Only deduct for platform (trial) usage — own-connected accounts have
-    // unlimited messaging through their own Meta Business account.
-    if (tenantId && !credentialSource.includes('/own')) {
+    // Deduct credits on successful send:
+    //   - Platform usage (!own): increments whatsappUsageCount + trialWhatsappUsed
+    //   - Own WA usage: increments only whatsappUsageCount (unlimited plan)
+    if (tenantId) {
       try {
-        await deductWhatsAppCredit(tenantId, 1)
+        await deductWhatsAppCredit(tenantId, 1, credentialSource.includes('/own'))
       } catch (deductErr) {
         console.warn('[WhatsApp] Failed to deduct credit (non-blocking):', deductErr)
       }
