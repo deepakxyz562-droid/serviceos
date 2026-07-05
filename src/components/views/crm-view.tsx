@@ -2,10 +2,15 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Users, Search, Plus, Phone, Mail, MapPin, Star, Briefcase,
-  MoreHorizontal, Pencil, Trash2, Eye, MessageCircle, Contact,
-  RefreshCw, TrendingUp, UserCheck, Clock, ArrowUpDown,
+  Users, Search, Plus, Phone, Mail, MapPin,
+  MoreHorizontal, Pencil, Trash2, Eye, MessageCircle,
+  RefreshCw, TrendingUp, ArrowUpDown,
   Send, Copy, Check, UserPlus, RotateCw, Ban,
+  ArrowLeft, Upload, Download, FolderTree, Tag as TagIcon,
+  Filter, BarChart3, FileText, Receipt, CreditCard,
+  FolderOpen, Wrench, MessageSquare,
+  Calendar, Briefcase, Clock, DollarSign, Star,
+  Building2, Home, Crown, ShieldCheck,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -14,7 +19,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -42,60 +46,39 @@ interface Customer {
   whatsappId?: string;
   createdAt: string;
   updatedAt: string;
-  // Portal / invitation fields (returned by /api/customers)
   portalEnabled?: boolean;
-  invitationStatus?: string; // 'none' | 'pending' | 'accepted' | 'disabled'
+  invitationStatus?: string;
   activatedAt?: string | null;
 }
 
-interface Employee {
+interface TimelineEntry {
+  id: string;
+  entryType: string;
+  title: string;
+  description?: string;
+  eventDate: string;
+  actorName?: string;
+  metadataJson?: string;
+}
+
+interface JobRef {
+  id: string;
+  title: string;
+  status: string;
+  scheduledDate?: string;
+  totalAmount?: number;
+}
+
+interface AssetRef {
   id: string;
   name: string;
-  phone: string;
-  role: string;
-  skills: string;
+  assetType: string;
+  brand?: string;
+  model?: string;
   status: string;
-  avatar?: string;
-  whatsappId?: string;
-  rating: number;
-  completedJobs: number;
-  location?: string;
-  createdAt: string;
-  updatedAt: string;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-function getEmployeeStatusColor(status: string) {
-  const map: Record<string, string> = {
-    available: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-    busy: 'bg-amber-100 text-amber-700 border-amber-200',
-    offline: 'bg-gray-100 text-gray-600 border-gray-200',
-  };
-  return map[status] || 'bg-gray-100 text-gray-600 border-gray-200';
-}
-
-function getEmployeeStatusDot(status: string) {
-  const map: Record<string, string> = {
-    available: 'bg-emerald-500',
-    busy: 'bg-amber-500',
-    offline: 'bg-gray-400',
-  };
-  return map[status] || 'bg-gray-400';
-}
-
-function getRoleBadgeColor(role: string) {
-  const map: Record<string, string> = {
-    driver: 'bg-sky-100 text-sky-700 border-sky-200',
-    cleaner: 'bg-teal-100 text-teal-700 border-teal-200',
-    beautician: 'bg-pink-100 text-pink-700 border-pink-200',
-    doctor: 'bg-red-100 text-red-700 border-red-200',
-    technician: 'bg-amber-100 text-amber-700 border-amber-200',
-    packer: 'bg-violet-100 text-violet-700 border-violet-200',
-    delivery: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-  };
-  return map[role] || 'bg-gray-100 text-gray-600 border-gray-200';
-}
 
 function formatDate(dateStr: string) {
   try {
@@ -107,11 +90,57 @@ function formatDate(dateStr: string) {
   }
 }
 
+function formatDateTime(dateStr: string) {
+  try {
+    return new Date(dateStr).toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: 'numeric', minute: '2-digit',
+    });
+  } catch {
+    return '--';
+  }
+}
+
+function initials(name: string) {
+  return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+}
+
+// ─── Static data for Groups / Tags / Smart Lists ────────────────────────────
+
+const GROUPS = [
+  { name: 'Residential', icon: Home, color: 'bg-blue-100 text-blue-700 border-blue-200', count: 0 },
+  { name: 'Commercial', icon: Building2, color: 'bg-purple-100 text-purple-700 border-purple-200', count: 0 },
+  { name: 'Corporate', icon: Briefcase, color: 'bg-slate-100 text-slate-700 border-slate-200', count: 0 },
+  { name: 'VIP', icon: Crown, color: 'bg-amber-100 text-amber-700 border-amber-200', count: 0 },
+  { name: 'AMC', icon: ShieldCheck, color: 'bg-emerald-100 text-emerald-700 border-emerald-200', count: 0 },
+];
+
+const TAGS = [
+  { name: 'AC', color: 'bg-sky-100 text-sky-700' },
+  { name: 'Solar', color: 'bg-yellow-100 text-yellow-700' },
+  { name: 'Plumbing', color: 'bg-blue-100 text-blue-700' },
+  { name: 'High Value', color: 'bg-amber-100 text-amber-700' },
+  { name: 'Warranty', color: 'bg-emerald-100 text-emerald-700' },
+  { name: 'Follow Up', color: 'bg-rose-100 text-rose-700' },
+];
+
+const SMART_LISTS = [
+  { name: 'Inactive Customers', description: 'No jobs in the last 6 months', icon: Clock, color: 'text-orange-500' },
+  { name: 'Pending Payment', description: 'Customers with unpaid invoices', icon: CreditCard, color: 'text-red-500' },
+  { name: 'No Jobs in 6 Months', description: 'Customers who haven\'t booked recently', icon: Calendar, color: 'text-amber-500' },
+  { name: 'Repeat Customers', description: 'Customers with 3+ jobs', icon: RefreshCw, color: 'text-emerald-500' },
+  { name: 'High Revenue Customers', description: 'Lifetime value above ₹50,000', icon: TrendingUp, color: 'text-purple-500' },
+];
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function CrmView() {
   const { setActiveView } = useAppStore();
-  const [activeTab, setActiveTab] = useState('customers');
+
+  // ─── View Mode: 'list' | 'detail' ──────────────────────────────────────
+  const [formMode, setFormMode] = useState<'list' | 'detail'>('list');
+  const [listTab, setListTab] = useState('all');
+  const [detailTab, setDetailTab] = useState('overview');
 
   // ─── Customers State ────────────────────────────────────────────────────
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -121,7 +150,6 @@ export function CrmView() {
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [customerForm, setCustomerForm] = useState({ name: '', phone: '', email: '', address: '' });
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [showCustomerDetail, setShowCustomerDetail] = useState(false);
   const [customerSort, setCustomerSort] = useState<'name' | 'createdAt'>('name');
   const [customerSortDir, setCustomerSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -131,18 +159,15 @@ export function CrmView() {
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [inviteCopied, setInviteCopied] = useState(false);
 
-  // ─── Employees State ────────────────────────────────────────────────────
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [employeesLoading, setEmployeesLoading] = useState(true);
-  const [employeeSearch, setEmployeeSearch] = useState('');
-  const [employeeRoleFilter, setEmployeeRoleFilter] = useState('all');
-  const [employeeStatusFilter, setEmployeeStatusFilter] = useState('all');
-  const [showAddEmployee, setShowAddEmployee] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
-  const [employeeForm, setEmployeeForm] = useState({ name: '', phone: '', role: 'technician', location: '', skills: '' });
-  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-  const [showEmployeeDetail, setShowEmployeeDetail] = useState(false);
-  const [employeeViewMode, setEmployeeViewMode] = useState<'cards' | 'table'>('cards');
+  // ─── Detail mode data ──────────────────────────────────────────────────
+  const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [jobs, setJobs] = useState<JobRef[]>([]);
+  const [jobsLoading, setJobsLoading] = useState(false);
+  const [assets, setAssets] = useState<AssetRef[]>([]);
+  const [assetsLoading, setAssetsLoading] = useState(false);
+  const [notes, setNotes] = useState('');
+  const [notesLoading, setNotesLoading] = useState(false);
 
   // ─── Fetch Customers ────────────────────────────────────────────────────
   const fetchCustomers = useCallback(async () => {
@@ -160,26 +185,9 @@ export function CrmView() {
     }
   }, []);
 
-  // ─── Fetch Employees ────────────────────────────────────────────────────
-  const fetchEmployees = useCallback(async () => {
-    setEmployeesLoading(true);
-    try {
-      const res = await fetch('/api/employees');
-      if (res.ok) {
-        const data = await res.json();
-        setEmployees(Array.isArray(data) ? data : data.employees || []);
-      }
-    } catch {
-      setEmployees([]);
-    } finally {
-      setEmployeesLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     fetchCustomers();
-    fetchEmployees();
-  }, [fetchCustomers, fetchEmployees]);
+  }, [fetchCustomers]);
 
   // ─── Customer CRUD ──────────────────────────────────────────────────────
   const handleSaveCustomer = async () => {
@@ -216,7 +224,10 @@ export function CrmView() {
       if (res.ok) {
         toast.success('Customer deleted');
         fetchCustomers();
-        setShowCustomerDetail(false);
+        if (selectedCustomer?.id === id) {
+          setFormMode('list');
+          setSelectedCustomer(null);
+        }
       } else {
         toast.error('Failed to delete customer');
       }
@@ -226,9 +237,6 @@ export function CrmView() {
   };
 
   // ─── Customer Portal Invitation Handlers ────────────────────────────────
-  // POST /api/customers/[id]/portal/enable  → generates activation link
-  // POST /api/customers/[id]/portal/resend  → regenerates link
-  // POST /api/customers/[id]/portal/disable → revokes portal access
   const API_SUFFIX = '?XTransformPort=3000';
 
   const handleSendInvite = async (customer: Customer) => {
@@ -246,7 +254,7 @@ export function CrmView() {
       if (res.ok && data.success && data.activationUrl) {
         setInviteUrl(data.activationUrl);
         toast.success(`Invitation link generated for ${customer.name}`);
-        fetchCustomers(); // refresh invitationStatus in the table
+        fetchCustomers();
       } else {
         toast.error(data.error || 'Failed to generate invitation link');
       }
@@ -298,69 +306,120 @@ export function CrmView() {
     setShowAddCustomer(true);
   };
 
-  // ─── Employee CRUD ──────────────────────────────────────────────────────
-  const handleSaveEmployee = async () => {
-    if (!employeeForm.name || !employeeForm.phone) {
-      toast.error('Name and phone are required');
-      return;
-    }
+  // ─── Open customer detail (full page) ───────────────────────────────────
+  const openCustomerDetail = useCallback(async (customer: Customer) => {
+    setSelectedCustomer(customer);
+    setDetailTab('overview');
+    setFormMode('detail');
+    setTimeline([]);
+    setJobs([]);
+    setAssets([]);
+    setNotes('');
+
+    // Fetch timeline
+    setTimelineLoading(true);
     try {
-      const isEditing = !!editingEmployee;
-      const url = isEditing ? `/api/employees?id=${editingEmployee.id}` : '/api/employees';
-      const method = isEditing ? 'PUT' : 'POST';
-      const res = await fetch(url, {
-        method,
+      const res = await fetch(`/api/customers/${customer.id}/timeline`);
+      if (res.ok) {
+        const data = await res.json();
+        setTimeline(Array.isArray(data?.entries) ? data.entries : []);
+      }
+    } catch { /* ignore */ }
+    finally { setTimelineLoading(false); }
+
+    // Fetch jobs
+    setJobsLoading(true);
+    try {
+      const res = await fetch(`/api/jobs?customerId=${customer.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setJobs(Array.isArray(data) ? data : data?.jobs || []);
+      }
+    } catch { /* ignore */ }
+    finally { setJobsLoading(false); }
+
+    // Fetch assets
+    setAssetsLoading(true);
+    try {
+      const res = await fetch(`/api/customers/${customer.id}/assets`);
+      if (res.ok) {
+        const data = await res.json();
+        setAssets(Array.isArray(data?.assets) ? data.assets : []);
+      }
+    } catch { /* ignore */ }
+    finally { setAssetsLoading(false); }
+  }, []);
+
+  const closeCustomerDetail = () => {
+    setFormMode('list');
+    setSelectedCustomer(null);
+  };
+
+  // ─── Save note ──────────────────────────────────────────────────────────
+  const handleSaveNote = async () => {
+    if (!selectedCustomer || !notes.trim()) return;
+    setNotesLoading(true);
+    try {
+      const res = await fetch(`/api/customers/${selectedCustomer.id}/timeline`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...employeeForm,
-          skills: employeeForm.skills ? employeeForm.skills.split(',').map(s => s.trim()) : [],
+          entryType: 'note',
+          title: 'Note added',
+          description: notes,
         }),
       });
       if (res.ok) {
-        toast.success(`Employee ${isEditing ? 'updated' : 'created'} successfully`);
-        setShowAddEmployee(false);
-        setEditingEmployee(null);
-        setEmployeeForm({ name: '', phone: '', role: 'technician', location: '', skills: '' });
-        fetchEmployees();
+        toast.success('Note saved');
+        setNotes('');
+        // Refresh timeline
+        const tRes = await fetch(`/api/customers/${selectedCustomer.id}/timeline`);
+        if (tRes.ok) {
+          const data = await tRes.json();
+          setTimeline(Array.isArray(data?.entries) ? data.entries : []);
+        }
       } else {
-        toast.error(`Failed to ${isEditing ? 'update' : 'create'} employee`);
+        toast.error('Failed to save note');
       }
     } catch {
       toast.error('Network error');
+    } finally {
+      setNotesLoading(false);
     }
   };
 
-  const handleDeleteEmployee = async (id: string) => {
-    try {
-      const res = await fetch(`/api/employees?id=${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        toast.success('Employee deleted');
-        fetchEmployees();
-        setShowEmployeeDetail(false);
-      } else {
-        toast.error('Failed to delete employee');
-      }
-    } catch {
-      toast.error('Network error');
+  // ─── Import / Export ────────────────────────────────────────────────────
+  const handleExport = () => {
+    if (customers.length === 0) {
+      toast.error('No customers to export');
+      return;
     }
+    const headers = ['Name', 'Phone', 'Email', 'Address', 'WhatsApp ID', 'Created At', 'Portal Status'];
+    const rows = customers.map(c => [
+      `"${c.name}"`,
+      `"${c.phone}"`,
+      `"${c.email || ''}"`,
+      `"${c.address || ''}"`,
+      `"${c.whatsappId || ''}"`,
+      `"${formatDate(c.createdAt)}"`,
+      `"${c.invitationStatus || 'none'}"`,
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `customers-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${customers.length} customers`);
   };
 
-  const openEditEmployee = (employee: Employee) => {
-    setEditingEmployee(employee);
-    let skills = '';
-    try { skills = JSON.parse(employee.skills || '[]').join(', '); } catch { skills = employee.skills; }
-    setEmployeeForm({
-      name: employee.name,
-      phone: employee.phone,
-      role: employee.role,
-      location: employee.location || '',
-      skills,
-    });
-    setShowAddEmployee(true);
+  const handleImport = () => {
+    toast.info('Import: Upload a CSV file with Name, Phone, Email, Address columns');
   };
 
   // ─── Filtered / Sorted Lists ────────────────────────────────────────────
-
   const filteredCustomers = customers
     .filter(c =>
       c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
@@ -373,15 +432,7 @@ export function CrmView() {
       return (new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) * dir;
     });
 
-  const filteredEmployees = employees.filter(e => {
-    const matchesSearch = e.name.toLowerCase().includes(employeeSearch.toLowerCase()) || e.phone.includes(employeeSearch);
-    const matchesRole = employeeRoleFilter === 'all' || e.role === employeeRoleFilter;
-    const matchesStatus = employeeStatusFilter === 'all' || e.status === employeeStatusFilter;
-    return matchesSearch && matchesRole && matchesStatus;
-  });
-
   // ─── Stats ──────────────────────────────────────────────────────────────
-
   const customerStats = {
     total: customers.length,
     withEmail: customers.filter(c => c.email).length,
@@ -391,13 +442,11 @@ export function CrmView() {
       const now = new Date();
       return now.getTime() - created.getTime() < 7 * 24 * 60 * 60 * 1000;
     }).length,
-  };
-
-  const employeeStats = {
-    total: employees.length,
-    available: employees.filter(e => e.status === 'available').length,
-    busy: employees.filter(e => e.status === 'busy').length,
-    avgRating: employees.length > 0 ? (employees.reduce((sum, e) => sum + e.rating, 0) / employees.length).toFixed(1) : '0',
+    newThisMonth: customers.filter(c => {
+      const created = new Date(c.createdAt);
+      const now = new Date();
+      return created.getMonth() === now.getMonth() && created.getFullYear() === now.getFullYear();
+    }).length,
   };
 
   // ─── Sort handler ───────────────────────────────────────────────────────
@@ -410,7 +459,458 @@ export function CrmView() {
     }
   };
 
-  // ─── Render ─────────────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ─── DETAIL MODE: Customer Profile (360 View) ────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  if (formMode === 'detail' && selectedCustomer) {
+    const c = selectedCustomer;
+    return (
+      <div className="space-y-4 w-full">
+        {/* Back button */}
+        <Button variant="ghost" size="sm" onClick={closeCustomerDetail} className="gap-1.5">
+          <ArrowLeft className="size-4" /> Back to Customers
+        </Button>
+
+        {/* Customer Header */}
+        <Card className="p-6">
+          <div className="flex flex-col md:flex-row md:items-start gap-4">
+            <Avatar className="size-16 shrink-0">
+              <AvatarFallback className="bg-emerald-100 text-emerald-700 text-xl font-medium">
+                {initials(c.name)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <h1 className="text-2xl font-bold">{c.name}</h1>
+                {c.invitationStatus === 'accepted' ? (
+                  <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-xs">
+                    <Check className="size-3 mr-1" /> Active
+                  </Badge>
+                ) : c.invitationStatus === 'pending' ? (
+                  <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 text-xs">
+                    <Clock className="size-3 mr-1" /> Pending
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-xs text-muted-foreground">Lead</Badge>
+                )}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-sm text-muted-foreground">
+                <span className="flex items-center gap-2">
+                  <Phone className="size-4 shrink-0" /> {c.phone}
+                </span>
+                {c.email && (
+                  <span className="flex items-center gap-2 truncate">
+                    <Mail className="size-4 shrink-0" /> {c.email}
+                  </span>
+                )}
+                {c.address && (
+                  <span className="flex items-center gap-2 truncate">
+                    <MapPin className="size-4 shrink-0" /> {c.address}
+                  </span>
+                )}
+                {c.whatsappId && (
+                  <span className="flex items-center gap-2">
+                    <MessageCircle className="size-4 shrink-0 text-emerald-500" /> {c.whatsappId}
+                  </span>
+                )}
+                <span className="flex items-center gap-2">
+                  <Calendar className="size-4 shrink-0" /> Added {formatDate(c.createdAt)}
+                </span>
+              </div>
+            </div>
+            {/* Action buttons */}
+            <div className="flex gap-2 shrink-0">
+              <Button variant="outline" size="sm" onClick={() => openEditCustomer(c)}>
+                <Pencil className="size-3.5 mr-1" /> Edit
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <MoreHorizontal className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setActiveView('omnichannel')}>
+                    <MessageSquare className="size-3.5 mr-2" /> Send Message
+                  </DropdownMenuItem>
+                  {c.invitationStatus === 'accepted' ? (
+                    <DropdownMenuItem variant="destructive" onClick={() => handleDisablePortal(c)}>
+                      <Ban className="size-3.5 mr-2" /> Disable Portal
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem onClick={() => handleSendInvite(c)}>
+                      <UserPlus className="size-3.5 mr-2" /> Send Portal Invite
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem variant="destructive" onClick={() => handleDeleteCustomer(c.id)}>
+                    <Trash2 className="size-3.5 mr-2" /> Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        </Card>
+
+        {/* Profile Tabs */}
+        <Tabs value={detailTab} onValueChange={setDetailTab}>
+          <ScrollArea className="w-full">
+            <TabsList className="inline-flex w-max">
+              <TabsTrigger value="overview" className="gap-1.5">Overview</TabsTrigger>
+              <TabsTrigger value="timeline" className="gap-1.5">Timeline</TabsTrigger>
+              <TabsTrigger value="jobs" className="gap-1.5">Jobs</TabsTrigger>
+              <TabsTrigger value="quotes" className="gap-1.5">Quotes</TabsTrigger>
+              <TabsTrigger value="invoices" className="gap-1.5">Invoices</TabsTrigger>
+              <TabsTrigger value="payments" className="gap-1.5">Payments</TabsTrigger>
+              <TabsTrigger value="documents" className="gap-1.5">Documents</TabsTrigger>
+              <TabsTrigger value="assets" className="gap-1.5">Assets</TabsTrigger>
+              <TabsTrigger value="communication" className="gap-1.5">Communication</TabsTrigger>
+              <TabsTrigger value="notes" className="gap-1.5">Notes</TabsTrigger>
+            </TabsList>
+          </ScrollArea>
+
+          {/* Overview Tab */}
+          <TabsContent value="overview" className="space-y-4">
+            <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+              <Card className="p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <Briefcase className="size-4 text-emerald-500" />
+                  <p className="text-xs text-muted-foreground">Total Jobs</p>
+                </div>
+                <p className="text-2xl font-bold">{jobs.length}</p>
+              </Card>
+              <Card className="p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <Wrench className="size-4 text-sky-500" />
+                  <p className="text-xs text-muted-foreground">Assets</p>
+                </div>
+                <p className="text-2xl font-bold">{assets.length}</p>
+              </Card>
+              <Card className="p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <FileText className="size-4 text-purple-500" />
+                  <p className="text-xs text-muted-foreground">Timeline Events</p>
+                </div>
+                <p className="text-2xl font-bold">{timeline.length}</p>
+              </Card>
+              <Card className="p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <Clock className="size-4 text-amber-500" />
+                  <p className="text-xs text-muted-foreground">Customer Since</p>
+                </div>
+                <p className="text-sm font-bold pt-1">{formatDate(c.createdAt)}</p>
+              </Card>
+            </div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Customer Information</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-0.5">Phone</p>
+                    <p className="font-medium">{c.phone}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-0.5">Email</p>
+                    <p className="font-medium">{c.email || '--'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-0.5">Address</p>
+                    <p className="font-medium">{c.address || '--'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-0.5">WhatsApp ID</p>
+                    <p className="font-medium">{c.whatsappId || '--'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-0.5">Portal Status</p>
+                    <p className="font-medium capitalize">{c.invitationStatus || 'none'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-0.5">Last Updated</p>
+                    <p className="font-medium">{formatDateTime(c.updatedAt)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Timeline Tab */}
+          <TabsContent value="timeline" className="space-y-3">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Activity Timeline</CardTitle>
+                <CardDescription>All interactions and events for this customer</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {timelineLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map(i => <div key={i} className="animate-pulse h-12 bg-muted rounded" />)}
+                  </div>
+                ) : timeline.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                    <Clock className="size-10 mb-2 opacity-20" />
+                    <p>No activity yet</p>
+                  </div>
+                ) : (
+                  <ScrollArea className="max-h-[500px]">
+                    <div className="space-y-3">
+                      {timeline.map((entry) => (
+                        <div key={entry.id} className="flex gap-3 pb-3 border-b last:border-0">
+                          <div className="size-8 shrink-0 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-medium">
+                            {(entry.actorName || 'S').charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-sm font-medium">{entry.title}</p>
+                              <Badge variant="outline" className="text-[10px] capitalize">{entry.entryType}</Badge>
+                            </div>
+                            {entry.description && (
+                              <p className="text-sm text-muted-foreground mt-0.5">{entry.description}</p>
+                            )}
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {formatDateTime(entry.eventDate)}
+                              {entry.actorName && ` · ${entry.actorName}`}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Jobs Tab */}
+          <TabsContent value="jobs" className="space-y-3">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Jobs</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {jobsLoading ? (
+                  <div className="space-y-2">{[1, 2, 3].map(i => <div key={i} className="animate-pulse h-10 bg-muted rounded" />)}</div>
+                ) : jobs.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                    <Briefcase className="size-10 mb-2 opacity-20" />
+                    <p>No jobs yet</p>
+                  </div>
+                ) : (
+                  <ScrollArea className="max-h-[500px]">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Title</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Scheduled</TableHead>
+                          <TableHead className="text-right">Amount</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {jobs.map(job => (
+                          <TableRow key={job.id}>
+                            <TableCell className="font-medium text-sm">{job.title}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-xs capitalize">{job.status}</Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {job.scheduledDate ? formatDate(job.scheduledDate) : '--'}
+                            </TableCell>
+                            <TableCell className="text-sm text-right">
+                              {job.totalAmount ? `₹${job.totalAmount.toLocaleString('en-IN')}` : '--'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </ScrollArea>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Quotes Tab */}
+          <TabsContent value="quotes">
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                <Receipt className="size-10 mb-2 opacity-20" />
+                <p>No quotes yet</p>
+                <p className="text-xs">Quotes created for this customer will appear here</p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Invoices Tab */}
+          <TabsContent value="invoices">
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                <FileText className="size-10 mb-2 opacity-20" />
+                <p>No invoices yet</p>
+                <p className="text-xs">Invoices for this customer will appear here</p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Payments Tab */}
+          <TabsContent value="payments">
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                <CreditCard className="size-10 mb-2 opacity-20" />
+                <p>No payments recorded</p>
+                <p className="text-xs">Payment history will appear here</p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Documents Tab */}
+          <TabsContent value="documents">
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                <FolderOpen className="size-10 mb-2 opacity-20" />
+                <p>No documents</p>
+                <p className="text-xs">Upload documents to keep them linked to this customer</p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Assets Tab */}
+          <TabsContent value="assets" className="space-y-3">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Equipment & Assets</CardTitle>
+                <CardDescription>Customer assets and service history</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {assetsLoading ? (
+                  <div className="space-y-2">{[1, 2].map(i => <div key={i} className="animate-pulse h-16 bg-muted rounded" />)}</div>
+                ) : assets.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                    <Wrench className="size-10 mb-2 opacity-20" />
+                    <p>No assets tracked</p>
+                    <p className="text-xs">Add equipment to track service history and warranties</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {assets.map(asset => (
+                      <div key={asset.id} className="flex items-center gap-3 p-3 rounded-lg border">
+                        <div className="size-10 shrink-0 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center">
+                          <Wrench className="size-5" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm">{asset.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {asset.assetType}{asset.brand ? ` · ${asset.brand}` : ''}{asset.model ? ` · ${asset.model}` : ''}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="text-xs capitalize">{asset.status}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Communication Tab */}
+          <TabsContent value="communication">
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                <MessageSquare className="size-10 mb-2 opacity-20" />
+                <p>No conversations yet</p>
+                <p className="text-xs">Messages, calls, and emails will appear here</p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Notes Tab */}
+          <TabsContent value="notes" className="space-y-3">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Notes</CardTitle>
+                <CardDescription>Internal notes about this customer</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Textarea
+                    placeholder="Add a note about this customer..."
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    rows={3}
+                  />
+                  <div className="flex justify-end">
+                    <Button
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700"
+                      onClick={handleSaveNote}
+                      disabled={!notes.trim() || notesLoading}
+                    >
+                      {notesLoading ? <RefreshCw className="size-3.5 mr-1 animate-spin" /> : <Plus className="size-3.5 mr-1" />}
+                      Add Note
+                    </Button>
+                  </div>
+                </div>
+                <Separator />
+                <div className="space-y-2">
+                  {timeline.filter(t => t.entryType === 'note').length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-6">No notes yet</p>
+                  ) : (
+                    timeline.filter(t => t.entryType === 'note').map(note => (
+                      <div key={note.id} className="p-3 rounded-lg bg-muted/50">
+                        <p className="text-sm">{note.description}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{formatDateTime(note.eventDate)}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        {/* Add/Edit Customer Dialog (shared) */}
+        <Dialog open={showAddCustomer} onOpenChange={setShowAddCustomer}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>{editingCustomer ? 'Edit Customer' : 'Add Customer'}</DialogTitle>
+              <DialogDescription>
+                {editingCustomer ? 'Update customer information' : 'Add a new customer to your CRM'}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label>Name *</Label>
+                <Input placeholder="Full name" value={customerForm.name} onChange={e => setCustomerForm({ ...customerForm, name: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>Phone *</Label>
+                <Input placeholder="+1 555 123 4567" value={customerForm.phone} onChange={e => setCustomerForm({ ...customerForm, phone: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input placeholder="email@example.com" type="email" value={customerForm.email} onChange={e => setCustomerForm({ ...customerForm, email: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>Address</Label>
+                <Textarea placeholder="Full address" value={customerForm.address} onChange={e => setCustomerForm({ ...customerForm, address: e.target.value })} rows={2} />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowAddCustomer(false)}>Cancel</Button>
+              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSaveCustomer} disabled={!customerForm.name || !customerForm.phone}>
+                {editingCustomer ? 'Update' : 'Create'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ─── LIST MODE: Customers Page ───────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
 
   return (
     <div className="space-y-6 w-full">
@@ -420,65 +920,36 @@ export function CrmView() {
           <Users className="size-5 text-white" />
         </div>
         <div>
-          <h2 className="text-xl font-bold">CRM</h2>
-          <p className="text-sm text-muted-foreground">Manage customers, employees, and business relationships</p>
+          <h2 className="text-xl font-bold">Customers</h2>
+          <p className="text-sm text-muted-foreground">Manage your customer relationships</p>
         </div>
       </div>
 
       {/* ─── Tabs ────────────────────────────────────────────────────────── */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="customers" className="gap-1.5">
-            <Contact className="size-3.5" /> Customers
-          </TabsTrigger>
-          <TabsTrigger value="employees" className="gap-1.5">
-            <Briefcase className="size-3.5" /> Employees
-          </TabsTrigger>
-        </TabsList>
+      <Tabs value={listTab} onValueChange={setListTab}>
+        <ScrollArea className="w-full">
+          <TabsList className="inline-flex w-max">
+            <TabsTrigger value="all" className="gap-1.5">
+              <Users className="size-3.5" /> All Customers
+            </TabsTrigger>
+            <TabsTrigger value="groups" className="gap-1.5">
+              <FolderTree className="size-3.5" /> Groups
+            </TabsTrigger>
+            <TabsTrigger value="tags" className="gap-1.5">
+              <TagIcon className="size-3.5" /> Tags
+            </TabsTrigger>
+            <TabsTrigger value="smartLists" className="gap-1.5">
+              <Filter className="size-3.5" /> Smart Lists
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="gap-1.5">
+              <BarChart3 className="size-3.5" /> Analytics
+            </TabsTrigger>
+          </TabsList>
+        </ScrollArea>
 
-        {/* ═══════════════════ CUSTOMERS TAB ═══════════════════════════════ */}
-        <TabsContent value="customers" className="space-y-4">
-          {/* Stats */}
-          <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-            <Card className="p-3">
-              <div className="flex items-center gap-2">
-                <Users className="size-4 text-emerald-500" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Total Customers</p>
-                  <p className="text-lg font-bold">{customerStats.total}</p>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-3">
-              <div className="flex items-center gap-2">
-                <Mail className="size-4 text-sky-500" />
-                <div>
-                  <p className="text-xs text-muted-foreground">With Email</p>
-                  <p className="text-lg font-bold text-sky-600">{customerStats.withEmail}</p>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-3">
-              <div className="flex items-center gap-2">
-                <MessageCircle className="size-4 text-emerald-500" />
-                <div>
-                  <p className="text-xs text-muted-foreground">WhatsApp</p>
-                  <p className="text-lg font-bold text-emerald-600">{customerStats.withWhatsApp}</p>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-3">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="size-4 text-amber-500" />
-                <div>
-                  <p className="text-xs text-muted-foreground">New (7d)</p>
-                  <p className="text-lg font-bold text-amber-600">{customerStats.recent}</p>
-                </div>
-              </div>
-            </Card>
-          </div>
-
-          {/* Search + Actions */}
+        {/* ═══════════════════ ALL CUSTOMERS TAB ═══════════════════════════ */}
+        <TabsContent value="all" className="space-y-4">
+          {/* Search + Actions (Shopify/Notion style) */}
           <div className="flex flex-wrap gap-3 items-center">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -489,19 +960,24 @@ export function CrmView() {
                 className="pl-9"
               />
             </div>
-            <Button variant="outline" size="sm" onClick={() => fetchCustomers()}>
-              <RefreshCw className="size-3.5 mr-1" /> Refresh
-            </Button>
-            <Button
-              className="bg-emerald-600 hover:bg-emerald-700"
-              onClick={() => {
-                setEditingCustomer(null);
-                setCustomerForm({ name: '', phone: '', email: '', address: '' });
-                setShowAddCustomer(true);
-              }}
-            >
-              <Plus className="size-4 mr-1" /> Add Customer
-            </Button>
+            <div className="flex gap-2 ml-auto">
+              <Button variant="outline" size="sm" onClick={handleImport}>
+                <Upload className="size-3.5 mr-1" /> Import
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleExport}>
+                <Download className="size-3.5 mr-1" /> Export
+              </Button>
+              <Button
+                className="bg-emerald-600 hover:bg-emerald-700"
+                onClick={() => {
+                  setEditingCustomer(null);
+                  setCustomerForm({ name: '', phone: '', email: '', address: '' });
+                  setShowAddCustomer(true);
+                }}
+              >
+                <Plus className="size-4 mr-1" /> New Customer
+              </Button>
+            </div>
           </div>
 
           {/* Customer Table */}
@@ -519,7 +995,7 @@ export function CrmView() {
             </div>
           ) : (
             <Card>
-              <ScrollArea className="max-h-[500px]">
+              <ScrollArea className="max-h-[600px]">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -545,13 +1021,13 @@ export function CrmView() {
                       <TableRow
                         key={customer.id}
                         className="cursor-pointer"
-                        onClick={() => { setSelectedCustomer(customer); setShowCustomerDetail(true); }}
+                        onClick={() => openCustomerDetail(customer)}
                       >
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <Avatar className="size-8">
                               <AvatarFallback className="bg-emerald-100 text-emerald-700 text-xs font-medium">
-                                {customer.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                                {initials(customer.name)}
                               </AvatarFallback>
                             </Avatar>
                             <div>
@@ -585,15 +1061,15 @@ export function CrmView() {
                         </TableCell>
                         <TableCell className="text-xs">
                           {customer.invitationStatus === 'accepted' ? (
-                            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 text-[10px]">
+                            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[10px]">
                               <Check className="size-2.5 mr-1" /> Active
                             </Badge>
                           ) : customer.invitationStatus === 'pending' ? (
-                            <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-300 text-[10px]">
+                            <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 text-[10px]">
                               <Clock className="size-2.5 mr-1" /> Pending
                             </Badge>
                           ) : customer.invitationStatus === 'disabled' ? (
-                            <Badge className="bg-red-100 text-red-700 hover:bg-red-100 dark:bg-red-950/40 dark:text-red-300 text-[10px]">
+                            <Badge className="bg-red-100 text-red-700 hover:bg-red-100 text-[10px]">
                               <Ban className="size-2.5 mr-1" /> Disabled
                             </Badge>
                           ) : (
@@ -613,18 +1089,14 @@ export function CrmView() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => { setSelectedCustomer(customer); setShowCustomerDetail(true); }}>
-                                <Eye className="size-3.5 mr-2" /> View
+                              <DropdownMenuItem onClick={() => openCustomerDetail(customer)}>
+                                <Eye className="size-3.5 mr-2" /> View Profile
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => openEditCustomer(customer)}>
                                 <Pencil className="size-3.5 mr-2" /> Edit
                               </DropdownMenuItem>
-                              {/* Customer portal invitation actions */}
                               {customer.invitationStatus === 'accepted' ? (
-                                <DropdownMenuItem
-                                  variant="destructive"
-                                  onClick={() => handleDisablePortal(customer)}
-                                >
+                                <DropdownMenuItem variant="destructive" onClick={() => handleDisablePortal(customer)}>
                                   <Ban className="size-3.5 mr-2" /> Disable Portal
                                 </DropdownMenuItem>
                               ) : customer.invitationStatus === 'pending' ? (
@@ -636,10 +1108,7 @@ export function CrmView() {
                                   <UserPlus className="size-3.5 mr-2" /> Send Invitation
                                 </DropdownMenuItem>
                               )}
-                              <DropdownMenuItem
-                                variant="destructive"
-                                onClick={() => handleDeleteCustomer(customer.id)}
-                              >
+                              <DropdownMenuItem variant="destructive" onClick={() => handleDeleteCustomer(customer.id)}>
                                 <Trash2 className="size-3.5 mr-2" /> Delete
                               </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -652,655 +1121,255 @@ export function CrmView() {
               </ScrollArea>
             </Card>
           )}
+        </TabsContent>
 
-          {/* Customer Portal Invitation Dialog */}
-          <Dialog
-            open={!!inviteCustomer}
-            onOpenChange={(open) => {
-              if (!open) {
+        {/* ═══════════════════ GROUPS TAB ═══════════════════════════════════ */}
+        <TabsContent value="groups" className="space-y-4">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+            {GROUPS.map(group => {
+              const Icon = group.icon;
+              return (
+                <Card key={group.name} className="p-5 hover:shadow-md transition-shadow cursor-pointer">
+                  <div className="flex items-center gap-3">
+                    <div className={`size-12 rounded-lg flex items-center justify-center border ${group.color}`}>
+                      <Icon className="size-6" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold">{group.name}</h3>
+                      <p className="text-sm text-muted-foreground">Customer group</p>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </TabsContent>
+
+        {/* ═══════════════════ TAGS TAB ═════════════════════════════════════ */}
+        <TabsContent value="tags" className="space-y-4">
+          <Card className="p-6">
+            <h3 className="font-semibold mb-1">Customer Tags</h3>
+            <p className="text-sm text-muted-foreground mb-4">Tags help you categorize and filter customers</p>
+            <div className="flex flex-wrap gap-2">
+              {TAGS.map(tag => (
+                <div key={tag.name} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${tag.color}`}>
+                  <TagIcon className="size-3.5" />
+                  {tag.name}
+                </div>
+              ))}
+            </div>
+          </Card>
+        </TabsContent>
+
+        {/* ═══════════════════ SMART LISTS TAB ══════════════════════════════ */}
+        <TabsContent value="smartLists" className="space-y-4">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+            {SMART_LISTS.map(list => {
+              const Icon = list.icon;
+              return (
+                <Card key={list.name} className="p-5 hover:shadow-md transition-shadow cursor-pointer">
+                  <div className="flex items-start gap-3">
+                    <div className="size-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                      <Icon className={`size-5 ${list.color}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-sm">{list.name}</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">{list.description}</p>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </TabsContent>
+
+        {/* ═══════════════════ ANALYTICS TAB ════════════════════════════════ */}
+        <TabsContent value="analytics" className="space-y-4">
+          <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Users className="size-4 text-emerald-500" />
+                <p className="text-xs text-muted-foreground">Total Customers</p>
+              </div>
+              <p className="text-2xl font-bold">{customerStats.total}</p>
+            </Card>
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <TrendingUp className="size-4 text-amber-500" />
+                <p className="text-xs text-muted-foreground">New This Month</p>
+              </div>
+              <p className="text-2xl font-bold text-amber-600">{customerStats.newThisMonth}</p>
+            </Card>
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <RefreshCw className="size-4 text-emerald-500" />
+                <p className="text-xs text-muted-foreground">Repeat Customers</p>
+              </div>
+              <p className="text-2xl font-bold text-emerald-600">--</p>
+            </Card>
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <DollarSign className="size-4 text-purple-500" />
+                <p className="text-xs text-muted-foreground">Revenue</p>
+              </div>
+              <p className="text-2xl font-bold text-purple-600">--</p>
+            </Card>
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Star className="size-4 text-sky-500" />
+                <p className="text-xs text-muted-foreground">Lifetime Value</p>
+              </div>
+              <p className="text-2xl font-bold text-sky-600">--</p>
+            </Card>
+          </div>
+          <Card className="p-6">
+            <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+              <BarChart3 className="size-12 mb-3 opacity-20" />
+              <p className="font-medium">Detailed Analytics</p>
+              <p className="text-sm">Revenue trends, customer growth, and lifetime value charts will appear here</p>
+            </div>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* ─── Add/Edit Customer Dialog ─────────────────────────────────────── */}
+      <Dialog open={showAddCustomer} onOpenChange={setShowAddCustomer}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingCustomer ? 'Edit Customer' : 'Add Customer'}</DialogTitle>
+            <DialogDescription>
+              {editingCustomer ? 'Update customer information' : 'Add a new customer to your CRM'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Name *</Label>
+              <Input placeholder="Full name" value={customerForm.name} onChange={e => setCustomerForm({ ...customerForm, name: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Phone *</Label>
+              <Input placeholder="+1 555 123 4567" value={customerForm.phone} onChange={e => setCustomerForm({ ...customerForm, phone: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input placeholder="email@example.com" type="email" value={customerForm.email} onChange={e => setCustomerForm({ ...customerForm, email: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Address</Label>
+              <Textarea placeholder="Full address" value={customerForm.address} onChange={e => setCustomerForm({ ...customerForm, address: e.target.value })} rows={2} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddCustomer(false)}>Cancel</Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSaveCustomer} disabled={!customerForm.name || !customerForm.phone}>
+              {editingCustomer ? 'Update' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Customer Portal Invitation Dialog ────────────────────────────── */}
+      <Dialog
+        open={!!inviteCustomer}
+        onOpenChange={(open) => {
+          if (!open) {
+            setInviteCustomer(null);
+            setInviteUrl(null);
+            setInviteCopied(false);
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="size-5 text-emerald-600" />
+              Send Portal Invitation
+            </DialogTitle>
+            <DialogDescription>
+              Generate a secure activation link for{' '}
+              <span className="font-medium text-foreground">
+                {inviteCustomer?.name}
+              </span>
+              . The customer uses this link to set their password and
+              access the customer portal.
+            </DialogDescription>
+          </DialogHeader>
+
+          {inviteCustomer?.email ? (
+            <div className="text-sm text-muted-foreground flex items-center gap-2">
+              <Mail className="size-4" />
+              <span>{inviteCustomer.email}</span>
+            </div>
+          ) : (
+            <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/30 p-3 text-xs text-amber-800 dark:text-amber-200">
+              This customer has no email address. You can still generate a
+              link, but you&apos;ll need to share it with them manually
+              (e.g. via WhatsApp).
+            </div>
+          )}
+
+          {inviteLoading ? (
+            <div className="flex items-center justify-center py-6">
+              <RefreshCw className="size-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : inviteUrl ? (
+            <div className="space-y-3">
+              <div className="rounded-md border bg-muted/40 p-3">
+                <div className="text-xs font-medium text-muted-foreground mb-1.5">
+                  Activation Link
+                </div>
+                <div className="flex items-start gap-2">
+                  <code className="flex-1 text-xs break-all leading-relaxed">
+                    {inviteUrl}
+                  </code>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 shrink-0"
+                    onClick={copyInviteUrl}
+                  >
+                    {inviteCopied ? (
+                      <><Check className="size-3.5 mr-1" /> Copied</>
+                    ) : (
+                      <><Copy className="size-3.5 mr-1" /> Copy</>
+                    )}
+                  </Button>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                The link expires in 7 days. The customer must set a password
+                on first visit.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-md border border-red-200 bg-red-50 dark:border-red-900/60 dark:bg-red-950/30 p-3 text-sm text-red-800 dark:text-red-200">
+              Could not generate the activation link. Please try again.
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
                 setInviteCustomer(null);
                 setInviteUrl(null);
                 setInviteCopied(false);
-              }
-            }}
-          >
-            <DialogContent className="max-w-lg">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Send className="size-5 text-emerald-600" />
-                  Send Portal Invitation
-                </DialogTitle>
-                <DialogDescription>
-                  Generate a secure activation link for{' '}
-                  <span className="font-medium text-foreground">
-                    {inviteCustomer?.name}
-                  </span>
-                  . The customer uses this link to set their password and
-                  access the customer portal.
-                </DialogDescription>
-              </DialogHeader>
-
-              {inviteCustomer?.email ? (
-                <div className="text-sm text-muted-foreground flex items-center gap-2">
-                  <Mail className="size-4" />
-                  <span>{inviteCustomer.email}</span>
-                </div>
-              ) : (
-                <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/30 p-3 text-xs text-amber-800 dark:text-amber-200">
-                  This customer has no email address. You can still generate a
-                  link, but you&apos;ll need to share it with them manually
-                  (e.g. via WhatsApp).
-                </div>
-              )}
-
-              {inviteLoading ? (
-                <div className="flex items-center justify-center py-6">
-                  <RefreshCw className="size-5 animate-spin text-muted-foreground" />
-                </div>
-              ) : inviteUrl ? (
-                <div className="space-y-3">
-                  <div className="rounded-md border bg-muted/40 p-3">
-                    <div className="text-xs font-medium text-muted-foreground mb-1.5">
-                      Activation Link
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <code className="flex-1 text-xs break-all leading-relaxed">
-                        {inviteUrl}
-                      </code>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 shrink-0"
-                        onClick={copyInviteUrl}
-                      >
-                        {inviteCopied ? (
-                          <>
-                            <Check className="size-3.5 mr-1" /> Copied
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="size-3.5 mr-1" /> Copy
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    The link expires in 7 days. The customer must set a password
-                    on first visit. After activation, they can sign in at{' '}
-                    <code className="text-foreground">/{'{slug}'}/customer</code>.
-                  </p>
-                </div>
-              ) : (
-                <div className="rounded-md border border-red-200 bg-red-50 dark:border-red-900/60 dark:bg-red-950/30 p-3 text-sm text-red-800 dark:text-red-200">
-                  Could not generate the activation link. Please try again.
-                </div>
-              )}
-
-              <DialogFooter className="gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setInviteCustomer(null);
-                    setInviteUrl(null);
-                    setInviteCopied(false);
-                  }}
-                >
-                  Close
-                </Button>
-                {inviteUrl && (
-                  <Button onClick={copyInviteUrl} className="bg-emerald-600 hover:bg-emerald-700">
-                    {inviteCopied ? (
-                      <>
-                        <Check className="size-4 mr-1" /> Copied
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="size-4 mr-1" /> Copy Link
-                      </>
-                    )}
-                  </Button>
-                )}
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          {/* Add/Edit Customer Dialog */}
-          <Dialog open={showAddCustomer} onOpenChange={setShowAddCustomer}>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>{editingCustomer ? 'Edit Customer' : 'Add Customer'}</DialogTitle>
-                <DialogDescription>
-                  {editingCustomer ? 'Update customer information' : 'Add a new customer to your CRM'}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-2">
-                <div className="space-y-2">
-                  <Label>Name *</Label>
-                  <Input placeholder="Full name" value={customerForm.name} onChange={e => setCustomerForm({ ...customerForm, name: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Phone *</Label>
-                  <Input placeholder="+1 555 123 4567" value={customerForm.phone} onChange={e => setCustomerForm({ ...customerForm, phone: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Email</Label>
-                  <Input placeholder="email@example.com" type="email" value={customerForm.email} onChange={e => setCustomerForm({ ...customerForm, email: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Address</Label>
-                  <Textarea placeholder="Full address" value={customerForm.address} onChange={e => setCustomerForm({ ...customerForm, address: e.target.value })} rows={2} />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setShowAddCustomer(false)}>Cancel</Button>
-                <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSaveCustomer} disabled={!customerForm.name || !customerForm.phone}>
-                  {editingCustomer ? 'Update' : 'Create'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          {/* Customer Detail Dialog */}
-          <Dialog open={showCustomerDetail} onOpenChange={setShowCustomerDetail}>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Customer Details</DialogTitle>
-              </DialogHeader>
-              {selectedCustomer && (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="size-14 shrink-0">
-                      <AvatarFallback className="bg-emerald-100 text-emerald-700 text-lg font-medium">
-                        {selectedCustomer.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <h3 className="font-semibold text-lg">{selectedCustomer.name}</h3>
-                      <p className="text-sm text-muted-foreground">{selectedCustomer.phone}</p>
-                    </div>
-                  </div>
-                  <Separator />
-                  <div className="space-y-2.5 text-sm">
-                    {selectedCustomer.email && (
-                      <div className="flex items-center gap-2">
-                        <Mail className="size-4 text-muted-foreground shrink-0" />
-                        <span>{selectedCustomer.email}</span>
-                      </div>
-                    )}
-                    {selectedCustomer.address && (
-                      <div className="flex items-center gap-2">
-                        <MapPin className="size-4 text-muted-foreground shrink-0" />
-                        <span>{selectedCustomer.address}</span>
-                      </div>
-                    )}
-                    {selectedCustomer.whatsappId && (
-                      <div className="flex items-center gap-2">
-                        <MessageCircle className="size-4 text-emerald-500 shrink-0" />
-                        <span>{selectedCustomer.whatsappId}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2">
-                      <Clock className="size-4 text-muted-foreground shrink-0" />
-                      <span>Added {formatDate(selectedCustomer.createdAt)}</span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 pt-2">
-                    <Button variant="outline" size="sm" className="flex-1" onClick={() => { setShowCustomerDetail(false); openEditCustomer(selectedCustomer); }}>
-                      <Pencil className="size-3.5 mr-1" /> Edit
-                    </Button>
-                    <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => { setShowCustomerDetail(false); setActiveView('omnichannel'); }}>
-                      <MessageCircle className="size-3.5 mr-1" /> Message
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </DialogContent>
-          </Dialog>
-        </TabsContent>
-
-        {/* ═══════════════════ EMPLOYEES TAB ═══════════════════════════════ */}
-        <TabsContent value="employees" className="space-y-4">
-          {/* Stats */}
-          <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
-            <Card className="p-3">
-              <div className="flex items-center gap-2">
-                <Briefcase className="size-4 text-muted-foreground" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Total</p>
-                  <p className="text-lg font-bold">{employeeStats.total}</p>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-3">
-              <div className="flex items-center gap-2">
-                <UserCheck className="size-4 text-emerald-500" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Available</p>
-                  <p className="text-lg font-bold text-emerald-600">{employeeStats.available}</p>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-3">
-              <div className="flex items-center gap-2">
-                <Clock className="size-4 text-orange-500" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Busy</p>
-                  <p className="text-lg font-bold text-orange-600">{employeeStats.busy}</p>
-                </div>
-              </div>
-            </Card>
-            <Card className="p-3">
-              <div className="flex items-center gap-2">
-                <Star className="size-4 text-yellow-500" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Avg Rating</p>
-                  <p className="text-lg font-bold text-yellow-600">{employeeStats.avgRating}</p>
-                </div>
-              </div>
-            </Card>
-          </div>
-
-          {/* Search + Filters */}
-          <div className="flex flex-wrap gap-3 items-center">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <Input
-                placeholder="Search employees..."
-                value={employeeSearch}
-                onChange={e => setEmployeeSearch(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <Select value={employeeRoleFilter} onValueChange={setEmployeeRoleFilter}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                <SelectItem value="driver">Driver</SelectItem>
-                <SelectItem value="cleaner">Cleaner</SelectItem>
-                <SelectItem value="beautician">Beautician</SelectItem>
-                <SelectItem value="doctor">Doctor</SelectItem>
-                <SelectItem value="technician">Technician</SelectItem>
-                <SelectItem value="packer">Packer</SelectItem>
-                <SelectItem value="delivery">Delivery</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={employeeStatusFilter} onValueChange={setEmployeeStatusFilter}>
-              <SelectTrigger className="w-36">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="available">Available</SelectItem>
-                <SelectItem value="busy">Busy</SelectItem>
-                <SelectItem value="offline">Offline</SelectItem>
-              </SelectContent>
-            </Select>
-            <div className="flex gap-1 border rounded-md p-0.5">
-              <Button
-                size="sm"
-                variant={employeeViewMode === 'cards' ? 'default' : 'ghost'}
-                className="h-7 text-xs px-2"
-                onClick={() => setEmployeeViewMode('cards')}
-              >
-                Cards
-              </Button>
-              <Button
-                size="sm"
-                variant={employeeViewMode === 'table' ? 'default' : 'ghost'}
-                className="h-7 text-xs px-2"
-                onClick={() => setEmployeeViewMode('table')}
-              >
-                Table
-              </Button>
-            </div>
-            <Button
-              className="bg-emerald-600 hover:bg-emerald-700"
-              onClick={() => {
-                setEditingEmployee(null);
-                setEmployeeForm({ name: '', phone: '', role: 'technician', location: '', skills: '' });
-                setShowAddEmployee(true);
               }}
             >
-              <Plus className="size-4 mr-1" /> Add Employee
+              Close
             </Button>
-          </div>
-
-          {/* Employee Content */}
-          {employeesLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[1, 2, 3, 4, 5, 6].map(i => (
-                <Card key={i} className="animate-pulse">
-                  <CardContent className="p-4">
-                    <div className="h-4 bg-muted rounded w-3/4 mb-3" />
-                    <div className="h-3 bg-muted rounded w-1/2 mb-2" />
-                    <div className="h-3 bg-muted rounded w-2/3" />
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : filteredEmployees.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-              <Briefcase className="size-12 mb-3 opacity-20" />
-              <p>No employees found</p>
-              <p className="text-xs">Add your first employee to get started</p>
-            </div>
-          ) : employeeViewMode === 'cards' ? (
-            /* ─── Card View ──────────────────────────────────────────────── */
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredEmployees.map(employee => {
-                let skills: string[] = [];
-                try { skills = JSON.parse(employee.skills || '[]'); } catch { /* empty */ }
-
-                return (
-                  <Card
-                    key={employee.id}
-                    className="cursor-pointer hover:shadow-md transition-shadow"
-                    onClick={() => { setSelectedEmployee(employee); setShowEmployeeDetail(true); }}
-                  >
-                    <CardContent className="p-4 space-y-3">
-                      <div className="flex items-center gap-3">
-                        <div className="relative shrink-0">
-                          <Avatar className="size-10">
-                            <AvatarFallback className="bg-sky-100 text-sky-700 text-sm font-medium">
-                              {employee.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className={`absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-white ${getEmployeeStatusDot(employee.status)}`} />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <h4 className="font-semibold text-sm truncate">{employee.name}</h4>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className={`text-[10px] h-4 ${getRoleBadgeColor(employee.role)}`}>
-                              {employee.role}
-                            </Badge>
-                            <Badge variant="outline" className={getEmployeeStatusColor(employee.status)}>
-                              {employee.status}
-                            </Badge>
-                          </div>
-                        </div>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild onClick={e => e.stopPropagation()}>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
-                              <MoreHorizontal className="size-3.5" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={e => { e.stopPropagation(); openEditEmployee(employee); }}>
-                              <Pencil className="size-3.5 mr-2" /> Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem variant="destructive" onClick={e => { e.stopPropagation(); handleDeleteEmployee(employee.id); }}>
-                              <Trash2 className="size-3.5 mr-2" /> Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1"><Phone className="size-3" /> {employee.phone}</span>
-                        {employee.location && (
-                          <span className="flex items-center gap-1"><MapPin className="size-3" /> {employee.location}</span>
-                        )}
-                      </div>
-
-                      {/* Skills */}
-                      {skills.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {skills.slice(0, 3).map((skill, i) => (
-                            <Badge key={i} variant="secondary" className="text-[9px] h-4">{skill}</Badge>
-                          ))}
-                          {skills.length > 3 && (
-                            <Badge variant="secondary" className="text-[9px] h-4">+{skills.length - 3}</Badge>
-                          )}
-                        </div>
-                      )}
-
-                      <div className="flex items-center justify-between pt-1 border-t text-xs">
-                        <div className="flex items-center gap-1">
-                          <Star className="size-3 text-yellow-500 fill-yellow-500" />
-                          <span className="font-medium">{employee.rating.toFixed(1)}</span>
-                          <span className="text-muted-foreground">({employee.completedJobs} jobs)</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          ) : (
-            /* ─── Table View ─────────────────────────────────────────────── */
-            <Card>
-              <ScrollArea className="max-h-[500px]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Phone</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Skills</TableHead>
-                      <TableHead>Rating</TableHead>
-                      <TableHead>Completed Jobs</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredEmployees.map(employee => {
-                      let skills: string[] = [];
-                      try { skills = JSON.parse(employee.skills || '[]'); } catch { /* empty */ }
-
-                      return (
-                        <TableRow
-                          key={employee.id}
-                          className="cursor-pointer"
-                          onClick={() => { setSelectedEmployee(employee); setShowEmployeeDetail(true); }}
-                        >
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <div className="relative">
-                                <Avatar className="size-7">
-                                  <AvatarFallback className="bg-sky-100 text-sky-700 text-[10px] font-medium">
-                                    {employee.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div className={`absolute -bottom-0.5 -right-0.5 size-2 rounded-full border border-white ${getEmployeeStatusDot(employee.status)}`} />
-                              </div>
-                              <span className="font-medium text-sm">{employee.name}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-sm">{employee.phone}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={`text-[10px] h-4 ${getRoleBadgeColor(employee.role)}`}>
-                              {employee.role}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={getEmployeeStatusColor(employee.status)}>
-                              <span className={`inline-block size-1.5 rounded-full mr-1 ${getEmployeeStatusDot(employee.status)}`} />
-                              {employee.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-0.5">
-                              {skills.slice(0, 2).map((skill, i) => (
-                                <Badge key={i} variant="secondary" className="text-[9px] h-4">{skill}</Badge>
-                              ))}
-                              {skills.length > 2 && (
-                                <Badge variant="secondary" className="text-[9px] h-4">+{skills.length - 2}</Badge>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <span className="flex items-center gap-0.5 text-sm">
-                              <Star className="size-3 text-yellow-500 fill-yellow-500" />
-                              {employee.rating.toFixed(1)}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-sm">{employee.completedJobs}</TableCell>
-                          <TableCell className="text-right" onClick={e => e.stopPropagation()}>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7">
-                                  <MoreHorizontal className="size-3.5" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => { setSelectedEmployee(employee); setShowEmployeeDetail(true); }}>
-                                  <Eye className="size-3.5 mr-2" /> View
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => openEditEmployee(employee)}>
-                                  <Pencil className="size-3.5 mr-2" /> Edit
-                                </DropdownMenuItem>
-                                <DropdownMenuItem variant="destructive" onClick={() => handleDeleteEmployee(employee.id)}>
-                                  <Trash2 className="size-3.5 mr-2" /> Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
-            </Card>
-          )}
-
-          {/* Add/Edit Employee Dialog */}
-          <Dialog open={showAddEmployee} onOpenChange={setShowAddEmployee}>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>{editingEmployee ? 'Edit Employee' : 'Add Employee'}</DialogTitle>
-                <DialogDescription>
-                  {editingEmployee ? 'Update employee information' : 'Add a new employee to your team'}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-2">
-                <div className="space-y-2">
-                  <Label>Name *</Label>
-                  <Input placeholder="Full name" value={employeeForm.name} onChange={e => setEmployeeForm({ ...employeeForm, name: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Phone *</Label>
-                  <Input placeholder="+1 555 123 4567" value={employeeForm.phone} onChange={e => setEmployeeForm({ ...employeeForm, phone: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Role</Label>
-                  <Select value={employeeForm.role} onValueChange={v => setEmployeeForm({ ...employeeForm, role: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="driver">Driver</SelectItem>
-                      <SelectItem value="cleaner">Cleaner</SelectItem>
-                      <SelectItem value="beautician">Beautician</SelectItem>
-                      <SelectItem value="doctor">Doctor</SelectItem>
-                      <SelectItem value="technician">Technician</SelectItem>
-                      <SelectItem value="packer">Packer</SelectItem>
-                      <SelectItem value="delivery">Delivery</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Location</Label>
-                  <Input placeholder="City or area" value={employeeForm.location} onChange={e => setEmployeeForm({ ...employeeForm, location: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Skills</Label>
-                  <Input placeholder="Comma-separated skills" value={employeeForm.skills} onChange={e => setEmployeeForm({ ...employeeForm, skills: e.target.value })} />
-                  <p className="text-xs text-muted-foreground">e.g., heavy vehicle, AC repair, first aid</p>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setShowAddEmployee(false)}>Cancel</Button>
-                <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSaveEmployee} disabled={!employeeForm.name || !employeeForm.phone}>
-                  {editingEmployee ? 'Update' : 'Create'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-
-          {/* Employee Detail Dialog */}
-          <Dialog open={showEmployeeDetail} onOpenChange={setShowEmployeeDetail}>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Employee Details</DialogTitle>
-              </DialogHeader>
-              {selectedEmployee && (() => {
-                let skills: string[] = [];
-                try { skills = JSON.parse(selectedEmployee.skills || '[]'); } catch { /* empty */ }
-
-                return (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="relative">
-                        <Avatar className="size-14 shrink-0">
-                          <AvatarFallback className="bg-sky-100 text-sky-700 text-lg font-medium">
-                            {selectedEmployee.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className={`absolute -bottom-0.5 -right-0.5 size-4 rounded-full border-2 border-white ${getEmployeeStatusDot(selectedEmployee.status)}`} />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-lg">{selectedEmployee.name}</h3>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className={getRoleBadgeColor(selectedEmployee.role)}>
-                            {selectedEmployee.role}
-                          </Badge>
-                          <Badge variant="outline" className={getEmployeeStatusColor(selectedEmployee.status)}>
-                            {selectedEmployee.status}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-                    <Separator />
-                    <div className="space-y-2.5 text-sm">
-                      <div className="flex items-center gap-2">
-                        <Phone className="size-4 text-muted-foreground shrink-0" />
-                        <span>{selectedEmployee.phone}</span>
-                      </div>
-                      {selectedEmployee.location && (
-                        <div className="flex items-center gap-2">
-                          <MapPin className="size-4 text-muted-foreground shrink-0" />
-                          <span>{selectedEmployee.location}</span>
-                        </div>
-                      )}
-                      {selectedEmployee.whatsappId && (
-                        <div className="flex items-center gap-2">
-                          <MessageCircle className="size-4 text-emerald-500 shrink-0" />
-                          <span>{selectedEmployee.whatsappId}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2">
-                        <Star className="size-4 text-yellow-500 shrink-0 fill-yellow-500" />
-                        <span>{selectedEmployee.rating.toFixed(1)} rating &bull; {selectedEmployee.completedJobs} completed jobs</span>
-                      </div>
-                    </div>
-                    {skills.length > 0 && (
-                      <div>
-                        <p className="text-sm font-medium mb-1.5">Skills</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {skills.map((skill, i) => (
-                            <Badge key={i} variant="secondary" className="text-xs">{skill}</Badge>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    <div className="flex gap-2 pt-2">
-                      <Button variant="outline" size="sm" className="flex-1" onClick={() => { setShowEmployeeDetail(false); openEditEmployee(selectedEmployee); }}>
-                        <Pencil className="size-3.5 mr-1" /> Edit
-                      </Button>
-                      <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700" onClick={() => { setShowEmployeeDetail(false); setActiveView('omnichannel'); }}>
-                        <MessageCircle className="size-3.5 mr-1" /> WhatsApp
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })()}
-            </DialogContent>
-          </Dialog>
-        </TabsContent>
-      </Tabs>
+            {inviteUrl && (
+              <Button onClick={copyInviteUrl} className="bg-emerald-600 hover:bg-emerald-700">
+                {inviteCopied ? (
+                  <><Check className="size-4 mr-1" /> Copied</>
+                ) : (
+                  <><Copy className="size-4 mr-1" /> Copy Link</>
+                )}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

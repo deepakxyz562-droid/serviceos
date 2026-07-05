@@ -30,6 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,6 +43,22 @@ import { useAppStore } from '@/store/app-store';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { authFetch } from '@/lib/api';
+
+// Recharts — used by the Analytics tab (also used by dashboard-view / reports-view).
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  ResponsiveContainer,
+  Cell,
+} from 'recharts';
+
+// Lazy-loaded peer view embedded in the Pipeline tab.
+import { SalesPipelineView } from '@/components/views/sales-pipeline-view';
 
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { FormSectionCard, FormPageHeader } from '@/components/shared/form-section-card';
@@ -207,6 +224,16 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: str
 
 // All statuses available for filtering
 const ALL_STATUSES = ['new', 'contacted', 'quoted', 'won', 'lost'] as const;
+
+// Bar chart colors used by the Analytics tab. Match the status dot palette
+// so chart bars line up with the kanban / table badges.
+const STATUS_BAR_COLORS: Record<string, string> = {
+  new: '#3b82f6',
+  contacted: '#f59e0b',
+  quoted: '#a855f7',
+  won: '#10b981',
+  lost: '#ef4444',
+};
 
 const SOURCE_CONFIG: Record<string, { label: string; color: string; bgColor: string; borderColor: string }> = {
   website: { label: 'Website', color: 'text-blue-700', bgColor: 'bg-blue-50', borderColor: 'border-blue-200' },
@@ -1178,6 +1205,42 @@ export function LeadsView() {
   const [newNote, setNewNote] = useState('');
 
   // ============================================================
+  // Tab state — List | Pipeline | Analytics
+  // ============================================================
+
+  // Top-level tab switcher for the Leads page. The Pipeline tab embeds the
+  // standalone SalesPipelineView component (which has its own internal
+  // state); the Analytics tab shows derived stats from the lead list.
+  const [activeTab, setActiveTab] = useState<'list' | 'pipeline' | 'analytics'>('list');
+
+  // Larger lead set fetched on-demand for the Analytics tab so the
+  // breakdowns reflect the whole tenant (not just the current page of 10).
+  const [analyticsLeads, setAnalyticsLeads] = useState<Lead[]>([]);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+
+  useEffect(() => {
+    if (activeTab !== 'analytics') return;
+    let cancelled = false;
+    setAnalyticsLoading(true);
+    authFetch('/api/leads?limit=1000')
+      .then((r) => (r.ok ? r.json() : { leads: [] }))
+      .then((data) => {
+        if (cancelled) return;
+        setAnalyticsLeads(Array.isArray(data?.leads) ? data.leads : []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAnalyticsLeads([]);
+      })
+      .finally(() => {
+        if (!cancelled) setAnalyticsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab]);
+
+  // ============================================================
   // Fetch leads
   // ============================================================
 
@@ -1255,6 +1318,62 @@ export function LeadsView() {
     }
     return groups;
   }, [leads]);
+
+  // ============================================================
+  // Analytics (Analytics tab) — derived from analyticsLeads
+  // ============================================================
+
+  const analyticsStats = useMemo(() => {
+    // Prefer the larger analytics fetch; fall back to the current page if it
+    // hasn't loaded yet so the cards aren't empty on first paint.
+    const data = analyticsLeads.length > 0 ? analyticsLeads : leads;
+    const total = analyticsLeads.length > 0 ? analyticsLeads.length : totalLeads;
+
+    const byStatus = KANBAN_STATUSES.map((status) => {
+      const inStatus = data.filter((l) => mapToKanbanStatus(l.status) === status);
+      return {
+        status,
+        label: STATUS_CONFIG[status].label,
+        color: STATUS_CONFIG[status].dotColor,
+        count: inStatus.length,
+        value: inStatus.reduce((sum, l) => sum + (l.value || 0), 0),
+      };
+    });
+
+    const bySource = Object.entries(SOURCE_CONFIG)
+      .map(([key, cfg]) => ({
+        source: key,
+        label: cfg.label,
+        count: data.filter((l) => l.source === key).length,
+      }))
+      .filter((s) => s.count > 0)
+      .sort((a, b) => b.count - a.count);
+
+    const wonCount = data.filter((l) => l.status === 'won').length;
+    const lostCount = data.filter((l) => l.status === 'lost').length;
+    const closedCount = wonCount + lostCount;
+    const conversionRate = closedCount > 0 ? (wonCount / closedCount) * 100 : 0;
+    const pipelineValue = data
+      .filter((l) => !['won', 'lost'].includes(l.status))
+      .reduce((sum, l) => sum + (l.value || 0), 0);
+    const wonValue = data
+      .filter((l) => l.status === 'won')
+      .reduce((sum, l) => sum + (l.value || 0), 0);
+    const avgValue = data.length > 0 ? data.reduce((s, l) => s + (l.value || 0), 0) / data.length : 0;
+
+    return {
+      total,
+      byStatus,
+      bySource,
+      wonCount,
+      lostCount,
+      closedCount,
+      conversionRate,
+      pipelineValue,
+      wonValue,
+      avgValue,
+    };
+  }, [analyticsLeads, leads, totalLeads]);
 
   // ============================================================
   // CRUD handlers
@@ -2600,6 +2719,325 @@ export function LeadsView() {
   );
 
   // ============================================================
+  // Render: Analytics tab (stat cards + bar chart)
+  // ============================================================
+
+  const renderAnalyticsView = () => {
+    // ─── Stat card config ────────────────────────────────────────────
+    const cards: Array<{
+      label: string;
+      value: string;
+      subtitle?: string;
+      icon: typeof Target;
+      iconBg: string;
+      iconColor: string;
+    }> = [
+      {
+        label: 'Total Leads',
+        value: String(analyticsStats.total),
+        subtitle: analyticsStats.closedCount > 0 ? `${analyticsStats.closedCount} closed` : 'No closed leads yet',
+        icon: Target,
+        iconBg: 'bg-emerald-50',
+        iconColor: 'text-emerald-600',
+      },
+      {
+        label: 'Pipeline Value',
+        value: formatCompact(analyticsStats.pipelineValue),
+        subtitle: 'Active deals only',
+        icon: DollarSign,
+        iconBg: 'bg-blue-50',
+        iconColor: 'text-blue-600',
+      },
+      {
+        label: 'Won Revenue',
+        value: formatCompact(analyticsStats.wonValue),
+        subtitle: `${analyticsStats.wonCount} won`,
+        icon: CheckCircle2,
+        iconBg: 'bg-emerald-50',
+        iconColor: 'text-emerald-600',
+      },
+      {
+        label: 'Conversion Rate',
+        value: `${analyticsStats.conversionRate.toFixed(1)}%`,
+        subtitle: analyticsStats.closedCount > 0 ? `${analyticsStats.wonCount} won / ${analyticsStats.lostCount} lost` : 'No closed leads yet',
+        icon: TrendingUp,
+        iconBg: 'bg-purple-50',
+        iconColor: 'text-purple-600',
+      },
+    ];
+
+    return (
+      <div className="space-y-6">
+        {/* ─── Top stat cards (2x2 on mobile, 4 on lg) ─────────────── */}
+        {analyticsLoading ? (
+          <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i} className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-2 flex-1">
+                    <Skeleton className="h-3 w-20" />
+                    <Skeleton className="h-7 w-16" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                  <Skeleton className="size-12 rounded-xl" />
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+            {cards.map((card) => {
+              const Icon = card.icon;
+              return (
+                <Card key={card.label} className="hover:shadow-md transition-shadow">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm text-muted-foreground font-medium truncate">{card.label}</p>
+                        <p className="text-2xl font-bold mt-1 truncate">{card.value}</p>
+                        {card.subtitle && (
+                          <p className="text-xs text-muted-foreground mt-1 truncate">{card.subtitle}</p>
+                        )}
+                      </div>
+                      <div className={`${card.iconBg} p-2.5 rounded-xl shrink-0`}>
+                        <Icon className={`size-5 ${card.iconColor}`} />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ─── Charts row (stack on mobile, 2-col on lg) ───────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Leads by Status — bar chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-1.5">
+                <BarChart3 className="size-4 text-emerald-600" /> Leads by Status
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">Distribution across pipeline stages</p>
+            </CardHeader>
+            <CardContent>
+              {analyticsLoading ? (
+                <Skeleton className="h-[260px] w-full" />
+              ) : analyticsStats.byStatus.every((s) => s.count === 0) ? (
+                <div className="flex items-center justify-center h-[260px] text-sm text-muted-foreground">
+                  No lead data yet
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart
+                    data={analyticsStats.byStatus}
+                    margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 11, fill: '#94a3b8' }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: '#94a3b8' }}
+                      axisLine={false}
+                      tickLine={false}
+                      allowDecimals={false}
+                    />
+                    <RechartsTooltip
+                      cursor={{ fill: 'rgba(16,185,129,0.06)' }}
+                      contentStyle={{
+                        borderRadius: '8px',
+                        border: '1px solid #e2e8f0',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                        fontSize: '12px',
+                      }}
+                      formatter={(value: number, name: string) => {
+                        if (name === 'value') return [formatCompact(value), 'Value'];
+                        return [value, 'Leads'];
+                      }}
+                    />
+                    <Bar dataKey="count" radius={[6, 6, 0, 0]} maxBarSize={56}>
+                      {analyticsStats.byStatus.map((entry) => (
+                        <Cell
+                          key={entry.status}
+                          fill={STATUS_BAR_COLORS[entry.status] || '#10b981'}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Pipeline Value by Status — bar chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-1.5">
+                <DollarSign className="size-4 text-emerald-600" /> Pipeline Value by Status
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">{symbol}-denominated value at each stage</p>
+            </CardHeader>
+            <CardContent>
+              {analyticsLoading ? (
+                <Skeleton className="h-[260px] w-full" />
+              ) : analyticsStats.byStatus.every((s) => s.value === 0) ? (
+                <div className="flex items-center justify-center h-[260px] text-sm text-muted-foreground">
+                  No value data yet
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart
+                    data={analyticsStats.byStatus}
+                    margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 11, fill: '#94a3b8' }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: '#94a3b8' }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v: number) => formatCompact(v).replace(/\.0$/, '')}
+                    />
+                    <RechartsTooltip
+                      cursor={{ fill: 'rgba(16,185,129,0.06)' }}
+                      contentStyle={{
+                        borderRadius: '8px',
+                        border: '1px solid #e2e8f0',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                        fontSize: '12px',
+                      }}
+                      formatter={(value: number) => [formatCurrency(value), 'Value']}
+                    />
+                    <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={56} fill="#10b981" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* ─── Breakdown tables row ─────────────────────────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Leads by Source */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-1.5">
+                <Users className="size-4 text-emerald-600" /> Leads by Source
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">Where your leads come from</p>
+            </CardHeader>
+            <CardContent>
+              {analyticsLoading ? (
+                <div className="space-y-2">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-8 w-full" />
+                  ))}
+                </div>
+              ) : analyticsStats.bySource.length === 0 ? (
+                <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+                  No source data yet
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-72 overflow-y-auto">
+                  {analyticsStats.bySource.map((s) => {
+                    const pct = analyticsStats.total > 0 ? (s.count / analyticsStats.total) * 100 : 0;
+                    const cfg = SOURCE_CONFIG[s.source];
+                    return (
+                      <div key={s.source} className="space-y-1">
+                        <div className="flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Badge
+                              variant="outline"
+                              className={cn('text-[10px] h-5 shrink-0', cfg?.bgColor, cfg?.color, cfg?.borderColor)}
+                            >
+                              {s.label}
+                            </Badge>
+                            <span className="text-muted-foreground text-xs">{s.count} leads</span>
+                          </div>
+                          <span className="font-semibold text-xs">{pct.toFixed(0)}%</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className="h-full bg-emerald-500 rounded-full transition-all"
+                            style={{ width: `${Math.max(pct, 2)}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Status breakdown table */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-1.5">
+                <Target className="size-4 text-emerald-600" /> Status Breakdown
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">Count and value at each pipeline stage</p>
+            </CardHeader>
+            <CardContent>
+              {analyticsLoading ? (
+                <div className="space-y-2">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <Skeleton key={i} className="h-8 w-full" />
+                  ))}
+                </div>
+              ) : (
+                <div className="overflow-hidden rounded-lg border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Stage</TableHead>
+                        <TableHead className="text-xs text-right">Leads</TableHead>
+                        <TableHead className="text-xs text-right">Value</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {analyticsStats.byStatus.map((row) => (
+                        <TableRow key={row.status}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span className={cn('size-2 rounded-full', row.color)} />
+                              <span className="text-sm font-medium">{row.label}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm text-right tabular-nums">{row.count}</TableCell>
+                          <TableCell className="text-sm text-right tabular-nums font-medium text-emerald-700">
+                            {row.value > 0 ? formatCompact(row.value) : '—'}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      <TableRow className="bg-muted/40 font-semibold">
+                        <TableCell className="text-sm">Avg. lead value</TableCell>
+                        <TableCell className="text-sm text-right text-muted-foreground">—</TableCell>
+                        <TableCell className="text-sm text-right tabular-nums text-emerald-700">
+                          {analyticsStats.avgValue > 0 ? formatCompact(analyticsStats.avgValue) : '—'}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================================
   // Main Render
   // ============================================================
 
@@ -2610,114 +3048,170 @@ export function LeadsView() {
         renderLeadFormPage()
       ) : (
         <>
-      {/* ─── Header ─────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600">
-            <Target className="size-5 text-white" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold">Leads</h2>
-            <p className="text-sm text-muted-foreground">Manage leads and track pipeline progress</p>
+      {/* ─── Header (title row + search/New Lead row) ─────────────── */}
+      <div className="flex flex-col gap-4">
+        {/* Title row with count badge */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600 shadow-sm">
+              <Target className="size-5 text-white" />
+            </div>
+            <div className="flex items-center gap-2.5">
+              <div>
+                <h2 className="text-xl font-bold leading-tight">Leads</h2>
+                <p className="text-xs text-muted-foreground">Manage leads and track pipeline progress</p>
+              </div>
+              <Badge className="bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 text-xs h-6 px-2 shrink-0">
+                {totalLeads}
+              </Badge>
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {/* View toggle */}
-          <div className="flex items-center border rounded-lg p-0.5">
-            <Button
-              variant={activeView === 'kanban' ? 'default' : 'ghost'}
-              size="sm"
-              className={cn(
-                'h-8 px-3 text-xs',
-                activeView === 'kanban' && 'bg-emerald-600 hover:bg-emerald-700'
-              )}
-              onClick={() => setActiveView('kanban')}
-            >
-              <LayoutGrid className="size-3.5 mr-1" /> Kanban
-            </Button>
-            <Button
-              variant={activeView === 'table' ? 'default' : 'ghost'}
-              size="sm"
-              className={cn(
-                'h-8 px-3 text-xs',
-                activeView === 'table' && 'bg-emerald-600 hover:bg-emerald-700'
-              )}
-              onClick={() => setActiveView('table')}
-            >
-              <List className="size-3.5 mr-1" /> Table
-            </Button>
-          </div>
 
-          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={openAddLead}>
-            <Plus className="size-4 mr-1" /> Add Lead
+        {/* Search + New Lead row (stacks vertically on mobile) */}
+        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+          <div className="relative flex-1 sm:max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder="Search leads by name, email, phone..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-10"
+            />
+          </div>
+          <Button
+            className="bg-emerald-600 hover:bg-emerald-700 h-10 w-full sm:w-auto shrink-0"
+            onClick={openAddLead}
+          >
+            <Plus className="size-4 mr-1" /> New Lead
           </Button>
         </div>
       </div>
 
-      {/* ─── Stats ─────────────────────────────────────────────── */}
-      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
-        {[
-          { label: 'Total Leads', value: totalLeads, icon: Target, color: 'text-foreground' },
-          { label: 'Pipeline Value', value: formatCompact(leads.reduce((s, l) => s + (l.value || 0), 0)), icon: DollarSign, color: 'text-emerald-600' },
-          { label: 'Won', value: leads.filter(l => l.status === 'won').length, icon: CheckCircle2, color: 'text-green-600' },
-          { label: 'Conversion Rate', value: leads.length > 0 ? `${Math.round(leads.filter(l => l.status === 'won').length / leads.length * 100)}%` : '0%', icon: TrendingUp, color: 'text-purple-600' },
-        ].map(stat => {
-          const Icon = stat.icon;
-          return (
-            <Card key={stat.label} className="p-4">
-              <div className="flex items-center gap-2">
-                <Icon className={`size-4 ${stat.color}`} />
-                <div>
-                  <p className="text-xs text-muted-foreground">{stat.label}</p>
-                  <p className={`text-lg font-bold ${stat.color}`}>{stat.value}</p>
-                </div>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* ─── Filters ────────────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-3 items-center">
-        <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-          <Input
-            placeholder="Search leads by name, email, phone..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-          />
+      {/* ─── Tabs (List | Pipeline | Analytics) ──────────────────── */}
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as 'list' | 'pipeline' | 'analytics')}
+      >
+        <div className="border-b border-border">
+          <TabsList className="bg-transparent h-11 gap-0.5 p-0 overflow-x-auto w-full sm:w-fit justify-start rounded-none">
+            <TabsTrigger
+              value="list"
+              className="data-[state=active]:bg-accent data-[state=active]:text-emerald-600 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-sm gap-1.5 transition-all duration-200"
+            >
+              <List className="size-3.5" /> List
+            </TabsTrigger>
+            <TabsTrigger
+              value="pipeline"
+              className="data-[state=active]:bg-accent data-[state=active]:text-emerald-600 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-sm gap-1.5 transition-all duration-200"
+            >
+              <TrendingUp className="size-3.5" /> Pipeline
+            </TabsTrigger>
+            <TabsTrigger
+              value="analytics"
+              className="data-[state=active]:bg-accent data-[state=active]:text-emerald-600 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-sm gap-1.5 transition-all duration-200"
+            >
+              <BarChart3 className="size-3.5" /> Analytics
+            </TabsTrigger>
+          </TabsList>
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-40">
-            <Filter className="size-3.5 mr-1.5 text-muted-foreground" />
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            {ALL_STATUSES.map((s) => (
-              <SelectItem key={s} value={s}>{STATUS_CONFIG[s].label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={sourceFilter} onValueChange={setSourceFilter}>
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Source" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Sources</SelectItem>
-            {Object.entries(SOURCE_CONFIG).map(([key, val]) => (
-              <SelectItem key={key} value={key}>{val.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button variant="outline" size="sm" onClick={() => fetchLeads()}>
-          <RefreshCw className="size-3.5 mr-1" /> Refresh
-        </Button>
-      </div>
 
-      {/* ─── View Content ───────────────────────────────────────── */}
-      {activeView === 'kanban' ? renderKanbanBoard() : renderTableView()}
+        {/* ─── List Tab (existing lead list functionality) ─────── */}
+        <TabsContent value="list" className="mt-6 space-y-6 outline-none">
+          {/* Stats */}
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+            {[
+              { label: 'Total Leads', value: totalLeads, icon: Target, color: 'text-foreground' },
+              { label: 'Pipeline Value', value: formatCompact(leads.reduce((s, l) => s + (l.value || 0), 0)), icon: DollarSign, color: 'text-emerald-600' },
+              { label: 'Won', value: leads.filter(l => l.status === 'won').length, icon: CheckCircle2, color: 'text-green-600' },
+              { label: 'Conversion Rate', value: leads.length > 0 ? `${Math.round(leads.filter(l => l.status === 'won').length / leads.length * 100)}%` : '0%', icon: TrendingUp, color: 'text-purple-600' },
+            ].map(stat => {
+              const Icon = stat.icon;
+              return (
+                <Card key={stat.label} className="p-4">
+                  <div className="flex items-center gap-2">
+                    <Icon className={`size-4 ${stat.color}`} />
+                    <div>
+                      <p className="text-xs text-muted-foreground">{stat.label}</p>
+                      <p className={`text-lg font-bold ${stat.color}`}>{stat.value}</p>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+
+          {/* Filters + Kanban/Table toggle */}
+          <div className="flex flex-wrap gap-3 items-center justify-between">
+            <div className="flex flex-wrap gap-3 items-center flex-1">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-40">
+                  <Filter className="size-3.5 mr-1.5 text-muted-foreground" />
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  {ALL_STATUSES.map((s) => (
+                    <SelectItem key={s} value={s}>{STATUS_CONFIG[s].label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Source" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Sources</SelectItem>
+                  {Object.entries(SOURCE_CONFIG).map(([key, val]) => (
+                    <SelectItem key={key} value={key}>{val.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="sm" onClick={() => fetchLeads()}>
+                <RefreshCw className="size-3.5 mr-1" /> Refresh
+              </Button>
+            </div>
+            {/* View toggle (Kanban / Table) */}
+            <div className="flex items-center border rounded-lg p-0.5">
+              <Button
+                variant={activeView === 'kanban' ? 'default' : 'ghost'}
+                size="sm"
+                className={cn(
+                  'h-8 px-3 text-xs',
+                  activeView === 'kanban' && 'bg-emerald-600 hover:bg-emerald-700'
+                )}
+                onClick={() => setActiveView('kanban')}
+              >
+                <LayoutGrid className="size-3.5 mr-1" /> Kanban
+              </Button>
+              <Button
+                variant={activeView === 'table' ? 'default' : 'ghost'}
+                size="sm"
+                className={cn(
+                  'h-8 px-3 text-xs',
+                  activeView === 'table' && 'bg-emerald-600 hover:bg-emerald-700'
+                )}
+                onClick={() => setActiveView('table')}
+              >
+                <List className="size-3.5 mr-1" /> Table
+              </Button>
+            </div>
+          </div>
+
+          {/* View Content (Kanban board or Table) */}
+          {activeView === 'kanban' ? renderKanbanBoard() : renderTableView()}
+        </TabsContent>
+
+        {/* ─── Pipeline Tab (embedded SalesPipelineView) ────────── */}
+        <TabsContent value="pipeline" className="mt-6 outline-none">
+          <SalesPipelineView />
+        </TabsContent>
+
+        {/* ─── Analytics Tab (stat cards + charts) ──────────────── */}
+        <TabsContent value="analytics" className="mt-6 outline-none">
+          {renderAnalyticsView()}
+        </TabsContent>
+      </Tabs>
 
       {/* ─── Dialogs ────────────────────────────────────────────── */}
       {renderDetailDialog()}

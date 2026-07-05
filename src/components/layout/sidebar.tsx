@@ -122,33 +122,13 @@ const ownerNavSections: NavSection[] = [
     items: [
       { view: 'leads', label: 'Leads', icon: Target },
       { view: 'customers', label: 'Customers', icon: Users },
-      { view: 'customer360', label: 'Customer 360', icon: UserCircle, badge: '360' },
-      { view: 'salesPipeline', label: 'Pipeline', icon: Kanban },
-    ],
-  },
-  {
-    title: 'Audience',
-    collapsible: true,
-    defaultCollapsed: true,
-    items: [
-      { view: 'contacts', label: 'All Contacts', icon: Users },
-      { view: 'groups', label: 'Groups', icon: FolderTree },
-      { view: 'tags', label: 'Tags', icon: TagIcon },
-      { view: 'segments', label: 'Segments', icon: Filter },
-      { view: 'contactImports', label: 'Imports', icon: Upload },
-      { view: 'contactExports', label: 'Exports', icon: Download },
-      { view: 'audienceAnalytics', label: 'Audience Analytics', icon: BarChart3 },
     ],
   },
   {
     title: 'Operations',
     items: [
-      { view: 'booking', label: 'Booking', icon: CalendarCheck },
       { view: 'jobs', label: 'Jobs', icon: Briefcase },
-      { view: 'dispatch', label: 'Dispatch Board', icon: Radio },
       { view: 'employees', label: 'Employees', icon: UserCog },
-      { view: 'employeePerformance', label: 'Performance', icon: TrendingUp },
-      { view: 'reviews', label: 'Reviews', icon: Star },
       { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },
     ],
   },
@@ -248,31 +228,13 @@ const superadminNavSections: NavSection[] = [
     items: [
       { view: 'leads', label: 'Leads', icon: Target },
       { view: 'customers', label: 'Customers', icon: Users },
-      { view: 'customer360', label: 'Customer 360', icon: UserCircle, badge: '360' },
-      { view: 'salesPipeline', label: 'Pipeline', icon: Kanban },
-    ],
-  },
-  {
-    title: 'Audience',
-    items: [
-      { view: 'contacts', label: 'All Contacts', icon: Users },
-      { view: 'groups', label: 'Groups', icon: FolderTree },
-      { view: 'tags', label: 'Tags', icon: TagIcon },
-      { view: 'segments', label: 'Segments', icon: Filter },
-      { view: 'contactImports', label: 'Imports', icon: Upload },
-      { view: 'contactExports', label: 'Exports', icon: Download },
-      { view: 'audienceAnalytics', label: 'Audience Analytics', icon: BarChart3 },
     ],
   },
   {
     title: 'Operations',
     items: [
-      { view: 'booking', label: 'Booking', icon: CalendarCheck },
       { view: 'jobs', label: 'Jobs', icon: Briefcase },
-      { view: 'dispatch', label: 'Dispatch Board', icon: Radio },
       { view: 'employees', label: 'Employees', icon: UserCog },
-      { view: 'employeePerformance', label: 'Performance', icon: TrendingUp },
-      { view: 'reviews', label: 'Reviews', icon: Star },
       { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },
     ],
   },
@@ -355,7 +317,6 @@ function CreateMenu({ isMobile, leftSidebarOpen, onSelect }: CreateMenuProps) {
   const items: { view: ViewType; label: string; icon: React.ElementType }[] = [
     { view: 'leads', label: 'New Lead', icon: Target },
     { view: 'customers', label: 'New Customer', icon: Users },
-    { view: 'booking', label: 'New Booking', icon: CalendarCheck },
     { view: 'jobs', label: 'New Job', icon: Briefcase },
     { view: 'invoices', label: 'New Invoice', icon: FileText },
     { view: 'campaigns', label: 'New Campaign', icon: Megaphone },
