@@ -146,7 +146,6 @@ const ownerNavSections: NavSection[] = [
     title: 'Inbox & Automation',
     items: [
       { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
-      { view: 'whatsapp', label: 'WhatsApp', icon: MessageSquare },
       { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
       { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
       { view: 'workflows', label: 'Workflows', icon: Workflow },
@@ -154,7 +153,6 @@ const ownerNavSections: NavSection[] = [
       { view: 'triggers', label: 'Triggers', icon: Zap },
       { view: 'formBuilder', label: 'Form Builder', icon: ClipboardList },
       { view: 'variables', label: 'Variables', icon: Variable },
-      { view: 'executions', label: 'Executions', icon: Activity },
     ],
   },
   {
@@ -252,7 +250,6 @@ const superadminNavSections: NavSection[] = [
     title: 'Inbox & Automation',
     items: [
       { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
-      { view: 'whatsapp', label: 'WhatsApp', icon: MessageSquare },
       { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
       { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
       { view: 'workflows', label: 'Workflows', icon: Workflow },
@@ -260,7 +257,6 @@ const superadminNavSections: NavSection[] = [
       { view: 'triggers', label: 'Triggers', icon: Zap },
       { view: 'formBuilder', label: 'Form Builder', icon: ClipboardList },
       { view: 'variables', label: 'Variables', icon: Variable },
-      { view: 'executions', label: 'Executions', icon: Activity },
     ],
   },
   {

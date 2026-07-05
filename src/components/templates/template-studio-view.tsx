@@ -35,6 +35,7 @@ import {
   Upload,
   X,
   ArrowLeft,
+  ArrowDownToLine,
   ChevronDown,
   ChevronRight,
   Loader2,
@@ -61,6 +62,8 @@ import {
   Smartphone,
   Monitor,
   Tablet,
+  LayoutGrid,
+  List as ListIcon,
   type LucideIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -128,6 +131,7 @@ import {
 import { EmailPreview, type EmailPreviewDevice } from '@/components/templates/email-preview'
 import { VARIABLE_CATEGORIES, ALL_VARIABLES } from '@/lib/template-vars'
 import { ALL_PACKS, BUSINESS_PACKS, INDUSTRY_PACKS, type TemplatePackDef } from '@/lib/template-packs-data'
+import { ImportSection } from '@/components/templates/import-section'
 
 /* ========================================================================== */
 /* Types                                                                      */
@@ -144,6 +148,7 @@ type SidebarKey =
   | 'wa-marketing'
   | 'wa-utility'
   | 'wa-authentication'
+  | 'import'
   | 'packs'
   | 'brand'
   | 'images'
@@ -399,20 +404,23 @@ function EmptyState({
   title,
   description,
   action,
+  secondary,
 }: {
   icon?: LucideIcon
   title: string
   description?: string
   action?: React.ReactNode
+  secondary?: string
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-      <div className="flex size-12 items-center justify-center rounded-full bg-muted">
-        <Icon className="size-6 text-muted-foreground" aria-hidden />
+    <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+      <div className="flex size-16 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-500 dark:bg-emerald-950/40 dark:text-emerald-400">
+        <Icon className="size-8" aria-hidden />
       </div>
-      <div className="flex flex-col gap-1">
-        <p className="text-sm font-semibold text-foreground">{title}</p>
-        {description && <p className="max-w-md text-xs text-muted-foreground">{description}</p>}
+      <div className="flex flex-col gap-1.5">
+        <p className="text-base font-semibold tracking-tight text-foreground">{title}</p>
+        {description && <p className="max-w-md text-sm text-muted-foreground">{description}</p>}
+        {secondary && <p className="mx-auto max-w-sm text-xs text-muted-foreground/80">{secondary}</p>}
       </div>
       {action}
     </div>
@@ -509,6 +517,7 @@ export function TemplateStudioView() {
   const [emailOpen, setEmailOpen] = React.useState(true)
   const [waOpen, setWaOpen] = React.useState(true)
   const [editorActive, setEditorActive] = React.useState(false)
+  const [showNewDialog, setShowNewDialog] = React.useState(false)
 
   // Counts
   const [emailTemplates, setEmailTemplates] = React.useState<EmailTemplate[]>([])
@@ -575,14 +584,50 @@ export function TemplateStudioView() {
     await loadCounts()
   }, [loadCounts])
 
+  const handleNewTemplate = (channel: 'email' | 'whatsapp') => {
+    setShowNewDialog(false)
+    if (channel === 'email') {
+      setActiveKey('email-all')
+    } else {
+      setActiveKey('wa-all')
+    }
+  }
+
+  // Sidebar item click — also fires when picking a new tab from the gallery header
+  const handleSetActive = (key: SidebarKey) => {
+    setActiveKey(key)
+  }
+
   return (
     <div className="flex h-screen flex-col bg-background">
       {/* Header */}
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <h1 className="text-lg font-semibold tracking-tight text-foreground">Template Studio</h1>
-        <div className="flex-1" />
-        <Button variant="outline" size="sm" onClick={() => void refreshAll()}>
-          <RefreshCw className="mr-1.5 size-3.5" /> Refresh
+      <header className="flex h-16 shrink-0 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:px-6">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <h1 className="truncate text-base font-bold tracking-tight text-foreground sm:text-lg">
+            Template Studio
+          </h1>
+          <p className="hidden truncate text-xs text-muted-foreground sm:block">
+            Design and manage your customer communications
+          </p>
+        </div>
+        {!countsLoaded ? (
+          <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden />
+        ) : null}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-9 text-muted-foreground hover:text-foreground"
+          onClick={() => void refreshAll()}
+          aria-label="Refresh template counts"
+        >
+          <RefreshCw className="size-4" />
+        </Button>
+        <Button
+          size="sm"
+          className="bg-emerald-600 hover:bg-emerald-700"
+          onClick={() => setShowNewDialog(true)}
+        >
+          <Plus className="mr-1.5 size-3.5" /> New Template
         </Button>
       </header>
 
@@ -590,9 +635,12 @@ export function TemplateStudioView() {
       <div className="flex flex-1 overflow-hidden">
         {/* Left sidebar — hidden when editor is full-page */}
         {!editorActive && (
-          <aside className="hidden w-56 shrink-0 flex-col border-r bg-muted/30 lg:flex">
+          <aside className="hidden w-60 shrink-0 flex-col border-r bg-muted/30 lg:flex">
           <ScrollArea className="flex-1">
-            <nav className="flex flex-col gap-1 p-3" aria-label="Template categories">
+            <nav className="flex flex-col gap-3 p-3" aria-label="Template categories">
+              {/* CREATE group */}
+              <SidebarGroupLabel icon={Plus}>Create</SidebarGroupLabel>
+
               {/* Email section */}
               <Collapsible open={emailOpen} onOpenChange={setEmailOpen}>
                 <CollapsibleTrigger asChild>
@@ -606,39 +654,22 @@ export function TemplateStudioView() {
                   </button>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                  <div className="ml-1 flex flex-col gap-0.5 border-l border-border/50 pl-2">
-                    {EMAIL_SIDEBAR_ITEMS.map((item) => {
-                      const Icon = item.icon
-                      const active = activeKey === item.key
-                      return (
-                        <button
-                          key={item.key}
-                          type="button"
-                          onClick={() => setActiveKey(item.key)}
-                          className={cn(
-                            'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
-                            active
-                              ? 'bg-primary/10 font-medium text-primary'
-                              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                          )}
-                        >
-                          <Icon className="size-3.5" aria-hidden />
-                          <span className="flex-1 text-left">{item.label}</span>
-                          <span className={cn(
-                            'text-xs tabular-nums',
-                            active ? 'text-primary' : 'text-muted-foreground/70'
-                          )}>
-                            {emailCountMap[item.key] ?? 0}
-                          </span>
-                        </button>
-                      )
-                    })}
+                  <div className="mt-1 flex flex-col gap-0.5">
+                    {EMAIL_SIDEBAR_ITEMS.map((item) => (
+                      <SidebarItem
+                        key={item.key}
+                        item={item}
+                        active={activeKey === item.key}
+                        count={emailCountMap[item.key] ?? 0}
+                        onClick={() => handleSetActive(item.key)}
+                      />
+                    ))}
                   </div>
                 </CollapsibleContent>
               </Collapsible>
 
               {/* WhatsApp section */}
-              <Collapsible open={waOpen} onOpenChange={setWaOpen} className="mt-2">
+              <Collapsible open={waOpen} onOpenChange={setWaOpen}>
                 <CollapsibleTrigger asChild>
                   <button
                     type="button"
@@ -650,65 +681,59 @@ export function TemplateStudioView() {
                   </button>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                  <div className="ml-1 flex flex-col gap-0.5 border-l border-border/50 pl-2">
-                    {WA_SIDEBAR_ITEMS.map((item) => {
-                      const Icon = item.icon
-                      const active = activeKey === item.key
-                      return (
-                        <button
-                          key={item.key}
-                          type="button"
-                          onClick={() => setActiveKey(item.key)}
-                          className={cn(
-                            'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
-                            active
-                              ? 'bg-primary/10 font-medium text-primary'
-                              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                          )}
-                        >
-                          <Icon className="size-3.5" aria-hidden />
-                          <span className="flex-1 text-left">{item.label}</span>
-                          <span className={cn(
-                            'text-xs tabular-nums',
-                            active ? 'text-primary' : 'text-muted-foreground/70'
-                          )}>
-                            {waCountMap[item.key] ?? 0}
-                          </span>
-                        </button>
-                      )
-                    })}
+                  <div className="mt-1 flex flex-col gap-0.5">
+                    {WA_SIDEBAR_ITEMS.map((item) => (
+                      <SidebarItem
+                        key={item.key}
+                        item={item}
+                        active={activeKey === item.key}
+                        count={waCountMap[item.key] ?? 0}
+                        onClick={() => handleSetActive(item.key)}
+                      />
+                    ))}
                   </div>
                 </CollapsibleContent>
               </Collapsible>
 
-              <Separator className="my-2" />
+              <Separator className="my-1" />
 
-              {/* Standalone items */}
-              {([
-                { key: 'packs' as SidebarKey, label: 'Template Packs', icon: Package },
-                { key: 'brand' as SidebarKey, label: 'Brand Kit', icon: Palette },
-                { key: 'images' as SidebarKey, label: 'Images', icon: ImageIcon },
-                { key: 'variables' as SidebarKey, label: 'Variables', icon: VariableIcon },
-              ]).map((item) => {
-                const Icon = item.icon
-                const active = activeKey === item.key
-                return (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => setActiveKey(item.key)}
-                    className={cn(
-                      'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors',
-                      active
-                        ? 'bg-primary/10 font-medium text-primary'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                    )}
-                  >
-                    <Icon className="size-3.5" aria-hidden />
-                    <span className="flex-1 text-left">{item.label}</span>
-                  </button>
-                )
-              })}
+              {/* IMPORT group */}
+              <SidebarGroupLabel icon={ArrowDownToLine}>Import</SidebarGroupLabel>
+              <SidebarItem
+                item={{ key: 'import', label: 'Import Hub', icon: ArrowDownToLine }}
+                active={activeKey === 'import'}
+                onClick={() => handleSetActive('import')}
+              />
+              <SidebarItem
+                item={{ key: 'packs', label: 'Template Packs', icon: Package }}
+                active={activeKey === 'packs'}
+                onClick={() => handleSetActive('packs')}
+              />
+
+              <Separator className="my-1" />
+
+              {/* ASSETS group */}
+              <SidebarGroupLabel icon={Palette}>Assets</SidebarGroupLabel>
+              <SidebarItem
+                item={{ key: 'brand', label: 'Brand Kit', icon: Palette }}
+                active={activeKey === 'brand'}
+                onClick={() => handleSetActive('brand')}
+              />
+              <SidebarItem
+                item={{ key: 'images', label: 'Images', icon: ImageIcon }}
+                active={activeKey === 'images'}
+                onClick={() => handleSetActive('images')}
+              />
+
+              <Separator className="my-1" />
+
+              {/* REFERENCE group */}
+              <SidebarGroupLabel icon={VariableIcon}>Reference</SidebarGroupLabel>
+              <SidebarItem
+                item={{ key: 'variables', label: 'Variables', icon: VariableIcon }}
+                active={activeKey === 'variables'}
+                onClick={() => handleSetActive('variables')}
+              />
             </nav>
           </ScrollArea>
         </aside>
@@ -721,6 +746,7 @@ export function TemplateStudioView() {
             {([
               { key: 'email-all' as SidebarKey, label: 'Email', icon: Mail },
               { key: 'wa-all' as SidebarKey, label: 'WhatsApp', icon: MessageSquare },
+              { key: 'import' as SidebarKey, label: 'Import', icon: ArrowDownToLine },
               { key: 'packs' as SidebarKey, label: 'Packs', icon: Package },
               { key: 'brand' as SidebarKey, label: 'Brand', icon: Palette },
               { key: 'images' as SidebarKey, label: 'Images', icon: ImageIcon },
@@ -735,7 +761,7 @@ export function TemplateStudioView() {
                   onClick={() => setActiveKey(item.key)}
                   className={cn(
                     'flex flex-1 flex-col items-center gap-0.5 px-2 py-2 text-[10px] font-medium transition-colors min-w-0',
-                    active ? 'text-primary' : 'text-muted-foreground'
+                    active ? 'text-emerald-600' : 'text-muted-foreground'
                   )}
                 >
                   <Icon className="size-4" />
@@ -767,13 +793,116 @@ export function TemplateStudioView() {
               onEditorActive={setEditorActive}
             />
           )}
+          {activeKey === 'import' && <ImportSection onImported={refreshAll} />}
           {activeKey === 'packs' && <TemplatePacksView />}
           {activeKey === 'brand' && <BrandKitView />}
           {activeKey === 'images' && <ImageLibraryView />}
           {activeKey === 'variables' && <VariablesView />}
         </main>
       </div>
+
+      {/* New Template dialog */}
+      <Dialog open={showNewDialog} onOpenChange={setShowNewDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="size-5 text-emerald-600" />
+              New Template
+            </DialogTitle>
+            <DialogDescription>
+              Pick a channel for your new template. A draft will open in the editor.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-3">
+            <button
+              type="button"
+              onClick={() => handleNewTemplate('email')}
+              className="group flex items-center gap-4 rounded-lg border border-border/60 p-4 text-left transition-all hover:border-emerald-400 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20"
+            >
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
+                <Mail className="size-5" aria-hidden />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-foreground">Email Template</p>
+                <p className="text-xs text-muted-foreground">HTML email with rich preview and merge tags.</p>
+              </div>
+              <ChevronRight className="size-4 text-muted-foreground transition-colors group-hover:text-emerald-600" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleNewTemplate('whatsapp')}
+              className="group flex items-center gap-4 rounded-lg border border-border/60 p-4 text-left transition-all hover:border-emerald-400 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20"
+            >
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
+                <MessageSquare className="size-5" aria-hidden />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-foreground">WhatsApp Template</p>
+                <p className="text-xs text-muted-foreground">Interactive WhatsApp message with buttons and headers.</p>
+              </div>
+              <ChevronRight className="size-4 text-muted-foreground transition-colors group-hover:text-emerald-600" />
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
+  )
+}
+
+/* ========================================================================== */
+/* Sidebar atoms                                                              */
+/* ========================================================================== */
+
+function SidebarGroupLabel({ icon: Icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-1.5 px-2 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+      <Icon className="size-3" aria-hidden />
+      <span>{children}</span>
+    </div>
+  )
+}
+
+function SidebarItem({
+  item,
+  active,
+  count,
+  onClick,
+}: {
+  item: SidebarItem
+  active: boolean
+  count?: number
+  onClick: () => void
+}) {
+  const Icon = item.icon
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'relative flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-sm transition-colors',
+        active
+          ? 'bg-emerald-50 font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+      )}
+    >
+      {active && (
+        <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-emerald-600" aria-hidden />
+      )}
+      <Icon className={cn('size-3.5', active ? 'text-emerald-600' : '')} aria-hidden />
+      <span className="flex-1 text-left">{item.label}</span>
+      {count !== undefined && (
+        <span
+          className={cn(
+            'rounded-full px-1.5 py-0.5 text-[10px] tabular-nums',
+            active
+              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300'
+              : 'bg-muted text-muted-foreground/80',
+          )}
+        >
+          {count}
+        </span>
+      )}
+    </button>
   )
 }
 
@@ -797,6 +926,8 @@ function EmailTemplatesGallery({ filter, templates, onRefresh, onTemplatesChange
   const [editingTemplate, setEditingTemplate] = React.useState<EmailTemplate | null>(null)
   const [deleteTarget, setDeleteTarget] = React.useState<EmailTemplate | null>(null)
   const [page, setPage] = React.useState(1)
+  const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('grid')
+  const [sortBy, setSortBy] = React.useState<'name' | 'updated' | 'category'>('updated')
   const perPage = 12
 
   const load = React.useCallback(async () => {
@@ -818,7 +949,7 @@ function EmailTemplatesGallery({ filter, templates, onRefresh, onTemplatesChange
 
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase()
-    return templates.filter((t) => {
+    const list = templates.filter((t) => {
       // Category filter based on sidebar
       if (filter === 'email-mine' && !t.tenantId) return false
       if (filter === 'email-transactional' && t.category !== 'transactional') return false
@@ -830,7 +961,21 @@ function EmailTemplatesGallery({ filter, templates, onRefresh, onTemplatesChange
       }
       return true
     })
-  }, [templates, search, filter])
+    const sorted = [...list]
+    if (sortBy === 'name') {
+      sorted.sort((a, b) => a.name.localeCompare(b.name))
+    } else if (sortBy === 'category') {
+      sorted.sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name))
+    } else {
+      // updated (default) — newest first
+      sorted.sort((a, b) => {
+        const at = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
+        const bt = b.updatedAt ? new Date(b.updatedAt).getTime() : 0
+        return bt - at
+      })
+    }
+    return sorted
+  }, [templates, search, filter, sortBy])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage))
   const paged = filtered.slice((page - 1) * perPage, page * perPage)
@@ -904,7 +1049,7 @@ function EmailTemplatesGallery({ filter, templates, onRefresh, onTemplatesChange
 
   return (
     <div className="flex flex-col gap-4 p-4 sm:p-6">
-      {/* Top bar: search + create button */}
+      {/* Top bar: search + sort + view toggle + create button */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative max-w-sm flex-1">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -917,12 +1062,62 @@ function EmailTemplatesGallery({ filter, templates, onRefresh, onTemplatesChange
             aria-label="Search email templates"
           />
         </div>
-        <Button size="sm" onClick={handleNew}>
-          <Plus className="mr-1.5 size-3.5" /> Create Template
-        </Button>
+        <div className="flex items-center gap-2">
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+            <SelectTrigger className="h-9 w-[150px] text-xs" aria-label="Sort templates">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="updated">Last modified</SelectItem>
+              <SelectItem value="name">Name (A–Z)</SelectItem>
+              <SelectItem value="category">Category</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="flex items-center rounded-md border bg-background p-0.5">
+            <Button
+              type="button"
+              size="sm"
+              variant={viewMode === 'grid' ? 'default' : 'ghost'}
+              className="h-7 w-7 p-0"
+              onClick={() => setViewMode('grid')}
+              aria-label="Grid view"
+              aria-pressed={viewMode === 'grid'}
+            >
+              <LayoutGrid className="size-3.5" />
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={viewMode === 'list' ? 'default' : 'ghost'}
+              className="h-7 w-7 p-0"
+              onClick={() => setViewMode('list')}
+              aria-label="List view"
+              aria-pressed={viewMode === 'list'}
+            >
+              <ListIcon className="size-3.5" />
+            </Button>
+          </div>
+          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={handleNew}>
+            <Plus className="mr-1.5 size-3.5" /> Create
+          </Button>
+        </div>
       </div>
 
-      {/* Grid */}
+      {/* Active filter chips */}
+      <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+        <span>Showing</span>
+        <Badge variant="secondary" className="text-[10px]">{filtered.length}</Badge>
+        <span>·</span>
+        <span className="capitalize">{filter.replace('email-', '').replace('-', ' ')}</span>
+        {search && (
+          <>
+            <span>·</span>
+            <Badge variant="outline" className="gap-1 text-[10px]">"{search}"</Badge>
+          </>
+        )}
+      </div>
+
+      {/* Grid / List */}
       {loading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {Array.from({ length: 8 }).map((_, i) => (
@@ -934,40 +1129,55 @@ function EmailTemplatesGallery({ filter, templates, onRefresh, onTemplatesChange
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={Mail}
-          title="No email templates found"
-          description={search ? 'Try adjusting your search.' : 'Create your first email template to get started.'}
+          title={search ? 'No templates match your search' : 'No email templates yet'}
+          description={search ? 'Try a different keyword or clear the search.' : 'Design beautiful, on-brand emails your customers will actually open.'}
+          secondary="Use merge tags like {{customer.name}} to personalize every message."
           action={
-            <Button size="sm" onClick={handleNew}>
-              <Plus className="mr-1.5 size-3.5" /> Create Template
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={handleNew}>
+              <Plus className="mr-1.5 size-3.5" /> Create your first email template
             </Button>
           }
         />
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-            {/* Create from Scratch card */}
-            <button
-              type="button"
-              onClick={handleNew}
-              className="group flex min-h-[200px] flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-muted-foreground/25 bg-muted/10 transition-colors hover:border-primary/40 hover:bg-primary/5"
-            >
-              <div className="flex size-12 items-center justify-center rounded-full bg-muted transition-colors group-hover:bg-primary/10">
-                <Plus className="size-6 text-muted-foreground transition-colors group-hover:text-primary" />
-              </div>
-              <span className="text-sm font-medium text-muted-foreground transition-colors group-hover:text-primary">Create from Scratch</span>
-            </button>
+          {viewMode === 'grid' ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              {/* Create from Scratch card */}
+              <button
+                type="button"
+                onClick={handleNew}
+                className="group flex min-h-[200px] flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-muted-foreground/25 bg-muted/10 transition-colors hover:border-emerald-400/60 hover:bg-emerald-50/30 dark:hover:bg-emerald-950/10"
+              >
+                <div className="flex size-12 items-center justify-center rounded-full bg-muted transition-colors group-hover:bg-emerald-50 dark:group-hover:bg-emerald-950/40">
+                  <Plus className="size-6 text-muted-foreground transition-colors group-hover:text-emerald-600" />
+                </div>
+                <span className="text-sm font-medium text-muted-foreground transition-colors group-hover:text-emerald-700 dark:group-hover:text-emerald-400">Create from Scratch</span>
+              </button>
 
-            {/* Template cards */}
-            {paged.map((t) => (
-              <EmailTemplateCard
-                key={t.id}
-                template={t}
-                onEdit={handleEdit}
-                onDuplicate={handleDuplicate}
-                onDelete={setDeleteTarget}
-              />
-            ))}
-          </div>
+              {/* Template cards */}
+              {paged.map((t) => (
+                <EmailTemplateCard
+                  key={t.id}
+                  template={t}
+                  onEdit={handleEdit}
+                  onDuplicate={handleDuplicate}
+                  onDelete={setDeleteTarget}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {paged.map((t) => (
+                <EmailTemplateRow
+                  key={t.id}
+                  template={t}
+                  onEdit={handleEdit}
+                  onDuplicate={handleDuplicate}
+                  onDelete={setDeleteTarget}
+                />
+              ))}
+            </div>
+          )}
 
           {/* Pagination */}
           {totalPages > 1 && (
@@ -1042,7 +1252,7 @@ function EmailTemplateCard({
 
   return (
     <div
-      className="group relative flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow hover:shadow-md cursor-pointer"
+      className="group relative flex flex-col overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm transition-all hover:border-emerald-300 hover:shadow-md cursor-pointer"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={() => onEdit(template)}
@@ -1067,7 +1277,7 @@ function EmailTemplateCard({
         )}
         {/* Status dot */}
         <div className="absolute right-2 top-2">
-          <span className={cn('inline-block size-2.5 rounded-full', statusColor)} title={template.status || 'published'} />
+          <span className={cn('inline-block size-2.5 rounded-full ring-2 ring-background', statusColor)} title={template.status || 'published'} />
         </div>
         {/* Hover overlay */}
         {hovered && (
@@ -1101,14 +1311,110 @@ function EmailTemplateCard({
       </div>
       {/* Info */}
       <div className="flex flex-col gap-1.5 p-3">
-        <span className="truncate text-sm font-medium text-foreground">{template.name}</span>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate text-sm font-semibold tracking-tight text-foreground">{template.name}</span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-6 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                onClick={(e) => e.stopPropagation()}
+                aria-label="Template actions"
+              >
+                <ChevronRight className="size-3.5 rotate-90" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuItem onClick={() => onEdit(template)}>
+                <Pencil className="mr-2 size-3.5" /> Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void onDuplicate(template)}>
+                <Copy className="mr-2 size-3.5" /> Duplicate
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => onDelete(template)}
+                disabled={template.isBuiltIn}
+                className="text-rose-600 focus:text-rose-700"
+              >
+                <Trash2 className="mr-2 size-3.5" /> Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
           <EmailCategoryBadge category={template.category} />
-          <span className="inline-flex rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
-            HTML
-          </span>
+          <span>·</span>
+          <span>{template.lastUsedAt ? `Used ${formatRelativeTime(template.lastUsedAt)}` : 'Never used'}</span>
         </div>
       </div>
+    </div>
+  )
+}
+
+/* Email template row (list view) */
+function EmailTemplateRow({
+  template,
+  onEdit,
+  onDuplicate,
+  onDelete,
+}: {
+  template: EmailTemplate
+  onEdit: (t: EmailTemplate) => void
+  onDuplicate: (t: EmailTemplate) => void
+  onDelete: (t: EmailTemplate) => void
+}) {
+  const statusColor = template.status === 'draft' ? 'bg-amber-400' : 'bg-emerald-400'
+  return (
+    <div
+      className="group flex cursor-pointer items-center gap-3 rounded-lg border border-border/60 bg-card px-4 py-3 shadow-sm transition-all hover:border-emerald-300 hover:shadow-md"
+      onClick={() => onEdit(template)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEdit(template) } }}
+    >
+      <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted/50 text-muted-foreground">
+        <Mail className="size-4" aria-hidden />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="truncate text-sm font-semibold text-foreground">{template.name}</span>
+          <span className={cn('inline-block size-2 shrink-0 rounded-full', statusColor)} title={template.status || 'published'} />
+        </div>
+        <p className="truncate text-xs text-muted-foreground">{template.subject || 'No subject'}</p>
+      </div>
+      <div className="hidden shrink-0 items-center gap-2 sm:flex">
+        <EmailCategoryBadge category={template.category} />
+        <span className="text-xs text-muted-foreground">{template.lastUsedAt ? `Used ${formatRelativeTime(template.lastUsedAt)}` : 'Never used'}</span>
+      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 shrink-0 opacity-60 transition-opacity group-hover:opacity-100"
+            onClick={(e) => e.stopPropagation()}
+            aria-label="Template actions"
+          >
+            <ChevronRight className="size-3.5 rotate-90" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+          <DropdownMenuItem onClick={() => onEdit(template)}>
+            <Pencil className="mr-2 size-3.5" /> Edit
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => void onDuplicate(template)}>
+            <Copy className="mr-2 size-3.5" /> Duplicate
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => onDelete(template)}
+            disabled={template.isBuiltIn}
+            className="text-rose-600 focus:text-rose-700"
+          >
+            <Trash2 className="mr-2 size-3.5" /> Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }
@@ -1146,7 +1452,6 @@ function ImagePicker({ open, onOpenChange, onSelect, folder = 'general', accept 
       setActiveTab('vault')
       setSearch('')
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
   const loadVault = async () => {
@@ -1932,6 +2237,8 @@ function WhatsAppTemplatesGallery({ filter, templates, onRefresh, onTemplatesCha
   const [editingTemplate, setEditingTemplate] = React.useState<CampaignTemplate | null>(null)
   const [deleteTarget, setDeleteTarget] = React.useState<CampaignTemplate | null>(null)
   const [page, setPage] = React.useState(1)
+  const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('grid')
+  const [sortBy, setSortBy] = React.useState<'name' | 'updated' | 'category'>('updated')
   const perPage = 9
 
   const load = React.useCallback(async () => {
@@ -1953,7 +2260,7 @@ function WhatsAppTemplatesGallery({ filter, templates, onRefresh, onTemplatesCha
 
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase()
-    return templates.filter((t) => {
+    const list = templates.filter((t) => {
       if (filter === 'wa-mine' && !t.tenantId) return false
       if (filter === 'wa-marketing' && t.category !== 'marketing') return false
       if (filter === 'wa-utility' && t.category !== 'utility') return false
@@ -1964,7 +2271,20 @@ function WhatsAppTemplatesGallery({ filter, templates, onRefresh, onTemplatesCha
       }
       return true
     })
-  }, [templates, search, filter])
+    const sorted = [...list]
+    if (sortBy === 'name') {
+      sorted.sort((a, b) => a.name.localeCompare(b.name))
+    } else if (sortBy === 'category') {
+      sorted.sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name))
+    } else {
+      sorted.sort((a, b) => {
+        const at = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
+        const bt = b.updatedAt ? new Date(b.updatedAt).getTime() : 0
+        return bt - at
+      })
+    }
+    return sorted
+  }, [templates, search, filter, sortBy])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage))
   const paged = filtered.slice((page - 1) * perPage, page * perPage)
@@ -2052,12 +2372,62 @@ function WhatsAppTemplatesGallery({ filter, templates, onRefresh, onTemplatesCha
             aria-label="Search WhatsApp templates"
           />
         </div>
-        <Button size="sm" onClick={handleNew}>
-          <Plus className="mr-1.5 size-3.5" /> Add New Template
-        </Button>
+        <div className="flex items-center gap-2">
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+            <SelectTrigger className="h-9 w-[150px] text-xs" aria-label="Sort templates">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="updated">Last modified</SelectItem>
+              <SelectItem value="name">Name (A–Z)</SelectItem>
+              <SelectItem value="category">Category</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="flex items-center rounded-md border bg-background p-0.5">
+            <Button
+              type="button"
+              size="sm"
+              variant={viewMode === 'grid' ? 'default' : 'ghost'}
+              className="h-7 w-7 p-0"
+              onClick={() => setViewMode('grid')}
+              aria-label="Grid view"
+              aria-pressed={viewMode === 'grid'}
+            >
+              <LayoutGrid className="size-3.5" />
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={viewMode === 'list' ? 'default' : 'ghost'}
+              className="h-7 w-7 p-0"
+              onClick={() => setViewMode('list')}
+              aria-label="List view"
+              aria-pressed={viewMode === 'list'}
+            >
+              <ListIcon className="size-3.5" />
+            </Button>
+          </div>
+          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={handleNew}>
+            <Plus className="mr-1.5 size-3.5" /> New
+          </Button>
+        </div>
       </div>
 
-      {/* Grid */}
+      {/* Active filter chips */}
+      <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+        <span>Showing</span>
+        <Badge variant="secondary" className="text-[10px]">{filtered.length}</Badge>
+        <span>·</span>
+        <span className="capitalize">{filter.replace('wa-', '').replace('-', ' ')}</span>
+        {search && (
+          <>
+            <span>·</span>
+            <Badge variant="outline" className="gap-1 text-[10px]">"{search}"</Badge>
+          </>
+        )}
+      </div>
+
+      {/* Grid / List */}
       {loading ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -2069,27 +2439,42 @@ function WhatsAppTemplatesGallery({ filter, templates, onRefresh, onTemplatesCha
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={MessageSquare}
-          title="No WhatsApp templates found"
-          description={search ? 'Try adjusting your search.' : 'Create your first WhatsApp template to get started.'}
+          title={search ? 'No templates match your search' : 'No WhatsApp templates yet'}
+          description={search ? 'Try a different keyword or clear the search.' : 'Create reusable WhatsApp messages with buttons, headers, and footers.'}
+          secondary="Templates must be submitted to Meta for approval before sending."
           action={
-            <Button size="sm" onClick={handleNew}>
-              <Plus className="mr-1.5 size-3.5" /> Add New Template
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={handleNew}>
+              <Plus className="mr-1.5 size-3.5" /> Create your first WhatsApp template
             </Button>
           }
         />
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
-            {paged.map((t) => (
-              <WhatsAppTemplateCard
-                key={t.id}
-                template={t}
-                onEdit={handleEdit}
-                onDuplicate={handleDuplicate}
-                onDelete={setDeleteTarget}
-              />
-            ))}
-          </div>
+          {viewMode === 'grid' ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
+              {paged.map((t) => (
+                <WhatsAppTemplateCard
+                  key={t.id}
+                  template={t}
+                  onEdit={handleEdit}
+                  onDuplicate={handleDuplicate}
+                  onDelete={setDeleteTarget}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {paged.map((t) => (
+                <WhatsAppTemplateRow
+                  key={t.id}
+                  template={t}
+                  onEdit={handleEdit}
+                  onDuplicate={handleDuplicate}
+                  onDelete={setDeleteTarget}
+                />
+              ))}
+            </div>
+          )}
 
           {/* Pagination */}
           {totalPages > 1 && (
@@ -2145,7 +2530,7 @@ function WhatsAppTemplateCard({
 
   return (
     <div
-      className="group relative flex flex-col rounded-xl border bg-card p-4 shadow-sm transition-shadow hover:shadow-md cursor-pointer"
+      className="group relative flex flex-col rounded-xl border border-border/60 bg-card p-4 shadow-sm transition-all hover:border-emerald-300 hover:shadow-md cursor-pointer"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={() => onEdit(template)}
@@ -2155,17 +2540,49 @@ function WhatsAppTemplateCard({
     >
       {/* Name */}
       <div className="mb-2 flex items-start justify-between gap-2">
-        <span className="text-sm font-semibold text-foreground">{template.name}</span>
-        <TypeBadge type={template.templateType || 'text'} />
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
+            <MessageSquare className="size-4" aria-hidden />
+          </div>
+          <span className="truncate text-sm font-semibold tracking-tight text-foreground">{template.name}</span>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+              onClick={(e) => e.stopPropagation()}
+              aria-label="Template actions"
+            >
+              <ChevronRight className="size-3.5 rotate-90" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+            <DropdownMenuItem onClick={() => onEdit(template)}>
+              <Pencil className="mr-2 size-3.5" /> Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => void onDuplicate(template)}>
+              <Copy className="mr-2 size-3.5" /> Duplicate
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => onDelete(template)}
+              className="text-rose-600 focus:text-rose-700"
+            >
+              <Trash2 className="mr-2 size-3.5" /> Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Body preview with merge tag highlighting */}
-      <p className="mb-3 line-clamp-2 text-xs text-muted-foreground">
+      <p className="mb-3 line-clamp-3 text-xs text-muted-foreground">
         <WaBodyPreview text={template.content || ''} />
       </p>
 
       {/* Badges row */}
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-1">
+        <TypeBadge type={template.templateType || 'text'} />
         <WaCategoryBadge category={template.category} />
         <StatusBadge status={template.status || 'published'} />
       </div>
@@ -2199,6 +2616,73 @@ function WhatsAppTemplateCard({
           </Tooltip>
         </div>
       )}
+    </div>
+  )
+}
+
+/* WhatsApp template row (list view) */
+function WhatsAppTemplateRow({
+  template,
+  onEdit,
+  onDuplicate,
+  onDelete,
+}: {
+  template: CampaignTemplate
+  onEdit: (t: CampaignTemplate) => void
+  onDuplicate: (t: CampaignTemplate) => void
+  onDelete: (t: CampaignTemplate) => void
+}) {
+  return (
+    <div
+      className="group flex cursor-pointer items-center gap-3 rounded-lg border border-border/60 bg-card px-4 py-3 shadow-sm transition-all hover:border-emerald-300 hover:shadow-md"
+      onClick={() => onEdit(template)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEdit(template) } }}
+    >
+      <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
+        <MessageSquare className="size-4" aria-hidden />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="truncate text-sm font-semibold text-foreground">{template.name}</span>
+          <StatusBadge status={template.status || 'published'} />
+        </div>
+        <p className="truncate text-xs text-muted-foreground">
+          <WaBodyPreview text={template.content || ''} />
+        </p>
+      </div>
+      <div className="hidden shrink-0 items-center gap-2 sm:flex">
+        <TypeBadge type={template.templateType || 'text'} />
+        <WaCategoryBadge category={template.category} />
+      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 shrink-0 opacity-60 transition-opacity group-hover:opacity-100"
+            onClick={(e) => e.stopPropagation()}
+            aria-label="Template actions"
+          >
+            <ChevronRight className="size-3.5 rotate-90" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+          <DropdownMenuItem onClick={() => onEdit(template)}>
+            <Pencil className="mr-2 size-3.5" /> Edit
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => void onDuplicate(template)}>
+            <Copy className="mr-2 size-3.5" /> Duplicate
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => onDelete(template)}
+            className="text-rose-600 focus:text-rose-700"
+          >
+            <Trash2 className="mr-2 size-3.5" /> Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }
@@ -2866,26 +3350,30 @@ function PackCard({
 }) {
   const IconComponent = getIcon(pack.icon)
   return (
-    <Card className="flex flex-col">
+    <Card className="group flex flex-col border-border/60 shadow-sm transition-all hover:border-emerald-300 hover:shadow-md">
       <CardContent className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex items-start gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg" style={{ backgroundColor: pack.color + '18', color: pack.color }}>
+          <div
+            className="flex size-10 shrink-0 items-center justify-center rounded-lg"
+            style={{ backgroundColor: pack.color + '18', color: pack.color }}
+          >
             {React.createElement(IconComponent, { className: 'size-5' })}
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-semibold text-foreground">{pack.name}</h3>
+            <h3 className="text-sm font-semibold tracking-tight text-foreground">{pack.name}</h3>
             <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{pack.description}</p>
           </div>
         </div>
-        <div className="flex items-center justify-between">
+        <div className="mt-auto flex items-center justify-between">
           <span className="text-xs text-muted-foreground">{pack.templateCount} templates</span>
           {pack.isInstalled ? (
             <Badge variant="secondary" className="gap-1 text-xs">
-              <CheckCircle2 className="size-3" /> Installed
+              <CheckCircle2 className="size-3 text-emerald-600" /> Installed
             </Badge>
           ) : (
             <Button
               size="sm"
+              className="bg-emerald-600 hover:bg-emerald-700"
               onClick={() => void onInstall(pack.slug)}
               disabled={installing === pack.slug}
             >
