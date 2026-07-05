@@ -542,62 +542,31 @@ async function sendEmail(
 
 /**
  * Send an SMS notification.
- * Placeholder for Twilio-style SMS integration.
- * Currently supports:
- * - Twilio API (if TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN are set)
- * - Simulated mode
+ * Uses the unified sms-send module (6 providers: twilio, msg91, plivo,
+ * textlocal, exotel, amazon_sns). Resolution: CommunicationProvider DB →
+ * env fallback (TWILIO_*) → simulated.
  */
 async function sendSMS(
   to: string,
-  message: string
+  message: string,
+  tenantId?: string
 ): Promise<SendResult> {
   if (!to) {
     return { success: false, error: 'No phone number provided for SMS' }
   }
 
-  const twilioSid = process.env.TWILIO_ACCOUNT_SID
-  const twilioToken = process.env.TWILIO_AUTH_TOKEN
-  const twilioPhone = process.env.TWILIO_PHONE_NUMBER
-
-  if (twilioSid && twilioToken && twilioPhone) {
-    try {
-      const response = await fetch(
-        `https://api.twilio.com/2010-04-01/Accounts/${twilioSid}/Messages.json`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Basic ${Buffer.from(`${twilioSid}:${twilioToken}`).toString('base64')}`,
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: new URLSearchParams({
-            From: twilioPhone,
-            To: to,
-            Body: message,
-          }).toString(),
-        }
-      )
-
-      const data = (await response.json()) as Record<string, any>
-
-      if (response.ok) {
-        return {
-          success: true,
-          externalId: data.sid as string,
-        }
-      } else {
-        return {
-          success: false,
-          error: (data.message as string) || `Twilio API error: ${response.status}`,
-        }
-      }
-    } catch (err) {
-      return { success: false, error: String(err) }
+  try {
+    const { sendSmsMessage } = await import('@/lib/sms-send')
+    const result = await sendSmsMessage({ to, message, tenantId })
+    return {
+      success: result.success,
+      externalId: result.messageId,
+      simulated: result.simulated,
+      error: result.error,
     }
+  } catch (err) {
+    return { success: false, error: String(err) }
   }
-
-  // No Twilio config - simulate
-  console.log(`[NotificationOrchestrator] SMS (simulated): to=${to}, message="${message.substring(0, 50)}..."`)
-  return { success: true, externalId: `sim_sms_${Date.now()}`, simulated: true }
 }
 
 /**
@@ -809,7 +778,7 @@ export async function orchestrateNotification(
           attemptNumber = 1
         } else {
           const retryResult = await withRetry(
-            () => sendSMS(smsTo, message),
+            () => sendSMS(smsTo, message, context?.tenantId),
             maxRetries
           )
           sendResult = retryResult.result

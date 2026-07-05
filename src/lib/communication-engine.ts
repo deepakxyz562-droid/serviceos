@@ -426,17 +426,24 @@ async function sendSmsChannel(ctx: ResolvedContext): Promise<ChannelResult> {
   if (!ctx.customer?.phone) {
     return { success: false, error: 'Customer has no phone number.' };
   }
-  // No SMS provider is configured in the current stack. Stub with a
-  // console.log + return simulated=true so the timeline entry is still
-  // created (the team can see the intended message).
-  console.log(
-    `[comm-engine][SMS SIMULATED] To: ${ctx.customer.phone}, Body: ${(ctx.body || '').slice(0, 160)}`,
-  );
-  return {
-    success: true,
-    messageId: `sim_sms_${Date.now()}`,
-    simulated: true,
-  };
+  try {
+    const { sendSmsMessage } = await import('@/lib/sms-send');
+    const result = await sendSmsMessage({
+      to: ctx.customer.phone,
+      message: ctx.body || '',
+      tenantId: ctx.tenantId,
+    });
+    return {
+      success: result.success,
+      messageId: result.messageId,
+      simulated: result.simulated,
+      error: result.error,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn('[comm-engine] SMS send threw:', msg);
+    return { success: false, error: msg };
+  }
 }
 
 async function sendWhatsAppChannel(

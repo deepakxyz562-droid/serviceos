@@ -49,24 +49,31 @@ interface CredItem {
 const PROV_LABELS: Record<string, string> = {
   meta_cloud_api: 'Meta Cloud API', '360dialog': '360Dialog', wati: 'WATI',
   interakt: 'Interakt', gupshup: 'Gupshup', twilio: 'Twilio', msg91: 'MSG91',
-  plivo: 'Plivo', textlocal: 'Textlocal', exotel: 'Exotel',
+  plivo: 'Plivo', textlocal: 'Textlocal', exotel: 'Exotel', amazon_sns: 'Amazon SNS',
   smtp: 'SMTP', resend: 'Resend', sendgrid: 'SendGrid', ses: 'AWS SES',
   mailgun: 'Mailgun', postmark: 'Postmark', brevo: 'Brevo',
 }
 const WA_PROVIDERS = ['meta_cloud_api', '360dialog', 'wati', 'interakt', 'gupshup']
-const SMS_PROVIDERS = ['twilio', 'msg91', 'plivo', 'textlocal', 'exotel']
+const SMS_PROVIDERS = ['twilio', 'msg91', 'plivo', 'textlocal', 'exotel', 'amazon_sns']
 const WA_FIELDS = [
   { key: 'phoneNumberId', label: 'Phone Number ID', type: 'text' as const, required: true },
   { key: 'businessAccountId', label: 'Business Account ID', type: 'text' as const, required: false },
   { key: 'accessToken', label: 'Access Token', type: 'password' as const, required: true },
   { key: 'webhookVerifyToken', label: 'Webhook Verify Token', type: 'text' as const, required: false },
 ]
-const SMS_FIELDS: Record<string, { key: string; label: string; type: 'text' | 'password'; required?: boolean }[]> = {
+const SMS_FIELDS: Record<string, { key: string; label: string; type: 'text' | 'password'; required?: boolean; placeholder?: string }[]> = {
   twilio: [{ key: 'accountSid', label: 'Account SID', type: 'text', required: true }, { key: 'authToken', label: 'Auth Token', type: 'password', required: true }, { key: 'fromNumber', label: 'From Number', type: 'text', required: true }],
   msg91: [{ key: 'authKey', label: 'Auth Key', type: 'password', required: true }, { key: 'fromNumber', label: 'From Number', type: 'text', required: true }],
   plivo: [{ key: 'authId', label: 'Auth ID', type: 'text', required: true }, { key: 'authToken', label: 'Auth Token', type: 'password', required: true }, { key: 'fromNumber', label: 'From Number', type: 'text', required: true }],
   textlocal: [{ key: 'apiKey', label: 'API Key', type: 'password', required: true }, { key: 'fromNumber', label: 'Sender Name', type: 'text', required: true }],
   exotel: [{ key: 'accountSid', label: 'Account SID', type: 'text', required: true }, { key: 'authToken', label: 'Auth Token', type: 'password', required: true }, { key: 'fromNumber', label: 'From Number', type: 'text', required: true }],
+  amazon_sns: [
+    { key: 'accessKeyId', label: 'AWS Access Key ID', type: 'text', required: true, placeholder: 'AKIA...' },
+    { key: 'secretAccessKey', label: 'AWS Secret Access Key', type: 'password', required: true, placeholder: '••••••••' },
+    { key: 'region', label: 'AWS Region', type: 'text', required: true, placeholder: 'us-east-1' },
+    { key: 'senderId', label: 'Sender ID (optional, up to 11 chars)', type: 'text', placeholder: 'SRVOS' },
+    { key: 'messageType', label: 'SMS Type', type: 'text', placeholder: 'Transactional' },
+  ],
 }
 
 // Email provider config field schemas
@@ -103,7 +110,7 @@ const EMAIL_DEFAULTS: Record<string, Record<string, string | boolean>> = {
   postmark: { serverToken: '' },
   brevo: { apiKey: '' },
 }
-const SECRET_KEYS = new Set(['accessToken', 'authToken', 'authKey', 'apiKey', 'smtpPass', 'serverToken', 'secret', 'token', 'password'])
+const SECRET_KEYS = new Set(['accessToken', 'authToken', 'authKey', 'apiKey', 'smtpPass', 'serverToken', 'secret', 'token', 'password', 'secretAccessKey', 'sessionToken'])
 
 const CRED_TYPES: Record<string, { icon: typeof KeyRound; label: string; color: string; bg: string }> = {
   whatsapp: { icon: MessageSquare, label: 'WhatsApp API', color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200' },

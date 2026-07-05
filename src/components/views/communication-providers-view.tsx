@@ -108,6 +108,7 @@ const PROVIDER_OPTIONS: Record<string, { value: string; label: string }> = {
   plivo: { value: 'plivo', label: 'Plivo' },
   textlocal: { value: 'textlocal', label: 'Textlocal' },
   exotel: { value: 'exotel', label: 'Exotel' },
+  amazon_sns: { value: 'amazon_sns', label: 'Amazon SNS' },
   // WhatsApp
   meta_cloud_api: { value: 'meta_cloud_api', label: 'Meta Cloud API' },
   '360dialog': { value: '360dialog', label: '360Dialog' },
@@ -116,7 +117,7 @@ const PROVIDER_OPTIONS: Record<string, { value: string; label: string }> = {
   gupshup: { value: 'gupshup', label: 'Gupshup' },
 };
 
-const SMS_PROVIDERS = ['twilio', 'msg91', 'plivo', 'textlocal', 'exotel'];
+const SMS_PROVIDERS = ['twilio', 'msg91', 'plivo', 'textlocal', 'exotel', 'amazon_sns'];
 const WHATSAPP_PROVIDERS = ['meta_cloud_api', '360dialog', 'wati', 'interakt', 'gupshup'];
 
 const CONFIG_FIELDS: Record<string, { key: string; label: string; type: 'text' | 'password'; placeholder: string }[]> = {
@@ -143,6 +144,13 @@ const CONFIG_FIELDS: Record<string, { key: string; label: string; type: 'text' |
     { key: 'accountSid', label: 'Account SID', type: 'text', placeholder: 'your_exotel_sid' },
     { key: 'authToken', label: 'Auth Token', type: 'password', placeholder: '••••••••' },
     { key: 'fromNumber', label: 'From Number', type: 'text', placeholder: '+919876543210' },
+  ],
+  amazon_sns: [
+    { key: 'accessKeyId', label: 'AWS Access Key ID', type: 'text', placeholder: 'AKIA...' },
+    { key: 'secretAccessKey', label: 'AWS Secret Access Key', type: 'password', placeholder: '••••••••' },
+    { key: 'region', label: 'AWS Region', type: 'text', placeholder: 'us-east-1' },
+    { key: 'senderId', label: 'Sender ID (optional, up to 11 chars)', type: 'text', placeholder: 'SRVOS' },
+    { key: 'messageType', label: 'SMS Type', type: 'text', placeholder: 'Transactional' },
   ],
   // WhatsApp providers
   meta_cloud_api: [
