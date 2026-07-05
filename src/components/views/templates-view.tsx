@@ -181,7 +181,7 @@ export function TemplatesView() {
   }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full">
       {/* ─── Job Assignment Workflow Quick Create Card ──────────────────────── */}
       <Card className="border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 overflow-hidden">
         <CardHeader className="pb-3">

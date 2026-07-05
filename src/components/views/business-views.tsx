@@ -45,7 +45,7 @@ const botStatusColors: Record<string, string> = { active: 'bg-emerald-100 text-e
 export function ChatbotBuilderView() {
   const [bots, setBots] = useState<typeof mockBots>([]);
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-emerald-50"><Bot className="size-5 text-emerald-600" /></div>
@@ -107,7 +107,7 @@ const mockSuggestions = [
 export function AIAssistantView() {
   const [suggestions, setSuggestions] = useState<typeof mockSuggestions>([]);
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full">
       <div className="flex items-center gap-3">
         <div className="p-2.5 rounded-xl bg-emerald-50"><Sparkles className="size-5 text-emerald-600" /></div>
         <div><h1 className="text-xl font-bold">AI Assistant</h1><p className="text-sm text-muted-foreground">AI-powered suggestions, summaries, and insights</p></div>

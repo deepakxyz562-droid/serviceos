@@ -165,6 +165,27 @@ export async function POST(request: NextRequest) {
           body.quotedAmount !== undefined && body.quotedAmount !== null && body.quotedAmount !== ''
             ? Number(body.quotedAmount)
             : undefined,
+        // ── Jobber-style itemized billing + on-site instructions ──
+        lineItemsJson: typeof body.lineItemsJson === 'string' ? body.lineItemsJson : JSON.stringify(body.lineItemsJson ?? []),
+        visitInstructions: body.visitInstructions || null,
+        scheduledTime: body.scheduledTime || null,
+        // ── "#job" Customize / Attach files & photos / Linked checklists / Link to related ──
+        customFieldsJson:
+          typeof body.customFieldsJson === 'string'
+            ? body.customFieldsJson
+            : JSON.stringify(body.customFieldsJson ?? []),
+        attachmentsJson:
+          typeof body.attachmentsJson === 'string'
+            ? body.attachmentsJson
+            : JSON.stringify(body.attachmentsJson ?? []),
+        linkedChecklistsJson:
+          typeof body.linkedChecklistsJson === 'string'
+            ? body.linkedChecklistsJson
+            : JSON.stringify(body.linkedChecklistsJson ?? []),
+        linkToRelatedJson:
+          typeof body.linkToRelatedJson === 'string'
+            ? body.linkToRelatedJson
+            : JSON.stringify(body.linkToRelatedJson ?? []),
         workspaceId,
       },
       include: {

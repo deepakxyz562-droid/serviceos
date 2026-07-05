@@ -1027,7 +1027,7 @@ export function CommunicationProvidersView() {
   // ─── Render ─────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full">
       {/* Email Channel Status Panel (System Email + Marketing Email) */}
       <section className="space-y-3" aria-label="Email Channel Status">
         <div className="flex items-center justify-between flex-wrap gap-2">
@@ -1392,7 +1392,7 @@ export function CommunicationProvidersView() {
 
       {/* Loading */}
       {loading ? (
-        <div className="space-y-6 max-w-7xl mx-auto">
+        <div className="space-y-6 w-full">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Skeleton className="size-10 rounded-lg" />

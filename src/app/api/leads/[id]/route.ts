@@ -69,6 +69,7 @@ export async function PUT(
     }
 
     const {
+      title,
       name,
       phone,
       email,
@@ -83,11 +84,18 @@ export async function PUT(
       assignedToId,
       notesJson,
       tagsJson,
+      lineItemsJson,
+      imagesJson,
+      assessmentImagesJson,
+      customerId,
+      jobId,
+      convertedAt,
       followUpAt,
     } = body;
 
     // Build update data - only include provided fields
     const updateData: Record<string, unknown> = {};
+    if (title !== undefined) updateData.title = title || null;
     if (name !== undefined) updateData.name = name;
     if (phone !== undefined) updateData.phone = phone;
     if (email !== undefined) updateData.email = email;
@@ -101,6 +109,12 @@ export async function PUT(
     if (assignedToId !== undefined) updateData.assignedToId = assignedToId;
     if (notesJson !== undefined) updateData.notesJson = notesJson;
     if (tagsJson !== undefined) updateData.tagsJson = tagsJson;
+    if (lineItemsJson !== undefined) updateData.lineItemsJson = lineItemsJson;
+    if (imagesJson !== undefined) updateData.imagesJson = imagesJson;
+    if (assessmentImagesJson !== undefined) updateData.assessmentImagesJson = assessmentImagesJson;
+    if (customerId !== undefined) updateData.customerId = customerId || null;
+    if (jobId !== undefined) updateData.jobId = jobId || null;
+    if (convertedAt !== undefined) updateData.convertedAt = convertedAt ? new Date(convertedAt) : null;
     if (followUpAt !== undefined) {
       updateData.followUpAt = followUpAt ? new Date(followUpAt) : null;
     }

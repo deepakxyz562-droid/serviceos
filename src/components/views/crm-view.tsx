@@ -413,7 +413,7 @@ export function CrmView() {
   // ─── Render ─────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full">
       {/* ─── Header ──────────────────────────────────────────────────────── */}
       <div className="flex items-center gap-3">
         <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600">

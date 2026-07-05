@@ -6,8 +6,10 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo,
+    Monaco, Consolas, monospace;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -45,37 +47,41 @@
 
 :root {
   --radius: 0.625rem;
+  /* Jobber-inspired clean palette: warm whites, soft grays, emerald accent */
   --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --foreground: oklch(0.21 0.02 256);            /* #2D3748 — primary text */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.21 0.02 256);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.21 0.02 256);
+  /* Emerald primary (Jobber green #10B981) */
+  --primary: oklch(0.696 0.17 162.48);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
+  --secondary-foreground: oklch(0.21 0.02 256);
   --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  --muted-foreground: oklch(0.55 0.015 256);      /* #718096 — tertiary text */
   --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --accent-foreground: oklch(0.21 0.02 256);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
+  /* Softer, lighter borders like Jobber (#E2E8F0) */
+  --border: oklch(0.928 0.005 256);
+  --input: oklch(0.94 0.004 256);
+  --ring: oklch(0.696 0.17 162.48);
+  --chart-1: oklch(0.696 0.17 162.48);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
+  /* Sidebar: very light gray (#F5F5F5) per Jobber */
+  --sidebar: oklch(0.97 0 0);
+  --sidebar-foreground: oklch(0.21 0.02 256);
+  --sidebar-primary: oklch(0.696 0.17 162.48);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-accent: oklch(0.93 0.01 256);
+  --sidebar-accent-foreground: oklch(0.21 0.02 256);
   --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-ring: oklch(0.696 0.17 162.48);
 }
 
 .dark {
@@ -85,8 +91,8 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  --primary: oklch(0.696 0.17 162.48);
+  --primary-foreground: oklch(0.145 0 0);
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
@@ -104,7 +110,7 @@
   --chart-5: oklch(0.645 0.246 16.439);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary: oklch(0.696 0.17 162.48);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
@@ -118,10 +124,173 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    /* Slightly tighter, modern letter-spacing like Jobber */
+    letter-spacing: -0.006em;
     /* Safe area support for iOS notch */
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
   }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-sans);
+    letter-spacing: -0.02em;
+  }
+}
+
+/* ─── Jobber-style utility classes ──────────────────────────── */
+
+/* Soft, subtle card shadow — like Jobber's "0 1px 3px rgba(0,0,0,0.1)" */
+.card-shadow {
+  box-shadow:
+    0 1px 2px 0 rgb(0 0 0 / 0.04),
+    0 1px 3px 0 rgb(0 0 0 / 0.06);
+}
+
+.card-shadow-hover {
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+.card-shadow-hover:hover {
+  box-shadow:
+    0 4px 6px -1px rgb(0 0 0 / 0.07),
+    0 2px 4px -2px rgb(0 0 0 / 0.05);
+}
+
+/* Generic card hover (used by StatCard and similar) */
+.card-hover {
+  transition: box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+.card-hover:hover {
+  box-shadow:
+    0 4px 6px -1px rgb(0 0 0 / 0.07),
+    0 2px 4px -2px rgb(0 0 0 / 0.05);
+}
+
+/* Status dot — small colored circle used in tables / badges (Jobber pattern) */
+.status-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+.status-dot-paid    { background-color: oklch(0.696 0.17 162.48); } /* emerald */
+.status-dot-sent    { background-color: oklch(0.6 0.18 245); }      /* blue */
+.status-dot-draft   { background-color: oklch(0.7 0 0); }           /* gray */
+.status-dot-overdue { background-color: oklch(0.577 0.245 27.325); } /* red */
+.status-dot-pending { background-color: oklch(0.769 0.188 70.08); }  /* amber */
+
+/* Soft status pill — light tinted background + colored text */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+.status-pill-paid {
+  background-color: oklch(0.95 0.05 162.48);
+  color: oklch(0.45 0.13 162.48);
+}
+.status-pill-sent {
+  background-color: oklch(0.95 0.04 245);
+  color: oklch(0.45 0.15 245);
+}
+.status-pill-draft {
+  background-color: oklch(0.96 0 0);
+  color: oklch(0.45 0 0);
+}
+.status-pill-overdue {
+  background-color: oklch(0.95 0.06 27);
+  color: oklch(0.5 0.2 27);
+}
+.status-pill-pending {
+  background-color: oklch(0.95 0.06 70);
+  color: oklch(0.45 0.16 70);
+}
+
+/* Filter pill button — like Jobber's "Status | All" filters */
+.filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: oklch(0.4 0.01 256);
+  background-color: oklch(0.96 0.003 256);
+  border: 1px solid oklch(0.928 0.005 256);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  cursor: pointer;
+}
+.filter-pill:hover {
+  background-color: oklch(0.94 0.004 256);
+  border-color: oklch(0.9 0.005 256);
+}
+
+/* Fade-up animation for view transitions */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up {
+  animation: fade-up 0.22s ease-out;
+}
+
+/* ─── Jobber-style form utilities ───────────────────────────── */
+
+/* Emerald focus ring for inputs — Jobber uses green focus, not blue */
+.form-input:focus,
+.form-input:focus-visible {
+  border-color: oklch(0.696 0.17 162.48);
+  box-shadow: 0 0 0 3px oklch(0.696 0.17 162.48 / 0.15);
+  outline: none;
+}
+
+/* Form section card — clean white surface, subtle shadow, 24px padding */
+.form-card {
+  background-color: oklch(1 0 0);
+  border: 1px solid oklch(0.928 0.005 256);
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.04), 0 1px 3px 0 rgb(0 0 0 / 0.05);
+}
+.dark .form-card {
+  background-color: oklch(0.205 0 0);
+  border-color: oklch(1 0 0 / 10%);
+}
+
+/* Form section header — icon badge + semibold title */
+.form-section-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  background-color: oklch(0.95 0.05 162.48);
+  color: oklch(0.45 0.13 162.48);
+  flex-shrink: 0;
+}
+.dark .form-section-icon {
+  background-color: oklch(0.3 0.08 162.48);
+  color: oklch(0.8 0.15 162.48);
+}
+
+/* Form page sticky header bar */
+.form-page-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: oklch(1 0 0 / 85%);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid oklch(0.928 0.005 256);
+}
+.dark .form-page-header {
+  background-color: oklch(0.145 0 0 / 85%);
+  border-bottom-color: oklch(1 0 0 / 10%);
 }
 
 /* ─── PWA & Mobile Optimizations ────────────────────────────── */

@@ -64,7 +64,7 @@ export function AdsIntegrationView() {
   const avgCPL = totalLeads > 0 ? (totalSpend / totalLeads).toFixed(2) : '0';
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">

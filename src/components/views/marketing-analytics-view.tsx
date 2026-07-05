@@ -182,7 +182,7 @@ export function MarketingAnalyticsView() {
   // ── Loading State ──
   if (isLoading) {
     return (
-      <div className="space-y-6 max-w-7xl mx-auto">
+      <div className="space-y-6 w-full">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Skeleton className="size-10 rounded-lg" />
@@ -248,7 +248,7 @@ export function MarketingAnalyticsView() {
   const maxCampaigns = Math.max(...dailyTrends.map(d => d.campaigns), 1);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">

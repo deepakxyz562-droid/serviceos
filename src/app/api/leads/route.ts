@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const {
+      title,
       name,
       phone,
       email,
@@ -102,6 +103,10 @@ export async function POST(request: NextRequest) {
       assignedToId,
       notesJson,
       tagsJson,
+      lineItemsJson,
+      imagesJson,
+      assessmentImagesJson,
+      customerId,
       followUpAt,
     } = body;
 
@@ -113,8 +118,88 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // ─── Customer de-duplication ────────────────────────────────
+    // For leads coming from external sources (website, wordpress, whatsapp,
+    // google, facebook, instagram, referral, …) we never want to create a
+    // duplicate Customer record. If the caller did NOT already pass a
+    // customerId, look up an existing customer in the caller's workspace by
+    // phone (normalized — digits only) OR email; link the lead to that
+    // customer if found. Only when no match exists do we create a new
+    // Customer. Manual leads are exempt — the agent has already chosen
+    // whether to link an existing customer via the picker.
+    let resolvedCustomerId: string | null = customerId || null;
+
+    const normalizedSource = (source || 'manual').toLowerCase();
+    const isExternalSource = normalizedSource !== 'manual';
+
+    if (isExternalSource && !resolvedCustomerId) {
+      // Resolve the caller's workspace so we don't accidentally link a lead
+      // to a customer that belongs to another tenant.
+      let workspaceId: string | null = authUser?.workspaceId || null;
+      if (!workspaceId && authUser?.tenantId) {
+        const ws = await db.workspace.findFirst({
+          where: { tenantId: authUser.tenantId },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true },
+        });
+        workspaceId = ws?.id ?? null;
+      }
+
+      if (workspaceId) {
+        const phoneDigits = (phone || '').replace(/\D/g, '');
+        const emailTrim = (email || '').trim().toLowerCase();
+
+        // Build a phone-match OR email-match query. We compare on the last 10
+        // digits of the phone number so different formatting (+1 234… vs
+        // 234…) still matches.
+        const orClauses: Record<string, unknown>[] = [];
+        if (phoneDigits.length >= 10) {
+          const tail = phoneDigits.slice(-10);
+          orClauses.push({ phone: { contains: tail } });
+        } else if (phoneDigits.length > 0) {
+          orClauses.push({ phone: { contains: phoneDigits } });
+        }
+        if (emailTrim) {
+          orClauses.push({ email: { equals: emailTrim } });
+        }
+
+        let existingCustomer: { id: string } | null = null;
+        if (orClauses.length > 0) {
+          existingCustomer = await db.customer.findFirst({
+            where: { workspaceId, OR: orClauses },
+            select: { id: true },
+          });
+        }
+
+        if (existingCustomer) {
+          // Link to the existing customer — no duplicate created.
+          resolvedCustomerId = existingCustomer.id;
+        } else {
+          // No match — create a new Customer scoped to the workspace.
+          try {
+            const newCustomer = await db.customer.create({
+              data: {
+                name: name.trim(),
+                phone: phone.trim(),
+                email: email?.trim() || null,
+                address: address?.trim() || null,
+                workspaceId,
+                preferredCurrency: 'USD',
+              },
+              select: { id: true },
+            });
+            resolvedCustomerId = newCustomer.id;
+          } catch (custErr) {
+            console.error('[LeadsCreate] Failed to auto-create customer for external lead:', custErr);
+            // Non-fatal — the lead will still be created without a customer link.
+          }
+        }
+      }
+    }
+
     const lead = await db.lead.create({
       data: {
+        title: title || null,
         name,
         phone,
         email: email || null,
@@ -130,6 +215,10 @@ export async function POST(request: NextRequest) {
         tenantId: authUser?.tenantId || null,
         notesJson: notesJson || '[]',
         tagsJson: tagsJson || '[]',
+        lineItemsJson: lineItemsJson || '[]',
+        imagesJson: imagesJson || '[]',
+        assessmentImagesJson: assessmentImagesJson || '[]',
+        customerId: resolvedCustomerId,
         followUpAt: followUpAt ? new Date(followUpAt) : null,
       },
       include: {

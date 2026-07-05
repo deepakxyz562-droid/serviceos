@@ -311,6 +311,7 @@ model Service {
 
 model Lead {
   id              String   @id @default(cuid())
+  title           String?
   name            String
   phone           String
   email           String?
@@ -328,6 +329,9 @@ model Lead {
   jobId           String?  @unique
   notesJson       String   @default("[]")
   tagsJson        String   @default("[]")
+  lineItemsJson   String   @default("[]")
+  imagesJson      String   @default("[]")
+  assessmentImagesJson String @default("[]")
   followUpAt      DateTime?
   convertedAt     DateTime?
   createdAt       DateTime @default(now())
@@ -637,8 +641,33 @@ model Workspace {
   folders       Folder[]
   webhookSources WebhookSource[]
   invitations   Invitation[]
+  checklists    Checklist[]
 
   @@index([tenantId])
+}
+
+// ==========================================
+// CHECKLISTS (Jobber-style "Capture on-site details")
+// ==========================================
+// A checklist is a reusable template made of sections, each containing
+// questions of various types (short/long answer, dropdown, checkbox,
+// numerical). It can be auto-attached to new jobs/assessments or manually
+// attached to a specific job (stored on Job.linkedChecklistsJson).
+model Checklist {
+  id                   String   @id @default(cuid())
+  title                String   @default("New checklist")
+  autoAttachJobs       Boolean  @default(false)
+  autoAttachAssessments Boolean @default(false)
+  // sectionsJson: [{id, title, questions: [{id, type, label, required, options: []}]}]
+  // type ∈ {short_answer, long_answer, dropdown, checkbox, numerical}
+  sectionsJson         String   @default("[]")
+  workspaceId          String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId])
 }
 
 model Workflow {
@@ -1033,6 +1062,22 @@ model Job {
   amountCollected   Float?
   collectedAt       DateTime?
   collectedById     String?
+  // ── Line items (Product / Service section) — mirrors Lead.lineItemsJson.
+  // Stored as JSON so the job form can show/edit the same itemized list that
+  // was negotiated on the lead, and the quotedAmount is computed from it.
+  lineItemsJson     String   @default("[]")
+  // ── Visit instructions shown to the assigned employee on-site ──
+  visitInstructions String?
+  // ── Jobber-style "#job" / Customize section: user-defined label+value
+  // pairs that get attached to the job. JSON: [{id, label, value}].
+  customFieldsJson  String   @default("[]")
+  // ── Attach files & photos: [{name, url, size, type, uploadedAt}]
+  attachmentsJson   String   @default("[]")
+  // ── Linked checklist IDs (from "Capture on-site details"): [checklistId, ...]
+  linkedChecklistsJson String @default("[]")
+  // ── Link to related: which related records to surface on the job
+  // (e.g. ["invoices", "quotes", "requests"]). JSON string array.
+  linkToRelatedJson String   @default("[]")
   workspaceId        String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt

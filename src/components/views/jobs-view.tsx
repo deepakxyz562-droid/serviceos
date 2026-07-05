@@ -1,11 +1,14 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Briefcase, Plus, Search, RefreshCw, Filter, Clock, MapPin, User,
   Phone, Calendar, Play, CheckCircle2, XCircle, Eye, ChevronRight,
   ArrowRight, AlertCircle, Activity, Zap, Pencil, Trash2, MoreVertical,
-  Loader2,
+  Loader2, ArrowLeft, FileText, StickyNote, CalendarDays, Info,
+  Repeat, ClipboardList, Paperclip, ChevronDown, Tag, Link2,
+  UploadCloud, File as FileIcon, X, Mail, DollarSign, MoreHorizontal,
+  TrendingUp, Printer, Send,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -19,6 +22,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,6 +49,34 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import { useCompanyCurrency } from '@/hooks/use-company-currency';
+import { FormSectionCard, FormPageHeader } from '@/components/shared/form-section-card';
+import { useAppStore, type JobPrefillData } from '@/store/app-store';
+
+// Reuse the Jobber-style line-item + customer-picker building blocks that the
+// lead form already uses, so the two forms stay visually consistent.
+import {
+  type LineItem,
+  type CatalogService,
+  newLineItemId,
+  emptyLineItem,
+  lineItemsSubtotal,
+  parseLineItems,
+  ImageUploader,
+  CreateServiceDialog,
+  CreateCustomerDialog,
+  CustomerPicker,
+  LineItemsSection,
+} from '@/components/views/leads-view';
+
+// Checklist builder (Jobber-style "Capture on-site details" feature).
+import {
+  ChecklistBuilder,
+  ChecklistAttachPicker,
+  parseChecklistSections,
+  type ChecklistData,
+} from '@/components/views/checklists-view';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -74,11 +106,33 @@ interface Job {
   assigneeName?: string;
   assigneePhone?: string;
   serviceId?: string;
+  visitInstructions?: string | null;
+  lineItemsJson?: string;
   notificationLogJson?: string;
+  customFieldsJson?: string;
+  attachmentsJson?: string;
+  linkedChecklistsJson?: string;
+  linkToRelatedJson?: string;
   createdAt: string;
   updatedAt: string;
   assignee?: { id: string; name: string; phone: string; role: string };
   customer?: { id: string; name: string; phone: string; email?: string };
+}
+
+// ── "#job" Customize: user-defined label+value pairs ──
+interface CustomField {
+  id: string;
+  label: string;
+  value: string;
+}
+
+// ── Attach files & photos: metadata for each uploaded file ──
+interface Attachment {
+  name: string;
+  url: string;
+  size?: number;
+  type?: string;
+  uploadedAt?: string;
 }
 
 interface Employee {
@@ -91,6 +145,60 @@ interface Employee {
   rating: number;
   completedJobs: number;
 }
+
+interface JobFormData {
+  title: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  address: string;
+  jobType: 'one-off' | 'recurring';
+  scheduledDate: string;
+  scheduledTime: string;
+  endTime: string;
+  assigneeId: string; // 'none' or employee id
+  visitInstructions: string;
+  invoiceOnClose: boolean;
+  lineItems: LineItem[];
+  notes: string;
+  priority: string;
+  serviceId: string;
+  estimatedDuration: string;
+  // ── "#job" Customize: user-defined label+value pairs ──
+  customFields: CustomField[];
+  // ── Attach files & photos ──
+  attachments: Attachment[];
+  // ── Linked checklist IDs (Capture on-site details) ──
+  linkedChecklists: string[];
+  // ── Link to related: which related record types to surface ──
+  linkToRelated: string[];
+}
+
+const EMPTY_JOB_FORM: JobFormData = {
+  title: '',
+  customerId: '',
+  customerName: '',
+  customerPhone: '',
+  customerEmail: '',
+  address: '',
+  jobType: 'one-off',
+  scheduledDate: '',
+  scheduledTime: '',
+  endTime: '',
+  assigneeId: 'none',
+  visitInstructions: '',
+  invoiceOnClose: true,
+  lineItems: [],
+  notes: '',
+  priority: 'medium',
+  serviceId: '',
+  estimatedDuration: '',
+  customFields: [],
+  attachments: [],
+  linkedChecklists: [],
+  linkToRelated: [],
+};
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -170,67 +278,112 @@ function parseNotificationLog(logJson?: string) {
   }
 }
 
+function parseCustomFields(json?: string | null): CustomField[] {
+  try {
+    const parsed = json ? JSON.parse(json) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((f: Record<string, unknown>, i: number) => ({
+      id: (f.id as string) || `cf-${i}-${Date.now()}`,
+      label: (f.label as string) || '',
+      value: (f.value as string) || '',
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function parseAttachments(json?: string | null): Attachment[] {
+  try {
+    const parsed = json ? JSON.parse(json) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed as Attachment[];
+  } catch {
+    return [];
+  }
+}
+
+function parseStringArray(json?: string | null): string[] {
+  try {
+    const parsed = json ? JSON.parse(json) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((x): x is string => typeof x === 'string');
+  } catch {
+    return [];
+  }
+}
+
+function formatFileSize(bytes?: number) {
+  if (!bytes && bytes !== 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function JobsView() {
+  const { symbol } = useCompanyCurrency();
+  // Read + consume the lead→job prefill handed off from the Leads view.
+  const pendingJobPrefill = useAppStore((s) => s.pendingJobPrefill);
+  const setPendingJobPrefill = useAppStore((s) => s.setPendingJobPrefill);
+
   // State
   const [jobs, setJobs] = useState<Job[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [customers, setCustomers] = useState<
+    { id: string; name: string; phone: string; email?: string | null; address?: string | null }[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
-  // Dialogs
-  const [showCreateJob, setShowCreateJob] = useState(false);
-  const [showJobDetail, setShowJobDetail] = useState(false);
+  // Form mode — 'list' shows the job list, 'form' shows the full-page
+  // New/Edit Job form (mirrors the lead form's page behaviour), 'detail'
+  // shows the full-page Job Detail view (Jobber-style, opened when a job
+  // card/row is clicked), and 'checklist' shows the full-page Checklist
+  // Builder (entered from the job form's "Create a Checklist" link).
+  const [formMode, setFormMode] = useState<'list' | 'form' | 'detail' | 'checklist'>('list');
+  const [editingJob, setEditingJob] = useState<Job | null>(null);
+  // When the form was opened from a lead "Convert", we remember the leadId so
+  // that on save we mark the lead as 'won' + link the new jobId.
+  const [prefillLeadId, setPrefillLeadId] = useState<string | null>(null);
+
+  // Job form state
+  const [jobForm, setJobForm] = useState<JobFormData>({ ...EMPTY_JOB_FORM });
+  const [saving, setSaving] = useState(false);
+
+  // Customer picker state (mirrors the lead form)
+  const [customerQuery, setCustomerQuery] = useState('');
+  const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
+  const [showCreateCustomerDialog, setShowCreateCustomerDialog] = useState(false);
+  const [createCustomerPrefill, setCreateCustomerPrefill] = useState({ name: '', phone: '', email: '' });
+
+  // ── Checklist builder state ──
+  // Available checklist templates (loaded for the "Attach a Checklist" picker)
+  const [checklists, setChecklists] = useState<{ id: string; title: string }[]>([]);
+  // The checklist currently being edited/created in the builder
+  const [editingChecklist, setEditingChecklist] = useState<ChecklistData | null>(null);
+  // Whether the builder was opened from inside the job form (true) or
+  // standalone from the jobs header (false). Determines where to return.
+  const [checklistFromForm, setChecklistFromForm] = useState(false);
+  // File upload state for "Attach files & photos"
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Dialogs (list-mode)
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [assigningJob, setAssigningJob] = useState<Job | null>(null);
   const [lifecycleLoading, setLifecycleLoading] = useState(false);
-  // Per-job loading state for the card action buttons (Start/Complete) so only
-  // the clicked button shows a spinner instead of disabling every card.
   const [loadingJobId, setLoadingJobId] = useState<string | null>(null);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
-  // Create-job dialog + cancel-job button loading states
-  const [creatingJob, setCreatingJob] = useState(false);
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
-
-  // Edit / Delete dialog state
-  const [showEditDialog, setShowEditDialog] = useState(false);
-  const [editingJob, setEditingJob] = useState<Job | null>(null);
-  const [editForm, setEditForm] = useState({
-    title: '', customerName: '', customerPhone: '', customerEmail: '', type: 'service',
-    address: '', scheduledDate: '', scheduledTime: '', priority: 'medium',
-    notes: '', estimatedDuration: '', quotedAmount: '',
-  });
-  const [editSaving, setEditSaving] = useState(false);
   const [deletingJob, setDeletingJob] = useState<Job | null>(null);
   const [deleteSaving, setDeleteSaving] = useState(false);
 
-  // Create job form
-  const [jobForm, setJobForm] = useState({
-    title: '',
-    customerName: '',
-    customerPhone: '',
-    customerEmail: '',
-    type: 'service',
-    address: '',
-    scheduledDate: '',
-    scheduledTime: '',
-    assigneeId: 'none',
-    priority: 'medium',
-    notes: '',
-    serviceId: '',
-    estimatedDuration: '',
-    quotedAmount: '',
-  });
-
-  // Service catalog — fetched so the create-job form can pick a service
-  // and auto-fill the duration from the catalog.
-  const [services, setServices] = useState<
-    { id: string; name: string; category: string; basePrice: number; duration: number }[]
-  >([]);
+  // Service catalog — for the line-item autocomplete in the form
+  const [services, setServices] = useState<CatalogService[]>([]);
   useEffect(() => {
     fetch('/api/services?active=true&limit=200')
       .then((r) => (r.ok ? r.json() : { services: [] }))
@@ -240,6 +393,21 @@ export function JobsView() {
       })
       .catch(() => setServices([]));
   }, []);
+
+  // Checklist templates — for the "Attach a Checklist" picker in the job form.
+  const fetchChecklists = useCallback(async () => {
+    try {
+      const res = await fetch('/api/checklists');
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : [];
+        setChecklists(list.map((c: { id: string; title: string }) => ({ id: c.id, title: c.title })));
+      }
+    } catch {
+      setChecklists([]);
+    }
+  }, []);
+  useEffect(() => { fetchChecklists(); }, [fetchChecklists]);
 
   // ─── Fetch ──────────────────────────────────────────────────────────────
 
@@ -273,6 +441,18 @@ export function JobsView() {
     }
   }, []);
 
+  const fetchCustomers = useCallback(async () => {
+    try {
+      const res = await fetch('/api/customers?limit=500');
+      if (res.ok) {
+        const data = await res.json();
+        setCustomers(Array.isArray(data) ? data : []);
+      }
+    } catch {
+      setCustomers([]);
+    }
+  }, []);
+
   useEffect(() => {
     fetchJobs();
   }, [fetchJobs]);
@@ -280,6 +460,22 @@ export function JobsView() {
   useEffect(() => {
     fetchEmployees();
   }, [fetchEmployees]);
+
+  useEffect(() => {
+    fetchCustomers();
+  }, [fetchCustomers]);
+
+  // ── Consume the lead→job prefill from the global store ──────────────────
+  // When the user clicks "Convert" on a lead, the Leads view stashes the
+  // lead's data in the store and switches to this view. We pick it up here,
+  // open the form pre-filled, and clear the store so a refresh doesn't
+  // re-open it.
+  useEffect(() => {
+    if (pendingJobPrefill) {
+      openJobFormFromLead(pendingJobPrefill);
+      setPendingJobPrefill(null);
+    }
+  }, [pendingJobPrefill]);
 
   // ─── Stats ──────────────────────────────────────────────────────────────
 
@@ -292,70 +488,353 @@ export function JobsView() {
     cancelled: jobs.filter(j => j.status === 'cancelled').length,
   };
 
-  // ─── Handlers ───────────────────────────────────────────────────────────
+  // ─── Customer picker helpers ───────────────────────────────────────────
 
-  const handleCreateJob = async () => {
-    if (!jobForm.title) {
+  const handlePickCustomer = (c: { id: string; name: string; phone: string; email?: string | null; address?: string | null }) => {
+    setJobForm((prev) => ({
+      ...prev,
+      customerId: c.id,
+      // Auto-fill contact fields only if empty (don't clobber manual edits).
+      customerName: prev.customerName || c.name,
+      customerPhone: prev.customerPhone || c.phone,
+      customerEmail: prev.customerEmail || (c.email || ''),
+      address: prev.address || (c.address || ''),
+    }));
+  };
+
+  const addCustomerToList = (c: { id: string; name: string; phone: string; email?: string | null; address?: string | null }) => {
+    setCustomers((prev) => [c, ...prev]);
+    handlePickCustomer(c);
+    setCustomerPickerOpen(false);
+  };
+
+  const openCreateCustomerDialog = (nameQuery: string) => {
+    setCreateCustomerPrefill({
+      name: nameQuery || jobForm.customerName || '',
+      phone: jobForm.customerPhone || '',
+      email: jobForm.customerEmail || '',
+    });
+    setShowCreateCustomerDialog(true);
+  };
+
+  const addServiceToCatalog = (svc: CatalogService) => {
+    setServices((prev) => (prev.some((s) => s.id === svc.id) ? prev : [svc, ...prev]));
+  };
+
+  // ─── Form open / close ──────────────────────────────────────────────────
+
+  const openAddJob = () => {
+    setEditingJob(null);
+    setPrefillLeadId(null);
+    setJobForm({ ...EMPTY_JOB_FORM });
+    setCustomerQuery('');
+    setCustomerPickerOpen(false);
+    setFormMode('form');
+  };
+
+  const openEditJob = (job: Job) => {
+    setEditingJob(job);
+    setPrefillLeadId(null);
+    const scheduledAt = job.scheduledAt ? new Date(job.scheduledAt) : null;
+    setJobForm({
+      title: job.title || '',
+      customerId: job.customerId || '',
+      customerName: job.customerName || '',
+      customerPhone: job.customerPhone || '',
+      customerEmail: job.customerEmail || '',
+      address: job.address || '',
+      jobType: 'one-off',
+      scheduledDate: scheduledAt ? scheduledAt.toISOString().slice(0, 10) : '',
+      scheduledTime: scheduledAt ? scheduledAt.toTimeString().slice(0, 5) : (job.scheduledTime || ''),
+      endTime: '',
+      assigneeId: job.assigneeId || 'none',
+      visitInstructions: job.visitInstructions || '',
+      invoiceOnClose: true,
+      lineItems: parseLineItems(job.lineItemsJson),
+      notes: job.notes || '',
+      priority: job.priority || 'medium',
+      serviceId: job.serviceId || '',
+      estimatedDuration: job.estimatedDuration ? String(job.estimatedDuration) : '',
+      customFields: parseCustomFields(job.customFieldsJson),
+      attachments: parseAttachments(job.attachmentsJson),
+      linkedChecklists: parseStringArray(job.linkedChecklistsJson),
+      linkToRelated: parseStringArray(job.linkToRelatedJson),
+    });
+    setCustomerQuery('');
+    setCustomerPickerOpen(false);
+    setFormMode('form');
+    // No longer using a dialog — detail is now a full page.
+  };
+
+  const openJobFormFromLead = (prefill: JobPrefillData) => {
+    setEditingJob(null);
+    setPrefillLeadId(prefill.leadId);
+    const items = parseLineItems(prefill.lineItemsJson);
+    const computedValue = prefill.value && prefill.value > 0 ? String(prefill.value) : '';
+    setJobForm({
+      ...EMPTY_JOB_FORM,
+      title: prefill.title || '',
+      customerId: prefill.customerId || '',
+      customerName: prefill.customerName || '',
+      customerPhone: prefill.customerPhone || '',
+      customerEmail: prefill.customerEmail || '',
+      address: prefill.address || prefill.customerAddress || '',
+      priority: prefill.priority || 'medium',
+      serviceId: prefill.serviceId || '',
+      visitInstructions: prefill.description || '',
+      notes: prefill.description ? `Converted from lead.\n\n${prefill.description}` : 'Converted from lead.',
+      lineItems: items,
+      // If the lead had a negotiated value and no line items, seed it as the
+      // quoted amount via a single line item so the billing section shows it.
+      estimatedDuration: computedValue ? '' : '',
+    });
+    setCustomerQuery('');
+    setCustomerPickerOpen(false);
+    setFormMode('form');
+  };
+
+  const closeJobForm = () => {
+    setFormMode('list');
+    setEditingJob(null);
+    setPrefillLeadId(null);
+    setJobForm({ ...EMPTY_JOB_FORM });
+    setCustomerQuery('');
+    setCustomerPickerOpen(false);
+  };
+
+  // ─── "#job" Customize: custom label+value field helpers ────────────────
+  const addCustomField = () => {
+    setJobForm((prev) => ({
+      ...prev,
+      customFields: [
+        ...prev.customFields,
+        { id: `cf-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, label: '', value: '' },
+      ],
+    }));
+  };
+  const updateCustomField = (id: string, patch: Partial<CustomField>) => {
+    setJobForm((prev) => ({
+      ...prev,
+      customFields: prev.customFields.map((f) => (f.id === id ? { ...f, ...patch } : f)),
+    }));
+  };
+  const removeCustomField = (id: string) => {
+    setJobForm((prev) => ({ ...prev, customFields: prev.customFields.filter((f) => f.id !== id) }));
+  };
+
+  // ─── Attach files & photos helpers ─────────────────────────────────────
+  const handleFileUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setUploadingFiles(true);
+    try {
+      const newAttachments: Attachment[] = [];
+      for (const file of Array.from(files)) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('bucket', 'job-attachments');
+        formData.append('folder', 'jobs');
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.url) {
+            newAttachments.push({
+              name: file.name,
+              url: data.url,
+              size: file.size,
+              type: file.type,
+              uploadedAt: new Date().toISOString(),
+            });
+          }
+        }
+      }
+      if (newAttachments.length > 0) {
+        setJobForm((prev) => ({ ...prev, attachments: [...prev.attachments, ...newAttachments] }));
+      }
+      if (newAttachments.length < files.length) {
+        toast.error('Some files failed to upload');
+      }
+    } catch {
+      toast.error('Upload failed');
+    } finally {
+      setUploadingFiles(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+  const removeAttachment = (idx: number) => {
+    setJobForm((prev) => ({ ...prev, attachments: prev.attachments.filter((_, i) => i !== idx) }));
+  };
+
+  // ─── Checklist builder helpers ─────────────────────────────────────────
+  const openChecklistBuilder = (existing?: { id: string; title: string }, fromForm = false) => {
+    setChecklistFromForm(fromForm);
+    if (existing) {
+      // Fetch full checklist for editing
+      fetch(`/api/checklists/${existing.id}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data?.id) {
+            setEditingChecklist({
+              id: data.id,
+              title: data.title || 'New checklist',
+              autoAttachJobs: !!data.autoAttachJobs,
+              autoAttachAssessments: !!data.autoAttachAssessments,
+              sections: parseChecklistSections(data.sectionsJson),
+            });
+            setFormMode('checklist');
+          }
+        })
+        .catch(() => toast.error('Failed to load checklist'));
+    } else {
+      setEditingChecklist(null);
+      setFormMode('checklist');
+    }
+  };
+  const handleChecklistSaved = (saved: ChecklistData) => {
+    // Refresh the checklist list
+    fetchChecklists();
+    setChecklists((prev) => {
+      const without = prev.filter((c) => c.id !== saved.id);
+      return [{ id: saved.id!, title: saved.title }, ...without];
+    });
+    // If opened from the job form, auto-attach the new checklist and return
+    // to the form. Otherwise return to the jobs list.
+    if (checklistFromForm) {
+      setJobForm((prev) => ({
+        ...prev,
+        linkedChecklists: prev.linkedChecklists.includes(saved.id!)
+          ? prev.linkedChecklists
+          : [...prev.linkedChecklists, saved.id!],
+      }));
+      setFormMode('form');
+    } else {
+      setFormMode('list');
+    }
+    setEditingChecklist(null);
+    setChecklistFromForm(false);
+  };
+  const handleChecklistCancel = () => {
+    setEditingChecklist(null);
+    setFormMode(checklistFromForm ? 'form' : 'list');
+    setChecklistFromForm(false);
+  };
+
+  // ─── Save (create or update) ────────────────────────────────────────────
+
+  const handleSaveJob = async () => {
+    if (!jobForm.title.trim()) {
       toast.error('Job title is required');
       return;
     }
-    setCreatingJob(true);
+    if (!jobForm.customerId && !jobForm.customerName.trim()) {
+      toast.error('Please select a client or enter a customer name');
+      return;
+    }
+    setSaving(true);
     try {
       const assignee = jobForm.assigneeId !== 'none'
-        ? employees.find(e => e.id === jobForm.assigneeId)
+        ? employees.find((e) => e.id === jobForm.assigneeId)
         : null;
 
       const scheduledAt = jobForm.scheduledDate && jobForm.scheduledTime
         ? new Date(`${jobForm.scheduledDate}T${jobForm.scheduledTime}`).toISOString()
         : undefined;
 
-      const res = await fetch('/api/jobs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: jobForm.title,
-          type: jobForm.type,
-          priority: jobForm.priority,
-          address: jobForm.address || undefined,
-          customerName: jobForm.customerName || undefined,
-          customerPhone: jobForm.customerPhone || undefined,
-          customerEmail: jobForm.customerEmail || undefined,
-          assigneeId: assignee?.id || undefined,
-          assigneeName: assignee?.name || undefined,
-          assigneePhone: assignee?.phone || undefined,
-          scheduledAt,
-          scheduledTime: jobForm.scheduledTime || undefined,
-          notes: jobForm.notes || undefined,
-          serviceId: jobForm.serviceId || undefined,
-          estimatedDuration: jobForm.estimatedDuration
-            ? Number(jobForm.estimatedDuration)
-            : undefined,
-          quotedAmount: jobForm.quotedAmount
-            ? Number(jobForm.quotedAmount)
-            : undefined,
-          status: assignee ? 'assigned' : 'pending',
-        }),
-      });
+      // Quoted amount: prefer the line-item subtotal, fall back to a manual
+      // estimate only if there are no line items (kept for back-compat with
+      // the old single-amount field).
+      const subtotal = lineItemsSubtotal(jobForm.lineItems);
 
-      if (res.ok) {
-        toast.success('Job created successfully');
-        setShowCreateJob(false);
-        setJobForm({
-          title: '', customerName: '', customerPhone: '', customerEmail: '', type: 'service',
-          address: '', scheduledDate: '', scheduledTime: '', assigneeId: 'none',
-          priority: 'medium', notes: '', serviceId: '', estimatedDuration: '',
-          quotedAmount: '',
+      const payload: Record<string, unknown> = {
+        title: jobForm.title.trim(),
+        type: 'service',
+        priority: jobForm.priority,
+        address: jobForm.address || undefined,
+        customerId: jobForm.customerId || undefined,
+        customerName: jobForm.customerName || undefined,
+        customerPhone: jobForm.customerPhone || undefined,
+        customerEmail: jobForm.customerEmail || undefined,
+        assigneeId: assignee?.id || undefined,
+        assigneeName: assignee?.name || undefined,
+        assigneePhone: assignee?.phone || undefined,
+        scheduledAt,
+        scheduledTime: jobForm.scheduledTime || undefined,
+        notes: jobForm.notes || undefined,
+        serviceId: jobForm.serviceId || undefined,
+        visitInstructions: jobForm.visitInstructions || undefined,
+        lineItemsJson: JSON.stringify(jobForm.lineItems),
+        estimatedDuration: jobForm.estimatedDuration ? Number(jobForm.estimatedDuration) : undefined,
+        quotedAmount: subtotal > 0 ? subtotal : (jobForm.estimatedDuration ? undefined : undefined),
+        status: assignee ? 'assigned' : 'pending',
+        // ── "#job" Customize / Attach files & photos / Linked checklists / Link to related ──
+        customFieldsJson: JSON.stringify(jobForm.customFields),
+        attachmentsJson: JSON.stringify(jobForm.attachments),
+        linkedChecklistsJson: JSON.stringify(jobForm.linkedChecklists),
+        linkToRelatedJson: JSON.stringify(jobForm.linkToRelated),
+      };
+
+      let createdJobId: string | null = null;
+      if (editingJob) {
+        // ── Update existing job ──
+        const res = await fetch(`/api/jobs/${editingJob.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
         });
-        fetchJobs();
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || 'Failed to update job');
+        }
+        toast.success('Job updated successfully');
       } else {
-        toast.error('Failed to create job');
+        // ── Create new job ──
+        const res = await fetch('/api/jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || 'Failed to create job');
+        }
+        const created = await res.json();
+        createdJobId = created?.id || null;
+        toast.success(prefillLeadId ? 'Job created from lead' : 'Job created successfully');
       }
-    } catch {
-      toast.error('Network error');
+
+      // ── If this job came from a lead, mark the lead as won + linked ──
+      // We do this AFTER the job is created so we can link the new jobId back
+      // to the lead. We deliberately do NOT call /api/leads/convert here
+      // because that endpoint creates its own customer+job (which would
+      // duplicate what we just created).
+      if (prefillLeadId && createdJobId) {
+        try {
+          await fetch(`/api/leads/${prefillLeadId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              status: 'won',
+              jobId: createdJobId,
+              customerId: jobForm.customerId || undefined,
+              convertedAt: new Date().toISOString(),
+            }),
+          });
+        } catch {
+          // Non-fatal — the job was created; the lead just won't auto-link.
+          console.warn('[JobsView] Failed to mark lead as won after job creation');
+        }
+      }
+
+      closeJobForm();
+      fetchJobs();
+      if (createdJobId && assignee) fetchEmployees();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Network error');
     } finally {
-      setCreatingJob(false);
+      setSaving(false);
     }
   };
+
+  // ─── Lifecycle / detail / assign / cancel / delete ──────────────────────
 
   const handleLifecycleAction = async (action: string, jobId: string, resourceId?: string) => {
     setLifecycleLoading(true);
@@ -370,10 +849,6 @@ export function JobsView() {
       if (res.ok) {
         toast.success(`Job ${action} successfully`);
         fetchJobs();
-        // ── Refresh employees so status changes (busy↔available) reflect in
-        // the UI immediately. Without this, the employee list stays stale
-        // after assign/complete/reject, making it look like the employee is
-        // still busy when they've actually been freed up (or vice-versa).
         if (['assign', 'start', 'complete', 'reject', 'accept'].includes(action)) {
           fetchEmployees();
         }
@@ -381,7 +856,7 @@ export function JobsView() {
           setShowAssignDialog(false);
           setAssigningJob(null);
         }
-        if (showJobDetail && selectedJob?.id === jobId) {
+        if (formMode === 'detail' && selectedJob?.id === jobId) {
           const detailRes = await fetch(`/api/jobs/lifecycle?jobId=${jobId}`);
           if (detailRes.ok) {
             const data = await detailRes.json();
@@ -413,7 +888,12 @@ export function JobsView() {
     } catch {
       setSelectedJob(job);
     }
-    setShowJobDetail(true);
+    // Open as a full page (Jobber-style) instead of a modal dialog.
+    setFormMode('detail');
+  };
+
+  const closeJobDetail = () => {
+    setFormMode('list');
   };
 
   const openAssignDialog = (job: Job) => {
@@ -432,7 +912,7 @@ export function JobsView() {
       if (res.ok) {
         toast.success('Job cancelled');
         fetchJobs();
-        setShowJobDetail(false);
+        setFormMode('list');
       } else {
         toast.error('Failed to cancel job');
       }
@@ -442,98 +922,16 @@ export function JobsView() {
       setCancellingJobId(null);
     }
   };
-  const openEditDialog = (job: Job) => {
-    setEditingJob(job);
-    // Pre-fill the edit form from the job's current values
-    const scheduledAt = job.scheduledAt ? new Date(job.scheduledAt) : null;
-    setEditForm({
-      title: job.title || '',
-      customerName: job.customerName || '',
-      customerPhone: job.customerPhone || '',
-      customerEmail: (job as any).customerEmail || '',
-      type: job.type || 'service',
-      address: job.address || '',
-      scheduledDate: scheduledAt
-        ? scheduledAt.toISOString().slice(0, 10)
-        : '',
-      scheduledTime: scheduledAt
-        ? scheduledAt.toTimeString().slice(0, 5)
-        : '',
-      priority: job.priority || 'medium',
-      notes: job.notes || '',
-      estimatedDuration: job.estimatedDuration
-        ? String(job.estimatedDuration)
-        : '',
-      quotedAmount: job.quotedAmount != null ? String(job.quotedAmount) : '',
-    });
-    setShowEditDialog(true);
-    // Close the detail dialog if it's open so the edit dialog is the focus
-    if (showJobDetail) setShowJobDetail(false);
-  };
 
-  const handleEditJob = async () => {
-    if (!editingJob) return;
-    if (!editForm.title.trim()) {
-      toast.error('Job title is required');
-      return;
-    }
-    setEditSaving(true);
-    try {
-      const scheduledAt = editForm.scheduledDate && editForm.scheduledTime
-        ? new Date(`${editForm.scheduledDate}T${editForm.scheduledTime}`).toISOString()
-        : undefined;
-
-      const res = await fetch(`/api/jobs/${editingJob.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: editForm.title,
-          type: editForm.type,
-          priority: editForm.priority,
-          address: editForm.address || null,
-          customerName: editForm.customerName || null,
-          customerPhone: editForm.customerPhone || null,
-          customerEmail: editForm.customerEmail || null,
-          scheduledAt: scheduledAt || null,
-          scheduledTime: editForm.scheduledTime || null,
-          notes: editForm.notes || null,
-          estimatedDuration: editForm.estimatedDuration
-            ? Number(editForm.estimatedDuration)
-            : null,
-          quotedAmount: editForm.quotedAmount
-            ? Number(editForm.quotedAmount)
-            : null,
-        }),
-      });
-
-      if (res.ok) {
-        toast.success('Job updated successfully');
-        setShowEditDialog(false);
-        setEditingJob(null);
-        fetchJobs();
-      } else {
-        const err = await res.json().catch(() => ({}));
-        toast.error(err.error || 'Failed to update job');
-      }
-    } catch {
-      toast.error('Network error');
-    } finally {
-      setEditSaving(false);
-    }
-  };
-
-  // ─── Delete Job ─────────────────────────────────────────────────────────
   const handleDeleteJob = async () => {
     if (!deletingJob) return;
     setDeleteSaving(true);
     try {
-      const res = await fetch(`/api/jobs/${deletingJob.id}`, {
-        method: 'DELETE',
-      });
+      const res = await fetch(`/api/jobs/${deletingJob.id}`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('Job deleted successfully');
         setDeletingJob(null);
-        setShowJobDetail(false);
+        setFormMode('list');
         fetchJobs();
         fetchEmployees();
       } else {
@@ -547,19 +945,10 @@ export function JobsView() {
     }
   };
 
-  // A small "⋯" dropdown with Edit / Delete actions, shown on every job row
-  // regardless of status (so completed/cancelled jobs can still be edited or
-  // removed). Wrapped to stop click propagation so it doesn't open the detail.
   const getMoreActionsMenu = (job: Job) => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={(e) => e.stopPropagation()}
-          title="More actions"
-        >
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => e.stopPropagation()} title="More actions">
           <MoreVertical className="size-4" />
         </Button>
       </DropdownMenuTrigger>
@@ -567,14 +956,11 @@ export function JobsView() {
         <DropdownMenuItem onClick={() => openJobDetail(job)}>
           <Eye className="size-4 mr-2" /> View Details
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => openEditDialog(job)}>
+        <DropdownMenuItem onClick={() => openEditJob(job)}>
           <Pencil className="size-4 mr-2" /> Edit Job
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem
-          className="text-red-600 focus:text-red-700 focus:bg-red-50"
-          onClick={() => setDeletingJob(job)}
-        >
+        <DropdownMenuItem className="text-red-600 focus:text-red-700 focus:bg-red-50" onClick={() => setDeletingJob(job)}>
           <Trash2 className="size-4 mr-2" /> Delete Job
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -582,17 +968,12 @@ export function JobsView() {
   );
 
   const getActionButtons = (job: Job) => {
-    // The status-specific primary action + the "⋯" more-actions menu (edit/delete)
     const moreMenu = getMoreActionsMenu(job);
     switch (job.status) {
       case 'pending':
         return (
           <div className="flex items-center gap-1 justify-end">
-            <Button
-              size="sm"
-              className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs"
-              onClick={(e) => { e.stopPropagation(); openAssignDialog(job); }}
-            >
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs" onClick={(e) => { e.stopPropagation(); openAssignDialog(job); }}>
               <User className="size-3 mr-1" /> Assign
             </Button>
             {moreMenu}
@@ -601,15 +982,8 @@ export function JobsView() {
       case 'assigned':
         return (
           <div className="flex items-center gap-1 justify-end">
-            <Button
-              size="sm"
-              className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs"
-              onClick={(e) => { e.stopPropagation(); handleLifecycleAction('start', job.id); }}
-              disabled={loadingJobId === job.id && loadingAction === 'start'}
-            >
-              {loadingJobId === job.id && loadingAction === 'start'
-                ? <Loader2 className="size-3 mr-1 animate-spin" />
-                : <Play className="size-3 mr-1" />} Start
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs" onClick={(e) => { e.stopPropagation(); handleLifecycleAction('start', job.id); }} disabled={loadingJobId === job.id && loadingAction === 'start'}>
+              {loadingJobId === job.id && loadingAction === 'start' ? <Loader2 className="size-3 mr-1 animate-spin" /> : <Play className="size-3 mr-1" />} Start
             </Button>
             {moreMenu}
           </div>
@@ -617,15 +991,8 @@ export function JobsView() {
       case 'in_progress':
         return (
           <div className="flex items-center gap-1 justify-end">
-            <Button
-              size="sm"
-              className="bg-green-600 hover:bg-green-700 h-7 text-xs"
-              onClick={(e) => { e.stopPropagation(); handleLifecycleAction('complete', job.id); }}
-              disabled={loadingJobId === job.id && loadingAction === 'complete'}
-            >
-              {loadingJobId === job.id && loadingAction === 'complete'
-                ? <Loader2 className="size-3 mr-1 animate-spin" />
-                : <CheckCircle2 className="size-3 mr-1" />} Complete
+            <Button size="sm" className="bg-green-600 hover:bg-green-700 h-7 text-xs" onClick={(e) => { e.stopPropagation(); handleLifecycleAction('complete', job.id); }} disabled={loadingJobId === job.id && loadingAction === 'complete'}>
+              {loadingJobId === job.id && loadingAction === 'complete' ? <Loader2 className="size-3 mr-1 animate-spin" /> : <CheckCircle2 className="size-3 mr-1" />} Complete
             </Button>
             {moreMenu}
           </div>
@@ -635,12 +1002,7 @@ export function JobsView() {
       default:
         return (
           <div className="flex items-center gap-1 justify-end">
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs"
-              onClick={(e) => { e.stopPropagation(); openJobDetail(job); }}
-            >
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); openJobDetail(job); }}>
               <Eye className="size-3 mr-1" /> View
             </Button>
             {moreMenu}
@@ -649,11 +1011,969 @@ export function JobsView() {
     }
   };
 
-  // ─── Render ─────────────────────────────────────────────────────────────
+  // ============================================================
+  // Render: Job Form Page (New / Edit) — Jobber-style full page
+  // ============================================================
+
+  const renderJobFormPage = () => {
+    const subtotal = lineItemsSubtotal(jobForm.lineItems);
+    const isEditing = !!editingJob;
+    const fromLead = !!prefillLeadId;
+
+    return (
+      <div className="w-full space-y-6">
+        {/* ─── Page header with Back button ─────────────────────── */}
+        <FormPageHeader
+          icon={Briefcase}
+          iconBg="bg-emerald-600"
+          title={isEditing ? 'Edit Job' : fromLead ? 'New Job from Lead' : 'New Job'}
+          subtitle={isEditing ? 'Update job details' : fromLead ? 'Review and create the job from this lead' : 'Schedule a new service job'}
+          onBack={closeJobForm}
+          onSubmit={handleSaveJob}
+          submitting={saving}
+          submitLabel={isEditing ? 'Update Job' : 'Create Job'}
+        />
+
+        {/* ─── Title & Client ───────────────────────────────────── */}
+        <FormSectionCard>
+          <div className="space-y-4">
+            <div className="grid gap-2">
+              <Label htmlFor="job-title">Title <span className="text-red-500 font-medium">*</span></Label>
+              <Input
+                id="job-title"
+                className="form-input h-10"
+                placeholder="Add a title (e.g. AC repair at customer site)"
+                value={jobForm.title}
+                onChange={(e) => setJobForm({ ...jobForm, title: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Select a client <span className="text-red-500 font-medium">*</span></Label>
+              <CustomerPicker
+                customers={customers}
+                selectedCustomerId={jobForm.customerId}
+                onPick={handlePickCustomer}
+                onClear={() => setJobForm({ ...jobForm, customerId: '' })}
+                onCreate={openCreateCustomerDialog}
+                query={customerQuery}
+                setQuery={setCustomerQuery}
+                open={customerPickerOpen}
+                setOpen={setCustomerPickerOpen}
+              />
+              <p className="text-xs text-muted-foreground">
+                Pick an existing client or click <span className="text-emerald-700 font-medium">+ Create new client</span> to add one on the fly.
+              </p>
+            </div>
+            {editingJob?.jobNumber && (
+              <div className="grid gap-2">
+                <Label>Job #</Label>
+                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-mono text-muted-foreground">
+                  {editingJob.jobNumber}
+                </div>
+              </div>
+            )}
+          </div>
+        </FormSectionCard>
+
+        {/* ─── "#job" / Customize: user-defined label+value pairs ── */}
+        {/* Matches the Jobber "Customize / Add Field" pattern: users can
+            attach arbitrary labelled fields to the job (e.g. PO Number,
+            Site Contact, Access Code). Each row is a label + input pair
+            that can be added/removed dynamically. */}
+        <FormSectionCard
+          icon={Tag}
+          title="#job"
+          description="Customize"
+          action={
+            <button
+              type="button"
+              onClick={addCustomField}
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-sm font-medium text-emerald-700 border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50 transition-colors"
+            >
+              <Plus className="size-4" /> Add Field
+            </button>
+          }
+        >
+          {jobForm.customFields.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic">
+              No custom fields. Click <span className="font-medium text-foreground">Add Field</span> to attach labelled info like PO Number, Site Contact, Access Code, etc.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {jobForm.customFields.map((f) => (
+                <div key={f.id} className="grid grid-cols-[140px_1fr_auto] gap-2 items-center">
+                  <Input
+                    className="form-input h-9 text-sm"
+                    placeholder="Label (e.g. PO #)"
+                    value={f.label}
+                    onChange={(e) => updateCustomField(f.id, { label: e.target.value })}
+                  />
+                  <Input
+                    className="form-input h-9 text-sm"
+                    placeholder="Value"
+                    value={f.value}
+                    onChange={(e) => updateCustomField(f.id, { value: e.target.value })}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 text-red-500 hover:text-red-600"
+                    onClick={() => removeCustomField(f.id)}
+                    title="Remove field"
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </FormSectionCard>
+
+        {/* ─── Contact info (only when no client selected) ──────── */}
+        {/* Mirrors the lead form: when a client is linked, contact details
+            come from the client record, so the manual fields are hidden. */}
+        {!jobForm.customerId && (
+          <FormSectionCard icon={User} title="Customer details">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="job-cust-name">Customer name <span className="text-red-500 font-medium">*</span></Label>
+                <Input
+                  id="job-cust-name"
+                  className="form-input h-10"
+                  placeholder="Full name"
+                  value={jobForm.customerName}
+                  onChange={(e) => setJobForm({ ...jobForm, customerName: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="job-cust-phone">Phone</Label>
+                <Input
+                  id="job-cust-phone"
+                  className="form-input h-10"
+                  placeholder="+1 234 567 8900"
+                  value={jobForm.customerPhone}
+                  onChange={(e) => setJobForm({ ...jobForm, customerPhone: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="job-cust-email">Email</Label>
+                <Input
+                  id="job-cust-email"
+                  type="email"
+                  className="form-input h-10"
+                  placeholder="email@example.com"
+                  value={jobForm.customerEmail}
+                  onChange={(e) => setJobForm({ ...jobForm, customerEmail: e.target.value })}
+                />
+              </div>
+            </div>
+          </FormSectionCard>
+        )}
+
+        {/* ─── Job type ────────────────────────────────────────── */}
+        <FormSectionCard icon={Info} title="Job type">
+          <div className="inline-flex rounded-lg border p-0.5">
+            <button
+              type="button"
+              onClick={() => setJobForm({ ...jobForm, jobType: 'one-off' })}
+              className={cn(
+                'px-4 py-1.5 text-sm rounded-md transition-colors',
+                jobForm.jobType === 'one-off' ? 'bg-emerald-600 text-white' : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              One-off
+            </button>
+            <button
+              type="button"
+              onClick={() => setJobForm({ ...jobForm, jobType: 'recurring' })}
+              className={cn(
+                'px-4 py-1.5 text-sm rounded-md transition-colors',
+                jobForm.jobType === 'recurring' ? 'bg-emerald-600 text-white' : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              Recurring
+            </button>
+          </div>
+        </FormSectionCard>
+
+        {/* ─── Schedule ─────────────────────────────────────────── */}
+        <FormSectionCard icon={CalendarDays} title="Schedule">
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-2">
+                <Label htmlFor="job-date">Start date</Label>
+                <Input
+                  id="job-date"
+                  type="date"
+                  className="form-input h-10"
+                  value={jobForm.scheduledDate}
+                  onChange={(e) => setJobForm({ ...jobForm, scheduledDate: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="job-start">Start time</Label>
+                <Input
+                  id="job-start"
+                  type="time"
+                  className="form-input h-10"
+                  value={jobForm.scheduledTime}
+                  onChange={(e) => setJobForm({ ...jobForm, scheduledTime: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="job-end">End time</Label>
+                <Input
+                  id="job-end"
+                  type="time"
+                  className="form-input h-10"
+                  value={jobForm.endTime}
+                  onChange={(e) => setJobForm({ ...jobForm, endTime: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="job-assignee">Assigned to</Label>
+              <Select value={jobForm.assigneeId} onValueChange={(v) => setJobForm({ ...jobForm, assigneeId: v })}>
+                <SelectTrigger id="job-assignee" className="form-input h-10"><SelectValue placeholder="Select employee (optional)" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No assignee</SelectItem>
+                  {employees.filter((e) => e.status === 'available').map((emp) => (
+                    <SelectItem key={emp.id} value={emp.id}>
+                      {emp.name} — {emp.role} ({emp.rating.toFixed(1)} ★)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="job-instructions">Visit instructions</Label>
+              <Textarea
+                id="job-instructions"
+                rows={3}
+                className="form-input"
+                placeholder="Visit instructions (shown to the assigned employee on-site)"
+                value={jobForm.visitInstructions}
+                onChange={(e) => setJobForm({ ...jobForm, visitInstructions: e.target.value })}
+              />
+            </div>
+            {/* ── Capture on-site details: checklists ── */}
+            <div className="rounded-lg border bg-muted/20 px-4 py-3 space-y-3">
+              <div className="flex items-start gap-2">
+                <ClipboardList className="size-4 mt-0.5 shrink-0 text-emerald-600" />
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-foreground/90 text-sm">CAPTURE ON-SITE DETAILS</p>
+                  <p className="text-xs text-muted-foreground">
+                    Attach custom-built checklists so that nothing gets missed.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="text-emerald-700 hover:text-emerald-800 px-0 h-auto"
+                  onClick={() => openChecklistBuilder(undefined, true)}
+                >
+                  + Create a Checklist
+                </Button>
+              </div>
+              {/* Attached / attach-existing picker */}
+              {jobForm.linkedChecklists.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {jobForm.linkedChecklists.map((cid) => {
+                    const cl = checklists.find((c) => c.id === cid);
+                    if (!cl) return null;
+                    return (
+                      <Badge
+                        key={cid}
+                        variant="secondary"
+                        className="bg-emerald-50 text-emerald-800 border-emerald-200 gap-1 pr-1 cursor-pointer hover:bg-emerald-100"
+                        onClick={() => openChecklistBuilder(cl, true)}
+                        title="Click to edit"
+                      >
+                        <ClipboardList className="size-3" />
+                        {cl.title}
+                        <button
+                          type="button"
+                          className="ml-0.5 hover:text-red-600"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setJobForm((prev) => ({
+                              ...prev,
+                              linkedChecklists: prev.linkedChecklists.filter((x) => x !== cid),
+                            }));
+                          }}
+                        >
+                          <X className="size-3" />
+                        </button>
+                      </Badge>
+                    );
+                  })}
+                </div>
+              )}
+              <ChecklistAttachPicker
+                checklists={checklists.filter((c) => !jobForm.linkedChecklists.includes(c.id))}
+                selectedIds={[]}
+                onChange={(ids) => {
+                  // For the picker, any checked id gets ADDED to linkedChecklists
+                  setJobForm((prev) => ({
+                    ...prev,
+                    linkedChecklists: [...new Set([...prev.linkedChecklists, ...ids])],
+                  }));
+                }}
+                onCreateNew={() => openChecklistBuilder(undefined, true)}
+              />
+            </div>
+          </div>
+        </FormSectionCard>
+
+        {/* ─── Billing ──────────────────────────────────────────── */}
+        <FormSectionCard icon={FileText} title="Billing">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="job-invoice"
+              checked={jobForm.invoiceOnClose}
+              onCheckedChange={(v) => setJobForm({ ...jobForm, invoiceOnClose: v === true })}
+            />
+            <Label htmlFor="job-invoice" className="text-sm font-normal cursor-pointer">
+              Remind me to invoice when I close the job
+            </Label>
+          </div>
+        </FormSectionCard>
+
+        {/* ─── Product / Service (line items) ───────────────────── */}
+        <FormSectionCard icon={Briefcase} title="Product / Service" description="Search the catalog or add a custom item">
+          <div className="space-y-3">
+            <LineItemsSection
+              items={jobForm.lineItems}
+              services={services}
+              symbol={symbol}
+              onServicesUpdate={addServiceToCatalog}
+              onChange={(items) => setJobForm((prev) => ({ ...prev, lineItems: items }))}
+            />
+            {jobForm.lineItems.length > 0 && (
+              <div className="flex items-center justify-end gap-4 text-sm">
+                <span className="text-muted-foreground">Total price</span>
+                <span className="font-bold text-emerald-700">{symbol}{subtotal.toFixed(2)}</span>
+              </div>
+            )}
+          </div>
+        </FormSectionCard>
+
+        {/* ─── Address & Priority ───────────────────────────────── */}
+        <FormSectionCard icon={MapPin} title="Location">
+          <div className="space-y-4">
+            <div className="grid gap-2">
+              <Label htmlFor="job-address">Address</Label>
+              <Input
+                id="job-address"
+                className="form-input h-10"
+                placeholder="Service location address"
+                value={jobForm.address}
+                onChange={(e) => setJobForm({ ...jobForm, address: e.target.value })}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid gap-2">
+                <Label>Priority</Label>
+                <Select value={jobForm.priority} onValueChange={(v) => setJobForm({ ...jobForm, priority: v })}>
+                  <SelectTrigger className="form-input h-10"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>
+                  Est. duration <span className="text-xs font-normal text-muted-foreground">(min)</span>
+                </Label>
+                <Input
+                  type="number"
+                  min="5"
+                  className="form-input h-10"
+                  placeholder="60"
+                  value={jobForm.estimatedDuration}
+                  onChange={(e) => setJobForm({ ...jobForm, estimatedDuration: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+        </FormSectionCard>
+
+        {/* ─── Notes ────────────────────────────────────────────── */}
+        <FormSectionCard icon={StickyNote} title="Notes">
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">Use @ in notes to mention your team</p>
+            <Textarea
+              rows={3}
+              className="form-input"
+              placeholder="Add a note for your team..."
+              value={jobForm.notes}
+              onChange={(e) => setJobForm({ ...jobForm, notes: e.target.value })}
+            />
+          </div>
+        </FormSectionCard>
+
+        {/* ─── Attach files & photos ───────────────────────────── */}
+        <FormSectionCard icon={Paperclip} title="Attach files & photos">
+          <div className="space-y-3">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => handleFileUpload(e.target.files)}
+            />
+            {/* Drop zone */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingFiles}
+              className="w-full rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/20 hover:bg-muted/40 hover:border-emerald-400/50 transition-colors px-4 py-6 text-sm flex flex-col items-center gap-1.5 disabled:opacity-50"
+            >
+              {uploadingFiles ? (
+                <>
+                  <Loader2 className="size-5 animate-spin text-emerald-600" />
+                  <span>Uploading...</span>
+                </>
+              ) : (
+                <>
+                  <UploadCloud className="size-5 text-emerald-600" />
+                  <span className="font-medium text-foreground">Select or drag files here to upload</span>
+                  <span className="text-xs text-muted-foreground">Click to browse — photos, PDFs, docs, etc.</span>
+                </>
+              )}
+            </button>
+            {/* Attached files list */}
+            {jobForm.attachments.length > 0 && (
+              <div className="space-y-1.5">
+                {jobForm.attachments.map((att, idx) => {
+                  const isImage = att.type?.startsWith('image/');
+                  return (
+                    <div
+                      key={idx}
+                      className="flex items-center gap-3 rounded-md border bg-background px-3 py-2"
+                    >
+                      {isImage ? (
+                        <img src={att.url} alt={att.name} className="size-8 rounded object-cover shrink-0" />
+                      ) : (
+                        <div className="size-8 rounded bg-muted flex items-center justify-center shrink-0">
+                          <FileIcon className="size-4 text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate">{att.name}</p>
+                        {att.size ? (
+                          <p className="text-xs text-muted-foreground">{formatFileSize(att.size)}</p>
+                        ) : null}
+                      </div>
+                      <a
+                        href={att.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-emerald-700 hover:underline shrink-0"
+                      >
+                        View
+                      </a>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 text-red-500 hover:text-red-600 shrink-0"
+                        onClick={() => removeAttachment(idx)}
+                        title="Remove"
+                      >
+                        <X className="size-3.5" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </FormSectionCard>
+
+        {/* ─── Link to related ─────────────────────────────────── */}
+        <FormSectionCard icon={Link2} title="Link to related">
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Choose which related records should be linked to this job.
+            </p>
+            <div className="space-y-2">
+              {([
+                { id: 'invoices', label: 'Invoices', hint: 'Bill this job with invoices' },
+                { id: 'quotes', label: 'Quotes', hint: 'Link a quote to this job' },
+                { id: 'requests', label: 'Requests', hint: 'Link back to the originating request/lead' },
+                { id: 'visits', label: 'Visits', hint: 'Track repeat visits' },
+              ] as const).map((opt) => {
+                const checked = jobForm.linkToRelated.includes(opt.id);
+                return (
+                  <label
+                    key={opt.id}
+                    className="flex items-center gap-3 rounded-md border bg-background px-3 py-2 cursor-pointer hover:bg-muted/40 transition-colors"
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(v) => {
+                        setJobForm((prev) => ({
+                          ...prev,
+                          linkToRelated: v
+                            ? [...prev.linkToRelated, opt.id]
+                            : prev.linkToRelated.filter((x) => x !== opt.id),
+                        }));
+                      }}
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{opt.label}</p>
+                      <p className="text-xs text-muted-foreground">{opt.hint}</p>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        </FormSectionCard>
+
+        {/* ─── Bottom action bar ────────────────────────────────── */}
+        <div className="flex items-center justify-end gap-2 pb-4">
+          <Button variant="outline" onClick={closeJobForm}>Cancel</Button>
+          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSaveJob} disabled={saving}>
+            {saving && <RefreshCw className="size-4 mr-1 animate-spin" />}
+            {isEditing ? 'Update Job' : 'Create Job'}
+          </Button>
+        </div>
+
+        {/* ─── Create-customer dialog (opened from the picker) ──── */}
+        <CreateCustomerDialog
+          open={showCreateCustomerDialog}
+          onOpenChange={setShowCreateCustomerDialog}
+          prefillName={createCustomerPrefill.name}
+          prefillPhone={createCustomerPrefill.phone}
+          prefillEmail={createCustomerPrefill.email}
+          onCreated={addCustomerToList}
+        />
+      </div>
+    );
+  };
+
+  // ============================================================
+  // Render: Job Detail Page (Jobber-style full page)
+  // ============================================================
+  const renderJobDetailPage = () => {
+    if (!selectedJob) return null;
+    const job = selectedJob;
+    const lineItems = parseLineItems(job.lineItemsJson);
+    const customFields = parseCustomFields(job.customFieldsJson);
+    const attachments = parseAttachments(job.attachmentsJson);
+    const linkedChecklists = parseStringArray(job.linkedChecklistsJson);
+    const totalPrice = lineItemsSubtotal(lineItems) || (job.quotedAmount || 0);
+    const totalCost = lineItems.reduce((sum, it) => sum + (Number(it.unitCost) || 0) * (Number(it.quantity) || 0), 0);
+    const profit = totalPrice - totalCost;
+    const profitPct = totalPrice > 0 ? (profit / totalPrice) * 100 : 0;
+    const isClosed = job.status === 'completed' || job.status === 'cancelled';
+    const logs = parseNotificationLog(job.notificationLogJson);
+
+    const detailRows: { label: string; value: React.ReactNode }[] = [
+      { label: 'Job #', value: <span className="font-mono">{job.jobNumber || '--'}</span> },
+      { label: 'Job type', value: <span className="capitalize">{job.type === 'one-off' ? 'One-off job' : job.type === 'recurring' ? 'Recurring job' : (job.type || 'One-off job')}</span> },
+      { label: 'Status', value: (
+        <span className="inline-flex items-center gap-1.5">
+          <span className={cn('size-2 rounded-full', {
+            'bg-amber-400': job.status === 'pending',
+            'bg-blue-400': job.status === 'assigned',
+            'bg-emerald-500': job.status === 'in_progress',
+            'bg-green-600': job.status === 'completed',
+            'bg-red-500': job.status === 'cancelled',
+          })} />
+          <span className="capitalize">{job.status.replace('_', ' ')}</span>
+        </span>
+      ) },
+      { label: 'Priority', value: <span className="capitalize">{job.priority}</span> },
+      ...(job.scheduledAt ? [{ label: 'Start date', value: <span>{formatDate(job.scheduledAt)}{job.scheduledTime ? ` · ${job.scheduledTime}` : ''}</span> }] : []),
+      ...(job.actualEndTime ? [{ label: 'End date', value: <span>{formatDate(job.actualEndTime)}</span> }] : []),
+      ...(job.estimatedDuration ? [{ label: 'Est. duration', value: <span>{job.estimatedDuration} min</span> }] : []),
+      { label: 'Created', value: <span>{formatDate(job.createdAt)}</span> },
+    ];
+
+    return (
+      <div className="w-full space-y-6">
+        {/* ─── Sticky page header (Back + title + actions) ────────── */}
+        <div className="form-page-header -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 mb-2">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={closeJobDetail}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0"
+              >
+                <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
+                <span className="hidden sm:inline">Back</span>
+              </button>
+              <Separator orientation="vertical" className="h-8 bg-border/60 hidden sm:block" />
+              <div className="flex items-center justify-center size-9 rounded-lg shrink-0 shadow-sm bg-amber-600">
+                <Briefcase className="size-5 text-white" strokeWidth={2.2} />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground leading-tight truncate">{job.title}</h2>
+                  <button title="Edit job" onClick={() => openEditJob(job)} className="text-muted-foreground hover:text-emerald-600 transition-colors shrink-0">
+                    <Pencil className="size-4" />
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground line-clamp-1">
+                  {job.jobNumber && <span className="font-mono">#{job.jobNumber}</span>}
+                  {job.jobNumber && job.customerName && ' · '}
+                  {job.customerName && <span>{job.customerName}</span>}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Status-aware lifecycle action (primary) */}
+              {job.status === 'pending' && (
+                <button onClick={() => openAssignDialog(job)} className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm">
+                  <User className="size-4 mr-1.5" /> Assign
+                </button>
+              )}
+              {job.status === 'assigned' && (
+                <button onClick={() => handleLifecycleAction('start', job.id)} disabled={lifecycleLoading} className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm">
+                  {lifecycleLoading && loadingAction === 'start' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Play className="size-4 mr-1.5" />} Start Job
+                </button>
+              )}
+              {job.status === 'in_progress' && (
+                <button onClick={() => handleLifecycleAction('complete', job.id)} disabled={lifecycleLoading} className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 transition-colors shadow-sm">
+                  {lifecycleLoading && loadingAction === 'complete' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <CheckCircle2 className="size-4 mr-1.5" />} Complete
+                </button>
+              )}
+              {isClosed && (
+                <button onClick={async () => {
+                  await fetch(`/api/jobs/${job.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: job.id, status: 'pending' }) });
+                  toast.success('Job reopened'); fetchJobs();
+                  const r = await fetch(`/api/jobs/lifecycle?jobId=${job.id}`); if (r.ok) setSelectedJob(await r.json());
+                }} className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm">
+                  Reopen Job
+                </button>
+              )}
+              <button onClick={() => openEditJob(job)} className="inline-flex items-center justify-center h-9 px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors">
+                <Pencil className="size-4 mr-1.5" /> Edit
+              </button>
+              <button title="More actions" className="inline-flex items-center justify-center size-9 rounded-lg text-foreground border border-border bg-background hover:bg-muted transition-colors">
+                <MoreHorizontal className="size-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ─── Two-column layout ─────────────────────────────────── */}
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6 items-start">
+          {/* ── Left column: main job details ── */}
+          <div className="space-y-6 min-w-0">
+            {/* Client card */}
+            <FormSectionCard icon={User} title="Client">
+              <div className="space-y-2">
+                <p className="text-base font-semibold text-foreground">{job.customerName || 'No client linked'}</p>
+                {job.customerPhone && (
+                  <a href={`tel:${job.customerPhone}`} className="flex items-center gap-2 text-sm text-emerald-700 hover:underline">
+                    <Phone className="size-4" /> {job.customerPhone}
+                  </a>
+                )}
+                {job.customerEmail && (
+                  <a href={`mailto:${job.customerEmail}`} className="flex items-center gap-2 text-sm text-emerald-700 hover:underline">
+                    <Mail className="size-4" /> {job.customerEmail}
+                  </a>
+                )}
+                {job.address && (
+                  <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                    <MapPin className="size-4 mt-0.5 shrink-0" /> <span>{job.address}</span>
+                  </div>
+                )}
+                {!job.customerPhone && !job.customerEmail && !job.address && (
+                  <p className="text-sm text-muted-foreground italic">No contact details on file.</p>
+                )}
+              </div>
+            </FormSectionCard>
+
+            {/* Job details card */}
+            <FormSectionCard icon={Info} title="Job details">
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                {detailRows.map((row, i) => (
+                  <div key={i} className="flex items-start justify-between gap-3 border-b border-border/40 pb-2 last:border-0">
+                    <dt className="text-sm text-muted-foreground shrink-0">{row.label}</dt>
+                    <dd className="text-sm font-medium text-foreground text-right min-w-0 break-words">{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </FormSectionCard>
+
+            {/* #job custom fields (only if any) */}
+            {customFields.length > 0 && (
+              <FormSectionCard icon={Tag} title="#job">
+                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                  {customFields.map((f) => (
+                    <div key={f.id} className="flex items-start justify-between gap-3 border-b border-border/40 pb-2 last:border-0">
+                      <dt className="text-sm text-muted-foreground shrink-0">{f.label || '—'}</dt>
+                      <dd className="text-sm font-medium text-foreground text-right min-w-0 break-words">{f.value || '—'}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </FormSectionCard>
+            )}
+
+            {/* Product / Service (line items) */}
+            <FormSectionCard
+              icon={Briefcase}
+              title="Product / Service"
+              action={<button onClick={() => openEditJob(job)} className="text-muted-foreground hover:text-emerald-600 transition-colors"><Pencil className="size-4" /></button>}
+            >
+              {lineItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground italic">No line items added to this job.</p>
+              ) : (
+                <div className="overflow-x-auto -mx-2">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-muted-foreground border-b border-border/60">
+                        <th className="px-2 py-2 font-medium">Line Item</th>
+                        <th className="px-2 py-2 font-medium text-center">Qty</th>
+                        <th className="px-2 py-2 font-medium text-right">Unit Cost</th>
+                        <th className="px-2 py-2 font-medium text-right">Unit Price</th>
+                        <th className="px-2 py-2 font-medium text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lineItems.map((it, i) => (
+                        <tr key={i} className="border-b border-border/40 last:border-0">
+                          <td className="px-2 py-2.5 font-medium text-foreground">{it.name || 'Custom item'}{it.description && <span className="block text-xs text-muted-foreground font-normal">{it.description}</span>}</td>
+                          <td className="px-2 py-2.5 text-center text-muted-foreground">{it.quantity || 1}</td>
+                          <td className="px-2 py-2.5 text-right text-muted-foreground">{symbol}{(Number(it.unitCost) || 0).toFixed(2)}</td>
+                          <td className="px-2 py-2.5 text-right text-muted-foreground">{symbol}{(Number(it.unitPrice) || 0).toFixed(2)}</td>
+                          <td className="px-2 py-2.5 text-right font-semibold text-foreground">{symbol}{((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1)).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-border/60">
+                        <td colSpan={3} />
+                        <td className="px-2 py-2 text-right text-sm text-muted-foreground">Total cost</td>
+                        <td className="px-2 py-2 text-right text-sm text-muted-foreground">{symbol}{totalCost.toFixed(2)}</td>
+                      </tr>
+                      <tr>
+                        <td colSpan={3} />
+                        <td className="px-2 py-1 text-right text-sm font-semibold text-foreground">Total price</td>
+                        <td className="px-2 py-1 text-right text-base font-bold text-foreground">{symbol}{totalPrice.toFixed(2)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </FormSectionCard>
+
+            {/* Scheduled visits (timeline) */}
+            <FormSectionCard icon={CalendarDays} title="Scheduled visits">
+              {job.scheduledAt ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 rounded-md border border-border/60 bg-muted/20 px-3 py-2.5">
+                    <CalendarDays className="size-4 text-emerald-600 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground">{formatDate(job.scheduledAt)}{job.scheduledTime ? ` · ${job.scheduledTime}` : ''}</p>
+                      <p className="text-xs text-muted-foreground">First visit</p>
+                    </div>
+                  </div>
+                  {job.assigneeName && (
+                    <div className="flex items-center gap-3 rounded-md border border-border/60 bg-muted/20 px-3 py-2.5">
+                      <div className="size-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-medium shrink-0">{job.assigneeName[0]}</div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground">{job.assigneeName}</p>
+                        <p className="text-xs text-muted-foreground">Assigned{job.assigneePhone ? ` · ${job.assigneePhone}` : ''}</p>
+                      </div>
+                    </div>
+                  )}
+                  {job.visitInstructions && (
+                    <div className="rounded-md bg-muted/30 px-3 py-2.5">
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Visit instructions</p>
+                      <p className="text-sm text-foreground whitespace-pre-wrap">{job.visitInstructions}</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <CalendarDays className="size-4" />
+                  <span>No visits have been scheduled for this job.</span>
+                </div>
+              )}
+            </FormSectionCard>
+
+            {/* Billing */}
+            <FormSectionCard icon={FileText} title="Billing">
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">Reminders · When the job is marked closed</p>
+                <div className="rounded-md border border-border/60 px-3 py-2.5 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground">Invoice {job.jobNumber ? `#${job.jobNumber}` : ''}</p>
+                    <p className="text-xs text-muted-foreground">{job.status === 'completed' ? 'Paid' : 'Pending'} · {symbol}{totalPrice.toFixed(2)}</p>
+                  </div>
+                  <Badge variant="outline" className={cn('shrink-0', job.status === 'completed' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200')}>
+                    {job.status === 'completed' ? 'Paid' : 'Pending'}
+                  </Badge>
+                </div>
+                <button className="text-sm font-medium text-emerald-700 hover:text-emerald-800 inline-flex items-center gap-1">
+                  <Plus className="size-3.5" /> Create Invoice
+                </button>
+              </div>
+            </FormSectionCard>
+
+            {/* Attachments (only if any) */}
+            {attachments.length > 0 && (
+              <FormSectionCard icon={Paperclip} title="Attached files & photos">
+                <div className="space-y-1.5">
+                  {attachments.map((att, idx) => {
+                    const isImage = att.type?.startsWith('image/');
+                    return (
+                      <div key={idx} className="flex items-center gap-3 rounded-md border border-border/60 bg-background px-3 py-2">
+                        {isImage ? (
+                          <img src={att.url} alt={att.name} className="size-8 rounded object-cover shrink-0" />
+                        ) : (
+                          <div className="size-8 rounded bg-muted flex items-center justify-center shrink-0"><FileIcon className="size-4 text-muted-foreground" /></div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">{att.name}</p>
+                          {att.size ? <p className="text-xs text-muted-foreground">{formatFileSize(att.size)}</p> : null}
+                        </div>
+                        <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-700 hover:underline shrink-0">View</a>
+                      </div>
+                    );
+                  })}
+                </div>
+              </FormSectionCard>
+            )}
+
+            {/* Linked checklists (only if any) */}
+            {linkedChecklists.length > 0 && (
+              <FormSectionCard icon={ClipboardList} title="Checklists">
+                <div className="flex flex-wrap gap-1.5">
+                  {linkedChecklists.map((cid) => (
+                    <Badge key={cid} variant="secondary" className="bg-emerald-50 text-emerald-800 border-emerald-200 gap-1">
+                      <ClipboardList className="size-3" /> {checklists.find((c) => c.id === cid)?.title || 'Checklist'}
+                    </Badge>
+                  ))}
+                </div>
+              </FormSectionCard>
+            )}
+
+            {/* Notes */}
+            <FormSectionCard icon={StickyNote} title="Notes">
+              <div className="space-y-2">
+                {(job.notes || job.description) && (
+                  <div className="rounded-md bg-muted/30 px-3 py-2.5">
+                    <p className="text-xs text-muted-foreground mb-0.5">{formatDateTime(job.createdAt)}</p>
+                    <p className="text-sm text-foreground whitespace-pre-wrap">{job.notes || job.description}</p>
+                  </div>
+                )}
+                {logs.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground pt-2">Activity log</p>
+                    {logs.map((log: Record<string, unknown>, i: number) => (
+                      <div key={i} className="flex items-center gap-2 text-xs p-2 rounded bg-muted/40">
+                        <Zap className="size-3 text-yellow-500 shrink-0" />
+                        <span className="font-medium">{String(log.action)}</span>
+                        {Boolean(log.resourceName) && <span className="text-muted-foreground">to {String(log.resourceName)}</span>}
+                        {Boolean(log.timestamp) && <span className="text-muted-foreground ml-auto">{new Date(String(log.timestamp)).toLocaleString()}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {!job.notes && !job.description && logs.length === 0 && (
+                  <p className="text-sm text-muted-foreground italic">No notes yet.</p>
+                )}
+              </div>
+            </FormSectionCard>
+
+            {/* Danger actions */}
+            {!['completed', 'cancelled'].includes(job.status) && (
+              <div className="flex flex-wrap gap-2 pt-2">
+                <button onClick={() => handleCancelJob(job.id)} disabled={cancellingJobId === job.id} className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-medium text-red-600 border border-red-200 bg-background hover:bg-red-50 disabled:opacity-60 transition-colors">
+                  {cancellingJobId === job.id ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <XCircle className="size-4 mr-1.5" />} Cancel Job
+                </button>
+                <button onClick={() => setDeletingJob(job)} className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-medium text-red-600 border border-red-200 bg-background hover:bg-red-50 transition-colors">
+                  <Trash2 className="size-4 mr-1.5" /> Delete
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* ── Right column: sidebar ── */}
+          <div className="space-y-6 xl:sticky xl:top-4">
+            {/* Profit margin */}
+            <FormSectionCard icon={TrendingUp} title="Profit margin">
+              <div className="space-y-2">
+                <p className="text-3xl font-bold text-foreground">{profitPct.toFixed(1)}%</p>
+                <div className="space-y-1 text-sm pt-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Revenue</span>
+                    <span className="font-medium text-foreground">{symbol}{totalPrice.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Line Item Cost</span>
+                    <span className="text-muted-foreground">({symbol}{totalCost.toFixed(2)})</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Labor</span>
+                    <span className="text-muted-foreground">({symbol}0.00)</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Expenses</span>
+                    <span className="text-muted-foreground">({symbol}0.00)</span>
+                  </div>
+                  <Separator className="my-2 bg-border/60" />
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-foreground">Profit</span>
+                    <span className="font-semibold text-foreground">{profitPct.toFixed(1)}% · {symbol}{profit.toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+            </FormSectionCard>
+
+            {/* Quick actions */}
+            <FormSectionCard icon={Briefcase} title="Actions">
+              <div className="grid grid-cols-1 gap-2">
+                <button onClick={() => openEditJob(job)} className="inline-flex items-center justify-start gap-2 h-9 px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors">
+                  <Pencil className="size-4" /> Edit job
+                </button>
+                <button className="inline-flex items-center justify-start gap-2 h-9 px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors">
+                  <Printer className="size-4" /> Print / PDF
+                </button>
+                <button className="inline-flex items-center justify-start gap-2 h-9 px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors">
+                  <Send className="size-4" /> Email client
+                </button>
+              </div>
+            </FormSectionCard>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================================
+  // Main Render
+  // ============================================================
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {/* ─── Header ──────────────────────────────────────────────────────── */}
+    <div className="space-y-6 w-full">
+      {/* ─── Checklist builder takes over when creating/editing a checklist ── */}
+      {formMode === 'checklist' ? (
+        <ChecklistBuilder
+          initial={editingChecklist}
+          onCancel={handleChecklistCancel}
+          onSaved={handleChecklistSaved}
+        />
+      ) : formMode === 'form' ? (
+        renderJobFormPage()
+      ) : formMode === 'detail' ? (
+        renderJobDetailPage()
+      ) : (
+        <>
+      {/* ─── Header ─────────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
           <div className="flex items-center justify-center size-10 rounded-lg bg-amber-600">
@@ -664,15 +1984,17 @@ export function JobsView() {
             <p className="text-sm text-muted-foreground">Manage and track all service jobs</p>
           </div>
         </div>
-        <Button
-          className="bg-emerald-600 hover:bg-emerald-700"
-          onClick={() => setShowCreateJob(true)}
-        >
-          <Plus className="size-4 mr-1.5" /> Create Job
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => openChecklistBuilder()}>
+            <ClipboardList className="size-4 mr-1.5" /> New Checklist
+          </Button>
+          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={openAddJob}>
+            <Plus className="size-4 mr-1.5" /> Create Job
+          </Button>
+        </div>
       </div>
 
-      {/* ─── Stats ───────────────────────────────────────────────────────── */}
+      {/* ─── Stats ───────────────────────────────────────────────── */}
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
         {[
           { label: 'Total', value: stats.total, color: 'text-foreground', icon: Briefcase },
@@ -697,7 +2019,7 @@ export function JobsView() {
         })}
       </div>
 
-      {/* ─── Status Filter Tabs + Search ─────────────────────────────────── */}
+      {/* ─── Status Filter Tabs + Search ─────────────────────────── */}
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">
           <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-auto">
@@ -723,22 +2045,8 @@ export function JobsView() {
             />
           </div>
           <div className="flex gap-1 border rounded-md p-0.5">
-            <Button
-              size="sm"
-              variant={viewMode === 'cards' ? 'default' : 'ghost'}
-              className="h-7 text-xs px-2"
-              onClick={() => setViewMode('cards')}
-            >
-              Cards
-            </Button>
-            <Button
-              size="sm"
-              variant={viewMode === 'table' ? 'default' : 'ghost'}
-              className="h-7 text-xs px-2"
-              onClick={() => setViewMode('table')}
-            >
-              Table
-            </Button>
+            <Button size="sm" variant={viewMode === 'cards' ? 'default' : 'ghost'} className="h-7 text-xs px-2" onClick={() => setViewMode('cards')}>Cards</Button>
+            <Button size="sm" variant={viewMode === 'table' ? 'default' : 'ghost'} className="h-7 text-xs px-2" onClick={() => setViewMode('table')}>Table</Button>
           </div>
           <Button variant="outline" size="sm" onClick={() => fetchJobs()}>
             <RefreshCw className="size-3.5 mr-1" /> Refresh
@@ -746,7 +2054,7 @@ export function JobsView() {
         </div>
       </div>
 
-      {/* ─── Jobs Content ────────────────────────────────────────────────── */}
+      {/* ─── Jobs Content ────────────────────────────────────────── */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -767,7 +2075,7 @@ export function JobsView() {
           <p className="text-sm">Create a new job or adjust your filters</p>
         </div>
       ) : viewMode === 'cards' ? (
-        /* ─── Card View ────────────────────────────────────────────────── */
+        /* ─── Card View ────────────────────────────────────────────── */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {jobs.map((job) => (
             <Card
@@ -784,95 +2092,52 @@ export function JobsView() {
               onClick={() => openJobDetail(job)}
             >
               <CardContent className="p-4 space-y-3">
-                {/* Title + Status */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] text-muted-foreground font-mono">
-                        {job.jobNumber || job.id.slice(0, 8).toUpperCase()}
-                      </span>
+                      <span className="text-[10px] text-muted-foreground font-mono">{job.jobNumber || job.id.slice(0, 8).toUpperCase()}</span>
                     </div>
                     <h4 className="font-semibold text-sm leading-tight truncate">{job.title}</h4>
                   </div>
                   <Badge variant="outline" className={`${getStatusColor(job.status)} shrink-0 text-[10px]`}>
-                    <span className="mr-1">{getStatusIcon(job.status)}</span>
-                    {job.status.replace('_', ' ')}
+                    <span className="mr-1">{getStatusIcon(job.status)}</span>{job.status.replace('_', ' ')}
                   </Badge>
                 </div>
-
-                {/* Customer */}
                 {job.customerName && (
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <User className="size-3 shrink-0" />
-                    <span className="truncate">{job.customerName}</span>
+                    <User className="size-3 shrink-0" /><span className="truncate">{job.customerName}</span>
                   </div>
                 )}
-
-                {/* Service Type */}
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant="secondary" className="text-[10px] h-5">
-                    {getJobTypeLabel(job.type)}
-                  </Badge>
-                  <Badge variant="outline" className={`${getPriorityColor(job.priority)} text-[10px] h-5`}>
-                    {job.priority}
-                  </Badge>
+                  <Badge variant="secondary" className="text-[10px] h-5">{getJobTypeLabel(job.type)}</Badge>
+                  <Badge variant="outline" className={`${getPriorityColor(job.priority)} text-[10px] h-5`}>{job.priority}</Badge>
                 </div>
-
-                {/* Address */}
                 {job.address && (
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <MapPin className="size-3 shrink-0" />
-                    <span className="truncate">{job.address}</span>
+                    <MapPin className="size-3 shrink-0" /><span className="truncate">{job.address}</span>
                   </div>
                 )}
-
-                {/* Route */}
-                {(job.pickup || job.dropoff) && (
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <MapPin className="size-3 shrink-0" />
-                    <span className="truncate max-w-[80px]">{job.pickup}</span>
-                    <ArrowRight className="size-3 shrink-0" />
-                    <span className="truncate max-w-[80px]">{job.dropoff}</span>
-                  </div>
-                )}
-
-                {/* Schedule */}
                 {job.scheduledAt && (
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Calendar className="size-3 shrink-0" />
-                    <span>{formatDate(job.scheduledAt)}</span>
+                    <Calendar className="size-3 shrink-0" /><span>{formatDate(job.scheduledAt)}</span>
                     {job.scheduledTime && <span className="ml-1">{job.scheduledTime}</span>}
                   </div>
                 )}
-
-                {/* Assignee */}
                 {job.assigneeName ? (
                   <div className="flex items-center gap-2 pt-1 border-t">
-                    <Avatar className="size-6">
-                      <AvatarFallback className="bg-emerald-100 text-emerald-700 text-[10px]">
-                        {job.assigneeName[0]}
-                      </AvatarFallback>
-                    </Avatar>
+                    <Avatar className="size-6"><AvatarFallback className="bg-emerald-100 text-emerald-700 text-[10px]">{job.assigneeName[0]}</AvatarFallback></Avatar>
                     <span className="text-xs text-muted-foreground">{job.assigneeName}</span>
                   </div>
                 ) : (
-                  <div className="pt-1 border-t">
-                    <span className="text-xs text-amber-600 flex items-center gap-1">
-                      <AlertCircle className="size-3" /> Unassigned
-                    </span>
-                  </div>
+                  <div className="pt-1 border-t"><span className="text-xs text-amber-600 flex items-center gap-1"><AlertCircle className="size-3" /> Unassigned</span></div>
                 )}
-
-                {/* Actions */}
-                <div className="pt-1 border-t">
-                  {getActionButtons(job)}
-                </div>
+                <div className="pt-1 border-t">{getActionButtons(job)}</div>
               </CardContent>
             </Card>
           ))}
         </div>
       ) : (
-        /* ─── Table View ───────────────────────────────────────────────── */
+        /* ─── Table View ───────────────────────────────────────────── */
         <Card>
           <ScrollArea className="max-h-[600px]">
             <Table>
@@ -891,39 +2156,19 @@ export function JobsView() {
               </TableHeader>
               <TableBody>
                 {jobs.map((job) => (
-                  <TableRow
-                    key={job.id}
-                    className="cursor-pointer"
-                    onClick={() => openJobDetail(job)}
-                  >
-                    <TableCell className="font-mono text-xs">
-                      {job.jobNumber || job.id.slice(0, 8).toUpperCase()}
-                    </TableCell>
+                  <TableRow key={job.id} className="cursor-pointer" onClick={() => openJobDetail(job)}>
+                    <TableCell className="font-mono text-xs">{job.jobNumber || job.id.slice(0, 8).toUpperCase()}</TableCell>
                     <TableCell className="font-medium text-sm">{job.title}</TableCell>
                     <TableCell className="text-sm">{job.customerName || '--'}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className="text-[10px]">
-                        {getJobTypeLabel(job.type)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate">
-                      {job.address || job.pickup || '--'}
-                    </TableCell>
+                    <TableCell><Badge variant="secondary" className="text-[10px]">{getJobTypeLabel(job.type)}</Badge></TableCell>
+                    <TableCell className="text-xs text-muted-foreground max-w-[150px] truncate">{job.address || job.pickup || '--'}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {job.scheduledAt ? formatDate(job.scheduledAt) : '--'}
                       {job.scheduledTime && <div>{job.scheduledTime}</div>}
                     </TableCell>
-                    <TableCell className="text-sm">
-                      {job.assigneeName || <span className="text-amber-600 text-xs">Unassigned</span>}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={`${getStatusColor(job.status)} text-[10px]`}>
-                        {job.status.replace('_', ' ')}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                      {getActionButtons(job)}
-                    </TableCell>
+                    <TableCell className="text-sm">{job.assigneeName || <span className="text-amber-600 text-xs">Unassigned</span>}</TableCell>
+                    <TableCell><Badge variant="outline" className={`${getStatusColor(job.status)} text-[10px]`}>{job.status.replace('_', ' ')}</Badge></TableCell>
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>{getActionButtons(job)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -931,260 +2176,34 @@ export function JobsView() {
           </ScrollArea>
         </Card>
       )}
-
-      {/* ─── Create Job Dialog ─────────────────────────────────────────── */}
-      <Dialog open={showCreateJob} onOpenChange={setShowCreateJob}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Create New Job</DialogTitle>
-            <DialogDescription>Schedule a new service job</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            {/* Service Catalog dropdown — auto-fills title + duration */}
-            <div className="space-y-2">
-              <Label>
-                Service{' '}
-                <span className="text-xs font-normal text-muted-foreground">
-                  (from catalog — optional)
-                </span>
-              </Label>
-              <Select
-                value={jobForm.serviceId || '_none'}
-                onValueChange={(v) => {
-                  const id = v === '_none' ? '' : v;
-                  const svc = services.find((s) => s.id === id);
-                  setJobForm((prev) => ({
-                    ...prev,
-                    serviceId: id,
-                    // Auto-fill title only if empty or matches a known service name.
-                    title:
-                      !prev.title.trim() || services.some((s) => s.name === prev.title)
-                        ? svc?.name ?? prev.title
-                        : prev.title,
-                    // Auto-fill duration from catalog (in minutes).
-                    estimatedDuration: svc ? String(svc.duration) : prev.estimatedDuration,
-                    // Auto-fill quoted amount from the service's base price,
-                    // but only if the user hasn't manually entered one yet.
-                    quotedAmount:
-                      svc && svc.basePrice > 0
-                        ? String(svc.basePrice)
-                        : prev.quotedAmount,
-                  }));
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={
-                      services.length === 0
-                        ? 'No services in catalog'
-                        : 'Select a service to auto-fill details'
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">— No service —</SelectItem>
-                  {services.map((svc) => (
-                    <SelectItem key={svc.id} value={svc.id}>
-                      {svc.name}
-                      <span className="text-xs text-muted-foreground ml-1">
-                        · {svc.category} · {svc.duration}m · ${svc.basePrice.toFixed(2)}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Title *</Label>
-              <Input
-                placeholder="e.g., AC Repair at Customer Site"
-                value={jobForm.title}
-                onChange={(e) => setJobForm({ ...jobForm, title: e.target.value })}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Customer Name</Label>
-                <Input
-                  placeholder="Customer name"
-                  value={jobForm.customerName}
-                  onChange={(e) => setJobForm({ ...jobForm, customerName: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Customer Phone</Label>
-                <Input
-                  placeholder="+1 555 123 4567"
-                  value={jobForm.customerPhone}
-                  onChange={(e) => setJobForm({ ...jobForm, customerPhone: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Customer Email</Label>
-              <Input
-                type="email"
-                placeholder="customer@example.com"
-                value={jobForm.customerEmail}
-                onChange={(e) => setJobForm({ ...jobForm, customerEmail: e.target.value })}
-              />
-            </div>
-
-            {/* Priority (full-width — Service Type dropdown hidden; jobForm.type
-                stays at its default 'service' which is what the API expects for
-                a catalog-driven job. The catalog Service dropdown above is the
-                source of truth for what kind of job this is.) */}
-            <div className="space-y-2">
-              <Label>Priority</Label>
-              <Select value={jobForm.priority} onValueChange={(v) => setJobForm({ ...jobForm, priority: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="urgent">Urgent</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Address</Label>
-              <Input
-                placeholder="Service location address"
-                value={jobForm.address}
-                onChange={(e) => setJobForm({ ...jobForm, address: e.target.value })}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <div className="space-y-2">
-                <Label>Scheduled Date</Label>
-                <Input
-                  type="date"
-                  value={jobForm.scheduledDate}
-                  onChange={(e) => setJobForm({ ...jobForm, scheduledDate: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Scheduled Time</Label>
-                <Input
-                  type="time"
-                  value={jobForm.scheduledTime}
-                  onChange={(e) => setJobForm({ ...jobForm, scheduledTime: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>
-                  Est. Duration{' '}
-                  <span className="text-xs font-normal text-muted-foreground">(min)</span>
-                </Label>
-                <Input
-                  type="number"
-                  min="5"
-                  placeholder="60"
-                  value={jobForm.estimatedDuration}
-                  onChange={(e) =>
-                    setJobForm({ ...jobForm, estimatedDuration: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>
-                  Quoted Amount{' '}
-                  <span className="text-xs font-normal text-muted-foreground">
-                    (used by auto-invoice)
-                  </span>
-                </Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={jobForm.quotedAmount}
-                  onChange={(e) =>
-                    setJobForm({ ...jobForm, quotedAmount: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Assignee</Label>
-              <Select value={jobForm.assigneeId} onValueChange={(v) => setJobForm({ ...jobForm, assigneeId: v })}>
-                <SelectTrigger><SelectValue placeholder="Select employee (optional)" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No assignee</SelectItem>
-                  {employees.filter(e => e.status === 'available').map((emp) => (
-                    <SelectItem key={emp.id} value={emp.id}>
-                      {emp.name} - {emp.role} ({emp.rating.toFixed(1)} rating)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Notes</Label>
-              <Textarea
-                placeholder="Additional notes or instructions"
-                value={jobForm.notes}
-                onChange={(e) => setJobForm({ ...jobForm, notes: e.target.value })}
-                rows={3}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateJob(false)}>Cancel</Button>
-            <Button
-              className="bg-emerald-600 hover:bg-emerald-700"
-              onClick={handleCreateJob}
-              disabled={!jobForm.title || creatingJob}
-            >
-              {creatingJob && <Loader2 className="size-4 mr-1.5 animate-spin" />}
-              {creatingJob ? 'Creating...' : 'Create Job'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </>
+      )}
 
       {/* ─── Assign Employee Dialog ────────────────────────────────────── */}
       <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
         <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Assign Employee</DialogTitle>
-            <DialogDescription>
-              {assigningJob ? `Select an employee for: ${assigningJob.title}` : 'Select an employee'}
-            </DialogDescription>
+            <DialogDescription>{assigningJob ? `Select an employee for: ${assigningJob.title}` : 'Select an employee'}</DialogDescription>
           </DialogHeader>
           {assigningJob && (
             <div className="space-y-4 overflow-y-auto flex-1 min-h-0">
               <div className="p-3 rounded-lg bg-muted/50 space-y-1">
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-sm">{assigningJob.title}</span>
-                  <Badge variant="outline" className={getStatusColor(assigningJob.status)}>
-                    {assigningJob.status.replace('_', ' ')}
-                  </Badge>
+                  <Badge variant="outline" className={getStatusColor(assigningJob.status)}>{assigningJob.status.replace('_', ' ')}</Badge>
                 </div>
-                {assigningJob.address && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <MapPin className="size-3" /> {assigningJob.address}
-                  </p>
-                )}
+                {assigningJob.address && <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="size-3" /> {assigningJob.address}</p>}
               </div>
               <Separator />
               <div>
                 <p className="text-sm font-medium mb-2">Available Employees</p>
-                {employees.filter(e => e.status === 'available').length === 0 ? (
-                  <div className="text-center py-6 text-muted-foreground text-sm">
-                    No available employees
-                  </div>
+                {employees.filter((e) => e.status === 'available').length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground text-sm">No available employees</div>
                 ) : (
                   <ScrollArea className="max-h-[50vh]">
                     <div className="space-y-2">
-                      {employees.filter(e => e.status === 'available').map((emp) => {
+                      {employees.filter((e) => e.status === 'available').map((emp) => {
                         let skills: string[] = [];
                         try { skills = JSON.parse(emp.skills || '[]'); } catch { /* empty */ }
                         return (
@@ -1195,31 +2214,20 @@ export function JobsView() {
                             disabled={lifecycleLoading}
                           >
                             <Avatar className="size-9 shrink-0">
-                              <AvatarFallback className="bg-emerald-100 text-emerald-700 text-sm font-medium">
-                                {emp.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                              </AvatarFallback>
+                              <AvatarFallback className="bg-emerald-100 text-emerald-700 text-sm font-medium">{emp.name.split(' ').map((n) => n[0]).join('').slice(0, 2)}</AvatarFallback>
                             </Avatar>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className="font-medium text-sm">{emp.name}</span>
                                 <Badge variant="outline" className="text-[10px] h-4">{emp.role}</Badge>
                               </div>
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <Phone className="size-3" /> {emp.phone}
-                              </div>
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground"><Phone className="size-3" /> {emp.phone}</div>
                               {skills.length > 0 && (
-                                <div className="flex gap-1 mt-1">
-                                  {skills.slice(0, 3).map((s, i) => (
-                                    <Badge key={i} variant="secondary" className="text-[9px] h-4">{s}</Badge>
-                                  ))}
-                                </div>
+                                <div className="flex gap-1 mt-1">{skills.slice(0, 3).map((s, i) => (<Badge key={i} variant="secondary" className="text-[9px] h-4">{s}</Badge>))}</div>
                               )}
                             </div>
                             <div className="text-right shrink-0">
-                              <div className="flex items-center gap-0.5 text-xs">
-                                <span className="text-yellow-500">★</span>
-                                <span>{emp.rating.toFixed(1)}</span>
-                              </div>
+                              <div className="flex items-center gap-0.5 text-xs"><span className="text-yellow-500">★</span><span>{emp.rating.toFixed(1)}</span></div>
                               <span className="text-[10px] text-muted-foreground">{emp.completedJobs} jobs</span>
                             </div>
                           </button>
@@ -1234,461 +2242,23 @@ export function JobsView() {
         </DialogContent>
       </Dialog>
 
-      {/* ─── Job Detail Dialog ─────────────────────────────────────────── */}
-      <Dialog open={showJobDetail} onOpenChange={setShowJobDetail}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              Job Details
-              {selectedJob && (
-                <Badge variant="outline" className={getStatusColor(selectedJob.status)}>
-                  {getStatusIcon(selectedJob.status)}
-                  <span className="ml-1">{selectedJob.status.replace('_', ' ')}</span>
-                </Badge>
-              )}
-            </DialogTitle>
-            <DialogDescription>
-              {selectedJob?.jobNumber && (
-                <span className="font-mono">{selectedJob.jobNumber}</span>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          {selectedJob && (
-            <div className="space-y-5">
-              {/* Title & Priority */}
-              <div>
-                <h3 className="font-semibold text-lg">{selectedJob.title}</h3>
-                <div className="flex items-center gap-2 mt-1">
-                  <Badge variant="outline" className={getPriorityColor(selectedJob.priority)}>
-                    {selectedJob.priority} priority
-                  </Badge>
-                  <Badge variant="secondary" className="text-xs">
-                    {getJobTypeLabel(selectedJob.type)}
-                  </Badge>
-                </div>
-              </div>
+      {/* ─── Job Detail is now a full page (renderJobDetailPage) ─────── */}
 
-              <Separator />
-
-              {/* Info Grid */}
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                {selectedJob.customerName && (
-                  <div className="flex items-center gap-2">
-                    <User className="size-4 text-muted-foreground shrink-0" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Customer</p>
-                      <p className="font-medium">{selectedJob.customerName}</p>
-                      {selectedJob.customerPhone && (
-                        <p className="text-xs text-muted-foreground">{selectedJob.customerPhone}</p>
-                      )}
-                      {selectedJob.customerEmail && (
-                        <p className="text-xs text-muted-foreground">{selectedJob.customerEmail}</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-                {selectedJob.assigneeName && (
-                  <div className="flex items-center gap-2">
-                    <div className="size-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-medium shrink-0">
-                      {selectedJob.assigneeName[0]}
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Assignee</p>
-                      <p className="font-medium">{selectedJob.assigneeName}</p>
-                      {selectedJob.assigneePhone && (
-                        <p className="text-xs text-muted-foreground">{selectedJob.assigneePhone}</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-                {selectedJob.address && (
-                  <div className="flex items-start gap-2 col-span-2">
-                    <MapPin className="size-4 text-muted-foreground shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Address</p>
-                      <p>{selectedJob.address}</p>
-                    </div>
-                  </div>
-                )}
-                {selectedJob.scheduledAt && (
-                  <div className="flex items-center gap-2">
-                    <Calendar className="size-4 text-muted-foreground shrink-0" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Scheduled</p>
-                      <p>{formatDate(selectedJob.scheduledAt)}{selectedJob.scheduledTime ? ` at ${selectedJob.scheduledTime}` : ''}</p>
-                    </div>
-                  </div>
-                )}
-                <div className="flex items-center gap-2">
-                  <Clock className="size-4 text-muted-foreground shrink-0" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Created</p>
-                    <p>{formatDateTime(selectedJob.createdAt)}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Description / Notes */}
-              {(selectedJob.description || selectedJob.notes) && (
-                <>
-                  <Separator />
-                  <div>
-                    <p className="text-sm font-medium mb-1">
-                      {selectedJob.description ? 'Description' : 'Notes'}
-                    </p>
-                    <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                      {selectedJob.description || selectedJob.notes}
-                    </p>
-                  </div>
-                </>
-              )}
-
-              {/* Status Timeline */}
-              <Separator />
-              <div>
-                <p className="text-sm font-medium mb-3">Status Timeline</p>
-                <div className="space-y-3">
-                  {[
-                    {
-                      label: 'Created',
-                      time: selectedJob.createdAt,
-                      icon: <Briefcase className="size-3" />,
-                      done: true,
-                    },
-                    {
-                      label: 'Assigned',
-                      time: selectedJob.assigneeName ? selectedJob.updatedAt : null,
-                      icon: <User className="size-3" />,
-                      done: !!selectedJob.assigneeName,
-                    },
-                    {
-                      label: 'In Progress',
-                      time: selectedJob.actualStartTime,
-                      icon: <Play className="size-3" />,
-                      done: ['in_progress', 'completed'].includes(selectedJob.status),
-                    },
-                    {
-                      label: 'Completed',
-                      time: selectedJob.actualEndTime,
-                      icon: <CheckCircle2 className="size-3" />,
-                      done: selectedJob.status === 'completed',
-                    },
-                  ].map((step, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                      <div className={`size-7 rounded-full flex items-center justify-center shrink-0 ${
-                        step.done
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-muted text-muted-foreground'
-                      }`}>
-                        {step.icon}
-                      </div>
-                      <div className="flex-1">
-                        <span className={`text-sm ${step.done ? '' : 'text-muted-foreground'}`}>
-                          {step.label}
-                        </span>
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        {step.time ? formatDateTime(step.time) : '--'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Notification Log */}
-              {(() => {
-                const logs = parseNotificationLog(selectedJob.notificationLogJson);
-                if (logs.length === 0) return null;
-                return (
-                  <>
-                    <Separator />
-                    <div>
-                      <p className="text-sm font-medium mb-2">Notification Log</p>
-                      <div className="space-y-1.5">
-                        {logs.map((log: Record<string, unknown>, i: number) => (
-                          <div key={i} className="flex items-center gap-2 text-xs p-2 rounded bg-muted/50">
-                            <Zap className="size-3 text-yellow-500 shrink-0" />
-                            <span className="font-medium">{String(log.action)}</span>
-                            {Boolean(log.resourceName) && (
-                              <span className="text-muted-foreground">to {String(log.resourceName)}</span>
-                            )}
-                            {Boolean(log.timestamp) && (
-                              <span className="text-muted-foreground ml-auto">
-                                {new Date(String(log.timestamp)).toLocaleTimeString()}
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                );
-              })()}
-
-              {/* Actions */}
-              <Separator />
-              <div className="flex flex-wrap gap-2">
-                {selectedJob.status === 'pending' && (
-                  <Button
-                    className="bg-emerald-600 hover:bg-emerald-700"
-                    onClick={() => {
-                      setShowJobDetail(false);
-                      openAssignDialog(selectedJob);
-                    }}
-                  >
-                    <User className="size-4 mr-1.5" /> Assign
-                  </Button>
-                )}
-                {selectedJob.status === 'assigned' && (
-                  <>
-                    <Button
-                      className="bg-emerald-600 hover:bg-emerald-700"
-                      onClick={() => handleLifecycleAction('start', selectedJob.id)}
-                      disabled={lifecycleLoading}
-                    >
-                      {lifecycleLoading && loadingAction === 'start'
-                        ? <Loader2 className="size-4 mr-1.5 animate-spin" />
-                        : <Play className="size-4 mr-1.5" />} Start Job
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setShowJobDetail(false);
-                        openAssignDialog(selectedJob);
-                      }}
-                    >
-                      Reassign
-                    </Button>
-                  </>
-                )}
-                {selectedJob.status === 'in_progress' && (
-                  <Button
-                    className="bg-green-600 hover:bg-green-700"
-                    onClick={() => handleLifecycleAction('complete', selectedJob.id)}
-                    disabled={lifecycleLoading}
-                  >
-                    {lifecycleLoading && loadingAction === 'complete'
-                      ? <Loader2 className="size-4 mr-1.5 animate-spin" />
-                      : <CheckCircle2 className="size-4 mr-1.5" />} Complete
-                  </Button>
-                )}
-                {!['completed', 'cancelled'].includes(selectedJob.status) && (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => handleCancelJob(selectedJob.id)}
-                    disabled={cancellingJobId === selectedJob.id}
-                  >
-                    {cancellingJobId === selectedJob.id
-                      ? <Loader2 className="size-4 mr-1.5 animate-spin" />
-                      : <XCircle className="size-4 mr-1.5" />} Cancel Job
-                  </Button>
-                )}
-                {/* Edit + Delete — available on any job regardless of status */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => openEditDialog(selectedJob)}
-                >
-                  <Pencil className="size-4 mr-1.5" /> Edit
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
-                  onClick={() => {
-                    setDeletingJob(selectedJob);
-                  }}
-                >
-                  <Trash2 className="size-4 mr-1.5" /> Delete
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* ─── Edit Job Dialog ─────────────────────────────────────────── */}
-      <Dialog open={showEditDialog} onOpenChange={(open) => {
-        setShowEditDialog(open);
-        if (!open) setEditingJob(null);
-      }}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Pencil className="size-5 text-emerald-600" />
-              Edit Job
-            </DialogTitle>
-            <DialogDescription>
-              {editingJob && (
-                <span>
-                  Update details for{' '}
-                  <span className="font-mono text-xs">
-                    {editingJob.jobNumber || editingJob.id.slice(0, 8).toUpperCase()}
-                  </span>
-                </span>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Title *</Label>
-              <Input
-                placeholder="Job title"
-                value={editForm.title}
-                onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Customer Name</Label>
-                <Input
-                  placeholder="Customer name"
-                  value={editForm.customerName}
-                  onChange={(e) => setEditForm({ ...editForm, customerName: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Customer Phone</Label>
-                <Input
-                  placeholder="+1 555 123 4567"
-                  value={editForm.customerPhone}
-                  onChange={(e) => setEditForm({ ...editForm, customerPhone: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Customer Email</Label>
-              <Input
-                type="email"
-                placeholder="customer@example.com"
-                value={editForm.customerEmail}
-                onChange={(e) => setEditForm({ ...editForm, customerEmail: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Priority</Label>
-              <Select value={editForm.priority} onValueChange={(v) => setEditForm({ ...editForm, priority: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="urgent">Urgent</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Address</Label>
-              <Input
-                placeholder="Service location address"
-                value={editForm.address}
-                onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <div className="space-y-2">
-                <Label>Scheduled Date</Label>
-                <Input
-                  type="date"
-                  value={editForm.scheduledDate}
-                  onChange={(e) => setEditForm({ ...editForm, scheduledDate: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Scheduled Time</Label>
-                <Input
-                  type="time"
-                  value={editForm.scheduledTime}
-                  onChange={(e) => setEditForm({ ...editForm, scheduledTime: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>
-                  Est. Duration{' '}
-                  <span className="text-xs font-normal text-muted-foreground">(min)</span>
-                </Label>
-                <Input
-                  type="number"
-                  min="5"
-                  placeholder="60"
-                  value={editForm.estimatedDuration}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, estimatedDuration: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>
-                  Quoted Amount{' '}
-                  <span className="text-xs font-normal text-muted-foreground">
-                    (used by auto-invoice)
-                  </span>
-                </Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={editForm.quotedAmount}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, quotedAmount: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Notes</Label>
-              <Textarea
-                placeholder="Additional notes or instructions"
-                value={editForm.notes}
-                onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
-                rows={3}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
-            <Button
-              className="bg-emerald-600 hover:bg-emerald-700"
-              onClick={handleEditJob}
-              disabled={!editForm.title.trim() || editSaving}
-            >
-              {editSaving ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ─── Delete Job Confirmation ─────────────────────────────────── */}
-      <AlertDialog open={!!deletingJob} onOpenChange={(open) => {
-        if (!open) setDeletingJob(null);
-      }}>
+      {/* ─── Delete Job Confirmation ───────────────────────────────────── */}
+      <AlertDialog open={!!deletingJob} onOpenChange={(open) => { if (!open) setDeletingJob(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              <Trash2 className="size-5 text-red-600" />
-              Delete Job?
+              <Trash2 className="size-5 text-red-600" /> Delete Job?
             </AlertDialogTitle>
             <AlertDialogDescription>
               {deletingJob && (
                 <>
                   Are you sure you want to permanently delete job{' '}
-                  <span className="font-mono font-semibold text-foreground">
-                    {deletingJob.jobNumber || deletingJob.id.slice(0, 8).toUpperCase()}
-                  </span>
-                  {' '}
-                  ({deletingJob.title})? This action cannot be undone.
+                  <span className="font-mono font-semibold text-foreground">{deletingJob.jobNumber || deletingJob.id.slice(0, 8).toUpperCase()}</span>
+                  {' '}({deletingJob.title})? This action cannot be undone.
                   {deletingJob.status === 'completed' && (
-                    <span className="block mt-2 text-amber-600">
-                      ⚠️ This job may have linked invoices. The job record will be removed but invoices will remain.
-                    </span>
+                    <span className="block mt-2 text-amber-600">⚠️ This job may have linked invoices. The job record will be removed but invoices will remain.</span>
                   )}
                 </>
               )}
@@ -1696,11 +2266,7 @@ export function JobsView() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleteSaving}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteJob}
-              disabled={deleteSaving}
-              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
-            >
+            <AlertDialogAction onClick={handleDeleteJob} disabled={deleteSaving} className="bg-red-600 hover:bg-red-700 focus:ring-red-600">
               {deleteSaving ? 'Deleting...' : 'Delete Job'}
             </AlertDialogAction>
           </AlertDialogFooter>

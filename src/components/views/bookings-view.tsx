@@ -274,7 +274,7 @@ export function BookingsView() {
 
   if (loading && bookings.length === 0) {
     return (
-      <div className="space-y-6 max-w-7xl mx-auto">
+      <div className="space-y-6 w-full">
         <ViewHeader icon={Calendar} iconBg="bg-violet-600" title="Booking Management" description="Manage bookings from all sources" />
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -293,7 +293,7 @@ export function BookingsView() {
   // ─── Render ──────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full">
       <ViewHeader
         icon={Calendar}
         iconBg="bg-violet-600"

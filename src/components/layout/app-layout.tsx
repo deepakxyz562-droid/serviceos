@@ -296,7 +296,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
         <main
           className={cn(
             'flex-1 overflow-auto animate-fade-in',
-            isCanvas ? 'p-0' : isMobile ? 'p-3 sm:p-4 bg-muted/30' : 'p-4 lg:p-6 bg-muted/30',
+            isCanvas ? 'p-0' : isMobile ? 'p-3 sm:p-4 bg-background' : 'p-4 lg:p-6 bg-background',
             isMobile && 'pb-mobile-nav'
           )}
         >

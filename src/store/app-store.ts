@@ -56,6 +56,33 @@ interface AppState {
   // Workflow (for canvas)
   currentWorkflowId: string | null;
   setCurrentWorkflowId: (id: string | null) => void;
+
+  // ── Lead → Job conversion prefill ──────────────────────────────────
+  // When the user clicks "Convert" on a lead, we don't immediately call the
+  // convert API. Instead we stash the lead's data here and switch to the Jobs
+  // view, which opens its New Job form pre-filled from this payload. The job
+  // form clears this once consumed so a refresh doesn't re-open it.
+  pendingJobPrefill: JobPrefillData | null;
+  setPendingJobPrefill: (data: JobPrefillData | null) => void;
+}
+
+// Shape of the data passed from a Lead into the New Job form.
+export interface JobPrefillData {
+  leadId: string;
+  title?: string;
+  customerId?: string;
+  customerName?: string;
+  customerPhone?: string;
+  customerEmail?: string | null;
+  customerAddress?: string | null;
+  serviceType?: string | null;
+  serviceId?: string | null;
+  priority?: string;
+  address?: string | null;
+  value?: number;
+  description?: string | null;
+  lineItemsJson?: string | null;
+  source?: string;
 }
 
 const initialAuthState: AuthState = {
@@ -109,4 +136,8 @@ export const useAppStore = create<AppState>((set) => ({
   // Workflow
   currentWorkflowId: null,
   setCurrentWorkflowId: (id: string | null) => set({ currentWorkflowId: id }),
+
+  // Lead → Job prefill
+  pendingJobPrefill: null,
+  setPendingJobPrefill: (data: JobPrefillData | null) => set({ pendingJobPrefill: data }),
 }));

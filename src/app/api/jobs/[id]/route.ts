@@ -96,6 +96,22 @@ export async function PUT(
     if (body.whatsappMessageId !== undefined) updateData.whatsappMessageId = body.whatsappMessageId;
     if (body.whatsappSessionId !== undefined) updateData.whatsappSessionId = body.whatsappSessionId;
     if (body.assignmentStatus !== undefined) updateData.assignmentStatus = body.assignmentStatus;
+    // ── Jobber-style itemized billing + on-site instructions + schedule ──
+    if (body.lineItemsJson !== undefined) {
+      updateData.lineItemsJson = typeof body.lineItemsJson === 'string'
+        ? body.lineItemsJson
+        : JSON.stringify(body.lineItemsJson ?? []);
+    }
+    if (body.visitInstructions !== undefined) updateData.visitInstructions = body.visitInstructions || null;
+    if (body.scheduledTime !== undefined) updateData.scheduledTime = body.scheduledTime || null;
+    if (body.estimatedDuration !== undefined) {
+      updateData.estimatedDuration =
+        body.estimatedDuration === null || body.estimatedDuration === ''
+          ? null
+          : Number(body.estimatedDuration);
+    }
+    if (body.serviceId !== undefined) updateData.serviceId = body.serviceId || null;
+    if (body.description !== undefined) updateData.description = body.description;
 
     // If status is being changed to 'assigned' and assigneeId is provided, update employee status
     if (body.status === 'assigned' && body.assigneeId) {

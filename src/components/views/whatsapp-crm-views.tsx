@@ -56,7 +56,7 @@ export function Customer360View() {
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full">
       <div className="flex items-center gap-3">
         <div className="p-2.5 rounded-xl bg-emerald-50"><UserCircle className="size-5 text-emerald-600" /></div>
         <div>
@@ -156,7 +156,7 @@ export function CampaignsView() {
   const deliveryRate = totalSent > 0 ? ((campaigns.reduce((s, c) => s + c.delivered, 0) / totalSent) * 100).toFixed(1) : '0';
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-emerald-50"><Megaphone className="size-5 text-emerald-600" /></div>
@@ -224,7 +224,7 @@ export function SegmentsView() {
   const totalMembers = segments.reduce((s, seg) => s + seg.members, 0);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-emerald-50"><Layers className="size-5 text-emerald-600" /></div>
@@ -290,7 +290,7 @@ export function RetargetingView() {
   const [rules, setRules] = useState<typeof mockRules>([]);
   const avgConversion = rules.length > 0 ? (rules.reduce((s, r) => s + r.rate, 0) / rules.length).toFixed(1) : '0';
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-emerald-50"><Target className="size-5 text-emerald-600" /></div>
@@ -351,7 +351,7 @@ const bStatusColors: Record<string, string> = { sent: 'bg-emerald-100 text-emera
 export function BroadcastView() {
   const [broadcasts, setBroadcasts] = useState<typeof mockBroadcasts>([]);
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-emerald-50"><Radio className="size-5 text-emerald-600" /></div>
@@ -412,7 +412,7 @@ const formTypeColors: Record<string, string> = { Lead: 'bg-emerald-100 text-emer
 export function FormBuilderView() {
   const [forms, setForms] = useState<typeof mockForms>([]);
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-emerald-50"><FileText className="size-5 text-emerald-600" /></div>
@@ -482,7 +482,7 @@ export function WebviewEngineView() {
   const totalClicks = webviews.reduce((s, w) => s + w.clicks, 0);
   const avgConv = webviews.length > 0 ? (webviews.reduce((s, w) => s + w.rate, 0) / webviews.length).toFixed(1) : '0';
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-emerald-50"><Monitor className="size-5 text-emerald-600" /></div>

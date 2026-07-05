@@ -375,7 +375,7 @@ function CreateMenu({ isMobile, leftSidebarOpen, onSelect }: CreateMenuProps) {
         side={isExpanded ? 'bottom' : 'right'}
         align="start"
         sideOffset={6}
-        className="w-52 bg-slate-900 border-slate-700 text-slate-200"
+        className="w-52"
       >
         {items.map((item) => {
           const Icon = item.icon;
@@ -383,9 +383,9 @@ function CreateMenu({ isMobile, leftSidebarOpen, onSelect }: CreateMenuProps) {
             <DropdownMenuItem
               key={item.view}
               onClick={() => onSelect(item.view)}
-              className="cursor-pointer text-slate-200 hover:bg-emerald-600/20 hover:text-emerald-300 focus:bg-emerald-600/20 focus:text-emerald-300"
+              className="cursor-pointer hover:bg-emerald-500/10 hover:text-emerald-700 focus:bg-emerald-500/10 focus:text-emerald-700"
             >
-              <Icon className="size-4 mr-2 text-emerald-400" />
+              <Icon className="size-4 mr-2 text-emerald-600" />
               <span>{item.label}</span>
             </DropdownMenuItem>
           );
@@ -524,21 +524,21 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
           'flex items-center w-full rounded-lg text-sm font-medium transition-all duration-150',
           isMobile || leftSidebarOpen ? 'h-9 px-3 gap-3' : 'h-9 justify-center',
           isActive
-            ? 'bg-emerald-500/15 text-emerald-400 shadow-sm'
-            : 'text-slate-400 hover:bg-slate-800/70 hover:text-slate-200'
+            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 shadow-sm'
+            : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200/70 dark:hover:bg-slate-800/70 hover:text-slate-800 dark:hover:text-slate-200'
         )}
       >
-        <Icon className={cn('shrink-0', isActive ? 'size-[18px] text-emerald-400' : 'size-4')} />
+        <Icon className={cn('shrink-0', isActive ? 'size-[18px] text-emerald-600 dark:text-emerald-400' : 'size-4')} />
         {(isMobile || leftSidebarOpen) && (
           <span className="whitespace-nowrap flex-1 text-left text-[13px]">{item.label}</span>
         )}
         {(isMobile || leftSidebarOpen) && item.badge && (
-          <Badge variant="outline" className="text-[9px] h-4 px-1.5 bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
+          <Badge variant="outline" className="text-[9px] h-4 px-1.5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
             {item.badge}
           </Badge>
         )}
         {(isMobile || leftSidebarOpen) && item.view === 'billing' && auth.tenant?.planStatus === 'trial' && (
-          <Crown className="size-3 text-amber-400 ml-auto" />
+          <Crown className="size-3 text-amber-500 ml-auto" />
         )}
       </button>
     );
@@ -556,15 +556,15 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
       {/* Logo / Branding */}
       <div
         className={cn(
-          'flex items-center h-14 px-4 border-b border-slate-800/60 shrink-0',
+          'flex items-center h-14 px-4 border-b border-sidebar-border shrink-0',
           isExpandedMode ? 'justify-start gap-3' : 'justify-center'
         )}
       >
         <div className={cn(
-          'flex items-center justify-center w-8 h-8 rounded-lg shrink-0 shadow-lg',
+          'flex items-center justify-center w-8 h-8 rounded-lg shrink-0 shadow-sm',
           isSuperAdmin
             ? 'bg-red-600 shadow-red-500/20'
-            : 'bg-emerald-500 shadow-emerald-500/20'
+            : 'bg-emerald-600 shadow-emerald-500/20'
         )}>
           {isSuperAdmin ? (
             <ShieldCheck className="size-5 text-white" />
@@ -574,10 +574,10 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
         </div>
         {isExpandedMode && (
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-lg font-bold tracking-tight whitespace-nowrap text-white">
+            <span className="text-lg font-bold tracking-tight whitespace-nowrap text-sidebar-foreground">
               {isSuperAdmin ? 'ServiceOS' : 'ServiceOS'}
             </span>
-            <Badge variant="outline" className={cn('text-[9px] h-4 px-1.5 border shrink-0', isSuperAdmin ? 'bg-red-500/10 text-red-400 border-red-500/30' : planBadge.className)}>
+            <Badge variant="outline" className={cn('text-[9px] h-4 px-1.5 border shrink-0', isSuperAdmin ? 'bg-red-500/10 text-red-600 border-red-500/30' : 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30')}>
               {isSuperAdmin ? 'Admin' : planBadge.label}
             </Badge>
           </div>
@@ -586,8 +586,8 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
 
       {/* Superadmin tenant indicator */}
       {isSuperAdmin && isExpandedMode && (
-        <div className="px-3 py-2 border-b border-slate-800/60 shrink-0">
-          <div className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-red-400/80 bg-red-500/5">
+        <div className="px-3 py-2 border-b border-sidebar-border shrink-0">
+          <div className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-red-600 bg-red-500/5">
             <Shield className="size-4 shrink-0" />
             <span className="text-xs font-medium">Platform Administration</span>
           </div>
@@ -630,18 +630,18 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
                       aria-expanded={!sectionCollapsed}
                       aria-label={`Toggle ${section.title} section`}
                     >
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 group-hover/section-header:text-slate-400 flex-1 text-left">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 group-hover/section-header:text-slate-600 dark:group-hover/section-header:text-slate-400 flex-1 text-left">
                         {section.title}
                       </span>
                       {sectionCollapsed ? (
-                        <ChevronRight className="size-3 text-slate-500 group-hover/section-header:text-slate-400" />
+                        <ChevronRight className="size-3 text-slate-400 dark:text-slate-500 group-hover/section-header:text-slate-600 dark:group-hover/section-header:text-slate-400" />
                       ) : (
-                        <ChevronDown className="size-3 text-slate-500 group-hover/section-header:text-slate-400" />
+                        <ChevronDown className="size-3 text-slate-400 dark:text-slate-500 group-hover/section-header:text-slate-600 dark:group-hover/section-header:text-slate-400" />
                       )}
                     </button>
                   ) : (
                     <div className="px-4 pt-2.5 pb-1">
-                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                         {section.title}
                       </span>
                     </div>
@@ -650,7 +650,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
                 {/* Icon-only mode: separator between sections (skip before first) */}
                 {!isExpandedMode && sectionIdx > 0 && (
                   <div className="px-3 my-1.5">
-                    <Separator className="bg-slate-800/60" />
+                    <Separator className="bg-sidebar-border" />
                   </div>
                 )}
                 {showItems && (
@@ -680,14 +680,14 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
       {!isMobile && (
         <button
           onClick={toggleLeftSidebar}
-          className="absolute -right-3 top-20 z-10 flex items-center justify-center w-6 h-6 rounded-full bg-slate-800 border border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-white transition-colors shadow-md"
+          className="absolute -right-3 top-20 z-10 flex items-center justify-center w-6 h-6 rounded-full bg-background border border-border text-slate-500 hover:bg-muted hover:text-slate-800 dark:hover:text-white transition-colors shadow-md"
           aria-label={leftSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
         >
           {leftSidebarOpen ? <ChevronLeft className="size-3" /> : <ChevronRight className="size-3" />}
         </button>
       )}
 
-      <Separator className="bg-slate-800/60" />
+      <Separator className="bg-sidebar-border" />
 
       {/* User Section */}
       <div
@@ -703,10 +703,10 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
         </Avatar>
         {isExpandedMode && (
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-slate-200 truncate">
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
               {auth.user?.name || 'Demo User'}
             </p>
-            <p className="text-xs text-slate-500 truncate">
+            <p className="text-xs text-slate-500 dark:text-slate-500 truncate">
               {auth.user?.email || 'demo@serviceos.cc'}
             </p>
           </div>
@@ -715,7 +715,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
           <Button
             variant="ghost"
             size="icon"
-            className="text-slate-500 hover:text-white hover:bg-slate-800/70 h-8 w-8 shrink-0"
+            className="text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800/70 h-8 w-8 shrink-0"
             onClick={onLogout}
           >
             <LogOut className="size-4" />
@@ -727,7 +727,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
               <Button
                 variant="ghost"
                 size="icon"
-                className="text-slate-500 hover:text-white hover:bg-slate-800/70 h-8 w-8 shrink-0 absolute bottom-3 right-1"
+                className="text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800/70 h-8 w-8 shrink-0 absolute bottom-3 right-1"
                 onClick={onLogout}
               >
                 <LogOut className="size-4" />
@@ -756,7 +756,7 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
       <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
         <SheetContent
           side="left"
-          className="w-[280px] p-0 bg-slate-950 border-r-slate-800/60"
+          className="w-[280px] p-0 bg-sidebar border-r-sidebar-border"
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Navigation</SheetTitle>
@@ -771,7 +771,7 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
   return (
     <aside
       className={cn(
-        'relative flex flex-col bg-slate-950 text-white transition-all duration-300 ease-in-out shrink-0 h-screen overflow-hidden',
+        'relative flex flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border transition-all duration-300 ease-in-out shrink-0 h-screen overflow-hidden',
         leftSidebarOpen ? 'w-60' : 'w-16'
       )}
     >

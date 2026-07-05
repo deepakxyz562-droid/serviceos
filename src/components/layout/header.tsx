@@ -134,7 +134,7 @@ export function AppHeader() {
 
   return (
     <header className={cn(
-      'flex items-center h-14 px-2 sm:px-4 border-b bg-background shrink-0 gap-2 sm:gap-3',
+      'flex items-center h-16 px-3 sm:px-5 border-b border-border/70 bg-background shrink-0 gap-2 sm:gap-4',
       // Safe area for iOS notch on standalone mode
       'pt-[env(safe-area-inset-top,0px)]'
     )}>
@@ -161,22 +161,22 @@ export function AppHeader() {
       </Button>
 
       {/* ─── Current view title ────────────────────────────────────────── */}
-      <h1 className="text-sm sm:text-base font-semibold whitespace-nowrap truncate">
+      <h1 className="text-base sm:text-lg font-semibold tracking-tight whitespace-nowrap truncate">
         {viewLabels[currentView] || 'Dashboard'}
       </h1>
 
       {!isCanvas && (
         <>
-          <Separator orientation="vertical" className="h-6 hidden sm:block" />
+          <Separator orientation="vertical" className="h-6 hidden sm:block bg-border/70" />
 
-          {/* ─── Search input (desktop) ──────────────────────────────── */}
+          {/* ─── Search input (desktop) — Jobber-style pill ──────────── */}
           <div className="relative max-w-sm flex-1 hidden sm:block">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
               placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 h-8 text-sm"
+              className="pl-9 h-9 text-sm rounded-lg bg-muted/50 border-transparent focus-visible:bg-background focus-visible:border-border"
             />
           </div>
 

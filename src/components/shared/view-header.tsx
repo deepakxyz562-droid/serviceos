@@ -13,7 +13,9 @@ interface ViewHeaderProps {
 }
 
 /**
- * Enterprise view header with gradient icon, better typography, and responsive layout.
+ * Jobber-style view header — large bold title, muted description,
+ * optional gradient icon badge, and a right-aligned action slot.
+ * Clean, minimal, with generous spacing.
  */
 export function ViewHeader({
   icon: Icon,
@@ -24,22 +26,26 @@ export function ViewHeader({
   badge,
 }: ViewHeaderProps) {
   return (
-    <div className="flex items-start sm:items-center justify-between flex-wrap gap-3 sm:gap-4 mb-6 animate-fade-up">
-      <div className="flex items-center gap-3">
+    <div className="flex items-start sm:items-center justify-between flex-wrap gap-4 mb-6 animate-fade-up">
+      <div className="flex items-center gap-3.5">
         <div
           className={cn(
-            'flex items-center justify-center size-10 rounded-xl shrink-0 shadow-sm',
+            'flex items-center justify-center size-11 rounded-xl shrink-0 shadow-sm',
             iconBg
           )}
         >
-          <Icon className="size-5 text-white" />
+          <Icon className="size-5 text-white" strokeWidth={2.2} />
         </div>
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg sm:text-xl font-bold truncate">{title}</h2>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl sm:text-[28px] font-bold tracking-tight text-foreground truncate">
+              {title}
+            </h1>
             {badge}
           </div>
-          <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1">{description}</p>
+          <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">
+            {description}
+          </p>
         </div>
       </div>
       {action && <div className="shrink-0">{action}</div>}

@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 
+// ServiceOS demo - trigger dev server restart
 const nextConfig: NextConfig = {
   compress: false,
   typescript: {

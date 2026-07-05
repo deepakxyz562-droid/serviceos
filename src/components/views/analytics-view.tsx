@@ -94,7 +94,7 @@ export function AnalyticsView() {
   const maxRevenue = Math.max(...monthlyRevenue.map(m => m.value));
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">

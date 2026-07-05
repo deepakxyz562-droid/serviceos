@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Target, Plus, Search, RefreshCw, Phone, Mail, MapPin,
   MoreHorizontal, Pencil, Trash2, Eye, MessageCircle,
@@ -9,7 +9,8 @@ import {
   List, ArrowUpDown, ChevronUp, ChevronDown, ChevronLeft,
   ChevronRight, CheckCircle2, X, Send, StickyNote,
   CalendarDays, Briefcase, AlertCircle, User, UserPlus,
-  Loader2,
+  Loader2, ArrowLeft, ImagePlus, Link2, Paperclip, Camera,
+  FileText, ImageIcon, ClipboardList,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -43,13 +44,23 @@ import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
+import { FormSectionCard, FormPageHeader } from '@/components/shared/form-section-card';
 
 // ============================================================
 // Types
 // ============================================================
 
+export interface LineItem {
+  id: string;
+  serviceId: string | null;
+  name: string;
+  quantity: string;
+  unitPrice: string;
+}
+
 interface Lead {
   id: string;
+  title?: string | null;
   name: string;
   phone: string;
   email?: string | null;
@@ -66,6 +77,9 @@ interface Lead {
   jobId?: string | null;
   notesJson: string;
   tagsJson: string;
+  lineItemsJson?: string;
+  imagesJson?: string;
+  assessmentImagesJson?: string;
   followUpAt?: string | null;
   convertedAt?: string | null;
   createdAt: string;
@@ -80,6 +94,7 @@ interface Lead {
     id: string;
     name: string;
     phone: string;
+    email?: string | null;
   } | null;
   job?: {
     id: string;
@@ -89,6 +104,7 @@ interface Lead {
 }
 
 interface LeadFormData {
+  title: string;
   name: string;
   phone: string;
   email: string;
@@ -98,7 +114,12 @@ interface LeadFormData {
   address: string;
   priority: string;
   value: string;
+  serviceDetails: string;
   notes: string;
+  images: string[];
+  assessmentImages: string[];
+  customerId: string;
+  lineItems: LineItem[];
 }
 
 // ============================================================
@@ -220,6 +241,7 @@ const SERVICE_TYPES = [
 ];
 
 const EMPTY_FORM: LeadFormData = {
+  title: '',
   name: '',
   phone: '',
   email: '',
@@ -229,7 +251,12 @@ const EMPTY_FORM: LeadFormData = {
   address: '',
   priority: 'medium',
   value: '',
+  serviceDetails: '',
   notes: '',
+  images: [],
+  assessmentImages: [],
+  customerId: '',
+  lineItems: [],
 };
 
 // ============================================================
@@ -266,11 +293,769 @@ function mapToKanbanStatus(status: string): string {
 }
 
 // ============================================================
+// Line item helpers (Product / Service section)
+// ============================================================
+
+export function newLineItemId(): string {
+  return `li_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function emptyLineItem(): LineItem {
+  return { id: newLineItemId(), serviceId: null, name: '', quantity: '1', unitPrice: '0' };
+}
+
+export function lineItemTotal(item: LineItem): number {
+  return (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0);
+}
+
+export function lineItemsSubtotal(items: LineItem[]): number {
+  return items.reduce((sum, it) => sum + lineItemTotal(it), 0);
+}
+
+export function parseLineItems(json: string | null | undefined): LineItem[] {
+  try {
+    const raw = JSON.parse(json || '[]');
+    if (!Array.isArray(raw)) return [];
+    return raw.map((it: Record<string, unknown>) => ({
+      id: (it.id as string) || newLineItemId(),
+      serviceId: (it.serviceId as string) || null,
+      name: (it.name as string) || '',
+      quantity: String((it.quantity as number | string) ?? 1),
+      unitPrice: String((it.unitPrice as number | string) ?? 0),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function parseImages(json: string | null | undefined): string[] {
+  try {
+    const raw = JSON.parse(json || '[]');
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((u: unknown): u is string => typeof u === 'string');
+  } catch {
+    return [];
+  }
+}
+
+function parseNotes(json: string | null | undefined): { text: string; createdAt: string }[] {
+  try {
+    const raw = JSON.parse(json || '[]');
+    if (!Array.isArray(raw)) return [];
+    return raw;
+  } catch {
+    return [];
+  }
+}
+
+// ============================================================
 // Component
 // ============================================================
 
+export type CatalogService = { id: string; name: string; category: string; basePrice: number };
+
+// ─── Image uploader (used for Overview + On-site assessment photos) ────────
+export function ImageUploader({
+  images,
+  onChange,
+  max = 10,
+  bucket = 'lead-images',
+}: {
+  images: string[];
+  onChange: (imgs: string[]) => void;
+  max?: number;
+  bucket?: string;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const remaining = max - images.length;
+    if (remaining <= 0) {
+      toast.error(`Maximum ${max} images reached`);
+      return;
+    }
+    const toUpload = Array.from(files).slice(0, remaining);
+    setUploading(true);
+    try {
+      const urls: string[] = [];
+      for (const file of toUpload) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('bucket', bucket);
+        formData.append('folder', 'leads');
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.url) urls.push(data.url);
+        }
+      }
+      if (urls.length > 0) onChange([...images, ...urls]);
+      if (urls.length < toUpload.length) toast.error('Some images failed to upload');
+    } catch {
+      toast.error('Upload failed');
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => handleFiles(e.target.files)}
+      />
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={uploading || images.length >= max}
+        className="w-full rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/20 hover:bg-muted/40 hover:border-emerald-400/50 transition-colors px-4 py-5 text-sm flex flex-col items-center gap-1.5 disabled:opacity-50"
+      >
+        {uploading ? (
+          <Loader2 className="size-5 animate-spin text-emerald-600" />
+        ) : (
+          <ImagePlus className="size-5 text-emerald-600" />
+        )}
+        <span className="font-medium text-foreground">
+          {uploading ? 'Uploading...' : 'Select or drag images here'}
+        </span>
+        <span className="text-xs text-muted-foreground">{images.length}/{max} uploaded</span>
+      </button>
+      {images.length > 0 && (
+        <div className="grid grid-cols-5 sm:grid-cols-6 gap-2">
+          {images.map((url, idx) => (
+            <div key={idx} className="relative group aspect-square rounded-md overflow-hidden border bg-muted">
+              <img src={url} alt={`Upload ${idx + 1}`} className="size-full object-cover" />
+              <button
+                type="button"
+                onClick={() => onChange(images.filter((_, i) => i !== idx))}
+                className="absolute top-1 right-1 size-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive"
+              >
+                <X className="size-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Create Service dialog (opened from the line-item autocomplete) ────────
+export function CreateServiceDialog({
+  open,
+  onOpenChange,
+  prefillName,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  prefillName: string;
+  onCreated: (svc: CatalogService) => void;
+}) {
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('general');
+  const [basePrice, setBasePrice] = useState('0');
+  const [duration, setDuration] = useState('60');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setName(prefillName || '');
+      setDescription('');
+      setCategory('general');
+      setBasePrice('0');
+      setDuration('60');
+    }
+  }, [open, prefillName]);
+
+  const handleCreate = async () => {
+    if (!name.trim()) {
+      toast.error('Service name is required');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/services', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          description: description.trim() || null,
+          category,
+          basePrice: parseFloat(basePrice) || 0,
+          duration: parseInt(duration) || 60,
+          isActive: true,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const svc = data.service;
+        toast.success(`Service "${svc.name}" created`);
+        onCreated(svc);
+        onOpenChange(false);
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Failed to create service');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Plus className="size-5 text-emerald-600" /> Add New Item
+          </DialogTitle>
+          <DialogDescription>Create a new product or service in your catalog</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-2">
+          <div className="grid gap-2">
+            <Label>Name *</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Drain cleaning" />
+          </div>
+          <div className="grid gap-2">
+            <Label>Description</Label>
+            <Textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional details" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-2">
+              <Label>Category</Label>
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="general">General</SelectItem>
+                  {SERVICE_TYPES.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label>Base Price</Label>
+              <Input type="number" min="0" step="0.01" value={basePrice} onChange={(e) => setBasePrice(e.target.value)} />
+            </div>
+          </div>
+          <div className="grid gap-2">
+            <Label>Duration (minutes)</Label>
+            <Input type="number" min="1" step="1" value={duration} onChange={(e) => setDuration(e.target.value)} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreate} disabled={saving}>
+            {saving && <Loader2 className="size-4 mr-1 animate-spin" />}
+            Create &amp; Add
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Create Customer dialog (opened from the customer picker) ───────────────
+// Mirrors CreateServiceDialog — pre-fills name from the typed query, lets the
+// user fill in phone/email/address, POSTs to /api/customers, and calls back
+// with the newly-created customer.
+export function CreateCustomerDialog({
+  open,
+  onOpenChange,
+  prefillName,
+  prefillPhone,
+  prefillEmail,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  prefillName: string;
+  prefillPhone?: string;
+  prefillEmail?: string;
+  onCreated: (c: { id: string; name: string; phone: string; email?: string | null; address?: string | null }) => void;
+}) {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [address, setAddress] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setName(prefillName || '');
+      setPhone(prefillPhone || '');
+      setEmail(prefillEmail || '');
+      setAddress('');
+    }
+  }, [open, prefillName, prefillPhone, prefillEmail]);
+
+  const handleCreate = async () => {
+    if (!name.trim() || !phone.trim()) {
+      toast.error('Name and phone are required');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          phone: phone.trim(),
+          email: email.trim() || null,
+          address: address.trim() || null,
+        }),
+      });
+      if (res.ok) {
+        const cust = await res.json();
+        toast.success(`Customer "${cust.name}" created`);
+        onCreated(cust);
+        onOpenChange(false);
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Failed to create customer');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="size-5 text-emerald-600" /> Create New Client
+          </DialogTitle>
+          <DialogDescription>Add a new customer to your workspace</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-2">
+          <div className="grid gap-2">
+            <Label>Name *</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" autoFocus />
+          </div>
+          <div className="grid gap-2">
+            <Label>Phone *</Label>
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+1 234 567 8900" />
+          </div>
+          <div className="grid gap-2">
+            <Label>Email</Label>
+            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@example.com" />
+          </div>
+          <div className="grid gap-2">
+            <Label>Address</Label>
+            <Textarea rows={2} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Service address (optional)" />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreate} disabled={saving}>
+            {saving && <Loader2 className="size-4 mr-1 animate-spin" />}
+            Create Client
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Customer picker (autocomplete search with "Create new client" CTA) ─────
+// Replaces the old "Link to related" plain <Select>. Behaviour:
+//   • Typing filters the customer list by name / phone / email / address.
+//   • The dropdown shows matching customers (name, address, email · phone).
+//   • A green "+ Create new client" button is always shown at the bottom of
+//     the dropdown — clicking it opens CreateCustomerDialog pre-filled with
+//     the current query.
+//   • Picking a customer calls onPick(c) so the parent can auto-fill the
+//     contact info (name / phone / email / address) from the customer record.
+export function CustomerPicker({
+  customers,
+  selectedCustomerId,
+  onPick,
+  onClear,
+  onCreate,
+  query,
+  setQuery,
+  open,
+  setOpen,
+}: {
+  customers: { id: string; name: string; phone: string; email?: string | null; address?: string | null }[];
+  selectedCustomerId: string;
+  onPick: (c: { id: string; name: string; phone: string; email?: string | null; address?: string | null }) => void;
+  onClear: () => void;
+  onCreate: (nameQuery: string) => void;
+  query: string;
+  setQuery: (v: string) => void;
+  open: boolean;
+  setOpen: (v: boolean) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const selected = customers.find((c) => c.id === selectedCustomerId) || null;
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return customers.slice(0, 8);
+    return customers
+      .filter((c) =>
+        [c.name, c.phone, c.email || '', c.address || '']
+          .some((f) => f.toLowerCase().includes(q))
+      )
+      .slice(0, 8);
+  }, [customers, query]);
+
+  const handlePick = (c: typeof customers[number]) => {
+    onPick(c);
+    setOpen(false);
+    setQuery('');
+  };
+
+  // If a customer is selected, show a chip-style read-only view with an X to clear.
+  if (selected) {
+    return (
+      <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="font-medium text-emerald-900 truncate">{selected.name}</p>
+          <p className="text-xs text-emerald-700 truncate">
+            {selected.address ? `${selected.address} · ` : ''}
+            {selected.email ? `${selected.email} · ` : ''}
+            {selected.phone}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => { onClear(); inputRef.current?.focus(); }}
+          className="text-emerald-700 hover:text-emerald-900 shrink-0 -mt-0.5"
+          aria-label="Clear selected customer"
+        >
+          <X className="size-4" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <Input
+        ref={inputRef}
+        placeholder="Select a client"
+        value={query}
+        onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+      />
+      {open && (
+        <div className="absolute z-30 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-72 overflow-y-auto">
+          {filtered.length === 0 && (
+            <div className="px-3 py-2 text-sm text-muted-foreground">No matching client found</div>
+          )}
+          {filtered.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => handlePick(c)}
+              className="w-full text-left px-3 py-2 hover:bg-emerald-50 border-b last:border-b-0 transition-colors"
+            >
+              <p className="font-medium text-sm">{c.name}</p>
+              {c.address && <p className="text-xs text-muted-foreground truncate">{c.address}</p>}
+              <p className="text-xs text-muted-foreground truncate">
+                {c.email ? `${c.email} · ` : ''}{c.phone}
+              </p>
+            </button>
+          ))}
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => { onCreate(query); setOpen(false); }}
+            className="w-full text-left px-3 py-2 bg-emerald-50/50 hover:bg-emerald-100 text-emerald-700 font-medium text-sm flex items-center gap-2 border-t"
+          >
+            <span className="flex items-center justify-center size-5 rounded-full bg-emerald-600 text-white">
+              <Plus className="size-3.5" />
+            </span>
+            Create new client{query.trim() ? ` "${query.trim()}"` : ''}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function LineItemRow({
+  item,
+  services,
+  symbol,
+  onChange,
+  onRemove,
+  canRemove,
+  onAddNewItem,
+}: {
+  item: LineItem;
+  services: CatalogService[];
+  symbol: string;
+  onChange: (item: LineItem) => void;
+  onRemove: () => void;
+  canRemove: boolean;
+  onAddNewItem: (currentName: string) => void;
+}) {
+  const [focused, setFocused] = useState(false);
+  const [highlightIdx, setHighlightIdx] = useState(0);
+
+  const query = item.name.trim().toLowerCase();
+  const matches = useMemo(() => {
+    if (!query) return services.slice(0, 8);
+    return services.filter((s) => s.name.toLowerCase().includes(query)).slice(0, 8);
+  }, [services, query]);
+
+  const showDropdown = focused;
+  const noMatches = matches.length === 0;
+
+  const pickService = (svc: CatalogService) => {
+    onChange({
+      ...item,
+      serviceId: svc.id,
+      name: svc.name,
+      unitPrice: String(svc.basePrice ?? 0),
+    });
+    setFocused(false);
+  };
+
+  const total = lineItemTotal(item);
+
+  return (
+    <div className="rounded-lg border bg-card p-3 space-y-2.5">
+      <div className="flex items-start gap-2">
+        <div className="relative flex-1">
+          <Label className="text-[11px] text-muted-foreground mb-1">Name</Label>
+          <Input
+            placeholder="Type to search the service catalog..."
+            value={item.name}
+            onChange={(e) => {
+              onChange({ ...item, name: e.target.value, serviceId: null });
+              setHighlightIdx(0);
+            }}
+            onFocus={() => { setFocused(true); setHighlightIdx(0); }}
+            onBlur={() => { setTimeout(() => setFocused(false), 150); }}
+            onKeyDown={(e) => {
+              if (!showDropdown) return;
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setHighlightIdx((i) => Math.min(i + 1, matches.length - 1));
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setHighlightIdx((i) => Math.max(i - 1, 0));
+              } else if (e.key === 'Enter') {
+                if (matches[highlightIdx]) {
+                  e.preventDefault();
+                  pickService(matches[highlightIdx]);
+                }
+              } else if (e.key === 'Escape') {
+                setFocused(false);
+              }
+            }}
+          />
+          {showDropdown && (
+            <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md max-h-64 overflow-y-auto">
+              {noMatches ? (
+                <div className="px-3 py-2 text-xs text-muted-foreground">
+                  {item.name.trim() ? 'No matching service found' : 'Start typing to search the catalog'}
+                </div>
+              ) : (
+                matches.map((svc, i) => (
+                  <button
+                    type="button"
+                    key={svc.id}
+                    onMouseDown={(e) => { e.preventDefault(); pickService(svc); }}
+                    className={cn(
+                      'flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent',
+                      i === highlightIdx && 'bg-accent'
+                    )}
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{svc.name}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">{svc.category}</p>
+                    </div>
+                    <span className="text-xs font-semibold text-emerald-700 whitespace-nowrap">
+                      {symbol}{svc.basePrice.toFixed(2)}
+                    </span>
+                  </button>
+                ))
+              )}
+              <button
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); onAddNewItem(item.name); setFocused(false); }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm border-t hover:bg-accent text-emerald-700 font-medium"
+              >
+                <Plus className="size-4" /> Add new item{item.name.trim() ? ` “${item.name.trim()}”` : ''}
+              </button>
+            </div>
+          )}
+        </div>
+        {canRemove && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="mt-6 size-8 text-muted-foreground hover:text-destructive"
+            onClick={onRemove}
+          >
+            <X className="size-4" />
+          </Button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <Label className="text-[11px] text-muted-foreground mb-1">Quantity</Label>
+          <Input
+            type="number"
+            min="0"
+            step="1"
+            value={item.quantity}
+            onChange={(e) => onChange({ ...item, quantity: e.target.value })}
+          />
+        </div>
+        <div>
+          <Label className="text-[11px] text-muted-foreground mb-1">Unit price</Label>
+          <Input
+            type="number"
+            min="0"
+            step="0.01"
+            value={item.unitPrice}
+            onChange={(e) => onChange({ ...item, unitPrice: e.target.value, serviceId: null })}
+          />
+        </div>
+        <div>
+          <Label className="text-[11px] text-muted-foreground mb-1">Total</Label>
+          <div className="h-9 flex items-center px-3 rounded-md border bg-muted/50 text-sm font-semibold">
+            {symbol}{total.toFixed(2)}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function LineItemsSection({
+  items,
+  services,
+  symbol,
+  onChange,
+  onServicesUpdate,
+}: {
+  items: LineItem[];
+  services: CatalogService[];
+  symbol: string;
+  onChange: (items: LineItem[]) => void;
+  onServicesUpdate: (svc: CatalogService) => void;
+}) {
+  const subtotal = lineItemsSubtotal(items);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [prefillName, setPrefillName] = useState('');
+  const [pendingIdx, setPendingIdx] = useState<number | null>(null);
+
+  const requestCreate = (idx: number, currentName: string) => {
+    setPendingIdx(idx);
+    setPrefillName(currentName);
+    setCreateOpen(true);
+  };
+
+  const handleCreated = (svc: CatalogService) => {
+    onServicesUpdate(svc);
+    if (pendingIdx !== null) {
+      const next = [...items];
+      next[pendingIdx] = {
+        ...next[pendingIdx],
+        serviceId: svc.id,
+        name: svc.name,
+        unitPrice: String(svc.basePrice ?? 0),
+      };
+      onChange(next);
+    }
+    setPendingIdx(null);
+  };
+
+  const update = (idx: number, item: LineItem) => {
+    const next = [...items];
+    next[idx] = item;
+    onChange(next);
+  };
+  const remove = (idx: number) => {
+    onChange(items.filter((_, i) => i !== idx));
+  };
+  const add = () => {
+    onChange([...items, emptyLineItem()]);
+  };
+
+  return (
+    <div className="grid gap-3">
+      {items.length === 0 ? (
+        <div className="rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/20 py-8 px-4 text-center">
+          <p className="text-sm text-muted-foreground">No items added yet.</p>
+          <p className="text-xs text-muted-foreground/80 mt-0.5">Click &ldquo;Add Line Item&rdquo; to begin.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {items.map((item, idx) => (
+            <LineItemRow
+              key={item.id}
+              item={item}
+              services={services}
+              symbol={symbol}
+              onChange={(it) => update(idx, it)}
+              onRemove={() => remove(idx)}
+              canRemove={items.length > 1}
+              onAddNewItem={(name) => requestCreate(idx, name)}
+            />
+          ))}
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={add}
+        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-sm font-medium text-emerald-700 border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50 transition-colors w-fit"
+      >
+        <Plus className="size-4" /> Add Line Item
+      </button>
+
+      {items.length > 0 && (
+        <div className="flex items-center justify-between rounded-lg bg-emerald-50/60 border border-emerald-200/70 px-4 py-2.5 mt-1">
+          <span className="text-sm font-medium text-emerald-800">Subtotal</span>
+          <span className="text-sm font-bold text-emerald-700">
+            {symbol}{subtotal.toFixed(2)}
+          </span>
+        </div>
+      )}
+
+      <CreateServiceDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        prefillName={prefillName}
+        onCreated={handleCreated}
+      />
+    </div>
+  );
+}
+
 export function LeadsView() {
   const { currency, formatCompact, format: formatCurrency, symbol } = useCompanyCurrency();
+
+  // Global store — used to hand off a lead's data to the Jobs view when the
+  // user clicks "Convert" so the New Job form opens pre-filled.
+  const setPendingJobPrefill = useAppStore((s) => s.setPendingJobPrefill);
+  const setGlobalView = useAppStore((s) => s.setActiveView);
 
   // Data state
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -292,8 +1077,8 @@ export function LeadsView() {
   const [sortField, setSortField] = useState<string>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
-  // Dialog state
-  const [showAddDialog, setShowAddDialog] = useState(false);
+  // Dialog / page state
+  const [formMode, setFormMode] = useState<'list' | 'form'>('list');
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [leadForm, setLeadForm] = useState<LeadFormData>({ ...EMPTY_FORM });
   const [saving, setSaving] = useState(false);
@@ -325,6 +1110,68 @@ export function LeadsView() {
         setServices(list);
       })
       .catch(() => setServices([]));
+  }, []);
+
+  // Customers — fetched for the “Select a client” picker on the lead form.
+  // Includes email + address so the picker can display them in the dropdown
+  // and auto-fill the contact info section when a customer is picked.
+  const [customers, setCustomers] = useState<{ id: string; name: string; phone: string; email?: string | null; address?: string | null }[]>([]);
+  useEffect(() => {
+    fetch('/api/customers?limit=200')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => {
+        const list = Array.isArray(data) ? data : [];
+        setCustomers(list);
+      })
+      .catch(() => setCustomers([]));
+  }, []);
+
+  // Customer picker (Select a client) UI state.
+  const [customerQuery, setCustomerQuery] = useState('');
+  const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
+  const [showCreateCustomerDialog, setShowCreateCustomerDialog] = useState(false);
+  const [createCustomerPrefill, setCreateCustomerPrefill] = useState<{ name: string; phone?: string; email?: string }>({ name: '' });
+
+  // Add a freshly-created customer to the local list AND select it as the
+  // lead's customerId, and auto-fill the contact info from it.
+  const addCustomerToList = useCallback((c: { id: string; name: string; phone: string; email?: string | null; address?: string | null }) => {
+    setCustomers((prev) => (prev.some((x) => x.id === c.id) ? prev : [c, ...prev]));
+    setLeadForm((prev) => ({
+      ...prev,
+      customerId: c.id,
+      name: c.name || prev.name,
+      phone: c.phone || prev.phone,
+      email: c.email || prev.email,
+      address: c.address || prev.address,
+    }));
+  }, []);
+
+  const handlePickCustomer = useCallback((c: { id: string; name: string; phone: string; email?: string | null; address?: string | null }) => {
+    setLeadForm((prev) => ({
+      ...prev,
+      customerId: c.id,
+      // Auto-fill contact info from the customer record (only overwrite empty
+      // fields so the user doesn't lose manual edits to non-empty fields).
+      name: prev.name || c.name,
+      phone: prev.phone || c.phone,
+      email: prev.email || c.email || '',
+      address: prev.address || c.address || '',
+    }));
+  }, []);
+
+  const openCreateCustomerDialog = useCallback((nameQuery: string) => {
+    setCreateCustomerPrefill({
+      name: nameQuery || leadForm.name,
+      phone: leadForm.phone,
+      email: leadForm.email,
+    });
+    setShowCreateCustomerDialog(true);
+  }, [leadForm.name, leadForm.phone, leadForm.email]);
+
+  const addServiceToCatalog = useCallback((svc: CatalogService) => {
+    setServices((prev) =>
+      prev.some((s) => s.id === svc.id) ? prev : [{ ...svc, duration: (svc as { duration?: number }).duration ?? 60 }, ...prev]
+    );
   }, []);
 
   // Notes
@@ -424,19 +1271,42 @@ export function LeadsView() {
       const url = isEditing ? `/api/leads/${editingLead.id}` : '/api/leads';
       const method = isEditing ? 'PUT' : 'POST';
 
+      const computedValue = leadForm.lineItems.length > 0
+        ? lineItemsSubtotal(leadForm.lineItems)
+        : (parseFloat(leadForm.value) || 0);
+
+      // Notes typed in the form are appended to the notesJson activity timeline
+      // (create: seed the first note; edit: append to existing notes).
+      let notesJsonToSend: string | undefined;
+      if (leadForm.notes.trim()) {
+        const existing = isEditing ? parseNotes(editingLead.notesJson) : [];
+        notesJsonToSend = JSON.stringify([
+          ...existing,
+          { text: leadForm.notes.trim(), createdAt: new Date().toISOString() },
+        ]);
+      }
+
       const body: Record<string, unknown> = {
+        title: leadForm.title.trim() || null,
         name: leadForm.name.trim(),
         phone: leadForm.phone.trim(),
         email: leadForm.email.trim() || null,
         source: leadForm.source,
         status: isEditing ? editingLead.status : 'new',
         priority: leadForm.priority,
-        value: parseFloat(leadForm.value) || 0,
-        description: leadForm.notes.trim() || null,
+        value: computedValue,
+        description: leadForm.serviceDetails.trim() || null,
         address: leadForm.address.trim() || null,
         serviceType: leadForm.serviceType || null,
         serviceId: leadForm.serviceId || null,
+        lineItemsJson: JSON.stringify(leadForm.lineItems),
+        imagesJson: JSON.stringify(leadForm.images),
+        assessmentImagesJson: JSON.stringify(leadForm.assessmentImages),
+        customerId: leadForm.customerId || null,
       };
+      if (notesJsonToSend !== undefined) {
+        body.notesJson = notesJsonToSend;
+      }
 
       const res = await fetch(url, {
         method,
@@ -446,7 +1316,7 @@ export function LeadsView() {
 
       if (res.ok) {
         toast.success(`Lead ${isEditing ? 'updated' : 'created'} successfully`);
-        setShowAddDialog(false);
+        setFormMode('list');
         setEditingLead(null);
         setLeadForm({ ...EMPTY_FORM });
         fetchLeads();
@@ -541,6 +1411,7 @@ export function LeadsView() {
   const openEditLead = (lead: Lead) => {
     setEditingLead(lead);
     setLeadForm({
+      title: lead.title || '',
       name: lead.name,
       phone: lead.phone,
       email: lead.email || '',
@@ -550,15 +1421,32 @@ export function LeadsView() {
       address: lead.address || '',
       priority: lead.priority,
       value: lead.value ? String(lead.value) : '',
-      notes: lead.description || '',
+      serviceDetails: lead.description || '',
+      notes: '',
+      images: parseImages(lead.imagesJson),
+      assessmentImages: parseImages(lead.assessmentImagesJson),
+      customerId: lead.customerId || '',
+      lineItems: parseLineItems(lead.lineItemsJson),
     });
-    setShowAddDialog(true);
+    setCustomerQuery('');
+    setCustomerPickerOpen(false);
+    setFormMode('form');
   };
 
   const openAddLead = () => {
     setEditingLead(null);
     setLeadForm({ ...EMPTY_FORM });
-    setShowAddDialog(true);
+    setCustomerQuery('');
+    setCustomerPickerOpen(false);
+    setFormMode('form');
+  };
+
+  const closeLeadForm = () => {
+    setFormMode('list');
+    setEditingLead(null);
+    setLeadForm({ ...EMPTY_FORM });
+    setCustomerQuery('');
+    setCustomerPickerOpen(false);
   };
 
   const openDetail = (lead: Lead) => {
@@ -566,9 +1454,36 @@ export function LeadsView() {
     setShowDetailDialog(true);
   };
 
+  // ── Convert lead → open the New Job form pre-filled ────────────────
+  // Instead of immediately calling /api/leads/convert (which creates a job
+  // behind the scenes), we hand the lead's data to the Jobs view via the
+  // global store and switch to it. The New Job form opens pre-filled so the
+  // user can review/edit before saving. When the job is saved, the Jobs view
+  // marks the lead as 'won' + links the new jobId (so lead tracking is kept).
   const openConvertDialog = (lead: Lead) => {
-    setConvertingLead(lead);
-    setShowConvertDialog(true);
+    setPendingJobPrefill({
+      leadId: lead.id,
+      title: lead.title || (lead.serviceType ? `${getServiceTypeLabel(lead.serviceType)} — ${lead.name}` : `Job for ${lead.name}`),
+      customerId: lead.customerId || undefined,
+      customerName: lead.name,
+      customerPhone: lead.phone,
+      customerEmail: lead.email,
+      customerAddress: lead.address,
+      serviceType: lead.serviceType,
+      serviceId: lead.serviceId,
+      priority: lead.priority,
+      address: lead.address,
+      value: lead.value,
+      description: lead.description,
+      lineItemsJson: lead.lineItemsJson,
+      source: lead.source,
+    });
+    // Close the lead detail dialog if it's open so it doesn't sit on top.
+    if (showDetailDialog) {
+      setShowDetailDialog(false);
+      setSelectedLead(null);
+    }
+    setGlobalView('jobs');
   };
 
   const openDeleteDialog = (lead: Lead) => {
@@ -686,6 +1601,9 @@ export function LeadsView() {
               <span className={`size-2 rounded-full shrink-0 ${PRIORITY_CONFIG[lead.priority]?.dotColor || 'bg-gray-400'}`} />
               <h4 className="font-semibold text-sm truncate">{lead.name}</h4>
             </div>
+            {lead.title && (
+              <p className="text-xs text-emerald-700 truncate mt-0.5">{lead.title}</p>
+            )}
             <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
               <Phone className="size-3" /> {lead.phone}
             </p>
@@ -884,7 +1802,12 @@ export function LeadsView() {
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-1.5">
                           <span className={`size-2 rounded-full shrink-0 ${PRIORITY_CONFIG[lead.priority]?.dotColor || 'bg-gray-400'}`} />
-                          {lead.name}
+                          <div className="min-w-0">
+                            <div className="truncate">{lead.name}</div>
+                            {lead.title && (
+                              <div className="text-xs text-emerald-700 truncate">{lead.title}</div>
+                            )}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-muted-foreground text-sm">{lead.phone}</TableCell>
@@ -966,46 +1889,98 @@ export function LeadsView() {
   };
 
   // ============================================================
-  // Render: Add Lead Dialog
+  // Render: Lead Form Page (full page, not a modal)
   // ============================================================
 
-  const renderAddDialog = () => (
-    <Dialog open={showAddDialog} onOpenChange={(open) => {
-      if (!open) {
-        setShowAddDialog(false);
-        setEditingLead(null);
-        setLeadForm({ ...EMPTY_FORM });
-      }
-    }}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <UserPlus className="size-5 text-emerald-600" />
-            {editingLead ? 'Edit Lead' : 'Add Lead'}
-          </DialogTitle>
-          <DialogDescription>
-            {editingLead ? 'Update lead information' : 'Add a new lead to your pipeline'}
-          </DialogDescription>
-        </DialogHeader>
+  const renderLeadFormPage = () => (
+    <div className="w-full space-y-6">
+      {/* ─── Page header with Back button ─────────────────────── */}
+      <FormPageHeader
+        icon={UserPlus}
+        title={editingLead ? 'Edit Lead' : 'New Request'}
+        subtitle={editingLead ? 'Update lead information' : 'Add a new lead to your pipeline'}
+        onBack={closeLeadForm}
+        onSubmit={handleSaveLead}
+        submitting={saving}
+        submitLabel={editingLead ? 'Update Lead' : 'Add Lead'}
+      />
 
-        <div className="grid gap-4 py-4">
-          {/* Name */}
+      {/* ─── Title & Client ───────────────────────────────────── */}
+      <FormSectionCard>
+        <div className="space-y-4">
           <div className="grid gap-2">
-            <Label htmlFor="lead-name">Name *</Label>
+            <Label htmlFor="lead-title">Title</Label>
             <Input
-              id="lead-name"
-              placeholder="Full name"
-              value={leadForm.name}
-              onChange={(e) => setLeadForm({ ...leadForm, name: e.target.value })}
+              id="lead-title"
+              className="form-input h-10"
+              placeholder="Add a title (e.g. Kitchen sink repair)"
+              value={leadForm.title}
+              onChange={(e) => setLeadForm({ ...leadForm, title: e.target.value })}
             />
           </div>
+          <div className="grid gap-2">
+            <Label>Select a client</Label>
+            <CustomerPicker
+              customers={customers}
+              selectedCustomerId={leadForm.customerId}
+              onPick={handlePickCustomer}
+              onClear={() => setLeadForm({ ...leadForm, customerId: '' })}
+              onCreate={openCreateCustomerDialog}
+              query={customerQuery}
+              setQuery={setCustomerQuery}
+              open={customerPickerOpen}
+              setOpen={setCustomerPickerOpen}
+            />
+            <p className="text-xs text-muted-foreground">
+              Pick an existing client or click <span className="text-emerald-700 font-medium">+ Create new client</span> to add one on the fly.
+            </p>
+          </div>
+        </div>
+      </FormSectionCard>
 
-          {/* Phone & Email row */}
-          <div className="grid grid-cols-2 gap-3">
+      {/* ─── Contact info ─────────────────────────────────────── */}
+      {/* When a customer is already linked via the picker above, the
+          Name/Phone/Email fields are redundant (they come from the
+          customer record and are auto-filled). In that case we hide the
+          contact inputs and only show Source + a small note. The hidden
+          values are still sent to the API so the lead's name/phone/email
+          stay in sync with the customer. */}
+      <FormSectionCard>
+        {leadForm.customerId ? (
+          <div className="grid gap-4 sm:grid-cols-2 items-start">
+            <div className="rounded-md border border-dashed bg-muted/30 px-3 py-2 text-xs text-muted-foreground flex items-start gap-2 sm:col-span-1">
+              <User className="size-3.5 mt-0.5 shrink-0" />
+              <span>Contact details are pulled from the selected client above. Clear the client to edit them manually.</span>
+            </div>
             <div className="grid gap-2">
-              <Label htmlFor="lead-phone">Phone *</Label>
+              <Label>Source</Label>
+              <Select value={leadForm.source} onValueChange={(v) => setLeadForm({ ...leadForm, source: v })}>
+                <SelectTrigger className="form-input h-10"><SelectValue placeholder="Select source" /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(SOURCE_CONFIG).map(([key, val]) => (
+                    <SelectItem key={key} value={key}>{val.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="lead-name">Name <span className="text-red-500 font-medium">*</span></Label>
+              <Input
+                id="lead-name"
+                className="form-input h-10"
+                placeholder="Full name"
+                value={leadForm.name}
+                onChange={(e) => setLeadForm({ ...leadForm, name: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="lead-phone">Phone <span className="text-red-500 font-medium">*</span></Label>
               <Input
                 id="lead-phone"
+                className="form-input h-10"
                 placeholder="+1 234 567 8900"
                 value={leadForm.phone}
                 onChange={(e) => setLeadForm({ ...leadForm, phone: e.target.value })}
@@ -1016,95 +1991,106 @@ export function LeadsView() {
               <Input
                 id="lead-email"
                 type="email"
+                className="form-input h-10"
                 placeholder="email@example.com"
                 value={leadForm.email}
                 onChange={(e) => setLeadForm({ ...leadForm, email: e.target.value })}
               />
             </div>
+            <div className="grid gap-2">
+              <Label>Source</Label>
+              <Select value={leadForm.source} onValueChange={(v) => setLeadForm({ ...leadForm, source: v })}>
+                <SelectTrigger className="form-input h-10"><SelectValue placeholder="Select source" /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(SOURCE_CONFIG).map(([key, val]) => (
+                    <SelectItem key={key} value={key}>{val.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
+        )}
+      </FormSectionCard>
 
-          {/* Source (full-width — Service Type dropdown hidden; serviceType is
-              auto-derived from the Catalog Service selection below when a
-              catalog service is picked, and stays empty otherwise). */}
-          <div className="grid gap-2">
-            <Label>Source</Label>
-            <Select value={leadForm.source} onValueChange={(v) => setLeadForm({ ...leadForm, source: v })}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select source" />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(SOURCE_CONFIG).map(([key, val]) => (
-                  <SelectItem key={key} value={key}>{val.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      {/* ─── Overview (Service details + images) ──────────────── */}
+      <FormSectionCard icon={FileText} title="Overview">
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label className="font-medium">Service details</Label>
+            <p className="text-xs text-muted-foreground">Please provide as much information as you can</p>
+            <Textarea
+              rows={4}
+              className="form-input"
+              placeholder="Describe the work requested, symptoms, urgency, etc."
+              value={leadForm.serviceDetails}
+              onChange={(e) => setLeadForm({ ...leadForm, serviceDetails: e.target.value })}
+            />
           </div>
-
-          {/* Service Catalog dropdown — links this lead to a specific catalog
-              service so its serviceId flows through to the job on convert. */}
-          <div className="grid gap-2">
-            <Label>
-              Service{' '}
-              <span className="text-xs font-normal text-muted-foreground">
-                (from catalog — optional)
-              </span>
-            </Label>
-            <Select
-              value={leadForm.serviceId || '_none'}
-              onValueChange={(v) => {
-                const id = v === '_none' ? '' : v;
-                const svc = services.find((s) => s.id === id);
-                setLeadForm((prev) => ({
-                  ...prev,
-                  serviceId: id,
-                  // Auto-set serviceType from the catalog service's category
-                  // so legacy code that reads lead.serviceType still works.
-                  serviceType: svc?.category || prev.serviceType,
-                }));
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue
-                  placeholder={
-                    services.length === 0
-                      ? 'No services in catalog'
-                      : 'Select a catalog service (optional)'
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_none">— No catalog service —</SelectItem>
-                {services.map((svc) => (
-                  <SelectItem key={svc.id} value={svc.id}>
-                    {svc.name}
-                    <span className="text-xs text-muted-foreground ml-1">
-                      · {svc.category} · ${svc.basePrice.toFixed(2)}
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="space-y-2">
+            <Label className="font-medium">Share images of the work to be done</Label>
+            <ImageUploader
+              images={leadForm.images}
+              onChange={(imgs) => setLeadForm({ ...leadForm, images: imgs })}
+            />
           </div>
+        </div>
+      </FormSectionCard>
 
-          {/* Address */}
+      {/* ─── On-site assessment ───────────────────────────────── */}
+      <FormSectionCard icon={Camera} title="On-site assessment">
+        <div className="space-y-4">
+          <div className="rounded-lg border border-dashed bg-muted/30 px-4 py-3 text-sm text-muted-foreground flex items-start gap-2">
+            <ClipboardList className="size-4 mt-0.5 shrink-0" />
+            <span>Visit the property to assess the job before you do the work.</span>
+          </div>
+          <div className="space-y-2">
+            <Label className="font-medium">Assessment photos</Label>
+            <ImageUploader
+              images={leadForm.assessmentImages}
+              onChange={(imgs) => setLeadForm({ ...leadForm, assessmentImages: imgs })}
+              bucket="lead-assessment"
+            />
+          </div>
+        </div>
+      </FormSectionCard>
+
+      {/* ─── Product / Service (line items) ───────────────────── */}
+      <FormSectionCard icon={Briefcase} title="Product / Service" description="Search the catalog or add a custom item">
+        <LineItemsSection
+          items={leadForm.lineItems}
+          services={services}
+          symbol={symbol}
+          onServicesUpdate={addServiceToCatalog}
+          onChange={(items) =>
+            setLeadForm((prev) => ({
+              ...prev,
+              lineItems: items,
+              serviceId: items.find((it) => it.serviceId)?.serviceId || '',
+              serviceType: prev.serviceType,
+              value: items.length > 0 ? lineItemsSubtotal(items).toFixed(2) : prev.value,
+            }))
+          }
+        />
+      </FormSectionCard>
+
+      {/* ─── Details (Address / Priority / Value) ─────────────── */}
+      <FormSectionCard icon={MapPin} title="Details">
+        <div className="space-y-4">
           <div className="grid gap-2">
             <Label htmlFor="lead-address">Address</Label>
             <Input
               id="lead-address"
+              className="form-input h-10"
               placeholder="Street address, city, state"
               value={leadForm.address}
               onChange={(e) => setLeadForm({ ...leadForm, address: e.target.value })}
             />
           </div>
-
-          {/* Priority & Value row */}
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2">
               <Label>Priority</Label>
               <Select value={leadForm.priority} onValueChange={(v) => setLeadForm({ ...leadForm, priority: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select priority" />
-                </SelectTrigger>
+                <SelectTrigger className="form-input h-10"><SelectValue placeholder="Select priority" /></SelectTrigger>
                 <SelectContent>
                   {Object.entries(PRIORITY_CONFIG).map(([key, val]) => (
                     <SelectItem key={key} value={key}>{val.label}</SelectItem>
@@ -1113,41 +2099,59 @@ export function LeadsView() {
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="lead-value">Value ($)</Label>
+              <Label htmlFor="lead-value" className="flex items-center gap-1">
+                Value ({symbol})
+                {leadForm.lineItems.length > 0 && (
+                  <span className="text-[10px] font-normal text-muted-foreground">(auto)</span>
+                )}
+              </Label>
               <Input
                 id="lead-value"
                 type="number"
+                className="form-input h-10"
                 placeholder="0"
                 value={leadForm.value}
                 onChange={(e) => setLeadForm({ ...leadForm, value: e.target.value })}
+                disabled={leadForm.lineItems.length > 0}
               />
             </div>
           </div>
-
-          {/* Notes */}
-          <div className="grid gap-2">
-            <Label htmlFor="lead-notes">Notes</Label>
-            <Textarea
-              id="lead-notes"
-              placeholder="Add any notes about this lead..."
-              rows={3}
-              value={leadForm.notes}
-              onChange={(e) => setLeadForm({ ...leadForm, notes: e.target.value })}
-            />
-          </div>
         </div>
+      </FormSectionCard>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => { setShowAddDialog(false); setEditingLead(null); setLeadForm({ ...EMPTY_FORM }); }}>
-            Cancel
-          </Button>
-          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSaveLead} disabled={saving}>
-            {saving && <RefreshCw className="size-4 mr-1 animate-spin" />}
-            {editingLead ? 'Update Lead' : 'Add Lead'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      {/* ─── Notes ────────────────────────────────────────────── */}
+      <FormSectionCard icon={StickyNote} title="Notes">
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">Use @ in notes to mention your team</p>
+          <Textarea
+            rows={3}
+            className="form-input"
+            placeholder="Add a note for your team..."
+            value={leadForm.notes}
+            onChange={(e) => setLeadForm({ ...leadForm, notes: e.target.value })}
+          />
+        </div>
+      </FormSectionCard>
+
+      {/* ─── Bottom action bar ────────────────────────────────── */}
+      <div className="flex items-center justify-end gap-2 pb-4">
+        <Button variant="outline" onClick={closeLeadForm}>Cancel</Button>
+        <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSaveLead} disabled={saving}>
+          {saving && <RefreshCw className="size-4 mr-1 animate-spin" />}
+          {editingLead ? 'Update Lead' : 'Add Lead'}
+        </Button>
+      </div>
+
+      {/* ─── Create-customer dialog (opened from the picker) ──── */}
+      <CreateCustomerDialog
+        open={showCreateCustomerDialog}
+        onOpenChange={setShowCreateCustomerDialog}
+        prefillName={createCustomerPrefill.name}
+        prefillPhone={createCustomerPrefill.phone}
+        prefillEmail={createCustomerPrefill.email}
+        onCreated={addCustomerToList}
+      />
+    </div>
   );
 
   // ============================================================
@@ -1175,11 +2179,14 @@ export function LeadsView() {
           </DialogHeader>
 
           <div className="space-y-5">
-            {/* Name and status */}
+            {/* Title + Name + status */}
             <div className="flex items-start justify-between gap-3">
-              <div>
+              <div className="min-w-0">
+                {selectedLead.title && (
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700 mb-1">{selectedLead.title}</p>
+                )}
                 <h3 className="font-bold text-lg">{selectedLead.name}</h3>
-                <div className="flex items-center gap-3 mt-1">
+                <div className="flex items-center gap-3 mt-1 flex-wrap">
                   <p className="text-sm text-muted-foreground flex items-center gap-1">
                     <Phone className="size-3.5" /> {selectedLead.phone}
                   </p>
@@ -1190,7 +2197,7 @@ export function LeadsView() {
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 {renderStatusBadge(selectedLead.status)}
                 <span className="flex items-center gap-1">
                   <span className={`size-2 rounded-full ${PRIORITY_CONFIG[selectedLead.priority]?.dotColor || 'bg-gray-400'}`} />
@@ -1298,6 +2305,112 @@ export function LeadsView() {
                 </div>
               </div>
             </div>
+
+            {/* Service details (Overview) */}
+            {selectedLead.description && (
+              <>
+                <Separator />
+                <div>
+                  <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+                    <FileText className="size-4 text-muted-foreground" /> Service details
+                  </h4>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap rounded-lg bg-muted/40 p-3">
+                    {selectedLead.description}
+                  </p>
+                </div>
+              </>
+            )}
+
+            {/* Overview images */}
+            {(() => {
+              const imgs = parseImages(selectedLead.imagesJson);
+              if (imgs.length === 0) return null;
+              return (
+                <div>
+                  <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+                    <ImageIcon className="size-4 text-muted-foreground" /> Work images ({imgs.length})
+                  </h4>
+                  <div className="grid grid-cols-5 gap-2">
+                    {imgs.map((url, i) => (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="aspect-square rounded-md overflow-hidden border bg-muted">
+                                                <img src={url} alt={`Work ${i + 1}`} className="size-full object-cover" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Assessment images */}
+            {(() => {
+              const imgs = parseImages(selectedLead.assessmentImagesJson);
+              if (imgs.length === 0) return null;
+              return (
+                <div>
+                  <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+                    <Camera className="size-4 text-muted-foreground" /> Assessment photos ({imgs.length})
+                  </h4>
+                  <div className="grid grid-cols-5 gap-2">
+                    {imgs.map((url, i) => (
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="aspect-square rounded-md overflow-hidden border bg-muted">
+                                                <img src={url} alt={`Assessment ${i + 1}`} className="size-full object-cover" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Linked customer */}
+            {selectedLead.customerId && (
+              <>
+                <Separator />
+                <div className="flex items-center gap-2 text-sm">
+                  <Link2 className="size-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Linked customer</p>
+                    <p className="font-medium">
+                      {selectedLead.customer?.name || customers.find((c) => c.id === selectedLead.customerId)?.name || 'Linked customer'}
+                    </p>
+                  </div>
+                </div>
+              </>
+            )}
+
+            <Separator />
+
+            {/* Product / Service line items */}
+            {(() => {
+              const items = parseLineItems(selectedLead.lineItemsJson);
+              if (items.length === 0) return null;
+              const sub = lineItemsSubtotal(items);
+              return (
+                <div>
+                  <h4 className="text-sm font-semibold mb-3 flex items-center gap-1.5">
+                    <Briefcase className="size-4 text-muted-foreground" /> Product / Service
+                  </h4>
+                  <div className="space-y-2">
+                    {items.map((it) => (
+                      <div key={it.id} className="flex items-center justify-between gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{it.name || 'Untitled item'}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {it.quantity} × {symbol}{(parseFloat(it.unitPrice) || 0).toFixed(2)}
+                          </p>
+                        </div>
+                        <span className="font-semibold text-emerald-700 whitespace-nowrap">
+                          {symbol}{lineItemTotal(it).toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2">
+                      <span className="text-sm font-medium text-emerald-800">Subtotal</span>
+                      <span className="text-sm font-bold text-emerald-700">{symbol}{sub.toFixed(2)}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
 
             <Separator />
 
@@ -1491,7 +2604,12 @@ export function LeadsView() {
   // ============================================================
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 w-full">
+      {/* ─── Form page takes over when adding/editing a lead ───────── */}
+      {formMode === 'form' ? (
+        renderLeadFormPage()
+      ) : (
+        <>
       {/* ─── Header ─────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -1602,10 +2720,11 @@ export function LeadsView() {
       {activeView === 'kanban' ? renderKanbanBoard() : renderTableView()}
 
       {/* ─── Dialogs ────────────────────────────────────────────── */}
-      {renderAddDialog()}
       {renderDetailDialog()}
       {renderConvertDialog()}
       {renderDeleteDialog()}
+        </>
+      )}
     </div>
   );
 }
