@@ -8,7 +8,10 @@ import {
   Loader2, ArrowLeft, FileText, StickyNote, CalendarDays, Info,
   Repeat, ClipboardList, Paperclip, ChevronDown, Tag, Link2,
   UploadCloud, File as FileIcon, X, Mail, DollarSign, MoreHorizontal,
-  TrendingUp, Printer, Send,
+  TrendingUp, Printer, Send, Camera, PenLine, ImagePlus,
+  // V1.5 lifecycle + time tracking icons
+  UserCheck, Check, Navigation, Wrench, Pause, Route as RouteIcon,
+  Timer, PlayCircle, PauseCircle, StopCircle, ExternalLink, MapPinned,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -53,6 +56,7 @@ import { cn } from '@/lib/utils';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { FormSectionCard, FormPageHeader } from '@/components/shared/form-section-card';
 import { useAppStore, type JobPrefillData } from '@/store/app-store';
+import { ChecklistExecution } from '@/components/job/checklist-execution';
 
 // Reuse the Jobber-style line-item + customer-picker building blocks that the
 // lead form already uses, so the two forms stay visually consistent.
@@ -77,6 +81,21 @@ import {
   parseChecklistSections,
   type ChecklistData,
 } from '@/components/views/checklists-view';
+
+// V1.5 field-service: photo capture + digital signatures + completion screen
+import { PhotoCapture, type JobPhoto } from '@/components/job/photo-capture';
+import { SignaturePad, type SavedSignature } from '@/components/job/signature-pad';
+import { JobCompletionScreen } from '@/components/job/job-completion-screen';
+import {
+  JOB_LIFECYCLE_STAGES,
+  getLifecycleStageIndex,
+  getLifecycleTimestamps,
+  type LifecycleTimestamps,
+} from '@/lib/job-lifecycle';
+
+// V1.5 AI Field Assistant + Communication Engine
+import { AIAssistantPanel } from '@/components/job/ai-assistant-panel';
+import { CommunicationComposer } from '@/components/communication/composer';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -113,6 +132,10 @@ interface Job {
   attachmentsJson?: string;
   linkedChecklistsJson?: string;
   linkToRelatedJson?: string;
+  // V1.5: lifecycle timestamps + misc metadata (JSON: { lifecycleTimestamps: {...} })
+  metadataJson?: string;
+  // V1.5: AI-generated completion notes (written by the AI Field Assistant)
+  completionNotes?: string | null;
   createdAt: string;
   updatedAt: string;
   assignee?: { id: string; name: string; phone: string; role: string };
@@ -146,6 +169,17 @@ interface Employee {
   completedJobs: number;
 }
 
+// V1.5: Lightweight customer-asset shape used by the job form's Equipment
+// selector and the job detail sidebar.
+interface CustomerAssetOption {
+  id: string;
+  name: string;
+  assetType: string;
+  brand?: string | null;
+  model?: string | null;
+  serialNumber?: string | null;
+}
+
 interface JobFormData {
   title: string;
   customerId: string;
@@ -173,6 +207,8 @@ interface JobFormData {
   linkedChecklists: string[];
   // ── Link to related: which related record types to surface ──
   linkToRelated: string[];
+  // ── V1.5: linked CustomerAsset (equipment) ──
+  assetId: string;
 }
 
 const EMPTY_JOB_FORM: JobFormData = {
@@ -198,6 +234,7 @@ const EMPTY_JOB_FORM: JobFormData = {
   attachments: [],
   linkedChecklists: [],
   linkToRelated: [],
+  assetId: '',
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -312,11 +349,526 @@ function parseStringArray(json?: string | null): string[] {
   }
 }
 
+/**
+ * V1.5 helper — extract the linked CustomerAsset ID from a job's metadataJson.
+ * metadataJson shape: { assetId?: string, lifecycleTimestamps?: {...}, ... }
+ */
+function parseAssetIdFromMetadata(json?: string | null): string {
+  try {
+    const parsed = json ? JSON.parse(json) : {};
+    if (parsed && typeof parsed === 'object' && typeof parsed.assetId === 'string') {
+      return parsed.assetId;
+    }
+  } catch {
+    // ignore
+  }
+  return '';
+}
+
 function formatFileSize(bytes?: number) {
   if (!bytes && bytes !== 0) return '';
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// ─── V1.5: Lifecycle / Time Tracking / GPS section sub-components ──────────
+
+/** Format seconds as HH:MM:SS. */
+function formatHMS(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${pad(h)}:${pad(m)}:${pad(sec)}`;
+}
+
+/** Format minutes as "1h 23m" or "45m" or "0m". */
+function formatMinutes(min: number): string {
+  if (!min || min <= 0) return '0m';
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+/** Map a Lucide icon name to the imported icon component. */
+function getLifecycleIcon(name: string) {
+  switch (name) {
+    case 'UserCheck': return UserCheck;
+    case 'Check': return Check;
+    case 'Navigation': return Navigation;
+    case 'MapPin': return MapPin;
+    case 'Wrench': return Wrench;
+    case 'Pause': return Pause;
+    case 'CheckCircle': return CheckCircle2;
+    case 'FileText': return FileText;
+    default: return Activity;
+  }
+}
+
+interface LifecycleDataShape {
+  status: string;
+  timestamps: LifecycleTimestamps;
+  activeTimeEntry: {
+    id: string;
+    startedAt: string;
+    endedAt: string | null;
+    status: string;
+    pausesJson: string;
+    durationMinutes: number;
+    pauseMinutes: number;
+    workingMinutes: number;
+    employeeId: string;
+  } | null;
+  activeRoute: {
+    id: string;
+    startedAt: string;
+    endedAt: string | null;
+    arrivedAt: string | null;
+    status: string;
+    distanceMeters: number;
+    durationMinutes: number;
+    etaMinutes: number | null;
+    startLat: number | null;
+    startLng: number | null;
+    endLat: number | null;
+    endLng: number | null;
+  } | null;
+}
+
+/**
+ * Lifecycle Timeline section — renders the 8-stage horizontal timeline
+ * (vertical on mobile) with completed stages in emerald, current in
+ * pulsing emerald, future in gray, and skipped stages with a dashed line.
+ */
+function LifecycleTimelineSection({
+  job,
+  lifecycleData,
+}: {
+  job: Job;
+  lifecycleData: LifecycleDataShape | null;
+}) {
+  // Pull timestamps — prefer the freshly-fetched lifecycleData; fall back to
+  // parsing them from the job's metadataJson (which the legacy /api/jobs/lifecycle
+  // endpoint returns as part of the job row).
+  const timestamps: LifecycleTimestamps = lifecycleData?.timestamps
+    ?? getLifecycleTimestamps({
+        metadataJson: job.metadataJson,
+        actualStartTime: job.actualStartTime,
+        completedAt: job.actualEndTime,
+      });
+
+  const currentIdx = getLifecycleStageIndex(job.status);
+
+  // Map timestamp keys to stages.
+  const tsByKey: Record<string, string | null> = {
+    assigned: timestamps.assigned,
+    accepted: timestamps.accepted,
+    travelling: timestamps.travelStarted,
+    arrived: timestamps.arrived,
+    working: timestamps.workStarted,
+    paused: timestamps.paused,
+    completed: timestamps.completed,
+    invoice_generated: timestamps.invoiceGenerated,
+  };
+
+  return (
+    <div className="w-full">
+      {/* Horizontal timeline (desktop) */}
+      <div className="hidden md:flex items-start justify-between gap-1 overflow-x-auto pb-2">
+        {JOB_LIFECYCLE_STAGES.map((stage, idx) => {
+          const Icon = getLifecycleIcon(stage.icon);
+          const isComplete = idx < currentIdx;
+          const isCurrent = idx === currentIdx;
+          const isFuture = idx > currentIdx;
+          const ts = tsByKey[stage.key];
+          const hasTimestamp = !!ts;
+
+          // Colour logic
+          const dotBg = isComplete || isCurrent
+            ? 'bg-emerald-500 text-white'
+            : 'bg-muted text-muted-foreground';
+          const ring = isCurrent ? 'ring-4 ring-emerald-500/20' : '';
+          const lineColor = isComplete
+            ? 'bg-emerald-500'
+            : isCurrent
+            ? 'bg-gradient-to-r from-emerald-500 to-muted'
+            : 'bg-border';
+
+          return (
+            <div key={stage.key} className="flex-1 min-w-[100px] flex flex-col items-center">
+              <div className="flex items-center w-full">
+                {/* Left half-line (skip for first) */}
+                {idx > 0 && (
+                  <div className={cn('flex-1 h-0.5', isComplete ? 'bg-emerald-500' : 'bg-border')} />
+                )}
+                {/* Dot + icon */}
+                <div className={cn(
+                  'relative size-9 rounded-full flex items-center justify-center shadow-sm shrink-0',
+                  dotBg,
+                  ring,
+                  isCurrent && 'animate-pulse',
+                )}>
+                  <Icon className="size-4" strokeWidth={2.2} />
+                </div>
+                {/* Right half-line (skip for last) */}
+                {idx < JOB_LIFECYCLE_STAGES.length - 1 && (
+                  <div className={cn('flex-1 h-0.5', lineColor)} />
+                )}
+              </div>
+              <div className="mt-2 text-center min-h-[40px]">
+                <p className={cn(
+                  'text-xs font-semibold',
+                  isComplete ? 'text-emerald-700' : isCurrent ? 'text-emerald-700' : 'text-muted-foreground',
+                )}>
+                  {stage.label}
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  {hasTimestamp ? formatDateTime(ts) : (isFuture ? 'Pending' : '—')}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Vertical timeline (mobile) */}
+      <div className="md:hidden space-y-1">
+        {JOB_LIFECYCLE_STAGES.map((stage, idx) => {
+          const Icon = getLifecycleIcon(stage.icon);
+          const isComplete = idx < currentIdx;
+          const isCurrent = idx === currentIdx;
+          const ts = tsByKey[stage.key];
+          const hasTimestamp = !!ts;
+
+          return (
+            <div key={stage.key} className="flex items-start gap-3">
+              <div className="flex flex-col items-center">
+                <div className={cn(
+                  'size-7 rounded-full flex items-center justify-center shrink-0',
+                  isComplete || isCurrent ? 'bg-emerald-500 text-white' : 'bg-muted text-muted-foreground',
+                  isCurrent && 'ring-4 ring-emerald-500/20 animate-pulse',
+                )}>
+                  <Icon className="size-3.5" strokeWidth={2.2} />
+                </div>
+                {idx < JOB_LIFECYCLE_STAGES.length - 1 && (
+                  <div className={cn('w-0.5 flex-1 min-h-[16px] my-1', isComplete ? 'bg-emerald-500' : 'bg-border')} />
+                )}
+              </div>
+              <div className="pb-2 min-w-0 flex-1">
+                <p className={cn(
+                  'text-sm font-semibold',
+                  isComplete ? 'text-emerald-700' : isCurrent ? 'text-emerald-700' : 'text-muted-foreground',
+                )}>
+                  {stage.label}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {hasTimestamp ? formatDateTime(ts) : (idx > currentIdx ? 'Pending' : '—')}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Time Tracking section — shows a live timer (HH:MM:SS) for the active
+ * work session, plus action buttons (Start / Pause / Resume / Complete),
+ * and the final breakdown (working / pause / total) when completed.
+ */
+function TimeTrackingSection({
+  job,
+  lifecycleData,
+  liveTimerSeconds,
+  lifecycleLoadingAction,
+  onAction,
+  onOpenCompletion,
+}: {
+  job: Job;
+  lifecycleData: LifecycleDataShape | null;
+  liveTimerSeconds: number;
+  lifecycleLoadingAction: string | null;
+  onAction: (action: 'start_work' | 'pause' | 'resume' | 'complete', jobId: string) => void;
+  onOpenCompletion: () => void;
+}) {
+  const activeEntry = lifecycleData?.activeTimeEntry ?? null;
+  const isWorking = job.status === 'working';
+  const isPaused = job.status === 'paused';
+  const isActive = isWorking || isPaused;
+  const isCompleted = job.status === 'completed' || job.status === 'invoice_generated';
+
+  // Compute pause + total live for active sessions.
+  const livePauseSeconds = (() => {
+    if (!activeEntry) return 0;
+    try {
+      const pauses = JSON.parse(activeEntry.pausesJson || '[]') as Array<{ start: string; end?: string | null }>;
+      let totalMs = 0;
+      for (const p of pauses) {
+        if (!p.start) continue;
+        const s = new Date(p.start).getTime();
+        const e = p.end ? new Date(p.end).getTime() : Date.now();
+        if (e > s) totalMs += e - s;
+      }
+      return Math.floor(totalMs / 1000);
+    } catch {
+      return 0;
+    }
+  })();
+  const liveTotalSeconds = liveTimerSeconds + livePauseSeconds;
+
+  return (
+    <div className="space-y-4">
+      {/* Live timer display */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            {isWorking ? 'Working time' : isPaused ? 'Paused' : isCompleted ? 'Total work time' : 'Not started'}
+          </p>
+          <p className="text-4xl font-mono font-bold text-foreground tabular-nums mt-1">
+            {isActive ? formatHMS(liveTimerSeconds) : isCompleted && activeEntry
+              ? formatHMS((activeEntry.workingMinutes || 0) * 60)
+              : isCompleted && job.actualStartTime && job.actualEndTime
+              ? formatHMS(Math.round((new Date(job.actualEndTime).getTime() - new Date(job.actualStartTime).getTime()) / 1000))
+              : '00:00:00'}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {isActive && (
+            <Badge variant="outline" className={cn(
+              'gap-1 capitalize',
+              isWorking ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200',
+            )}>
+              <span className={cn('size-1.5 rounded-full', isWorking ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500')} />
+              {job.status}
+            </Badge>
+          )}
+          {!isActive && !isCompleted && (
+            <Badge variant="outline" className="bg-muted text-muted-foreground border-border capitalize">
+              {job.status.replace('_', ' ')}
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex flex-wrap gap-2 pt-2 border-t border-border/40">
+        {!isActive && !isCompleted && job.status === 'arrived' && (
+          <button
+            onClick={() => onAction('start_work', job.id)}
+            disabled={!!lifecycleLoadingAction}
+            className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm"
+          >
+            {lifecycleLoadingAction === 'start_work' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <PlayCircle className="size-4 mr-1.5" />} Start Working
+          </button>
+        )}
+        {isWorking && (
+          <>
+            <button
+              onClick={() => onAction('pause', job.id)}
+              disabled={!!lifecycleLoadingAction}
+              className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted disabled:opacity-60 transition-colors"
+            >
+              {lifecycleLoadingAction === 'pause' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <PauseCircle className="size-4 mr-1.5" />} Pause
+            </button>
+            <button
+              onClick={onOpenCompletion}
+              disabled={!!lifecycleLoadingAction}
+              className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 transition-colors shadow-sm"
+            >
+              <StopCircle className="size-4 mr-1.5" /> Complete
+            </button>
+          </>
+        )}
+        {isPaused && (
+          <>
+            <button
+              onClick={() => onAction('resume', job.id)}
+              disabled={!!lifecycleLoadingAction}
+              className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm"
+            >
+              {lifecycleLoadingAction === 'resume' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <PlayCircle className="size-4 mr-1.5" />} Resume
+            </button>
+            <button
+              onClick={onOpenCompletion}
+              disabled={!!lifecycleLoadingAction}
+              className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 transition-colors shadow-sm"
+            >
+              <StopCircle className="size-4 mr-1.5" /> Complete
+            </button>
+          </>
+        )}
+        {!isActive && !isCompleted && job.status !== 'arrived' && (
+          <p className="text-sm text-muted-foreground italic">
+            {job.status === 'pending' && 'Job must be assigned first to start time tracking.'}
+            {job.status === 'assigned' && 'Technician must accept the job to start time tracking.'}
+            {job.status === 'accepted' && 'Start travel to begin tracking. Time tracking begins on arrival.'}
+            {job.status === 'travelling' && 'Mark as arrived to begin work time tracking.'}
+          </p>
+        )}
+      </div>
+
+      {/* Time breakdown */}
+      {(isActive || isCompleted) && (
+        <div className="grid grid-cols-3 gap-3 pt-3 border-t border-border/40">
+          <div className="rounded-md bg-emerald-50/60 dark:bg-emerald-950/20 px-3 py-2 text-center">
+            <p className="text-xs text-muted-foreground">Working</p>
+            <p className="text-sm font-semibold text-emerald-700 mt-0.5 font-mono">
+              {isActive
+                ? formatHMS(liveTimerSeconds)
+                : activeEntry
+                ? formatMinutes(activeEntry.workingMinutes || 0)
+                : '—'}
+            </p>
+          </div>
+          <div className="rounded-md bg-amber-50/60 dark:bg-amber-950/20 px-3 py-2 text-center">
+            <p className="text-xs text-muted-foreground">Pause</p>
+            <p className="text-sm font-semibold text-amber-700 mt-0.5 font-mono">
+              {isActive
+                ? formatHMS(livePauseSeconds)
+                : activeEntry
+                ? formatMinutes(activeEntry.pauseMinutes || 0)
+                : '—'}
+            </p>
+          </div>
+          <div className="rounded-md bg-muted/40 px-3 py-2 text-center">
+            <p className="text-xs text-muted-foreground">Total</p>
+            <p className="text-sm font-semibold text-foreground mt-0.5 font-mono">
+              {isActive
+                ? formatHMS(liveTotalSeconds)
+                : activeEntry
+                ? formatMinutes((activeEntry.durationMinutes || 0))
+                : '—'}
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * GPS / Route section — shows a summary of the travel route (distance,
+ * duration, on-time arrival) and a "View on Map" button that opens a
+ * modal with the path coordinates + Google Maps link.
+ */
+function GpsRouteSection({
+  job,
+  lifecycleData,
+  onOpenRoute,
+}: {
+  job: Job;
+  lifecycleData: LifecycleDataShape | null;
+  onOpenRoute: () => void;
+}) {
+  const route = lifecycleData?.activeRoute;
+  // The active route is "in_progress"; completed routes are fetched on-demand.
+  // We also check the lifecycle timestamps to see if travel ever happened.
+  const ts = lifecycleData?.timestamps;
+  const travelHappened = !!(ts && (ts.travelStarted || ts.arrived));
+
+  if (!travelHappened && !route) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <RouteIcon className="size-4" />
+        <span>No travel recorded for this job yet.</span>
+      </div>
+    );
+  }
+
+  // Compute on-time status (if scheduledAt + arrivedAt both present).
+  let onTimeDiffMin: number | null = null;
+  if (ts?.arrived && job.scheduledAt) {
+    try {
+      const arrived = new Date(ts.arrived).getTime();
+      const scheduled = new Date(job.scheduledAt).getTime();
+      onTimeDiffMin = Math.round((arrived - scheduled) / 60000);
+    } catch {
+      onTimeDiffMin = null;
+    }
+  }
+  let onTimeBadge: React.ReactNode = null;
+  if (onTimeDiffMin !== null) {
+    if (onTimeDiffMin <= 0) {
+      onTimeBadge = (
+        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+          On time
+        </Badge>
+      );
+    } else if (onTimeDiffMin <= 15) {
+      onTimeBadge = (
+        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+          {onTimeDiffMin}m late
+        </Badge>
+      );
+    } else {
+      onTimeBadge = (
+        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
+          {onTimeDiffMin}m late
+        </Badge>
+      );
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="rounded-md bg-muted/40 px-3 py-2">
+          <p className="text-xs text-muted-foreground">Distance</p>
+          <p className="text-sm font-semibold text-foreground mt-0.5">
+            {route?.distanceMeters
+              ? `${(route.distanceMeters / 1000).toFixed(2)} km`
+              : '—'}
+          </p>
+        </div>
+        <div className="rounded-md bg-muted/40 px-3 py-2">
+          <p className="text-xs text-muted-foreground">Travel time</p>
+          <p className="text-sm font-semibold text-foreground mt-0.5">
+            {route?.durationMinutes ? formatMinutes(route.durationMinutes) : (ts?.travelStarted && ts?.arrived ? formatMinutes(Math.round((new Date(ts.arrived).getTime() - new Date(ts.travelStarted).getTime()) / 60000)) : '—')}
+          </p>
+        </div>
+        <div className="rounded-md bg-muted/40 px-3 py-2">
+          <p className="text-xs text-muted-foreground">Started</p>
+          <p className="text-sm font-semibold text-foreground mt-0.5">
+            {ts?.travelStarted ? formatDateTime(ts.travelStarted) : '—'}
+          </p>
+        </div>
+        <div className="rounded-md bg-muted/40 px-3 py-2">
+          <p className="text-xs text-muted-foreground">Arrived</p>
+          <p className="text-sm font-semibold text-foreground mt-0.5">
+            {ts?.arrived ? formatDateTime(ts.arrived) : (route?.status === 'in_progress' ? 'In transit…' : '—')}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-3 flex-wrap pt-2 border-t border-border/40">
+        <div className="flex items-center gap-2">
+          {onTimeBadge}
+          {route?.status === 'in_progress' && (
+            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
+              <Navigation className="size-3 mr-1 animate-pulse" /> In transit
+            </Badge>
+          )}
+          {route?.status === 'completed' && (
+            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+              <CheckCircle2 className="size-3 mr-1" /> Route completed
+            </Badge>
+          )}
+        </div>
+        <button
+          onClick={onOpenRoute}
+          className="inline-flex items-center justify-center h-8 px-3 rounded-lg text-sm font-medium text-emerald-700 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+        >
+          <MapPinned className="size-4 mr-1.5" /> View on Map
+        </button>
+      </div>
+    </div>
+  );
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -374,6 +926,8 @@ export function JobsView() {
   // Dialogs (list-mode)
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [detailLinkedAsset, setDetailLinkedAsset] = useState<CustomerAssetOption | null>(null);
+  const [showChecklistExecution, setShowChecklistExecution] = useState(false);
   const [assigningJob, setAssigningJob] = useState<Job | null>(null);
   const [lifecycleLoading, setLifecycleLoading] = useState(false);
   const [loadingJobId, setLoadingJobId] = useState<string | null>(null);
@@ -381,6 +935,62 @@ export function JobsView() {
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
   const [deletingJob, setDeletingJob] = useState<Job | null>(null);
   const [deleteSaving, setDeleteSaving] = useState(false);
+
+  // V1.5: Job completion dialog (photos + signatures + notes)
+  const [completionJob, setCompletionJob] = useState<Job | null>(null);
+  const [showCompletionDialog, setShowCompletionDialog] = useState(false);
+
+  // V1.5: Signatures displayed inline in the job detail page
+  const [jobSignatures, setJobSignatures] = useState<SavedSignature[]>([]);
+  const [showSignaturePad, setShowSignaturePad] = useState(false);
+
+  // V1.5: Lifecycle + Time Tracking + GPS state for the job detail page
+  const [lifecycleData, setLifecycleData] = useState<{
+    status: string;
+    timestamps: LifecycleTimestamps;
+    activeTimeEntry: {
+      id: string;
+      startedAt: string;
+      endedAt: string | null;
+      status: string;
+      pausesJson: string;
+      durationMinutes: number;
+      pauseMinutes: number;
+      workingMinutes: number;
+      employeeId: string;
+    } | null;
+    activeRoute: {
+      id: string;
+      startedAt: string;
+      endedAt: string | null;
+      arrivedAt: string | null;
+      status: string;
+      distanceMeters: number;
+      durationMinutes: number;
+      etaMinutes: number | null;
+      startLat: number | null;
+      startLng: number | null;
+      endLat: number | null;
+      endLng: number | null;
+    } | null;
+  } | null>(null);
+  const [lifecycleLoadingAction, setLifecycleLoadingAction] = useState<string | null>(null);
+  const [liveTimerSeconds, setLiveTimerSeconds] = useState(0);
+  const [showRouteModal, setShowRouteModal] = useState(false);
+  const [routeData, setRouteData] = useState<{
+    path: Array<{ lat: number; lng: number; capturedAt: string; accuracy?: number | null }>;
+    summary: { totalDistanceKm: number; totalDurationMinutes: number; routeCount: number };
+    routes: Array<{ id: string; startedAt: string; arrivedAt: string | null; distanceMeters: number; durationMinutes: number; startLat: number | null; startLng: number | null; endLat: number | null; endLng: number | null }>;
+  } | null>(null);
+  const [routeLoading, setRouteLoading] = useState(false);
+
+  // V1.5 AI Assistant + Communication Composer state
+  const [showComposer, setShowComposer] = useState(false);
+  const [composerInitial, setComposerInitial] = useState<{
+    body?: string;
+    subject?: string;
+    templateKey?: string;
+  }>({});
 
   // Service catalog — for the line-item autocomplete in the form
   const [services, setServices] = useState<CatalogService[]>([]);
@@ -408,6 +1018,76 @@ export function JobsView() {
     }
   }, []);
   useEffect(() => { fetchChecklists(); }, [fetchChecklists]);
+
+  // V1.5: Customer assets — for the "Equipment" selector in the job form.
+  // Loaded whenever the selected customerId changes.
+  const [customerAssets, setCustomerAssets] = useState<CustomerAssetOption[]>([]);
+  useEffect(() => {
+    if (!jobForm.customerId) {
+      setCustomerAssets([]);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/customers/${jobForm.customerId}/assets`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { assets: [] }))
+      .then((data) => {
+        if (!cancelled) {
+          const list = Array.isArray(data?.assets) ? data.assets : [];
+          setCustomerAssets(list);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setCustomerAssets([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [jobForm.customerId]);
+
+  // V1.5: When a job detail page is opened, fetch the linked asset (if any)
+  // so we can show its name + type in the detail sidebar.
+  useEffect(() => {
+    setShowChecklistExecution(false);
+    if (!selectedJob) {
+      setDetailLinkedAsset(null);
+      return;
+    }
+    const assetId = parseAssetIdFromMetadata(selectedJob.metadataJson);
+    if (!assetId) {
+      setDetailLinkedAsset(null);
+      return;
+    }
+    // If we already have it in customerAssets (e.g. the form was used), reuse.
+    const cached = customerAssets.find((a) => a.id === assetId);
+    if (cached) {
+      setDetailLinkedAsset(cached);
+      return;
+    }
+    let cancelled = false;
+    // Fetch via the asset detail endpoint (works even without customer context).
+    fetch(`/api/customers/${selectedJob.customerId || '_'}/assets/${assetId}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.asset) {
+          setDetailLinkedAsset({
+            id: data.asset.id,
+            name: data.asset.name,
+            assetType: data.asset.assetType,
+            brand: data.asset.brand,
+            model: data.asset.model,
+            serialNumber: data.asset.serialNumber,
+          });
+        } else if (!cancelled) {
+          setDetailLinkedAsset(null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setDetailLinkedAsset(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedJob]);
 
   // ─── Fetch ──────────────────────────────────────────────────────────────
 
@@ -464,6 +1144,73 @@ export function JobsView() {
   useEffect(() => {
     fetchCustomers();
   }, [fetchCustomers]);
+
+  // ── V1.5: Live timer — ticks every second while a JobTimeEntry is active ──
+  // Computes elapsed seconds from `startedAt` minus any pause durations (live).
+  useEffect(() => {
+    if (!lifecycleData?.activeTimeEntry) {
+      setLiveTimerSeconds(0);
+      return;
+    }
+    // Only tick if the entry is active (not paused) — when paused, freeze the timer.
+    if (lifecycleData.activeTimeEntry.status !== 'active') {
+      // Compute frozen value (working time up to the last pause start).
+      const computeSeconds = () => {
+        const started = new Date(lifecycleData.activeTimeEntry!.startedAt).getTime();
+        let pauseMs = 0;
+        try {
+          const pauses = JSON.parse(lifecycleData.activeTimeEntry!.pausesJson || '[]') as Array<{ start: string; end?: string | null }>;
+          for (const p of pauses) {
+            if (!p.start) continue;
+            const s = new Date(p.start).getTime();
+            const e = p.end ? new Date(p.end).getTime() : Date.now();
+            if (e > s) pauseMs += e - s;
+          }
+        } catch {
+          // ignore
+        }
+        // If currently paused (last pause has no end), freeze at that pause's start.
+        const lastPauseOpen = (() => {
+          try {
+            const pauses = JSON.parse(lifecycleData.activeTimeEntry!.pausesJson || '[]') as Array<{ start: string; end?: string | null }>;
+            return pauses.length > 0 && !pauses[pauses.length - 1].end
+              ? new Date(pauses[pauses.length - 1].start).getTime()
+              : null;
+          } catch {
+            return null;
+          }
+        })();
+        const endTime = lastPauseOpen ?? Date.now();
+        const workingMs = endTime - started - pauseMs;
+        return Math.max(0, Math.floor(workingMs / 1000));
+      };
+      setLiveTimerSeconds(computeSeconds());
+      return;
+    }
+    // Active — tick every second.
+    const computeSeconds = () => {
+      const started = new Date(lifecycleData.activeTimeEntry!.startedAt).getTime();
+      let pauseMs = 0;
+      try {
+        const pauses = JSON.parse(lifecycleData.activeTimeEntry!.pausesJson || '[]') as Array<{ start: string; end?: string | null }>;
+        for (const p of pauses) {
+          if (!p.start) continue;
+          const s = new Date(p.start).getTime();
+          const e = p.end ? new Date(p.end).getTime() : Date.now();
+          if (e > s) pauseMs += e - s;
+        }
+      } catch {
+        // ignore
+      }
+      const workingMs = Date.now() - started - pauseMs;
+      return Math.max(0, Math.floor(workingMs / 1000));
+    };
+    setLiveTimerSeconds(computeSeconds());
+    const interval = setInterval(() => {
+      setLiveTimerSeconds(computeSeconds());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [lifecycleData?.activeTimeEntry]);
 
   // ── Consume the lead→job prefill from the global store ──────────────────
   // When the user clicks "Convert" on a lead, the Leads view stashes the
@@ -559,6 +1306,7 @@ export function JobsView() {
       attachments: parseAttachments(job.attachmentsJson),
       linkedChecklists: parseStringArray(job.linkedChecklistsJson),
       linkToRelated: parseStringArray(job.linkToRelatedJson),
+      assetId: parseAssetIdFromMetadata(job.metadataJson),
     });
     setCustomerQuery('');
     setCustomerPickerOpen(false);
@@ -770,6 +1518,8 @@ export function JobsView() {
         attachmentsJson: JSON.stringify(jobForm.attachments),
         linkedChecklistsJson: JSON.stringify(jobForm.linkedChecklists),
         linkToRelatedJson: JSON.stringify(jobForm.linkToRelated),
+        // V1.5: linked equipment (CustomerAsset) — stored in job.metadataJson
+        assetId: jobForm.assetId || undefined,
       };
 
       let createdJobId: string | null = null;
@@ -888,8 +1638,140 @@ export function JobsView() {
     } catch {
       setSelectedJob(job);
     }
+    // V1.5: load any saved signatures for this job (for the inline display)
+    fetchJobSignatures(job.id);
+    setShowSignaturePad(false);
+    // V1.5: load lifecycle state (timestamps + active time entry + active route)
+    fetchLifecycleData(job.id);
+    // Reset route modal state
+    setRouteData(null);
+    setShowRouteModal(false);
     // Open as a full page (Jobber-style) instead of a modal dialog.
     setFormMode('detail');
+  };
+
+  const fetchJobSignatures = async (jobId: string) => {
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/signatures`);
+      if (res.ok) {
+        const data = await res.json();
+        setJobSignatures(data.signatures || []);
+      } else {
+        setJobSignatures([]);
+      }
+    } catch {
+      setJobSignatures([]);
+    }
+  };
+
+  // ── V1.5: fetch lifecycle state (timestamps + active time entry + active route) ──
+  const fetchLifecycleData = useCallback(async (jobId: string) => {
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/lifecycle`);
+      if (res.ok) {
+        const data = await res.json();
+        setLifecycleData(data);
+      } else {
+        setLifecycleData(null);
+      }
+    } catch {
+      setLifecycleData(null);
+    }
+  }, []);
+
+  // ── V1.5: trigger a lifecycle transition via the new endpoint ──
+  const handleLifecycleTransition = useCallback(
+    async (
+      action: 'accept' | 'start_travel' | 'arrive' | 'start_work' | 'pause' | 'resume' | 'complete' | 'generate_invoice',
+      jobId: string,
+      extra?: { latitude?: number; longitude?: number; notes?: string },
+    ) => {
+      setLifecycleLoadingAction(action);
+      try {
+        const res = await fetch(`/api/jobs/${jobId}/lifecycle`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, ...extra }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          toast.success(`Job ${action.replace('_', ' ')} successful`);
+          // Refresh both the lifecycle data + the job itself
+          await fetchLifecycleData(jobId);
+          fetchJobs();
+          // Re-fetch the job detail row so the header status badge updates.
+          try {
+            const detailRes = await fetch(`/api/jobs/lifecycle?jobId=${jobId}`);
+            if (detailRes.ok) setSelectedJob(await detailRes.json());
+          } catch {
+            // ignore
+          }
+        } else {
+          toast.error(data?.error || `Failed to ${action} job`);
+        }
+      } catch {
+        toast.error('Network error');
+      } finally {
+        setLifecycleLoadingAction(null);
+      }
+    },
+    [fetchLifecycleData, fetchJobs],
+  );
+
+  // ── V1.5: fetch a route for a specific employee+job ──
+  const fetchRouteData = useCallback(async (employeeId: string, jobId?: string) => {
+    setRouteLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (jobId) params.set('jobId', jobId);
+      const res = await fetch(`/api/gps/route/${employeeId}?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setRouteData({
+          path: data.path || [],
+          summary: data.summary || { totalDistanceKm: 0, totalDurationMinutes: 0, routeCount: 0 },
+          routes: (data.routes || []).map((r: Record<string, unknown>) => ({
+            id: String(r.id),
+            startedAt: String(r.startedAt),
+            arrivedAt: (r.arrivedAt as string | null) || null,
+            distanceMeters: Number(r.distanceMeters || 0),
+            durationMinutes: Number(r.durationMinutes || 0),
+            startLat: (r.startLat as number | null) ?? null,
+            startLng: (r.startLng as number | null) ?? null,
+            endLat: (r.endLat as number | null) ?? null,
+            endLng: (r.endLng as number | null) ?? null,
+          })),
+        });
+      } else {
+        setRouteData(null);
+      }
+    } catch {
+      setRouteData(null);
+    } finally {
+      setRouteLoading(false);
+    }
+  }, []);
+
+  // V1.5: open the multi-step completion dialog instead of directly completing
+  const openCompletionDialog = (job: Job) => {
+    setCompletionJob(job);
+    setShowCompletionDialog(true);
+  };
+
+  const handleCompletionDone = () => {
+    // Refresh the jobs list + the selected job (now completed)
+    fetchJobs();
+    if (completionJob) {
+      fetch(`/api/jobs/lifecycle?jobId=${completionJob.id}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data) {
+            setSelectedJob(data);
+            fetchJobSignatures(completionJob.id);
+          }
+        })
+        .catch(() => {});
+    }
   };
 
   const closeJobDetail = () => {
@@ -1341,6 +2223,45 @@ export function JobsView() {
           </div>
         </FormSectionCard>
 
+        {/* ─── Equipment (linked asset) ──────────────────────────── */}
+        <FormSectionCard icon={Wrench} title="Equipment" description="Link this job to a customer asset to track service history">
+          <div className="space-y-2">
+            {!jobForm.customerId ? (
+              <p className="text-xs text-muted-foreground italic">
+                Select a customer first to see their equipment.
+              </p>
+            ) : customerAssets.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">
+                This customer has no equipment tracked yet.
+              </p>
+            ) : (
+              <>
+                <Select
+                  value={jobForm.assetId || 'none'}
+                  onValueChange={(v) => setJobForm({ ...jobForm, assetId: v === 'none' ? '' : v })}
+                >
+                  <SelectTrigger className="form-input h-10">
+                    <SelectValue placeholder="None — no specific equipment" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None — no specific equipment</SelectItem>
+                    {customerAssets.map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.name} ({a.assetType}){a.brand ? ` · ${a.brand}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {jobForm.assetId && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Service history will be auto-recorded on this asset when the job completes.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+        </FormSectionCard>
+
         {/* ─── Product / Service (line items) ───────────────────── */}
         <FormSectionCard icon={Briefcase} title="Product / Service" description="Search the catalog or add a custom item">
           <div className="space-y-3">
@@ -1569,6 +2490,8 @@ export function JobsView() {
     const customFields = parseCustomFields(job.customFieldsJson);
     const attachments = parseAttachments(job.attachmentsJson);
     const linkedChecklists = parseStringArray(job.linkedChecklistsJson);
+    const linkedAssetId = parseAssetIdFromMetadata(job.metadataJson);
+    const linkedAsset = linkedAssetId ? detailLinkedAsset : null;
     const totalPrice = lineItemsSubtotal(lineItems) || (job.quotedAmount || 0);
     const totalCost = lineItems.reduce((sum, it) => sum + (Number(it.unitCost) || 0) * (Number(it.quantity) || 0), 0);
     const profit = totalPrice - totalCost;
@@ -1643,7 +2566,7 @@ export function JobsView() {
                 </button>
               )}
               {job.status === 'in_progress' && (
-                <button onClick={() => handleLifecycleAction('complete', job.id)} disabled={lifecycleLoading} className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 transition-colors shadow-sm">
+                <button onClick={() => openCompletionDialog(job)} disabled={lifecycleLoading} className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 transition-colors shadow-sm">
                   {lifecycleLoading && loadingAction === 'complete' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <CheckCircle2 className="size-4 mr-1.5" />} Complete
                 </button>
               )}
@@ -1656,6 +2579,18 @@ export function JobsView() {
                   Reopen Job
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => {
+                  setComposerInitial({ templateKey: 'custom' });
+                  setShowComposer(true);
+                }}
+                title="Message customer"
+                disabled={!job.customerId}
+                className="inline-flex items-center justify-center h-9 px-3 rounded-lg text-sm font-medium text-emerald-700 border border-emerald-600/40 bg-emerald-500/5 hover:bg-emerald-500/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <Mail className="size-4 mr-1.5" /> Message
+              </button>
               <button onClick={() => openEditJob(job)} className="inline-flex items-center justify-center h-9 px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors">
                 <Pencil className="size-4 mr-1.5" /> Edit
               </button>
@@ -1705,6 +2640,123 @@ export function JobsView() {
                   </div>
                 ))}
               </dl>
+            </FormSectionCard>
+
+            {/* ── V1.5: Lifecycle Timeline ─────────────────────────────────── */}
+            <FormSectionCard icon={Activity} title="Lifecycle timeline" description="Track the job through its 8 stages — from assignment to invoice.">
+              <LifecycleTimelineSection
+                job={job}
+                lifecycleData={lifecycleData}
+              />
+              {/* Quick action buttons for the current stage */}
+              <div className="mt-4 flex flex-wrap gap-2 pt-3 border-t border-border/40">
+                {job.status === 'assigned' && (
+                  <button
+                    onClick={() => handleLifecycleTransition('accept', job.id)}
+                    disabled={!!lifecycleLoadingAction}
+                    className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm"
+                  >
+                    {lifecycleLoadingAction === 'accept' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Check className="size-4 mr-1.5" />} Accept
+                  </button>
+                )}
+                {job.status === 'accepted' && (
+                  <button
+                    onClick={() => handleLifecycleTransition('start_travel', job.id)}
+                    disabled={!!lifecycleLoadingAction}
+                    className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 disabled:opacity-60 transition-colors shadow-sm"
+                  >
+                    {lifecycleLoadingAction === 'start_travel' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Navigation className="size-4 mr-1.5" />} Start Travel
+                  </button>
+                )}
+                {job.status === 'travelling' && (
+                  <button
+                    onClick={() => handleLifecycleTransition('arrive', job.id)}
+                    disabled={!!lifecycleLoadingAction}
+                    className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-60 transition-colors shadow-sm"
+                  >
+                    {lifecycleLoadingAction === 'arrive' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <MapPin className="size-4 mr-1.5" />} Mark Arrived
+                  </button>
+                )}
+                {job.status === 'arrived' && (
+                  <button
+                    onClick={() => handleLifecycleTransition('start_work', job.id)}
+                    disabled={!!lifecycleLoadingAction}
+                    className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm"
+                  >
+                    {lifecycleLoadingAction === 'start_work' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Wrench className="size-4 mr-1.5" />} Start Work
+                  </button>
+                )}
+                {job.status === 'working' && (
+                  <button
+                    onClick={() => handleLifecycleTransition('pause', job.id)}
+                    disabled={!!lifecycleLoadingAction}
+                    className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted disabled:opacity-60 transition-colors"
+                  >
+                    {lifecycleLoadingAction === 'pause' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Pause className="size-4 mr-1.5" />} Pause
+                  </button>
+                )}
+                {job.status === 'paused' && (
+                  <button
+                    onClick={() => handleLifecycleTransition('resume', job.id)}
+                    disabled={!!lifecycleLoadingAction}
+                    className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm"
+                  >
+                    {lifecycleLoadingAction === 'resume' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Play className="size-4 mr-1.5" />} Resume
+                  </button>
+                )}
+                {(job.status === 'working' || job.status === 'paused') && (
+                  <button
+                    onClick={() => openCompletionDialog(job)}
+                    disabled={!!lifecycleLoadingAction}
+                    className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 transition-colors shadow-sm"
+                  >
+                    <CheckCircle2 className="size-4 mr-1.5" /> Complete
+                  </button>
+                )}
+                {job.status === 'completed' && (
+                  <button
+                    onClick={() => handleLifecycleTransition('generate_invoice', job.id)}
+                    disabled={!!lifecycleLoadingAction}
+                    className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm"
+                  >
+                    {lifecycleLoadingAction === 'generate_invoice' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <FileText className="size-4 mr-1.5" />} Generate Invoice
+                  </button>
+                )}
+              </div>
+            </FormSectionCard>
+
+            {/* ── V1.5: Time Tracking (live timer + breakdown) ──────────────── */}
+            <FormSectionCard
+              icon={Timer}
+              title="Time tracking"
+              description="Live timer for the active work session. Pause when taking a break."
+            >
+              <TimeTrackingSection
+                job={job}
+                lifecycleData={lifecycleData}
+                liveTimerSeconds={liveTimerSeconds}
+                lifecycleLoadingAction={lifecycleLoadingAction}
+                onAction={handleLifecycleTransition}
+                onOpenCompletion={() => openCompletionDialog(job)}
+              />
+            </FormSectionCard>
+
+            {/* ── V1.5: GPS / Route summary ──────────────────────────────────── */}
+            <FormSectionCard
+              icon={MapPinned}
+              title="GPS & route"
+              description="Travel route, distance, and on-time arrival for this job."
+            >
+              <GpsRouteSection
+                job={job}
+                lifecycleData={lifecycleData}
+                onOpenRoute={() => {
+                  if (job.assigneeId) {
+                    fetchRouteData(job.assigneeId, job.id);
+                    setShowRouteModal(true);
+                  }
+                }}
+              />
             </FormSectionCard>
 
             {/* #job custom fields (only if any) */}
@@ -1849,17 +2901,188 @@ export function JobsView() {
             )}
 
             {/* Linked checklists (only if any) */}
-            {linkedChecklists.length > 0 && (
-              <FormSectionCard icon={ClipboardList} title="Checklists">
-                <div className="flex flex-wrap gap-1.5">
-                  {linkedChecklists.map((cid) => (
-                    <Badge key={cid} variant="secondary" className="bg-emerald-50 text-emerald-800 border-emerald-200 gap-1">
-                      <ClipboardList className="size-3" /> {checklists.find((c) => c.id === cid)?.title || 'Checklist'}
-                    </Badge>
-                  ))}
-                </div>
+            {(linkedChecklists.length > 0 || linkedAssetId) && (
+              <FormSectionCard
+                icon={ClipboardList}
+                title="On-site checklists"
+                action={
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5"
+                    onClick={() => setShowChecklistExecution((s) => !s)}
+                  >
+                    {showChecklistExecution ? 'Hide' : 'Open checklist'}
+                    <ChevronRight className={cn('size-3.5 transition-transform', showChecklistExecution && 'rotate-90')} />
+                  </Button>
+                }
+              >
+                {showChecklistExecution ? (
+                  <ChecklistExecution jobId={job.id} />
+                ) : (
+                  <div className="space-y-2">
+                    {linkedChecklists.length === 0 ? (
+                      <p className="text-sm text-muted-foreground italic">
+                        No checklist template linked. Opening the runner will attempt to auto-create
+                        one from this job&apos;s service template (if any).
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {linkedChecklists.map((cid) => (
+                          <Badge key={cid} variant="secondary" className="bg-emerald-50 text-emerald-800 border-emerald-200 gap-1">
+                            <ClipboardList className="size-3" /> {checklists.find((c) => c.id === cid)?.title || 'Checklist'}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-[11px] text-muted-foreground">
+                      Tap “Open checklist” to fill it in on-site.
+                    </p>
+                  </div>
+                )}
               </FormSectionCard>
             )}
+
+            {/* V1.5: Linked equipment (asset) */}
+            {linkedAssetId && (
+              <FormSectionCard icon={Wrench} title="Equipment serviced">
+                {linkedAsset ? (
+                  <div className="flex items-start gap-3">
+                    <div className="size-9 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
+                      <Wrench className="size-4 text-emerald-600" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground">{linkedAsset.name}</p>
+                      <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 capitalize">
+                          {linkedAsset.assetType}
+                        </Badge>
+                        {linkedAsset.brand && (
+                          <span className="text-xs text-muted-foreground">
+                            {linkedAsset.brand}{linkedAsset.model ? ` · ${linkedAsset.model}` : ''}
+                          </span>
+                        )}
+                        {linkedAsset.serialNumber && (
+                          <span className="text-xs text-muted-foreground font-mono">
+                            S/N: {linkedAsset.serialNumber}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        Service history is tracked on this asset in the customer&apos;s Equipment tab.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Linked asset <span className="font-mono text-xs">{linkedAssetId.slice(-8)}</span> (details unavailable)
+                  </p>
+                )}
+              </FormSectionCard>
+            )}
+
+            {/* V1.5: Before / After Photos */}
+            <FormSectionCard
+              icon={Camera}
+              title="Photos"
+              description="Before / after / progress / issue photos with GPS metadata"
+              action={
+                job.status === 'in_progress' && (
+                  <button
+                    type="button"
+                    onClick={() => openCompletionDialog(job)}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-800"
+                  >
+                    <CheckCircle2 className="size-3.5" /> Complete
+                  </button>
+                )
+              }
+            >
+              <PhotoCapture jobId={job.id} showTabs />
+            </FormSectionCard>
+
+            {/* V1.5: Signatures */}
+            <FormSectionCard
+              icon={PenLine}
+              title="Signatures"
+              description="Customer + employee signatures collected at job completion"
+            >
+              <div className="space-y-4">
+                {jobSignatures.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {jobSignatures.map((sig) => (
+                      <div
+                        key={sig.id}
+                        className="rounded-lg border border-border/60 bg-background p-3 space-y-2"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              'text-[10px] capitalize',
+                              sig.signatoryType === 'customer'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-blue-50 text-blue-700 border-blue-200'
+                            )}
+                          >
+                            {sig.signatoryType}
+                          </Badge>
+                          <span className="text-[10px] text-muted-foreground">
+                            {new Date(sig.signedAt).toLocaleString()}
+                          </span>
+                        </div>
+                        <img
+                          src={sig.signatureUrl}
+                          alt={`Signature by ${sig.signatoryName}`}
+                          className="w-full h-16 object-contain bg-white rounded border border-border/40"
+                        />
+                        <div className="text-xs">
+                          <p className="font-medium text-foreground">{sig.signatoryName}</p>
+                          {sig.signatoryRole && (
+                            <p className="text-muted-foreground">{sig.signatoryRole}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">No signatures collected yet.</p>
+                )}
+
+                {showSignaturePad ? (
+                  <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <h4 className="text-sm font-semibold">Add a signature</h4>
+                      <button
+                        type="button"
+                        onClick={() => setShowSignaturePad(false)}
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    </div>
+                    <SignaturePad
+                      jobId={job.id}
+                      signatoryType="customer"
+                      defaultSignatoryRole="Customer"
+                      onSaved={() => {
+                        fetchJobSignatures(job.id);
+                        setShowSignaturePad(false);
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowSignaturePad(true)}
+                    className="bg-background"
+                  >
+                    <ImagePlus className="size-4 mr-1.5" /> Add Signature
+                  </Button>
+                )}
+              </div>
+            </FormSectionCard>
 
             {/* Notes */}
             <FormSectionCard icon={StickyNote} title="Notes">
@@ -2272,6 +3495,182 @@ export function JobsView() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ─── V1.5: Job Completion Dialog (photos + signatures + notes) ──── */}
+      {completionJob && (
+        <JobCompletionScreen
+          open={showCompletionDialog}
+          onOpenChange={setShowCompletionDialog}
+          jobId={completionJob.id}
+          jobTitle={completionJob.title}
+          linkedChecklistIds={parseStringArray(completionJob.linkedChecklistsJson)}
+          linkedChecklistNames={
+            parseStringArray(completionJob.linkedChecklistsJson)
+              .map((cid) => checklists.find((c) => c.id === cid)?.title)
+              .filter((n): n is string => !!n)
+          }
+          onCompleted={handleCompletionDone}
+        />
+      )}
+
+      {/* ─── V1.5: Route Map Dialog ──────────────────────────────────────── */}
+      <Dialog open={showRouteModal} onOpenChange={setShowRouteModal}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPinned className="size-5 text-emerald-600" /> Travel Route
+            </DialogTitle>
+            <DialogDescription>
+              GPS path recorded for this job. Open in Google Maps for a full turn-by-turn view.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            {routeLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="size-6 animate-spin text-emerald-600" />
+              </div>
+            ) : !routeData || routeData.path.length === 0 ? (
+              <div className="text-center py-12">
+                <MapPinned className="size-10 mx-auto text-muted-foreground/40 mb-2" />
+                <p className="text-sm text-muted-foreground">No GPS path recorded for this job yet.</p>
+                <p className="text-xs text-muted-foreground/70 mt-1">GPS pings are captured while the technician is in transit.</p>
+              </div>
+            ) : (
+              <>
+                {/* Summary stats */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-md bg-muted/40 px-3 py-2 text-center">
+                    <p className="text-xs text-muted-foreground">Distance</p>
+                    <p className="text-lg font-bold text-foreground mt-0.5">
+                      {routeData.summary.totalDistanceKm.toFixed(2)} km
+                    </p>
+                  </div>
+                  <div className="rounded-md bg-muted/40 px-3 py-2 text-center">
+                    <p className="text-xs text-muted-foreground">Duration</p>
+                    <p className="text-lg font-bold text-foreground mt-0.5">
+                      {formatMinutes(routeData.summary.totalDurationMinutes)}
+                    </p>
+                  </div>
+                  <div className="rounded-md bg-muted/40 px-3 py-2 text-center">
+                    <p className="text-xs text-muted-foreground">Points</p>
+                    <p className="text-lg font-bold text-foreground mt-0.5">
+                      {routeData.path.length}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Path table (first/last + middle sample) */}
+                <div className="rounded-md border border-border/60 overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead className="bg-muted/30 text-muted-foreground">
+                      <tr>
+                        <th className="px-2 py-1.5 text-left font-medium">#</th>
+                        <th className="px-2 py-1.5 text-left font-medium">Lat</th>
+                        <th className="px-2 py-1.5 text-left font-medium">Lng</th>
+                        <th className="px-2 py-1.5 text-left font-medium">Time</th>
+                      </tr>
+                    </thead>
+                    <tbody className="font-mono">
+                      {/* Show first 3 + last 3 to keep the modal short */}
+                      {routeData.path.slice(0, 3).map((p, i) => (
+                        <tr key={`f-${i}`} className="border-t border-border/40">
+                          <td className="px-2 py-1.5">{i + 1}</td>
+                          <td className="px-2 py-1.5">{p.lat.toFixed(5)}</td>
+                          <td className="px-2 py-1.5">{p.lng.toFixed(5)}</td>
+                          <td className="px-2 py-1.5">{formatDateTime(p.capturedAt)}</td>
+                        </tr>
+                      ))}
+                      {routeData.path.length > 6 && (
+                        <tr className="border-t border-border/40">
+                          <td colSpan={4} className="px-2 py-1.5 text-center text-muted-foreground italic">
+                            … {routeData.path.length - 6} more points …
+                          </td>
+                        </tr>
+                      )}
+                      {routeData.path.length > 3 && routeData.path.slice(-3).map((p, i) => (
+                        <tr key={`l-${i}`} className="border-t border-border/40">
+                          <td className="px-2 py-1.5">{routeData.path.length - 2 + i}</td>
+                          <td className="px-2 py-1.5">{p.lat.toFixed(5)}</td>
+                          <td className="px-2 py-1.5">{p.lng.toFixed(5)}</td>
+                          <td className="px-2 py-1.5">{formatDateTime(p.capturedAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Google Maps link */}
+                {(() => {
+                  const first = routeData.path[0];
+                  const last = routeData.path[routeData.path.length - 1];
+                  if (!first || !last) return null;
+                  const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${first.lat},${first.lng}&destination=${last.lat},${last.lng}&travelmode=driving`;
+                  return (
+                    <a
+                      href={mapsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm w-full"
+                    >
+                      <ExternalLink className="size-4 mr-1.5" /> Open in Google Maps
+                    </a>
+                  );
+                })()}
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── V1.5: AI Field Assistant (floating button + slide-over) ──── */}
+      {formMode === 'detail' && selectedJob && (
+        <AIAssistantPanel
+          jobId={selectedJob.id}
+          jobTitle={selectedJob.title}
+          onUseCompletionNotes={async (notes) => {
+            try {
+              await fetch(`/api/jobs/${selectedJob.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: selectedJob.id, completionNotes: notes }),
+              });
+              // Reflect locally so the detail page shows the new notes
+              setSelectedJob({ ...selectedJob, completionNotes: notes } as Job);
+              toast.success('AI-generated notes saved to this job');
+            } catch {
+              toast.error('Could not save AI notes — try copying instead.');
+            }
+          }}
+          onUseDraftMessage={(text) => {
+            setComposerInitial({
+              templateKey: 'custom',
+              body: text,
+              subject: `Update on ${selectedJob.title}`,
+            });
+            setShowComposer(true);
+          }}
+        />
+      )}
+
+      {/* ─── V1.5: Communication Composer (multi-channel message) ────── */}
+      <CommunicationComposer
+        open={showComposer}
+        onOpenChange={setShowComposer}
+        customerId={selectedJob?.customerId}
+        customerName={selectedJob?.customerName}
+        customerEmail={selectedJob?.customerEmail}
+        customerPhone={selectedJob?.customerPhone}
+        relatedEntityType="job"
+        relatedEntityId={selectedJob?.id}
+        relatedEntityName={selectedJob?.title}
+        defaultTemplateKey={composerInitial.templateKey}
+        defaultSubject={composerInitial.subject}
+        defaultBody={composerInitial.body}
+        onSent={() => {
+          // Reset the prefill after a successful send
+          setComposerInitial({});
+        }}
+      />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { getAuthUser } from '@/lib/auth';
 import { EventBus } from '@/lib/event-bus';
 import { sendEmail } from '@/lib/email-send';
 import { notifyOwner } from '@/lib/owner-notifications';
+import { logActivity } from '@/lib/activity-log';
 
 // GET /api/leads - List leads with optional status filter
 export async function GET(request: NextRequest) {
@@ -363,6 +364,34 @@ export async function POST(request: NextRequest) {
         }
       })
       .catch((err) => console.error('[LeadsCreate] Background side-effects failed:', err));
+
+    // ─── V1.5 Activity Log ──────────────────────────────────────────
+    // Best-effort — never fails the lead creation.
+    try {
+      if (lead.tenantId) {
+        await logActivity({
+          tenantId: lead.tenantId,
+          actorId: authUser?.id,
+          actorName: authUser?.name || authUser?.email,
+          actorType: 'user',
+          action: 'create',
+          entityType: 'lead',
+          entityId: lead.id,
+          entityName: lead.name || lead.title || null,
+          description: `New lead created: ${lead.name} (source: ${lead.source})`,
+          metadataJson: JSON.stringify({
+            source: lead.source,
+            serviceType: lead.serviceType,
+            priority: lead.priority,
+            value: lead.value,
+            status: lead.status,
+          }),
+          severity: 'info',
+        });
+      }
+    } catch (logErr) {
+      console.error('[LeadsCreate] Failed to log activity:', logErr);
+    }
 
     return NextResponse.json({ lead }, { status: 201 });
   } catch (error) {

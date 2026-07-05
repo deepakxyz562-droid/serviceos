@@ -40,6 +40,9 @@ import {
   useBookings,
 } from '@/hooks/queries/use-supabase-queries';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
+import { AssetsSection } from '@/components/customer/assets-section';
+import { TimelineSection } from '@/components/customer/timeline-section';
+import { CommunicationComposer } from '@/components/communication/composer';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -492,6 +495,9 @@ export function Customer360View() {
 
   // Jobs tab status filter
   const [jobStatusFilter, setJobStatusFilter] = useState<string>('all');
+
+  // V1.5: Communication composer state
+  const [composerOpen, setComposerOpen] = useState(false);
 
   // Fetch customer list
   const { data: customers = [], isLoading: customersLoading } = useCustomers(tenantId);
@@ -1035,6 +1041,16 @@ export function Customer360View() {
                       >
                         <MessageSquare className="size-3.5" /> WhatsApp
                       </Button>
+                      {/* Multi-channel Message composer */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-2 flex-1 border-emerald-600/40 text-emerald-700 hover:bg-emerald-500/10 transition-all duration-200"
+                        onClick={() => setComposerOpen(true)}
+                        title="Compose multi-channel message"
+                      >
+                        <Send className="size-3.5" /> Message
+                      </Button>
                       {/* Icon-only round buttons */}
                       <Button
                         size="icon"
@@ -1188,6 +1204,12 @@ export function Customer360View() {
                     <Activity className="size-3.5" /> Overview
                   </TabsTrigger>
                   <TabsTrigger
+                    value="timeline"
+                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
+                  >
+                    <Clock className="size-3.5" /> Timeline
+                  </TabsTrigger>
+                  <TabsTrigger
                     value="conversations"
                     className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
                   >
@@ -1236,6 +1258,12 @@ export function Customer360View() {
                         {ecommerceOrders.length}
                       </Badge>
                     )}
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="equipment"
+                    className="data-[state=active]:bg-accent data-[state=active]:text-emerald-400 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-xs gap-1.5 transition-all duration-200"
+                  >
+                    <Wrench className="size-3.5" /> Equipment
                   </TabsTrigger>
                   <TabsTrigger
                     value="documents"
@@ -1370,6 +1398,24 @@ export function Customer360View() {
                               );
                             })}
                           </div>
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
+
+                {/* ─── Timeline Tab ────────────────────────────────────────── */}
+                <TabsContent value="timeline" className="h-full m-0">
+                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
+                    <div className="p-5">
+                      {customer?.id ? (
+                        <TimelineSection customerId={customer.id} />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-16 text-center">
+                          <Clock className="size-10 text-muted-foreground mb-3" />
+                          <p className="text-sm text-muted-foreground">
+                            Select a customer to view their unified timeline.
+                          </p>
                         </div>
                       )}
                     </div>
@@ -2112,6 +2158,17 @@ export function Customer360View() {
                   </ScrollArea>
                 </TabsContent>
 
+                {/* ─── Equipment Tab ───────────────────────────────────────── */}
+                <TabsContent value="equipment" className="h-full m-0">
+                  <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
+                    <div className="p-5">
+                      {selectedCustomerId && (
+                        <AssetsSection customerId={selectedCustomerId} />
+                      )}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
+
                 {/* ─── Documents Tab ────────────────────────────────────────── */}
                 <TabsContent value="documents" className="h-full m-0">
                   <ScrollArea className="h-full max-h-[calc(100vh-16rem)]">
@@ -2450,6 +2507,24 @@ export function Customer360View() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ─── V1.5: Communication Composer ────────────────────────────── */}
+      <CommunicationComposer
+        open={composerOpen}
+        onOpenChange={setComposerOpen}
+        customerId={c?.id}
+        customerName={c?.name}
+        customerEmail={c?.email}
+        customerPhone={c?.phone}
+        customerWhatsappId={c?.whatsappId}
+        relatedEntityType="customer"
+        relatedEntityId={c?.id}
+        relatedEntityName={c?.name}
+        onSent={() => {
+          // Invalidate the customer 360 query so the new timeline entry shows up
+          queryClient.invalidateQueries({ queryKey: ['customer360', c?.id] });
+        }}
+      />
     </div>
   );
 }

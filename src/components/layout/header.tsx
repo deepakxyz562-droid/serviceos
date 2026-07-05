@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useAppStore } from '@/store/app-store';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { ViewType } from '@/types/workflow';
@@ -96,6 +97,7 @@ const viewLabels: Record<ViewType, string> = {
   emailCampaigns: 'Email Campaigns',
   emailProviders: 'Email Providers',
   emailTemplates: 'Email Templates',
+  notifications: 'Notifications',
 };
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -115,6 +117,30 @@ export function AppHeader() {
   const isMobile = useIsMobile();
   const isCanvas = currentView === 'canvas';
   const [searchOpen, setSearchOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
+
+  // ─── Live unread count (polled every 30s) ────────────────────────────
+  // Falls back to a static "3" for unauthenticated users so the bell still
+  // shows something — but once authed, the real count is fetched.
+  const { data: unreadData } = useQuery<{ unreadCount: number }>({
+    queryKey: ['unread-count'],
+    queryFn: async () => {
+      const res = await fetch('/api/notifications/unread-count?XTransformPort=3000');
+      if (!res.ok) throw new Error('failed');
+      return res.json();
+    },
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+    staleTime: 15_000,
+  });
+  const unreadCount = unreadData?.unreadCount ?? 0;
+
+  const goNotifications = useCallback(() => {
+    setNotifOpen(false);
+    setCurrentView('notifications');
+  }, [setCurrentView]);
 
   // Get user initials for avatar
   const getUserInitials = () => {
@@ -199,7 +225,7 @@ export function AppHeader() {
       {/* ─── Right side actions ────────────────────────────────────────── */}
       <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
         {/* ─── Notifications bell ──────────────────────────────────────── */}
-        <DropdownMenu>
+        <DropdownMenu open={notifOpen} onOpenChange={setNotifOpen}>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
@@ -208,9 +234,19 @@ export function AppHeader() {
               aria-label="Notifications"
             >
               <Bell className="size-4" />
-              {/* Notification badge */}
-              <span className="absolute top-1.5 right-1.5 flex items-center justify-center size-2 rounded-full bg-emerald-500">
-                <span className="sr-only">3 unread notifications</span>
+              {/* Notification badge — only renders when there's at least 1 unread */}
+              {unreadCount > 0 && (
+                <span
+                  className="absolute top-1 right-1 min-w-3.5 h-3.5 px-1 flex items-center justify-center rounded-full bg-emerald-500 text-white text-[9px] font-bold leading-none"
+                  aria-hidden="true"
+                >
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+              <span className="sr-only">
+                {unreadCount === 0
+                  ? 'No unread notifications'
+                  : `${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}`}
               </span>
             </Button>
           </DropdownMenuTrigger>
@@ -218,30 +254,30 @@ export function AppHeader() {
             <DropdownMenuLabel className="flex items-center justify-between">
               Notifications
               <Badge variant="secondary" className="text-[10px] h-4 px-1.5">
-                3 new
+                {unreadCount} new
               </Badge>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="flex flex-col items-start gap-1 cursor-pointer py-3">
-              <span className="text-sm font-medium">New lead assigned</span>
-              <span className="text-xs text-muted-foreground">
-                A new lead has been assigned to you · 2m ago
-              </span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex flex-col items-start gap-1 cursor-pointer py-3">
-              <span className="text-sm font-medium">Job completed</span>
-              <span className="text-xs text-muted-foreground">
-                Job #1234 has been marked as completed · 15m ago
-              </span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex flex-col items-start gap-1 cursor-pointer py-3">
-              <span className="text-sm font-medium">Invoice overdue</span>
-              <span className="text-xs text-muted-foreground">
-                Invoice INV-003 is now overdue · 1h ago
-              </span>
-            </DropdownMenuItem>
+            {unreadCount === 0 ? (
+              <div className="px-3 py-6 text-center">
+                <Bell className="size-6 text-muted-foreground/40 mx-auto mb-2" />
+                <p className="text-xs text-muted-foreground">
+                  You&apos;re all caught up!
+                </p>
+              </div>
+            ) : (
+              <div className="px-3 py-4 text-center">
+                <p className="text-sm font-medium">{unreadCount} unread notification{unreadCount === 1 ? '' : 's'}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Open the Notification Center to view and manage them.
+                </p>
+              </div>
+            )}
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-center cursor-pointer text-emerald-600 dark:text-emerald-400 justify-center">
+            <DropdownMenuItem
+              className="text-center cursor-pointer text-emerald-600 dark:text-emerald-400 justify-center"
+              onClick={goNotifications}
+            >
               View all notifications
             </DropdownMenuItem>
           </DropdownMenuContent>

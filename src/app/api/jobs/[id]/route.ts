@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { EventBus } from '@/lib/event-bus';
+import { logActivity } from '@/lib/activity-log';
 
 export async function GET(
   request: NextRequest,
@@ -113,6 +114,24 @@ export async function PUT(
     if (body.serviceId !== undefined) updateData.serviceId = body.serviceId || null;
     if (body.description !== undefined) updateData.description = body.description;
 
+    // ── V1.5: assetId is stored inside metadataJson (no dedicated column).
+    // Accept either { assetId } or { metadataJson } in the body.
+    if (body.assetId !== undefined || body.metadataJson !== undefined) {
+      let md: Record<string, unknown> = {};
+      try {
+        const raw = body.metadataJson ?? existingJob.metadataJson;
+        md = raw ? JSON.parse(raw) : {};
+        if (!md || typeof md !== 'object') md = {};
+      } catch {
+        md = {};
+      }
+      if (body.assetId !== undefined) {
+        if (body.assetId) md.assetId = body.assetId;
+        else delete md.assetId;
+      }
+      updateData.metadataJson = JSON.stringify(md);
+    }
+
     // If status is being changed to 'assigned' and assigneeId is provided, update employee status
     if (body.status === 'assigned' && body.assigneeId) {
       await db.employee.update({
@@ -224,6 +243,56 @@ export async function PUT(
       }
     } catch (eventErr) {
       console.error('[JobsUpdate] Failed to emit event:', eventErr);
+    }
+
+    // ─── V1.5 Activity Log ──────────────────────────────────────────
+    // Records the update action in the audit trail. Wrapped so a logging
+    // failure never affects the main response.
+    try {
+      let jobTenantId: string | null = null;
+      if (job.workspaceId) {
+        const ws = await db.workspace.findUnique({
+          where: { id: job.workspaceId },
+          select: { tenantId: true },
+        });
+        jobTenantId = ws?.tenantId ?? null;
+      }
+      if (jobTenantId) {
+        const changedFields = Object.keys(updateData);
+        const isStatusChange =
+          body.status !== undefined && body.status !== existingJob.status;
+        if (isStatusChange) {
+          await logActivity({
+            tenantId: jobTenantId,
+            actorType: 'system',
+            action: 'status_change',
+            entityType: 'job',
+            entityId: job.id,
+            entityName: job.title || job.customerName || null,
+            description: `Job "${job.title || 'Untitled'}" status: ${existingJob.status} → ${body.status}`,
+            metadataJson: JSON.stringify({
+              fromStatus: existingJob.status,
+              toStatus: body.status,
+              changedFields,
+            }),
+            severity: 'info',
+          });
+        } else if (changedFields.length > 0) {
+          await logActivity({
+            tenantId: jobTenantId,
+            actorType: 'system',
+            action: 'update',
+            entityType: 'job',
+            entityId: job.id,
+            entityName: job.title || job.customerName || null,
+            description: `Updated job "${job.title || 'Untitled'}" (${changedFields.length} field${changedFields.length === 1 ? '' : 's'})`,
+            metadataJson: JSON.stringify({ changedFields }),
+            severity: 'info',
+          });
+        }
+      }
+    } catch (logErr) {
+      console.error('[JobsUpdate] Failed to log activity:', logErr);
     }
 
     return NextResponse.json({ job });

@@ -59,6 +59,7 @@ export async function PUT(
       'name', 'description', 'category', 'basePrice', 'duration',
       'icon', 'isActive', 'assignedTeamJson', 'addOnsJson',
       'upsellServiceIdsJson', 'imageUrl', 'tagsJson', 'sortOrder',
+      'checklistId',
     ];
 
     for (const field of allowedFields) {

@@ -3,6 +3,7 @@ import { Poppins, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { QueryProvider } from "@/providers/query-provider";
+import { PwaProvider } from "@/components/pwa/pwa-provider";
 
 const poppins = Poppins({
   variable: "--font-poppins",
@@ -31,9 +32,11 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "ServiceOS - The Operating System for Service Businesses",
   description: "ServiceOS — The Operating System for service businesses. Replace WhatsApp chaos, Excel trackers, and paper forms. Leads, dispatch, invoicing, WhatsApp-first operations.",
+  applicationName: "ServiceOS",
   keywords: ["ServiceOS", "field service", "SaaS", "job management", "WhatsApp", "invoicing", "workflow automation", "service business"],
   authors: [{ name: "ServiceOS Team" }],
   manifest: "/manifest.json",
+  formatDetection: { telephone: false },
   icons: {
     icon: [
       { url: "/logo.svg", sizes: "any", type: "image/svg+xml" },
@@ -85,6 +88,7 @@ export default function RootLayout({
         <QueryProvider>
           {children}
           <Toaster position="top-center" />
+          <PwaProvider />
         </QueryProvider>
       </body>
     </html>

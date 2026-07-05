@@ -65,6 +65,7 @@ export interface ChecklistSection {
 export interface ChecklistData {
   id?: string;
   title: string;
+  category?: string;
   autoAttachJobs: boolean;
   autoAttachAssessments: boolean;
   sections: ChecklistSection[];
@@ -129,6 +130,7 @@ export function ChecklistBuilder({
   onSaved: (saved: ChecklistData) => void;
 }) {
   const [title, setTitle] = useState(initial?.title || 'New checklist');
+  const [category, setCategory] = useState(initial?.category || 'General');
   const [autoAttachJobs, setAutoAttachJobs] = useState(initial?.autoAttachJobs ?? false);
   const [autoAttachAssessments, setAutoAttachAssessments] = useState(initial?.autoAttachAssessments ?? false);
   const [sections, setSections] = useState<ChecklistSection[]>(
@@ -236,6 +238,7 @@ export function ChecklistBuilder({
     try {
       const payload = {
         title: title.trim(),
+        category: category.trim() || 'General',
         autoAttachJobs,
         autoAttachAssessments,
         sectionsJson: JSON.stringify(sections),
@@ -263,6 +266,7 @@ export function ChecklistBuilder({
       onSaved({
         id: saved.id,
         title: saved.title,
+        category: saved.category,
         autoAttachJobs: saved.autoAttachJobs,
         autoAttachAssessments: saved.autoAttachAssessments,
         sections,
@@ -561,6 +565,28 @@ export function ChecklistBuilder({
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="New checklist"
                 />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="cl-category">Category</Label>
+                <Input
+                  id="cl-category"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  placeholder="e.g. AC Service, Generator Maintenance, General"
+                  list="cl-category-suggestions"
+                />
+                <datalist id="cl-category-suggestions">
+                  <option value="General" />
+                  <option value="AC Service" />
+                  <option value="Generator Maintenance" />
+                  <option value="Plumbing" />
+                  <option value="Electrical" />
+                  <option value="Solar" />
+                  <option value="Water Purifier" />
+                </datalist>
+                <p className="text-[11px] text-muted-foreground">
+                  Group templates by service type for easy lookup.
+                </p>
               </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-2">

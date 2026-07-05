@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { getExchangeRate, convertCurrency } from '@/lib/currency';
 import { generateInvoiceNumber } from '@/lib/invoice-automation';
+import { logActivity } from '@/lib/activity-log';
 
 /**
  * Resolves a tenant ID from the auth user, falling back to the first tenant
@@ -171,6 +172,34 @@ export async function POST(request: NextRequest) {
         employee: { select: { id: true, name: true } },
       },
     });
+
+    // ─── V1.5 Activity Log ──────────────────────────────────────────
+    // Best-effort — never fails the invoice creation.
+    try {
+      await logActivity({
+        tenantId,
+        actorId: authUser.id,
+        actorName: authUser.name || authUser.email,
+        actorType: 'user',
+        action: 'create',
+        entityType: 'invoice',
+        entityId: invoice.id,
+        entityName: invoice.number,
+        description: `Created invoice ${invoice.number} for ${invoice.customer?.name || 'customer'} (${transactionCurrency} ${total.toFixed(2)})`,
+        metadataJson: JSON.stringify({
+          number: invoice.number,
+          customerId,
+          jobId: jobId || null,
+          employeeId: employeeId || null,
+          total,
+          currency: transactionCurrency,
+          status: 'draft',
+        }),
+        severity: 'info',
+      });
+    } catch (logErr) {
+      console.error('[Invoices POST] Failed to log activity:', logErr);
+    }
 
     return NextResponse.json({ invoice }, { status: 201 });
   } catch (error) {

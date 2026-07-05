@@ -45,6 +45,7 @@ const CalendarView = lazy(() => import('@/components/views/calendar-view').then(
 const JobsView = lazy(() => import('@/components/views/jobs-view').then(m => ({ default: m.JobsView })));
 const DispatchView = lazy(() => import('@/components/views/dispatch-view').then(m => ({ default: m.DispatchView })));
 const EmployeesView = lazy(() => import('@/components/views/employees-view').then(m => ({ default: m.EmployeesView })));
+const EmployeePerformanceView = lazy(() => import('@/components/views/employee-performance-view').then(m => ({ default: m.EmployeePerformanceView })));
 
 // Finance
 const QuotesView = lazy(() => import('@/components/views/quotes-view').then(m => ({ default: m.QuotesView })));
@@ -56,6 +57,8 @@ const CredentialsView = lazy(() => import('@/components/views/credentials-view')
 const IntegrationsView = lazy(() => import('@/components/views/integrations-view').then(m => ({ default: m.IntegrationsView })));
 const SettingsView = lazy(() => import('@/components/views/settings-view').then(m => ({ default: m.SettingsView })));
 const ReportsView = lazy(() => import('@/components/views/reports-view').then(m => ({ default: m.ReportsView })));
+const ActivityLogsView = lazy(() => import('@/components/views/activity-logs-view').then(m => ({ default: m.ActivityLogsView })));
+const NotificationsView = lazy(() => import('@/components/views/notifications-view').then(m => ({ default: m.NotificationsView })));
 
 // Portals
 const CustomerPortalView = lazy(() => import('@/components/views/customer-portal-view').then(m => ({ default: m.CustomerPortalView })));
@@ -138,6 +141,7 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   jobs: JobsView,
   dispatch: DispatchView,
   employees: EmployeesView,
+  employeePerformance: EmployeePerformanceView,
   // Finance
   quotes: QuotesView,
   invoices: InvoicesView,
@@ -147,7 +151,9 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   integrations: IntegrationsView,
   settings: SettingsView,
   auditLogs: ReportsView,
+  activityLogs: ActivityLogsView,
   reports: ReportsView,
+  notifications: NotificationsView,
   // Portals
   customerPortal: CustomerPortalView,
   employeePortal: EmployeePortalView,

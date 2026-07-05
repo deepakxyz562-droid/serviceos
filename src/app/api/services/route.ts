@@ -72,6 +72,7 @@ export async function POST(request: NextRequest) {
       duration,
       icon,
       isActive,
+      checklistId,
     } = body;
 
     if (!name) {
@@ -87,6 +88,7 @@ export async function POST(request: NextRequest) {
         duration: duration !== undefined ? Number(duration) : 60,
         icon: icon || null,
         isActive: isActive !== undefined ? isActive : true,
+        checklistId: checklistId || null,
         tenantId: user.tenantId,
       },
     });

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { notifyCustomerBookingConfirmed, notifyEmployeeJobAssigned } from '@/lib/whatsapp-notifications'
 import { dispatchJobEvent } from '@/lib/event-webhook-dispatcher'
+import { logActivity } from '@/lib/activity-log'
 
 /**
  * Resolve a workspaceId for a new job.
@@ -134,6 +135,18 @@ export async function POST(request: NextRequest) {
     // user's invoice list). See resolveWorkspaceId() docblock above.
     const workspaceId = await resolveWorkspaceId(body.workspaceId, authUser)
 
+    // ── V1.5: parse metadataJson + inject assetId if provided (kept in
+    // metadataJson since the Job model has no dedicated assetId column).
+    const baseMetadata: Record<string, unknown> = (() => {
+      try {
+        const parsed = body.metadataJson ? JSON.parse(body.metadataJson) : {}
+        return parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {}
+      } catch {
+        return {}
+      }
+    })()
+    if (body.assetId) baseMetadata.assetId = body.assetId
+
     const job = await db.job.create({
       data: {
         title: body.title,
@@ -186,6 +199,7 @@ export async function POST(request: NextRequest) {
           typeof body.linkToRelatedJson === 'string'
             ? body.linkToRelatedJson
             : JSON.stringify(body.linkToRelatedJson ?? []),
+        metadataJson: JSON.stringify(baseMetadata),
         workspaceId,
       },
       include: {
@@ -232,6 +246,44 @@ export async function POST(request: NextRequest) {
         }
       })
       .catch((e) => console.error('Failed to run post-create side-effects:', e))
+
+    // ─── V1.5 Activity Log ──────────────────────────────────────────
+    // Records the create action in the audit trail. Wrapped in a try/catch
+    // so a logging failure never affects the main response.
+    try {
+      // Resolve tenantId (job uses workspaceId → workspace.tenantId)
+      let jobTenantId: string | null = authUser?.tenantId || null
+      if (!jobTenantId && job.workspaceId) {
+        const ws = await db.workspace.findUnique({
+          where: { id: job.workspaceId },
+          select: { tenantId: true },
+        })
+        jobTenantId = ws?.tenantId ?? null
+      }
+      if (jobTenantId) {
+        await logActivity({
+          tenantId: jobTenantId,
+          actorId: authUser?.id,
+          actorName: authUser?.name || authUser?.email,
+          actorType: 'user',
+          action: 'create',
+          entityType: 'job',
+          entityId: job.id,
+          entityName: job.title || job.customerName || null,
+          description: `Created job "${job.title || 'Untitled'}" for ${job.customerName || 'customer'}`,
+          metadataJson: JSON.stringify({
+            status: job.status,
+            priority: job.priority,
+            type: job.type,
+            assigneeName: job.assigneeName || null,
+            quotedAmount: job.quotedAmount ?? null,
+          }),
+          severity: 'info',
+        })
+      }
+    } catch (logErr) {
+      console.error('[Jobs POST] Failed to log activity:', logErr)
+    }
 
     return NextResponse.json(job, { status: 201 })
   } catch (error) {

@@ -32,6 +32,7 @@ export async function PUT(
 
     const updateData: Record<string, unknown> = {}
     if (typeof body.title === 'string') updateData.title = body.title.slice(0, 200)
+    if (typeof body.category === 'string') updateData.category = body.category.slice(0, 100)
     if (typeof body.autoAttachJobs === 'boolean') updateData.autoAttachJobs = body.autoAttachJobs
     if (typeof body.autoAttachAssessments === 'boolean') updateData.autoAttachAssessments = body.autoAttachAssessments
     if (body.sectionsJson !== undefined) {

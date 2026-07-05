@@ -37,6 +37,7 @@ import {
   RadioTower,
   ShieldCheck,
   ScrollText,
+  History,
   UserCog,
   Eye,
   MessageSquare,
@@ -62,6 +63,7 @@ import {
   LifeBuoy,
   Ticket,
   Megaphone as MegaphoneIcon,
+  TrendingUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -145,6 +147,7 @@ const ownerNavSections: NavSection[] = [
       { view: 'jobs', label: 'Jobs', icon: Briefcase },
       { view: 'dispatch', label: 'Dispatch Board', icon: Radio },
       { view: 'employees', label: 'Employees', icon: UserCog },
+      { view: 'employeePerformance', label: 'Performance', icon: TrendingUp },
       { view: 'reviews', label: 'Reviews', icon: Star },
       { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },
     ],
@@ -191,6 +194,7 @@ const ownerNavSections: NavSection[] = [
       { view: 'integrations', label: 'Integrations', icon: Plug, badge: 'New' },
       { view: 'channels', label: 'Channels & Credentials', icon: RadioTower },
       { view: 'auditLogs', label: 'Audit Logs', icon: ScrollText },
+      { view: 'activityLogs', label: 'Activity Logs', icon: History },
       { view: 'customerPortal', label: 'Customer Portal', icon: Globe },
       { view: 'employeePortal', label: 'Employee Portal', icon: HardHat },
       { view: 'helpCenter', label: 'Help & Support', icon: LifeBuoy },
@@ -267,6 +271,7 @@ const superadminNavSections: NavSection[] = [
       { view: 'jobs', label: 'Jobs', icon: Briefcase },
       { view: 'dispatch', label: 'Dispatch Board', icon: Radio },
       { view: 'employees', label: 'Employees', icon: UserCog },
+      { view: 'employeePerformance', label: 'Performance', icon: TrendingUp },
       { view: 'reviews', label: 'Reviews', icon: Star },
       { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },
     ],
@@ -311,6 +316,7 @@ const superadminNavSections: NavSection[] = [
       { view: 'integrations', label: 'Integrations', icon: Plug, badge: 'New' },
       { view: 'channels', label: 'Channels & Credentials', icon: RadioTower },
       { view: 'auditLogs', label: 'Audit Logs', icon: ScrollText },
+      { view: 'activityLogs', label: 'Activity Logs', icon: History },
       { view: 'helpAdminTickets', label: 'Support Tickets', icon: Ticket },
       { view: 'helpAdminKB', label: 'Knowledge Base', icon: BookOpen },
       { view: 'helpAdminCategories', label: 'Categories', icon: FolderTree },

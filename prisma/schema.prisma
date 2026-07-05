@@ -295,6 +295,7 @@ model Service {
   duration    Int      @default(60)
   icon        String?
   isActive    Boolean  @default(true)
+  checklistId String?  // -> Checklist.id (auto-attached when a job is created for this service)
   tenantId    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -303,6 +304,7 @@ model Service {
 
   @@index([tenantId])
   @@index([category])
+  @@index([checklistId])
 }
 
 // ==========================================
@@ -656,6 +658,7 @@ model Workspace {
 model Checklist {
   id                   String   @id @default(cuid())
   title                String   @default("New checklist")
+  category             String   @default("General") // AC Service, Generator Maintenance, General, ...
   autoAttachJobs       Boolean  @default(false)
   autoAttachAssessments Boolean @default(false)
   // sectionsJson: [{id, title, questions: [{id, type, label, required, options: []}]}]
@@ -668,6 +671,7 @@ model Checklist {
   workspace Workspace? @relation(fields: [workspaceId], references: [id])
 
   @@index([workspaceId])
+  @@index([category])
 }
 
 model Workflow {
@@ -1078,6 +1082,10 @@ model Job {
   // ── Link to related: which related records to surface on the job
   // (e.g. ["invoices", "quotes", "requests"]). JSON string array.
   linkToRelatedJson String   @default("[]")
+  // ── V1.5 lifecycle timestamps + misc metadata ──
+  // Stored as JSON: { lifecycleTimestamps: { assigned, accepted, travelStarted,
+  //   arrived, workStarted, completed, invoiceGenerated, paused, resumed } }
+  metadataJson      String   @default("{}")
   workspaceId        String?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
@@ -3240,4 +3248,468 @@ model Announcement {
   @@index([status])
   @@index([type])
   @@index([publishedAt])
+}
+
+// ==========================================
+// SERVICEOS V1.5 — FIELD SERVICE UPGRADE
+// ==========================================
+// NOTE on naming: An older `Notification` model already exists above (lines ~464-480)
+// and is actively referenced by `Tenant.notifications` / `User.notifications` plus 7 source
+// files (`db.notification`). To avoid a Prisma duplicate-model error and per the
+// "DO NOT modify any existing models" constraint, the new V1.5 unified in-app
+// notification store is named `AppNotification` (accessed via `db.appNotification`).
+// All other V1.5 model names below are unique and match the original spec.
+
+// 1. AppNotification — unified in-app notification store (one row per recipient).
+//    (Renamed from `Notification` to avoid collision with the legacy Notification model.)
+model AppNotification {
+  id              String   @id @default(cuid())
+  tenantId        String
+  recipientId     String   // user id who should receive this
+  // Notification content
+  type            String   // lead_assigned, lead_updated, quote_approved, quote_rejected, job_assigned, job_started, technician_on_route, job_completed, invoice_created, invoice_paid, customer_review, employee_login, workflow_executed, reminder, support_ticket_update
+  category        String   @default("general") // lead, job, quote, invoice, customer, employee, workflow, support, system
+  title           String
+  message         String
+  // Rich data
+  metadataJson    String   @default("{}")  // {jobId, leadId, customerId, amount, url, ...}
+  actionUrl       String?  // where to navigate when clicked
+  actionLabel     String?  // button label
+  // State
+  isRead          Boolean  @default(false)
+  readAt          DateTime?
+  isArchived      Boolean  @default(false)
+  archivedAt      DateTime?
+  // Push delivery
+  pushSent        Boolean  @default(false)
+  pushSentAt      DateTime?
+  // Priority
+  priority        String   @default("normal") // low, normal, high, urgent
+  // Sender (who/what triggered it)
+  senderId        String?  // user id, or null for system
+  senderType      String   @default("system") // user, system, workflow, ai
+  createdAt       DateTime @default(now())
+
+  @@index([tenantId, recipientId, isRead])
+  @@index([tenantId, recipientId, isArchived])
+  @@index([tenantId, type, createdAt])
+  @@index([recipientId, createdAt])
+}
+
+// 2. NotificationPreference — per-user notification preferences (channels + per-type toggles).
+model NotificationPreference {
+  id              String   @id @default(cuid())
+  tenantId        String
+  userId          String   // -> User.id
+  // Channel toggles
+  inAppEnabled    Boolean  @default(true)
+  pushEnabled     Boolean  @default(true)
+  emailEnabled    Boolean  @default(false)
+  smsEnabled      Boolean  @default(false)
+  whatsappEnabled Boolean  @default(false)
+  // Type-level toggles stored as JSON: { "lead_assigned": true, "job_completed": false, ... }
+  typePrefsJson   String   @default("{}")
+  // Quiet hours
+  quietHoursStart String?  // "22:00"
+  quietHoursEnd   String?  // "07:00"
+  quietHoursTz    String   @default("Asia/Calcutta")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([tenantId, userId])
+  @@index([tenantId, userId])
+}
+
+// 3. PushSubscription — Web Push subscriptions (one user can have many — one per device/browser).
+model PushSubscription {
+  id              String   @id @default(cuid())
+  tenantId        String
+  userId          String   // -> User.id
+  endpoint        String   // push service URL
+  keysJson        String   @default("{}") // {p256dh, auth}
+  userAgent       String?  // browser/device info
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, endpoint])
+  @@index([tenantId, userId, isActive])
+}
+
+// 4. ActivityLog — audit trail of all important actions.
+model ActivityLog {
+  id              String   @id @default(cuid())
+  tenantId        String
+  // Actor
+  actorId         String?  // user id, null for system
+  actorName       String?
+  actorType       String   @default("user") // user, system, api, workflow, ai
+  // Action
+  action          String   // create, update, delete, assign, complete, pay, login, logout, export, status_change
+  entityType      String   // lead, job, customer, invoice, quote, employee, tenant, user, etc.
+  entityId        String?
+  entityName      String?  // human-readable label
+  // Details
+  description     String
+  metadataJson    String   @default("{}") // before/after values, extra context
+  // Request context
+  ipAddress       String?
+  userAgent       String?
+  // Severity
+  severity        String   @default("info") // info, warning, error, critical
+  createdAt       DateTime @default(now())
+
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, actorId, createdAt])
+  @@index([tenantId, action, createdAt])
+  @@index([tenantId, createdAt])
+}
+
+// 5. CustomerAsset — customer-owned equipment (AC, generator, solar panel, water purifier, etc.).
+model CustomerAsset {
+  id              String   @id @default(cuid())
+  tenantId        String
+  customerId      String   // -> Customer.id
+  // Asset details
+  name            String   // "Living Room AC"
+  assetType       String   // ac, generator, solar, purifier, other
+  brand           String?
+  model           String?
+  serialNumber    String?
+  // Lifecycle
+  installationDate DateTime?
+  warrantyStart   DateTime?
+  warrantyEnd     DateTime?
+  warrantyStatus  String   @default("active") // active, expired, none
+  // Location
+  location        String?  // "Living Room", "Rooftop"
+  // Media
+  photosJson      String   @default("[]") // [{url, caption, uploadedAt}]
+  documentsJson   String   @default("[]") // [{url, name, type, uploadedAt}]
+  // Status
+  status          String   @default("active") // active, inactive, disposed
+  notes           String?
+  // Custom fields
+  customFieldsJson String  @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([tenantId, customerId])
+  @@index([tenantId, assetType])
+  @@index([tenantId, status])
+}
+
+// 6. AssetServiceHistory — links an asset to a job that serviced it, with notes.
+model AssetServiceHistory {
+  id              String   @id @default(cuid())
+  tenantId        String
+  assetId         String   // -> CustomerAsset.id
+  jobId           String?  // -> Job.id (optional — some history may be standalone)
+  serviceDate     DateTime @default(now())
+  serviceType     String?  // install, repair, maintenance, inspection
+  performedBy     String?  // employee id
+  performedByName String?
+  notes           String?
+  cost            Float    @default(0)
+  partsReplaced   String?  // free text or JSON array
+  nextServiceDate DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([tenantId, assetId, serviceDate])
+  @@index([tenantId, jobId])
+}
+
+// 7. JobPhoto — before/after photos attached to a job, with GPS metadata.
+model JobPhoto {
+  id              String   @id @default(cuid())
+  tenantId        String
+  jobId           String   // -> Job.id
+  customerId      String?  // -> Customer.id (denormalized for Customer 360)
+  // Photo metadata
+  photoType       String   @default("before") // before, after, progress, issue, other
+  url             String   // storage URL
+  thumbnailUrl    String?
+  fileName        String?
+  mimeType        String   @default("image/jpeg")
+  size            Int      @default(0) // bytes
+  width           Int?
+  height          Int?
+  // Capture context
+  capturedBy      String?  // employee id
+  capturedByName  String?
+  capturedAt      DateTime @default(now())
+  // GPS
+  latitude        Float?
+  longitude       Float?
+  accuracy        Float?   // meters
+  // Notes
+  caption         String?
+  notes           String?
+  // Sync state (for offline mode)
+  syncStatus      String   @default("synced") // synced, pending, failed
+  createdAt       DateTime @default(now())
+
+  @@index([tenantId, jobId, photoType])
+  @@index([tenantId, customerId, capturedAt])
+  @@index([tenantId, syncStatus])
+}
+
+// 8. JobSignature — digital signatures collected at job completion (customer + employee).
+model JobSignature {
+  id              String   @id @default(cuid())
+  tenantId        String
+  jobId           String   // -> Job.id
+  customerId      String?  // -> Customer.id
+  // Signature
+  signatoryType   String   // customer, employee
+  signatoryName   String
+  signatoryRole   String?  // "Customer", "Technician", etc.
+  // The signature image (PNG data URL or storage URL)
+  signatureUrl    String
+  signatureDataJson String @default("{}") // {points, width, height} optional raw data
+  // Context
+  signedAt        DateTime @default(now())
+  ipAddress       String?
+  userAgent       String?
+  // Geo
+  latitude        Float?
+  longitude       Float?
+  // Notes
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  @@index([tenantId, jobId, signatoryType])
+  @@index([tenantId, customerId])
+}
+
+// 9. JobChecklist — a completed checklist instance attached to a job (filled by the employee).
+model JobChecklist {
+  id              String   @id @default(cuid())
+  tenantId        String
+  jobId           String   // -> Job.id
+  customerId      String?  // -> Customer.id
+  // Template
+  templateId      String?  // -> Checklist.id (the reusable template)
+  name            String   // "AC Service Checklist"
+  // Items stored as JSON: [{id, label, checked, checkedAt, checkedBy, notes, photoUrl?}]
+  itemsJson       String   @default("[]")
+  // State
+  status          String   @default("in_progress") // in_progress, completed, skipped
+  completedAt     DateTime?
+  completedBy     String?  // employee id
+  completedByName String?
+  // Sync
+  syncStatus      String   @default("synced") // synced, pending, failed
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([tenantId, jobId])
+  @@index([tenantId, customerId])
+  @@index([tenantId, status])
+}
+
+// 10. EmployeeShift — tracks employee work shifts with break tracking.
+model EmployeeShift {
+  id              String   @id @default(cuid())
+  tenantId        String
+  employeeId      String   // -> Employee.id
+  // Shift
+  shiftDate       DateTime @default(now()) // the day the shift started
+  clockIn         DateTime @default(now())
+  clockOut        DateTime?
+  // Breaks stored as JSON: [{start, end, durationMinutes, reason}]
+  breaksJson      String   @default("[]")
+  // Totals (computed on clock-out)
+  totalMinutes    Int      @default(0)
+  workingMinutes  Int      @default(0)
+  breakMinutes    Int      @default(0)
+  travelMinutes   Int      @default(0)
+  // Location
+  clockInLat      Float?
+  clockInLng      Float?
+  clockOutLat     Float?
+  clockOutLng     Float?
+  // Status
+  status          String   @default("active") // active, on_break, completed
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([tenantId, employeeId, shiftDate])
+  @@index([tenantId, status])
+}
+
+// 11. JobTimeEntry — tracks time spent on a specific job (start/pause/resume/complete).
+model JobTimeEntry {
+  id              String   @id @default(cuid())
+  tenantId        String
+  jobId           String   // -> Job.id
+  employeeId      String   // -> Employee.id
+  // Timing
+  startedAt       DateTime @default(now())
+  endedAt         DateTime?
+  // Pauses stored as JSON: [{start, end}]
+  pausesJson      String   @default("[]")
+  // Totals (computed on end)
+  durationMinutes Int      @default(0)
+  pauseMinutes    Int      @default(0)
+  workingMinutes  Int      @default(0)
+  // Entry type
+  entryType       String   @default("work") // work, travel, break
+  // State
+  status          String   @default("active") // active, paused, completed
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([tenantId, jobId, employeeId])
+  @@index([tenantId, employeeId, status])
+  @@index([tenantId, entryType])
+}
+
+// 12. GPSLocation — append-only GPS pings from employees during travel.
+model GPSLocation {
+  id              String   @id @default(cuid())
+  tenantId        String
+  employeeId      String   // -> Employee.id
+  jobId           String?  // -> Job.id (if tracking for a specific job)
+  // Coordinates
+  latitude        Float
+  longitude       Float
+  accuracy        Float?   // meters
+  heading         Float?   // degrees
+  speed           Float?   // m/s
+  altitude        Float?
+  // Context
+  capturedAt      DateTime @default(now())
+  batteryLevel    Float?   // 0-1
+  isMoving        Boolean  @default(false)
+  // Sync
+  syncStatus      String   @default("synced") // synced, pending, failed
+  createdAt       DateTime @default(now())
+
+  @@index([tenantId, employeeId, capturedAt])
+  @@index([tenantId, jobId, capturedAt])
+  @@index([tenantId, syncStatus])
+}
+
+// 13. RouteHistory — a summary of a technician's route for a job/day.
+model RouteHistory {
+  id              String   @id @default(cuid())
+  tenantId        String
+  employeeId      String   // -> Employee.id
+  jobId           String?  // -> Job.id (if for a specific job)
+  // Route
+  startedAt       DateTime @default(now())
+  endedAt         DateTime?
+  // Path stored as JSON: [{lat, lng, capturedAt, accuracy}]
+  pathJson        String   @default("[]")
+  // Stats
+  distanceMeters  Float    @default(0)
+  durationMinutes Int      @default(0)
+  avgSpeedKmh     Float    @default(0)
+  // Origin/destination
+  startLat        Float?
+  startLng        Float?
+  endLat          Float?
+  endLng          Float?
+  // ETA
+  etaMinutes      Int?
+  arrivedAt       DateTime?
+  status          String   @default("in_progress") // in_progress, completed, cancelled
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([tenantId, employeeId, startedAt])
+  @@index([tenantId, jobId])
+  @@index([tenantId, status])
+}
+
+// 14. CustomerTimelineEntry — unified, chronological timeline for Customer 360.
+model CustomerTimelineEntry {
+  id              String   @id @default(cuid())
+  tenantId        String
+  customerId      String   // -> Customer.id
+  // Entry
+  entryType       String   // lead, call, email, whatsapp, sms, quote, job, invoice, payment, photo, signature, review, ticket, note, visit, asset, status_change
+  title           String
+  description     String?
+  // Link to source entity
+  sourceType      String?  // Lead, Job, Invoice, etc.
+  sourceId        String?  // the id of the source entity
+  // Rich data
+  metadataJson    String   @default("{}")
+  // Actor
+  actorId         String?  // user/employee id
+  actorName       String?
+  actorType       String   @default("user") // user, employee, system, customer, ai
+  // Timestamp of the event (may differ from createdAt if backdating)
+  eventDate       DateTime @default(now())
+  // Visibility
+  isInternal      Boolean  @default(false) // internal notes only visible to staff
+  isPinned        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  @@index([tenantId, customerId, eventDate])
+  @@index([tenantId, customerId, entryType])
+  @@index([tenantId, sourceType, sourceId])
+  @@index([tenantId, actorId])
+}
+
+// 15. EmployeePerformance — aggregated performance metrics per employee per period (daily/weekly/monthly).
+model EmployeePerformance {
+  id              String   @id @default(cuid())
+  tenantId        String
+  employeeId      String   // -> Employee.id
+  // Period
+  periodType      String   // daily, weekly, monthly
+  periodStart     DateTime
+  periodEnd       DateTime
+  // KPIs
+  jobsCompleted   Int      @default(0)
+  jobsAssigned    Int      @default(0)
+  hoursWorked     Float    @default(0) // total hours
+  travelDistanceKm Float   @default(0)
+  travelMinutes   Int      @default(0)
+  workingMinutes  Int      @default(0)
+  breakMinutes    Int      @default(0)
+  avgCompletionMinutes Float @default(0)
+  customerRating  Float    @default(0) // 0-5
+  revenueGenerated Float   @default(0)
+  lateArrivals    Int      @default(0)
+  attendanceDays  Int      @default(0)
+  // Computed rank in tenant for this period
+  rank            Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([tenantId, employeeId, periodType, periodStart])
+  @@index([tenantId, employeeId, periodType])
+  @@index([tenantId, periodType, periodStart])
+  @@index([tenantId, periodType, rank])
+}
+
+// 16. OfflineMutation — queued mutations from offline mode (for background sync replay).
+model OfflineMutation {
+  id              String   @id @default(cuid())
+  tenantId        String
+  userId          String?  // user who created it
+  // The mutation
+  method          String   // POST, PUT, PATCH, DELETE
+  url             String   // API path
+  bodyJson        String   @default("{}")
+  headersJson     String   @default("{}")
+  // State
+  status          String   @default("pending") // pending, synced, failed, conflict
+  attempts        Int      @default(0)
+  lastError       String?
+  // Result
+  responseStatus  Int?
+  responseBodyJson String?
+  syncedAt        DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([tenantId, userId, status])
+  @@index([tenantId, status, createdAt])
 }

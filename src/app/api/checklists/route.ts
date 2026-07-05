@@ -90,6 +90,7 @@ export async function POST(request: NextRequest) {
     const checklist = await db.checklist.create({
       data: {
         title: (body.title || 'New checklist').toString().slice(0, 200),
+        category: (body.category || 'General').toString().slice(0, 100),
         autoAttachJobs: !!body.autoAttachJobs,
         autoAttachAssessments: !!body.autoAttachAssessments,
         sectionsJson:

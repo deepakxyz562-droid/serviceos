@@ -1,6 +1,7 @@
 import { db } from '@/lib/db'
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
+import { logActivity } from '@/lib/activity-log'
 
 // GET /api/customers — list customers for the authenticated user's tenant
 // Scopes results to the logged-in user's workspace/tenant so cross-tenant
@@ -92,6 +93,41 @@ export async function POST(request: NextRequest) {
         preferredCurrency: preferredCurrency || 'USD',
       },
     })
+
+    // ─── V1.5 Activity Log ──────────────────────────────────────────
+    // Best-effort — never fails the customer creation. Customer uses
+    // workspaceId → workspace.tenantId for tenant scoping.
+    try {
+      let customerTenantId: string | null = user.tenantId || null
+      if (!customerTenantId && customer.workspaceId) {
+        const ws = await db.workspace.findUnique({
+          where: { id: customer.workspaceId },
+          select: { tenantId: true },
+        })
+        customerTenantId = ws?.tenantId ?? null
+      }
+      if (customerTenantId) {
+        await logActivity({
+          tenantId: customerTenantId,
+          actorId: user.id,
+          actorName: user.name || user.email,
+          actorType: 'user',
+          action: 'create',
+          entityType: 'customer',
+          entityId: customer.id,
+          entityName: customer.name || null,
+          description: `Created customer: ${customer.name}`,
+          metadataJson: JSON.stringify({
+            phone: customer.phone,
+            email: customer.email,
+            workspaceId: customer.workspaceId,
+          }),
+          severity: 'info',
+        })
+      }
+    } catch (logErr) {
+      console.error('[Customers POST] Failed to log activity:', logErr)
+    }
 
     return NextResponse.json(customer, { status: 201 })
   } catch (error) {
