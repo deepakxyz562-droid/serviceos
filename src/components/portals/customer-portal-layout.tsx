@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import {
   LayoutDashboard,
   CalendarCheck,
@@ -183,7 +183,9 @@ function formatCurrency(amount: number): string {
 }
 
 function apiUrl(path: string) {
-  return `${path}?XTransformPort=3000`;
+  // Append XTransformPort=3000 correctly, handling existing query params
+  const separator = path.includes('?') ? '&' : '?';
+  return `${path}${separator}XTransformPort=3000`;
 }
 
 function formatBookingDate(dateStr: string | Date | null | undefined): string {
@@ -235,9 +237,28 @@ function getInvoiceStatusBadge(status: string) {
     paid: { label: 'Paid', className: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800' },
     pending: { label: 'Pending', className: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800' },
     overdue: { label: 'Overdue', className: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800' },
+    draft: { label: 'Draft', className: 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950/40 dark:text-gray-400 dark:border-gray-800' },
+    sent: { label: 'Sent', className: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800' },
+    pending_approval: { label: 'Pending Approval', className: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800' },
+    cancelled: { label: 'Cancelled', className: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800' },
   };
   const c = config[status] || { label: status, className: 'bg-gray-50 text-gray-700 border-gray-200' };
   return <Badge variant="outline" className={cn('text-xs font-medium', c.className)}>{c.label}</Badge>;
+}
+
+/**
+ * Extract the real Customer ID from the auth user.
+ * - Magic-link auth sets `user.id` to the real customer.id directly.
+ * - Company-login (password) sets `user.id` to `cust_<customer.id>`.
+ * This helper normalises both so we can filter invoices by customer.
+ */
+function getRealCustomerId(authUser: any): string | null {
+  const raw = authUser?.id;
+  if (!raw) return null;
+  if (typeof raw === 'string' && raw.startsWith('cust_')) {
+    return raw.slice(5);
+  }
+  return raw;
 }
 
 function StarRating({ value, onChange, size = 'md' }: { value: number; onChange?: (val: number) => void; size?: 'sm' | 'md' | 'lg' }) {
@@ -281,22 +302,47 @@ function CustomerSidebar({
   onLogout,
   customerName,
   customerPhone,
+  tenant,
 }: {
   activeView: CustomerView;
   onViewChange: (view: CustomerView) => void;
   onLogout?: () => void;
   customerName: string;
   customerPhone: string;
+  tenant?: { name?: string | null; logo?: string | null; slug?: string | null; industry?: string | null } | null;
 }) {
+  const companyName = tenant?.name || 'Customer Portal';
+  const companyLogo = tenant?.logo || null;
+  // Build initials for the logo fallback from the company name
+  const companyInitials = companyName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(w => w[0]?.toUpperCase() || '')
+    .join('');
+
   return (
     <div className="flex h-full flex-col bg-card border-r border-border">
-      {/* Logo & Customer Info */}
+      {/* Company Logo & Name — shows the registered company (tenant) the customer belongs to */}
       <div className="p-5 pb-4">
         <div className="flex items-center gap-2.5 mb-4">
-          <div className="flex items-center justify-center size-9 rounded-lg bg-teal-600">
-            <Zap className="size-5 text-white" />
+          {companyLogo ? (
+            <img
+              src={companyLogo}
+              alt={companyName}
+              className="size-9 rounded-lg object-cover border border-border"
+            />
+          ) : (
+            <div className="flex items-center justify-center size-9 rounded-lg bg-teal-600 shrink-0">
+              <span className="text-white text-sm font-bold">{companyInitials || <Zap className="size-5 text-white" />}</span>
+            </div>
+          )}
+          <div className="min-w-0">
+            <span className="text-base font-bold text-foreground tracking-tight truncate block">{companyName}</span>
+            {tenant?.industry ? (
+              <span className="text-[11px] text-muted-foreground truncate block capitalize">{tenant.industry}</span>
+            ) : null}
           </div>
-          <span className="text-lg font-bold text-foreground tracking-tight">ServiceOS</span>
         </div>
         <Separator className="mb-3" />
         <div className="flex items-center gap-3">
@@ -366,6 +412,7 @@ function CustomerHeader({
   const { theme, setTheme } = useTheme();
   const auth = useAppStore((s) => s.auth);
   const userName = auth.user?.name || auth.user?.email || 'Customer';
+  const companyName = auth.tenant?.name || 'Customer Portal';
 
   const viewTitle: Record<CustomerView, string> = {
     dashboard: 'Dashboard',
@@ -392,6 +439,10 @@ function CustomerHeader({
           <span className="sr-only">Toggle menu</span>
         </Button>
         <h1 className="text-lg sm:text-xl font-semibold text-foreground">{viewTitle[activeView]}</h1>
+        {/* Show company name on mobile (sidebar hidden) for context */}
+        <span className="hidden sm:block text-xs text-muted-foreground font-normal ml-1 truncate max-w-[140px] lg:hidden">
+          · {companyName}
+        </span>
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2">
@@ -444,6 +495,23 @@ function CustomerHeader({
 }
 
 // ─── Types for real data ────────────────────────────────────────────────────
+
+interface InvoiceItem {
+  id: string;
+  number: string;
+  amount: number;
+  tax: number;
+  discount: number;
+  total: number;
+  currency: string;
+  status: string; // draft, sent, paid, pending_approval, cancelled
+  dueDate?: string | null;
+  sentAt?: string | null;
+  paidAt?: string | null;
+  createdAt: string;
+  customer?: { id: string; name: string; email: string | null; phone: string | null } | null;
+  job?: { id: string; title: string } | null;
+}
 
 interface BookingItem {
   id: string;
@@ -919,7 +987,7 @@ function OrdersView({ customerEmail }: { customerEmail: string }) {
   const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/ecommerce/orders?search=${encodeURIComponent(customerEmail)}`);
+      const res = await fetch(apiUrl(`/api/ecommerce/orders?search=${encodeURIComponent(customerEmail)}`));
       if (res.ok) {
         const data = await res.json();
         setOrders(data.orders || []);
@@ -1190,18 +1258,105 @@ function OrdersView({ customerEmail }: { customerEmail: string }) {
 }
 
 function InvoicesView({ initialInvoiceId }: { initialInvoiceId?: string | null }) {
-  const totalPending = PLACEHOLDER_INVOICES.filter(i => i.status === 'pending').reduce((s, i) => s + i.amount, 0);
-  const totalOverdue = PLACEHOLDER_INVOICES.filter(i => i.status === 'overdue').reduce((s, i) => s + i.amount, 0);
+  const auth = useAppStore((s) => s.auth);
+  const [invoices, setInvoices] = useState<InvoiceItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // Magic-link deep-link target — currently invoices are placeholder data,
-  // so there's no row to auto-open. This effect is here so that when real
-  // invoice data is wired in, the deep-link id will already be plumbed through.
-  useEffect(() => {
-    if (initialInvoiceId) {
-      // No-op for now — placeholder data won't match a real invoice id.
-      // When real invoices are loaded, scroll to / expand the matching row here.
+  const fetchInvoices = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const customerId = getRealCustomerId(auth.user);
+      // Build query — filter by customerId so the customer only sees their own invoices
+      const params = new URLSearchParams({ limit: '200' });
+      if (customerId) params.set('customerId', customerId);
+      const res = await fetch(apiUrl(`/api/invoices?${params.toString()}`), {
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to load invoices');
+      const data = await res.json();
+      setInvoices(data.invoices || []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load invoices');
+    } finally {
+      setLoading(false);
     }
-  }, [initialInvoiceId]);
+  }, [auth.user]);
+
+  useEffect(() => {
+    fetchInvoices();
+  }, [fetchInvoices]);
+
+  // Auto-expand the deep-linked invoice on first render (magic-link redirect)
+  useEffect(() => {
+    if (initialInvoiceId && invoices.length > 0) {
+      const exists = invoices.some(i => i.id === initialInvoiceId || i.number === initialInvoiceId);
+      if (exists) setExpandedId(initialInvoiceId);
+    }
+  }, [initialInvoiceId, invoices]);
+
+  // Compute summary totals from real data
+  const totalPaid = invoices.filter(i => i.status === 'paid').reduce((s, i) => s + (i.total || i.amount), 0);
+  const totalPending = invoices
+    .filter(i => ['sent', 'pending', 'pending_approval'].includes(i.status))
+    .reduce((s, i) => s + (i.total || i.amount), 0);
+  const totalOverdue = invoices
+    .filter(i => i.status !== 'paid' && i.status !== 'cancelled' && i.dueDate && new Date(i.dueDate) < new Date())
+    .reduce((s, i) => s + (i.total || i.amount), 0);
+
+  // Apply status filter
+  const filteredInvoices = statusFilter === 'all'
+    ? invoices
+    : invoices.filter(i => {
+        if (statusFilter === 'overdue') {
+          return i.status !== 'paid' && i.status !== 'cancelled' && i.dueDate && new Date(i.dueDate) < new Date();
+        }
+        return i.status === statusFilter;
+      });
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-bold text-foreground">Invoices</h2>
+          <p className="text-muted-foreground text-sm">View and manage your invoices</p>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {[1, 2, 3].map(i => (
+            <Card key={i}><CardContent className="p-4"><Skeleton className="h-12 w-full" /></CardContent></Card>
+          ))}
+        </div>
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            {[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-bold text-foreground">Invoices</h2>
+          <p className="text-muted-foreground text-sm">View and manage your invoices</p>
+        </div>
+        <Card className="border-red-200 dark:border-red-800">
+          <CardContent className="p-6 text-center">
+            <AlertCircle className="size-10 text-red-500 mx-auto mb-2" />
+            <p className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>
+            <Button variant="outline" size="sm" onClick={fetchInvoices}>Retry</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -1214,7 +1369,7 @@ function InvoicesView({ initialInvoiceId }: { initialInvoiceId?: string | null }
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Paid</p>
-              <p className="text-lg font-bold text-foreground">{formatCurrency(PLACEHOLDER_INVOICES.filter(i => i.status === 'paid').reduce((s, i) => s + i.amount, 0))}</p>
+              <p className="text-lg font-bold text-foreground">{formatCurrency(totalPaid)}</p>
             </div>
           </CardContent>
         </Card>
@@ -1248,14 +1403,17 @@ function InvoicesView({ initialInvoiceId }: { initialInvoiceId?: string | null }
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <CardTitle className="text-base">Invoice History</CardTitle>
             <div className="flex items-center gap-2">
-              <Select defaultValue="all">
-                <SelectTrigger className="w-32 h-8 text-xs">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-36 h-8 text-xs">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="paid">Paid</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="sent">Sent</SelectItem>
+                  <SelectItem value="pending_approval">Pending Approval</SelectItem>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
                   <SelectItem value="overdue">Overdue</SelectItem>
                 </SelectContent>
               </Select>
@@ -1263,34 +1421,103 @@ function InvoicesView({ initialInvoiceId }: { initialInvoiceId?: string | null }
           </div>
         </CardHeader>
         <CardContent className="pt-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs">Invoice #</TableHead>
-                  <TableHead className="text-xs">Date</TableHead>
-                  <TableHead className="text-xs text-right">Amount</TableHead>
-                  <TableHead className="text-xs">Status</TableHead>
-                  <TableHead className="text-xs text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {PLACEHOLDER_INVOICES.map((invoice) => (
-                  <TableRow key={invoice.id}>
-                    <TableCell className="font-mono text-xs font-medium">{invoice.id}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{invoice.date}</TableCell>
-                    <TableCell className="text-xs text-right font-medium">{formatCurrency(invoice.amount)}</TableCell>
-                    <TableCell>{getInvoiceStatusBadge(invoice.status)}</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" className="size-7">
-                        <Download className="size-3.5" />
-                      </Button>
-                    </TableCell>
+          {filteredInvoices.length === 0 ? (
+            <div className="text-center py-12">
+              <Receipt className="size-10 text-muted-foreground/40 mx-auto mb-2" />
+              <p className="text-sm text-muted-foreground">No invoices found</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs">Invoice #</TableHead>
+                    <TableHead className="text-xs">Date</TableHead>
+                    <TableHead className="text-xs">Due Date</TableHead>
+                    <TableHead className="text-xs text-right">Amount</TableHead>
+                    <TableHead className="text-xs">Status</TableHead>
+                    <TableHead className="text-xs text-right">Action</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {filteredInvoices.map((invoice) => {
+                    const isExpanded = expandedId === invoice.id || expandedId === invoice.number;
+                    const isOverdue = invoice.status !== 'paid' && invoice.status !== 'cancelled' && invoice.dueDate && new Date(invoice.dueDate) < new Date();
+                    return (
+                      <Fragment key={invoice.id}>
+                        <TableRow
+                          className="cursor-pointer hover:bg-muted/30"
+                          onClick={() => setExpandedId(isExpanded ? null : invoice.id)}
+                        >
+                          <TableCell className="font-mono text-xs font-medium">{invoice.number}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{formatBookingDate(invoice.createdAt)}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {invoice.dueDate ? formatBookingDate(invoice.dueDate) : '—'}
+                            {isOverdue ? <span className="ml-1 text-red-600 dark:text-red-400 font-medium">(overdue)</span> : null}
+                          </TableCell>
+                          <TableCell className="text-xs text-right font-medium">{formatCurrency(invoice.total || invoice.amount)}</TableCell>
+                          <TableCell>{getInvoiceStatusBadge(invoice.status)}</TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="icon" className="size-7" onClick={(e) => e.stopPropagation()}>
+                              <Download className="size-3.5" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                        {isExpanded ? (
+                          <TableRow className="bg-muted/20">
+                            <TableCell colSpan={6} className="p-4">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                                <div>
+                                  <p className="text-muted-foreground mb-1">Invoice Number</p>
+                                  <p className="font-mono font-medium text-foreground">{invoice.number}</p>
+                                </div>
+                                <div>
+                                  <p className="text-muted-foreground mb-1">Status</p>
+                                  <div>{getInvoiceStatusBadge(invoice.status)}</div>
+                                </div>
+                                <div>
+                                  <p className="text-muted-foreground mb-1">Subtotal</p>
+                                  <p className="font-medium text-foreground">{formatCurrency(invoice.amount)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-muted-foreground mb-1">Tax</p>
+                                  <p className="font-medium text-foreground">{formatCurrency(invoice.tax)}</p>
+                                </div>
+                                {invoice.discount > 0 ? (
+                                  <div>
+                                    <p className="text-muted-foreground mb-1">Discount</p>
+                                    <p className="font-medium text-foreground">-{formatCurrency(invoice.discount)}</p>
+                                  </div>
+                                ) : null}
+                                <div>
+                                  <p className="text-muted-foreground mb-1">Total</p>
+                                  <p className="font-bold text-foreground">{formatCurrency(invoice.total)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-muted-foreground mb-1">Sent</p>
+                                  <p className="font-medium text-foreground">{invoice.sentAt ? formatBookingDate(invoice.sentAt) : 'Not sent'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-muted-foreground mb-1">Paid</p>
+                                  <p className="font-medium text-foreground">{invoice.paidAt ? formatBookingDate(invoice.paidAt) : '—'}</p>
+                                </div>
+                                {invoice.job ? (
+                                  <div className="sm:col-span-2">
+                                    <p className="text-muted-foreground mb-1">Related Job</p>
+                                    <p className="font-medium text-foreground">{invoice.job.title}</p>
+                                  </div>
+                                ) : null}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ) : null}
+                      </Fragment>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -1826,6 +2053,8 @@ function QuotesView({ initialQuoteId }: { initialQuoteId?: string | null }) {
 
 function MessagesView() {
   const [newMessage, setNewMessage] = useState('');
+  const auth = useAppStore((s) => s.auth);
+  const companyName = auth.tenant?.name || 'Support';
 
   return (
     <div className="space-y-0">
@@ -1837,7 +2066,7 @@ function MessagesView() {
               <Zap className="size-5 text-teal-600 dark:text-teal-400" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-foreground">ServiceOS Support</p>
+              <p className="text-sm font-semibold text-foreground">{companyName} Support</p>
               <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                 <span className="size-1.5 rounded-full bg-emerald-500 inline-block" />
                 Online
@@ -1917,16 +2146,61 @@ function MessagesView() {
   );
 }
 
+interface ReviewItem {
+  id: string;
+  rating: number;
+  comment: string | null;
+  status: string; // published, pending, flagged
+  source: string | null;
+  customerName?: string | null;
+  employeeName?: string | null;
+  serviceName?: string | null;
+  createdAt: string;
+}
+
 function ReviewsView() {
+  const auth = useAppStore((s) => s.auth);
+  const [reviews, setReviews] = useState<ReviewItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showWriteReview, setShowWriteReview] = useState(false);
   const [newRating, setNewRating] = useState(0);
   const [newReviewText, setNewReviewText] = useState('');
+
+  const fetchReviews = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const customerId = getRealCustomerId(auth.user);
+      const params = new URLSearchParams({ limit: '100' });
+      if (customerId) params.set('customerId', customerId);
+      const res = await fetch(apiUrl(`/api/reviews?${params.toString()}`), {
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to load reviews');
+      const data = await res.json();
+      setReviews(data.reviews || []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load reviews');
+    } finally {
+      setLoading(false);
+    }
+  }, [auth.user]);
+
+  useEffect(() => {
+    fetchReviews();
+  }, [fetchReviews]);
+
+  const avgRating = reviews.length > 0
+    ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1)
+    : '—';
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
+          <h2 className="text-xl font-bold text-foreground">Reviews</h2>
           <p className="text-muted-foreground text-sm">Share your experience and help others</p>
         </div>
         <Button
@@ -1947,19 +2221,6 @@ function ReviewsView() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label className="text-sm mb-2 block">Select Service</Label>
-              <Select>
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a completed service" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ac">AC Maintenance</SelectItem>
-                  <SelectItem value="plumbing">Plumbing Repair</SelectItem>
-                  <SelectItem value="electrical">Electrical Inspection</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
               <Label className="text-sm mb-2 block">Rating</Label>
               <StarRating value={newRating} onChange={setNewRating} size="lg" />
             </div>
@@ -1973,49 +2234,95 @@ function ReviewsView() {
               />
             </div>
             <div className="flex items-center gap-2">
-              <Button className="bg-teal-600 hover:bg-teal-700 text-white">Submit Review</Button>
-              <Button variant="outline" onClick={() => setShowWriteReview(false)}>Cancel</Button>
+              <Button className="bg-teal-600 hover:bg-teal-700 text-white" disabled={newRating === 0 || !newReviewText.trim()}>
+                Submit Review
+              </Button>
+              <Button variant="outline" onClick={() => { setShowWriteReview(false); setNewRating(0); setNewReviewText(''); }}>Cancel</Button>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Existing Reviews */}
-      <div className="space-y-4">
-        {PLACEHOLDER_REVIEWS.map((review) => (
-          <Card key={review.id}>
-            <CardContent className="p-5">
-              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-3">
-                <div>
-                  <h3 className="font-semibold text-foreground">{review.service}</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">Technician: {review.assignee} &middot; {review.date}</p>
-                </div>
-                <StarRating value={review.rating} size="sm" />
+      {/* Summary */}
+      {loading ? (
+        <Card>
+          <CardContent className="p-4 space-y-3">
+            {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full" />)}
+          </CardContent>
+        </Card>
+      ) : error ? (
+        <Card className="border-red-200 dark:border-red-800">
+          <CardContent className="p-6 text-center">
+            <AlertCircle className="size-10 text-red-500 mx-auto mb-2" />
+            <p className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>
+            <Button variant="outline" size="sm" onClick={fetchReviews}>Retry</Button>
+          </CardContent>
+        </Card>
+      ) : reviews.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="p-12 flex flex-col items-center justify-center text-center">
+            <div className="size-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">
+              <Star className="size-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-semibold text-foreground mb-1">No reviews yet</h3>
+            <p className="text-sm text-muted-foreground max-w-sm">
+              Reviews you submit will appear here. Share your experience to help others.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          {/* Average rating card */}
+          <Card className="bg-gradient-to-br from-teal-50 to-white dark:from-teal-950/40 dark:to-card border-teal-200 dark:border-teal-800">
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="text-center">
+                <p className="text-4xl font-bold text-teal-700 dark:text-teal-400">{avgRating}</p>
+                <StarRating value={Math.round(Number(avgRating))} readonly size="sm" />
               </div>
-              <p className="text-sm text-muted-foreground leading-relaxed">{review.text}</p>
-              <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border">
-                <Button variant="ghost" size="sm" className="text-xs text-muted-foreground h-7">
-                  <ThumbsUp className="size-3.5 mr-1" />
-                  Helpful
-                </Button>
-                <Button variant="ghost" size="sm" className="text-xs text-muted-foreground h-7">
-                  <Edit className="size-3.5 mr-1" />
-                  Edit
-                </Button>
+              <div>
+                <p className="text-sm font-medium text-foreground">{reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}</p>
+                <p className="text-xs text-muted-foreground">Based on your submitted reviews</p>
               </div>
             </CardContent>
           </Card>
-        ))}
-      </div>
+
+          {/* Existing Reviews */}
+          <div className="space-y-4">
+            {reviews.map((review) => (
+              <Card key={review.id}>
+                <CardContent className="p-5">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-3">
+                    <div>
+                      <h3 className="font-semibold text-foreground">{review.serviceName || 'Service Review'}</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {review.employeeName ? `Technician: ${review.employeeName} · ` : ''}
+                        {formatBookingDate(review.createdAt)}
+                        {review.status === 'pending' ? ' · Pending' : ''}
+                      </p>
+                    </div>
+                    <StarRating value={review.rating} size="sm" />
+                  </div>
+                  {review.comment ? (
+                    <p className="text-sm text-muted-foreground leading-relaxed">{review.comment}</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">No written comment provided.</p>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
 function ProfileView() {
   const auth = useAppStore((s) => s.auth);
-  const customerName = auth.user?.name || 'Rajesh Kumar';
-  const customerEmail = auth.user?.email || 'rajesh.kumar@email.com';
-  const customerPhone = auth.user?.phone || '+91 98765 43210';
+  const customerName = auth.user?.name || 'Customer';
+  const customerEmail = auth.user?.email || '';
+  const customerPhone = auth.user?.phone || '';
+  const companyName = auth.tenant?.name || '';
 
   return (
     <div className="space-y-6">
@@ -2030,15 +2337,11 @@ function ProfileView() {
             </Avatar>
             <div className="flex-1">
               <h2 className="text-xl font-bold text-foreground">{customerName}</h2>
-              <p className="text-sm text-muted-foreground mt-0.5">Customer since January 2025</p>
+              <p className="text-sm text-muted-foreground mt-0.5">Customer{companyName ? ` · ${companyName}` : ''}</p>
               <div className="flex flex-wrap items-center gap-3 mt-2">
                 <Badge variant="outline" className="text-xs bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-400 dark:border-teal-800">
                   <Shield className="size-3 mr-1" />
                   Verified
-                </Badge>
-                <Badge variant="outline" className="text-xs">
-                  <Star className="size-3 mr-1 text-amber-400 fill-amber-400" />
-                  4.8 Rating
                 </Badge>
               </div>
             </div>
@@ -2083,7 +2386,7 @@ function ProfileView() {
               <Label htmlFor="profile-company">Company (Optional)</Label>
               <div className="relative">
                 <Home className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                <Input id="profile-company" placeholder="Your company name" className="pl-9" />
+                <Input id="profile-company" placeholder="Your company name" defaultValue={companyName} className="pl-9" />
               </div>
             </div>
           </div>
@@ -2094,7 +2397,7 @@ function ProfileView() {
               <MapPin className="absolute left-3 top-3 size-4 text-muted-foreground" />
               <Textarea
                 id="profile-address"
-                defaultValue="123 Oak Street, Apt 4B, Mumbai, Maharashtra 400001"
+                placeholder="Enter your address"
                 className="pl-9 min-h-[80px]"
               />
             </div>
@@ -2346,6 +2649,7 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
           onLogout={onLogout}
           customerName={customerName}
           customerPhone={customerPhone}
+          tenant={auth.tenant}
         />
       </aside>
 
@@ -2361,6 +2665,7 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
             onLogout={onLogout}
             customerName={customerName}
             customerPhone={customerPhone}
+            tenant={auth.tenant}
           />
         </SheetContent>
       </Sheet>
