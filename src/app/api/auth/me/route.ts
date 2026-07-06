@@ -14,13 +14,16 @@ export async function GET() {
     }
 
     // ── Customer portal session ──────────────────────────────────────────
-    // Customer JWTs have role='customer' and id=Customer.id (NOT a User id).
-    // The block below queries the Customer table + its workspace.tenant,
-    // then returns the same { user, tenant } shape as the admin flow so the
-    // frontend (page.tsx → useAppStore.setAuth) works identically.
+    // Customer JWTs have role='customer'. The id may be either:
+    //   - The raw Customer.id (magic-link / OTP login), or
+    //   - `cust_<Customer.id>` (company-login / password login).
+    // Strip the `cust_` prefix so we can query the Customer table directly.
     if (authUser.role === 'customer') {
+      const rawId = authUser.id || '';
+      const customerId = rawId.startsWith('cust_') ? rawId.slice(5) : rawId;
+
       const customer = await db.customer.findUnique({
-        where: { id: authUser.id },
+        where: { id: customerId },
         include: { workspace: { include: { tenant: true } } },
       });
 

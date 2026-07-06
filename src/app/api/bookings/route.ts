@@ -31,7 +31,9 @@ export async function GET(request: NextRequest) {
       tenantId: user.tenantId,
     };
 
-    // Customers can only see their own bookings
+    // Customers can only see their own bookings.
+    // getAuthUser() already strips the `cust_` prefix, so user.id is the
+    // raw Customer.id that matches Booking.customerId.
     if (user.role === 'customer') {
       where.customerId = user.id;
     } else if (searchParams.get('customerId')) {

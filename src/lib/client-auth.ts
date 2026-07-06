@@ -64,7 +64,8 @@ export function authHeaders(custom?: Record<string, string>): Record<string, str
  * Authenticated fetch wrapper.
  *
  * Works exactly like `fetch()`, but automatically includes the
- * `Authorization: Bearer <token>` header from localStorage.
+ * `Authorization: Bearer <token>` header from localStorage and sends
+ * credentials (cookies) with every request.
  *
  * Usage:
  *   authFetch('/api/employees', { method: 'POST', body: JSON.stringify(data) })
@@ -86,5 +87,8 @@ export async function authFetch(url: string, options?: RequestInit): Promise<Res
   return fetch(url, {
     ...options,
     headers,
+    // Always include credentials (cookies) so the HTTP-only session
+    // cookie is sent even if the caller forgets to set this explicitly.
+    credentials: options?.credentials ?? 'include',
   });
 }

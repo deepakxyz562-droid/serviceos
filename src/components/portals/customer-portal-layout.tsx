@@ -987,7 +987,9 @@ function OrdersView({ customerEmail }: { customerEmail: string }) {
   const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(apiUrl(`/api/ecommerce/orders?search=${encodeURIComponent(customerEmail)}`));
+      const res = await fetch(apiUrl(`/api/ecommerce/orders?search=${encodeURIComponent(customerEmail)}`), {
+        credentials: 'include',
+      });
       if (res.ok) {
         const data = await res.json();
         setOrders(data.orders || []);
@@ -1540,8 +1542,8 @@ function PaymentsView({ paymentMethods, loading, error, onAddMethod, onRetry, on
     try {
       const res = await fetch(apiUrl(`/api/customer/payment-methods/${id}`), {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isDefault: true }),
       });
       if (!res.ok) {
@@ -1790,6 +1792,7 @@ function formatQuoteDate(dateStr: string | null | undefined): string {
 }
 
 function QuotesView({ initialQuoteId }: { initialQuoteId?: string | null }) {
+  const auth = useAppStore((s) => s.auth);
   const [quotes, setQuotes] = useState<QuoteItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1799,7 +1802,10 @@ function QuotesView({ initialQuoteId }: { initialQuoteId?: string | null }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await authFetch('/api/quotes?limit=100&XTransformPort=3000', {
+      const customerId = getRealCustomerId(auth.user);
+      const params = new URLSearchParams({ limit: '100' });
+      if (customerId) params.set('customerId', customerId);
+      const res = await authFetch(apiUrl(`/api/quotes?${params.toString()}`), {
         credentials: 'include',
       });
       if (!res.ok) throw new Error('Failed to load quotes');
@@ -1810,7 +1816,7 @@ function QuotesView({ initialQuoteId }: { initialQuoteId?: string | null }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [auth.user]);
 
   useEffect(() => {
     fetchQuotes();

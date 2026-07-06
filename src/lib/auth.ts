@@ -58,6 +58,11 @@ export function verifyToken(token: string): AuthUser | null {
  * Checks HTTP-only cookie first, then falls back to Authorization header (Bearer token).
  * This dual approach ensures auth works even if cookies are not forwarded
  * through the Caddy gateway proxy.
+ *
+ * NOTE: For customer portal sessions, the company-login flow sets the JWT
+ * `id` to `cust_<customerId>` (with a `cust_` prefix). We strip that prefix
+ * here so every downstream API can use `user.id` directly as the Customer.id
+ * without needing to normalise it individually.
  */
 export async function getAuthUser(): Promise<AuthUser | null> {
   try {
@@ -66,7 +71,7 @@ export async function getAuthUser(): Promise<AuthUser | null> {
     const token = cookieStore.get(TOKEN_NAME)?.value;
     if (token) {
       const user = verifyToken(token);
-      if (user) return user;
+      if (user) return normalizeCustomerId(user);
     }
 
     // 2. Fallback: Check Authorization header (Bearer token)
@@ -75,13 +80,26 @@ export async function getAuthUser(): Promise<AuthUser | null> {
     if (authHeader?.startsWith('Bearer ')) {
       const bearerToken = authHeader.slice(7);
       const user = verifyToken(bearerToken);
-      if (user) return user;
+      if (user) return normalizeCustomerId(user);
     }
 
     return null;
   } catch {
     return null;
   }
+}
+
+/**
+ * Strip the `cust_` prefix from the user id for customer-role sessions.
+ * Company-login sets `id: cust_<customerId>`; magic-link / OTP set the raw
+ * `customerId`. Normalising here means every API can filter by `user.id`
+ * without worrying about the prefix.
+ */
+function normalizeCustomerId(user: AuthUser): AuthUser {
+  if (user.role === 'customer' && typeof user.id === 'string' && user.id.startsWith('cust_')) {
+    return { ...user, id: user.id.slice(5) };
+  }
+  return user;
 }
 
 export function getTokenName(): string {
