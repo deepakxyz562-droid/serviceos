@@ -142,6 +142,7 @@ export async function POST(request: NextRequest) {
           industry: tenant.industry,
         },
         customer: { id: customer.id, name: customer.name },
+        token,
       });
       response.cookies.set({ ...COOKIE_OPTIONS, value: token });
       return response;

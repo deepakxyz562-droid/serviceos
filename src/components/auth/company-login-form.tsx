@@ -22,6 +22,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/app-store';
+import { setToken } from '@/lib/client-auth';
 import { CompanyAuthRole, ROLE_CONFIG } from './company-auth-card';
 
 export interface CompanyLoginFormProps {
@@ -106,17 +107,22 @@ export function CompanyLoginForm({
       if (typeof window !== 'undefined') {
         const existingAuth = localStorage.getItem('serviceos_auth');
         const existingData = existingAuth ? safeParse(existingAuth) : {};
+        const token = data.token ?? existingData.token ?? undefined;
         localStorage.setItem(
           'serviceos_auth',
           JSON.stringify({
             isAuthenticated: true,
             user: data.user,
             tenant: data.tenant || null,
-            token: data.token ?? existingData.token ?? undefined,
+            token,
             isCustomer: role === 'customer' || existingData.isCustomer === true,
             portalToken: existingData.portalToken,
           })
         );
+        // Also save to the dedicated token key so authFetch() can find it
+        if (token) {
+          setToken(token);
+        }
       }
 
       // Update Zustand store so any mounted listeners pick it up immediately

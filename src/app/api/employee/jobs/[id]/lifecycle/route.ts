@@ -177,31 +177,40 @@ export async function POST(
           include: { assignee: true, customer: true },
         });
 
-        // Close the active RouteHistory for this job
-        const activeRoute = await db.routeHistory.findFirst({
-          where: {
-            employeeId: employee.id,
-            jobId: job.id,
-            status: 'in_progress',
-          },
-          orderBy: { startedAt: 'desc' },
-        });
-        if (activeRoute) {
-          const durationMinutes = Math.max(
-            1,
-            Math.round((now.getTime() - activeRoute.startedAt.getTime()) / 60000),
-          );
-          await db.routeHistory.update({
-            where: { id: activeRoute.id },
-            data: {
-              endedAt: now,
-              arrivedAt: now,
-              endLat: typeof latitude === 'number' ? latitude : null,
-              endLng: typeof longitude === 'number' ? longitude : null,
-              durationMinutes,
-              status: 'completed',
+        // Close the active RouteHistory for this job (non-critical — don't
+        // fail the lifecycle action if the RouteHistory table/update errors).
+        try {
+          const activeRoute = await db.routeHistory.findFirst({
+            where: {
+              employeeId: employee.id,
+              jobId: job.id,
+              status: 'in_progress',
             },
+            orderBy: { startedAt: 'desc' },
           });
+          if (activeRoute) {
+            // Defensive: in Supabase (PostgREST) adapter, Date fields are returned
+            // as ISO strings, not JS Date objects. Wrap in new Date() so .getTime()
+            // works in both Prisma (Date) and Supabase (string) environments.
+            const routeStartedAt = new Date(activeRoute.startedAt as unknown as string);
+            const durationMinutes = Math.max(
+              1,
+              Math.round((now.getTime() - routeStartedAt.getTime()) / 60000),
+            );
+            await db.routeHistory.update({
+              where: { id: activeRoute.id },
+              data: {
+                endedAt: now,
+                arrivedAt: now,
+                endLat: typeof latitude === 'number' ? latitude : null,
+                endLng: typeof longitude === 'number' ? longitude : null,
+                durationMinutes,
+                status: 'completed',
+              },
+            });
+          }
+        } catch (routeErr) {
+          console.warn('[lifecycle/arrive] RouteHistory update failed (non-critical):', routeErr instanceof Error ? routeErr.message : routeErr);
         }
 
         await notifyTenantAdmins(user.tenantId || 'default', {
@@ -322,7 +331,11 @@ export async function POST(
       }
 
       case 'complete': {
-        // ── Validation: require before/after photos, completed checklist, customer signature ──
+        // ── Validation: require before/after photos + customer signature.
+        // Checklist is only required if the job has linked checklists
+        // (job.linkedChecklistsJson is a non-empty array). This mirrors the
+        // JobCompletionScreen UI which treats checklist as "warn" (non-blocking)
+        // when no checklists are linked. ──
         const [photos, signatures, checklists] = await Promise.all([
           db.jobPhoto.findMany({ where: { jobId: job.id }, select: { photoType: true } }),
           db.jobSignature.findMany({ where: { jobId: job.id } }),
@@ -331,13 +344,25 @@ export async function POST(
         const hasBefore = photos.some((p) => p.photoType === 'before');
         const hasAfter = photos.some((p) => p.photoType === 'after');
         const hasCustomerSig = signatures.some((s) => s.signatoryType === 'customer');
+
+        // Parse linked checklist IDs from the job. Only enforce "completed
+        // checklist" when there are linked checklists AND at least one
+        // JobChecklist row exists (i.e. the employee was expected to fill one).
+        let linkedChecklistIds: string[] = [];
+        try {
+          const parsed = JSON.parse(job.linkedChecklistsJson || '[]');
+          if (Array.isArray(parsed)) linkedChecklistIds = parsed.filter((x) => typeof x === 'string');
+        } catch {
+          // ignore
+        }
+        const checklistRequired = linkedChecklistIds.length > 0 || checklists.length > 0;
         const hasCompletedChecklist = checklists.some((c) => c.status === 'completed');
 
         const missing: string[] = [];
         if (!hasBefore) missing.push('Before photo');
         if (!hasAfter) missing.push('After photo');
         if (!hasCustomerSig) missing.push('Customer signature');
-        if (!hasCompletedChecklist) missing.push('Completed checklist');
+        if (checklistRequired && !hasCompletedChecklist) missing.push('Completed checklist');
         if (missing.length > 0) {
           return NextResponse.json(
             { error: 'Cannot complete job — missing: ' + missing.join(', '), missing },
@@ -345,38 +370,45 @@ export async function POST(
           );
         }
 
-        // Close the active JobTimeEntry
-        const activeEntry = await db.jobTimeEntry.findFirst({
-          where: { jobId: job.id, employeeId: employee.id, status: { in: ['active', 'paused'] } },
-          orderBy: { startedAt: 'desc' },
-        });
-        if (activeEntry) {
-          // Close any open pause
-          const pauses = parsePauses(activeEntry.pausesJson);
-          const openIdx = pauses.findIndex((p) => !p.end);
-          if (openIdx >= 0) {
-            pauses[openIdx].end = now.toISOString();
-            pauses[openIdx].minutes = Math.max(
-              1,
-              Math.round((now.getTime() - new Date(pauses[openIdx].start).getTime()) / 60000),
-            );
-          }
-          const pauseMinutes = pauses.reduce((sum, p) => sum + (p.minutes || 0), 0);
-          const durationMinutes = Math.max(
-            1,
-            Math.round((now.getTime() - activeEntry.startedAt.getTime()) / 60000),
-          );
-          await db.jobTimeEntry.update({
-            where: { id: activeEntry.id },
-            data: {
-              status: 'completed',
-              endedAt: now,
-              pausesJson: JSON.stringify(pauses),
-              durationMinutes,
-              pauseMinutes,
-              workingMinutes: Math.max(0, durationMinutes - pauseMinutes),
-            },
+        // Close the active JobTimeEntry (non-critical — don't fail the
+        // complete action if JobTimeEntry table/update errors).
+        try {
+          const activeEntry = await db.jobTimeEntry.findFirst({
+            where: { jobId: job.id, employeeId: employee.id, status: { in: ['active', 'paused'] } },
+            orderBy: { startedAt: 'desc' },
           });
+          if (activeEntry) {
+            // Close any open pause
+            const pauses = parsePauses(activeEntry.pausesJson);
+            const openIdx = pauses.findIndex((p) => !p.end);
+            if (openIdx >= 0) {
+              pauses[openIdx].end = now.toISOString();
+              pauses[openIdx].minutes = Math.max(
+                1,
+                Math.round((now.getTime() - new Date(pauses[openIdx].start).getTime()) / 60000),
+              );
+            }
+            const pauseMinutes = pauses.reduce((sum, p) => sum + (p.minutes || 0), 0);
+            // Defensive: Supabase returns startedAt as ISO string, not Date.
+            const entryStartedAt = new Date(activeEntry.startedAt as unknown as string);
+            const durationMinutes = Math.max(
+              1,
+              Math.round((now.getTime() - entryStartedAt.getTime()) / 60000),
+            );
+            await db.jobTimeEntry.update({
+              where: { id: activeEntry.id },
+              data: {
+                status: 'completed',
+                endedAt: now,
+                pausesJson: JSON.stringify(pauses),
+                durationMinutes,
+                pauseMinutes,
+                workingMinutes: Math.max(0, durationMinutes - pauseMinutes),
+              },
+            });
+          }
+        } catch (entryErr) {
+          console.warn('[lifecycle/complete] JobTimeEntry update failed (non-critical):', entryErr instanceof Error ? entryErr.message : entryErr);
         }
 
         updatedJob = await db.job.update({
@@ -436,7 +468,11 @@ export async function POST(
     return NextResponse.json({ job: updatedJob });
   } catch (error) {
     console.error('[employee/jobs/[id]/lifecycle POST] error:', error);
-    return NextResponse.json({ error: 'Failed to process lifecycle action' }, { status: 500 });
+    const errMsg = error instanceof Error ? error.message : String(error);
+    return NextResponse.json(
+      { error: `Failed to process lifecycle action: ${errMsg}` },
+      { status: 500 },
+    );
   }
 }
 

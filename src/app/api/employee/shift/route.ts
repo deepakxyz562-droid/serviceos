@@ -183,7 +183,10 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const totalMinutes = Math.max(1, Math.round((now.getTime() - shift.clockIn.getTime()) / 60000));
+    // Defensive: Supabase (PostgREST) returns clockIn as an ISO string, not a
+    // JS Date. Wrap in new Date() so .getTime() works in both environments.
+    const clockInDate = new Date(shift.clockIn as unknown as string);
+    const totalMinutes = Math.max(1, Math.round((now.getTime() - clockInDate.getTime()) / 60000));
     const breakMinutes = breaks.reduce((sum, b) => sum + (b.durationMinutes || 0), 0);
     const workingMinutes = Math.max(0, totalMinutes - breakMinutes);
 

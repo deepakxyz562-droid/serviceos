@@ -73,6 +73,7 @@ import { useAppStore } from '@/store/app-store';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/client-auth';
+import { JobCompletionScreen } from '@/components/job/job-completion-screen';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -152,6 +153,9 @@ interface Job {
   lifecycleState?: string;
   lifecycleTimestamps?: Record<string, string>;
   _counts?: { photos: number; signatures: number; checklists: number };
+  // JSON string of linked checklist IDs — used by the JobCompletionScreen
+  // to decide whether a checklist is required for completion.
+  linkedChecklistsJson?: string;
 }
 
 // /api/employee/jobs returns a flat array of enriched job rows. This helper
@@ -184,6 +188,7 @@ interface EmployeeJobsApiResponseRow {
   lifecycleState?: string;
   lifecycleTimestamps?: Record<string, string>;
   _counts?: { photos: number; signatures: number; checklists: number };
+  linkedChecklistsJson?: string;
 }
 
 function mapJobRow(row: EmployeeJobsApiResponseRow): Job {
@@ -212,6 +217,7 @@ function mapJobRow(row: EmployeeJobsApiResponseRow): Job {
     lifecycleState: row.lifecycleState,
     lifecycleTimestamps: row.lifecycleTimestamps,
     _counts: row._counts,
+    linkedChecklistsJson: row.linkedChecklistsJson,
   };
 }
 
@@ -849,16 +855,20 @@ function JobDetailSheet({
   open,
   onClose,
   onAction,
+  onJobCompleted,
   actionLoading,
 }: {
   job: Job | null;
   open: boolean;
   onClose: () => void;
   onAction: (action: string, jobId: string) => void;
+  /** Called after the JobCompletionScreen successfully completes the job.
+   *  The parent uses this to refetch the jobs list + close the sheet.
+   *  NOT called for other lifecycle actions (those go through onAction). */
+  onJobCompleted?: (jobId: string) => void;
   actionLoading: string | null;
 }) {
-  const [completeNotes, setCompleteNotes] = useState('');
-  const [showCompleteDialog, setShowCompleteDialog] = useState(false);
+  const [showCompletionScreen, setShowCompletionScreen] = useState(false);
 
   if (!job) return null;
 
@@ -878,13 +888,11 @@ function JobDetailSheet({
   const handleStartWork = () => onAction('start_work', job.id);
   const handlePause = () => onAction('pause', job.id);
   const handleResume = () => onAction('resume', job.id);
-  const handleComplete = () => setShowCompleteDialog(true);
-
-  const confirmComplete = () => {
-    onAction('complete', job.id);
-    setShowCompleteDialog(false);
-    setCompleteNotes('');
-  };
+  // Open the full JobCompletionScreen (captures before/after photos,
+  // customer signature, checklist) instead of a plain confirm dialog.
+  // The backend `complete` action requires these proof items, so the
+  // employee MUST capture them first.
+  const handleComplete = () => setShowCompletionScreen(true);
 
   // Calculate elapsed time for working / paused jobs (V1.5 prefers
   // lifecycleTimestamps.working; legacy fallback uses actualStartTime).
@@ -1164,40 +1172,28 @@ function JobDetailSheet({
         </SheetContent>
       </Sheet>
 
-      {/* Complete Job Confirmation Dialog */}
-      <Dialog open={showCompleteDialog} onOpenChange={setShowCompleteDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Complete Job</DialogTitle>
-            <DialogDescription>
-              Mark &quot;{job.title}&quot; as completed? This will notify the customer and may auto-generate an invoice.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="complete-notes">Completion Notes (optional)</Label>
-              <Textarea
-                id="complete-notes"
-                placeholder="Add any notes about the job completion..."
-                value={completeNotes}
-                onChange={(e) => setCompleteNotes(e.target.value)}
-                className="mt-2"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCompleteDialog(false)}>Cancel</Button>
-            <Button className="bg-blue-600 hover:bg-blue-700" onClick={confirmComplete}>
-              {actionLoading === `complete-${job.id}` ? (
-                <Loader2 className="size-4 mr-2 animate-spin" />
-              ) : (
-                <CheckCircle2 className="size-4 mr-2" />
-              )}
-              Confirm Complete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Full Job Completion Screen — captures before/after photos,
+          customer signature, checklist, and completion notes before
+          calling the lifecycle complete action. The backend `complete`
+          action requires these proof items, so the employee MUST capture
+          them here first. */}
+      <JobCompletionScreen
+        open={showCompletionScreen}
+        onOpenChange={setShowCompletionScreen}
+        jobId={job.id}
+        jobTitle={job.title}
+        employeeName={job.assigneeName}
+        lifecycleEndpoint={`/api/employee/jobs/${job.id}/lifecycle?XTransformPort=3000`}
+        onCompleted={() => {
+          setShowCompletionScreen(false);
+          // Notify the parent that the job was completed so it can refetch
+          // the jobs list and close the detail sheet. We do NOT call
+          // onAction('complete', ...) here because JobCompletionScreen
+          // already POSTed to the lifecycle endpoint — calling onAction
+          // would double-POST and fail.
+          onJobCompleted?.(job.id);
+        }}
+      />
     </>
   );
 }
@@ -1422,6 +1418,12 @@ function MyJobsView({ employeeId }: { employeeId: string }) {
         open={!!selectedJob}
         onClose={() => setSelectedJob(null)}
         onAction={handleLifecycleAction}
+        onJobCompleted={async (jobId) => {
+          toast.success('Job completed successfully');
+          await refetch();
+          // Auto-close the detail sheet once the job is completed.
+          setSelectedJob(null);
+        }}
         actionLoading={actionLoading}
       />
     </div>

@@ -41,6 +41,16 @@ interface JobCompletionScreenProps {
   employeeName?: string;
   /** Called after the job is successfully completed. */
   onCompleted?: () => void;
+  /**
+   * Override the lifecycle endpoint that the "Complete Job" button calls.
+   * Defaults to `/api/jobs/${jobId}/lifecycle` (admin endpoint).
+   * Set to `/api/employee/jobs/${jobId}/lifecycle` when used from the
+   * employee portal — that endpoint enforces assignee ownership and
+   * validates that before/after photos + customer signature exist.
+   */
+  lifecycleEndpoint?: string;
+  /** Extra payload to merge into the complete request body (e.g. latitude/longitude). */
+  extraPayload?: Record<string, unknown>;
 }
 
 interface ValidationItem {
@@ -68,6 +78,8 @@ export function JobCompletionScreen({
   linkedChecklistNames = [],
   employeeName,
   onCompleted,
+  lifecycleEndpoint,
+  extraPayload,
 }: JobCompletionScreenProps) {
   const [beforePhotos, setBeforePhotos] = useState<JobPhoto[]>([]);
   const [afterPhotos, setAfterPhotos] = useState<JobPhoto[]>([]);
@@ -191,14 +203,17 @@ export function JobCompletionScreen({
     }
     setSubmitting(true);
     try {
-      // The lifecycle API is owned by another agent — call it but catch errors gracefully.
-      const res = await fetch(`/api/jobs/${jobId}/lifecycle`, {
+      // Use the override endpoint if provided (e.g. employee portal uses
+      // /api/employee/jobs/[id]/lifecycle for assignee-scoped validation).
+      const endpoint = lifecycleEndpoint || `/api/jobs/${jobId}/lifecycle`;
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'complete',
           jobId,
           completionNotes,
+          ...(extraPayload || {}),
         }),
       });
       if (!res.ok) {
