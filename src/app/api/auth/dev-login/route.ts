@@ -20,6 +20,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
+    // For employee-role users, look up the linked Employee record so the
+    // JWT carries `employeeId` (the EmployeePortalLayout needs this to
+    // resolve the active employee and fetch assigned jobs).
+    let employeeId: string | null = null;
+    if (user.role === 'employee') {
+      try {
+        const emp = await db.employee.findFirst({
+          where: { userId: user.id },
+          select: { id: true },
+        });
+        employeeId = emp?.id || null;
+      } catch {
+        // best-effort — continue without employeeId
+      }
+    }
+
     const authUser = {
       id: user.id,
       email: user.email,
@@ -29,6 +45,7 @@ export async function POST(request: NextRequest) {
       workspaceId: user.workspaceId,
       avatar: user.avatar,
       isSuperAdmin: user.isSuperAdmin || false,
+      employeeId,
     };
     const token = generateToken(authUser);
 
@@ -44,6 +61,7 @@ export async function POST(request: NextRequest) {
           workspaceId: user.workspaceId,
           avatar: user.avatar,
           isSuperAdmin: user.isSuperAdmin || false,
+          employeeId,
           lastLoginAt: new Date(),
         },
         token,

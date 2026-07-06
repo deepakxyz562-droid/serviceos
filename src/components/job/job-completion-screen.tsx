@@ -22,7 +22,10 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { ScrollArea } from '@/components/ui/scroll-area';
+// Note: we intentionally do NOT use the Radix ScrollArea here because its
+// inner Viewport wraps children in a `display: table` div, which collapses
+// the content height inside a flex container and prevents scrolling. A plain
+// `overflow-y-auto` div works reliably in flex layouts.
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { PhotoCapture, type JobPhoto } from './photo-capture';
@@ -233,9 +236,9 @@ export function JobCompletionScreen({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[92vh] p-0 gap-0 overflow-hidden">
+      <DialogContent className="max-w-4xl h-[92vh] sm:h-[88vh] p-0 gap-0 overflow-hidden flex flex-col">
         {/* Header */}
-        <DialogHeader className="px-6 py-4 border-b border-border/60 bg-muted/30">
+        <DialogHeader className="px-6 py-4 border-b border-border/60 bg-muted/30 shrink-0">
           <DialogTitle className="flex items-center gap-2 text-lg">
             <span className="inline-flex items-center justify-center size-7 rounded-lg bg-emerald-600 text-white">
               <CheckCircle2 className="size-4" />
@@ -248,7 +251,7 @@ export function JobCompletionScreen({
         </DialogHeader>
 
         {/* Validation checklist (always visible, sticky at top of body) */}
-        <div className="px-6 py-3 border-b border-border/60 bg-background">
+        <div className="px-6 py-3 border-b border-border/60 bg-background shrink-0">
           <div className="flex flex-wrap items-center gap-2">
             {validationItems.map((item) => {
               const Icon = item.icon;
@@ -278,8 +281,33 @@ export function JobCompletionScreen({
           </div>
         </div>
 
-        {/* Scrollable body */}
-        <ScrollArea className="flex-1" style={{ maxHeight: 'calc(92vh - 220px)' }}>
+        {/* Scrollable body — flex-1 + min-h-0 + overflow-y-auto so it fills
+            the remaining dialog height and scrolls internally. We use a plain
+            div instead of Radix ScrollArea because the latter wraps children
+            in a `display: table` div that collapses inside flex containers.
+            Custom scrollbar styling for better visibility. */}
+        <div className="flex-1 min-h-0 overflow-y-auto job-completion-scroll">
+          <style>{`
+            .job-completion-scroll {
+              scrollbar-width: thin;
+              scrollbar-color: rgb(203 213 225) transparent;
+            }
+            .job-completion-scroll::-webkit-scrollbar {
+              width: 8px;
+            }
+            .job-completion-scroll::-webkit-scrollbar-track {
+              background: transparent;
+            }
+            .job-completion-scroll::-webkit-scrollbar-thumb {
+              background-color: rgb(203 213 225);
+              border-radius: 4px;
+              border: 2px solid transparent;
+              background-clip: content-box;
+            }
+            .job-completion-scroll::-webkit-scrollbar-thumb:hover {
+              background-color: rgb(148 163 184);
+            }
+          `}</style>
           <div className="px-6 py-5 space-y-6">
             {/* Before Photos */}
             <section className="space-y-2">
@@ -457,10 +485,10 @@ export function JobCompletionScreen({
               />
             </section>
           </div>
-        </ScrollArea>
+        </div>
 
         {/* Footer */}
-        <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/30">
+        <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/30 shrink-0">
           <Button
             type="button"
             variant="outline"

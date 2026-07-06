@@ -275,7 +275,10 @@ export function SignaturePad({
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to save signature');
+        // Include the HTTP status + server error message so the user sees
+        // what actually went wrong (auth, validation, server error, etc.)
+        const detail = err.error || res.statusText || 'Unknown error';
+        throw new Error(`Save failed (${res.status}): ${detail}`);
       }
       const data = await res.json();
       toast.success(
@@ -285,7 +288,11 @@ export function SignaturePad({
       onSaved?.(data.signature as SavedSignature);
     } catch (err) {
       console.error('[SignaturePad] save error:', err);
-      toast.error(err instanceof Error ? err.message : 'Failed to save signature');
+      const msg = err instanceof Error ? err.message : 'Failed to save signature';
+      toast.error('Failed to save signature', {
+        description: msg,
+        duration: 6000,
+      });
     } finally {
       setSaving(false);
     }

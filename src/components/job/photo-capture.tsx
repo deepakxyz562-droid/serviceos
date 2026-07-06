@@ -77,6 +77,9 @@ const PHOTO_TYPE_TABS: { value: PhotoType; label: string; color: string }[] = [
 const MAX_DIMENSION = 1280;
 const JPEG_QUALITY = 0.8;
 const PENDING_STORAGE_KEY = 'serviceos_pending_photos';
+// Reject files larger than 15MB before compression (protects against
+// memory blow-ups in the canvas resize step + avoids huge base64 payloads).
+const MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024;
 
 /**
  * Compress and resize an image File to a JPEG data URL.
@@ -320,6 +323,15 @@ export function PhotoCapture({
 
       for (const file of Array.from(files)) {
         try {
+          // Guard: reject excessively large files before attempting compression
+          // (canvas operations on 50MB+ RAW/HEIC files can crash mobile browsers).
+          if (file.size > MAX_FILE_SIZE_BYTES) {
+            toast.error(`${file.name} is too large`, {
+              description: `Maximum file size is ${Math.round(MAX_FILE_SIZE_BYTES / 1024 / 1024)}MB. Got ${Math.round(file.size / 1024 / 1024)}MB.`,
+              duration: 6000,
+            });
+            continue;
+          }
           const dataUrl = await compressImage(file, MAX_DIMENSION, JPEG_QUALITY);
           const capturedAt = new Date().toISOString();
 
@@ -364,12 +376,21 @@ export function PhotoCapture({
           });
           if (!res.ok) {
             const err = await res.json().catch(() => ({}));
-            throw new Error(err.error || 'Upload failed');
+            // Include the HTTP status + server error message so the user
+            // sees what actually went wrong (auth, size, server error, etc.)
+            const detail = err.error || res.statusText || 'Unknown error';
+            throw new Error(`Upload failed (${res.status}): ${detail}`);
           }
           successCount++;
         } catch (err) {
           console.error('[PhotoCapture] upload error:', err);
-          toast.error(`Failed to upload ${file.name}`);
+          // Show the actual error message (not just "Failed to upload")
+          // so the user knows whether it's an auth issue, size limit, etc.
+          const msg = err instanceof Error ? err.message : 'Unknown error';
+          toast.error(`Failed to upload ${file.name}`, {
+            description: msg,
+            duration: 6000,
+          });
         }
       }
 

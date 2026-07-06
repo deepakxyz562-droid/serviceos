@@ -1184,6 +1184,18 @@ function JobDetailSheet({
         jobTitle={job.title}
         employeeName={job.assigneeName}
         lifecycleEndpoint={`/api/employee/jobs/${job.id}/lifecycle?XTransformPort=3000`}
+        // Parse linked checklist IDs from the job's linkedChecklistsJson so
+        // the completion screen can display the checklist names and the
+        // backend lifecycle route can decide whether to enforce the
+        // "completed checklist" requirement.
+        linkedChecklistIds={(() => {
+          try {
+            const parsed = JSON.parse(job.linkedChecklistsJson || '[]');
+            return Array.isArray(parsed) ? parsed.filter((x: unknown) => typeof x === 'string') : [];
+          } catch {
+            return [];
+          }
+        })()}
         onCompleted={() => {
           setShowCompletionScreen(false);
           // Notify the parent that the job was completed so it can refetch
