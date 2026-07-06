@@ -878,6 +878,11 @@ export function JobsView() {
   // Read + consume the lead→job prefill handed off from the Leads view.
   const pendingJobPrefill = useAppStore((s) => s.pendingJobPrefill);
   const setPendingJobPrefill = useAppStore((s) => s.setPendingJobPrefill);
+  // Cross-view "New Job" create signal — when the sidebar's "+ Create"
+  // dropdown or the dashboard's "Create Job" quick action sets
+  // pendingCreate to 'job', we open the New Job form and clear the signal.
+  const pendingCreate = useAppStore((s) => s.pendingCreate);
+  const setPendingCreate = useAppStore((s) => s.setPendingCreate);
 
   // State
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -895,7 +900,7 @@ export function JobsView() {
   // shows the full-page Job Detail view (Jobber-style, opened when a job
   // card/row is clicked), and 'checklist' shows the full-page Checklist
   // Builder (entered from the job form's "Create a Checklist" link).
-  const [formMode, setFormMode] = useState<'list' | 'form' | 'detail' | 'checklist'>('list');
+  const [formMode, setFormMode] = useState<'list' | 'form' | 'detail' | 'checklist'>(pendingCreate === 'job' ? 'form' : 'list');
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   // When the form was opened from a lead "Convert", we remember the leadId so
   // that on save we mark the lead as 'won' + link the new jobId.
@@ -1223,6 +1228,16 @@ export function JobsView() {
       setPendingJobPrefill(null);
     }
   }, [pendingJobPrefill]);
+
+  // ── Consume the cross-view "New Job" create signal ──────────────────────
+  // Opens the blank New Job form when the sidebar/dashboard sends the 'job'
+  // signal. Separate from the prefill effect above (which carries lead data).
+  useEffect(() => {
+    if (pendingCreate === 'job') {
+      openAddJob();
+      setPendingCreate(null);
+    }
+  }, [pendingCreate]);
 
   // ─── Stats ──────────────────────────────────────────────────────────────
 

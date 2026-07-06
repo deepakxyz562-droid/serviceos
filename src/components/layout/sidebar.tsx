@@ -302,20 +302,22 @@ interface AppSidebarProps {
 
 // ─── "+ Create" quick-action menu ────────────────────────────────────────────
 
+type CreateEntity = 'lead' | 'customer' | 'job' | 'invoice' | 'campaign';
+
 interface CreateMenuProps {
   isMobile: boolean;
   leftSidebarOpen: boolean;
-  onSelect: (view: ViewType) => void;
+  onSelect: (view: ViewType, entity: CreateEntity) => void;
 }
 
 function CreateMenu({ isMobile, leftSidebarOpen, onSelect }: CreateMenuProps) {
   const isExpanded = isMobile || leftSidebarOpen;
-  const items: { view: ViewType; label: string; icon: React.ElementType }[] = [
-    { view: 'leads', label: 'New Lead', icon: Target },
-    { view: 'customers', label: 'New Customer', icon: Users },
-    { view: 'jobs', label: 'New Job', icon: Briefcase },
-    { view: 'invoices', label: 'New Invoice', icon: FileText },
-    { view: 'campaigns', label: 'New Campaign', icon: Megaphone },
+  const items: { view: ViewType; entity: CreateEntity; label: string; icon: React.ElementType }[] = [
+    { view: 'leads', entity: 'lead', label: 'New Lead', icon: Target },
+    { view: 'customers', entity: 'customer', label: 'New Customer', icon: Users },
+    { view: 'jobs', entity: 'job', label: 'New Job', icon: Briefcase },
+    { view: 'invoices', entity: 'invoice', label: 'New Invoice', icon: FileText },
+    { view: 'campaigns', entity: 'campaign', label: 'New Campaign', icon: Megaphone },
   ];
 
   return (
@@ -345,7 +347,7 @@ function CreateMenu({ isMobile, leftSidebarOpen, onSelect }: CreateMenuProps) {
           return (
             <DropdownMenuItem
               key={item.view}
-              onClick={() => onSelect(item.view)}
+              onClick={() => onSelect(item.view, item.entity)}
               className="cursor-pointer hover:bg-emerald-500/10 hover:text-emerald-700 focus:bg-emerald-500/10 focus:text-emerald-700"
             >
               <Icon className="size-4 mr-2 text-emerald-600" />
@@ -367,6 +369,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     leftSidebarOpen,
     toggleLeftSidebar,
     setMobileSidebarOpen,
+    setPendingCreate,
     auth,
   } = useAppStore();
 
@@ -470,7 +473,10 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     if (isMobile) setMobileSidebarOpen(false);
   };
 
-  const handleCreateSelect = (view: ViewType) => {
+  const handleCreateSelect = (view: ViewType, entity: 'lead' | 'customer' | 'job' | 'invoice' | 'campaign') => {
+    // Tell the target view to auto-open its create form/dialog, then navigate.
+    // The view's useEffect consumes pendingCreate and clears it.
+    setPendingCreate(entity);
     setCurrentView(view);
     if (isMobile) setMobileSidebarOpen(false);
   };

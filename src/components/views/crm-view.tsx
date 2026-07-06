@@ -135,7 +135,7 @@ const SMART_LISTS = [
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function CrmView() {
-  const { setActiveView } = useAppStore();
+  const { setActiveView, pendingCreate, setPendingCreate } = useAppStore();
 
   // ─── View Mode: 'list' | 'detail' ──────────────────────────────────────
   const [formMode, setFormMode] = useState<'list' | 'detail'>('list');
@@ -146,9 +146,23 @@ export function CrmView() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customersLoading, setCustomersLoading] = useState(true);
   const [customerSearch, setCustomerSearch] = useState('');
-  const [showAddCustomer, setShowAddCustomer] = useState(false);
+  const [showAddCustomer, setShowAddCustomer] = useState(pendingCreate === 'customer');
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [customerForm, setCustomerForm] = useState({ name: '', phone: '', email: '', address: '' });
+
+  // Consume the cross-view "New Customer" signal — when the sidebar's "+ Create"
+  // dropdown or a dashboard quick action sets pendingCreate to 'customer',
+  // we reset the form + open the add-customer dialog, then clear the signal
+  // (mirrors the existing "New Customer" button onClick).
+  useEffect(() => {
+    if (pendingCreate === 'customer') {
+      setEditingCustomer(null);
+      setCustomerForm({ name: '', phone: '', email: '', address: '' });
+      setShowAddCustomer(true);
+      setPendingCreate(null);
+    }
+  }, [pendingCreate]);
+
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerSort, setCustomerSort] = useState<'name' | 'createdAt'>('name');
   const [customerSortDir, setCustomerSortDir] = useState<'asc' | 'desc'>('asc');

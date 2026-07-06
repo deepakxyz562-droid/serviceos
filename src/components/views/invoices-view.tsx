@@ -35,6 +35,13 @@ import {
   Power,
   Sparkles,
   Pencil,
+  RotateCcw,
+  ScrollText,
+  StickyNote,
+  User,
+  Phone,
+  MapPin,
+  Briefcase,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -69,6 +76,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { authFetch } from '@/lib/client-auth';
+import { FormSectionCard } from '@/components/shared/form-section-card';
+import { useAppStore } from '@/store/app-store';
 
 // ============================================================
 // Types
@@ -388,6 +397,13 @@ function parseApiInvoice(raw: Record<string, unknown>): Invoice {
 // ============================================================
 
 export function InvoicesView() {
+  // Cross-view "New Invoice" create signal — when the sidebar's "+ Create"
+  // dropdown or a dashboard quick action sets pendingCreate to 'invoice',
+  // we open the create dialog and clear the signal so a refresh doesn't
+  // re-open it.
+  const pendingCreate = useAppStore((s) => s.pendingCreate);
+  const setPendingCreate = useAppStore((s) => s.setPendingCreate);
+
   // Data state
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -423,11 +439,15 @@ export function InvoicesView() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // Dialogs
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(pendingCreate === 'invoice');
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   // When non-null, the create dialog is in "edit" mode and will PUT instead of POST.
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
+
+  // Full-page detail mode (Jobber-style) — when 'detail', the list is replaced
+  // by `renderInvoiceDetailPage()` instead of the legacy small Dialog.
+  const [formMode, setFormMode] = useState<'list' | 'detail'>('list');
 
   // Form
   const [form, setForm] = useState<InvoiceFormData>(EMPTY_FORM());
@@ -570,6 +590,14 @@ export function InvoicesView() {
     setShowCreateDialog(true);
   };
 
+  // Consume the cross-view "New Invoice" signal — opens the dialog, then clears.
+  useEffect(() => {
+    if (pendingCreate === 'invoice') {
+      openCreateDialog();
+      setPendingCreate(null);
+    }
+  }, [pendingCreate]);
+
   const openEditDialog = (invoice: Invoice) => {
     setEditingInvoice(invoice);
     setForm({
@@ -589,12 +617,30 @@ export function InvoicesView() {
       notes: invoice.notes || '',
     });
     setShowDetailDialog(false);
+    setFormMode('list');
     setShowCreateDialog(true);
   };
 
   const openDetailDialog = (invoice: Invoice) => {
     setSelectedInvoice(invoice);
     setShowDetailDialog(true);
+  };
+
+  // ── Full-page detail (Jobber-style) ──────────────────────────────────
+  // Replaces the legacy small Dialog for the primary "click row / View Details"
+  // entry points. The legacy Dialog (openDetailDialog) is retained for any
+  // other code paths that still call it.
+  const openInvoiceDetail = (invoice: Invoice) => {
+    setSelectedInvoice(invoice);
+    setFormMode('detail');
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0 });
+    }
+  };
+
+  const closeInvoiceDetail = () => {
+    setFormMode('list');
+    setSelectedInvoice(null);
   };
 
   const handleAddLineItem = () => {
@@ -1139,17 +1185,505 @@ export function InvoicesView() {
   };
 
   // ============================================================
+  // Render: Invoice Detail Page (Jobber-style full page)
+  // ============================================================
+  const renderInvoiceDetailPage = () => {
+    if (!selectedInvoice) return null;
+    const inv = selectedInvoice;
+    const lineItems = inv.lineItems || [];
+    const invoiceTitle = inv.jobTitle || inv.customer || 'Invoice';
+
+    // Look up the customer record (for the billing address / property address)
+    // in the customers state array. Falls back gracefully if not found.
+    const linkedCustomer = inv.customerId
+      ? customers.find((c) => c.id === inv.customerId) || null
+      : null;
+    const billingAddress = linkedCustomer?.address || '';
+    const customerPhone = inv.customerPhone || linkedCustomer?.phone || '';
+    const customerEmail = inv.customerEmail || linkedCustomer?.email || '';
+
+    // Status-aware flag for the primary lifecycle action in the sticky header.
+    const canSend =
+      inv.status === 'draft' ||
+      inv.status === 'pending_approval' ||
+      inv.status === 'sent';
+    const isPaid = inv.status === 'paid';
+
+    // Payment / balance breakdown for the totals block.
+    const invoiceBalance = isPaid ? 0 : inv.total;
+    const accountBalance = invoiceBalance;
+
+    // Inline handler for "Re-open Invoice" (paid → sent). Reuses authFetch +
+    // fetchInvoices() refresh, mirroring the reopen pattern in jobs-view.
+    const handleReopenInvoice = async () => {
+      setActionLoading((prev) => ({ ...prev, [`${inv.id}-reopen`]: true }));
+      try {
+        const res = await authFetch(`/api/invoices/${inv.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ status: 'sent', paidAt: null }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error((data as { error?: string }).error || 'Failed to re-open invoice');
+        }
+        const parsed = parseApiInvoice(data as Record<string, unknown>);
+        setInvoices((curr) => curr.map((i) => (i.id === parsed.id ? parsed : i)));
+        setSelectedInvoice(parsed);
+        toast.success(`Invoice ${parsed.number} re-opened`);
+        void fetchInvoices();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : 'Failed to re-open invoice');
+      } finally {
+        setActionLoading((prev) => {
+          const next = { ...prev };
+          delete next[`${inv.id}-reopen`];
+          return next;
+        });
+      }
+    };
+
+    const detailRows: { label: string; value: React.ReactNode }[] = [
+      { label: 'Invoice #', value: <span className="font-mono">{inv.number || '—'}</span> },
+      {
+        label: 'Invoice for',
+        value: inv.jobTitle ? (
+          <span className="text-emerald-700 hover:underline cursor-pointer">{inv.jobTitle}</span>
+        ) : (
+          <span>{inv.customer}</span>
+        ),
+      },
+      { label: 'Status', value: renderStatusBadge(inv.status) },
+      { label: 'Issued', value: <span>{formatShortDate(inv.createdAt)}</span> },
+      { label: 'Payment terms', value: <span>Due upon receipt</span> },
+      { label: 'Due date', value: <span>{formatShortDate(inv.dueDate)}</span> },
+      {
+        label: 'Paid',
+        value: inv.paidAt ? (
+          <span className="text-emerald-700">{formatShortDate(inv.paidAt)}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+      },
+      ...(inv.employeeName ? [{ label: 'Assigned to', value: <span>{inv.employeeName}</span> }] : []),
+    ];
+
+    return (
+      <div className="w-full space-y-6">
+        {/* ─── Sticky page header (Back + title + actions) ────────── */}
+        <div className="form-page-header -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 mb-2">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={closeInvoiceDetail}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0"
+              >
+                <svg
+                  className="size-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M19 12H5M12 19l-7-7 7-7" />
+                </svg>
+                <span className="hidden sm:inline">Back</span>
+              </button>
+              <Separator orientation="vertical" className="h-8 bg-border/60 hidden sm:block" />
+              <div className="flex items-center justify-center size-9 rounded-lg shrink-0 shadow-sm bg-emerald-600">
+                <Receipt className="size-5 text-white" strokeWidth={2.2} />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground leading-tight truncate">
+                    {invoiceTitle}
+                  </h2>
+                  <button
+                    type="button"
+                    title="Edit invoice"
+                    onClick={() => openEditDialog(inv)}
+                    className="text-muted-foreground hover:text-emerald-600 transition-colors shrink-0"
+                  >
+                    <Pencil className="size-4" />
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground line-clamp-1">
+                  {inv.number && <span className="font-mono">#{inv.number}</span>}
+                  {inv.number && inv.customer && ' · '}
+                  {inv.customer && <span>{inv.customer}</span>}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              {/* Status-aware primary lifecycle action */}
+              {canSend && (
+                <button
+                  type="button"
+                  onClick={() => handleInvoiceAction(inv.id, 'send')}
+                  disabled={!!actionLoading[`${inv.id}-send`]}
+                  className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm"
+                >
+                  {actionLoading[`${inv.id}-send`] ? (
+                    <Loader2 className="size-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <Send className="size-4 mr-1.5" />
+                  )}
+                  Send
+                </button>
+              )}
+              {inv.status === 'pending_approval' && (
+                <button
+                  type="button"
+                  onClick={() => handleInvoiceAction(inv.id, 'approve')}
+                  disabled={!!actionLoading[`${inv.id}-approve`]}
+                  className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-60 transition-colors shadow-sm"
+                >
+                  {actionLoading[`${inv.id}-approve`] ? (
+                    <Loader2 className="size-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <ShieldCheck className="size-4 mr-1.5" />
+                  )}
+                  Approve &amp; Send
+                </button>
+              )}
+              {!isPaid && (
+                <button
+                  type="button"
+                  onClick={() => handleInvoiceAction(inv.id, 'mark_paid')}
+                  disabled={!!actionLoading[`${inv.id}-mark_paid`]}
+                  className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 transition-colors shadow-sm"
+                >
+                  {actionLoading[`${inv.id}-mark_paid`] ? (
+                    <Loader2 className="size-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="size-4 mr-1.5" />
+                  )}
+                  Mark as Paid
+                </button>
+              )}
+              {isPaid && (
+                <button
+                  type="button"
+                  onClick={handleReopenInvoice}
+                  disabled={!!actionLoading[`${inv.id}-reopen`]}
+                  className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm"
+                >
+                  {actionLoading[`${inv.id}-reopen`] ? (
+                    <Loader2 className="size-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <RotateCcw className="size-4 mr-1.5" />
+                  )}
+                  Re-open Invoice
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => handleInvoiceAction(inv.id, 'reminder')}
+                disabled={!!actionLoading[`${inv.id}-reminder`]}
+                className="inline-flex items-center justify-center h-9 px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted disabled:opacity-60 transition-colors"
+              >
+                {actionLoading[`${inv.id}-reminder`] ? (
+                  <Loader2 className="size-4 mr-1.5 animate-spin" />
+                ) : (
+                  <Bell className="size-4 mr-1.5" />
+                )}
+                Remind
+              </button>
+              <button
+                type="button"
+                onClick={() => openEditDialog(inv)}
+                className="inline-flex items-center justify-center h-9 px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors"
+              >
+                <Pencil className="size-4 mr-1.5" /> Edit
+              </button>
+              <button
+                type="button"
+                title="More actions"
+                className="inline-flex items-center justify-center size-9 rounded-lg text-foreground border border-border bg-background hover:bg-muted transition-colors"
+              >
+                <MoreHorizontal className="size-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ─── Two-column layout ─────────────────────────────────── */}
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6 items-start">
+          {/* ── Left column: main invoice details ── */}
+          <div className="space-y-6 min-w-0">
+            {/* Client card */}
+            <FormSectionCard icon={User} title="Client">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="size-2 rounded-full bg-blue-500 shrink-0" />
+                  <p className="text-base font-semibold text-foreground">{inv.customer}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Billing Address</p>
+                  {billingAddress ? (
+                    <p className="text-sm text-foreground whitespace-pre-wrap">{billingAddress}</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">No billing address on file</p>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Property Address</p>
+                  <p className="text-sm text-muted-foreground italic">(Same as billing address)</p>
+                </div>
+                {customerPhone && (
+                  <a
+                    href={`tel:${customerPhone}`}
+                    className="flex items-center gap-2 text-sm text-emerald-700 hover:underline"
+                  >
+                    <Phone className="size-4" /> {customerPhone}
+                  </a>
+                )}
+                {customerEmail && (
+                  <a
+                    href={`mailto:${customerEmail}`}
+                    className="flex items-center gap-2 text-sm text-emerald-700 hover:underline"
+                  >
+                    <Mail className="size-4" /> {customerEmail}
+                  </a>
+                )}
+                {!customerPhone && !customerEmail && !billingAddress && (
+                  <p className="text-sm text-muted-foreground italic">No contact details on file.</p>
+                )}
+              </div>
+            </FormSectionCard>
+
+            {/* Invoice details card */}
+            <FormSectionCard icon={FileText} title="Invoice details">
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                {detailRows.map((row, i) => (
+                  <div
+                    key={i}
+                    className="flex items-start justify-between gap-3 border-b border-border/40 pb-2 last:border-0"
+                  >
+                    <dt className="text-sm text-muted-foreground shrink-0">{row.label}</dt>
+                    <dd className="text-sm font-medium text-foreground text-right min-w-0 break-words">
+                      {row.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </FormSectionCard>
+
+            {/* Product / Service (line items) */}
+            <FormSectionCard
+              icon={Briefcase}
+              title="Product / Service"
+              action={
+                <button
+                  type="button"
+                  onClick={() => openEditDialog(inv)}
+                  className="text-muted-foreground hover:text-emerald-600 transition-colors"
+                >
+                  <Pencil className="size-4" />
+                </button>
+              }
+            >
+              {lineItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground italic">No line items on this invoice.</p>
+              ) : (
+                <div className="overflow-x-auto -mx-2">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-muted-foreground border-b border-border/60">
+                        <th className="px-2 py-2 font-medium">Line Item</th>
+                        <th className="px-2 py-2 font-medium text-center">Quantity</th>
+                        <th className="px-2 py-2 font-medium text-right">Unit Price</th>
+                        <th className="px-2 py-2 font-medium text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lineItems.map((item, i) => (
+                        <tr key={item.id || i} className="border-b border-border/40 last:border-0">
+                          <td className="px-2 py-2.5 font-medium text-foreground">
+                            {item.description || 'Custom item'}
+                          </td>
+                          <td className="px-2 py-2.5 text-center text-muted-foreground">
+                            {item.quantity}
+                          </td>
+                          <td className="px-2 py-2.5 text-right text-muted-foreground">
+                            {format(item.rate)}
+                          </td>
+                          <td className="px-2 py-2.5 text-right font-semibold text-foreground">
+                            {format(item.quantity * item.rate)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Right-aligned totals block */}
+              <div className="mt-4 flex justify-end">
+                <div className="w-full max-w-xs space-y-1.5">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="text-foreground">{format(inv.subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      Tax ({Math.round(inv.taxPercent)}%)
+                    </span>
+                    <span className="text-foreground">{format(inv.taxAmount)}</span>
+                  </div>
+                  {inv.discount > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Discount</span>
+                      <span className="text-foreground">-{format(inv.discount)}</span>
+                    </div>
+                  )}
+                  <Separator className="my-1 bg-border/60" />
+                  <div className="flex justify-between text-base font-bold">
+                    <span className="text-foreground">Total</span>
+                    <span className="text-emerald-700">{format(inv.total)}</span>
+                  </div>
+                  {isPaid && inv.paidAt && (
+                    <div className="flex justify-between text-sm text-emerald-700 pt-1">
+                      <span>
+                        Payment
+                        <span className="text-muted-foreground font-normal">
+                          {' '}· {formatShortDate(inv.paidAt)}
+                        </span>
+                      </span>
+                      <span>-{format(inv.total)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm pt-1 border-t border-border/40">
+                    <span className="text-muted-foreground">Invoice balance</span>
+                    <span className="text-foreground font-medium">{format(invoiceBalance)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Account balance</span>
+                    <span className="text-foreground font-medium">{format(accountBalance)}</span>
+                  </div>
+                </div>
+              </div>
+            </FormSectionCard>
+
+            {/* Contract / Disclaimer */}
+            <FormSectionCard
+              icon={ScrollText}
+              title="Contract / Disclaimer"
+              action={
+                <button
+                  type="button"
+                  onClick={() => openEditDialog(inv)}
+                  className="text-muted-foreground hover:text-emerald-600 transition-colors"
+                >
+                  <Pencil className="size-4" />
+                </button>
+              }
+            >
+              <p className="text-sm text-foreground whitespace-pre-wrap">
+                {inv.notes ||
+                  'Thank you for your business. Please contact us with any questions regarding this invoice.'}
+              </p>
+            </FormSectionCard>
+          </div>
+
+          {/* ── Right column: sidebar ── */}
+          <div className="space-y-6 xl:sticky xl:top-4">
+            {/* Client view */}
+            <FormSectionCard icon={Eye} title="Client view">
+              <div className="space-y-3">
+                {[
+                  'Quantities',
+                  'Unit prices',
+                  'Line item totals',
+                  'Account balance',
+                  'Late stamp (if overdue)',
+                ].map((label) => (
+                  <div
+                    key={label}
+                    className="flex items-center justify-between gap-3 border-b border-border/40 pb-2 last:border-0 last:pb-0"
+                  >
+                    <span className="text-sm text-foreground">{label}</span>
+                    <Switch checked disabled aria-label={label} />
+                  </div>
+                ))}
+              </div>
+            </FormSectionCard>
+
+            {/* Notes */}
+            <FormSectionCard
+              icon={StickyNote}
+              title="Notes"
+              action={
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-800"
+                >
+                  <Plus className="size-3.5" /> Add note
+                </button>
+              }
+            >
+              {inv.notes ? (
+                <div className="space-y-3">
+                  <div className="rounded-md bg-muted/30 px-3 py-2.5">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="size-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] font-semibold shrink-0">
+                          {(inv.employeeName || 'Jobber').slice(0, 1).toUpperCase()}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-foreground truncate">
+                            {inv.employeeName || 'Jobber'}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {formatShortDate(inv.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge variant="outline" className="text-[9px] h-4 px-1.5 bg-muted/40">
+                          Linked note
+                        </Badge>
+                        <button
+                          type="button"
+                          onClick={() => openEditDialog(inv)}
+                          className="text-muted-foreground hover:text-emerald-600 transition-colors"
+                        >
+                          <Pencil className="size-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-sm text-foreground whitespace-pre-wrap">{inv.notes}</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">No notes yet.</p>
+              )}
+            </FormSectionCard>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================================
   // Render
   // ============================================================
 
   return (
     <div className="space-y-6 w-full">
-      {/* ── Header ───────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600">
-            <Receipt className="size-5 text-white" />
-          </div>
+      {formMode === 'detail' ? (
+        renderInvoiceDetailPage()
+      ) : (
+        <>
+          {/* ── Header ───────────────────────────────────────────────── */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600">
+                <Receipt className="size-5 text-white" />
+              </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Invoices</h1>
             <p className="text-sm text-muted-foreground">Create, track, and manage invoices</p>
@@ -1292,7 +1826,7 @@ export function InvoicesView() {
                       <TableRow
                         key={invoice.id}
                         className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => openDetailDialog(invoice)}
+                        onClick={() => openInvoiceDetail(invoice)}
                       >
                         <TableCell className="font-medium text-sm">
                           <div className="flex items-center gap-2 flex-wrap">
@@ -1343,7 +1877,7 @@ export function InvoicesView() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                              <DropdownMenuItem onClick={() => openDetailDialog(invoice)}>
+                              <DropdownMenuItem onClick={() => openInvoiceDetail(invoice)}>
                                 <Eye className="size-3.5 mr-2" /> View Details
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => openEditDialog(invoice)}>
@@ -2407,6 +2941,8 @@ export function InvoicesView() {
           </ScrollArea>
         </DialogContent>
       </Dialog>
+        </>
+      )}
     </div>
   );
 }

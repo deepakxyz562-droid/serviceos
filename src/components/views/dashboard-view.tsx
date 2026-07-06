@@ -31,6 +31,10 @@ import {
   Package,
   ExternalLink,
   IndianRupee,
+  Target,
+  Users,
+  FileText,
+  Megaphone,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -45,7 +49,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAppStore } from '@/store/app-store';
-import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -378,7 +381,7 @@ function KPISparkline({ data, color }: { data: { value: number }[]; color: strin
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export function DashboardView() {
-  const { setCurrentView } = useAppStore();
+  const { setCurrentView, setPendingCreate } = useAppStore();
   const [stats, setStats] = useState<SaaSStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1073,8 +1076,8 @@ export function DashboardView() {
               <Button
                 className="justify-start gap-2.5 bg-emerald-600 hover:bg-emerald-700 h-auto py-3"
                 onClick={() => {
+                  setPendingCreate('lead');
                   setCurrentView('leads');
-                  toast.info('Opening Leads — click Add Lead');
                 }}
               >
                 <Plus className="size-4" />
@@ -1084,8 +1087,8 @@ export function DashboardView() {
                 variant="outline"
                 className="justify-start gap-2.5 h-auto py-3 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
                 onClick={() => {
+                  setPendingCreate('job');
                   setCurrentView('jobs');
-                  toast.info('Opening Jobs — click Create Job');
                 }}
               >
                 <ClipboardList className="size-4" />
@@ -1093,10 +1096,42 @@ export function DashboardView() {
               </Button>
               <Button
                 variant="outline"
+                className="justify-start gap-2.5 h-auto py-3 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                onClick={() => {
+                  setPendingCreate('customer');
+                  setCurrentView('customers');
+                }}
+              >
+                <Users className="size-4" />
+                <span className="text-sm">New Customer</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="justify-start gap-2.5 h-auto py-3 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                onClick={() => {
+                  setPendingCreate('invoice');
+                  setCurrentView('invoices');
+                }}
+              >
+                <FileText className="size-4" />
+                <span className="text-sm">New Invoice</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="justify-start gap-2.5 h-auto py-3 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                onClick={() => {
+                  setPendingCreate('campaign');
+                  setCurrentView('campaigns');
+                }}
+              >
+                <Megaphone className="size-4" />
+                <span className="text-sm">New Campaign</span>
+              </Button>
+              <Button
+                variant="outline"
                 className="justify-start gap-2.5 h-auto py-3 border-teal-200 text-teal-700 hover:bg-teal-50"
                 onClick={() => {
                   setCurrentView('dispatch');
-                  toast.info('Opening Dispatch Board');
                 }}
               >
                 <Radio className="size-4" />
@@ -1107,7 +1142,6 @@ export function DashboardView() {
                 className="justify-start gap-2.5 h-auto py-3 border-green-200 text-green-700 hover:bg-green-50"
                 onClick={() => {
                   setCurrentView('omnichannel');
-                  toast.info('Opening Omnichannel');
                 }}
               >
                 <MessageCircle className="size-4" />

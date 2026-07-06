@@ -37,6 +37,7 @@
 
 import { db } from '@/lib/db'
 import { sendJobNotification as _sendJobNotification } from '@/lib/whatsapp-notifications'
+import { issueCustomerMagicLink } from '@/lib/customer-magic-link'
 
 // Re-export for backward compatibility (journey-engine imports from this module)
 export { _sendJobNotification as sendJobNotification }
@@ -685,6 +686,44 @@ async function withRetry<T extends SendResult>(
 // ─── Main Orchestrator ────────────────────────────────────────────────────────
 
 /**
+ * Resolve an `actionUrl` for a customer recipient.
+ *
+ * Notification templates set `actionUrl: d.jobId ? '/jobs/${d.jobId}' : undefined`
+ * on in-app payloads — but those URLs point to the STAFF admin app, which a
+ * customer cannot access. For customer recipients, we instead issue a freshly-
+ * minted customer magic-link URL that auto-authenticates them into the customer
+ * portal deep-linked to the relevant job (or the portal root if no jobId).
+ *
+ * Returns `null` if magic-link issuance fails (DB error, customer not found,
+ * etc.) — the caller should fall back to the original template actionUrl in
+ * that case so the notification still has SOME actionUrl.
+ *
+ * Safe to call from request-context AND non-request-context (cron) — when no
+ * Request is provided, the issuer falls back to NEXT_PUBLIC_APP_URL / APP_URL.
+ */
+async function resolveCustomerActionUrl(
+  customerId: string | undefined,
+  redirectPath: string,
+  request?: Request
+): Promise<string | null> {
+  if (!customerId) return null
+  try {
+    const { url } = await issueCustomerMagicLink({
+      customerId,
+      redirect: redirectPath,
+      request,
+    })
+    return url
+  } catch (err) {
+    console.warn(
+      `[NotificationOrchestrator] resolveCustomerActionUrl failed for customer ${customerId}:`,
+      err
+    )
+    return null
+  }
+}
+
+/**
  * Orchestrate a multi-channel notification.
  *
  * Tries each channel in order until one succeeds.
@@ -803,6 +842,26 @@ export async function orchestrateNotification(
           attemptNumber = 1
         } else {
           const inAppPayload = template.getInAppPayload(request.templateData)
+
+          // For customer recipients, swap the staff admin actionUrl for a
+          // freshly-issued customer magic-link URL so the in-app notification
+          // deep-links into the customer portal (auto-login) instead of the
+          // staff-only /jobs/:id route. Staff recipients keep the original URL.
+          if (
+            request.recipient.role === 'customer' &&
+            request.context?.customerId
+          ) {
+            const redirectPath = inAppPayload.actionUrl || '/'
+            const customerUrl = await resolveCustomerActionUrl(
+              request.context.customerId,
+              redirectPath,
+              undefined // orchestrator runs in non-request-context (cron/events)
+            )
+            if (customerUrl) {
+              inAppPayload.actionUrl = customerUrl
+            }
+          }
+
           const retryResult = await withRetry(
             () => sendInApp(userId, inAppPayload, request.context),
             0 // No retry for in-app (database write)
@@ -851,6 +910,26 @@ export async function orchestrateNotification(
 
     if (!alreadySentInApp) {
       const inAppPayload = template.getInAppPayload(request.templateData)
+
+      // Same customer actionUrl override as the in_app branch above — for
+      // customer recipients, swap the staff admin URL for a freshly-issued
+      // customer magic-link URL so the always-in-app notification deep-links
+      // into the customer portal (auto-login) instead of the staff app.
+      if (
+        request.recipient.role === 'customer' &&
+        request.context?.customerId
+      ) {
+        const redirectPath = inAppPayload.actionUrl || '/'
+        const customerUrl = await resolveCustomerActionUrl(
+          request.context.customerId,
+          redirectPath,
+          undefined
+        )
+        if (customerUrl) {
+          inAppPayload.actionUrl = customerUrl
+        }
+      }
+
       const inAppResult = await sendInApp(request.recipient.userId!, inAppPayload, request.context)
 
       if (inAppResult.success) {

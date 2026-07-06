@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
-import { uploadFile, STORAGE_BUCKETS, type StorageBucket, isS3Configured, ensureS3Bucket } from '@/lib/supabase-storage'
+import { uploadFile, STORAGE_BUCKETS, type StorageBucket, isS3Configured, isSupabaseStorageConfigured, ensureS3Bucket } from '@/lib/supabase-storage'
 import { db } from '@/lib/db'
 import { randomUUID } from 'crypto'
 import path from 'path'

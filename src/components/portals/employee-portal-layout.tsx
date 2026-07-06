@@ -37,6 +37,10 @@ import {
   Navigation,
   FileText,
   DollarSign,
+  Pause,
+  Coffee,
+  Wrench,
+  Receipt,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -68,13 +72,40 @@ import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/app-store';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from 'sonner';
+import { authFetch } from '@/lib/client-auth';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 type EmployeeSubView = 'home' | 'my-jobs' | 'schedule' | 'attendance' | 'inbox' | 'profile';
 
-type JobStatus = 'assigned' | 'in_progress' | 'completed' | 'pending' | 'cancelled';
+// V1.5 job statuses (kept legacy ones for backward compat)
+type JobStatus =
+  | 'assigned'
+  | 'accepted'
+  | 'travelling'
+  | 'arrived'
+  | 'working'
+  | 'paused'
+  | 'in_progress'
+  | 'completed'
+  | 'invoice_generated'
+  | 'pending'
+  | 'cancelled';
 type JobPriority = 'high' | 'medium' | 'low';
+
+// V1.5 lifecycle stages (from src/lib/job-lifecycle.ts). `paused` is a
+// sub-state of `working` so it isn't in this row, but the rest of the
+// 8-stage lifecycle is represented here.
+const LIFECYCLE_STAGES = [
+  'assigned',
+  'accepted',
+  'travelling',
+  'arrived',
+  'working',
+  'completed',
+  'invoice_generated',
+] as const;
+type LifecycleStage = (typeof LIFECYCLE_STAGES)[number];
 
 interface EmployeeRecord {
   id: string;
@@ -117,11 +148,71 @@ interface Job {
   actualEndTime?: string | null;
   createdAt: string;
   customer: JobCustomer | null;
+  // V1.5 enriched fields (populated by /api/employee/jobs)
+  lifecycleState?: string;
+  lifecycleTimestamps?: Record<string, string>;
+  _counts?: { photos: number; signatures: number; checklists: number };
 }
 
-interface EmployeeJobsResponse {
-  employee: { id: string; name: string; status: string };
-  jobs: Job[];
+// /api/employee/jobs returns a flat array of enriched job rows. This helper
+// maps the API response to our local Job interface (filling defaults for
+// nullable fields so existing UI code keeps working).
+interface EmployeeJobsApiResponseRow {
+  id: string;
+  jobNumber?: string | null;
+  title: string;
+  description?: string | null;
+  status: string;
+  assignmentStatus?: string | null;
+  priority?: string | null;
+  type?: string | null;
+  address?: string | null;
+  assigneeId?: string | null;
+  assigneeName?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  customerId?: string | null;
+  quotedAmount?: number | null;
+  estimatedDuration?: number | null;
+  scheduledAt?: string | null;
+  actualStartTime?: string | null;
+  actualEndTime?: string | null;
+  completedAt?: string | null;
+  createdAt?: string;
+  customer?: JobCustomer | null;
+  assignee?: { id: string; name?: string | null } | null;
+  lifecycleState?: string;
+  lifecycleTimestamps?: Record<string, string>;
+  _counts?: { photos: number; signatures: number; checklists: number };
+}
+
+function mapJobRow(row: EmployeeJobsApiResponseRow): Job {
+  return {
+    id: row.id,
+    jobNumber: row.jobNumber ?? '',
+    title: row.title,
+    description: row.description ?? undefined,
+    status: (row.status as JobStatus) ?? 'pending',
+    assignmentStatus: row.assignmentStatus ?? undefined,
+    priority: ((row.priority as JobPriority) ?? 'medium'),
+    type: row.type ?? 'service',
+    address: row.address ?? '',
+    assigneeId: row.assigneeId ?? '',
+    assigneeName: row.assigneeName ?? undefined,
+    customerName: row.customerName ?? undefined,
+    customerPhone: row.customerPhone ?? undefined,
+    customerId: row.customerId ?? '',
+    quotedAmount: row.quotedAmount ?? 0,
+    estimatedDuration: row.estimatedDuration ?? undefined,
+    scheduledAt: row.scheduledAt ?? null,
+    actualStartTime: row.actualStartTime ?? null,
+    actualEndTime: row.actualEndTime ?? row.completedAt ?? null,
+    createdAt: row.createdAt ?? new Date().toISOString(),
+    customer: row.customer ?? null,
+    lifecycleState: row.lifecycleState,
+    lifecycleTimestamps: row.lifecycleTimestamps,
+    _counts: row._counts,
+  };
 }
 
 interface EmployeePortalLayoutProps {
@@ -156,8 +247,14 @@ const pageTitleMap: Record<EmployeeSubView, string> = {
 
 const STATUS_LABEL_MAP: Record<JobStatus, string> = {
   assigned: 'Assigned',
+  accepted: 'Accepted',
+  travelling: 'Travelling',
+  arrived: 'Arrived',
+  working: 'Working',
+  paused: 'Paused',
   in_progress: 'In Progress',
   completed: 'Completed',
+  invoice_generated: 'Invoice Generated',
   pending: 'Pending',
   cancelled: 'Cancelled',
 };
@@ -167,27 +264,76 @@ const STATUS_LABEL_MAP: Record<JobStatus, string> = {
 // ─── Status color helper ────────────────────────────────────────────────────
 
 function getStatusBadge(status: string) {
+  // Normalise: V1.5 lifecycle states come from the API as lifecycleState
+  // but the rest of the codebase still passes Job.status here.
   switch (status) {
     case 'assigned':
       return <Badge className="bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300 border-0 hover:bg-violet-100">{STATUS_LABEL_MAP[status as JobStatus] ?? status}</Badge>;
+    case 'accepted':
+      return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-0 hover:bg-amber-100">{STATUS_LABEL_MAP[status as JobStatus] ?? status}</Badge>;
+    case 'travelling':
+      return <Badge className="bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300 border-0 hover:bg-sky-100">{STATUS_LABEL_MAP[status as JobStatus] ?? status}</Badge>;
+    case 'arrived':
+      return <Badge className="bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 border-0 hover:bg-teal-100">{STATUS_LABEL_MAP[status as JobStatus] ?? status}</Badge>;
+    case 'working':
+      return <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-0 hover:bg-emerald-100">{STATUS_LABEL_MAP[status as JobStatus] ?? status}</Badge>;
+    case 'paused':
+      return <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 border-0 hover:bg-orange-100">{STATUS_LABEL_MAP[status as JobStatus] ?? status}</Badge>;
     case 'in_progress':
-      return <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-0 hover:bg-blue-100">{STATUS_LABEL_MAP[status as JobStatus] ?? status}</Badge>;
+      return <Badge className="bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300 border-0 hover:bg-sky-100">{STATUS_LABEL_MAP[status as JobStatus] ?? status}</Badge>;
     case 'pending':
       return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-0 hover:bg-amber-100">{STATUS_LABEL_MAP[status as JobStatus] ?? status}</Badge>;
     case 'completed':
       return <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-0 hover:bg-emerald-100">{STATUS_LABEL_MAP[status as JobStatus] ?? status}</Badge>;
+    case 'invoice_generated':
+      return <Badge className="bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300 border-0 hover:bg-violet-100">{STATUS_LABEL_MAP[status as JobStatus] ?? status}</Badge>;
     case 'cancelled':
       return <Badge className="bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-0 hover:bg-red-100">{STATUS_LABEL_MAP[status as JobStatus] ?? status}</Badge>;
     // Attendance statuses (kept for AttendanceView)
     case 'Present':
       return <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 border-0 hover:bg-emerald-100">{status}</Badge>;
     case 'Today':
-      return <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-0 hover:bg-blue-100">{status}</Badge>;
+      return <Badge className="bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300 border-0 hover:bg-sky-100">{status}</Badge>;
     case 'Absent':
       return <Badge className="bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-0 hover:bg-red-100">{status}</Badge>;
+    case 'On Break':
+      return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-0 hover:bg-amber-100">{status}</Badge>;
     default:
       return <Badge variant="outline">{status}</Badge>;
   }
+}
+
+// Resolve the effective V1.5 lifecycle stage for a job: prefer lifecycleState
+// (returned by /api/employee/jobs), fall back to a status-derived mapping.
+function resolveLifecycleStage(job: Job): string {
+  if (job.lifecycleState) return job.lifecycleState;
+  // Map legacy status → lifecycle stage so old jobs without lifecycleState
+  // still render the right action buttons.
+  switch (job.status) {
+    case 'accepted':
+      return 'accepted';
+    case 'in_progress':
+      return 'working';
+    case 'completed':
+    case 'invoice_generated':
+      return job.status;
+    case 'assigned':
+      return job.assignmentStatus === 'accepted' ? 'accepted' : 'assigned';
+    case 'pending':
+      return 'assigned';
+    default:
+      return 'assigned';
+  }
+}
+
+// Format a duration (in minutes) as "2h 14m".
+function formatDuration(minutes: number): string {
+  if (minutes <= 0) return '0m';
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
 }
 
 function getPriorityDot(priority: string) {
@@ -277,10 +423,13 @@ function useEmployeeJobs(employeeId: string | null) {
   const fetchJobs = useCallback(async () => {
     if (!employeeId) return;
     try {
-      const res = await fetch(`/api/employees/${employeeId}/jobs?XTransformPort=3000`);
+      // V1.5 endpoint: GET /api/employee/jobs?filter=all returns an enriched
+      // flat array (with lifecycleState, lifecycleTimestamps, _counts).
+      const res = await fetch('/api/employee/jobs?filter=all&XTransformPort=3000');
       if (!res.ok) throw new Error(`Failed to fetch jobs (${res.status})`);
-      const data: EmployeeJobsResponse = await res.json();
-      setJobs(data.jobs ?? []);
+      const data = await res.json();
+      const rows: EmployeeJobsApiResponseRow[] = Array.isArray(data) ? data : (data?.jobs ?? []);
+      setJobs(rows.map(mapJobRow));
       setError(null);
       setLoading(false);
     } catch (err: any) {
@@ -308,14 +457,29 @@ function useEmployeeRecord(employeeId: string | null) {
 
     async function fetchEmployee() {
       try {
-        const res = await fetch('/api/employees?XTransformPort=3000', { signal: controller.signal });
+        // Direct fetch the employee record. The Employee model has no
+        // `employeeId` field (the dead `e.employeeId === employeeId` branch
+        // in the prior implementation never matched) — so we look the row
+        // up by its primary key directly via /api/employees/[id].
+        const res = await fetch(`/api/employees/${employeeId}?XTransformPort=3000`, {
+          signal: controller.signal,
+        });
         if (!res.ok) throw new Error(`Failed to fetch employee (${res.status})`);
         const data = await res.json();
-        // The API might return an array or a single object; handle both
-        const list: EmployeeRecord[] = Array.isArray(data) ? data : data.employees ?? [data];
-        const found = list.find((e: EmployeeRecord) => e.id === employeeId || e.employeeId === employeeId);
         if (!cancelled) {
-          setEmployee(found ?? list[0] ?? null);
+          // Normalize the API response (Employee + userAccount) into our
+          // EmployeeRecord shape. Fall back to the JWT-side identity if a
+          // field is missing.
+          const rec: EmployeeRecord = {
+            id: data.id,
+            name: data.name || data.userAccount?.name || 'Employee',
+            email: data.email ?? data.userAccount?.email ?? undefined,
+            phone: data.phone ?? undefined,
+            status: data.status,
+            role: data.role,
+            rating: data.rating,
+          };
+          setEmployee(rec);
           setLoading(false);
         }
       } catch (err: any) {
@@ -521,18 +685,24 @@ function HomeView({ employeeId }: { employeeId: string }) {
                 <p className="text-sm">No jobs scheduled for today.</p>
               </div>
             ) : (
-              todayJobs.map((job) => (
-                <div key={job.id} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                  <div className="text-xs font-mono text-muted-foreground min-w-[70px] pt-0.5">
-                    {job.scheduledAt ? formatTime(job.scheduledAt) : 'TBD'}
+              todayJobs.map((job) => {
+                const stage = resolveLifecycleStage(job);
+                return (
+                  <div key={job.id} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+                    <div className="text-xs font-mono text-muted-foreground min-w-[70px] pt-0.5">
+                      {job.scheduledAt ? formatTime(job.scheduledAt) : 'TBD'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{job.title}</p>
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                        <Badge variant="outline" className="text-[10px] h-5">{job.type || 'Job'}</Badge>
+                        {stage && getStatusBadge(stage)}
+                      </div>
+                    </div>
+                    <ArrowRight className="size-4 text-muted-foreground shrink-0 mt-0.5" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{job.title}</p>
-                    <Badge variant="outline" className="mt-1 text-[10px] h-5">{job.type || 'Job'}</Badge>
-                  </div>
-                  <ArrowRight className="size-4 text-muted-foreground shrink-0 mt-0.5" />
-                </div>
-              ))
+                );
+              })
             )}
           </CardContent>
         </Card>
@@ -605,6 +775,75 @@ function HomeView({ employeeId }: { employeeId: string }) {
 
 // ─── Job Detail Sheet (used by MyJobsView & HomeView) ──────────────────────────
 
+// ─── V1.5 Lifecycle Progress (compact pill row) ─────────────────────────────
+// Renders the 7 stages of the V1.5 job lifecycle as a row of small pills,
+// highlighting completed and current stages. Reads timestamps from the
+// enriched job.lifecycleTimestamps returned by /api/employee/jobs.
+function LifecycleProgress({ job, stage }: { job: Job; stage: string }) {
+  const ts = job.lifecycleTimestamps || {};
+  // Compute which stages have a timestamp (i.e. have been reached).
+  const reached: Record<string, boolean> = {
+    assigned: !!ts.assigned || !!job.createdAt,
+    accepted: !!ts.accepted || job.assignmentStatus === 'accepted',
+    travelling: !!ts.travelling,
+    arrived: !!ts.arrived,
+    working: !!ts.working,
+    completed: stage === 'completed' || !!ts.completed || !!job.actualEndTime,
+    invoice_generated: stage === 'invoice_generated',
+  };
+  // `paused` is a working sub-state — visually demote to working for the row,
+  // but show a small paused indicator on the working pill.
+  const effectiveStage = stage === 'paused' ? 'working' : stage;
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 p-3">
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-2">
+        Lifecycle
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {LIFECYCLE_STAGES.map((s) => {
+          const isCurrent = effectiveStage === s;
+          const isReached = reached[s] || isCurrent;
+          return (
+            <span
+              key={s}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium border',
+                isCurrent
+                  ? 'bg-emerald-600 text-white border-emerald-600'
+                  : isReached
+                    ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-800'
+                    : 'bg-background text-muted-foreground border-border'
+              )}
+            >
+              {isReached && !isCurrent && <CheckCircle2 className="size-2.5" />}
+              {isCurrent && stage === 'paused' && s === 'working' ? 'Paused' : STATUS_LABEL_MAP[s as JobStatus] ?? s}
+            </span>
+          );
+        })}
+      </div>
+      {/* Timestamps */}
+      {Object.keys(ts).length > 0 && (
+        <div className="mt-3 grid grid-cols-2 gap-1.5 text-[10px]">
+          {ts.accepted && <TimelineItem label="Accepted" ts={ts.accepted} />}
+          {ts.travelling && <TimelineItem label="Travelling" ts={ts.travelling} />}
+          {ts.arrived && <TimelineItem label="Arrived" ts={ts.arrived} />}
+          {ts.working && <TimelineItem label="Work started" ts={ts.working} />}
+          {ts.completed && <TimelineItem label="Completed" ts={ts.completed} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TimelineItem({ label, ts }: { label: string; ts: string }) {
+  return (
+    <div className="flex flex-col bg-background rounded px-2 py-1 border border-border/50">
+      <span className="text-[9px] uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="font-medium text-foreground">{formatTime(ts)}</span>
+    </div>
+  );
+}
+
 function JobDetailSheet({
   job,
   open,
@@ -623,27 +862,23 @@ function JobDetailSheet({
 
   if (!job) return null;
 
-  const isAssigned = job.status === 'assigned';
-  const isInProgress = job.status === 'in_progress';
-  const isCompleted = job.status === 'completed';
-  const isPending = job.status === 'pending';
-  const needsAccept = isAssigned && job.assignmentStatus !== 'accepted';
+  // V1.5: derive the effective lifecycle stage (lifecycleState preferred,
+  // falling back to a status-derived mapping for legacy jobs).
+  const stage = resolveLifecycleStage(job);
+  const isCompleted = stage === 'completed' || stage === 'invoice_generated';
 
-  const handleStart = () => {
-    onAction('start', job.id);
-  };
-
-  const handleAccept = () => {
-    onAction('accept', job.id);
-  };
-
+  const handleAccept = () => onAction('accept', job.id);
+  // V1.5 lifecycle endpoint doesn't support `reject` — show a friendly toast
+  // instead of sending a request that will 400.
   const handleReject = () => {
-    onAction('reject', job.id);
+    toast.info('Reject is not supported in V1.5 — contact your manager to reassign this job.');
   };
-
-  const handleComplete = () => {
-    setShowCompleteDialog(true);
-  };
+  const handleStartTravel = () => onAction('start_travel', job.id);
+  const handleArrive = () => onAction('arrive', job.id);
+  const handleStartWork = () => onAction('start_work', job.id);
+  const handlePause = () => onAction('pause', job.id);
+  const handleResume = () => onAction('resume', job.id);
+  const handleComplete = () => setShowCompleteDialog(true);
 
   const confirmComplete = () => {
     onAction('complete', job.id);
@@ -651,17 +886,11 @@ function JobDetailSheet({
     setCompleteNotes('');
   };
 
-  // Calculate elapsed time for in-progress jobs
-  const elapsed = isInProgress && job.actualStartTime
-    ? (() => {
-        const start = new Date(job.actualStartTime).getTime();
-        const now = Date.now();
-        const diffMin = Math.floor((now - start) / 60000);
-        if (diffMin < 60) return `${diffMin}m`;
-        const hrs = Math.floor(diffMin / 60);
-        const mins = diffMin % 60;
-        return `${hrs}h ${mins}m`;
-      })()
+  // Calculate elapsed time for working / paused jobs (V1.5 prefers
+  // lifecycleTimestamps.working; legacy fallback uses actualStartTime).
+  const workingTs = job.lifecycleTimestamps?.working || job.actualStartTime;
+  const elapsed = (stage === 'working' || stage === 'paused') && workingTs
+    ? formatDuration(Math.max(0, Math.round((Date.now() - new Date(workingTs).getTime()) / 60000)))
     : null;
 
   return (
@@ -669,10 +898,19 @@ function JobDetailSheet({
       <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
           <SheetHeader>
-            <div className="flex items-center gap-2">
-              {getStatusBadge(job.status)}
-              {needsAccept && (
-                <Badge className="bg-blue-100 text-blue-700 border-blue-200 text-[10px]">Awaiting Acceptance</Badge>
+            <div className="flex items-center gap-2 flex-wrap">
+              {getStatusBadge(stage)}
+              {stage === 'assigned' && (
+                <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] border">Awaiting Acceptance</Badge>
+              )}
+              {stage === 'paused' && (
+                <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-[10px] border">Paused</Badge>
+              )}
+              {job._counts && (
+                <span className="ml-auto flex items-center gap-2 text-[10px] text-muted-foreground">
+                  <span className="inline-flex items-center gap-0.5"><Camera className="size-3" />{job._counts.photos}</span>
+                  <span className="inline-flex items-center gap-0.5"><FileText className="size-3" />{job._counts.signatures}</span>
+                </span>
               )}
             </div>
             <SheetTitle className="text-lg">{job.title}</SheetTitle>
@@ -783,10 +1021,13 @@ function JobDetailSheet({
               </div>
             </div>
 
-            {/* Action Buttons */}
+            {/* V1.5: Lifecycle progress pills */}
+            <LifecycleProgress job={job} stage={stage} />
+
+            {/* Action Buttons (stage-aware) */}
             <Separator />
             <div className="space-y-3">
-              {needsAccept && (
+              {stage === 'assigned' && (
                 <div className="flex gap-2">
                   <Button
                     className="flex-1 bg-emerald-600 hover:bg-emerald-700"
@@ -804,64 +1045,118 @@ function JobDetailSheet({
                     variant="outline"
                     className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
                     onClick={handleReject}
-                    disabled={actionLoading === `reject-${job.id}`}
                   >
-                    {actionLoading === `reject-${job.id}` ? (
-                      <Loader2 className="size-4 mr-2 animate-spin" />
-                    ) : (
-                      <XCircle className="size-4 mr-2" />
-                    )}
+                    <XCircle className="size-4 mr-2" />
                     Reject
                   </Button>
                 </div>
               )}
 
-              {isAssigned && !needsAccept && (
+              {stage === 'accepted' && (
+                <Button
+                  className="w-full bg-sky-600 hover:bg-sky-700"
+                  onClick={handleStartTravel}
+                  disabled={actionLoading === `start_travel-${job.id}`}
+                >
+                  {actionLoading === `start_travel-${job.id}` ? (
+                    <Loader2 className="size-4 mr-2 animate-spin" />
+                  ) : (
+                    <Navigation className="size-4 mr-2" />
+                  )}
+                  Start Travel
+                </Button>
+              )}
+
+              {stage === 'travelling' && (
+                <Button
+                  className="w-full bg-teal-600 hover:bg-teal-700"
+                  onClick={handleArrive}
+                  disabled={actionLoading === `arrive-${job.id}`}
+                >
+                  {actionLoading === `arrive-${job.id}` ? (
+                    <Loader2 className="size-4 mr-2 animate-spin" />
+                  ) : (
+                    <MapPin className="size-4 mr-2" />
+                  )}
+                  Mark Arrived
+                </Button>
+              )}
+
+              {stage === 'arrived' && (
                 <Button
                   className="w-full bg-emerald-600 hover:bg-emerald-700"
-                  onClick={handleStart}
-                  disabled={actionLoading === `start-${job.id}`}
+                  onClick={handleStartWork}
+                  disabled={actionLoading === `start_work-${job.id}`}
                 >
-                  {actionLoading === `start-${job.id}` ? (
+                  {actionLoading === `start_work-${job.id}` ? (
+                    <Loader2 className="size-4 mr-2 animate-spin" />
+                  ) : (
+                    <Wrench className="size-4 mr-2" />
+                  )}
+                  Start Work
+                </Button>
+              )}
+
+              {stage === 'working' && (
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1 border-orange-200 text-orange-700 hover:bg-orange-50 hover:text-orange-800"
+                    onClick={handlePause}
+                    disabled={actionLoading === `pause-${job.id}`}
+                  >
+                    {actionLoading === `pause-${job.id}` ? (
+                      <Loader2 className="size-4 mr-2 animate-spin" />
+                    ) : (
+                      <Pause className="size-4 mr-2" />
+                    )}
+                    Pause
+                  </Button>
+                  <Button
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                    onClick={handleComplete}
+                    disabled={actionLoading === `complete-${job.id}`}
+                  >
+                    {actionLoading === `complete-${job.id}` ? (
+                      <Loader2 className="size-4 mr-2 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="size-4 mr-2" />
+                    )}
+                    Complete
+                  </Button>
+                </div>
+              )}
+
+              {stage === 'paused' && (
+                <Button
+                  className="w-full bg-emerald-600 hover:bg-emerald-700"
+                  onClick={handleResume}
+                  disabled={actionLoading === `resume-${job.id}`}
+                >
+                  {actionLoading === `resume-${job.id}` ? (
                     <Loader2 className="size-4 mr-2 animate-spin" />
                   ) : (
                     <Play className="size-4 mr-2" />
                   )}
-                  Start Job
-                </Button>
-              )}
-
-              {isInProgress && (
-                <Button
-                  className="w-full bg-blue-600 hover:bg-blue-700"
-                  onClick={handleComplete}
-                  disabled={actionLoading === `complete-${job.id}`}
-                >
-                  {actionLoading === `complete-${job.id}` ? (
-                    <Loader2 className="size-4 mr-2 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="size-4 mr-2" />
-                  )}
-                  Complete Job
+                  Resume Work
                 </Button>
               )}
 
               {isCompleted && (
                 <div className="text-center py-4">
-                  <CheckCircle2 className="size-12 text-emerald-500 mx-auto mb-2" />
-                  <p className="text-sm font-medium text-emerald-700">Job Completed</p>
+                  {stage === 'invoice_generated' ? (
+                    <Receipt className="size-12 text-violet-500 mx-auto mb-2" />
+                  ) : (
+                    <CheckCircle2 className="size-12 text-emerald-500 mx-auto mb-2" />
+                  )}
+                  <p className="text-sm font-medium text-emerald-700">
+                    {stage === 'invoice_generated' ? 'Invoice Generated' : 'Job Completed'}
+                  </p>
                   {job.actualEndTime && (
                     <p className="text-xs text-muted-foreground mt-1">
                       Completed {formatDate(job.actualEndTime)} at {formatTime(job.actualEndTime)}
                     </p>
                   )}
-                </div>
-              )}
-
-              {isPending && (
-                <div className="text-center py-4 text-muted-foreground">
-                  <Briefcase className="size-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">This job is pending assignment</p>
                 </div>
               )}
             </div>
@@ -917,47 +1212,67 @@ function MyJobsView({ employeeId }: { employeeId: string }) {
 
   const filteredJobs = filter === 'all'
     ? jobs
-    : jobs.filter((j) => j.status === filter);
+    : jobs.filter((j) => {
+        // V1.5: match against the resolved lifecycle stage first, falling back
+        // to legacy Job.status. This way both the new chips (accepted / working /
+        // paused / etc.) and the legacy chips (in_progress / pending) work.
+        const stage = resolveLifecycleStage(j);
+        return stage === filter || j.status === filter;
+      });
 
-  // ── Job lifecycle action handler ──
+  // ── V1.5 Job lifecycle action handler ──
+  // Calls POST /api/employee/jobs/[id]/lifecycle with the full V1.5 action
+  // set: accept, start_travel, arrive, start_work, pause, resume, complete.
   const handleLifecycleAction = async (action: string, jobId: string) => {
     setActionLoading(`${action}-${jobId}`);
     try {
-      const res = await fetch('/api/jobs/lifecycle?XTransformPort=3000', {
+      const res = await fetch(`/api/employee/jobs/${jobId}/lifecycle?XTransformPort=3000`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, jobId }),
+        body: JSON.stringify({ action }),
       });
       if (res.ok) {
         const actionLabels: Record<string, string> = {
           accept: 'accepted',
-          reject: 'rejected',
-          start: 'started',
+          start_travel: 'travel started',
+          arrive: 'arrived',
+          start_work: 'work started',
+          pause: 'paused',
+          resume: 'resumed',
           complete: 'completed',
         };
         toast.success(`Job ${actionLabels[action] || action} successfully`);
         await refetch();
-        // Update selected job if it's the one being acted on
+        // Refresh the selected job from the freshly-refetched jobs list so the
+        // sheet immediately reflects the new lifecycle stage / timestamps.
         if (selectedJob?.id === jobId) {
-          const updatedRes = await fetch(`/api/jobs/${jobId}?XTransformPort=3000`);
-          if (updatedRes.ok) {
-            const updatedJob = await updatedRes.json();
-            // Map the API response to our Job interface
-            setSelectedJob({
-              ...selectedJob,
-              status: updatedJob.status,
-              assignmentStatus: updatedJob.assignmentStatus,
-              actualStartTime: updatedJob.actualStartTime,
-              actualEndTime: updatedJob.actualEndTime,
-            });
+          // refetch() updates the `jobs` array asynchronously; we can't read
+          // it here directly, so optimistically patch the locally-selected job
+          // using the lifecycle response (the endpoint returns { job: ... }).
+          try {
+            const data = await res.json();
+            const updated = data?.job;
+            if (updated) {
+              setSelectedJob((prev) => prev ? {
+                ...prev,
+                status: (updated.status as JobStatus) ?? prev.status,
+                assignmentStatus: updated.assignmentStatus ?? prev.assignmentStatus,
+                actualStartTime: updated.actualStartTime ?? prev.actualStartTime,
+                actualEndTime: updated.actualEndTime ?? prev.actualEndTime,
+                lifecycleTimestamps: prev.lifecycleTimestamps,
+                lifecycleState: prev.lifecycleState,
+              } : prev);
+            }
+          } catch {
+            // Response body already consumed — ignore.
           }
         }
-        // Auto-close the sheet if job was completed or rejected
-        if (action === 'complete' || action === 'reject') {
+        // Auto-close the sheet once the job is completed.
+        if (action === 'complete') {
           setSelectedJob(null);
         }
       } else {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({ error: `Failed to ${action} job` }));
         toast.error(err.error || `Failed to ${action} job`);
       }
     } catch {
@@ -970,8 +1285,11 @@ function MyJobsView({ employeeId }: { employeeId: string }) {
   const filterOptions: { value: string; label: string }[] = [
     { value: 'all', label: 'All' },
     { value: 'assigned', label: 'Assigned' },
-    { value: 'in_progress', label: 'In Progress' },
-    { value: 'pending', label: 'Pending' },
+    { value: 'accepted', label: 'Accepted' },
+    { value: 'travelling', label: 'Travelling' },
+    { value: 'arrived', label: 'Arrived' },
+    { value: 'working', label: 'Working' },
+    { value: 'paused', label: 'Paused' },
     { value: 'completed', label: 'Completed' },
   ];
 
@@ -1266,44 +1584,160 @@ function ScheduleView({ employeeId }: { employeeId: string }) {
 // ─── Sub-View: Attendance ───────────────────────────────────────────────────
 
 function AttendanceView() {
-  const [checkedIn, setCheckedIn] = useState(false);
-  const [checkInTime, setCheckInTime] = useState<string | null>(null);
-  const [checkOutTime, setCheckOutTime] = useState<string | null>(null);
-  const [sessionHistory, setSessionHistory] = useState<Array<{ date: string; checkIn: string; checkOut: string; hours: string }>>([]);
+  // ── Real shift state (V1.5) ──────────────────────────────────────────────
+  // activeShift mirrors the EmployeeShift row from /api/employee/shift/today.
+  interface ActiveShift {
+    id: string;
+    clockIn: string;
+    clockOut?: string | null;
+    status: string; // 'active' | 'on_break' | 'completed'
+    breaksJson?: string;
+  }
+  interface TodayTotals {
+    activeShift: ActiveShift | null;
+    shiftsToday?: number;
+    jobsAssignedToday?: number;
+    jobsCompletedToday?: number;
+    workingMinutes?: number;
+    breakMinutes?: number;
+    totalMinutes?: number;
+    travelDistanceMeters?: number;
+  }
 
-  const handleCheckIn = () => {
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-    setCheckedIn(true);
-    setCheckInTime(timeStr);
-    setCheckOutTime(null);
-  };
+  const [activeShift, setActiveShift] = useState<ActiveShift | null>(null);
+  const [todayTotals, setTodayTotals] = useState<TodayTotals | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
-  const handleCheckOut = () => {
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-    setCheckedIn(false);
-    setCheckOutTime(timeStr);
-    if (checkInTime) {
-      const dayName = new Date().toLocaleDateString('en-US', { weekday: 'long' });
-      setSessionHistory(prev => [
-        { date: dayName, checkIn: checkInTime, checkOut: timeStr, hours: calcHours(checkInTime, timeStr) },
-        ...prev,
-      ]);
+  // Live "now" tick so the timer refreshes every second while clocked in.
+  useEffect(() => {
+    if (!activeShift || activeShift.status === 'completed') return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [activeShift]);
+
+  // Pull today's shift + totals from the API.
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch('/api/employee/shift/today?XTransformPort=3000');
+      if (res.ok) {
+        const data: TodayTotals = await res.json();
+        setActiveShift(data.activeShift ?? null);
+        setTodayTotals(data);
+      }
+    } catch {
+      // Silent — the empty state will show.
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+  const handleClockIn = async () => {
+    setActionLoading('clockin');
+    try {
+      const res = await fetch('/api/employee/shift?XTransformPort=3000', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setActiveShift(data.shift);
+        toast.success('Clocked in — have a great shift!');
+        await refresh();
+      } else if (res.status === 409) {
+        toast.info('Already clocked in');
+        await refresh();
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Failed to clock in' }));
+        toast.error(err.error || 'Failed to clock in');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setActionLoading(null);
     }
   };
 
-  const calcHours = (inTime: string, outTime: string): string => {
+  const handleShiftAction = async (action: 'break' | 'resume' | 'clockout') => {
+    setActionLoading(`shift-${action}`);
     try {
-      const [h1, m1] = inTime.split(':').map(Number);
-      const [h2, m2] = outTime.split(':').map(Number);
-      const diffMins = (h2 * 60 + m2) - (h1 * 60 + m1);
-      if (diffMins <= 0) return '0h 0m';
-      return `${Math.floor(diffMins / 60)}h ${diffMins % 60}m`;
-    } catch { return '—'; }
+      const res = await fetch('/api/employee/shift?XTransformPort=3000', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const labels: Record<string, string> = {
+          break: 'Break started',
+          resume: 'Back to work',
+          clockout: 'Clocked out — see you next time!',
+        };
+        toast.success(labels[action]);
+        if (action === 'clockout') {
+          setActiveShift(null);
+        } else if (data.shift) {
+          setActiveShift(data.shift);
+        }
+        await refresh();
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Failed to update shift' }));
+        toast.error(err.error || 'Failed to update shift');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setActionLoading(null);
+    }
   };
 
-  // Build this week's days
+  // ── Derived display values ─────────────────────────────────────────────────
+  const isCheckedIn = !!activeShift && activeShift.status !== 'completed';
+  const isOnBreak = activeShift?.status === 'on_break';
+  const clockInTime = activeShift?.clockIn ? formatTime(activeShift.clockIn) : null;
+
+  // Live elapsed time since clockIn (respects breaks)
+  const liveTotalMin = activeShift?.clockIn
+    ? Math.max(0, Math.round((now - new Date(activeShift.clockIn).getTime()) / 60000))
+    : 0;
+  const liveBreakMin = (() => {
+    if (!activeShift?.breaksJson) return 0;
+    try {
+      const breaks = JSON.parse(activeShift.breaksJson) as Array<{
+        start: string;
+        end: string | null;
+        durationMinutes?: number;
+      }>;
+      let total = 0;
+      for (const b of breaks) {
+        if (b.end) {
+          total += b.durationMinutes || 0;
+        } else {
+          total += Math.max(1, Math.round((now - new Date(b.start).getTime()) / 60000));
+        }
+      }
+      return total;
+    } catch {
+      return 0;
+    }
+  })();
+  const liveWorkingMin = Math.max(0, liveTotalMin - liveBreakMin);
+
+  // From today's totals (server-authoritative for completed shifts)
+  const todayWorkingMin = todayTotals?.workingMinutes ?? 0;
+  const todayBreakMin = todayTotals?.breakMinutes ?? 0;
+  const todayTotalMin = todayTotals?.totalMinutes ?? 0;
+
+  // This week's days (display only — without a 7-day API, we mark today and
+  // leave the rest as "—"). When the API adds a 7-day history endpoint, this
+  // table will be populated from it.
   const thisWeekDays = Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
     const dayOfWeek = d.getDay();
@@ -1317,60 +1751,175 @@ function AttendanceView() {
     };
   });
 
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <LoadingSkeleton lines={3} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Check-in card */}
       <Card className={cn(
         'border-0 shadow-lg',
-        checkedIn
-          ? 'bg-gradient-to-br from-emerald-600 to-emerald-700 text-white'
+        isCheckedIn
+          ? (isOnBreak
+              ? 'bg-gradient-to-br from-amber-600 to-amber-700 text-white'
+              : 'bg-gradient-to-br from-emerald-600 to-emerald-700 text-white')
           : 'bg-gradient-to-br from-slate-700 to-slate-800 text-white'
       )}>
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <h3 className="text-lg font-semibold">
-                {checkedIn ? 'You are checked in' : 'Ready to start your day?'}
+                {isCheckedIn
+                  ? (isOnBreak ? 'You are on break' : 'You are checked in')
+                  : 'Ready to start your day?'}
               </h3>
               <p className="text-sm opacity-80 mt-1">
-                {checkedIn
-                  ? `Checked in at ${checkInTime} — Have a productive day!`
-                  : 'Check in to mark your attendance for today.'
-                }
+                {isCheckedIn
+                  ? (isOnBreak
+                      ? `On break since ${clockInTime ? formatTime(new Date().toISOString()) : ''} — take your time.`
+                      : `Checked in at ${clockInTime} — have a productive day!`)
+                  : 'Check in to mark your attendance for today.'}
               </p>
+              {/* Live timer */}
+              {isCheckedIn && (
+                <div className="mt-3 flex items-center gap-4 text-sm">
+                  <div className="flex items-center gap-1.5">
+                    <Timer className="size-4 opacity-80" />
+                    <span className="font-mono">
+                      Working: <strong>{formatDuration(liveWorkingMin)}</strong>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Coffee className="size-4 opacity-80" />
+                    <span className="font-mono">
+                      Break: <strong>{formatDuration(liveBreakMin)}</strong>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Clock className="size-4 opacity-80" />
+                    <span className="font-mono">
+                      Total: <strong>{formatDuration(liveTotalMin)}</strong>
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="flex gap-2">
-              {!checkedIn ? (
+            <div className="flex gap-2 flex-wrap">
+              {!isCheckedIn ? (
                 <Button
-                  onClick={handleCheckIn}
+                  onClick={handleClockIn}
+                  disabled={actionLoading === 'clockin'}
                   className="bg-white text-slate-800 hover:bg-white/90 font-semibold"
                 >
-                  <Clock className="size-4 mr-2" />
-                  Check In
+                  {actionLoading === 'clockin' ? (
+                    <Loader2 className="size-4 mr-2 animate-spin" />
+                  ) : (
+                    <Clock className="size-4 mr-2" />
+                  )}
+                  Clock In
+                </Button>
+              ) : isOnBreak ? (
+                <Button
+                  onClick={() => handleShiftAction('resume')}
+                  disabled={actionLoading === 'shift-resume'}
+                  className="bg-white text-amber-800 hover:bg-white/90 font-semibold"
+                >
+                  {actionLoading === 'shift-resume' ? (
+                    <Loader2 className="size-4 mr-2 animate-spin" />
+                  ) : (
+                    <Play className="size-4 mr-2" />
+                  )}
+                  Resume
                 </Button>
               ) : (
-                <Button
-                  onClick={handleCheckOut}
-                  variant="outline"
-                  className="border-white/30 text-white hover:bg-white/10"
-                >
-                  <Clock className="size-4 mr-2" />
-                  Check Out
-                </Button>
+                <>
+                  <Button
+                    onClick={() => handleShiftAction('break')}
+                    disabled={actionLoading === 'shift-break'}
+                    variant="outline"
+                    className="border-white/30 text-white hover:bg-white/10"
+                  >
+                    {actionLoading === 'shift-break' ? (
+                      <Loader2 className="size-4 mr-2 animate-spin" />
+                    ) : (
+                      <Coffee className="size-4 mr-2" />
+                    )}
+                    Start Break
+                  </Button>
+                  <Button
+                    onClick={() => handleShiftAction('clockout')}
+                    disabled={actionLoading === 'shift-clockout'}
+                    variant="outline"
+                    className="border-white/30 text-white hover:bg-white/10"
+                  >
+                    {actionLoading === 'shift-clockout' ? (
+                      <Loader2 className="size-4 mr-2 animate-spin" />
+                    ) : (
+                      <LogOut className="size-4 mr-2" />
+                    )}
+                    Clock Out
+                  </Button>
+                </>
               )}
             </div>
           </div>
-          {checkedIn && (
+          {isCheckedIn && (
             <div className="mt-4 flex items-center gap-3">
               <span className="relative flex size-3">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                <span className="relative inline-flex rounded-full size-3 bg-green-300" />
+                <span className={cn(
+                  'relative inline-flex rounded-full size-3',
+                  isOnBreak ? 'bg-amber-300' : 'bg-green-300'
+                )} />
               </span>
-              <span className="text-sm text-emerald-100">Active session</span>
+              <span className="text-sm text-emerald-100">
+                {isOnBreak ? 'On break — shift still active' : 'Active session'}
+              </span>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Today's summary (server-authoritative) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-2xl font-bold text-emerald-600">
+              {isCheckedIn ? formatDuration(liveWorkingMin) : formatDuration(todayWorkingMin)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">Worked Today</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-2xl font-bold text-amber-600">
+              {isCheckedIn ? formatDuration(liveBreakMin) : formatDuration(todayBreakMin)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">Break Time</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-2xl font-bold text-sky-600">
+              {todayTotals?.jobsCompletedToday ?? 0}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">Jobs Completed Today</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-2xl font-bold text-violet-600">
+              {isCheckedIn ? 'Active' : 'Clocked out'}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">Current Status</p>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* This week overview */}
       <Card>
@@ -1392,27 +1941,36 @@ function AttendanceView() {
               </TableHeader>
               <TableBody>
                 {thisWeekDays.map((day) => {
-                  const histEntry = sessionHistory.find(h => h.date.startsWith(day.name));
                   const isToday = day.isToday;
                   return (
                     <TableRow key={day.name}>
-                      <TableCell className="font-medium">{day.name} {isToday ? '(Today)' : ''}</TableCell>
-                      <TableCell className="font-mono text-sm">
-                        {isToday && checkInTime ? checkInTime : histEntry?.checkIn || '—'}
+                      <TableCell className="font-medium">
+                        {day.name} {isToday ? '(Today)' : ''}
                       </TableCell>
                       <TableCell className="font-mono text-sm">
-                        {isToday && checkOutTime ? checkOutTime : histEntry?.checkOut || '—'}
+                        {isToday && clockInTime ? clockInTime : '—'}
                       </TableCell>
                       <TableCell className="font-mono text-sm">
-                        {isToday && checkInTime && (checkOutTime || checkedIn)
-                          ? (checkOutTime ? calcHours(checkInTime, checkOutTime) : 'In progress')
-                          : histEntry?.hours || '—'}
+                        {isToday && !isCheckedIn && todayTotals?.activeShift === null
+                          ? (todayTotalMin > 0 ? '—' : '—')
+                          : isToday && !isCheckedIn
+                            ? 'Clocked out'
+                            : '—'}
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">
+                        {isToday && isCheckedIn
+                          ? formatDuration(liveTotalMin)
+                          : isToday && !isCheckedIn && todayTotalMin > 0
+                            ? formatDuration(todayTotalMin)
+                            : '—'}
                       </TableCell>
                       <TableCell>
                         {isToday
-                          ? (checkInTime ? getStatusBadge('Present') : getStatusBadge('Today'))
+                          ? (isCheckedIn
+                              ? (isOnBreak ? getStatusBadge('On Break') : getStatusBadge('Present'))
+                              : (todayTotalMin > 0 ? getStatusBadge('Present') : getStatusBadge('Today')))
                           : day.isPast
-                            ? (histEntry ? getStatusBadge('Present') : getStatusBadge('Absent'))
+                            ? getStatusBadge('Absent')
                             : getStatusBadge('Today')
                         }
                       </TableCell>
@@ -1425,53 +1983,31 @@ function AttendanceView() {
         </CardContent>
       </Card>
 
-      {/* Session history */}
-      {sessionHistory.length > 0 && (
+      {/* Today's session detail */}
+      {isCheckedIn && activeShift && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Recent Sessions</CardTitle>
+            <CardTitle className="text-base">Today&apos;s Active Session</CardTitle>
+            <CardDescription>Started at {clockInTime}</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              {sessionHistory.map((s, i) => (
-                <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                  <span className="text-sm font-medium">{s.date}</span>
-                  <span className="text-sm text-muted-foreground">{s.checkIn} → {s.checkOut}</span>
-                  <Badge variant="outline" className="text-xs">{s.hours}</Badge>
-                </div>
-              ))}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="p-3 rounded-lg bg-muted/50">
+                <p className="text-xs text-muted-foreground">Clock In</p>
+                <p className="text-sm font-medium font-mono">{clockInTime}</p>
+              </div>
+              <div className="p-3 rounded-lg bg-muted/50">
+                <p className="text-xs text-muted-foreground">Working Time</p>
+                <p className="text-sm font-medium font-mono">{formatDuration(liveWorkingMin)}</p>
+              </div>
+              <div className="p-3 rounded-lg bg-muted/50">
+                <p className="text-xs text-muted-foreground">Break Time</p>
+                <p className="text-sm font-medium font-mono">{formatDuration(liveBreakMin)}</p>
+              </div>
             </div>
           </CardContent>
         </Card>
       )}
-
-      {/* Monthly summary from session history */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-emerald-600">{sessionHistory.length}</p>
-            <p className="text-xs text-muted-foreground mt-1">Sessions Completed</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-blue-600">{checkedIn ? 'Active' : '—'}</p>
-            <p className="text-xs text-muted-foreground mt-1">Current Status</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-amber-600">{checkInTime || '—'}</p>
-            <p className="text-xs text-muted-foreground mt-1">Today&apos;s Check In</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <p className="text-2xl font-bold text-violet-600">{checkOutTime || '—'}</p>
-            <p className="text-xs text-muted-foreground mt-1">Today&apos;s Check Out</p>
-          </CardContent>
-        </Card>
-      </div>
     </div>
   );
 }
@@ -1516,6 +2052,119 @@ function ProfileView({ employeeId }: { employeeId: string }) {
   const employeeRole = employee?.role || 'Field Service Technician';
   const employeeStatus = employee?.status || 'active';
   const displayId = employee?.employeeId || employee?.id || employeeId;
+
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [savingContact, setSavingContact] = useState(false);
+
+  // Helper to read an input's current value by DOM id (the inputs below are
+  // uncontrolled with defaultValue — this is the lightest-touch way to wire
+  // them without converting all of them to controlled components).
+  const readInput = (id: string): string => {
+    if (typeof document === 'undefined') return '';
+    const el = document.getElementById(id) as HTMLInputElement | null;
+    return el?.value ?? '';
+  };
+
+  // ── Save Changes: PUT /api/employee/profile with name/phone/email/location ──
+  const handleSaveProfile = async () => {
+    setSavingProfile(true);
+    try {
+      const payload = {
+        name: readInput('profile-name'),
+        email: readInput('profile-email'),
+        phone: readInput('profile-phone'),
+        location: readInput('profile-location'),
+      };
+      const res = await authFetch('/api/employee/profile?XTransformPort=3000', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        toast.success('Profile updated');
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Failed to update profile' }));
+        toast.error(err.error || 'Failed to update profile');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  // ── Update Password: POST /api/employee/change-password ──
+  const handleUpdatePassword = async () => {
+    const current = readInput('current-password');
+    const next = readInput('new-password');
+    const confirm = readInput('confirm-password');
+    if (!current || !next) {
+      toast.error('Please fill in your current and new passwords');
+      return;
+    }
+    if (next !== confirm) {
+      toast.error('New password and confirmation do not match');
+      return;
+    }
+    if (next.length < 6) {
+      toast.error('New password must be at least 6 characters');
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      const res = await authFetch('/api/employee/change-password?XTransformPort=3000', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword: current, newPassword: next }),
+      });
+      if (res.ok) {
+        toast.success('Password updated');
+        // Clear the password fields
+        if (typeof document !== 'undefined') {
+          ['current-password', 'new-password', 'confirm-password'].forEach((id) => {
+            const el = document.getElementById(id) as HTMLInputElement | null;
+            if (el) el.value = '';
+          });
+        }
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Failed to change password' }));
+        toast.error(err.error || 'Failed to change password');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setSavingPassword(false);
+    }
+  };
+
+  // ── Update Contact: PUT /api/employee/profile with emergency contact fields ──
+  const handleUpdateContact = async () => {
+    setSavingContact(true);
+    try {
+      const payload = {
+        emergencyContactName: readInput('emergency-name'),
+        emergencyContactRelationship: readInput('emergency-relationship'),
+        emergencyContactPhone: readInput('emergency-phone'),
+        emergencyContactAlternate: readInput('emergency-alternate'),
+      };
+      const res = await authFetch('/api/employee/profile?XTransformPort=3000', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        toast.success('Emergency contact updated');
+      } else {
+        const err = await res.json().catch(() => ({ error: 'Failed to update contact' }));
+        toast.error(err.error || 'Failed to update contact');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setSavingContact(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -1578,7 +2227,13 @@ function ProfileView({ employeeId }: { employeeId: string }) {
             </div>
           </div>
           <div className="flex justify-end mt-4">
-            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" size="sm">
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              size="sm"
+              onClick={handleSaveProfile}
+              disabled={savingProfile}
+            >
+              {savingProfile && <Loader2 className="size-3.5 mr-2 animate-spin" />}
               Save Changes
             </Button>
           </div>
@@ -1605,8 +2260,16 @@ function ProfileView({ employeeId }: { employeeId: string }) {
               <Label htmlFor="confirm-password" className="text-xs">Confirm New Password</Label>
               <Input id="confirm-password" type="password" placeholder="Confirm new password" className="mt-1 h-9 text-sm" />
             </div>
-            <Button variant="outline" size="sm" className="gap-2">
-              <Lock className="size-3.5" />
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={handleUpdatePassword}
+              disabled={savingPassword}
+            >
+              {savingPassword
+                ? <Loader2 className="size-3.5 animate-spin" />
+                : <Lock className="size-3.5" />}
               Update Password
             </Button>
           </div>
@@ -1622,24 +2285,32 @@ function ProfileView({ employeeId }: { employeeId: string }) {
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <Label className="text-xs">Contact Name</Label>
-              <Input defaultValue="" placeholder="Enter contact name" className="mt-1 h-9 text-sm" />
+              <Label htmlFor="emergency-name" className="text-xs">Contact Name</Label>
+              <Input id="emergency-name" defaultValue="" placeholder="Enter contact name" className="mt-1 h-9 text-sm" />
             </div>
             <div>
-              <Label className="text-xs">Relationship</Label>
-              <Input defaultValue="" placeholder="Enter relationship" className="mt-1 h-9 text-sm" />
+              <Label htmlFor="emergency-relationship" className="text-xs">Relationship</Label>
+              <Input id="emergency-relationship" defaultValue="" placeholder="Enter relationship" className="mt-1 h-9 text-sm" />
             </div>
             <div>
-              <Label className="text-xs">Phone Number</Label>
-              <Input defaultValue="" placeholder="Enter phone number" className="mt-1 h-9 text-sm" />
+              <Label htmlFor="emergency-phone" className="text-xs">Phone Number</Label>
+              <Input id="emergency-phone" defaultValue="" placeholder="Enter phone number" className="mt-1 h-9 text-sm" />
             </div>
             <div>
-              <Label className="text-xs">Alternate Phone</Label>
-              <Input defaultValue="" placeholder="Enter alternate phone" className="mt-1 h-9 text-sm" />
+              <Label htmlFor="emergency-alternate" className="text-xs">Alternate Phone</Label>
+              <Input id="emergency-alternate" defaultValue="" placeholder="Enter alternate phone" className="mt-1 h-9 text-sm" />
             </div>
           </div>
           <div className="flex justify-end mt-4">
-            <Button variant="outline" size="sm">Update Contact</Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleUpdateContact}
+              disabled={savingContact}
+            >
+              {savingContact && <Loader2 className="size-3.5 mr-2 animate-spin" />}
+              Update Contact
+            </Button>
           </div>
         </CardContent>
       </Card>

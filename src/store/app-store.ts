@@ -64,6 +64,15 @@ interface AppState {
   // form clears this once consumed so a refresh doesn't re-open it.
   pendingJobPrefill: JobPrefillData | null;
   setPendingJobPrefill: (data: JobPrefillData | null) => void;
+
+  // ── Cross-view "New X" create signal ─────────────────────────────────
+  // When the user clicks "New Lead / Customer / Job / Invoice / Campaign"
+  // from the sidebar's "+ Create" dropdown or the dashboard's quick actions,
+  // we set this to the target entity, switch to the matching view, and the
+  // target view consumes it (opens its create form/dialog) then clears it.
+  // This avoids the user having to click the in-view "New X" button twice.
+  pendingCreate: 'lead' | 'customer' | 'job' | 'invoice' | 'campaign' | null;
+  setPendingCreate: (entity: 'lead' | 'customer' | 'job' | 'invoice' | 'campaign' | null) => void;
 }
 
 // Shape of the data passed from a Lead into the New Job form.
@@ -140,4 +149,8 @@ export const useAppStore = create<AppState>((set) => ({
   // Lead → Job prefill
   pendingJobPrefill: null,
   setPendingJobPrefill: (data: JobPrefillData | null) => set({ pendingJobPrefill: data }),
+
+  // Cross-view "New X" create signal
+  pendingCreate: null,
+  setPendingCreate: (entity) => set({ pendingCreate: entity }),
 }));

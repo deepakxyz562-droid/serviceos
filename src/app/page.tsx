@@ -114,6 +114,81 @@ export default function HomePage() {
 
   // Check for existing session on mount
   const checkSession = useCallback(async () => {
+    // ── Customer magic-link auto-login ────────────────────────────────────
+    // Detect ?mgl=TOKEN in the URL on page load, exchange it for a session,
+    // auto-authenticate the customer, and stash the redirect target for the
+    // customer portal to consume on mount.
+    if (typeof window !== 'undefined') {
+      try {
+        const mglParams = new URLSearchParams(window.location.search);
+        const mgl = mglParams.get('mgl');
+        const mglRedirect = mglParams.get('redirect') || '/';
+        if (mgl) {
+          try {
+            const exchangeRes = await fetch(
+              '/api/auth/customer/exchange-magic-link?XTransformPort=3000',
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ token: mgl }),
+              }
+            );
+            if (exchangeRes.ok) {
+              const data = await exchangeRes.json();
+              if (data.user) {
+                setAuth({
+                  isAuthenticated: true,
+                  user: data.user,
+                  tenant: data.tenant || null,
+                });
+                // Save the redirect target for the portal to consume after mount
+                try {
+                  sessionStorage.setItem('mgl_redirect', mglRedirect);
+                } catch {
+                  // sessionStorage unavailable — portal will default to dashboard
+                }
+                // Strip the mgl + redirect params from the URL
+                window.history.replaceState({}, '', window.location.pathname);
+                // Persist auth to localStorage (mirror the existing shape)
+                localStorage.setItem(
+                  'serviceos_auth',
+                  JSON.stringify({
+                    isAuthenticated: true,
+                    user: data.user,
+                    tenant: data.tenant || null,
+                    token: data.token,
+                    isCustomer: true,
+                  })
+                );
+                // Session is set — skip the normal /api/auth/me flow
+                return;
+              }
+            } else {
+              // 404 = token not found, 410 = expired, etc. — surface the
+              // failure to the user, strip the bad params, and fall through
+              // to the normal /api/auth/me flow so they see the landing page.
+              const errBody = await exchangeRes.json().catch(() => ({}));
+              console.error(
+                '[magic-link] exchange failed:',
+                exchangeRes.status,
+                errBody?.error
+              );
+              toast.error('Magic link invalid or expired', {
+                description: 'Please sign in normally to continue.',
+              });
+              window.history.replaceState({}, '', window.location.pathname);
+            }
+          } catch (mglErr) {
+            console.error('[magic-link] detection error:', mglErr);
+            // Fall through to the normal /api/auth/me flow
+          }
+        }
+      } catch {
+        // URL parsing failed — fall through to the normal flow
+      }
+    }
+
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);

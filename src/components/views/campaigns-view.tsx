@@ -344,12 +344,28 @@ function getChannelColor(channel: string) {
 
 export function CampaignsView() {
   const setActiveView = useAppStore((s) => s.setActiveView);
+  // Cross-view "New Campaign" create signal — when the sidebar's "+ Create"
+  // dropdown or a dashboard quick action sets pendingCreate to 'campaign',
+  // we open the create dialog and clear the signal so a refresh doesn't
+  // re-open it.
+  const pendingCreate = useAppStore((s) => s.pendingCreate);
+  const setPendingCreate = useAppStore((s) => s.setPendingCreate);
+
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(pendingCreate === 'campaign');
+
+  // Consume the cross-view "New Campaign" signal — opens the dialog, then clears.
+  useEffect(() => {
+    if (pendingCreate === 'campaign') {
+      setShowCreateDialog(true);
+      setPendingCreate(null);
+    }
+  }, [pendingCreate]);
+
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [isCreating, setIsCreating] = useState(false);

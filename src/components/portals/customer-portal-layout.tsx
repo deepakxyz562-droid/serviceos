@@ -46,6 +46,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { authFetch } from '@/lib/client-auth';
 import { useAppStore } from '@/store/app-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -106,7 +107,7 @@ const AddPaymentMethodDialog = lazy(() => import('./add-payment-method-dialog').
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type CustomerView = 'dashboard' | 'bookings' | 'orders' | 'invoices' | 'payments' | 'messages' | 'reviews' | 'profile';
+type CustomerView = 'dashboard' | 'bookings' | 'orders' | 'invoices' | 'payments' | 'messages' | 'reviews' | 'profile' | 'quotes';
 
 interface CustomerPortalLayoutProps {
   onLogout?: () => void;
@@ -119,6 +120,7 @@ const SIDEBAR_ITEMS: { key: CustomerView; label: string; icon: React.ElementType
   { key: 'bookings', label: 'Bookings', icon: CalendarCheck },
   { key: 'orders', label: 'My Orders', icon: ShoppingBag },
   { key: 'invoices', label: 'Invoices', icon: Receipt },
+  { key: 'quotes', label: 'Quotes', icon: FileText },
   { key: 'payments', label: 'Payments', icon: CreditCard },
   { key: 'messages', label: 'Messages', icon: MessageSquare },
   { key: 'reviews', label: 'Reviews', icon: Star },
@@ -370,6 +372,7 @@ function CustomerHeader({
     bookings: 'Bookings',
     orders: 'Orders',
     invoices: 'Invoices',
+    quotes: 'Quotes',
     payments: 'Payments',
     messages: 'Messages',
     reviews: 'Reviews',
@@ -623,16 +626,30 @@ function DashboardView({ onNewBooking, customerName, bookings, bookingsLoading }
   );
 }
 
-function BookingsView({ bookings, loading, error, onNewBooking, onRetry }: {
+function BookingsView({ bookings, loading, error, onNewBooking, onRetry, initialBookingId }: {
   bookings: BookingItem[];
   loading: boolean;
   error: string | null;
   onNewBooking: () => void;
   onRetry: () => void;
+  initialBookingId?: string | null;
 }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Auto-expand the deep-linked booking when the magic-link redirect target
+  // arrives (it's set asynchronously by the parent after mount). Uses the
+  // React-recommended "adjust state when a prop changes" pattern instead of
+  // a useEffect to avoid cascading renders.
+  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+  const [prevInitialBookingId, setPrevInitialBookingId] = useState<string | null | undefined>(initialBookingId);
+  if (initialBookingId !== prevInitialBookingId) {
+    setPrevInitialBookingId(initialBookingId);
+    if (initialBookingId) {
+      setExpandedId(initialBookingId);
+    }
+  }
 
   const filtered = bookings.filter(b => {
     const matchesSearch = !search ||
@@ -1172,9 +1189,19 @@ function OrdersView({ customerEmail }: { customerEmail: string }) {
   );
 }
 
-function InvoicesView() {
+function InvoicesView({ initialInvoiceId }: { initialInvoiceId?: string | null }) {
   const totalPending = PLACEHOLDER_INVOICES.filter(i => i.status === 'pending').reduce((s, i) => s + i.amount, 0);
   const totalOverdue = PLACEHOLDER_INVOICES.filter(i => i.status === 'overdue').reduce((s, i) => s + i.amount, 0);
+
+  // Magic-link deep-link target — currently invoices are placeholder data,
+  // so there's no row to auto-open. This effect is here so that when real
+  // invoice data is wired in, the deep-link id will already be plumbed through.
+  useEffect(() => {
+    if (initialInvoiceId) {
+      // No-op for now — placeholder data won't match a real invoice id.
+      // When real invoices are loaded, scroll to / expand the matching row here.
+    }
+  }, [initialInvoiceId]);
 
   return (
     <div className="space-y-6">
@@ -1479,6 +1506,320 @@ function PaymentsView({ paymentMethods, loading, error, onAddMethod, onRetry, on
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+// ─── Quotes View ────────────────────────────────────────────────────────────
+
+interface QuoteLineItem {
+  name?: string;
+  title?: string;
+  description?: string;
+  price?: number;
+  quantity?: number;
+}
+
+interface QuoteItem {
+  id: string;
+  title: string;
+  description?: string | null;
+  customerName?: string | null;
+  customerId?: string;
+  customerPhone?: string | null;
+  services: QuoteLineItem[];
+  addOns: QuoteLineItem[];
+  subtotal: number;
+  discountType: string;
+  discountValue: number;
+  discount: number;
+  taxRate: number;
+  tax: number;
+  total: number;
+  currency: string;
+  status: string;
+  validUntil: string | null;
+  whatsappSent: boolean | null;
+  createdAt: string;
+}
+
+function getQuoteStatusBadge(status: string) {
+  const config: Record<string, { label: string; className: string }> = {
+    draft: { label: 'Draft', className: 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950/40 dark:text-gray-400 dark:border-gray-800' },
+    sent: { label: 'Sent', className: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800' },
+    accepted: { label: 'Accepted', className: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800' },
+    declined: { label: 'Declined', className: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800' },
+    expired: { label: 'Expired', className: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800' },
+  };
+  const c = config[status] || { label: status, className: 'bg-gray-50 text-gray-700 border-gray-200' };
+  return <Badge variant="outline" className={cn('text-xs font-medium', c.className)}>{c.label}</Badge>;
+}
+
+function formatQuoteDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function QuotesView({ initialQuoteId }: { initialQuoteId?: string | null }) {
+  const [quotes, setQuotes] = useState<QuoteItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
+
+  const fetchQuotes = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await authFetch('/api/quotes?limit=100&XTransformPort=3000', {
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to load quotes');
+      const data = await res.json();
+      setQuotes(Array.isArray(data) ? data : (data.quotes || []));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load quotes');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchQuotes();
+  }, [fetchQuotes]);
+
+  // Auto-open the deep-linked quote on first render (magic-link redirect).
+  useEffect(() => {
+    if (initialQuoteId) {
+      setSelectedQuoteId(initialQuoteId);
+    }
+  }, [initialQuoteId]);
+
+  const selectedQuote = quotes.find(q => q.id === selectedQuoteId);
+
+  // Loading skeleton
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-bold text-foreground">Quotes</h2>
+          <p className="text-muted-foreground text-sm">Review quotes we&apos;ve sent you</p>
+        </div>
+        <div className="space-y-3">
+          {[1, 2, 3].map(i => (
+            <Card key={i}>
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-2 flex-1">
+                    <Skeleton className="h-4 w-1/3" />
+                    <Skeleton className="h-3 w-1/2" />
+                  </div>
+                  <div className="space-y-2">
+                    <Skeleton className="h-5 w-16" />
+                    <Skeleton className="h-4 w-20" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-bold text-foreground">Quotes</h2>
+          <p className="text-muted-foreground text-sm">Review quotes we&apos;ve sent you</p>
+        </div>
+        <Card className="border-red-200 dark:border-red-800">
+          <CardContent className="p-6 text-center">
+            <AlertCircle className="size-10 text-red-500 mx-auto mb-2" />
+            <p className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>
+            <Button variant="outline" size="sm" onClick={fetchQuotes}>Retry</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Empty state
+  if (quotes.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-bold text-foreground">Quotes</h2>
+          <p className="text-muted-foreground text-sm">Review quotes we&apos;ve sent you</p>
+        </div>
+        <Card className="border-dashed">
+          <CardContent className="p-12 flex flex-col items-center justify-center text-center">
+            <div className="size-16 rounded-full bg-muted/50 flex items-center justify-center mb-4">
+              <FileText className="size-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-lg font-semibold text-foreground mb-1">No quotes yet</h3>
+            <p className="text-sm text-muted-foreground max-w-sm">
+              Quotes we send you will appear here. You can review line items and totals, then accept or decline.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h2 className="text-xl font-bold text-foreground">Quotes</h2>
+        <p className="text-muted-foreground text-sm">Review quotes we&apos;ve sent you</p>
+      </div>
+
+      {/* Quote Cards */}
+      <div className="space-y-3">
+        {quotes.map((quote) => {
+          const lineItemsCount = (quote.services?.length || 0) + (quote.addOns?.length || 0);
+          return (
+            <Card key={quote.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => setSelectedQuoteId(quote.id)}>
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <h3 className="font-semibold text-foreground truncate">{quote.title}</h3>
+                      {getQuoteStatusBadge(quote.status)}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <FileText className="size-3.5" />
+                        {lineItemsCount} {lineItemsCount === 1 ? 'item' : 'items'}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Calendar className="size-3.5" />
+                        Created {formatQuoteDate(quote.createdAt)}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="size-3.5" />
+                        Valid until {formatQuoteDate(quote.validUntil)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg font-bold text-foreground">{formatCurrency(quote.total)}</span>
+                    <ChevronDown className="size-4 text-muted-foreground" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Quote detail Sheet */}
+      <Sheet open={!!selectedQuote} onOpenChange={(open) => !open && setSelectedQuoteId(null)}>
+        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="text-left">{selectedQuote?.title || 'Quote'}</SheetTitle>
+          </SheetHeader>
+          {selectedQuote && (
+            <div className="px-4 pb-6 space-y-5">
+              {/* Meta */}
+              <div className="flex flex-wrap items-center gap-2">
+                {getQuoteStatusBadge(selectedQuote.status)}
+                <Badge variant="outline" className="text-xs font-mono">#{selectedQuote.id.slice(-8)}</Badge>
+                {selectedQuote.whatsappSent && (
+                  <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800">
+                    WhatsApp sent
+                  </Badge>
+                )}
+              </div>
+
+              {/* Dates */}
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">Created</p>
+                  <p className="text-foreground font-medium">{formatQuoteDate(selectedQuote.createdAt)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Valid until</p>
+                  <p className="text-foreground font-medium">{formatQuoteDate(selectedQuote.validUntil)}</p>
+                </div>
+              </div>
+
+              {/* Description */}
+              {selectedQuote.description && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground uppercase mb-1">Description</p>
+                  <p className="text-sm text-foreground whitespace-pre-wrap">{selectedQuote.description}</p>
+                </div>
+              )}
+
+              {/* Line items */}
+              <div>
+                <h4 className="text-sm font-semibold text-foreground mb-2">Line Items</h4>
+                <div className="space-y-2">
+                  {(selectedQuote.services || []).map((item, idx) => (
+                    <div key={`svc-${idx}`} className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-muted/50">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FileText className="size-4 text-muted-foreground shrink-0" />
+                        <span className="text-sm text-foreground truncate">{item.name || item.title || 'Service'}</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-sm shrink-0">
+                        <span className="text-muted-foreground">×{item.quantity || 1}</span>
+                        <span className="font-medium text-foreground">{formatCurrency((item.price || 0) * (item.quantity || 1))}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {(selectedQuote.addOns || []).map((item, idx) => (
+                    <div key={`add-${idx}`} className="flex items-center justify-between py-1.5 px-3 rounded-lg bg-muted/30">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Plus className="size-4 text-muted-foreground shrink-0" />
+                        <span className="text-sm text-foreground truncate">{item.name || item.title || 'Add-on'}</span>
+                      </div>
+                      <span className="text-sm font-medium text-foreground shrink-0">{formatCurrency(item.price || 0)}</span>
+                    </div>
+                  ))}
+                  {(selectedQuote.services || []).length === 0 && (selectedQuote.addOns || []).length === 0 && (
+                    <p className="text-sm text-muted-foreground italic">No line items.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Totals */}
+              <div>
+                <h4 className="text-sm font-semibold text-foreground mb-2">Summary</h4>
+                <div className="bg-muted/50 rounded-lg p-3 space-y-1.5">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="text-foreground">{formatCurrency(selectedQuote.subtotal)}</span>
+                  </div>
+                  {selectedQuote.discount > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        Discount{selectedQuote.discountType === 'percentage' ? ` (${selectedQuote.discountValue || 0}%)` : ''}
+                      </span>
+                      <span className="text-emerald-600 dark:text-emerald-400">-{formatCurrency(selectedQuote.discount)}</span>
+                    </div>
+                  )}
+                  {selectedQuote.tax > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Tax ({selectedQuote.taxRate || 0}%)</span>
+                      <span className="text-foreground">{formatCurrency(selectedQuote.tax)}</span>
+                    </div>
+                  )}
+                  <Separator />
+                  <div className="flex justify-between text-sm font-bold">
+                    <span className="text-foreground">Total</span>
+                    <span className="text-foreground">{formatCurrency(selectedQuote.total)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
@@ -1809,6 +2150,13 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const auth = useAppStore((s) => s.auth);
 
+  // Deep-link targets — set once on mount when a customer magic-link redirect
+  // is present in sessionStorage (consumed & cleared below). Each sub-view
+  // receives its target as an `initialXxxId` prop and auto-opens the detail.
+  const [deepLinkBookingId, setDeepLinkBookingId] = useState<string | null>(null);
+  const [deepLinkInvoiceId, setDeepLinkInvoiceId] = useState<string | null>(null);
+  const [deepLinkQuoteId, setDeepLinkQuoteId] = useState<string | null>(null);
+
   // Dialog state
   const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
@@ -1866,6 +2214,46 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
     fetchBookings();
   }, [fetchBookings, dataNonce]);
 
+  // ── Consume magic-link redirect target on first mount ──────────────────
+  // page.tsx stashes `mgl_redirect` in sessionStorage after a successful
+  // magic-link exchange. Parse it, deep-link into the relevant portal view,
+  // then clear it so a refresh doesn't re-trigger the deep-link.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let redirect: string | null = null;
+    try {
+      redirect = sessionStorage.getItem('mgl_redirect');
+    } catch {
+      // sessionStorage unavailable — nothing to deep-link to
+      return;
+    }
+    if (!redirect) return;
+    // Always clear so it only fires once
+    try { sessionStorage.removeItem('mgl_redirect'); } catch {}
+
+    if (redirect === '/' || !redirect.startsWith('/')) {
+      setActiveView('dashboard');
+      return;
+    }
+
+    const parts = redirect.replace(/^\//, '').split('/');
+    const resource = parts[0];
+    const id = parts[1];
+
+    if (resource === 'invoices' && id) {
+      setActiveView('invoices');
+      setDeepLinkInvoiceId(id);
+    } else if ((resource === 'jobs' || resource === 'bookings') && id) {
+      setActiveView('bookings');
+      setDeepLinkBookingId(id);
+    } else if (resource === 'quotes' && id) {
+      setActiveView('quotes');
+      setDeepLinkQuoteId(id);
+    } else {
+      setActiveView('dashboard');
+    }
+  }, []);
+
   // Fetch payment methods when payments view is opened + when dataNonce changes
   useEffect(() => {
     if (activeView === 'payments') {
@@ -1910,12 +2298,15 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
             error={bookingsError}
             onNewBooking={handleNewBooking}
             onRetry={fetchBookings}
+            initialBookingId={deepLinkBookingId}
           />
         );
       case 'orders':
         return <OrdersView customerEmail={customerEmail} />;
       case 'invoices':
-        return <InvoicesView />;
+        return <InvoicesView initialInvoiceId={deepLinkInvoiceId} />;
+      case 'quotes':
+        return <QuotesView initialQuoteId={deepLinkQuoteId} />;
       case 'payments':
         return (
           <PaymentsView

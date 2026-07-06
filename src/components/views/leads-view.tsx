@@ -10,7 +10,7 @@ import {
   ChevronRight, CheckCircle2, X, Send, StickyNote,
   CalendarDays, Briefcase, AlertCircle, User, UserPlus,
   Loader2, ArrowLeft, ImagePlus, Link2, Paperclip, Camera,
-  FileText, ImageIcon, ClipboardList,
+  FileText, ImageIcon, ClipboardList, Truck, Info,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -1083,6 +1083,12 @@ export function LeadsView() {
   // user clicks "Convert" so the New Job form opens pre-filled.
   const setPendingJobPrefill = useAppStore((s) => s.setPendingJobPrefill);
   const setGlobalView = useAppStore((s) => s.setActiveView);
+  // Cross-view "New X" create signal — when the sidebar's "+ Create" dropdown
+  // or the dashboard's "Add Lead" quick action sets pendingCreate to 'lead',
+  // we open the New Lead form and clear the signal so a refresh doesn't
+  // re-open it.
+  const pendingCreate = useAppStore((s) => s.pendingCreate);
+  const setPendingCreate = useAppStore((s) => s.setPendingCreate);
 
   // Data state
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -1104,8 +1110,8 @@ export function LeadsView() {
   const [sortField, setSortField] = useState<string>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
-  // Dialog / page state
-  const [formMode, setFormMode] = useState<'list' | 'form'>('list');
+  // Dialog / page state — initialize to 'form' if a cross-view "New Lead" signal is pending
+  const [formMode, setFormMode] = useState<'list' | 'form' | 'detail'>(pendingCreate === 'lead' ? 'form' : 'list');
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [leadForm, setLeadForm] = useState<LeadFormData>({ ...EMPTY_FORM });
   const [saving, setSaving] = useState(false);
@@ -1463,6 +1469,10 @@ export function LeadsView() {
           setShowDetailDialog(false);
           setSelectedLead(null);
         }
+        if (formMode === 'detail' && selectedLead?.id === deletingLead.id) {
+          setFormMode('list');
+          setSelectedLead(null);
+        }
         fetchLeads();
       } else {
         toast.error('Failed to delete lead');
@@ -1489,6 +1499,10 @@ export function LeadsView() {
         setConvertingLead(null);
         if (showDetailDialog) {
           setShowDetailDialog(false);
+          setSelectedLead(null);
+        }
+        if (formMode === 'detail') {
+          setFormMode('list');
           setSelectedLead(null);
         }
         fetchLeads();
@@ -1560,6 +1574,15 @@ export function LeadsView() {
     setFormMode('form');
   };
 
+  // Reset the form fields + clear the cross-view "New Lead" signal.
+  // The formMode initial state above already opens the form; this just ensures clean fields.
+  useEffect(() => {
+    if (pendingCreate === 'lead') {
+      openAddLead();
+      setPendingCreate(null);
+    }
+  }, [pendingCreate, setPendingCreate]);
+
   const closeLeadForm = () => {
     setFormMode('list');
     setEditingLead(null);
@@ -1571,6 +1594,21 @@ export function LeadsView() {
   const openDetail = (lead: Lead) => {
     setSelectedLead(lead);
     setShowDetailDialog(true);
+  };
+
+  // Full-page Lead Detail (Jobber-style) — opened by clicking a kanban
+  // card, table row, or "View" dropdown item. Replaces the legacy dialog
+  // as the primary entry point while the dialog code below stays for
+  // backward-compat (e.g. callers from outside the list view).
+  const openLeadDetail = (lead: Lead) => {
+    setSelectedLead(lead);
+    setFormMode('detail');
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
+  };
+
+  const closeLeadDetail = () => {
+    setFormMode('list');
+    setSelectedLead(null);
   };
 
   // ── Convert lead → open the New Job form pre-filled ────────────────
@@ -1597,9 +1635,12 @@ export function LeadsView() {
       lineItemsJson: lead.lineItemsJson,
       source: lead.source,
     });
-    // Close the lead detail dialog if it's open so it doesn't sit on top.
+    // Close the lead detail dialog/page if it's open so it doesn't sit on top.
     if (showDetailDialog) {
       setShowDetailDialog(false);
+    }
+    if (formMode === 'detail') {
+      setFormMode('list');
       setSelectedLead(null);
     }
     setGlobalView('jobs');
@@ -1710,7 +1751,7 @@ export function LeadsView() {
     <Card
       key={lead.id}
       className="cursor-pointer hover:shadow-md transition-all group relative"
-      onClick={() => openDetail(lead)}
+      onClick={() => openLeadDetail(lead)}
     >
       <CardContent className="p-3 space-y-2">
         {/* Header row */}
@@ -1916,7 +1957,7 @@ export function LeadsView() {
                     <TableRow
                       key={lead.id}
                       className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => openDetail(lead)}
+                      onClick={() => openLeadDetail(lead)}
                     >
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-1.5">
@@ -1950,7 +1991,7 @@ export function LeadsView() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                            <DropdownMenuItem onClick={() => openDetail(lead)}>
+                            <DropdownMenuItem onClick={() => openLeadDetail(lead)}>
                               <Eye className="size-3.5 mr-2" /> View
                             </DropdownMenuItem>
                             {!['won', 'lost'].includes(lead.status) && (
@@ -3038,6 +3079,502 @@ export function LeadsView() {
   };
 
   // ============================================================
+  // Render: Lead Detail Page (Jobber-style full page)
+  // ============================================================
+  const renderLeadDetailPage = () => {
+    if (!selectedLead) return null;
+    const lead = selectedLead;
+    const lineItems = parseLineItems(lead.lineItemsJson);
+    const overviewImages = parseImages(lead.imagesJson);
+    const assessmentImages = parseImages(lead.assessmentImagesJson);
+    const leadNotes = (() => {
+      try { return JSON.parse(lead.notesJson || '[]') as { text: string; createdAt: string; author?: string }[]; } catch { return []; }
+    })();
+    const kanbanStatus = mapToKanbanStatus(lead.status);
+    const currentStageIdx = KANBAN_STATUSES.indexOf(kanbanStatus as typeof KANBAN_STATUSES[number]);
+    const subtotal = lineItemsSubtotal(lineItems);
+    const isClosed = lead.status === 'won' || lead.status === 'lost';
+
+    const detailRows: { label: string; value: React.ReactNode }[] = [
+      ...(lead.value > 0 ? [{ label: 'Value', value: <span className="font-semibold text-emerald-700">{formatCompact(lead.value)}</span> }] : []),
+      { label: 'Source', value: <span>{SOURCE_CONFIG[lead.source]?.label || lead.source}</span> },
+      { label: 'Service', value: <span>{getServiceTypeLabel(lead.serviceType)}</span> },
+      {
+        label: 'Priority',
+        value: (
+          <span className="inline-flex items-center gap-1.5">
+            <span className={cn('size-2 rounded-full', PRIORITY_CONFIG[lead.priority]?.dotColor || 'bg-gray-400')} />
+            <span className="capitalize">{PRIORITY_CONFIG[lead.priority]?.label || lead.priority}</span>
+          </span>
+        ),
+      },
+      ...(lead.assignedTo ? [{ label: 'Assigned to', value: <span>{lead.assignedTo.name}</span> }] : []),
+      ...(lead.job ? [{ label: 'Linked Job', value: <span className="text-emerald-700 font-medium">{lead.job.title}</span> }] : []),
+      { label: 'Created', value: <span>{formatDateMedium(lead.createdAt)}</span> },
+    ];
+
+    return (
+      <div className="w-full space-y-6">
+        {/* ─── Sticky page header (Back + title + actions) ────────── */}
+        <div className="form-page-header -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 mb-2">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={closeLeadDetail}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0"
+              >
+                <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
+                <span className="hidden sm:inline">Back</span>
+              </button>
+              <Separator orientation="vertical" className="h-8 bg-border/60 hidden sm:block" />
+              <div className="flex items-center justify-center size-9 rounded-lg shrink-0 shadow-sm bg-emerald-600">
+                <Target className="size-5 text-white" strokeWidth={2.2} />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Lead</span>
+                  {renderStatusBadge(lead.status)}
+                  {isClosed && (
+                    <span className="text-[10px] font-medium text-muted-foreground">{lead.status === 'won' ? '· Won' : '· Lost'}</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 min-w-0">
+                  <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground leading-tight truncate">
+                    {lead.title || lead.name}
+                  </h2>
+                  <button
+                    type="button"
+                    title="Edit lead"
+                    onClick={() => openEditLead(lead)}
+                    className="text-muted-foreground hover:text-emerald-600 transition-colors shrink-0"
+                  >
+                    <Pencil className="size-4" />
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground line-clamp-1">
+                  {lead.name}
+                  {lead.phone && <span> · {lead.phone}</span>}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {!isClosed && (
+                <button
+                  type="button"
+                  onClick={() => openConvertDialog(lead)}
+                  className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm"
+                >
+                  <ArrowRight className="size-4 mr-1.5" /> Convert to Job
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => openEditLead(lead)}
+                className="inline-flex items-center justify-center h-9 px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors"
+              >
+                <Pencil className="size-4 mr-1.5" /> Edit
+              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    title="More actions"
+                    className="inline-flex items-center justify-center size-9 rounded-lg text-foreground border border-border bg-background hover:bg-muted transition-colors"
+                  >
+                    <MoreHorizontal className="size-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {!isClosed && (
+                    <DropdownMenuItem onClick={() => openConvertDialog(lead)}>
+                      <ArrowRight className="size-3.5 mr-2" /> Convert to Job
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={() => openEditLead(lead)}>
+                    <Pencil className="size-3.5 mr-2" /> Edit lead
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { if (lead.phone) window.location.href = `tel:${lead.phone}`; }} disabled={!lead.phone}>
+                    <Phone className="size-3.5 mr-2" /> Call
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { if (lead.email) window.location.href = `mailto:${lead.email}`; }} disabled={!lead.email}>
+                    <Mail className="size-3.5 mr-2" /> Email
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem variant="destructive" onClick={() => openDeleteDialog(lead)}>
+                    <Trash2 className="size-3.5 mr-2" /> Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        </div>
+
+        {/* ─── Two-column layout ─────────────────────────────────── */}
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6 items-start">
+          {/* ── Left column: main lead details ── */}
+          <div className="space-y-6 min-w-0">
+            {/* Contact card */}
+            <FormSectionCard icon={User} title="Contact">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Left: contact info */}
+                <div className="space-y-2 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="size-2 rounded-full bg-blue-500 shrink-0" />
+                    <p className="text-base font-semibold text-foreground truncate">{lead.name}</p>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button type="button" className="text-muted-foreground hover:text-foreground transition-colors ml-auto shrink-0" title="More">
+                          <MoreHorizontal className="size-4" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openEditLead(lead)}>
+                          <Pencil className="size-3.5 mr-2" /> Edit contact
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => { if (lead.phone) window.location.href = `tel:${lead.phone}`; }} disabled={!lead.phone}>
+                          <Phone className="size-3.5 mr-2" /> Call
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => { if (lead.email) window.location.href = `mailto:${lead.email}`; }} disabled={!lead.email}>
+                          <Mail className="size-3.5 mr-2" /> Email
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  {lead.address && (
+                    <div className="space-y-0.5">
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Billing / Property Address</p>
+                      <div className="flex items-start gap-2 text-sm text-foreground">
+                        <MapPin className="size-4 mt-0.5 shrink-0 text-muted-foreground" />
+                        <span className="whitespace-pre-wrap">{lead.address}</span>
+                      </div>
+                    </div>
+                  )}
+                  {lead.phone && (
+                    <a href={`tel:${lead.phone}`} className="flex items-center gap-2 text-sm text-emerald-700 hover:underline">
+                      <Phone className="size-4" /> {lead.phone}
+                    </a>
+                  )}
+                  {lead.email && (
+                    <a href={`mailto:${lead.email}`} className="flex items-center gap-2 text-sm text-emerald-700 hover:underline">
+                      <Mail className="size-4" /> {lead.email}
+                    </a>
+                  )}
+                  {!lead.address && !lead.phone && !lead.email && (
+                    <p className="text-sm text-muted-foreground italic">No contact details on file.</p>
+                  )}
+                </div>
+                {/* Right: meta info (Request Source / Requested / Used for) */}
+                <div className="space-y-3 sm:border-l sm:border-border/40 sm:pl-4">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Request Source</p>
+                    <p className="text-sm font-medium text-foreground">{renderSourceBadge(lead.source)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Requested</p>
+                    <p className="text-sm font-medium text-foreground">{formatDateMedium(lead.createdAt)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Used for</p>
+                    {lead.job ? (
+                      <p className="text-sm text-emerald-700 font-medium hover:underline cursor-pointer">
+                        Job #{lead.job.id.slice(-6)}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">—</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </FormSectionCard>
+
+            {/* Overview card */}
+            <FormSectionCard
+              icon={FileText}
+              title="Overview"
+              description="Service details"
+              action={
+                <button
+                  type="button"
+                  onClick={() => openEditLead(lead)}
+                  className="text-muted-foreground hover:text-emerald-600 transition-colors"
+                  title="Edit"
+                >
+                  <Pencil className="size-4" />
+                </button>
+              }
+            >
+              <div className="space-y-4">
+                {lead.description ? (
+                  <p className="text-sm text-foreground whitespace-pre-wrap">{lead.description}</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">No service details provided.</p>
+                )}
+                <ul className="space-y-1.5 text-xs text-muted-foreground">
+                  <li className="flex items-start gap-1.5">
+                    <span className="size-1 rounded-full bg-muted-foreground/50 mt-1.5 shrink-0" />
+                    <span>Please provide as much information as you can.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="size-1 rounded-full bg-muted-foreground/50 mt-1.5 shrink-0" />
+                    <span>Share images of the work to be done.</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="size-1 rounded-full bg-muted-foreground/50 mt-1.5 shrink-0" />
+                    <span>How did you hear about us?</span>
+                  </li>
+                </ul>
+                {overviewImages.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <ImageIcon className="size-3.5" /> Work images ({overviewImages.length})
+                    </p>
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                      {overviewImages.map((url, i) => (
+                        <a
+                          key={i}
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="aspect-square rounded-md overflow-hidden border bg-muted"
+                        >
+                          <img src={url} alt={`Work ${i + 1}`} className="size-full object-cover" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </FormSectionCard>
+
+            {/* On-site assessment card */}
+            <FormSectionCard icon={Truck} title="On-site assessment">
+              <div className="space-y-4">
+                <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
+                  <Truck className="size-8 text-muted-foreground/50 mx-auto mb-2" strokeWidth={1.5} />
+                  <p className="text-sm text-muted-foreground">
+                    Visit the property to assess the job before you do the work.
+                  </p>
+                </div>
+                {assessmentImages.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <Camera className="size-3.5" /> Assessment photos ({assessmentImages.length})
+                    </p>
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                      {assessmentImages.map((url, i) => (
+                        <a
+                          key={i}
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="aspect-square rounded-md overflow-hidden border bg-muted"
+                        >
+                          <img src={url} alt={`Assessment ${i + 1}`} className="size-full object-cover" />
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </FormSectionCard>
+
+            {/* Product / Service card */}
+            <FormSectionCard
+              icon={Briefcase}
+              title="Product / Service"
+              action={
+                <button
+                  type="button"
+                  onClick={() => openEditLead(lead)}
+                  className="text-muted-foreground hover:text-emerald-600 transition-colors"
+                  title="Edit"
+                >
+                  <Pencil className="size-4" />
+                </button>
+              }
+            >
+              {lineItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground italic">No line items added to this lead.</p>
+              ) : (
+                <div className="overflow-x-auto -mx-2">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-muted-foreground border-b border-border/60">
+                        <th className="px-2 py-2 font-medium">Description</th>
+                        <th className="px-2 py-2 font-medium text-center">Quantity</th>
+                        <th className="px-2 py-2 font-medium text-right">Unit price</th>
+                        <th className="px-2 py-2 font-medium text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lineItems.map((it, i) => (
+                        <tr key={i} className="border-b border-border/40 last:border-0">
+                          <td className="px-2 py-2.5 font-medium text-foreground">{it.name || 'Custom item'}</td>
+                          <td className="px-2 py-2.5 text-center text-muted-foreground">{it.quantity || 1}</td>
+                          <td className="px-2 py-2.5 text-right text-muted-foreground">{formatCurrency(parseFloat(it.unitPrice) || 0)}</td>
+                          <td className="px-2 py-2.5 text-right font-semibold text-foreground">{formatCurrency(lineItemTotal(it))}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-border/60">
+                        <td colSpan={3} className="px-2 py-2 text-right text-sm text-muted-foreground">Subtotal</td>
+                        <td className="px-2 py-2 text-right text-sm text-muted-foreground">{formatCurrency(subtotal)}</td>
+                      </tr>
+                      <tr>
+                        <td colSpan={3} className="px-2 py-1 text-right text-sm font-semibold text-foreground">Total</td>
+                        <td className="px-2 py-1 text-right text-base font-bold text-foreground">{formatCurrency(subtotal)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </FormSectionCard>
+
+            {/* Pipeline Progress card */}
+            <FormSectionCard
+              icon={TrendingUp}
+              title="Pipeline progress"
+              description="Track the lead through the pipeline stages."
+            >
+              <div className="space-y-4">
+                <div className="flex items-center gap-1 overflow-x-auto pb-2">
+                  {KANBAN_STATUSES.filter((s) => s !== 'lost').map((status, idx) => {
+                    const config = STATUS_CONFIG[status];
+                    const isCompleted = idx < currentStageIdx;
+                    const isCurrent = idx === currentStageIdx;
+                    return (
+                      <div key={status} className="flex items-center gap-1">
+                        <div
+                          className={cn(
+                            'rounded-lg px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide transition-all whitespace-nowrap',
+                            isCompleted && `${config.bgColor} ${config.color} ${config.borderColor} border`,
+                            isCurrent && `${config.bgColor} ${config.color} ${config.borderColor} border ring-2 ring-offset-1`,
+                            !isCompleted && !isCurrent && 'bg-muted text-muted-foreground',
+                          )}
+                        >
+                          {isCompleted && <CheckCircle2 className="size-3 inline mr-0.5" />}
+                          {config.label}
+                        </div>
+                        {idx < KANBAN_STATUSES.filter((s) => s !== 'lost').length - 1 && (
+                          <ArrowRight className="size-3 text-muted-foreground/40 flex-shrink-0" />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {!isClosed && (
+                  <div className="pt-3 border-t border-border/40">
+                    <p className="text-xs font-semibold text-muted-foreground mb-2">Update Status</p>
+                    <div className="flex flex-wrap gap-2">
+                      {KANBAN_STATUSES.filter((s) => s !== lead.status).map((status) => {
+                        const config = STATUS_CONFIG[status];
+                        const isStatusLoading = statusLoadingId === lead.id;
+                        return (
+                          <Button
+                            key={status}
+                            variant="outline"
+                            size="sm"
+                            className={cn('text-xs', config.color, config.borderColor)}
+                            onClick={() => handleStatusChange(lead.id, status)}
+                            disabled={isStatusLoading}
+                          >
+                            {isStatusLoading && <Loader2 className="size-3 mr-1 animate-spin" />}
+                            {config.label}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </FormSectionCard>
+          </div>
+
+          {/* ── Right column: sidebar ── */}
+          <div className="space-y-6 xl:sticky xl:top-4">
+            {/* Lead info card */}
+            <FormSectionCard icon={Info} title="Lead info">
+              <dl className="space-y-0">
+                {detailRows.map((row, i) => (
+                  <div
+                    key={i}
+                    className="flex items-start justify-between gap-3 border-b border-border/40 pb-2 last:border-0 last:pb-0 pt-2 first:pt-0"
+                  >
+                    <dt className="text-sm text-muted-foreground shrink-0">{row.label}</dt>
+                    <dd className="text-sm font-medium text-foreground text-right min-w-0 break-words">{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </FormSectionCard>
+
+            {/* Notes card */}
+            <FormSectionCard
+              icon={StickyNote}
+              title="Notes"
+              action={
+                <button
+                  type="button"
+                  title="Add note"
+                  onClick={() => {
+                    const el = document.getElementById('lead-detail-new-note-input');
+                    if (el) (el as HTMLInputElement).focus();
+                  }}
+                  className="inline-flex items-center justify-center size-7 rounded-md border border-border bg-background hover:bg-muted text-foreground transition-colors"
+                >
+                  <span className="text-lg leading-none">+</span>
+                </button>
+              }
+            >
+              <div className="space-y-3">
+                {leadNotes.length === 0 ? (
+                  <p className="text-sm text-muted-foreground italic py-1">No notes yet.</p>
+                ) : (
+                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    {leadNotes.map((note, idx) => (
+                      <div key={idx} className="rounded-lg bg-muted/40 px-3 py-2.5 space-y-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-semibold text-foreground">Jobber</p>
+                          <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                            <Link2 className="size-3" /> Linked note
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">{formatDateMedium(note.createdAt)}</p>
+                        <p className="text-sm text-foreground whitespace-pre-wrap">{note.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <Input
+                    id="lead-detail-new-note-input"
+                    placeholder="Add a note..."
+                    value={newNote}
+                    onChange={(e) => setNewNote(e.target.value)}
+                    className="flex-1 text-sm h-9"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && newNote.trim()) handleAddNote();
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700 h-9 px-3"
+                    onClick={handleAddNote}
+                    disabled={!newNote.trim()}
+                  >
+                    <Send className="size-3.5" />
+                  </Button>
+                </div>
+              </div>
+            </FormSectionCard>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================================
   // Main Render
   // ============================================================
 
@@ -3046,6 +3583,8 @@ export function LeadsView() {
       {/* ─── Form page takes over when adding/editing a lead ───────── */}
       {formMode === 'form' ? (
         renderLeadFormPage()
+      ) : formMode === 'detail' ? (
+        renderLeadDetailPage()
       ) : (
         <>
       {/* ─── Header (title row + search/New Lead row) ─────────────── */}

@@ -25,6 +25,7 @@ import { sendEmail } from '@/lib/email-send'
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
 import { getExchangeRate, convertCurrency } from '@/lib/currency'
 import { notifyOwner } from '@/lib/owner-notifications'
+import { issueCustomerMagicLink } from '@/lib/customer-magic-link'
 
 // ─── Settings ────────────────────────────────────────────────────────────────
 
@@ -684,12 +685,36 @@ export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = 
 
   // ─── Email ─────────────────────────────────────────────────────
   if (opts.sendEmail && recipientEmail) {
+    // Issue a magic-link URL so the customer can one-click into their invoice
+    // on the portal. Wrapped in try/catch — the email should still send even
+    // if link generation fails (some invoices may not have a customerId).
+    let magicUrl: string | null = null
+    if (invoice.customerId) {
+      try {
+        const magicLink = await issueCustomerMagicLink({
+          customerId: invoice.customerId,
+          redirect: `/invoices/${invoice.id}`,
+        })
+        magicUrl = magicLink.url
+      } catch (err) {
+        console.warn(
+          `[InvoiceAutomation] sendInvoice(${invoice.number}): magic-link generation failed:`,
+          err
+        )
+      }
+    }
+
+    const viewInvoiceButton = magicUrl
+      ? `<div style="margin: 24px 0;"><a href="${magicUrl}" style="display:inline-block;padding:12px 28px;background:#059669;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">View Invoice</a></div>`
+      : ''
+
     const subject = `Invoice ${invoice.number} from ${invoice.tenant?.name || 'ServiceOS'}`
     const html = [
       `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; padding: 24px;">`,
       `<h2 style="color: #0f172a;">Invoice ${invoice.number}</h2>`,
       `<p>Hi ${customerName},</p>`,
       `<p>Please find your invoice below. Thank you for your business!</p>`,
+      viewInvoiceButton,
       `<table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">`,
       `<tr><td style="padding: 8px; background: #f9fafb; font-weight: 600; border: 1px solid #e5e7eb;">Invoice #</td><td style="padding: 8px; border: 1px solid #e5e7eb;">${invoice.number}</td></tr>`,
       `<tr><td style="padding: 8px; background: #f9fafb; font-weight: 600; border: 1px solid #e5e7eb;">Total Due</td><td style="padding: 8px; border: 1px solid #e5e7eb; font-weight: 700; color: #059669;">${invoiceTotal}</td></tr>`,
@@ -702,7 +727,7 @@ export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = 
       `<p style="font-size: 12px; color: #9ca3af;">— Sent from ${invoice.tenant?.name || 'ServiceOS'}</p>`,
       `</div>`,
     ].filter(Boolean).join('\n')
-    const text = `Invoice ${invoice.number}\nTotal: ${invoiceTotal}\nDue: ${invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : 'N/A'}\n\nItems:\n${itemsText}\n\n— ${invoice.tenant?.name || 'ServiceOS'}`
+    const text = `Invoice ${invoice.number}\nTotal: ${invoiceTotal}\nDue: ${invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : 'N/A'}\n${magicUrl ? `\nView your invoice: ${magicUrl}\n` : ''}\nItems:\n${itemsText}\n\n— ${invoice.tenant?.name || 'ServiceOS'}`
     try {
       const r = await sendEmail({ to: recipientEmail, subject, html, text, usageType: 'transactional', tenantId: invoice.tenantId || undefined })
       result.email = { success: !!r.success, error: r.error, simulated: r.simulated }
@@ -715,6 +740,25 @@ export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = 
 
   // ─── WhatsApp ──────────────────────────────────────────────────
   if (opts.sendWhatsApp && recipientPhone) {
+    // For WhatsApp we can't render an HTML button, but if we have a magic
+    // link (generated above OR re-attempted here for WhatsApp-only sends),
+    // append a plain-text link so the customer can still tap into the portal.
+    let waMagicUrl: string | null = null
+    if (invoice.customerId) {
+      try {
+        const magicLink = await issueCustomerMagicLink({
+          customerId: invoice.customerId,
+          redirect: `/invoices/${invoice.id}`,
+        })
+        waMagicUrl = magicLink.url
+      } catch (err) {
+        console.warn(
+          `[InvoiceAutomation] sendInvoice(${invoice.number}): WhatsApp magic-link generation failed:`,
+          err
+        )
+      }
+    }
+
     const waMessage = [
       `🧾 *Invoice ${invoice.number}*`,
       '',
@@ -726,6 +770,7 @@ export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = 
       '*Line Items:*',
       itemsText || 'No items',
       '',
+      waMagicUrl ? `Track your invoice: ${waMagicUrl}` : '',
       'Thank you for your business!',
     ].filter(Boolean).join('\n')
     try {
@@ -838,13 +883,35 @@ export async function sendInvoiceReminder(invoiceId: string): Promise<{ success:
   let emailSent = false
   let whatsappSent = false
 
+  // Issue a magic-link URL (shared by both email and WhatsApp branches) so the
+  // customer can one-click into their invoice on the portal. Wrapped in
+  // try/catch — the reminder should still send even if link generation fails.
+  let reminderMagicUrl: string | null = null
+  if (invoice.customerId) {
+    try {
+      const magicLink = await issueCustomerMagicLink({
+        customerId: invoice.customerId,
+        redirect: `/invoices/${invoice.id}`,
+      })
+      reminderMagicUrl = magicLink.url
+    } catch (err) {
+      console.warn(
+        `[InvoiceAutomation] sendInvoiceReminder(${invoice.number}): magic-link generation failed:`,
+        err
+      )
+    }
+  }
+
   if (invoice.customer?.email) {
+    const viewInvoiceButton = reminderMagicUrl
+      ? `<div style="margin: 24px 0;"><a href="${reminderMagicUrl}" style="display:inline-block;padding:12px 28px;background:#059669;color:#fff;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;">View Invoice</a></div>`
+      : ''
     try {
       await sendEmail({
         to: invoice.customer.email,
         subject: `Reminder: Invoice ${invoice.number} is due`,
-        html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px"><h2>Payment Reminder</h2><p>Hi ${customerName},</p><p>This is a friendly reminder that invoice <strong>${invoice.number}</strong> for <strong>${invoiceTotal}</strong> ${invoice.dueDate ? `is due on ${new Date(invoice.dueDate).toLocaleDateString()}` : 'is now due'}.</p><p>Please complete payment at your earliest convenience.</p><p>— ${invoice.tenant?.name || 'ServiceOS'}</p></div>`,
-        text: `Reminder: Invoice ${invoice.number} for ${invoiceTotal} is due. Please complete payment.\n\n— ${invoice.tenant?.name || 'ServiceOS'}`,
+        html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px"><h2>Payment Reminder</h2><p>Hi ${customerName},</p><p>This is a friendly reminder that invoice <strong>${invoice.number}</strong> for <strong>${invoiceTotal}</strong> ${invoice.dueDate ? `is due on ${new Date(invoice.dueDate).toLocaleDateString()}` : 'is now due'}.</p>${viewInvoiceButton}<p>Please complete payment at your earliest convenience.</p><p>— ${invoice.tenant?.name || 'ServiceOS'}</p></div>`,
+        text: `Reminder: Invoice ${invoice.number} for ${invoiceTotal} is due. Please complete payment.${reminderMagicUrl ? `\n\nView your invoice: ${reminderMagicUrl}` : ''}\n\n— ${invoice.tenant?.name || 'ServiceOS'}`,
         usageType: 'transactional',
         tenantId: invoice.tenantId || undefined,
       })
@@ -858,7 +925,7 @@ export async function sendInvoiceReminder(invoiceId: string): Promise<{ success:
     try {
       await sendWhatsAppMessage({
         to: invoice.customer.phone,
-        message: `Friendly reminder: Your invoice ${invoice.number} for ${invoiceTotal} ${invoice.dueDate ? `(due ${new Date(invoice.dueDate).toLocaleDateString()})` : 'is now due'}. Please complete payment. Thank you! — ${invoice.tenant?.name || 'ServiceOS'}`,
+        message: `Friendly reminder: Your invoice ${invoice.number} for ${invoiceTotal} ${invoice.dueDate ? `(due ${new Date(invoice.dueDate).toLocaleDateString()})` : 'is now due'}. Please complete payment.${reminderMagicUrl ? `\nView your invoice: ${reminderMagicUrl}` : ''} Thank you! — ${invoice.tenant?.name || 'ServiceOS'}`,
         tenantId: invoice.tenantId || undefined,
       })
       whatsappSent = true
