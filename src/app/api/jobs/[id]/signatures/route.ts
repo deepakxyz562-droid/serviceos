@@ -1,24 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import { promises as fs } from 'fs';
-import path from 'path';
-
-const SIGNATURES_DIR = path.join(process.cwd(), 'public', 'uploads', 'signatures');
-const PUBLIC_SIGNATURES_URL = '/uploads/signatures';
+import {
+  uploadFile,
+  STORAGE_BUCKETS,
+  isS3Configured,
+} from '@/lib/supabase-storage';
+import { randomUUID } from 'crypto';
 
 const VALID_SIGNATORY_TYPES = ['customer', 'employee'];
-
-/**
- * Ensure the signatures directory exists (idempotent).
- */
-async function ensureSignaturesDir() {
-  try {
-    await fs.mkdir(SIGNATURES_DIR, { recursive: true });
-  } catch {
-    // ignore — likely already exists
-  }
-}
 
 /**
  * Extract the binary content + mime type from a base64 data URL.
@@ -29,11 +19,6 @@ function parseDataUrl(dataUrl: string): { buffer: Buffer; mimeType: string } | n
   const mimeType = match[1];
   const buffer = Buffer.from(match[2], 'base64');
   return { buffer, mimeType };
-}
-
-function generateFileName(jobId: string, signatoryType: string) {
-  const safeType = signatoryType.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-  return `${jobId}-${safeType}-${Date.now()}.png`;
 }
 
 /**
@@ -76,8 +61,8 @@ export async function GET(
  * POST /api/jobs/[id]/signatures
  * Body: { signatoryType, signatoryName, signatoryRole?, signatureData, latitude?, longitude?, notes? }
  *
- * Saves the signature PNG to public/uploads/signatures/, creates a JobSignature
- * record, and emits a CustomerTimelineEntry.
+ * Uploads the signature PNG via the shared storage helper (S3 → Supabase → local),
+ * creates a JobSignature record, and emits a CustomerTimelineEntry.
  */
 export async function POST(
   request: NextRequest,
@@ -133,12 +118,20 @@ export async function POST(
       );
     }
 
-    // ── Save the PNG to public/uploads/signatures/ ──
-    await ensureSignaturesDir();
-    const fileName = generateFileName(jobId, signatoryType);
-    const filePath = path.join(SIGNATURES_DIR, fileName);
-    await fs.writeFile(filePath, parsed.buffer);
-    const publicUrl = `${PUBLIC_SIGNATURES_URL}/${fileName}`;
+    // ── Upload via the shared storage helper (S3 → Supabase → local) ──
+    // Same storage path as /api/upload + job photos, so signatures respect
+    // the configured storage provider instead of being hardcoded to local.
+    const companyId = (job.workspaceId || user.tenantId || 'default').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const uniqueName = `${jobId}_${signatoryType}_${Date.now()}_${randomUUID().slice(0, 8)}.png`;
+
+    const { url: publicUrl } = await uploadFile({
+      bucket: STORAGE_BUCKETS.jobAttachments,
+      file: parsed.buffer,
+      companyId,
+      folder: `signatures/${jobId}`,
+      fileName: uniqueName,
+      contentType: parsed.mimeType || 'image/png',
+    });
 
     // ── Capture optional IP / user agent for audit ──
     const headersList = request.headers;
@@ -200,7 +193,7 @@ export async function POST(
       console.error('[SignaturesAPI] Failed to create timeline entry:', timelineErr);
     }
 
-    return NextResponse.json({ signature }, { status: 201 });
+    return NextResponse.json({ signature, storage: isS3Configured() ? 's3' : 'local' }, { status: 201 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to save signature';
     console.error('[SignaturesAPI] POST error:', error);

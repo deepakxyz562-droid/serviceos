@@ -1,24 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import { promises as fs } from 'fs';
+import {
+  uploadFile,
+  STORAGE_BUCKETS,
+  isS3Configured,
+} from '@/lib/supabase-storage';
+import { randomUUID } from 'crypto';
 import path from 'path';
 
-const UPLOADS_DIR = path.join(process.cwd(), 'public', 'uploads');
-const PUBLIC_UPLOADS_URL = '/uploads';
-
 const VALID_PHOTO_TYPES = ['before', 'after', 'progress', 'issue', 'other'];
-
-/**
- * Ensure the uploads directory exists (idempotent).
- */
-async function ensureUploadsDir() {
-  try {
-    await fs.mkdir(UPLOADS_DIR, { recursive: true });
-  } catch {
-    // ignore — likely already exists
-  }
-}
 
 /**
  * Extract the binary content + mime type from a base64 data URL.
@@ -33,11 +24,13 @@ function parseDataUrl(dataUrl: string): { buffer: Buffer; mimeType: string } | n
 }
 
 /**
- * Generate a filesystem-safe filename for a photo.
+ * Map a mime type to a file extension for the stored object key.
  */
-function generateFileName(jobId: string, photoType: string, ext: string) {
-  const safeType = photoType.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-  return `${jobId}-${safeType}-${Date.now()}.${ext}`;
+function extForMimeType(mimeType: string): string {
+  if (mimeType === 'image/png') return 'png';
+  if (mimeType === 'image/webp') return 'webp';
+  if (mimeType === 'image/gif') return 'gif';
+  return 'jpg';
 }
 
 /**
@@ -91,8 +84,8 @@ export async function GET(
  *
  * Or multipart/form-data with the same fields (file as File).
  *
- * Saves the image to public/uploads/, creates the JobPhoto record,
- * and emits a CustomerTimelineEntry.
+ * Uploads the image via the shared storage helper (S3 → Supabase → local),
+ * creates the JobPhoto record, and emits a CustomerTimelineEntry.
  */
 export async function POST(
   request: NextRequest,
@@ -188,13 +181,21 @@ export async function POST(
       );
     }
 
-    // ── Write to public/uploads/ ──
-    await ensureUploadsDir();
-    const ext = parsed.mimeType === 'image/png' ? 'png' : parsed.mimeType === 'image/webp' ? 'webp' : 'jpg';
-    const safeFileName = generateFileName(jobId, photoType, ext);
-    const filePath = path.join(UPLOADS_DIR, safeFileName);
-    await fs.writeFile(filePath, parsed.buffer);
-    const publicUrl = `${PUBLIC_UPLOADS_URL}/${safeFileName}`;
+    // ── Upload via the shared storage helper (S3 → Supabase → local) ──
+    // This is the SAME path used by /api/upload, so job photos respect the
+    // configured storage provider instead of being hardcoded to local disk.
+    const ext = extForMimeType(parsed.mimeType);
+    const companyId = (job.workspaceId || user.tenantId || 'default').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const uniqueName = `${jobId}_${photoType}_${Date.now()}_${randomUUID().slice(0, 8)}.${ext}`;
+
+    const { url: publicUrl } = await uploadFile({
+      bucket: STORAGE_BUCKETS.jobAttachments,
+      file: parsed.buffer,
+      companyId,
+      folder: `photos/${jobId}`,
+      fileName: uniqueName,
+      contentType: parsed.mimeType || 'image/jpeg',
+    });
 
     // ── Create the JobPhoto record ──
     const photo = await db.jobPhoto.create({
@@ -205,7 +206,7 @@ export async function POST(
         photoType,
         url: publicUrl,
         thumbnailUrl: publicUrl,
-        fileName: fileName || safeFileName,
+        fileName: fileName || uniqueName,
         mimeType: parsed.mimeType || 'image/jpeg',
         size: parsed.buffer.length,
         capturedBy: user.id,
@@ -249,7 +250,7 @@ export async function POST(
       console.error('[PhotosAPI] Failed to create timeline entry:', timelineErr);
     }
 
-    return NextResponse.json({ photo }, { status: 201 });
+    return NextResponse.json({ photo, storage: isS3Configured() ? 's3' : 'local' }, { status: 201 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to upload photo';
     console.error('[PhotosAPI] POST error:', error);
