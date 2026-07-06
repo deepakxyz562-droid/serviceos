@@ -13,6 +13,68 @@ export async function GET() {
       );
     }
 
+    // ── Customer portal session ──────────────────────────────────────────
+    // Customer JWTs have role='customer' and id=Customer.id (NOT a User id).
+    // The block below queries the Customer table + its workspace.tenant,
+    // then returns the same { user, tenant } shape as the admin flow so the
+    // frontend (page.tsx → useAppStore.setAuth) works identically.
+    if (authUser.role === 'customer') {
+      const customer = await db.customer.findUnique({
+        where: { id: authUser.id },
+        include: { workspace: { include: { tenant: true } } },
+      });
+
+      if (!customer) {
+        return NextResponse.json(
+          { error: 'Customer not found' },
+          { status: 404 }
+        );
+      }
+
+      const tenant = customer.workspace?.tenant || null;
+
+      return NextResponse.json({
+        user: {
+          id: customer.id,
+          name: customer.name,
+          email: customer.email || customer.phone,
+          phone: customer.phone,
+          role: 'customer',
+          tenantId: tenant?.id || null,
+          workspaceId: customer.workspaceId || null,
+          avatar: null,
+          isSuperAdmin: false,
+          isActive: true,
+          lastLoginAt: customer.lastLoginAt,
+          createdAt: customer.createdAt,
+          employeeId: null,
+        },
+        tenant: tenant
+          ? {
+              id: tenant.id,
+              name: tenant.name,
+              slug: tenant.slug,
+              industry: tenant.industry,
+              logo: tenant.logo,
+              phone: tenant.phone,
+              email: tenant.email,
+              address: tenant.address,
+              country: tenant.country,
+              currency: tenant.currency,
+              whatsappPhone: tenant.whatsappPhone,
+              plan: tenant.plan,
+              planStatus: tenant.planStatus,
+              trialEndsAt: tenant.trialEndsAt,
+              onboardingCompleted: tenant.onboardingCompleted,
+              onboardingStep: tenant.onboardingStep,
+              settingsJson: tenant.settingsJson,
+              createdAt: tenant.createdAt,
+            }
+          : null,
+      });
+    }
+
+    // ── Admin / employee session (existing flow) ─────────────────────────
     // Fetch full user data from DB
     const user = await db.user.findUnique({
       where: { id: authUser.id },
