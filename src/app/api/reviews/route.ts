@@ -3,10 +3,20 @@ import { getAuthUser } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/reviews — List reviews with filters
+//
+// Customer sessions: scoped to the logged-in customer's own reviews
+// (where.customerId = user.id). tenantId is skipped for customers — if
+// Customer.workspaceId is null (broken Customer→Workspace→Tenant chain),
+// tenantId can't be resolved and the review list would return empty.
 export async function GET(request: NextRequest) {
   try {
     const user = await getAuthUser(request);
-    if (!user || !user.tenantId) {
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    // Customers don't need a tenantId — they're scoped by customerId.
+    if (user.role !== 'customer' && !user.tenantId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
@@ -14,7 +24,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const source = searchParams.get('source');
     const employeeId = searchParams.get('employeeId');
-    const customerId = searchParams.get('customerId');
+    const customerIdParam = searchParams.get('customerId');
     const minRating = searchParams.get('minRating');
     const search = searchParams.get('search');
     const page = parseInt(searchParams.get('page') || '1');
@@ -22,9 +32,16 @@ export async function GET(request: NextRequest) {
     const sortBy = searchParams.get('sortBy') || 'createdAt';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
 
-    const where: Record<string, unknown> = {
-      tenantId: user.tenantId,
-    };
+    const where: Record<string, unknown> = {};
+
+    // Customers: scope by customerId (privacy + resilience).
+    // Admins/employees: scope by tenantId (+ optional customerId filter).
+    if (user.role === 'customer') {
+      where.customerId = user.id;
+    } else {
+      where.tenantId = user.tenantId;
+      if (customerIdParam) where.customerId = customerIdParam;
+    }
 
     if (status) {
       const statuses = status.split(',');
@@ -36,7 +53,6 @@ export async function GET(request: NextRequest) {
     }
     if (source) where.source = source;
     if (employeeId) where.employeeId = employeeId;
-    if (customerId) where.customerId = customerId;
     if (minRating) where.rating = { gte: parseInt(minRating) };
 
     if (search) {

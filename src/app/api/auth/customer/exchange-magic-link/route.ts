@@ -117,6 +117,56 @@ export async function POST(request: Request) {
 
     const tenant = customer.workspace?.tenant || null
 
+    // ── 4b. Resilient tenantId resolution ────────────────────────────────
+    // If the customer's workspace chain is broken (Customer.workspaceId is
+    // null, or the workspace has no tenant), try to resolve the tenantId
+    // from the customer's invoices. This is a defensive fallback so the
+    // customer can still see their data even if the workspace link was
+    // never set (e.g. customer created via a flow that didn't set
+    // workspaceId). The customer-facing APIs (invoices, bookings, etc.)
+    // don't actually rely on tenantId for customer sessions — they filter
+    // by customerId directly — but /api/auth/me returns tenantId to the
+    // frontend and other APIs may still use it. Setting it correctly here
+    // avoids cascading failures.
+    let resolvedTenantId = tenant?.id || null
+    if (!resolvedTenantId) {
+      try {
+        const invoiceWithTenant = await db.invoice.findFirst({
+          where: { customerId: customer.id },
+          select: { tenantId: true },
+        })
+        if (invoiceWithTenant?.tenantId) {
+          resolvedTenantId = invoiceWithTenant.tenantId
+        }
+      } catch {
+        // Non-fatal — tenantId stays null; customer-facing APIs are
+        // designed to work without it (filter by customerId alone).
+      }
+    }
+
+    // If we resolved a tenantId from invoices but customer.workspace was
+    // null, also try to populate the tenant object so the frontend gets
+    // the tenant name/logo for the sidebar.
+    let resolvedTenant = tenant
+    if (!resolvedTenant && resolvedTenantId) {
+      try {
+        resolvedTenant = await db.tenant.findUnique({
+          where: { id: resolvedTenantId },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            industry: true,
+            logo: true,
+            phone: true,
+            email: true,
+          },
+        }) as typeof tenant
+      } catch {
+        // Non-fatal — tenant stays null
+      }
+    }
+
     // ── 5. Build AuthUser + JWT (mirror verify-otp) ──────────────────────
     const authUser = {
       id: customer.id,
@@ -124,7 +174,7 @@ export async function POST(request: Request) {
       name: customer.name,
       phone: customer.phone,
       role: 'customer' as const,
-      tenantId: tenant?.id || null,
+      tenantId: resolvedTenantId,
       workspaceId: customer.workspaceId || null,
       avatar: null,
       isSuperAdmin: false,
@@ -156,15 +206,15 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       user: authUser,
-      tenant: tenant
+      tenant: resolvedTenant
         ? {
-            id: tenant.id,
-            name: tenant.name,
-            slug: tenant.slug,
-            industry: tenant.industry,
-            logo: tenant.logo,
-            phone: tenant.phone,
-            email: tenant.email,
+            id: resolvedTenant.id,
+            name: resolvedTenant.name,
+            slug: resolvedTenant.slug,
+            industry: resolvedTenant.industry,
+            logo: resolvedTenant.logo,
+            phone: resolvedTenant.phone,
+            email: resolvedTenant.email,
           }
         : null,
       token: jwt,

@@ -34,7 +34,34 @@ export async function GET() {
         );
       }
 
-      const tenant = customer.workspace?.tenant || null;
+      let tenant = customer.workspace?.tenant || null;
+
+      // ── Resilient tenantId resolution ──────────────────────────────────
+      // If the customer's workspace chain is broken (Customer.workspaceId is
+      // null, or the workspace has no tenant), try to resolve the tenantId
+      // from the customer's invoices. This mirrors the fallback in
+      // /api/auth/customer/exchange-magic-link and ensures /api/auth/me
+      // returns a consistent tenantId across sessions. Without this, a
+      // page refresh after magic-link login could lose the tenantId (since
+      // /api/auth/me queries Customer.findUnique which only returns
+      // workspace.tenant if workspaceId is set).
+      if (!tenant) {
+        try {
+          const invoiceWithTenant = await db.invoice.findFirst({
+            where: { customerId: customer.id },
+            select: { tenantId: true },
+          });
+          if (invoiceWithTenant?.tenantId) {
+            tenant = await db.tenant.findUnique({
+              where: { id: invoiceWithTenant.tenantId },
+            });
+          }
+        } catch {
+          // Non-fatal — tenant stays null
+        }
+      }
+
+      const resolvedTenantId = tenant?.id || null;
 
       return NextResponse.json({
         user: {
@@ -43,7 +70,7 @@ export async function GET() {
           email: customer.email || customer.phone,
           phone: customer.phone,
           role: 'customer',
-          tenantId: tenant?.id || null,
+          tenantId: resolvedTenantId,
           workspaceId: customer.workspaceId || null,
           avatar: null,
           isSuperAdmin: false,

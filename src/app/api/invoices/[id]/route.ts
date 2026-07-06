@@ -1,13 +1,34 @@
 import { db } from '@/lib/db'
+import { getAuthUser } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 
 // GET /api/invoices/[id] — Get single invoice by ID
+//
+// Access control:
+//   - Customer sessions: may view ONLY their own invoices (invoice.customerId
+//     must equal authUser.id). This is enforced server-side regardless of
+//     whether the request comes from the portal, a magic-link deep-link, or
+//     a direct API call. If the invoice doesn't belong to the customer, we
+//     return 404 (not 403) to avoid leaking the existence of other invoices.
+//   - Admin/employee sessions: may view any invoice in their tenant.
+//   - Unauthenticated requests: denied (401). The previous implementation
+//     allowed public access to any invoice by ID, which was a privacy leak.
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params
+
+    const authUser = await getAuthUser()
+
+    // Require authentication — no anonymous access to invoices.
+    if (!authUser) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
+    }
 
     const invoice = await db.invoice.findUnique({
       where: { id },
@@ -16,10 +37,6 @@ export async function GET(
           select: { id: true, name: true, phone: true, email: true, address: true },
         },
         job: {
-          // NOTE: `service` was previously included here but is NOT a field
-          // on the Job model (the model has `serviceId` FK and `type` String).
-          // Including it caused a PrismaClientValidationError that broke both
-          // this GET (single) and the PUT (edit) endpoints with HTTP 500.
           select: { id: true, title: true, jobNumber: true, status: true },
         },
       },
@@ -30,6 +47,17 @@ export async function GET(
         { error: 'Invoice not found' },
         { status: 404 }
       )
+    }
+
+    // Customer session: enforce ownership. Return 404 (not 403) to avoid
+    // leaking the existence of invoices that don't belong to the customer.
+    if (authUser.role === 'customer') {
+      if (invoice.customerId !== authUser.id) {
+        return NextResponse.json(
+          { error: 'Invoice not found' },
+          { status: 404 }
+        )
+      }
     }
 
     return NextResponse.json(invoice)

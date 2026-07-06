@@ -1398,6 +1398,39 @@ function InvoicesView({ initialInvoiceId }: { initialInvoiceId?: string | null }
     }
   }, [initialInvoiceId, invoices]);
 
+  // ── Fallback: fetch the deep-linked invoice directly if it's missing ──────
+  // When a customer clicks "View Invoice" in an email, the magic-link redirect
+  // points to /invoices/<id>. If the list endpoint returns empty (e.g. due to
+  // a stale tenant link on the Customer record, a different tenantId in the
+  // JWT vs the invoice, or the customer session not being fully established
+  // when the first fetch ran), we still want the customer to see the invoice
+  // they were emailed. This effect fetches /api/invoices/<id> directly and
+  // prepends it to the list, then auto-expands it.
+  useEffect(() => {
+    if (!initialInvoiceId || loading) return;
+    const alreadyHave = invoices.some(
+      i => i.id === initialInvoiceId || i.number === initialInvoiceId
+    );
+    if (alreadyHave) return;
+
+    let cancelled = false;
+    fetch(apiUrl(`/api/invoices/${initialInvoiceId}`), { credentials: 'include' })
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (cancelled || !data || !data.id) return;
+        // Avoid duplicates just in case the list refetched in parallel
+        setInvoices(prev => {
+          if (prev.some(i => i.id === data.id)) return prev;
+          return [data as InvoiceItem, ...prev];
+        });
+        setExpandedId(initialInvoiceId);
+      })
+      .catch(() => {
+        // Silent — the list view is the canonical source of truth
+      });
+    return () => { cancelled = true; };
+  }, [initialInvoiceId, invoices, loading]);
+
   // Compute summary totals from real data
   const totalPaid = invoices.filter(i => i.status === 'paid').reduce((s, i) => s + (i.total || i.amount), 0);
   const totalPending = invoices

@@ -28,30 +28,86 @@ async function resolveTenantId(authUser: Awaited<ReturnType<typeof getAuthUser>>
 
 /**
  * GET /api/invoices
- * List invoices for the authenticated user's tenant
+ * List invoices for the authenticated user's tenant.
+ *
+ * Customer sessions: ALWAYS scoped to the logged-in customer's own invoices
+ * (where.customerId = authUser.id). The tenantId filter is intentionally
+ * skipped for customers — they may belong to a tenant via Customer→Workspace→Tenant,
+ * but if that chain is broken (e.g. Customer.workspaceId is null), the
+ * tenantId filter would return zero rows. Filtering by customerId alone is
+ * both sufficient (customers can only see their own invoices) and resilient
+ * (no dependency on the workspace link being set).
+ *
+ * Admin/employee sessions: scoped by tenantId (resolved from auth or first
+ * tenant fallback) plus optional customerId filter from the query string.
  */
 export async function GET(request: NextRequest) {
   try {
     const authUser = await getAuthUser();
-    const tenantId = await resolveTenantId(authUser);
-
-    if (!tenantId) {
-      return NextResponse.json({ invoices: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 0 } });
-    }
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '200');
     const status = searchParams.get('status');
     const search = searchParams.get('search');
-    const customerId = searchParams.get('customerId');
+    const customerIdParam = searchParams.get('customerId');
+
+    // ── Customer session: enforce customer-scoped access server-side ──────────
+    // Ignore the customerId query param — the customer can ONLY ever see their
+    // own invoices, full stop. This is a privacy safeguard AND a resilience fix
+    // (handles the case where Customer.workspaceId is null and tenantId can't
+    // be resolved from the workspace chain).
+    if (authUser?.role === 'customer' && authUser.id) {
+      const where: Record<string, unknown> = { customerId: authUser.id };
+      if (status && status !== 'all') {
+        where.status = status;
+      }
+      if (search) {
+        where.OR = [
+          { number: { contains: search, mode: 'insensitive' } },
+          { customer: { name: { contains: search, mode: 'insensitive' } } },
+        ];
+      }
+
+      const [invoices, total] = await Promise.all([
+        db.invoice.findMany({
+          where,
+          include: {
+            customer: { select: { id: true, name: true, email: true, phone: true } },
+            job: { select: { id: true, title: true } },
+            employee: { select: { id: true, name: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        db.invoice.count({ where }),
+      ]);
+
+      return NextResponse.json({
+        invoices,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      });
+    }
+
+    // ── Admin / employee session (existing flow) ──────────────────────────────
+    const tenantId = await resolveTenantId(authUser);
+
+    if (!tenantId) {
+      return NextResponse.json({ invoices: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 0 } });
+    }
 
     const where: Record<string, unknown> = { tenantId };
     if (status && status !== 'all') {
       where.status = status;
     }
-    if (customerId) {
-      where.customerId = customerId;
+    if (customerIdParam) {
+      where.customerId = customerIdParam;
     }
     if (search) {
       where.OR = [

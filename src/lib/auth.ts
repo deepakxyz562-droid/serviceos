@@ -16,6 +16,10 @@ export interface AuthUser {
   avatar: string | null;
   isSuperAdmin?: boolean;
   employeeId?: string | null;
+  // Customer sessions include the customer's phone (set by exchange-magic-link
+  // and verify-otp). Used by /api/ecommerce/orders to filter orders by phone
+  // when the customer has no email or both email+phone are captured.
+  phone?: string | null;
 }
 
 export async function hashPassword(password: string): Promise<string> {
@@ -38,6 +42,10 @@ export function generateToken(user: AuthUser): string {
       avatar: user.avatar,
       isSuperAdmin: user.isSuperAdmin || false,
       employeeId: user.employeeId || null,
+      // Include phone for customer sessions so /api/ecommerce/orders can
+      // filter by phone without an extra DB lookup. For non-customer
+      // sessions this is undefined and gets omitted from the JWT.
+      ...(user.phone ? { phone: user.phone } : {}),
     },
     JWT_SECRET,
     { expiresIn: TOKEN_EXPIRY }

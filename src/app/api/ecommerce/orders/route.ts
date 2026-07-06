@@ -4,10 +4,22 @@ import { getAuthUser } from '@/lib/auth'
 import { Prisma } from '@prisma/client'
 
 // GET /api/ecommerce/orders - List ecommerce orders with filtering
+//
+// Customer sessions: scoped to orders matching the customer's email OR phone.
+// The tenantId filter is skipped — if Customer.workspaceId is null (broken
+// Customer→Workspace→Tenant chain), tenantId can't be resolved and the
+// orders list would return 401. Customers can only see their own orders
+// regardless of which tenant the order belongs to.
 export async function GET(request: NextRequest) {
   try {
     const auth = await getAuthUser()
-    if (!auth?.tenantId) {
+    if (!auth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Customers: no tenantId required; we'll filter by their email/phone.
+    // Admins/employees: tenantId required.
+    if (auth.role !== 'customer' && !auth.tenantId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -21,8 +33,31 @@ export async function GET(request: NextRequest) {
     const dateTo = searchParams.get('dateTo')
 
     // Build the where clause
-    const where: Record<string, unknown> = {
-      tenantId: auth.tenantId,
+    const where: Record<string, unknown> = {}
+
+    if (auth.role === 'customer') {
+      // Customer session: scope to their own orders by email/phone.
+      // The customer's email/phone come from the JWT (auth.email / auth.phone).
+      // We use OR so an order matching EITHER email OR phone is returned
+      // (some stores capture phone but not email, and vice-versa).
+      const orClauses: Record<string, unknown>[] = []
+      // authUser shape from getAuthUser doesn't include phone for non-customer
+      // sessions, but for customer sessions /api/auth/me enriches it. We
+      // defensively read both fields.
+      const custEmail = (auth as { email?: string | null }).email
+      const custPhone = (auth as { phone?: string | null }).phone
+      if (custEmail) orClauses.push({ customerEmail: { contains: custEmail } })
+      if (custPhone) orClauses.push({ customerPhone: { contains: custPhone } })
+      if (orClauses.length > 0) {
+        where.OR = orClauses
+      } else {
+        // No email/phone on the customer — return empty rather than leak
+        // other customers' orders.
+        return NextResponse.json({ orders: [], total: 0 })
+      }
+    } else {
+      // Admin/employee: tenant-scoped.
+      where.tenantId = auth.tenantId
     }
 
     if (status) {
@@ -37,7 +72,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Search filter: match against orderNumber, customerEmail, customerName, customerPhone
-    if (search) {
+    // (For customer sessions, the search param is typically their own email —
+    // combining with the OR clause above would create conflicting OR groups.
+    // Prisma doesn't support nested OR easily, so for customers we rely on
+    // the email/phone OR clause and ignore the search param. For admins, the
+    // search param works as before.)
+    if (search && auth.role !== 'customer') {
       where.OR = [
         { orderNumber: { contains: search } },
         { customerEmail: { contains: search } },

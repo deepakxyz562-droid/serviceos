@@ -3,6 +3,11 @@ import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 
 // GET /api/conversations - List conversations with filters
+//
+// Customer sessions: scoped to the logged-in customer's own conversations
+// (where.customerId = authUser.id). tenantId is skipped for customers — if
+// Customer.workspaceId is null (broken Customer→Workspace→Tenant chain),
+// tenantId can't be resolved and the conversation list would return empty.
 export async function GET(request: NextRequest) {
   try {
     const authUser = await getAuthUser()
@@ -17,16 +22,22 @@ export async function GET(request: NextRequest) {
 
     const where: Record<string, unknown> = {}
 
-    // Scope to tenant if authenticated
-    if (authUser?.tenantId) {
+    // Customers: scope by customerId (privacy + resilience). Ignore any
+    // tenantId/customerId query params — the customer can ONLY ever see
+    // their own conversations.
+    // Admins/employees: scope by tenantId (+ optional customerId filter).
+    if (authUser?.role === 'customer') {
+      where.customerId = authUser.id
+    } else if (authUser?.tenantId) {
       where.tenantId = authUser.tenantId
+      if (customerIdParam) where.customerId = customerIdParam
     } else if (tenantId) {
       where.tenantId = tenantId
+      if (customerIdParam) where.customerId = customerIdParam
     }
 
     if (status) where.status = status
     if (phone) where.customerPhone = { contains: phone }
-    if (customerIdParam) where.customerId = customerIdParam
 
     const [conversations, total] = await Promise.all([
       db.conversation.findMany({

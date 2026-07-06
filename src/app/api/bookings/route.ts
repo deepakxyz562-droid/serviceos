@@ -6,10 +6,23 @@ import { createDepositInvoiceFromBooking, getInvoiceSettings } from '@/lib/invoi
 import { EventBus } from '@/lib/event-bus';
 
 // GET /api/bookings — List bookings with filters
+//
+// Customer sessions: scoped to the logged-in customer's own bookings
+// (where.customerId = user.id). The tenantId filter is intentionally
+// skipped for customers — if Customer.workspaceId is null (broken
+// Customer→Workspace→Tenant chain), tenantId can't be resolved and the
+// booking list would return empty. Filtering by customerId alone is both
+// sufficient (privacy) and resilient (no workspace dependency).
 export async function GET(request: NextRequest) {
   try {
     const user = await getAuthUser();
-    if (!user || !user.tenantId) {
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    // Customers don't need a tenantId — they're scoped by customerId.
+    // Admins/employees DO need a tenantId (their bookings are tenant-scoped).
+    if (user.role !== 'customer' && !user.tenantId) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
@@ -26,18 +39,20 @@ export async function GET(request: NextRequest) {
     const sortBy = searchParams.get('sortBy') || 'scheduledAt';
     const sortOrder = searchParams.get('sortOrder') || 'asc';
 
-    // Build where clause scoped to tenant
-    const where: Record<string, unknown> = {
-      tenantId: user.tenantId,
-    };
+    // Build where clause. Customers are scoped by customerId; admins/employees
+    // are scoped by tenantId (+ optional customerId filter).
+    const where: Record<string, unknown> = {};
 
     // Customers can only see their own bookings.
     // getAuthUser() already strips the `cust_` prefix, so user.id is the
     // raw Customer.id that matches Booking.customerId.
     if (user.role === 'customer') {
       where.customerId = user.id;
-    } else if (searchParams.get('customerId')) {
-      where.customerId = searchParams.get('customerId');
+    } else {
+      where.tenantId = user.tenantId;
+      if (searchParams.get('customerId')) {
+        where.customerId = searchParams.get('customerId');
+      }
     }
 
     if (status) {
