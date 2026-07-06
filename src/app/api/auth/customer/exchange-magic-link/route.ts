@@ -122,6 +122,7 @@ export async function POST(request: Request) {
       id: customer.id,
       email: customer.email || '',
       name: customer.name,
+      phone: customer.phone,
       role: 'customer' as const,
       tenantId: tenant?.id || null,
       workspaceId: customer.workspaceId || null,

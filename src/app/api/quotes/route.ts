@@ -11,9 +11,22 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
     }
 
+    const { searchParams } = new URL(req.url);
+    const customerIdParam = searchParams.get('customerId');
+
     const where: Record<string, unknown> = {};
     if (user.tenantId && !user.isSuperAdmin) {
       where.tenantId = user.tenantId;
+    }
+
+    // Customers can only see their own quotes.
+    // getAuthUser() already strips the `cust_` prefix, so user.id is the
+    // raw Customer.id that matches Quote.customerId.
+    // For admin/employee sessions, honour the optional customerId query param.
+    if (user.role === 'customer') {
+      where.customerId = user.id;
+    } else if (customerIdParam) {
+      where.customerId = customerIdParam;
     }
 
     const quotes = await db.quote.findMany({

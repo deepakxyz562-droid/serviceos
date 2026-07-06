@@ -44,6 +44,7 @@ import {
   ThumbsUp,
   Shield,
   FileText,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { authFetch } from '@/lib/client-auth';
@@ -125,55 +126,6 @@ const SIDEBAR_ITEMS: { key: CustomerView; label: string; icon: React.ElementType
   { key: 'messages', label: 'Messages', icon: MessageSquare },
   { key: 'reviews', label: 'Reviews', icon: Star },
   { key: 'profile', label: 'Profile', icon: UserCircle },
-];
-
-// ─── Placeholder Data ───────────────────────────────────────────────────────
-
-const PLACEHOLDER_BOOKINGS = [
-  { id: 'BK-1001', service: 'AC Maintenance', date: 'Mar 15, 2026', time: '10:00 AM', address: '123 Oak Street, Apt 4B', status: 'upcoming' as const, assignee: 'Mike Johnson' },
-  { id: 'BK-1002', service: 'Plumbing Repair', date: 'Mar 12, 2026', time: '2:30 PM', address: '123 Oak Street, Apt 4B', status: 'in_progress' as const, assignee: 'Sarah Chen' },
-  { id: 'BK-1003', service: 'Electrical Inspection', date: 'Mar 8, 2026', time: '9:00 AM', address: '456 Elm Avenue', status: 'completed' as const, assignee: 'David Park' },
-  { id: 'BK-1004', service: 'Deep Cleaning', date: 'Mar 5, 2026', time: '11:00 AM', address: '123 Oak Street, Apt 4B', status: 'completed' as const, assignee: 'Lisa Wong' },
-  { id: 'BK-1005', service: 'Painting Touch-up', date: 'Feb 28, 2026', time: '3:00 PM', address: '123 Oak Street, Apt 4B', status: 'cancelled' as const, assignee: '--' },
-];
-
-const PLACEHOLDER_INVOICES = [
-  { id: 'INV-2026-001', date: 'Mar 12, 2026', amount: 350.00, status: 'paid' as const },
-  { id: 'INV-2026-002', date: 'Mar 8, 2026', amount: 175.50, status: 'paid' as const },
-  { id: 'INV-2026-003', date: 'Mar 5, 2026', amount: 420.00, status: 'pending' as const },
-  { id: 'INV-2026-004', date: 'Feb 20, 2026', amount: 89.99, status: 'overdue' as const },
-  { id: 'INV-2026-005', date: 'Feb 15, 2026', amount: 225.00, status: 'paid' as const },
-  { id: 'INV-2026-006', date: 'Feb 1, 2026', amount: 560.00, status: 'paid' as const },
-];
-
-const PLACEHOLDER_PAYMENTS = [
-  { id: 'PAY-001', date: 'Mar 12, 2026', method: 'Visa •••• 4242', amount: 350.00, status: 'completed' as const, invoiceId: 'INV-2026-001' },
-  { id: 'PAY-002', date: 'Mar 8, 2026', method: 'Visa •••• 4242', amount: 175.50, status: 'completed' as const, invoiceId: 'INV-2026-002' },
-  { id: 'PAY-003', date: 'Feb 15, 2026', method: 'Bank Transfer', amount: 225.00, status: 'completed' as const, invoiceId: 'INV-2026-005' },
-  { id: 'PAY-004', date: 'Feb 1, 2026', method: 'Visa •••• 4242', amount: 560.00, status: 'completed' as const, invoiceId: 'INV-2026-006' },
-];
-
-const PLACEHOLDER_MESSAGES = [
-  { id: 1, from: 'business' as const, text: 'Hi Rajesh! Your AC maintenance appointment is confirmed for March 15 at 10:00 AM.', time: '10:30 AM' },
-  { id: 2, from: 'customer' as const, text: 'Great, thanks! Do I need to do anything to prepare?', time: '10:32 AM' },
-  { id: 3, from: 'business' as const, text: 'Just make sure the AC unit is accessible. Our technician Mike will bring all the necessary tools and equipment.', time: '10:35 AM' },
-  { id: 4, from: 'customer' as const, text: 'Sounds good. Will he call before arriving?', time: '10:36 AM' },
-  { id: 5, from: 'business' as const, text: 'Yes, Mike will give you a call about 30 minutes before arrival. You can also track his location in real-time through the portal.', time: '10:38 AM' },
-  { id: 6, from: 'business' as const, text: 'Is there anything else I can help you with?', time: '10:38 AM' },
-];
-
-const PLACEHOLDER_REVIEWS = [
-  { id: 1, service: 'Electrical Inspection', date: 'Mar 8, 2026', rating: 5, text: 'David was excellent! Very thorough inspection and took the time to explain everything. Highly recommend.', assignee: 'David Park' },
-  { id: 2, service: 'Deep Cleaning', date: 'Mar 5, 2026', rating: 4, text: 'Good cleaning service overall. The team was professional and on time. A few spots were missed but they came back to fix it.', assignee: 'Lisa Wong' },
-  { id: 3, service: 'Plumbing Repair', date: 'Feb 20, 2026', rating: 5, text: 'Fixed the leaky faucet quickly and at a fair price. Will definitely use again for any plumbing needs.', assignee: 'Sarah Chen' },
-];
-
-const RECENT_ACTIVITY = [
-  { id: 1, icon: CheckCircle2, text: 'Payment of $350.00 confirmed for INV-2026-001', time: '2 hours ago', color: 'text-emerald-500' },
-  { id: 2, icon: CalendarCheck, text: 'Booking BK-1002 status updated to In Progress', time: '5 hours ago', color: 'text-teal-500' },
-  { id: 3, icon: Receipt, text: 'New invoice INV-2026-003 generated', time: '1 day ago', color: 'text-amber-500' },
-  { id: 4, icon: Star, text: 'You reviewed Electrical Inspection service', time: '2 days ago', color: 'text-amber-500' },
-  { id: 5, icon: AlertCircle, text: 'Invoice INV-2026-004 is now overdue', time: '3 days ago', color: 'text-red-500' },
 ];
 
 // ─── Helper Functions ───────────────────────────────────────────────────────
@@ -548,17 +500,58 @@ interface PaymentMethodItem {
 
 // ─── Sub-Views ──────────────────────────────────────────────────────────────
 
-function DashboardView({ onNewBooking, customerName, bookings, bookingsLoading }: {
+function DashboardView({ onNewBooking, customerName, bookings, bookingsLoading, onViewInvoices }: {
   onNewBooking: () => void;
   customerName: string;
   bookings: BookingItem[];
   bookingsLoading: boolean;
+  onViewInvoices: () => void;
 }) {
+  const auth = useAppStore((s) => s.auth);
+  const [invoices, setInvoices] = useState<InvoiceItem[]>([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(true);
+
+  // Fetch invoices for the dashboard summary
+  useEffect(() => {
+    let cancelled = false;
+    const fetchInvoices = async () => {
+      setInvoicesLoading(true);
+      try {
+        const customerId = getRealCustomerId(auth.user);
+        const params = new URLSearchParams({ limit: '50' });
+        if (customerId) params.set('customerId', customerId);
+        const res = await fetch(apiUrl(`/api/invoices?${params.toString()}`), {
+          credentials: 'include',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled) setInvoices(data.invoices || []);
+        }
+      } catch {
+        // silently fail on dashboard
+      } finally {
+        if (!cancelled) setInvoicesLoading(false);
+      }
+    };
+    fetchInvoices();
+    return () => { cancelled = true; };
+  }, [auth.user]);
+
   const activeBookings = bookings.filter(b => ['pending', 'confirmed', 'in_progress'].includes(b.status));
   const upcomingBookings = bookings
     .filter(b => ['pending', 'confirmed'].includes(b.status) && b.scheduledAt && new Date(b.scheduledAt) > new Date())
     .sort((a, b) => new Date(a.scheduledAt!).getTime() - new Date(b.scheduledAt!).getTime())
     .slice(0, 3);
+
+  // Invoice stats
+  const totalPaid = invoices.filter(i => i.status === 'paid').reduce((s, i) => s + (i.total || i.amount), 0);
+  const totalPending = invoices
+    .filter(i => ['sent', 'pending', 'pending_approval'].includes(i.status))
+    .reduce((s, i) => s + (i.total || i.amount), 0);
+  const totalOverdue = invoices
+    .filter(i => i.status !== 'paid' && i.status !== 'cancelled' && i.dueDate && new Date(i.dueDate) < new Date())
+    .reduce((s, i) => s + (i.total || i.amount), 0);
+  const recentInvoices = invoices.slice(0, 4);
 
   return (
     <div className="space-y-6">
@@ -626,16 +619,121 @@ function DashboardView({ onNewBooking, customerName, bookings, bookingsLoading }
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground font-medium">Payment Methods</p>
-                <p className="text-3xl font-bold text-foreground mt-1">—</p>
-                <p className="text-xs text-muted-foreground font-medium mt-1 flex items-center gap-1">
-                  <CreditCard className="size-3" /> See Payments
+                <p className="text-sm text-muted-foreground font-medium">Outstanding Invoices</p>
+                {invoicesLoading ? (
+                  <Skeleton className="h-8 w-16 mt-1" />
+                ) : (
+                  <p className="text-3xl font-bold text-foreground mt-1">{formatCurrency(totalPending + totalOverdue)}</p>
+                )}
+                <p className="text-xs text-amber-600 dark:text-amber-400 font-medium mt-1 flex items-center gap-1">
+                  <Receipt className="size-3" /> {invoices.filter(i => ['sent', 'pending', 'pending_approval'].includes(i.status)).length} pending
                 </p>
               </div>
-              <div className="size-12 rounded-xl bg-purple-50 dark:bg-purple-950/40 flex items-center justify-center">
-                <CreditCard className="size-6 text-purple-600 dark:text-purple-400" />
+              <div className="size-12 rounded-xl bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center">
+                <Receipt className="size-6 text-amber-600 dark:text-amber-400" />
               </div>
             </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Invoice summary + Recent invoices */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card className="lg:col-span-1">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Invoice Summary</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0 space-y-3">
+            {invoicesLoading ? (
+              <div className="space-y-2">
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center justify-between p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-sm text-foreground">Paid</span>
+                  </div>
+                  <span className="text-sm font-bold text-foreground">{formatCurrency(totalPaid)}</span>
+                </div>
+                <div className="flex items-center justify-between p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30">
+                  <div className="flex items-center gap-2">
+                    <Clock className="size-4 text-amber-600 dark:text-amber-400" />
+                    <span className="text-sm text-foreground">Pending</span>
+                  </div>
+                  <span className="text-sm font-bold text-foreground">{formatCurrency(totalPending)}</span>
+                </div>
+                <div className="flex items-center justify-between p-3 rounded-lg bg-red-50 dark:bg-red-950/30">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="size-4 text-red-600 dark:text-red-400" />
+                    <span className="text-sm text-foreground">Overdue</span>
+                  </div>
+                  <span className="text-sm font-bold text-foreground">{formatCurrency(totalOverdue)}</span>
+                </div>
+                <Button variant="outline" size="sm" className="w-full text-teal-600 border-teal-200 hover:bg-teal-50" onClick={onViewInvoices}>
+                  View All Invoices
+                  <ArrowUpRight className="size-3.5 ml-1" />
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Recent Invoices */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Recent Invoices</CardTitle>
+              <Button variant="ghost" size="sm" className="text-teal-600 hover:bg-teal-50" onClick={onViewInvoices}>
+                View all
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {invoicesLoading ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}
+              </div>
+            ) : recentInvoices.length === 0 ? (
+              <div className="text-center py-8">
+                <Receipt className="size-10 text-muted-foreground/40 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">No invoices yet</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {recentInvoices.map(invoice => {
+                  const isOverdue = invoice.status !== 'paid' && invoice.status !== 'cancelled' && invoice.dueDate && new Date(invoice.dueDate) < new Date();
+                  return (
+                    <button
+                      key={invoice.id}
+                      onClick={onViewInvoices}
+                      className="w-full flex items-center justify-between p-3 rounded-lg border border-border hover:bg-muted/30 transition-colors text-left"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="size-9 rounded-lg bg-muted/50 flex items-center justify-center shrink-0">
+                          <Receipt className="size-4 text-muted-foreground" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground font-mono truncate">{invoice.number}</p>
+                          <p className="text-xs text-muted-foreground">{formatBookingDate(invoice.createdAt)}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-sm font-bold text-foreground">{formatCurrency(invoice.total || invoice.amount)}</span>
+                        {isOverdue ? (
+                          <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">Overdue</Badge>
+                        ) : (
+                          getInvoiceStatusBadge(invoice.status)
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -2057,10 +2155,95 @@ function QuotesView({ initialQuoteId }: { initialQuoteId?: string | null }) {
   );
 }
 
+interface ConversationMessage {
+  id?: string | number;
+  from: 'customer' | 'business';
+  text: string;
+  time?: string;
+  timestamp?: string;
+}
+
+interface ConversationItem {
+  id: string;
+  conversationId?: string;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  channel?: string;
+  status?: string;
+  lastMessageAt?: string | null;
+  lastMessageBody?: string | null;
+  lastDirection?: string | null;
+  messagesJson?: string;
+  messages?: ConversationMessage[];
+}
+
 function MessagesView() {
   const [newMessage, setNewMessage] = useState('');
+  const [conversations, setConversations] = useState<ConversationItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const auth = useAppStore((s) => s.auth);
   const companyName = auth.tenant?.name || 'Support';
+
+  const fetchConversations = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const customerId = getRealCustomerId(auth.user);
+      const params = new URLSearchParams({ limit: '50' });
+      if (customerId) params.set('customerId', customerId);
+      const res = await fetch(apiUrl(`/api/conversations?${params.toString()}`), {
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to load messages');
+      const data = await res.json();
+      const convos: ConversationItem[] = data.conversations || [];
+      setConversations(convos);
+      // Auto-select the most recent conversation
+      if (convos.length > 0 && !selectedConversationId) {
+        setSelectedConversationId(convos[0].id);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load messages');
+    } finally {
+      setLoading(false);
+    }
+  }, [auth.user, selectedConversationId]);
+
+  useEffect(() => {
+    fetchConversations();
+  }, [auth.user]);
+
+  // Parse messages from the selected conversation
+  const selectedConversation = conversations.find(c => c.id === selectedConversationId);
+  const messages: ConversationMessage[] = (() => {
+    if (!selectedConversation) return [];
+    try {
+      const parsed = JSON.parse(selectedConversation.messagesJson || '[]');
+      if (!Array.isArray(parsed)) return [];
+      return parsed.map((m: any, idx: number) => ({
+        id: m.id || idx,
+        from: m.direction === 'outbound' || m.from === 'business' ? 'business' : 'customer',
+        text: m.body || m.text || m.message || '',
+        time: m.time,
+        timestamp: m.timestamp || m.createdAt,
+      })).filter((m: ConversationMessage) => m.text);
+    } catch {
+      return [];
+    }
+  })();
+
+  const formatMessageTime = (timestamp?: string) => {
+    if (!timestamp) return '';
+    try {
+      const d = new Date(timestamp);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+    } catch {
+      return '';
+    }
+  };
 
   return (
     <div className="space-y-0">
@@ -2073,9 +2256,9 @@ function MessagesView() {
             </div>
             <div>
               <p className="text-sm font-semibold text-foreground">{companyName} Support</p>
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
                 <span className="size-1.5 rounded-full bg-emerald-500 inline-block" />
-                Online
+                {conversations.length} {conversations.length === 1 ? 'conversation' : 'conversations'}
               </p>
             </div>
           </div>
@@ -2084,69 +2267,111 @@ function MessagesView() {
           </Button>
         </div>
 
+        {/* Loading state */}
+        {loading && (
+          <div className="p-8 text-center">
+            <Loader2 className="size-6 animate-spin text-muted-foreground mx-auto mb-2" />
+            <p className="text-sm text-muted-foreground">Loading messages…</p>
+          </div>
+        )}
+
+        {/* Error state */}
+        {!loading && error && (
+          <div className="p-8 text-center">
+            <AlertCircle className="size-10 text-red-500 mx-auto mb-2" />
+            <p className="text-sm text-red-600 dark:text-red-400 mb-3">{error}</p>
+            <Button variant="outline" size="sm" onClick={fetchConversations}>Retry</Button>
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!loading && !error && messages.length === 0 && (
+          <div className="p-12 text-center">
+            <div className="size-16 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-4">
+              <MessageSquare className="size-8 text-muted-foreground" />
+            </div>
+            <h3 className="text-base font-semibold text-foreground mb-1">No messages yet</h3>
+            <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+              When you message {companyName}, your conversation will appear here. Use the form below to start a conversation.
+            </p>
+          </div>
+        )}
+
         {/* Messages Area */}
-        <ScrollArea className="h-[450px] p-4">
-          <div className="space-y-4">
-            {PLACEHOLDER_MESSAGES.map((msg) => (
-              <div
-                key={msg.id}
-                className={cn(
-                  'flex',
-                  msg.from === 'customer' ? 'justify-end' : 'justify-start'
-                )}
-              >
+        {!loading && !error && messages.length > 0 && (
+          <ScrollArea className="h-[450px] p-4">
+            <div className="space-y-4">
+              {messages.map((msg, idx) => (
                 <div
+                  key={msg.id || idx}
                   className={cn(
-                    'max-w-[80%] sm:max-w-[65%] rounded-2xl px-4 py-2.5',
-                    msg.from === 'customer'
-                      ? 'bg-teal-600 text-white rounded-br-md'
-                      : 'bg-muted text-foreground rounded-bl-md'
+                    'flex',
+                    msg.from === 'customer' ? 'justify-end' : 'justify-start'
                   )}
                 >
-                  <p className="text-sm leading-relaxed">{msg.text}</p>
-                  <p className={cn(
-                    'text-[10px] mt-1',
-                    msg.from === 'customer' ? 'text-teal-100' : 'text-muted-foreground'
-                  )}>
-                    {msg.time}
-                  </p>
+                  <div
+                    className={cn(
+                      'max-w-[80%] sm:max-w-[65%] rounded-2xl px-4 py-2.5',
+                      msg.from === 'customer'
+                        ? 'bg-teal-600 text-white rounded-br-md'
+                        : 'bg-muted text-foreground rounded-bl-md'
+                    )}
+                  >
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                    <p className={cn(
+                      'text-[10px] mt-1',
+                      msg.from === 'customer' ? 'text-teal-100' : 'text-muted-foreground'
+                    )}>
+                      {msg.time || formatMessageTime(msg.timestamp)}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </ScrollArea>
+              ))}
+            </div>
+          </ScrollArea>
+        )}
 
         {/* Input Area */}
-        <div className="p-3 border-t border-border bg-muted/30">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="size-9 shrink-0 text-muted-foreground hover:text-foreground">
-              <Paperclip className="size-4" />
-            </Button>
-            <div className="flex-1 relative">
-              <Input
-                placeholder="Type a message..."
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                className="pr-10 h-10 rounded-full bg-background border-border"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && newMessage.trim()) {
+        {!loading && !error && (
+          <div className="p-3 border-t border-border bg-muted/30">
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="icon" className="size-9 shrink-0 text-muted-foreground hover:text-foreground">
+                <Paperclip className="size-4" />
+              </Button>
+              <div className="flex-1 relative">
+                <Input
+                  placeholder="Type a message..."
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  className="pr-10 h-10 rounded-full bg-background border-border"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && newMessage.trim()) {
+                      // TODO: wire to POST /api/conversations/[id]/messages when available
+                      toast.info('Messaging is coming soon. Please contact us via phone or email.');
+                      setNewMessage('');
+                    }
+                  }}
+                />
+                <Button variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 size-7 text-muted-foreground hover:text-foreground">
+                  <Smile className="size-4" />
+                </Button>
+              </div>
+              <Button
+                size="icon"
+                className="size-10 rounded-full bg-teal-600 hover:bg-teal-700 text-white shrink-0"
+                disabled={!newMessage.trim()}
+                onClick={() => {
+                  if (newMessage.trim()) {
+                    toast.info('Messaging is coming soon. Please contact us via phone or email.');
                     setNewMessage('');
                   }
                 }}
-              />
-              <Button variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 size-7 text-muted-foreground hover:text-foreground">
-                <Smile className="size-4" />
+              >
+                <Send className="size-4" />
               </Button>
             </div>
-            <Button
-              size="icon"
-              className="size-10 rounded-full bg-teal-600 hover:bg-teal-700 text-white shrink-0"
-              disabled={!newMessage.trim()}
-            >
-              <Send className="size-4" />
-            </Button>
           </div>
-        </div>
+        )}
       </Card>
     </div>
   );
@@ -2597,6 +2822,7 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
             customerName={customerName}
             bookings={bookings}
             bookingsLoading={bookingsLoading}
+            onViewInvoices={() => setActiveView('invoices')}
           />
         );
       case 'bookings':
@@ -2640,6 +2866,7 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
             customerName={customerName}
             bookings={bookings}
             bookingsLoading={bookingsLoading}
+            onViewInvoices={() => setActiveView('invoices')}
           />
         );
     }
