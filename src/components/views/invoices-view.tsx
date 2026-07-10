@@ -16,6 +16,8 @@ import {
   Trash2,
   X,
   PlusCircle,
+  ShoppingCart,
+  Calculator,
   MinusCircle,
   Printer,
   Copy,
@@ -439,7 +441,6 @@ export function InvoicesView() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // Dialogs
-  const [showCreateDialog, setShowCreateDialog] = useState(pendingCreate === 'invoice');
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   // When non-null, the create dialog is in "edit" mode and will PUT instead of POST.
@@ -447,7 +448,7 @@ export function InvoicesView() {
 
   // Full-page detail mode (Jobber-style) — when 'detail', the list is replaced
   // by `renderInvoiceDetailPage()` instead of the legacy small Dialog.
-  const [formMode, setFormMode] = useState<'list' | 'detail'>('list');
+  const [formMode, setFormMode] = useState<'list' | 'detail' | 'create'>('list');
 
   // Form
   const [form, setForm] = useState<InvoiceFormData>(EMPTY_FORM());
@@ -587,7 +588,13 @@ export function InvoicesView() {
   const openCreateDialog = () => {
     setEditingInvoice(null);
     setForm(EMPTY_FORM());
-    setShowCreateDialog(true);
+    setFormMode('create');
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
+  };
+
+  const closeCreatePage = () => {
+    setFormMode('list');
+    setEditingInvoice(null);
   };
 
   // Consume the cross-view "New Invoice" signal — opens the dialog, then clears.
@@ -617,8 +624,8 @@ export function InvoicesView() {
       notes: invoice.notes || '',
     });
     setShowDetailDialog(false);
-    setFormMode('list');
-    setShowCreateDialog(true);
+    setFormMode('create');
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
   };
 
   const openDetailDialog = (invoice: Invoice) => {
@@ -712,7 +719,7 @@ export function InvoicesView() {
         if (selectedInvoice?.id === updated.id) {
           setSelectedInvoice(updated);
         }
-        setShowCreateDialog(false);
+        setFormMode('list');
         setEditingInvoice(null);
         toast.success(`Invoice ${updated.number} updated`);
       } else {
@@ -740,7 +747,7 @@ export function InvoicesView() {
         }
         const newInvoice = parseApiInvoice((data as { invoice: Record<string, unknown> }).invoice);
         setInvoices((prev) => [newInvoice, ...prev]);
-        setShowCreateDialog(false);
+        setFormMode('list');
         toast.success('Invoice created successfully');
       }
     } catch (e) {
@@ -1669,12 +1676,315 @@ export function InvoicesView() {
   };
 
   // ============================================================
+  // New Invoice Full Page (replaces modal dialog)
+  // ============================================================
+
+  const renderNewInvoicePage = () => {
+    return (
+      <div className="w-full space-y-6">
+        {/* ─── Sticky page header (Back + title + actions) ────────── */}
+        <div className="form-page-header -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 mb-2">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={closeCreatePage}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0"
+              >
+                <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
+                <span className="hidden sm:inline">Back</span>
+              </button>
+              <Separator orientation="vertical" className="h-8 bg-border/60 hidden sm:block" />
+              <div className="flex items-center justify-center size-9 rounded-lg shrink-0 shadow-sm bg-emerald-600">
+                {editingInvoice ? <Pencil className="size-5 text-white" strokeWidth={2.2} /> : <Plus className="size-5 text-white" strokeWidth={2.2} />}
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground leading-tight">
+                  {editingInvoice ? `Edit Invoice ${editingInvoice.number}` : 'New Invoice'}
+                </h2>
+                <p className="text-xs text-muted-foreground line-clamp-1">
+                  {editingInvoice ? 'Update the invoice details' : 'Fill in the details to create a new invoice'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button variant="outline" onClick={closeCreatePage} disabled={saving}>
+                Cancel
+              </Button>
+              <Button
+                className={editingInvoice ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'}
+                onClick={handleSaveInvoice}
+                disabled={saving}
+              >
+                {saving ? (
+                  <><Loader2 className="size-4 mr-1.5 animate-spin" /> Saving...</>
+                ) : editingInvoice ? (
+                  <><Pencil className="size-4 mr-1.5" /> Save Changes</>
+                ) : (
+                  <><Plus className="size-4 mr-1.5" /> Create Invoice</>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* ─── Main content: two-column layout ───────────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start">
+          {/* Left column: form fields */}
+          <div className="space-y-6">
+            {/* Invoice header info */}
+            <FormSectionCard icon={FileText} title="Invoice Details">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Subject</Label>
+                  <Input
+                    placeholder="For Services Rendered"
+                    value={form.notes && form.notes.includes('For Services Rendered') ? 'For Services Rendered' : ''}
+                    onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
+                    className="text-sm"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Client *</Label>
+                  <Select
+                    value={form.customer}
+                    onValueChange={(val) => setForm((prev) => ({ ...prev, customer: val }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={loadingCustomers ? 'Loading customers...' : 'Select a client'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {loadingCustomers ? (
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground flex items-center gap-2">
+                          <Loader2 className="size-3 animate-spin" /> Loading...
+                        </div>
+                      ) : customers.length === 0 ? (
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground">No customers found</div>
+                      ) : (
+                        customers.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}{c.phone ? ` · ${c.phone}` : ''}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                <div className="space-y-2">
+                  <Label>Invoice #</Label>
+                  <Input
+                    placeholder="Auto-generated"
+                    disabled
+                    className="bg-muted/30 font-mono text-sm"
+                    value={editingInvoice ? editingInvoice.number : 'Auto'}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Issued Date</Label>
+                  <Input
+                    type="date"
+                    value={editingInvoice ? editingInvoice.createdAt.split('T')[0] : new Date().toISOString().split('T')[0]}
+                    disabled
+                    className="bg-muted/30 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                <div className="space-y-2">
+                  <Label>Due Date *</Label>
+                  <Input
+                    type="date"
+                    value={form.dueDate}
+                    onChange={(e) => setForm((prev) => ({ ...prev, dueDate: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Payment Terms</Label>
+                  <Select
+                    value={form.dueDate ? 'custom' : 'due_receipt'}
+                    onValueChange={(val) => {
+                      if (val === 'due_receipt') {
+                        setForm((prev) => ({ ...prev, dueDate: new Date().toISOString().split('T')[0] }));
+                      } else if (val === 'net15') {
+                        const d = new Date(); d.setDate(d.getDate() + 15);
+                        setForm((prev) => ({ ...prev, dueDate: d.toISOString().split('T')[0] }));
+                      } else if (val === 'net30') {
+                        const d = new Date(); d.setDate(d.getDate() + 30);
+                        setForm((prev) => ({ ...prev, dueDate: d.toISOString().split('T')[0] }));
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="text-sm">
+                      <SelectValue placeholder="Select payment terms" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="due_receipt">Due upon receipt</SelectItem>
+                      <SelectItem value="net15">Net 15 days</SelectItem>
+                      <SelectItem value="net30">Net 30 days</SelectItem>
+                      <SelectItem value="custom">Custom date</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </FormSectionCard>
+
+            {/* Product / Service section */}
+            <FormSectionCard
+              icon={ShoppingCart}
+              title="Product / Service"
+              action={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-7 text-xs"
+                  onClick={handleAddLineItem}
+                >
+                  <PlusCircle className="size-3.5 mr-1" /> Add Line Item
+                </Button>
+              }
+            >
+              <div className="space-y-3">
+                {/* Header row */}
+                <div className="grid grid-cols-[1fr_70px_90px_90px_32px] gap-2 text-xs font-medium text-muted-foreground px-1">
+                  <span>Name</span>
+                  <span>Qty</span>
+                  <span>Unit Price</span>
+                  <span className="text-right">Total</span>
+                  <span></span>
+                </div>
+                {form.lineItems.map((item) => (
+                  <div key={item.id} className="space-y-2">
+                    <div className="grid grid-cols-[1fr_70px_90px_90px_32px] gap-2 items-center">
+                      <Input
+                        placeholder="Service description"
+                        value={item.description}
+                        onChange={(e) => handleLineItemChange(item.id, 'description', e.target.value)}
+                        className="h-9 text-sm"
+                      />
+                      <Input
+                        type="number"
+                        min={1}
+                        value={item.quantity}
+                        onChange={(e) => handleLineItemChange(item.id, 'quantity', parseInt(e.target.value) || 0)}
+                        className="h-9 text-sm"
+                      />
+                      <Input
+                        type="number"
+                        min={0}
+                        value={item.rate}
+                        onChange={(e) => handleLineItemChange(item.id, 'rate', parseFloat(e.target.value) || 0)}
+                        className="h-9 text-sm"
+                      />
+                      <div className="text-right text-sm font-medium pr-1">
+                        {format(item.quantity * item.rate)}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-red-600"
+                        disabled={form.lineItems.length <= 1}
+                        onClick={() => handleRemoveLineItem(item.id)}
+                      >
+                        <MinusCircle className="size-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </FormSectionCard>
+
+            {/* Contract / Disclaimer section */}
+            <FormSectionCard icon={ScrollText} title="Contract / Disclaimer">
+              <Textarea
+                defaultValue="Thank you for your business. Please contact us with any questions regarding this invoice."
+                rows={3}
+                className="text-sm"
+                placeholder="Add contract or disclaimer text..."
+              />
+            </FormSectionCard>
+
+            {/* Notes section */}
+            <FormSectionCard icon={StickyNote} title="Notes">
+              <Textarea
+                placeholder="Leave an internal note for yourself or a team member"
+                rows={3}
+                className="text-sm"
+                value={form.notes}
+                onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
+              />
+            </FormSectionCard>
+          </div>
+
+          {/* Right column: summary sidebar */}
+          <div className="space-y-4 lg:sticky lg:top-4">
+            <Card>
+              <CardContent className="p-5">
+                <h4 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-1.5">
+                  <Calculator className="size-4 text-emerald-600" /> Summary
+                </h4>
+                <div className="space-y-2.5">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="font-medium">{format(formSubtotal)}</span>
+                  </div>
+                  <div className="flex justify-between items-center gap-3 text-sm">
+                    <span className="text-muted-foreground">Discount</span>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min={0}
+                        value={form.discount}
+                        onChange={(e) => setForm((prev) => ({ ...prev, discount: parseFloat(e.target.value) || 0 }))}
+                        className="h-7 w-20 text-sm text-right"
+                      />
+                      <span className="font-medium">-{format(form.discount)}</span>
+                    </div>
+                  </div>
+                  <div className="flex justify-between items-center gap-3 text-sm">
+                    <span className="text-muted-foreground">Tax</span>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={form.taxPercent}
+                        onChange={(e) => setForm((prev) => ({ ...prev, taxPercent: parseFloat(e.target.value) || 0 }))}
+                        className="h-7 w-16 text-sm text-right"
+                      />
+                      <span className="text-muted-foreground">%</span>
+                      <span className="font-medium ml-2">{format(formTax)}</span>
+                    </div>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between text-base font-bold">
+                    <span>Total</span>
+                    <span className="text-emerald-700">{format(formTotal)}</span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Invoice Balance</span>
+                    <span className="font-medium">{format(formTotal)}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================================
   // Render
   // ============================================================
 
   return (
     <div className="space-y-6 w-full">
-      {formMode === 'detail' ? (
+      {formMode === 'create' ? (
+        renderNewInvoicePage()
+      ) : formMode === 'detail' ? (
         renderInvoiceDetailPage()
       ) : (
         <>
@@ -1992,234 +2302,6 @@ export function InvoicesView() {
         </Card>
       )}
 
-      {/* ── Create / Edit Invoice Dialog ─────────────────────────── */}
-      <Dialog
-        open={showCreateDialog}
-        onOpenChange={(open) => {
-          setShowCreateDialog(open);
-          if (!open) setEditingInvoice(null);
-        }}
-      >
-        <DialogContent className="max-w-2xl max-h-[90vh]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {editingInvoice ? (
-                <Pencil className="size-5 text-blue-600" />
-              ) : (
-                <Plus className="size-5 text-emerald-600" />
-              )}
-              {editingInvoice ? `Edit Invoice ${editingInvoice.number}` : 'Create Invoice'}
-            </DialogTitle>
-            <DialogDescription>
-              {editingInvoice
-                ? 'Update the invoice details. Totals are recalculated automatically.'
-                : 'Fill in the details to create a new invoice'}
-            </DialogDescription>
-          </DialogHeader>
-
-          <ScrollArea className="max-h-[65vh] pr-1">
-            <div className="space-y-5 pr-3">
-              {/* Customer & Due Date */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Customer *</Label>
-                  <Select
-                    value={form.customer}
-                    onValueChange={(val) => setForm((prev) => ({ ...prev, customer: val }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={
-                        loadingCustomers ? 'Loading customers...' : 'Select customer'
-                      } />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {loadingCustomers ? (
-                        <div className="px-2 py-1.5 text-sm text-muted-foreground flex items-center gap-2">
-                          <Loader2 className="size-3 animate-spin" /> Loading...
-                        </div>
-                      ) : customers.length === 0 ? (
-                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                          No customers found
-                        </div>
-                      ) : (
-                        customers.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}{c.phone ? ` · ${c.phone}` : ''}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Due Date *</Label>
-                  <Input
-                    type="date"
-                    value={form.dueDate}
-                    onChange={(e) => setForm((prev) => ({ ...prev, dueDate: e.target.value }))}
-                  />
-                </div>
-              </div>
-
-              {/* Line Items */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-semibold">Line Items</Label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-7 text-xs"
-                    onClick={handleAddLineItem}
-                  >
-                    <PlusCircle className="size-3.5 mr-1" /> Add Item
-                  </Button>
-                </div>
-
-                <div className="space-y-2">
-                  {/* Header row */}
-                  <div className="grid grid-cols-[1fr_70px_90px_90px_32px] gap-2 text-xs font-medium text-muted-foreground px-1">
-                    <span>Description</span>
-                    <span>Qty</span>
-                    <span>Rate ({symbol})</span>
-                    <span className="text-right">Amount</span>
-                    <span></span>
-                  </div>
-
-                  {form.lineItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className="grid grid-cols-[1fr_70px_90px_90px_32px] gap-2 items-center"
-                    >
-                      <Input
-                        placeholder="Service description"
-                        value={item.description}
-                        onChange={(e) => handleLineItemChange(item.id, 'description', e.target.value)}
-                        className="h-8 text-sm"
-                      />
-                      <Input
-                        type="number"
-                        min={1}
-                        value={item.quantity}
-                        onChange={(e) => handleLineItemChange(item.id, 'quantity', parseInt(e.target.value) || 0)}
-                        className="h-8 text-sm"
-                      />
-                      <Input
-                        type="number"
-                        min={0}
-                        value={item.rate}
-                        onChange={(e) => handleLineItemChange(item.id, 'rate', parseFloat(e.target.value) || 0)}
-                        className="h-8 text-sm"
-                      />
-                      <div className="text-right text-sm font-medium pr-1">
-                        {format(item.quantity * item.rate)}
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-red-600"
-                        disabled={form.lineItems.length <= 1}
-                        onClick={() => handleRemoveLineItem(item.id)}
-                      >
-                        <MinusCircle className="size-3.5" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Totals */}
-              <div className="flex justify-end">
-                <div className="w-full max-w-xs space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Subtotal</span>
-                    <span className="font-medium">{format(formSubtotal)}</span>
-                  </div>
-                  <div className="flex justify-between items-center gap-3 text-sm">
-                    <span className="text-muted-foreground">Tax</span>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        min={0}
-                        max={100}
-                        value={form.taxPercent}
-                        onChange={(e) => setForm((prev) => ({ ...prev, taxPercent: parseFloat(e.target.value) || 0 }))}
-                        className="h-7 w-16 text-sm text-right"
-                      />
-                      <span className="text-muted-foreground">%</span>
-                      <span className="font-medium ml-2">{format(formTax)}</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center gap-3 text-sm">
-                    <span className="text-muted-foreground">Discount</span>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        min={0}
-                        value={form.discount}
-                        onChange={(e) => setForm((prev) => ({ ...prev, discount: parseFloat(e.target.value) || 0 }))}
-                        className="h-7 w-20 text-sm text-right"
-                      />
-                      <span className="font-medium ml-2">-{format(form.discount)}</span>
-                    </div>
-                  </div>
-                  <Separator />
-                  <div className="flex justify-between text-base font-bold">
-                    <span>Total</span>
-                    <span className="text-emerald-700">{format(formTotal)}</span>
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Notes */}
-              <div className="space-y-2">
-                <Label>Notes</Label>
-                <Textarea
-                  placeholder="Payment terms, thank you message, etc."
-                  value={form.notes}
-                  onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
-                  rows={3}
-                  className="text-sm"
-                />
-              </div>
-            </div>
-          </ScrollArea>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowCreateDialog(false);
-                setEditingInvoice(null);
-              }}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
-            <Button
-              className={editingInvoice ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'}
-              onClick={handleSaveInvoice}
-              disabled={saving}
-            >
-              {saving ? (
-                <>
-                  <Loader2 className="size-4 mr-1.5 animate-spin" />
-                  {editingInvoice ? 'Saving...' : 'Creating...'}
-                </>
-              ) : editingInvoice ? (
-                <>
-                  <Pencil className="size-4 mr-1.5" /> Save Changes
-                </>
-              ) : (
-                'Create Invoice'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* ── Invoice Detail Dialog ────────────────────────────────── */}
       <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>

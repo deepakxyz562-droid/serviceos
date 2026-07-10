@@ -303,12 +303,11 @@ export function QuotesView() {
   const [sortField, setSortField] = useState<string>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showPreviewDialog, setShowPreviewDialog] = useState(false);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [selectedQuote, setSelectedQuote] = useState<Quote | null>(null);
   const [editingQuoteId, setEditingQuoteId] = useState<string | null>(null);
-  const [formMode, setFormMode] = useState<'list' | 'detail'>('list');
+  const [formMode, setFormMode] = useState<'list' | 'detail' | 'create'>('list');
 
   const [form, setForm] = useState<QuoteFormData>(EMPTY_FORM());
   const [saving, setSaving] = useState(false);
@@ -441,7 +440,13 @@ export function QuotesView() {
   const openCreateDialog = () => {
     setForm(EMPTY_FORM());
     setEditingQuoteId(null);
-    setShowCreateDialog(true);
+    setFormMode('create');
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
+  };
+
+  const closeCreatePage = () => {
+    setFormMode('list');
+    setEditingQuoteId(null);
   };
 
   const openEditDialog = (quote: Quote) => {
@@ -458,8 +463,8 @@ export function QuotesView() {
       taxRate: quote.taxRate,
       validUntil: quote.validUntil,
     });
-    setFormMode('list');
-    setShowCreateDialog(true);
+    setFormMode('create');
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
   };
 
   const openDetailDialog = (quote: Quote) => {
@@ -603,7 +608,7 @@ export function QuotesView() {
         toast.success('Quote created successfully');
       }
 
-      setShowCreateDialog(false);
+      setFormMode('list');
       setEditingQuoteId(null);
     } catch {
       toast.error('Network error saving quote');
@@ -1096,12 +1101,396 @@ export function QuotesView() {
   };
 
   // ============================================================
+  // New Quote Full Page (replaces modal dialog)
+  // ============================================================
+
+  const renderNewQuotePage = () => {
+    return (
+      <div className="w-full space-y-6">
+        {/* ─── Sticky page header (Back + title + actions) ────────── */}
+        <div className="form-page-header -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 mb-2">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={closeCreatePage}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors shrink-0"
+              >
+                <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
+                <span className="hidden sm:inline">Back</span>
+              </button>
+              <Separator orientation="vertical" className="h-8 bg-border/60 hidden sm:block" />
+              <div className="flex items-center justify-center size-9 rounded-lg shrink-0 shadow-sm bg-emerald-600">
+                <Plus className="size-5 text-white" strokeWidth={2.2} />
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground leading-tight">
+                  {editingQuoteId ? 'Edit Quote' : 'New Quote'}
+                </h2>
+                <p className="text-xs text-muted-foreground line-clamp-1">
+                  {editingQuoteId ? 'Update the quote details below' : 'Fill in the details to create a new quote'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button variant="outline" onClick={closeCreatePage} disabled={saving}>
+                Cancel
+              </Button>
+              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSaveQuote} disabled={saving}>
+                {saving ? (
+                  <><Loader2 className="size-4 mr-1.5 animate-spin" /> Saving...</>
+                ) : editingQuoteId ? (
+                  'Update Quote'
+                ) : (
+                  <><Plus className="size-4 mr-1.5" /> Create Quote</>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* ─── Main content: two-column layout ───────────────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start">
+          {/* Left column: form fields */}
+          <div className="space-y-6">
+            {/* Quote metadata */}
+            <FormSectionCard icon={FileText} title="Quote Details">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Title *</Label>
+                  <Input
+                    placeholder="e.g., Window Cleaning"
+                    value={form.title}
+                    onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Client *</Label>
+                  <Select
+                    value={form.customerId}
+                    onValueChange={(val) => {
+                      const customer = customers.find((c) => c.id === val);
+                      setForm((prev) => ({ ...prev, customerId: val, customerName: customer?.name || '' }));
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a client" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {customers.length === 0 ? (
+                        <SelectItem value="_none" disabled>No customers available</SelectItem>
+                      ) : (
+                        customers.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                <div className="space-y-2">
+                  <Label>Quote #</Label>
+                  <Input
+                    placeholder="Auto-generated"
+                    disabled
+                    className="bg-muted/30 font-mono text-sm"
+                    value={editingQuoteId ? `#${editingQuoteId.slice(-6).toUpperCase()}` : 'Auto'}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Valid Until *</Label>
+                  <Input
+                    type="date"
+                    value={form.validUntil}
+                    onChange={(e) => setForm((prev) => ({ ...prev, validUntil: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2 mt-4">
+                <Label>Description</Label>
+                <Textarea
+                  placeholder="Quote description or notes..."
+                  value={form.description}
+                  onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+                  rows={2}
+                  className="text-sm"
+                />
+              </div>
+            </FormSectionCard>
+
+            {/* Product / Service section */}
+            <FormSectionCard
+              icon={ShoppingCart}
+              title="Product / Service"
+              action={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-7 text-xs"
+                  onClick={handleAddServiceItem}
+                >
+                  <PlusCircle className="size-3.5 mr-1" /> Add Line Item
+                </Button>
+              }
+            >
+              <div className="space-y-3">
+                {/* Header row */}
+                <div className="grid grid-cols-[1fr_80px_100px_100px_32px] gap-2 text-xs font-medium text-muted-foreground px-1">
+                  <span>Name</span>
+                  <span>Qty</span>
+                  <span>Unit Price</span>
+                  <span className="text-right">Total</span>
+                  <span></span>
+                </div>
+                {form.services.map((item) => (
+                  <div key={item.id} className="space-y-2">
+                    <div className="grid grid-cols-[1fr_80px_100px_100px_32px] gap-2 items-center">
+                      <Select
+                        value={item.serviceId}
+                        onValueChange={(val) => handleServiceSelect(item.id, val)}
+                      >
+                        <SelectTrigger className="h-9 text-sm">
+                          <SelectValue placeholder="Select service..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {MOCK_SERVICE_CATALOG.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.name} — {format(s.basePrice)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number" min={1}
+                        value={item.quantity}
+                        onChange={(e) => handleServiceFieldChange(item.id, 'quantity', parseInt(e.target.value) || 1)}
+                        className="h-9 text-sm"
+                        placeholder="Qty"
+                      />
+                      <Input
+                        type="number" min={0}
+                        value={item.price}
+                        onChange={(e) => handleServiceFieldChange(item.id, 'price', parseFloat(e.target.value) || 0)}
+                        className="h-9 text-sm"
+                        placeholder="Price"
+                      />
+                      <div className="text-right text-sm font-medium pr-1">
+                        {format(item.price * item.quantity)}
+                      </div>
+                      <Button
+                        variant="ghost" size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-red-600"
+                        disabled={form.services.length <= 1}
+                        onClick={() => handleRemoveServiceItem(item.id)}
+                      >
+                        <MinusCircle className="size-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </FormSectionCard>
+
+            {/* Add-ons section */}
+            <FormSectionCard
+              icon={PlusCircle}
+              title="Add-ons"
+              action={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-7 text-xs"
+                  onClick={handleAddAddOn}
+                >
+                  <PlusCircle className="size-3.5 mr-1" /> Add Add-on
+                </Button>
+              }
+            >
+              {form.addOns.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">No add-ons added yet</p>
+              ) : (
+                <div className="space-y-2">
+                  {form.addOns.map((addon) => (
+                    <div key={addon.id} className="grid grid-cols-[1fr_120px_32px] gap-2 items-center">
+                      <Input
+                        placeholder="Add-on name"
+                        value={addon.name}
+                        onChange={(e) => handleAddOnChange(addon.id, 'name', e.target.value)}
+                        className="h-9 text-sm"
+                      />
+                      <Input
+                        type="number" min={0}
+                        value={addon.price}
+                        onChange={(e) => handleAddOnChange(addon.id, 'price', parseFloat(e.target.value) || 0)}
+                        className="h-9 text-sm"
+                        placeholder="Price"
+                      />
+                      <Button
+                        variant="ghost" size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-red-600"
+                        onClick={() => handleRemoveAddOn(addon.id)}
+                      >
+                        <MinusCircle className="size-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </FormSectionCard>
+
+            {/* Contract / Disclaimer section */}
+            <FormSectionCard icon={ScrollText} title="Contract / Disclaimer">
+              <Textarea
+                defaultValue="This quote is valid for the next 30 days, after which values may be subject to change."
+                rows={3}
+                className="text-sm"
+                placeholder="Add contract or disclaimer text..."
+              />
+              <label className="flex items-center gap-2 mt-2 text-sm text-muted-foreground cursor-pointer">
+                <input type="checkbox" className="rounded border-border" />
+                Apply to all future quotes
+              </label>
+            </FormSectionCard>
+
+            {/* Notes section */}
+            <FormSectionCard icon={StickyNote} title="Notes">
+              <Textarea
+                placeholder="Leave an internal note for yourself or a team member"
+                rows={3}
+                className="text-sm"
+                value={form.description}
+                onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+              />
+            </FormSectionCard>
+          </div>
+
+          {/* Right column: summary sidebar */}
+          <div className="space-y-4 lg:sticky lg:top-4">
+            <Card>
+              <CardContent className="p-5">
+                <h4 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-1.5">
+                  <Calculator className="size-4 text-emerald-600" /> Summary
+                </h4>
+                <div className="space-y-2.5">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="font-medium">{format(formSummary.subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      Discount {form.discountType === 'percentage' ? `(${form.discountValue}%)` : ''}
+                    </span>
+                    <span className="font-medium text-red-600">-{format(formSummary.discount)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Tax ({form.taxRate}%)</span>
+                    <span className="font-medium">+{format(formSummary.tax)}</span>
+                  </div>
+                  <Separator />
+                  <div className="flex justify-between text-base font-bold">
+                    <span>Total</span>
+                    <span className="text-emerald-700">{format(formSummary.total)}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Discount settings */}
+            <Card>
+              <CardContent className="p-5">
+                <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5">
+                  <Tag className="size-4 text-emerald-600" /> Discount
+                </h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Type</Label>
+                    <Select
+                      value={form.discountType}
+                      onValueChange={(val: 'fixed' | 'percentage') => setForm((prev) => ({ ...prev, discountType: val }))}
+                    >
+                      <SelectTrigger className="h-9 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="fixed">Fixed ({symbol})</SelectItem>
+                        <SelectItem value="percentage">Percentage (%)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Value</Label>
+                    <Input
+                      type="number" min={0}
+                      value={form.discountValue}
+                      onChange={(e) => setForm((prev) => ({ ...prev, discountValue: parseFloat(e.target.value) || 0 }))}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Tax settings */}
+            <Card>
+              <CardContent className="p-5">
+                <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-1.5">
+                  <Percent className="size-4 text-emerald-600" /> Tax
+                </h4>
+                <div className="flex items-center gap-3">
+                  <Input
+                    type="number" min={0} max={100}
+                    value={form.taxRate}
+                    onChange={(e) => setForm((prev) => ({ ...prev, taxRate: parseFloat(e.target.value) || 0 }))}
+                    className="h-9 text-sm w-24"
+                  />
+                  <span className="text-sm text-muted-foreground">% rate</span>
+                  <span className="text-sm ml-auto font-medium">{format(formSummary.tax)}</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* WhatsApp Preview button */}
+            {form.customerId && form.title && (
+              <Button
+                variant="outline"
+                className="w-full border-emerald-600 text-emerald-600 hover:bg-emerald-50"
+                onClick={() => {
+                  const summary = calcSummary(form.services, form.addOns, form.discountType, form.discountValue, form.taxRate);
+                  const customer = customers.find((c) => c.id === form.customerId);
+                  const previewQuote: Quote = {
+                    id: 'preview', title: form.title, description: form.description,
+                    customerName: customer?.name || form.customerName,
+                    customerId: form.customerId, customerPhone: customer?.phone,
+                    services: form.services, addOns: form.addOns,
+                    ...summary,
+                    discountType: form.discountType, discountValue: form.discountValue, taxRate: form.taxRate,
+                    status: 'draft', validUntil: form.validUntil, whatsappSent: false,
+                    createdAt: new Date().toISOString().split('T')[0],
+                    currency: currency, exchangeRate: 1, baseCurrency: currency, baseAmount: summary.total,
+                  };
+                  setSelectedQuote(previewQuote);
+                  setShowPreviewDialog(true);
+                }}
+              >
+                <MessageCircle className="size-4 mr-1.5" /> Preview WhatsApp
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ============================================================
   // Render
   // ============================================================
 
   return (
     <div className="space-y-6 w-full">
-      {formMode === 'detail' ? (
+      {formMode === 'create' ? (
+        renderNewQuotePage()
+      ) : formMode === 'detail' ? (
         renderQuoteDetailPage()
       ) : (
         <>
@@ -1300,317 +1689,6 @@ export function QuotesView() {
         </Card>
       )}
 
-      {/* ── Create/Edit Quote Dialog ─────────────────────────────── */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent className="max-w-3xl max-h-[90vh]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Plus className="size-5 text-emerald-600" />
-              {editingQuoteId ? 'Edit Quote' : 'Create Quote'}
-            </DialogTitle>
-            <DialogDescription>
-              {editingQuoteId ? 'Update the quote details below' : 'Fill in the details to create a new quote'}
-            </DialogDescription>
-          </DialogHeader>
-
-          <ScrollArea className="max-h-[68vh] pr-1">
-            <div className="space-y-5 pr-3">
-              {/* Title & Customer */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Quote Title *</Label>
-                  <Input
-                    placeholder="e.g., Window Cleaning"
-                    value={form.title}
-                    onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Customer *</Label>
-                  <Select
-                    value={form.customerId}
-                    onValueChange={(val) => {
-                      const customer = customers.find((c) => c.id === val);
-                      setForm((prev) => ({ ...prev, customerId: val, customerName: customer?.name || '' }));
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select customer" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {customers.length === 0 ? (
-                        <SelectItem value="_none" disabled>No customers available</SelectItem>
-                      ) : (
-                        customers.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Description</Label>
-                <Textarea
-                  placeholder="Quote description or notes..."
-                  value={form.description}
-                  onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-                  rows={2}
-                  className="text-sm"
-                />
-              </div>
-
-              <Separator />
-
-              {/* ── Services Section ────────────────────────────── */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-semibold flex items-center gap-1.5">
-                    <ShoppingCart className="size-4 text-emerald-600" /> Services
-                  </Label>
-                  <Button
-                    variant="ghost" size="sm"
-                    className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-7 text-xs"
-                    onClick={handleAddServiceItem}
-                  >
-                    <PlusCircle className="size-3.5 mr-1" /> Add Service
-                  </Button>
-                </div>
-
-                <div className="space-y-2">
-                  {form.services.map((item) => (
-                    <div key={item.id} className="grid grid-cols-[1fr_80px_70px_90px_32px] gap-2 items-center">
-                      <Select
-                        value={item.serviceId}
-                        onValueChange={(val) => handleServiceSelect(item.id, val)}
-                      >
-                        <SelectTrigger className="h-8 text-sm">
-                          <SelectValue placeholder="Select service..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {MOCK_SERVICE_CATALOG.map((s) => (
-                            <SelectItem key={s.id} value={s.id}>
-                              {s.name} — {format(s.basePrice)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        type="number" min={1}
-                        value={item.quantity}
-                        onChange={(e) => handleServiceFieldChange(item.id, 'quantity', parseInt(e.target.value) || 1)}
-                        className="h-8 text-sm"
-                        placeholder="Qty"
-                      />
-                      <Input
-                        type="number" min={0}
-                        value={item.price}
-                        onChange={(e) => handleServiceFieldChange(item.id, 'price', parseFloat(e.target.value) || 0)}
-                        className="h-8 text-sm"
-                        placeholder="Price"
-                      />
-                      <div className="text-right text-sm font-medium pr-1">
-                        {format(item.price * item.quantity)}
-                      </div>
-                      <Button
-                        variant="ghost" size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-red-600"
-                        disabled={form.services.length <= 1}
-                        onClick={() => handleRemoveServiceItem(item.id)}
-                      >
-                        <MinusCircle className="size-3.5" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* ── Add-ons Section ─────────────────────────────── */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-semibold flex items-center gap-1.5">
-                    <PlusCircle className="size-4 text-emerald-600" /> Add-ons
-                  </Label>
-                  <Button
-                    variant="ghost" size="sm"
-                    className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-7 text-xs"
-                    onClick={handleAddAddOn}
-                  >
-                    <PlusCircle className="size-3.5 mr-1" /> Add Add-on
-                  </Button>
-                </div>
-
-                {form.addOns.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-2">No add-ons added yet</p>
-                ) : (
-                  <div className="space-y-2">
-                    {form.addOns.map((addon) => (
-                      <div key={addon.id} className="grid grid-cols-[1fr_100px_32px] gap-2 items-center">
-                        <Input
-                          placeholder="Add-on name"
-                          value={addon.name}
-                          onChange={(e) => handleAddOnChange(addon.id, 'name', e.target.value)}
-                          className="h-8 text-sm"
-                        />
-                        <Input
-                          type="number" min={0}
-                          value={addon.price}
-                          onChange={(e) => handleAddOnChange(addon.id, 'price', parseFloat(e.target.value) || 0)}
-                          className="h-8 text-sm"
-                          placeholder="Price"
-                        />
-                        <Button
-                          variant="ghost" size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-red-600"
-                          onClick={() => handleRemoveAddOn(addon.id)}
-                        >
-                          <MinusCircle className="size-3.5" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <Separator />
-
-              {/* ── Discount Section ────────────────────────────── */}
-              <div className="space-y-3">
-                <Label className="text-sm font-semibold flex items-center gap-1.5">
-                  <Tag className="size-4 text-emerald-600" /> Discount
-                </Label>
-                <div className="grid grid-cols-[1fr_120px] gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Type</Label>
-                    <Select
-                      value={form.discountType}
-                      onValueChange={(val: 'fixed' | 'percentage') => setForm((prev) => ({ ...prev, discountType: val }))}
-                    >
-                      <SelectTrigger className="h-8 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="fixed">Fixed Amount ({symbol})</SelectItem>
-                        <SelectItem value="percentage">Percentage (%)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Value</Label>
-                    <Input
-                      type="number" min={0}
-                      value={form.discountValue}
-                      onChange={(e) => setForm((prev) => ({ ...prev, discountValue: parseFloat(e.target.value) || 0 }))}
-                      className="h-8 text-sm"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* ── Tax Section ─────────────────────────────────── */}
-              <div className="space-y-3">
-                <Label className="text-sm font-semibold flex items-center gap-1.5">
-                  <Percent className="size-4 text-emerald-600" /> Tax
-                </Label>
-                <div className="flex items-center gap-3">
-                  <Input
-                    type="number" min={0} max={100}
-                    value={form.taxRate}
-                    onChange={(e) => setForm((prev) => ({ ...prev, taxRate: parseFloat(e.target.value) || 0 }))}
-                    className="h-8 text-sm w-24"
-                  />
-                  <span className="text-sm text-muted-foreground">% rate</span>
-                  <span className="text-sm ml-auto font-medium">{format(formSummary.tax)}</span>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* ── Summary ─────────────────────────────────────── */}
-              <div className="rounded-lg border bg-emerald-50/50 p-4 space-y-2">
-                <h4 className="text-sm font-semibold text-emerald-800 mb-3 flex items-center gap-1.5">
-                  <Calculator className="size-4" /> Summary
-                </h4>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Subtotal (services + add-ons)</span>
-                  <span className="font-medium">{format(formSummary.subtotal)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">
-                    Discount {form.discountType === 'percentage' ? `(${form.discountValue}%)` : ''}
-                  </span>
-                  <span className="font-medium text-red-600">-{format(formSummary.discount)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Tax ({form.taxRate}%)</span>
-                  <span className="font-medium">+{format(formSummary.tax)}</span>
-                </div>
-                <Separator />
-                <div className="flex justify-between text-base font-bold">
-                  <span>Total</span>
-                  <span className="text-emerald-700">{format(formSummary.total)}</span>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* ── Valid Until ─────────────────────────────────── */}
-              <div className="space-y-2">
-                <Label>Valid Until *</Label>
-                <Input
-                  type="date"
-                  value={form.validUntil}
-                  onChange={(e) => setForm((prev) => ({ ...prev, validUntil: e.target.value }))}
-                  className="w-full sm:w-48"
-                />
-              </div>
-            </div>
-          </ScrollArea>
-
-          <DialogFooter className="flex-col sm:flex-row gap-2">
-            <div className="flex gap-2 flex-1">
-              {form.customerId && form.title && (
-                <Button
-                  variant="outline"
-                  className="border-emerald-600 text-emerald-600 hover:bg-emerald-50"
-                  onClick={() => {
-                    const summary = calcSummary(form.services, form.addOns, form.discountType, form.discountValue, form.taxRate);
-                    const customer = customers.find((c) => c.id === form.customerId);
-                    const previewQuote: Quote = {
-                      id: 'preview', title: form.title, description: form.description,
-                      customerName: customer?.name || form.customerName,
-                      customerId: form.customerId, customerPhone: customer?.phone,
-                      services: form.services, addOns: form.addOns,
-                      ...summary,
-                      discountType: form.discountType, discountValue: form.discountValue, taxRate: form.taxRate,
-                      status: 'draft', validUntil: form.validUntil, whatsappSent: false,
-                      createdAt: new Date().toISOString().split('T')[0],
-                      currency: currency, exchangeRate: 1, baseCurrency: currency, baseAmount: summary.total,
-                    };
-                    setSelectedQuote(previewQuote);
-                    setShowPreviewDialog(true);
-                  }}
-                >
-                  <MessageCircle className="size-4 mr-1.5" /> Preview WhatsApp
-                </Button>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setShowCreateDialog(false)} disabled={saving}>
-                Cancel
-              </Button>
-              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSaveQuote} disabled={saving}>
-                {saving ? 'Saving...' : editingQuoteId ? 'Update Quote' : 'Create Quote'}
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* ── Quote Detail Dialog ──────────────────────────────────── */}
       <Dialog open={showDetailDialog} onOpenChange={setShowDetailDialog}>
