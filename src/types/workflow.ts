@@ -172,9 +172,9 @@ export type ViewType =
   // Automation
   | 'workflows' | 'canvas' | 'triggers' | 'variables' | 'executions' | 'formBuilder' | 'workflowAutomations'
   // Operations
-  | 'operations' | 'booking' | 'calendar' | 'jobs' | 'dispatch' | 'employees' | 'employeePerformance'
+  | 'operations' | 'booking' | 'calendar' | 'jobs' | 'dispatch' | 'employees' | 'employeePerformance' | 'timesheet'
   // Finance
-  | 'quotes' | 'invoices' | 'billing'
+  | 'quotes' | 'invoices' | 'billing' | 'expenses'
   // System
   | 'credentials' | 'settings' | 'auditLogs' | 'activityLogs' | 'reports' | 'notifications'
   // Portals

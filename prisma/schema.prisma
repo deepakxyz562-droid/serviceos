@@ -438,6 +438,46 @@ model RecurringInvoice {
 }
 
 // ==========================================
+// EXPENSES
+// ==========================================
+// Standalone expense records submitted by employees or owners.
+// Kept intentionally relation-free (denormalized names) so the model is
+// resilient to missing workspace/user links and easy to query by role.
+//   status: pending | approved | rejected | reimbursed
+model Expense {
+  id              String    @id @default(cuid())
+  number          String    @unique                  // EXP-0001
+  tenantId        String?
+  employeeId      String?                             // Employee who incurred the expense
+  employeeName    String?
+  submittedById   String?                             // Auth User who submitted
+  submittedByName String?
+  jobId           String?                             // optional linked Job
+  jobTitle        String?
+  category        String    @default("General")      // Travel, Materials, Fuel, Food, Tools, Misc...
+  description     String
+  amount          Float     @default(0)
+  currency        String    @default("USD")
+  expenseDate     DateTime  @default(now())          // when the cost was incurred
+  status          String    @default("pending")      // pending | approved | rejected | reimbursed
+  receiptUrl      String?                             // S3 receipt/image URL
+  notes           String?
+  approvedById    String?
+  approvedByName  String?
+  approvedAt      DateTime?
+  rejectedReason  String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([employeeId])
+  @@index([jobId])
+  @@index([category])
+  @@index([expenseDate])
+}
+
+// ==========================================
 // REVIEWS
 // ==========================================
 

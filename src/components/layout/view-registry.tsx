@@ -41,11 +41,13 @@ const JobsView = lazy(() => import('@/components/views/jobs-view').then(m => ({ 
 const DispatchView = lazy(() => import('@/components/views/dispatch-view').then(m => ({ default: m.DispatchView })));
 const EmployeesView = lazy(() => import('@/components/views/employees-view').then(m => ({ default: m.EmployeesView })));
 const EmployeePerformanceView = lazy(() => import('@/components/views/employee-performance-view').then(m => ({ default: m.EmployeePerformanceView })));
+const TimesheetView = lazy(() => import('@/components/views/timesheet-view').then(m => ({ default: m.TimesheetView })));
 
 // Finance
 const QuotesView = lazy(() => import('@/components/views/quotes-view').then(m => ({ default: m.QuotesView })));
 const InvoicesView = lazy(() => import('@/components/views/invoices-view').then(m => ({ default: m.InvoicesView })));
 const BillingView = lazy(() => import('@/components/views/billing-view').then(m => ({ default: m.BillingView })));
+const ExpensesView = lazy(() => import('@/components/views/expenses-view').then(m => ({ default: m.ExpensesView })));
 
 // System
 const CredentialsView = lazy(() => import('@/components/views/credentials-view').then(m => ({ default: m.CredentialsView })));
@@ -135,10 +137,12 @@ const lazyViews: Partial<Record<ViewType, ComponentType>> = {
   dispatch: DispatchView,
   employees: EmployeesView,
   employeePerformance: EmployeePerformanceView,
+  timesheet: TimesheetView,
   // Finance
   quotes: QuotesView,
   invoices: InvoicesView,
   billing: BillingView,
+  expenses: ExpensesView,
   // System
   credentials: CredentialsView,
   settings: SettingsView,

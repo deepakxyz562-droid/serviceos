@@ -64,6 +64,8 @@ import {
   Ticket,
   Megaphone as MegaphoneIcon,
   TrendingUp,
+  Wallet,
+  Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -129,6 +131,7 @@ const ownerNavSections: NavSection[] = [
     items: [
       { view: 'jobs', label: 'Jobs', icon: Briefcase },
       { view: 'employees', label: 'Employees', icon: UserCog },
+      { view: 'timesheet', label: 'Timesheet', icon: Clock },
       { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },
     ],
   },
@@ -160,6 +163,7 @@ const ownerNavSections: NavSection[] = [
     items: [
       { view: 'quotes', label: 'Quotes', icon: Receipt },
       { view: 'invoices', label: 'Invoices', icon: FileText },
+      { view: 'expenses', label: 'Expenses', icon: Wallet },
       { view: 'billing', label: 'Subscription', icon: CreditCard },
     ],
   },
@@ -185,7 +189,14 @@ const employeeNavSections: NavSection[] = [
     title: 'My Work',
     items: [
       { view: 'employeePortal', label: 'My Jobs', icon: Briefcase },
+      { view: 'timesheet', label: 'Timesheet', icon: Clock },
       { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    ],
+  },
+  {
+    title: 'Finance',
+    items: [
+      { view: 'expenses', label: 'Expenses', icon: Wallet },
     ],
   },
   {
@@ -233,6 +244,7 @@ const superadminNavSections: NavSection[] = [
     items: [
       { view: 'jobs', label: 'Jobs', icon: Briefcase },
       { view: 'employees', label: 'Employees', icon: UserCog },
+      { view: 'timesheet', label: 'Timesheet', icon: Clock },
       { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },
     ],
   },
@@ -264,6 +276,7 @@ const superadminNavSections: NavSection[] = [
     items: [
       { view: 'quotes', label: 'Quotes', icon: Receipt },
       { view: 'invoices', label: 'Invoices', icon: FileText },
+      { view: 'expenses', label: 'Expenses', icon: Wallet },
       { view: 'billing', label: 'Subscription', icon: CreditCard },
     ],
   },
