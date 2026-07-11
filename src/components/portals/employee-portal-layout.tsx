@@ -598,12 +598,14 @@ function usePushAutoSubscribe() {
           // don't leave a dangling browser subscription with no DB row.
           let errMsg = `Server returned ${subRes.status}`;
           let errCode: string | undefined;
+          let errDetails: string | undefined;
           try {
             const errBody = await subRes.json();
             if (errBody?.error) errMsg = errBody.error;
             if (errBody?.code) errCode = errBody.code;
+            if (errBody?.details) errDetails = errBody.details;
           } catch { /* ignore */ }
-          console.warn('[push] Auto-subscribe POST rejected:', subRes.status, errCode, errMsg);
+          console.warn('[push] Auto-subscribe POST rejected:', subRes.status, errCode, errMsg, errDetails);
           // If the session expired, surface a toast so the employee knows
           // to re-login. Other errors are silent (non-fatal) since the
           // banner/card will handle them when the user taps Enable.
@@ -738,12 +740,14 @@ function PushEnableBanner() {
         if (!subRes.ok) {
           let errMsg = `Server returned ${subRes.status}`;
           let errCode: string | undefined;
+          let errDetails: string | undefined;
           try {
             const errBody = await subRes.json();
             if (errBody?.error) errMsg = errBody.error;
             if (errBody?.code) errCode = errBody.code;
+            if (errBody?.details) errDetails = errBody.details;
           } catch { /* ignore */ }
-          console.error('[push] Subscribe POST rejected:', subRes.status, errCode, errMsg);
+          console.error('[push] Subscribe POST rejected:', subRes.status, errCode, errMsg, errDetails);
           const toastTitle =
             errCode === 'AUTH_REQUIRED'
               ? 'Session expired'
@@ -752,10 +756,19 @@ function PushEnableBanner() {
               : errCode === 'NOT_CONFIGURED'
               ? 'Push not configured'
               : 'Failed to save push subscription';
-          const toastDesc =
+          // For DB_ERROR / UNKNOWN, append the server-provided `details`
+          // (truncated) so the user sees the ACTUAL failure reason (e.g.
+          // "table PushSubscription does not exist").
+          let toastDesc =
             errCode === 'AUTH_REQUIRED'
               ? 'Please log in again, then re-enable push notifications.'
               : errMsg;
+          if (
+            errDetails &&
+            (errCode === 'DB_ERROR' || errCode === 'UNKNOWN' || !errCode)
+          ) {
+            toastDesc = `${errMsg} (${errDetails.slice(0, 160)})`;
+          }
           toast.error(toastTitle, { description: toastDesc });
           try { await sub.unsubscribe(); } catch { /* ignore */ }
           return;
@@ -1882,13 +1895,18 @@ function MyJobsView({ employeeId }: { employeeId: string }) {
                   </div>
                   <div className="flex items-center gap-3 sm:shrink-0">
                     {getStatusBadge(job.status)}
-                    {/* pointer-events-none so iOS touch events pass through
-                        to the parent div's onClick. Without this, the native
-                        <button> element captures the touch and prevents the
-                        job detail sheet from opening on iOS. */}
-                    <Button variant="ghost" size="sm" className="text-xs h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 pointer-events-none" tabIndex={-1}>
+                    {/* Visual "View" indicator rendered as a non-interactive
+                        <span> instead of a <Button>. iOS WebKit has well-
+                        known quirks where `pointer-events: none` on native
+                        <button> elements doesn't reliably pass touch events
+                        through to the parent div's onClick — so tapping a
+                        job row on iOS did nothing. Since the entire row is
+                        already clickable (role="button" + onClick above),
+                        this indicator is purely visual and never needs to be
+                        a real <button> element. */}
+                    <span className="inline-flex items-center text-xs h-7 px-2 text-emerald-600">
                       View <ArrowRight className="size-3 ml-1" />
-                    </Button>
+                    </span>
                   </div>
                 </div>
               ))

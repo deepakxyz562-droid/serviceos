@@ -167,6 +167,18 @@ const TABLE_MAP: Record<string, string> = {
   ticketMessage: 'TicketMessage',
   ticketAttachment: 'TicketAttachment',
   announcement: 'Announcement',
+  // ── Notifications (V1.5) ──
+  // These models back the push-notification + in-app notification system.
+  // Without explicit TABLE_MAP entries the adapter would guess the table
+  // name via default capitalization (PushSubscription / AppNotification /
+  // NotificationPreference), which happens to be correct — BUT listing
+  // them explicitly documents intent and makes grep-able which tables the
+  // push subsystem depends on. The actual tables MUST exist in Supabase
+  // (run `npx prisma db push` against the Supabase DATABASE_URL, or create
+  // them manually via the Supabase SQL editor).
+  appNotification: 'AppNotification',
+  notificationPreference: 'NotificationPreference',
+  pushSubscription: 'PushSubscription',
 };
 
 // Known missing tables in Supabase (return empty results gracefully)

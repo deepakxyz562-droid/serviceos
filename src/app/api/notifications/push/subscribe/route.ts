@@ -9,9 +9,13 @@ export const dynamic = 'force-dynamic';
  * POST /api/notifications/push/subscribe
  *
  * Persist a Web Push subscription for the authenticated user. Called from the
- * browser after `pushManager.subscribe()` succeeds. We upsert on
- * `[userId, endpoint]` so re-subscribing the same device doesn't create
- * duplicate rows.
+ * browser after `pushManager.subscribe()` succeeds. We look up an existing row
+ * by `[userId, endpoint]` and update-or-create it so re-subscribing the same
+ * device doesn't create duplicate rows.
+ *
+ * NOTE: We do NOT use Prisma's compound-unique `upsert()` because the Supabase
+ * REST adapter (used in production) cannot resolve the `userId_endpoint`
+ * constraint name. We use findFirst → update | create instead.
  *
  * Body:
  *   {
@@ -84,61 +88,100 @@ export async function POST(request: NextRequest) {
     // userAgent for debugging which device/browser owns each subscription.
     const userAgent = request.headers.get('user-agent') || null;
 
+    // NOTE: We deliberately AVOID Prisma's compound-unique `upsert()` here.
+    // The `userId_endpoint` compound unique constraint is a Prisma-level
+    // abstraction. The Supabase REST adapter (used on Vercel) does NOT
+    // understand compound-unique constraint NAMES — it tries to use
+    // `userId_endpoint` as a literal `onConflict` column, which PostgREST
+    // rejects ("column userId_endpoint does not exist"), causing every
+    // subscribe call to fail with "Failed to save push subscription".
+    //
+    // Instead we do a manual findFirst → update | create. This works
+    // identically across Prisma (SQLite/Postgres) and the Supabase REST
+    // adapter because it only uses simple column filters.
     try {
-      const sub = await db.pushSubscription.upsert({
-        where: {
-          userId_endpoint: {
-            userId: user.id,
-            endpoint,
-          },
-        },
-        update: {
-          keysJson,
-          userAgent,
-          isActive: true,
-          tenantId: user.tenantId,
-        },
-        create: {
-          tenantId: user.tenantId,
-          userId: user.id,
-          endpoint,
-          keysJson,
-          userAgent,
-          isActive: true,
-        },
+      const existing = await db.pushSubscription.findFirst({
+        where: { userId: user.id, endpoint },
+        select: { id: true },
       });
 
-      return NextResponse.json({ id: sub.id, ok: true }, { status: 201 });
+      let savedId: string;
+      if (existing) {
+        const updated = await db.pushSubscription.update({
+          where: { id: existing.id },
+          data: {
+            keysJson,
+            userAgent,
+            isActive: true,
+            tenantId: user.tenantId,
+          },
+          select: { id: true },
+        });
+        savedId = updated.id;
+      } else {
+        const created = await db.pushSubscription.create({
+          data: {
+            tenantId: user.tenantId,
+            userId: user.id,
+            endpoint,
+            keysJson,
+            userAgent,
+            isActive: true,
+          },
+          select: { id: true },
+        });
+        savedId = created.id;
+      }
+
+      return NextResponse.json({ id: savedId, ok: true }, { status: 201 });
     } catch (dbErr) {
-      // Log the FULL Prisma error so Vercel logs show the exact failure
-      // reason (error code, meta, message). Without this, the generic
-      // "Failed to save push subscription" message is useless for debugging.
-      const prismaErr = dbErr as {
+      // Log the FULL error so Vercel logs show the exact failure reason.
+      // Capture both Prisma-shaped errors ({ code, meta }) and plain Error
+      // objects thrown by the Supabase adapter (no .code property — just
+      // .message). The Supabase adapter throws errors like:
+      //   "Failed to upsert PushSubscription: ... table does not exist"
+      // which previously fell through to the generic default message.
+      const dbError = dbErr as {
         code?: string;
         meta?: unknown;
         message?: string;
       };
+      const rawMessage = dbError.message || String(dbErr);
       console.error('[push/subscribe] DB error:', {
-        code: prismaErr.code,
-        meta: prismaErr.meta,
-        message: prismaErr.message,
+        code: dbError.code,
+        meta: dbError.meta,
+        message: rawMessage,
         userId: user.id,
         endpointPreview: endpoint.slice(0, 60),
       });
 
-      // Map known Prisma error codes to user-friendly messages.
+      // Map known error patterns to user-friendly messages. Include the
+      // raw message as `details` so the client toast can show the ACTUAL
+      // failure reason (e.g. "table PushSubscription does not exist") —
+      // this is critical for diagnosing Supabase-adapter issues where the
+      // table hasn't been created yet.
       let errorMsg = 'Failed to save push subscription';
-      if (prismaErr.code === 'P2002') {
-        // Unique constraint — shouldn't happen (we upsert), but handle it.
+      if (dbError.code === 'P2002') {
         errorMsg = 'This device is already registered. Try disabling and re-enabling push.';
-      } else if (prismaErr.code === 'P1001') {
+      } else if (dbError.code === 'P1001') {
         errorMsg = 'Database connection error. Please try again in a moment.';
-      } else if (prismaErr.code?.startsWith('P1')) {
-        errorMsg = `Database error (${prismaErr.code}). Please try again.`;
+      } else if (dbError.code?.startsWith('P1')) {
+        errorMsg = `Database error (${dbError.code}). Please try again.`;
+      } else if (rawMessage.includes('does not exist') || rawMessage.includes('Could not find')) {
+        errorMsg = 'Push notifications table is not set up on the server yet.';
+      } else if (rawMessage.includes('not in Supabase')) {
+        errorMsg = 'Push notifications are not configured in the database backend.';
       }
 
       return NextResponse.json(
-        { error: errorMsg, code: 'DB_ERROR', dbCode: prismaErr.code },
+        {
+          error: errorMsg,
+          code: 'DB_ERROR',
+          dbCode: dbError.code,
+          // Truncate the raw message so we don't leak huge payloads, but
+          // keep enough to diagnose. This is shown in the client toast.
+          details: rawMessage.slice(0, 300),
+        },
         { status: 500 }
       );
     }

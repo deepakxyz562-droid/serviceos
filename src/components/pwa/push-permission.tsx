@@ -204,12 +204,14 @@ function usePushPermission(): UsePushPermissionReturn {
               // PushSubscription row was ever saved in the DB.
               let errorMsg = `Server returned ${subRes.status}`;
               let errorCode: string | undefined;
+              let errorDetails: string | undefined;
               try {
                 const errBody = await subRes.json();
                 if (errBody?.error) errorMsg = errBody.error;
                 if (errBody?.code) errorCode = errBody.code;
+                if (errBody?.details) errorDetails = errBody.details;
               } catch { /* ignore JSON parse errors */ }
-              console.error('[push] Subscribe POST rejected:', subRes.status, errorCode, errorMsg);
+              console.error('[push] Subscribe POST rejected:', subRes.status, errorCode, errorMsg, errorDetails);
 
               // Map server error codes to actionable user-facing messages
               // so the user knows exactly what to do next.
@@ -223,10 +225,21 @@ function usePushPermission(): UsePushPermissionReturn {
                   : errorCode === 'DB_ERROR'
                   ? 'Server error'
                   : 'Failed to save push subscription';
-              const toastDesc =
+              // For DB_ERROR / UNKNOWN, append the server-provided `details`
+              // (truncated) so the user — and anyone screenshotting the toast
+              // for support — can see the ACTUAL failure reason (e.g. "table
+              // PushSubscription does not exist"). This is the single most
+              // useful field for diagnosing Supabase-adapter issues.
+              let toastDesc =
                 errorCode === 'AUTH_REQUIRED'
                   ? 'Please log in again, then re-enable push notifications.'
                   : errorMsg;
+              if (
+                errorDetails &&
+                (errorCode === 'DB_ERROR' || errorCode === 'UNKNOWN' || !errorCode)
+              ) {
+                toastDesc = `${errorMsg} (${errorDetails.slice(0, 160)})`;
+              }
 
               toast.error(toastTitle, { description: toastDesc });
               // Clean up the dangling local subscription (no DB row = useless).
