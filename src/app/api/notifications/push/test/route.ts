@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '@/lib/auth';
 import { isWebPushConfigured } from '@/lib/notifications';
-import { sendWebPushToUser } from '@/lib/web-push-send';
+import { sendWebPushToUserWithDiagnostics } from '@/lib/web-push-send';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,11 +19,12 @@ export const dynamic = 'force-dynamic';
  * Responses:
  *   200 { ok: true, result }            — push fan-out completed (check
  *                                         result.sent / result.failed for
- *                                         per-device outcome)
+ *                                         per-device outcome; result.devices
+ *                                         has per-subscription diagnostics)
  *   401 { error: 'Authentication required' }
  *   400 { error: 'Tenant context required' }
- *   503 { error: 'Web Push is not configured...' }  — missing VAPID keys
- *   500 { error: 'Failed to send test push' }       — unexpected error
+ *   503 { error: 'Web Push is not configured...', result } — missing/bad VAPID
+ *   500 { error: 'Failed to send test push' }              — unexpected error
  */
 export async function POST() {
   try {
@@ -47,7 +48,11 @@ export async function POST() {
       );
     }
 
-    const result = await sendWebPushToUser(user.id, user.tenantId, {
+    // Use the diagnostics variant so the response includes per-device
+    // outcomes (endpoint preview, HTTP status, error body). This is what
+    // makes "Failed to send test push" debuggable — the UI can show
+    // exactly which device failed and the push service's error reason.
+    const result = await sendWebPushToUserWithDiagnostics(user.id, user.tenantId, {
       title: 'ServiceOS Test Notification',
       body: 'If you can see this, push notifications are working correctly!',
       url: '/',
@@ -58,7 +63,13 @@ export async function POST() {
 
     if (result.notConfigured) {
       return NextResponse.json(
-        { error: 'Web Push not configured', result },
+        {
+          error: 'Web Push not configured',
+          result,
+          // configError carries the specific reason (missing key vs
+          // malformed key) so the UI can show a precise message.
+          configError: result.configError,
+        },
         { status: 503 }
       );
     }

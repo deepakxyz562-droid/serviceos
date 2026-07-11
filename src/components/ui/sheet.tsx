@@ -10,21 +10,21 @@ function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />
 }
 
-function SheetTrigger({
-  ...props
-}: React.ComponentProps<typeof SheetPrimitive.Trigger>) {
+function SheetTrigger(
+  ...props: React.ComponentProps<typeof SheetPrimitive.Trigger>
+) {
   return <SheetPrimitive.Trigger data-slot="sheet-trigger" {...props} />
 }
 
-function SheetClose({
-  ...props
-}: React.ComponentProps<typeof SheetPrimitive.Close>) {
+function SheetClose(
+  ...props: React.ComponentProps<typeof SheetPrimitive.Close>
+) {
   return <SheetPrimitive.Close data-slot="sheet-close" {...props} />
 }
 
-function SheetPortal({
-  ...props
-}: React.ComponentProps<typeof SheetPrimitive.Portal>) {
+function SheetPortal(
+  ...props: React.ComponentProps<typeof SheetPrimitive.Portal>
+) {
   return <SheetPrimitive.Portal data-slot="sheet-portal" {...props} />
 }
 
@@ -52,6 +52,14 @@ function SheetContent({
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
   side?: "top" | "right" | "bottom" | "left"
 }) {
+  // iOS notch / status bar: sheets that touch the top of the viewport
+  // (top/left/right) render their header under the notch when
+  // viewport-fit=cover + black-translucent status bar. We push the sheet
+  // content down by env(safe-area-inset-top) so the header (and the close
+  // button) sit below the notch. Bottom sheets don't reach the top, so
+  // they're excluded. env() evaluates to 0px on non-notched devices, so
+  // this is a no-op on desktop / Android without notch.
+  const touchesTop = side === "top" || side === "left" || side === "right";
   return (
     <SheetPortal>
       <SheetOverlay />
@@ -69,10 +77,24 @@ function SheetContent({
             "data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom inset-x-0 bottom-0 h-auto border-t",
           className
         )}
+        style={
+          touchesTop
+            ? { paddingTop: "env(safe-area-inset-top, 0px)" }
+            : undefined
+        }
         {...props}
       >
         {children}
-        <SheetPrimitive.Close className="ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none">
+        <SheetPrimitive.Close
+          // Offset the close button by the safe-area inset so it stays
+          // tappable below the notch (mirrors the sheet's top padding).
+          className={cn(
+            "ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none",
+            touchesTop
+              ? "top-[calc(env(safe-area-inset-top,0px)+1rem)]"
+              : "top-4"
+          )}
+        >
           <XIcon className="size-4" />
           <span className="sr-only">Close</span>
         </SheetPrimitive.Close>

@@ -334,22 +334,63 @@ export function PushPermissionCard() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        // 503 with configError = VAPID keys missing OR malformed. Show the
+        // specific reason so the operator knows whether to set the env var
+        // or regenerate the keys.
+        const configError = data?.configError;
+        const baseDesc = data?.error || `Server returned ${res.status}`;
         toast.error('Test notification failed', {
-          description: data?.error || `Server returned ${res.status}`,
+          description: configError
+            ? `${baseDesc} — ${configError}`
+            : baseDesc,
         });
         return;
       }
       const result = data?.result || {};
       if (result.notConfigured) {
+        // Shouldn't happen (route returns 503 in this case), but guard
+        // anyway in case of a race.
         toast.error('Push not configured', {
-          description: 'VAPID keys are missing on the server.',
+          description: result.configError || 'VAPID keys are missing on the server.',
         });
-      } else if (result.sent > 0) {
+        return;
+      }
+
+      // Per-device diagnostics from sendWebPushToUserWithDiagnostics().
+      // Each entry: { endpointPreview, status, success, deactivated, error }.
+      const devices: Array<{
+        endpointPreview: string;
+        status: number;
+        success: boolean;
+        deactivated: boolean;
+        error?: string;
+      }> = Array.isArray(result.devices) ? result.devices : [];
+
+      if (result.sent > 0) {
+        // At least one device received the push. If others failed, surface
+        // the first failure's status+error so the user knows why.
+        const failedDevice = devices.find((d) => !d.success);
+        const failDetail = failedDevice
+          ? ` 1 device failed (HTTP ${failedDevice.status}${
+              failedDevice.error ? `: ${failedDevice.error.slice(0, 120)}` : ''
+            }).`
+          : '';
         toast.success('Test notification sent', {
-          description: `Delivered to ${result.sent} device(s).${
-            result.failed > 0 ? ` ${result.failed} failed.` : ''
-          }${
+          description: `Delivered to ${result.sent} device(s).${failDetail}${
             isIOS ? ' Close the app to see it.' : ''
+          }`,
+        });
+      } else if (devices.length > 0) {
+        // We had subscriptions but ALL failed. Show the first device's
+        // error so the user can diagnose (e.g. APNs "Unregistered",
+        // FCM "MismatchedSenderID", 410 = expired).
+        const firstFail = devices[0];
+        const errDetail = firstFail.error
+          ? firstFail.error.slice(0, 160)
+          : 'No error body returned by the push service.';
+        toast.error('Push delivery failed', {
+          description: `HTTP ${firstFail.status} from push service. ${errDetail}${
+            firstFail.deactivated ? ' (subscription deactivated — re-enable push.)' : ''
           }`,
         });
       } else {
