@@ -203,14 +203,32 @@ function usePushPermission(): UsePushPermissionReturn {
               // this check the user would believe they're subscribed when no
               // PushSubscription row was ever saved in the DB.
               let errorMsg = `Server returned ${subRes.status}`;
+              let errorCode: string | undefined;
               try {
                 const errBody = await subRes.json();
                 if (errBody?.error) errorMsg = errBody.error;
+                if (errBody?.code) errorCode = errBody.code;
               } catch { /* ignore JSON parse errors */ }
-              console.error('[push] Subscribe POST rejected:', subRes.status, errorMsg);
-              toast.error('Failed to save push subscription', {
-                description: errorMsg,
-              });
+              console.error('[push] Subscribe POST rejected:', subRes.status, errorCode, errorMsg);
+
+              // Map server error codes to actionable user-facing messages
+              // so the user knows exactly what to do next.
+              const toastTitle =
+                errorCode === 'AUTH_REQUIRED'
+                  ? 'Session expired'
+                  : errorCode === 'NO_TENANT'
+                  ? 'Account not configured'
+                  : errorCode === 'NOT_CONFIGURED'
+                  ? 'Push not configured'
+                  : errorCode === 'DB_ERROR'
+                  ? 'Server error'
+                  : 'Failed to save push subscription';
+              const toastDesc =
+                errorCode === 'AUTH_REQUIRED'
+                  ? 'Please log in again, then re-enable push notifications.'
+                  : errorMsg;
+
+              toast.error(toastTitle, { description: toastDesc });
               // Clean up the dangling local subscription (no DB row = useless).
               try { await sub.unsubscribe(); } catch { /* ignore */ }
               setSubscription(null);

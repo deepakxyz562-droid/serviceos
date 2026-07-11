@@ -559,8 +559,9 @@ function usePushAutoSubscribe() {
 
     let cancelled = false;
 
-    (async () => {
+    const attemptSubscribe = async () => {
       try {
+        if (Notification.permission !== 'granted') return;
         // Resolve the VAPID key (build-time fast path → runtime fetch
         // fallback). Abort early if the server isn't configured.
         const vapidKey = await getVapidPublicKey();
@@ -596,11 +597,21 @@ function usePushAutoSubscribe() {
           // Server rejected the subscription — unsubscribe locally so we
           // don't leave a dangling browser subscription with no DB row.
           let errMsg = `Server returned ${subRes.status}`;
+          let errCode: string | undefined;
           try {
             const errBody = await subRes.json();
             if (errBody?.error) errMsg = errBody.error;
+            if (errBody?.code) errCode = errBody.code;
           } catch { /* ignore */ }
-          console.warn('[push] Auto-subscribe POST rejected:', subRes.status, errMsg);
+          console.warn('[push] Auto-subscribe POST rejected:', subRes.status, errCode, errMsg);
+          // If the session expired, surface a toast so the employee knows
+          // to re-login. Other errors are silent (non-fatal) since the
+          // banner/card will handle them when the user taps Enable.
+          if (errCode === 'AUTH_REQUIRED') {
+            toast.error('Session expired', {
+              description: 'Please log in again to re-enable push notifications.',
+            });
+          }
           try { await sub.unsubscribe(); } catch { /* ignore */ }
           return;
         }
@@ -610,10 +621,24 @@ function usePushAutoSubscribe() {
         // manually enable via the Profile → PushPermissionCard.
         console.warn('[push] Auto-subscribe failed:', err);
       }
-    })();
+    };
+
+    attemptSubscribe();
+
+    // Re-attempt when the page becomes visible again (user switched back
+    // to the PWA after re-logging in). This covers the common flow:
+    // session expires → user re-logs in → switches back to PWA → push
+    // auto-resubscribes without any manual interaction.
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && !cancelled) {
+        attemptSubscribe();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       cancelled = true;
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
 }
@@ -712,12 +737,26 @@ function PushEnableBanner() {
         });
         if (!subRes.ok) {
           let errMsg = `Server returned ${subRes.status}`;
+          let errCode: string | undefined;
           try {
             const errBody = await subRes.json();
             if (errBody?.error) errMsg = errBody.error;
+            if (errBody?.code) errCode = errBody.code;
           } catch { /* ignore */ }
-          console.error('[push] Subscribe POST rejected:', subRes.status, errMsg);
-          toast.error('Failed to save push subscription', { description: errMsg });
+          console.error('[push] Subscribe POST rejected:', subRes.status, errCode, errMsg);
+          const toastTitle =
+            errCode === 'AUTH_REQUIRED'
+              ? 'Session expired'
+              : errCode === 'NO_TENANT'
+              ? 'Account not configured'
+              : errCode === 'NOT_CONFIGURED'
+              ? 'Push not configured'
+              : 'Failed to save push subscription';
+          const toastDesc =
+            errCode === 'AUTH_REQUIRED'
+              ? 'Please log in again, then re-enable push notifications.'
+              : errMsg;
+          toast.error(toastTitle, { description: toastDesc });
           try { await sub.unsubscribe(); } catch { /* ignore */ }
           return;
         }
@@ -1803,8 +1842,16 @@ function MyJobsView({ employeeId }: { employeeId: string }) {
               filteredJobs.map((job) => (
                 <div
                   key={job.id}
-                  className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-lg border border-border hover:border-emerald-300 dark:hover:border-emerald-700 transition-colors hover:bg-muted/30 cursor-pointer"
+                  role="button"
+                  tabIndex={0}
+                  className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-lg border border-border hover:border-emerald-300 dark:hover:border-emerald-700 transition-colors hover:bg-muted/30 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
                   onClick={() => setSelectedJob(job)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSelectedJob(job);
+                    }
+                  }}
                 >
                   <div className="flex items-start gap-3 flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 shrink-0 mt-1">
@@ -1835,7 +1882,11 @@ function MyJobsView({ employeeId }: { employeeId: string }) {
                   </div>
                   <div className="flex items-center gap-3 sm:shrink-0">
                     {getStatusBadge(job.status)}
-                    <Button variant="ghost" size="sm" className="text-xs h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30">
+                    {/* pointer-events-none so iOS touch events pass through
+                        to the parent div's onClick. Without this, the native
+                        <button> element captures the touch and prevents the
+                        job detail sheet from opening on iOS. */}
+                    <Button variant="ghost" size="sm" className="text-xs h-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 pointer-events-none" tabIndex={-1}>
                       View <ArrowRight className="size-3 ml-1" />
                     </Button>
                   </div>
