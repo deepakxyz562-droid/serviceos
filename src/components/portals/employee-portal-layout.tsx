@@ -41,6 +41,7 @@ import {
   Wrench,
   Receipt,
   Plus,
+  X,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -529,6 +530,214 @@ function useEmployeeRecord(employeeId: string | null) {
   return { employee, loading, error };
 }
 
+/**
+ * usePushAutoSubscribe — silently (re)subscribe to Web Push on mount.
+ *
+ * Why this exists: the PushPermissionCard in the Profile view requires the
+ * employee to manually click "Enable". Most never do, so even when the
+ * backend push fan-out code is correct, `sendWebPushToUser()` finds 0
+ * PushSubscription rows and no push is ever delivered.
+ *
+ * This hook closes that gap: on portal mount, if push is supported AND the
+ * VAPID public key is present in the client bundle AND the employee already
+ * granted notification permission on a prior visit AND there's no existing
+ * PushSubscription, we call `pushManager.subscribe()` + POST to the
+ * subscribe endpoint. This makes push "just work" for returning employees
+ * without any extra UI interaction.
+ *
+ * If permission is `default` (never asked), we DO NOT prompt automatically —
+ * that's annoying and many browsers block auto-prompts. The push-enable
+ * banner on the Home view (see HomeView) surfaces the opt-in.
+ */
+function usePushAutoSubscribe() {
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    if (!vapidKey) return;
+    if (Notification.permission !== 'granted') return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        const existing = await reg.pushManager.getSubscription();
+        if (cancelled || existing) return; // already subscribed
+
+        // Convert the VAPID public key to the Uint8Array form pushManager
+        // expects. Same helper the manual subscribe path uses.
+        function urlBase64ToUint8Array(base64String: string): Uint8Array {
+          const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+          const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+          const raw = window.atob(base64);
+          const output = new Uint8Array(raw.length);
+          for (let i = 0; i < raw.length; ++i) output[i] = raw.charCodeAt(i);
+          return output;
+        }
+
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        });
+        if (cancelled) {
+          // We subscribed after unmount — clean up so we don't leak.
+          await sub.unsubscribe();
+          return;
+        }
+        const json = sub.toJSON();
+        if (!json.endpoint) return;
+
+        // Persist server-side so the backend can actually send pushes.
+        await fetch('/api/notifications/push/subscribe?XTransformPort=3000', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            endpoint: json.endpoint,
+            keys: json.keys,
+            expirationTime: json.expirationTime ?? null,
+          }),
+        });
+        console.info('[push] Auto-subscribed successfully');
+      } catch (err) {
+        // Non-fatal — the employee just won't receive pushes until they
+        // manually enable via the Profile → PushPermissionCard.
+        console.warn('[push] Auto-subscribe failed:', err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+}
+
+/**
+ * PushEnableBanner — one-tap opt-in banner shown on the Home view.
+ *
+ * Renders only when ALL of these are true:
+ *  - Push is supported in this browser
+ *  - The VAPID public key is present (server is configured)
+ *  - Notification permission is `default` (never asked) — if `granted` the
+ *    auto-subscribe hook already handles it; if `denied` there's nothing we
+ *    can do from code (user must change it in browser settings).
+ *  - The employee hasn't dismissed the banner (localStorage flag)
+ *
+ * The Enable button requests permission + subscribes + persists. On success
+ * the banner disappears (permission is now `granted`).
+ */
+const PUSH_BANNER_DISMISS_KEY = 'serviceos_push_banner_dismissed_v1';
+
+function PushEnableBanner() {
+  const [dismissed, setDismissed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [permission, setPermission] = useState<NotificationPermission>('default');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setPermission(Notification.permission);
+    try {
+      if (window.localStorage.getItem(PUSH_BANNER_DISMISS_KEY) === '1') {
+        setDismissed(true);
+      }
+    } catch {
+      // localStorage may be blocked (private mode) — just hide the banner.
+      setDismissed(true);
+    }
+  }, []);
+
+  // Hide if push isn't supported / VAPID missing / already granted or denied.
+  const supported = typeof window !== 'undefined'
+    && 'Notification' in window
+    && 'serviceWorker' in navigator
+    && 'PushManager' in window;
+  const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  if (!supported || !vapidKey || dismissed || permission !== 'default') return null;
+
+  const handleEnable = async () => {
+    setBusy(true);
+    try {
+      // 1) Ask the browser for notification permission.
+      const perm = await Notification.requestPermission();
+      setPermission(perm);
+      if (perm !== 'granted') {
+        toast.error('Notification permission denied', {
+          description: 'You can enable it later in your browser settings.',
+        });
+        return;
+      }
+      // 2) Subscribe via the service worker + persist server-side.
+      const reg = await navigator.serviceWorker.ready;
+      function urlBase64ToUint8Array(base64String: string): Uint8Array {
+        const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const raw = window.atob(base64);
+        const output = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; ++i) output[i] = raw.charCodeAt(i);
+        return output;
+      }
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+      });
+      const json = sub.toJSON();
+      if (json.endpoint) {
+        await fetch('/api/notifications/push/subscribe?XTransformPort=3000', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            endpoint: json.endpoint,
+            keys: json.keys,
+            expirationTime: json.expirationTime ?? null,
+          }),
+        });
+      }
+      toast.success('Push notifications enabled', {
+        description: 'You\'ll now receive alerts when jobs are assigned to you.',
+      });
+    } catch (err) {
+      console.error('[push] Enable failed:', err);
+      toast.error('Could not enable push notifications');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDismiss = () => {
+    setDismissed(true);
+    try {
+      window.localStorage.setItem(PUSH_BANNER_DISMISS_KEY, '1');
+    } catch {
+      // Ignore storage errors.
+    }
+  };
+
+  return (
+    <Card className="border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-900">
+      <CardContent className="p-4 flex items-start gap-3">
+        <div className="size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center shrink-0">
+          <Bell className="size-5 text-emerald-600 dark:text-emerald-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-foreground">Get notified about new jobs</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Enable push notifications so you receive an alert on this device the moment a job is assigned to you.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button size="sm" className="h-8 bg-emerald-600 hover:bg-emerald-700" onClick={handleEnable} disabled={busy}>
+            {busy ? <Loader2 className="size-3.5 mr-1.5 animate-spin" /> : <Bell className="size-3.5 mr-1.5" />}
+            Enable
+          </Button>
+          <Button size="sm" variant="ghost" className="h-8 px-2 text-muted-foreground" onClick={handleDismiss} aria-label="Dismiss">
+            <X className="size-4" />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Loading skeleton ───────────────────────────────────────────────────────
 
 function LoadingSkeleton({ lines = 3 }: { lines?: number }) {
@@ -633,6 +842,11 @@ function HomeView({ employeeId }: { employeeId: string }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Push-enable prompt — only shown if push is supported + VAPID is
+          configured + the employee hasn't yet granted notification
+          permission + they haven't dismissed this banner before. */}
+      <PushEnableBanner />
 
       {/* Stats grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1075,8 +1289,11 @@ function JobDetailSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-        <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
-          <SheetHeader>
+        <SheetContent className="w-full sm:max-w-xl flex flex-col gap-0 p-0">
+          {/* Sticky header — stays visible at the top while the body scrolls.
+              shrink-0 so it never collapses; bottom border separates it from
+              the scrollable content below. */}
+          <SheetHeader className="shrink-0 sticky top-0 z-10 bg-background px-4 pt-4 pb-3 border-b border-border">
             <div className="flex items-center gap-2 flex-wrap">
               {getStatusBadge(stage)}
               {stage === 'assigned' && (
@@ -1098,7 +1315,10 @@ function JobDetailSheet({
             )}
           </SheetHeader>
 
-          <div className="mt-6 space-y-5">
+          {/* Scrollable body — takes the remaining height between the sticky
+              header and sticky footer. overflow-y-auto so only this region
+              scrolls, keeping the header + action buttons always visible. */}
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
             {/* Description */}
             {job.description && (
               <div>
@@ -1228,8 +1448,14 @@ function JobDetailSheet({
               />
             </div>
 
+          </div>
+
+          {/* Sticky footer — action buttons always visible at the bottom of
+              the sheet (no need to scroll down to find them). Safe-area
+              padding so iPhones with home indicators don't cover the buttons.
+              bg-background + top border visually separate it from the body. */}
+          <div className="shrink-0 sticky bottom-0 z-10 bg-background border-t border-border px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             {/* Action Buttons (stage-aware) */}
-            <Separator />
             <div className="space-y-3">
               {stage === 'assigned' && (
                 <div className="flex gap-2">
@@ -1424,6 +1650,33 @@ function MyJobsView({ employeeId }: { employeeId: string }) {
         return stage === filter || j.status === filter;
       });
 
+  // ── Sync selectedJob from the jobs array whenever jobs change ────────
+  // This is the fix for the "next button not updating" bug. After a
+  // lifecycle action (accept/start_travel/arrive/etc.) we call `refetch()`,
+  // which recomputes `lifecycleState` + `lifecycleTimestamps` on the server
+  // (see /api/employee/jobs route). Previously the handler tried to patch
+  // `selectedJob` from the raw lifecycle POST response — but that response
+  // doesn't include `lifecycleState`/`lifecycleTimestamps` (they're derived
+  // fields), so the optimistic patch copied STALE values via `prev`, and
+  // `resolveLifecycleStage(job)` kept returning the OLD stage → the action
+  // button never advanced.
+  //
+  // This effect fires AFTER `refetch()` updates `jobs`. It finds the
+  // matching job in the fresh list (which has the correct derived fields)
+  // and replaces `selectedJob` entirely. The sheet then re-renders with
+  // the new stage → the "Next" button advances automatically.
+  useEffect(() => {
+    if (!selectedJob) return;
+    const fresh = jobs.find((j) => j.id === selectedJob.id);
+    if (fresh && fresh !== selectedJob) {
+      // Only update if the reference actually changed (avoids infinite loops
+      // since mapJobRow returns a new object per fetch — the `!==` check on
+      // the object reference is enough because useEmployeeJobs replaces the
+      // whole array on refetch).
+      setSelectedJob(fresh);
+    }
+  }, [jobs, selectedJob]);
+
   // ── V1.5 Job lifecycle action handler ──
   // Calls POST /api/employee/jobs/[id]/lifecycle with the full V1.5 action
   // set: accept, start_travel, arrive, start_work, pause, resume, complete.
@@ -1446,31 +1699,10 @@ function MyJobsView({ employeeId }: { employeeId: string }) {
           complete: 'completed',
         };
         toast.success(`Job ${actionLabels[action] || action} successfully`);
+        // refetch() updates the `jobs` array; the useEffect above will sync
+        // `selectedJob` from the fresh data (with correct lifecycleState +
+        // lifecycleTimestamps), so the sheet's action buttons advance.
         await refetch();
-        // Refresh the selected job from the freshly-refetched jobs list so the
-        // sheet immediately reflects the new lifecycle stage / timestamps.
-        if (selectedJob?.id === jobId) {
-          // refetch() updates the `jobs` array asynchronously; we can't read
-          // it here directly, so optimistically patch the locally-selected job
-          // using the lifecycle response (the endpoint returns { job: ... }).
-          try {
-            const data = await res.json();
-            const updated = data?.job;
-            if (updated) {
-              setSelectedJob((prev) => prev ? {
-                ...prev,
-                status: (updated.status as JobStatus) ?? prev.status,
-                assignmentStatus: updated.assignmentStatus ?? prev.assignmentStatus,
-                actualStartTime: updated.actualStartTime ?? prev.actualStartTime,
-                actualEndTime: updated.actualEndTime ?? prev.actualEndTime,
-                lifecycleTimestamps: prev.lifecycleTimestamps,
-                lifecycleState: prev.lifecycleState,
-              } : prev);
-            }
-          } catch {
-            // Response body already consumed — ignore.
-          }
-        }
         // Auto-close the sheet once the job is completed.
         if (action === 'complete') {
           setSelectedJob(null);
@@ -2932,6 +3164,14 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
   const employeeName = employee?.name || auth.user?.name || 'Employee';
   const employeeRole = employee?.role || 'Field Service Technician';
 
+  // ── Auto-subscribe to Web Push on mount ────────────────────────────────
+  // If the employee previously granted notification permission (e.g. on a
+  // prior session, or after clicking "Allow" in the OS prompt), we silently
+  // (re)subscribe + persist the PushSubscription server-side so the backend
+  // can actually deliver job-assignment pushes to this device. Runs once per
+  // portal mount. All failures are swallowed — this never blocks the UI.
+  usePushAutoSubscribe();
+
   const handleViewChange = (view: EmployeeSubView) => {
     setActiveView(view);
     setMobileSidebarOpen(false);
@@ -3012,41 +3252,47 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
       {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
-        <header className="h-14 shrink-0 border-b border-border bg-card flex items-center justify-between px-4">
-          <div className="flex items-center gap-3">
+        <header className="h-14 shrink-0 border-b border-border bg-card flex items-center justify-between gap-2 px-3 sm:px-4">
+          {/* Left: hamburger (mobile) + page title. min-w-0 + truncate so long
+              titles ("Scheduled Visits", "My Jobs") never push the right-side
+              action buttons off-screen on small phones. */}
+          <div className="flex items-center gap-2 min-w-0 flex-1">
             {isMobile && (
               <Button
                 variant="ghost"
                 size="icon"
-                className="size-9 -ml-1"
+                className="size-9 -ml-1 shrink-0"
                 onClick={() => setMobileSidebarOpen(true)}
               >
                 <Menu className="size-5" />
                 <span className="sr-only">Open menu</span>
               </Button>
             )}
-            <h1 className="text-base font-semibold text-foreground">
+            <h1 className="text-base font-semibold text-foreground truncate min-w-0">
               {pageTitleMap[activeView]}
             </h1>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Right: action buttons. shrink-0 so they never get squeezed;
+              gap-1 on mobile (gap-2 on sm+) keeps them compact. */}
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             {/* Dark mode toggle */}
             <ThemeToggleButton />
 
             {/* Notification bell — wired to /api/notifications */}
             <NotificationBell />
 
-            {/* Avatar dropdown */}
+            {/* Avatar dropdown — on mobile show avatar only (hide the
+                chevron to save horizontal space). */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-9 px-2 gap-2">
+                <Button variant="ghost" className="h-9 px-1.5 sm:px-2 gap-1.5 sm:gap-2">
                   <Avatar className="size-7">
                     <AvatarFallback className="text-[10px] font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
                       {employeeName.split(' ').map(n => n[0]).join('').slice(0, 2)}
                     </AvatarFallback>
                   </Avatar>
-                  <ChevronDown className="size-3.5 text-muted-foreground" />
+                  <ChevronDown className="size-3.5 text-muted-foreground hidden sm:block" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
