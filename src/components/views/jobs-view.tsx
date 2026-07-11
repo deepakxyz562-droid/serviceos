@@ -86,6 +86,10 @@ import {
 import { PhotoCapture, type JobPhoto } from '@/components/job/photo-capture';
 import { SignaturePad, type SavedSignature } from '@/components/job/signature-pad';
 import { JobCompletionScreen } from '@/components/job/job-completion-screen';
+// Scheduled visits (Jobber-style), Labor + Expenses sections on the job detail page
+import { ScheduledVisitsSection } from '@/components/job/scheduled-visits-section';
+import { LaborSection } from '@/components/job/labor-section';
+import { JobExpensesSection } from '@/components/job/job-expenses-section';
 import {
   JOB_LIFECYCLE_STAGES,
   getLifecycleStageIndex,
@@ -883,6 +887,7 @@ export function JobsView() {
   // pendingCreate to 'job', we open the New Job form and clear the signal.
   const pendingCreate = useAppStore((s) => s.pendingCreate);
   const setPendingCreate = useAppStore((s) => s.setPendingCreate);
+  const setActiveView = useAppStore((s) => s.setActiveView);
 
   // State
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -982,6 +987,9 @@ export function JobsView() {
   const [lifecycleLoadingAction, setLifecycleLoadingAction] = useState<string | null>(null);
   const [liveTimerSeconds, setLiveTimerSeconds] = useState(0);
   const [showRouteModal, setShowRouteModal] = useState(false);
+  // Job-detail sidebar: live Labor + Expenses totals (for the Profit margin card).
+  const [jobLaborMinutes, setJobLaborMinutes] = useState(0);
+  const [jobExpensesTotal, setJobExpensesTotal] = useState(0);
   const [routeData, setRouteData] = useState<{
     path: Array<{ lat: number; lng: number; capturedAt: string; accuracy?: number | null }>;
     summary: { totalDistanceKm: number; totalDurationMinutes: number; routeCount: number };
@@ -1661,8 +1669,31 @@ export function JobsView() {
     // Reset route modal state
     setRouteData(null);
     setShowRouteModal(false);
+    // Load Labor + Expenses totals for the Profit margin sidebar.
+    fetchJobLaborAndExpenses(job.id);
     // Open as a full page (Jobber-style) instead of a modal dialog.
     setFormMode('detail');
+  };
+
+  // Fetch Labor (JobTimeEntry) minutes and Expenses total for the job-detail
+  // Profit margin sidebar. Best-effort — failures default to 0.
+  const fetchJobLaborAndExpenses = async (jobId: string) => {
+    setJobLaborMinutes(0);
+    setJobExpensesTotal(0);
+    try {
+      const [teRes, exRes] = await Promise.all([
+        fetch(`/api/jobs/${jobId}/time-entries`).then((r) => r.json()).catch(() => null),
+        fetch(`/api/jobs/${jobId}/expenses`).then((r) => r.json()).catch(() => null),
+      ]);
+      if (teRes?.totals) {
+        setJobLaborMinutes(Number(teRes.totals.totalWorkingMinutes) || 0);
+      }
+      if (exRes?.totals) {
+        setJobExpensesTotal(Number(exRes.totals.totalAmount) || 0);
+      }
+    } catch {
+      // ignore — sidebar just shows 0
+    }
   };
 
   const fetchJobSignatures = async (jobId: string) => {
@@ -1840,6 +1871,53 @@ export function JobsView() {
     } finally {
       setDeleteSaving(false);
     }
+  };
+
+  // ── Create Invoice from the current job (Billing section button) ────────
+  // Calls the existing /api/jobs/generate-invoice endpoint, then navigates
+  // the user to the Invoices view so they can see the freshly-created row.
+  const handleCreateInvoice = async (job: Job) => {
+    try {
+      toast.loading('Generating invoice…', { id: 'gen-invoice' });
+      const res = await fetch('/api/jobs/generate-invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: job.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 409 && data.invoice) {
+          toast.success('Invoice already exists — opening Invoices', { id: 'gen-invoice' });
+        } else {
+          throw new Error(data.error || 'Failed to generate invoice');
+        }
+      } else {
+        toast.success(`Invoice ${data.invoice?.number || ''} created`, { id: 'gen-invoice' });
+      }
+      // Navigate to the Invoices view so the user can see the result.
+      setActiveView('invoices');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to generate invoice', { id: 'gen-invoice' });
+    }
+  };
+
+  // ── Print / PDF (Actions sidebar) ───────────────────────────────────────
+  // Uses the browser's native print dialog, which lets the user "Save as PDF".
+  const handlePrintJob = () => {
+    if (typeof window !== 'undefined') {
+      window.print();
+    }
+  };
+
+  // ── Email client (Actions sidebar) ──────────────────────────────────────
+  // Opens the existing CommunicationComposer pre-targeted to this job's customer.
+  const handleEmailClient = (job: Job) => {
+    setComposerInitial({
+      templateKey: 'custom',
+      subject: `Update on ${job.title}`,
+      body: '',
+    });
+    setShowComposer(true);
   };
 
   const getMoreActionsMenu = (job: Job) => (
@@ -2509,7 +2587,13 @@ export function JobsView() {
     const linkedAsset = linkedAssetId ? detailLinkedAsset : null;
     const totalPrice = lineItemsSubtotal(lineItems) || (job.quotedAmount || 0);
     const totalCost = lineItems.reduce((sum, it) => sum + (Number(it.unitCost) || 0) * (Number(it.quantity) || 0), 0);
-    const profit = totalPrice - totalCost;
+    // Labor cost: convert tracked working minutes to a monetary value.
+    // Uses a conservative $50/hr default rate; employees without an explicit
+    // hourly rate fall back to this. (Future: read from Employee.hourlyRate.)
+    const LABOR_HOURLY_RATE = 50;
+    const laborCost = (jobLaborMinutes / 60) * LABOR_HOURLY_RATE;
+    const expensesCost = jobExpensesTotal;
+    const profit = totalPrice - totalCost - laborCost - expensesCost;
     const profitPct = totalPrice > 0 ? (profit / totalPrice) * 100 : 0;
     const isClosed = job.status === 'completed' || job.status === 'cancelled';
     const logs = parseNotificationLog(job.notificationLogJson);
@@ -2836,39 +2920,27 @@ export function JobsView() {
               )}
             </FormSectionCard>
 
-            {/* Scheduled visits (timeline) */}
+            {/* Labor (JobTimeEntry list + Add Time Entry) */}
+            <FormSectionCard icon={Clock} title="Labor" description="Time tracked by the team on this job.">
+              <LaborSection
+                jobId={job.id}
+                employees={employees.map((e) => ({ id: e.id, name: e.name }))}
+                canAdd={true}
+              />
+            </FormSectionCard>
+
+            {/* Expenses (list + Add Expense) */}
+            <FormSectionCard icon={DollarSign} title="Expenses" description="Track all expenses for this job in one place.">
+              <JobExpensesSection job={{ id: job.id, title: job.title, customerName: job.customerName }} />
+            </FormSectionCard>
+
+            {/* Scheduled visits (interactive table + dialogs) */}
             <FormSectionCard icon={CalendarDays} title="Scheduled visits">
-              {job.scheduledAt ? (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3 rounded-md border border-border/60 bg-muted/20 px-3 py-2.5">
-                    <CalendarDays className="size-4 text-emerald-600 shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground">{formatDate(job.scheduledAt)}{job.scheduledTime ? ` · ${job.scheduledTime}` : ''}</p>
-                      <p className="text-xs text-muted-foreground">First visit</p>
-                    </div>
-                  </div>
-                  {job.assigneeName && (
-                    <div className="flex items-center gap-3 rounded-md border border-border/60 bg-muted/20 px-3 py-2.5">
-                      <div className="size-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-medium shrink-0">{job.assigneeName[0]}</div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground">{job.assigneeName}</p>
-                        <p className="text-xs text-muted-foreground">Assigned{job.assigneePhone ? ` · ${job.assigneePhone}` : ''}</p>
-                      </div>
-                    </div>
-                  )}
-                  {job.visitInstructions && (
-                    <div className="rounded-md bg-muted/30 px-3 py-2.5">
-                      <p className="text-xs font-medium text-muted-foreground mb-1">Visit instructions</p>
-                      <p className="text-sm text-foreground whitespace-pre-wrap">{job.visitInstructions}</p>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <CalendarDays className="size-4" />
-                  <span>No visits have been scheduled for this job.</span>
-                </div>
-              )}
+              <ScheduledVisitsSection
+                job={{ id: job.id, title: job.title, customerName: job.customerName, jobNumber: job.jobNumber }}
+                employees={employees.map((e) => ({ id: e.id, name: e.name }))}
+                checklists={checklists.map((c) => ({ id: c.id, name: c.title }))}
+              />
             </FormSectionCard>
 
             {/* Billing */}
@@ -2884,7 +2956,7 @@ export function JobsView() {
                     {job.status === 'completed' ? 'Paid' : 'Pending'}
                   </Badge>
                 </div>
-                <button className="text-sm font-medium text-emerald-700 hover:text-emerald-800 inline-flex items-center gap-1">
+                <button onClick={() => handleCreateInvoice(job)} className="text-sm font-medium text-emerald-700 hover:text-emerald-800 inline-flex items-center gap-1">
                   <Plus className="size-3.5" /> Create Invoice
                 </button>
               </div>
@@ -3156,12 +3228,12 @@ export function JobsView() {
                     <span className="text-muted-foreground">({symbol}{totalCost.toFixed(2)})</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Labor</span>
-                    <span className="text-muted-foreground">({symbol}0.00)</span>
+                    <span className="text-muted-foreground">Labor <span className="text-[10px]">({Math.round(jobLaborMinutes)}m)</span></span>
+                    <span className="text-muted-foreground">({symbol}{laborCost.toFixed(2)})</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Expenses</span>
-                    <span className="text-muted-foreground">({symbol}0.00)</span>
+                    <span className="text-muted-foreground">({symbol}{expensesCost.toFixed(2)})</span>
                   </div>
                   <Separator className="my-2 bg-border/60" />
                   <div className="flex items-center justify-between">
@@ -3178,10 +3250,10 @@ export function JobsView() {
                 <button onClick={() => openEditJob(job)} className="inline-flex items-center justify-start gap-2 h-9 px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors">
                   <Pencil className="size-4" /> Edit job
                 </button>
-                <button className="inline-flex items-center justify-start gap-2 h-9 px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors">
+                <button onClick={handlePrintJob} className="inline-flex items-center justify-start gap-2 h-9 px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors">
                   <Printer className="size-4" /> Print / PDF
                 </button>
-                <button className="inline-flex items-center justify-start gap-2 h-9 px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors">
+                <button onClick={() => handleEmailClient(job)} className="inline-flex items-center justify-start gap-2 h-9 px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors">
                   <Send className="size-4" /> Email client
                 </button>
               </div>

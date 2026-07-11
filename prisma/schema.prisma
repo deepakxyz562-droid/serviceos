@@ -3607,6 +3607,52 @@ model JobTimeEntry {
   @@index([tenantId, entryType])
 }
 
+// 11b. JobVisit — a scheduled visit for a job (supports repeat scheduling).
+//   A job can have many visits. The first visit mirrors the legacy
+//   Job.scheduledAt / scheduledTime fields for backward compatibility,
+//   but additional visits live only here.
+//   status: scheduled | in_progress | completed | cancelled
+//   repeats: none | daily | weekly | monthly
+model JobVisit {
+  id              String   @id @default(cuid())
+  jobVisitNumber  Int      @default(1)               // 1, 2, 3 ... per job (sequential)
+  tenantId        String
+  jobId           String   // -> Job.id
+  // Visit content
+  title           String   @default("")              // visit title (often auto "client - title")
+  instructions    String?                             // visit instructions shown to assignee on-site
+  // Schedule
+  scheduledDate   DateTime @default(now())           // the day the visit starts
+  endDate         DateTime?                           // optional end date for multi-day visits
+  scheduledTime   String?                             // "09:30" or null when "Anytime"
+  endTime         String?                             // optional end time
+  anytime         Boolean  @default(true)             // when true, time fields are ignored
+  scheduleLater   Boolean  @default(false)            // when true, visit is unscheduled (TBD)
+  // Repeat scheduling
+  repeats         String   @default("none")           // none | daily | weekly | monthly
+  repeatInterval  Int      @default(1)                // every N days/weeks/months
+  repeatWeekdays  String   @default("[]")             // JSON: [0..6] for weekly (0=Sun)
+  repeatUntil     DateTime?                            // optional end date for the recurrence
+  // Assignment
+  assigneeIdsJson String   @default("[]")             // JSON: [employeeId, ...]
+  assigneeNamesJson String @default("[]")             // JSON: [employeeName, ...] (denormalized for fast render)
+  emailTeam       Boolean  @default(false)            // email team when assigned
+  teamReminder    String   @default("none")           // none | 1h | 24h | 2d
+  // Linked checklists
+  checklistIdsJson String  @default("[]")             // JSON: [checklistId, ...]
+  // Status
+  status          String   @default("scheduled")      // scheduled | in_progress | completed | cancelled
+  completedAt     DateTime?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([tenantId, jobId, scheduledDate])
+  @@index([tenantId, jobId, status])
+  @@index([tenantId, scheduledDate])
+  @@index([tenantId, status])
+}
+
 // 12. GPSLocation — append-only GPS pings from employees during travel.
 model GPSLocation {
   id              String   @id @default(cuid())

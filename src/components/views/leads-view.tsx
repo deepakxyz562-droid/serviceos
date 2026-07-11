@@ -73,6 +73,10 @@ export interface LineItem {
   name: string;
   quantity: string;
   unitPrice: string;
+  /** Cost of goods/services per unit (used for profit-margin calc). Defaults to '0'. */
+  unitCost?: string;
+  /** Optional long-form description shown under the name. */
+  description?: string;
 }
 
 interface Lead {
@@ -328,15 +332,25 @@ export function newLineItemId(): string {
 }
 
 export function emptyLineItem(): LineItem {
-  return { id: newLineItemId(), serviceId: null, name: '', quantity: '1', unitPrice: '0' };
+  return { id: newLineItemId(), serviceId: null, name: '', quantity: '1', unitPrice: '0', unitCost: '0', description: '' };
 }
 
 export function lineItemTotal(item: LineItem): number {
   return (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0);
 }
 
+/** Total cost = Σ (unitCost × quantity). Used for profit margin. */
+export function lineItemCost(item: LineItem): number {
+  return (parseFloat(item.quantity) || 0) * (parseFloat(item.unitCost || '0') || 0);
+}
+
 export function lineItemsSubtotal(items: LineItem[]): number {
   return items.reduce((sum, it) => sum + lineItemTotal(it), 0);
+}
+
+/** Σ of all line-item costs. Used for the profit-margin sidebar. */
+export function lineItemsTotalCost(items: LineItem[]): number {
+  return items.reduce((sum, it) => sum + lineItemCost(it), 0);
 }
 
 export function parseLineItems(json: string | null | undefined): LineItem[] {
@@ -349,6 +363,8 @@ export function parseLineItems(json: string | null | undefined): LineItem[] {
       name: (it.name as string) || '',
       quantity: String((it.quantity as number | string) ?? 1),
       unitPrice: String((it.unitPrice as number | string) ?? 0),
+      unitCost: String((it.unitCost as number | string) ?? 0),
+      description: (it.description as string) || '',
     }));
   } catch {
     return [];
@@ -942,7 +958,7 @@ export function LineItemRow({
         )}
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <div>
           <Label className="text-[11px] text-muted-foreground mb-1">Quantity</Label>
           <Input
@@ -951,6 +967,16 @@ export function LineItemRow({
             step="1"
             value={item.quantity}
             onChange={(e) => onChange({ ...item, quantity: e.target.value })}
+          />
+        </div>
+        <div>
+          <Label className="text-[11px] text-muted-foreground mb-1">Unit cost</Label>
+          <Input
+            type="number"
+            min="0"
+            step="0.01"
+            value={item.unitCost ?? '0'}
+            onChange={(e) => onChange({ ...item, unitCost: e.target.value })}
           />
         </div>
         <div>
