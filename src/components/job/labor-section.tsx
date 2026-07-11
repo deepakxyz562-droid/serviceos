@@ -70,11 +70,20 @@ export function LaborSection({
   employees,
   canAdd = true,
   onAddTimeEntry,
+  hideActiveEntry = false,
 }: {
   jobId: string;
   employees: EmployeeOption[];
   canAdd?: boolean;
   onAddTimeEntry?: () => void;
+  /**
+   * When true, entries whose status is 'active' or 'paused' (i.e. the session
+   * currently being shown by the live timer above) are hidden from this list
+   * so the same session isn't displayed twice. The grand-total minutes in the
+   * summary still reflect all entries (completed time only — the DB only
+   * populates workingMinutes when an entry is finalized).
+   */
+  hideActiveEntry?: boolean;
 }) {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [totals, setTotals] = useState<Totals>({ totalMinutes: 0, totalWorkingMinutes: 0, totalTravelMinutes: 0, count: 0 });
@@ -98,7 +107,16 @@ export function LaborSection({
 
   useEffect(() => {
     fetchEntries();
-  }, [fetchEntries]);
+    // Re-fetch when the active-session visibility flips so the list stays in
+    // sync with the live timer (e.g. when a session completes, its entry
+    // transitions from 'active' → 'completed' and should now appear here).
+  }, [fetchEntries, hideActiveEntry]);
+
+  // Filter out the in-flight session when it's already shown by the live timer.
+  const visibleEntries = hideActiveEntry
+    ? entries.filter((e) => e.status !== 'active' && e.status !== 'paused')
+    : entries;
+  const hiddenCount = entries.length - visibleEntries.length;
 
   return (
     <>
@@ -106,11 +124,15 @@ export function LaborSection({
         <div className="text-xs text-muted-foreground">
           {loading ? (
             <span className="flex items-center gap-1.5"><Loader2 className="size-3.5 animate-spin" /> Loading…</span>
-          ) : entries.length === 0 ? (
+          ) : visibleEntries.length === 0 && hiddenCount === 0 ? (
             <span>Time tracked to this job will show here.</span>
           ) : (
             <span>
-              {totals.count} {totals.count === 1 ? 'entry' : 'entries'} ·{' '}
+              {visibleEntries.length} {visibleEntries.length === 1 ? 'entry' : 'entries'}
+              {hiddenCount > 0 && (
+                <span className="text-emerald-600"> · {hiddenCount} {hiddenCount === 1 ? 'session' : 'sessions'} live above</span>
+              )}
+              {' · '}
               <span className="font-medium text-foreground">{formatDuration(totals.totalWorkingMinutes)}</span> work ·{' '}
               <span className="font-medium text-foreground">{formatDuration(totals.totalTravelMinutes)}</span> travel
             </span>
@@ -128,9 +150,9 @@ export function LaborSection({
         )}
       </div>
 
-      {!loading && entries.length > 0 && (
+      {!loading && visibleEntries.length > 0 && (
         <div className="space-y-1.5 max-h-64 overflow-y-auto">
-          {entries.map((e) => (
+          {visibleEntries.map((e) => (
             <div key={e.id} className="flex items-start gap-3 rounded-md border border-border/60 bg-background px-3 py-2">
               <div className="size-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-medium shrink-0">
                 {e.employeeName?.[0]?.toUpperCase() || '?'}

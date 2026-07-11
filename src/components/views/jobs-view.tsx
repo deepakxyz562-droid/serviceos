@@ -2824,11 +2824,11 @@ export function JobsView() {
               </div>
             </FormSectionCard>
 
-            {/* ── V1.5: Time Tracking (live timer + breakdown) ──────────────── */}
+            {/* ── V1.5: Time Tracking (live timer + entries log, merged) ──────── */}
             <FormSectionCard
               icon={Timer}
               title="Time tracking"
-              description="Live timer for the active work session. Pause when taking a break."
+              description="Live timer for the active session, plus the full time log for this job."
             >
               <TimeTrackingSection
                 job={job}
@@ -2837,6 +2837,18 @@ export function JobsView() {
                 lifecycleLoadingAction={lifecycleLoadingAction}
                 onAction={handleLifecycleTransition}
                 onOpenCompletion={() => openCompletionDialog(job)}
+              />
+
+              {/* Divider between the live-timer zone and the entries-log zone. */}
+              <div className="border-t border-border/40 my-4" />
+
+              <LaborSection
+                jobId={job.id}
+                employees={employees.map((e) => ({ id: e.id, name: e.name }))}
+                canAdd={true}
+                /* Hide the in-flight session from the list when the live timer
+                   above is already showing it (job is working or paused). */
+                hideActiveEntry={job.status === 'working' || job.status === 'paused'}
               />
             </FormSectionCard>
 
@@ -2920,14 +2932,7 @@ export function JobsView() {
               )}
             </FormSectionCard>
 
-            {/* Labor (JobTimeEntry list + Add Time Entry) */}
-            <FormSectionCard icon={Clock} title="Labor" description="Time tracked by the team on this job.">
-              <LaborSection
-                jobId={job.id}
-                employees={employees.map((e) => ({ id: e.id, name: e.name }))}
-                canAdd={true}
-              />
-            </FormSectionCard>
+            {/* Labor is now merged into the "Time tracking" card above. */}
 
             {/* Expenses (list + Add Expense) */}
             <FormSectionCard icon={DollarSign} title="Expenses" description="Track all expenses for this job in one place.">
