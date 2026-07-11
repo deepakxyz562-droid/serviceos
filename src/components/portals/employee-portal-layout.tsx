@@ -583,7 +583,7 @@ function usePushAutoSubscribe() {
         if (!json.endpoint) return;
 
         // Persist server-side so the backend can actually send pushes.
-        await fetch('/api/notifications/push/subscribe?XTransformPort=3000', {
+        const subRes = await fetch('/api/notifications/push/subscribe?XTransformPort=3000', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -592,6 +592,18 @@ function usePushAutoSubscribe() {
             expirationTime: json.expirationTime ?? null,
           }),
         });
+        if (!subRes.ok) {
+          // Server rejected the subscription — unsubscribe locally so we
+          // don't leave a dangling browser subscription with no DB row.
+          let errMsg = `Server returned ${subRes.status}`;
+          try {
+            const errBody = await subRes.json();
+            if (errBody?.error) errMsg = errBody.error;
+          } catch { /* ignore */ }
+          console.warn('[push] Auto-subscribe POST rejected:', subRes.status, errMsg);
+          try { await sub.unsubscribe(); } catch { /* ignore */ }
+          return;
+        }
         console.info('[push] Auto-subscribed successfully');
       } catch (err) {
         // Non-fatal — the employee just won't receive pushes until they
@@ -689,7 +701,7 @@ function PushEnableBanner() {
       });
       const json = sub.toJSON();
       if (json.endpoint) {
-        await fetch('/api/notifications/push/subscribe?XTransformPort=3000', {
+        const subRes = await fetch('/api/notifications/push/subscribe?XTransformPort=3000', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -698,6 +710,17 @@ function PushEnableBanner() {
             expirationTime: json.expirationTime ?? null,
           }),
         });
+        if (!subRes.ok) {
+          let errMsg = `Server returned ${subRes.status}`;
+          try {
+            const errBody = await subRes.json();
+            if (errBody?.error) errMsg = errBody.error;
+          } catch { /* ignore */ }
+          console.error('[push] Subscribe POST rejected:', subRes.status, errMsg);
+          toast.error('Failed to save push subscription', { description: errMsg });
+          try { await sub.unsubscribe(); } catch { /* ignore */ }
+          return;
+        }
       }
       toast.success('Push notifications enabled', {
         description: 'You\'ll now receive alerts when jobs are assigned to you.',
@@ -3223,7 +3246,10 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
   };
 
   return (
-    <div className="h-[100dvh] flex overflow-hidden bg-background">
+    <div
+      className="h-[100dvh] flex overflow-hidden bg-background"
+      style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+    >
       {/* Desktop sidebar */}
       {!isMobile && (
         <aside className="w-64 shrink-0 border-r border-border bg-card">

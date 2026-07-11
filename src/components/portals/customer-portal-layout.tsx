@@ -2906,7 +2906,10 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
   };
 
   return (
-    <div className="flex h-screen bg-muted/30 overflow-hidden">
+    <div
+      className="flex h-screen bg-muted/30 overflow-hidden"
+      style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+    >
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex lg:w-64 lg:shrink-0 lg:flex-col border-r border-border">
         <CustomerSidebar

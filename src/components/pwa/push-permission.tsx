@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Bell, BellOff, Loader2 } from 'lucide-react';
+import { Bell, BellOff, Loader2, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -188,7 +188,7 @@ function usePushPermission(): UsePushPermissionReturn {
         // lives only in the browser and is lost on uninstall/SW eviction.
         if (json.endpoint) {
           try {
-            await fetch('/api/notifications/push/subscribe?XTransformPort=3000', {
+            const subRes = await fetch('/api/notifications/push/subscribe?XTransformPort=3000', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -197,10 +197,34 @@ function usePushPermission(): UsePushPermissionReturn {
                 expirationTime: json.expirationTime ?? null,
               }),
             });
+            if (!subRes.ok) {
+              // The server rejected the subscription. fetch() only throws on
+              // network errors — a 400/500 response resolves normally. Without
+              // this check the user would believe they're subscribed when no
+              // PushSubscription row was ever saved in the DB.
+              let errorMsg = `Server returned ${subRes.status}`;
+              try {
+                const errBody = await subRes.json();
+                if (errBody?.error) errorMsg = errBody.error;
+              } catch { /* ignore JSON parse errors */ }
+              console.error('[push] Subscribe POST rejected:', subRes.status, errorMsg);
+              toast.error('Failed to save push subscription', {
+                description: errorMsg,
+              });
+              // Clean up the dangling local subscription (no DB row = useless).
+              try { await sub.unsubscribe(); } catch { /* ignore */ }
+              setSubscription(null);
+              return null;
+            }
           } catch (err) {
-            // Non-fatal: the subscription still works locally; we just won't
-            // receive server-pushed notifications until this succeeds.
+            // Network error (offline, CORS, etc.)
             console.warn('[push] Failed to persist subscription server-side:', err);
+            toast.error('Could not reach the server', {
+              description: 'Check your connection and try enabling push again.',
+            });
+            try { await sub.unsubscribe(); } catch { /* ignore */ }
+            setSubscription(null);
+            return null;
           }
         }
 
@@ -287,6 +311,59 @@ export function PushPermissionCard() {
   } = usePushPermission();
 
   const [busy, setBusy] = useState(false);
+  const [testBusy, setTestBusy] = useState(false);
+
+  // Detect iOS so we can show the background-only notification hint.
+  // iOS Web Push only displays notifications when the PWA is in the
+  // background or closed — foreground pushes are silently swallowed.
+  const [isIOS] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    const ua = window.navigator.userAgent || '';
+    return (
+      /iPad|iPhone|iPod/.test(ua) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+    );
+  });
+
+  const handleTest = async () => {
+    setTestBusy(true);
+    try {
+      const res = await fetch('/api/notifications/push/test?XTransformPort=3000', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error('Test notification failed', {
+          description: data?.error || `Server returned ${res.status}`,
+        });
+        return;
+      }
+      const result = data?.result || {};
+      if (result.notConfigured) {
+        toast.error('Push not configured', {
+          description: 'VAPID keys are missing on the server.',
+        });
+      } else if (result.sent > 0) {
+        toast.success('Test notification sent', {
+          description: `Delivered to ${result.sent} device(s).${
+            result.failed > 0 ? ` ${result.failed} failed.` : ''
+          }${
+            isIOS ? ' Close the app to see it.' : ''
+          }`,
+        });
+      } else {
+        toast.error('No active subscriptions found', {
+          description: 'Your device subscription was not saved. Try disabling and re-enabling push.',
+        });
+      }
+    } catch (err) {
+      console.error('[push] Test failed:', err);
+      toast.error('Could not send test notification');
+    } finally {
+      setTestBusy(false);
+    }
+  };
 
   if (!supported) {
     return (
@@ -360,6 +437,14 @@ export function PushPermissionCard() {
           </p>
         )}
 
+        {isSubscribed && isIOS && (
+          <p className="rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-700 ring-1 ring-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:ring-blue-900">
+            <strong>iOS note:</strong> Notifications only appear when the app
+            is in the background or closed. To test, send a test notification
+            below, then close the app.
+          </p>
+        )}
+
         <div className="flex items-center justify-between gap-3">
           <div className="text-sm">
             <p className="font-medium text-slate-900">
@@ -386,20 +471,36 @@ export function PushPermissionCard() {
           </div>
 
           {isSubscribed ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleDisable}
-              disabled={busy}
-            >
-              {busy ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <BellOff className="size-4" />
-              )}
-              Disable
-            </Button>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleTest}
+                disabled={testBusy || busy}
+              >
+                {testBusy ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Send className="size-4" />
+                )}
+                Test
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleDisable}
+                disabled={busy}
+              >
+                {busy ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <BellOff className="size-4" />
+                )}
+                Disable
+              </Button>
+            </div>
           ) : (
             <Button
               type="button"

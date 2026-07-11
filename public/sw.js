@@ -224,15 +224,15 @@ self.addEventListener('push', (event) => {
 
   const title = payload.title || 'ServiceOS';
   const body = payload.body || '';
-  const icon = payload.icon || '/icon.svg';
-  const badge = payload.badge || '/icon.svg';
+  const icon = payload.icon || '/icon-192.png';
+  const badge = payload.badge || '/icon-192.png';
   const tag = payload.tag || 'serviceos-notification';
   const data = payload.data || {};
   const actions =
     'actions' in Notification.prototype
       ? [
-          { action: 'view', title: 'View', icon: '/icon.svg' },
-          { action: 'dismiss', title: 'Dismiss', icon: '/icon.svg' },
+          { action: 'view', title: 'View', icon: '/icon-192.png' },
+          { action: 'dismiss', title: 'Dismiss', icon: '/icon-192.png' },
         ]
       : undefined;
 

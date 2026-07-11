@@ -297,7 +297,10 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   const isCanvas = currentView === 'canvas';
 
   return (
-    <div className={cn('h-[100dvh] flex overflow-hidden bg-background', darkMode && 'dark')}>
+    <div
+      className={cn('h-[100dvh] flex overflow-hidden bg-background', darkMode && 'dark')}
+      style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+    >
       <AppSidebar onLogout={onLogout} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">

@@ -147,6 +147,19 @@ export async function sendWebPushToUser(
     })
   );
 
+  // Log delivery results so operators can see push outcomes in Vercel logs.
+  // This is critical for debugging "push not received" reports — without it,
+  // sendWebPushToUser silently returns { sent: 0 } and the caller has no idea
+  // whether subscriptions exist or if sends are failing.
+  console.info('[web-push] Delivery result', {
+    userId,
+    tenantId: tenantId || null,
+    subscriptions: subs.length,
+    sent,
+    failed,
+    deactivated,
+  });
+
   return { sent, failed, deactivated, notConfigured: false };
 }
 
