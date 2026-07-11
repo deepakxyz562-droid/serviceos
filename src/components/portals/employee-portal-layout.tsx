@@ -41,6 +41,7 @@ import {
   Coffee,
   Wrench,
   Receipt,
+  Plus,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -74,6 +75,18 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/client-auth';
 import { JobCompletionScreen } from '@/components/job/job-completion-screen';
+// Product / Service (line items) + Expenses + Scheduled visits sections
+// — employees can add & edit these directly from the job detail sheet.
+import {
+  type LineItem,
+  type CatalogService,
+  newLineItemId,
+  emptyLineItem,
+  lineItemsSubtotal,
+  parseLineItems,
+} from '@/components/views/leads-view';
+import { JobExpensesSection } from '@/components/job/job-expenses-section';
+import { ScheduledVisitsSection } from '@/components/job/scheduled-visits-section';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -156,6 +169,9 @@ interface Job {
   // JSON string of linked checklist IDs — used by the JobCompletionScreen
   // to decide whether a checklist is required for completion.
   linkedChecklistsJson?: string;
+  // JSON string of line items (Product / Service). Employees can add/edit
+  // these via the JobDetailSheet and save through PUT /api/jobs/[id].
+  lineItemsJson?: string;
 }
 
 // /api/employee/jobs returns a flat array of enriched job rows. This helper
@@ -189,6 +205,7 @@ interface EmployeeJobsApiResponseRow {
   lifecycleTimestamps?: Record<string, string>;
   _counts?: { photos: number; signatures: number; checklists: number };
   linkedChecklistsJson?: string;
+  lineItemsJson?: string | null;
 }
 
 function mapJobRow(row: EmployeeJobsApiResponseRow): Job {
@@ -218,6 +235,7 @@ function mapJobRow(row: EmployeeJobsApiResponseRow): Job {
     lifecycleTimestamps: row.lifecycleTimestamps,
     _counts: row._counts,
     linkedChecklistsJson: row.linkedChecklistsJson,
+    lineItemsJson: row.lineItemsJson ?? undefined,
   };
 }
 
@@ -850,6 +868,154 @@ function TimelineItem({ label, ts }: { label: string; ts: string }) {
   );
 }
 
+// ─── Editable Product / Service (line items) section for the employee sheet ──
+// Employees can add / edit / remove line items and save them to the job via
+// PUT /api/jobs/[id] (lineItemsJson). Kept compact to fit inside the Sheet.
+function EmployeeLineItemsSection({ job }: { job: Job }) {
+  const [items, setItems] = useState<LineItem[]>(() => parseLineItems(job.lineItemsJson));
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+
+  // Re-sync from the job when it changes (e.g. sheet re-opened for another job)
+  useEffect(() => {
+    setItems(parseLineItems(job.lineItemsJson));
+    setDirty(false);
+  }, [job.id, job.lineItemsJson]);
+
+  const subtotal = lineItemsSubtotal(items);
+
+  const update = (idx: number, patch: Partial<LineItem>) => {
+    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
+    setDirty(true);
+  };
+
+  const add = () => {
+    setItems((prev) => [...prev, { ...emptyLineItem(), id: newLineItemId() }]);
+    setDirty(true);
+  };
+
+  const remove = (idx: number) => {
+    setItems((prev) => prev.filter((_, i) => i !== idx));
+    setDirty(true);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await authFetch(`/api/jobs/${job.id}?XTransformPort=3000`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lineItemsJson: JSON.stringify(items) }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to save line items');
+      }
+      setDirty(false);
+      toast.success('Line items saved');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to save line items');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-3 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Briefcase className="size-4 text-emerald-600" />
+          <h4 className="text-sm font-semibold text-foreground">Product / Service</h4>
+        </div>
+        <button
+          onClick={add}
+          className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-800"
+        >
+          <Plus className="size-3.5" /> Add item
+        </button>
+      </div>
+
+      {items.length === 0 ? (
+        <p className="text-xs text-muted-foreground italic py-2">No line items yet. Click &ldquo;Add item&rdquo; to add one.</p>
+      ) : (
+        <div className="space-y-2">
+          {items.map((it, idx) => (
+            <div key={it.id} className="rounded-md border border-border/60 bg-background p-2 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={it.name}
+                  onChange={(e) => update(idx, { name: e.target.value })}
+                  placeholder="Item name"
+                  className="flex-1 min-w-0 h-7 text-sm bg-transparent border-0 outline-none placeholder:text-muted-foreground/60 font-medium"
+                />
+                <button
+                  onClick={() => remove(idx)}
+                  className="text-muted-foreground hover:text-red-600 shrink-0"
+                  aria-label="Remove item"
+                >
+                  <XCircle className="size-4" />
+                </button>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                <label className="block">
+                  <span className="text-[10px] text-muted-foreground">Qty</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={it.quantity}
+                    onChange={(e) => update(idx, { quantity: e.target.value })}
+                    className="w-full h-7 text-sm rounded border border-border/60 px-1.5 bg-background"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[10px] text-muted-foreground">Unit cost</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={it.unitCost ?? '0'}
+                    onChange={(e) => update(idx, { unitCost: e.target.value })}
+                    className="w-full h-7 text-sm rounded border border-border/60 px-1.5 bg-background"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[10px] text-muted-foreground">Unit price</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={it.unitPrice}
+                    onChange={(e) => update(idx, { unitPrice: e.target.value })}
+                    className="w-full h-7 text-sm rounded border border-border/60 px-1.5 bg-background"
+                  />
+                </label>
+              </div>
+            </div>
+          ))}
+          <div className="flex items-center justify-between pt-1 text-sm">
+            <span className="text-muted-foreground">Subtotal</span>
+            <span className="font-semibold text-foreground">₹{subtotal.toFixed(2)}</span>
+          </div>
+        </div>
+      )}
+
+      {dirty && (
+        <div className="flex items-center justify-end gap-2 pt-1">
+          <Button size="sm" variant="outline" onClick={() => { setItems(parseLineItems(job.lineItemsJson)); setDirty(false); }} disabled={saving}>
+            Cancel
+          </Button>
+          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={save} disabled={saving}>
+            {saving && <Loader2 className="size-3.5 mr-1 animate-spin" />}
+            Save items
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function JobDetailSheet({
   job,
   open,
@@ -904,7 +1070,7 @@ function JobDetailSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-        <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+        <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
           <SheetHeader>
             <div className="flex items-center gap-2 flex-wrap">
               {getStatusBadge(stage)}
@@ -1031,6 +1197,31 @@ function JobDetailSheet({
 
             {/* V1.5: Lifecycle progress pills */}
             <LifecycleProgress job={job} stage={stage} />
+
+            {/* ── Product / Service (editable line items) ────────────────── */}
+            <EmployeeLineItemsSection job={job} />
+
+            {/* ── Expenses (add / edit via JobExpensesSection) ────────────── */}
+            <div className="rounded-lg border border-border bg-card p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <DollarSign className="size-4 text-emerald-600" />
+                <h4 className="text-sm font-semibold text-foreground">Expenses</h4>
+              </div>
+              <JobExpensesSection job={{ id: job.id, title: job.title, customerName: job.customerName }} />
+            </div>
+
+            {/* ── Scheduled visits (add / edit via ScheduledVisitsSection) ─ */}
+            <div className="rounded-lg border border-border bg-card p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <CalendarDays className="size-4 text-emerald-600" />
+                <h4 className="text-sm font-semibold text-foreground">Scheduled visits</h4>
+              </div>
+              <ScheduledVisitsSection
+                job={{ id: job.id, title: job.title, customerName: job.customerName, jobNumber: job.jobNumber }}
+                employees={[]}
+                checklists={[]}
+              />
+            </div>
 
             {/* Action Buttons (stage-aware) */}
             <Separator />

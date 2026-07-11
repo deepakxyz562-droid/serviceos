@@ -2704,42 +2704,45 @@ export function JobsView() {
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6 items-start">
           {/* ── Left column: main job details ── */}
           <div className="space-y-6 min-w-0">
-            {/* Client card */}
-            <FormSectionCard icon={User} title="Client">
-              <div className="space-y-2">
-                <p className="text-base font-semibold text-foreground">{job.customerName || 'No client linked'}</p>
-                {job.customerPhone && (
-                  <a href={`tel:${job.customerPhone}`} className="flex items-center gap-2 text-sm text-emerald-700 hover:underline">
-                    <Phone className="size-4" /> {job.customerPhone}
-                  </a>
-                )}
-                {job.customerEmail && (
-                  <a href={`mailto:${job.customerEmail}`} className="flex items-center gap-2 text-sm text-emerald-700 hover:underline">
-                    <Mail className="size-4" /> {job.customerEmail}
-                  </a>
-                )}
-                {job.address && (
-                  <div className="flex items-start gap-2 text-sm text-muted-foreground">
-                    <MapPin className="size-4 mt-0.5 shrink-0" /> <span>{job.address}</span>
-                  </div>
-                )}
-                {!job.customerPhone && !job.customerEmail && !job.address && (
-                  <p className="text-sm text-muted-foreground italic">No contact details on file.</p>
-                )}
-              </div>
-            </FormSectionCard>
+            {/* ── Client + Job details (same row on desktop) ─────────────── */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+              {/* Client card */}
+              <FormSectionCard icon={User} title="Client">
+                <div className="space-y-2">
+                  <p className="text-base font-semibold text-foreground">{job.customerName || 'No client linked'}</p>
+                  {job.customerPhone && (
+                    <a href={`tel:${job.customerPhone}`} className="flex items-center gap-2 text-sm text-emerald-700 hover:underline">
+                      <Phone className="size-4" /> {job.customerPhone}
+                    </a>
+                  )}
+                  {job.customerEmail && (
+                    <a href={`mailto:${job.customerEmail}`} className="flex items-center gap-2 text-sm text-emerald-700 hover:underline">
+                      <Mail className="size-4" /> {job.customerEmail}
+                    </a>
+                  )}
+                  {job.address && (
+                    <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                      <MapPin className="size-4 mt-0.5 shrink-0" /> <span>{job.address}</span>
+                    </div>
+                  )}
+                  {!job.customerPhone && !job.customerEmail && !job.address && (
+                    <p className="text-sm text-muted-foreground italic">No contact details on file.</p>
+                  )}
+                </div>
+              </FormSectionCard>
 
-            {/* Job details card */}
-            <FormSectionCard icon={Info} title="Job details">
-              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
-                {detailRows.map((row, i) => (
-                  <div key={i} className="flex items-start justify-between gap-3 border-b border-border/40 pb-2 last:border-0">
-                    <dt className="text-sm text-muted-foreground shrink-0">{row.label}</dt>
-                    <dd className="text-sm font-medium text-foreground text-right min-w-0 break-words">{row.value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </FormSectionCard>
+              {/* Job details card */}
+              <FormSectionCard icon={Info} title="Job details">
+                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                  {detailRows.map((row, i) => (
+                    <div key={i} className="flex items-start justify-between gap-3 border-b border-border/40 pb-2 last:border-0">
+                      <dt className="text-sm text-muted-foreground shrink-0">{row.label}</dt>
+                      <dd className="text-sm font-medium text-foreground text-right min-w-0 break-words">{row.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </FormSectionCard>
+            </div>
 
             {/* ── V1.5: Lifecycle Timeline ─────────────────────────────────── */}
             <FormSectionCard icon={Activity} title="Lifecycle timeline" description="Track the job through its 8 stages — from assignment to invoice.">
@@ -2824,6 +2827,68 @@ export function JobsView() {
               </div>
             </FormSectionCard>
 
+            {/* ── Product / Service (line items) — immediately after timeline ── */}
+            <FormSectionCard
+              icon={Briefcase}
+              title="Product / Service"
+              action={<button onClick={() => openEditJob(job)} className="text-muted-foreground hover:text-emerald-600 transition-colors"><Pencil className="size-4" /></button>}
+            >
+              {lineItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground italic">No line items added to this job.</p>
+              ) : (
+                <div className="overflow-x-auto -mx-2">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-muted-foreground border-b border-border/60">
+                        <th className="px-2 py-2 font-medium">Line Item</th>
+                        <th className="px-2 py-2 font-medium text-center">Qty</th>
+                        <th className="px-2 py-2 font-medium text-right">Unit Cost</th>
+                        <th className="px-2 py-2 font-medium text-right">Unit Price</th>
+                        <th className="px-2 py-2 font-medium text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lineItems.map((it, i) => (
+                        <tr key={i} className="border-b border-border/40 last:border-0">
+                          <td className="px-2 py-2.5 font-medium text-foreground">{it.name || 'Custom item'}{it.description && <span className="block text-xs text-muted-foreground font-normal">{it.description}</span>}</td>
+                          <td className="px-2 py-2.5 text-center text-muted-foreground">{it.quantity || 1}</td>
+                          <td className="px-2 py-2.5 text-right text-muted-foreground">{symbol}{(Number(it.unitCost) || 0).toFixed(2)}</td>
+                          <td className="px-2 py-2.5 text-right text-muted-foreground">{symbol}{(Number(it.unitPrice) || 0).toFixed(2)}</td>
+                          <td className="px-2 py-2.5 text-right font-semibold text-foreground">{symbol}{((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1)).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-border/60">
+                        <td colSpan={3} />
+                        <td className="px-2 py-2 text-right text-sm text-muted-foreground">Total cost</td>
+                        <td className="px-2 py-2 text-right text-sm text-muted-foreground">{symbol}{totalCost.toFixed(2)}</td>
+                      </tr>
+                      <tr>
+                        <td colSpan={3} />
+                        <td className="px-2 py-1 text-right text-sm font-semibold text-foreground">Total price</td>
+                        <td className="px-2 py-1 text-right text-base font-bold text-foreground">{symbol}{totalPrice.toFixed(2)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </FormSectionCard>
+
+            {/* ── Expenses — immediately after Product / Service ───────────── */}
+            <FormSectionCard icon={DollarSign} title="Expenses" description="Track all expenses for this job in one place.">
+              <JobExpensesSection job={{ id: job.id, title: job.title, customerName: job.customerName }} />
+            </FormSectionCard>
+
+            {/* ── Scheduled visits — immediately after Expenses ───────────── */}
+            <FormSectionCard icon={CalendarDays} title="Scheduled visits">
+              <ScheduledVisitsSection
+                job={{ id: job.id, title: job.title, customerName: job.customerName, jobNumber: job.jobNumber }}
+                employees={employees.map((e) => ({ id: e.id, name: e.name }))}
+                checklists={checklists.map((c) => ({ id: c.id, name: c.title }))}
+              />
+            </FormSectionCard>
+
             {/* ── V1.5: Time Tracking (live timer + entries log, merged) ──────── */}
             <FormSectionCard
               icon={Timer}
@@ -2883,70 +2948,6 @@ export function JobsView() {
                 </dl>
               </FormSectionCard>
             )}
-
-            {/* Product / Service (line items) */}
-            <FormSectionCard
-              icon={Briefcase}
-              title="Product / Service"
-              action={<button onClick={() => openEditJob(job)} className="text-muted-foreground hover:text-emerald-600 transition-colors"><Pencil className="size-4" /></button>}
-            >
-              {lineItems.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">No line items added to this job.</p>
-              ) : (
-                <div className="overflow-x-auto -mx-2">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-xs text-muted-foreground border-b border-border/60">
-                        <th className="px-2 py-2 font-medium">Line Item</th>
-                        <th className="px-2 py-2 font-medium text-center">Qty</th>
-                        <th className="px-2 py-2 font-medium text-right">Unit Cost</th>
-                        <th className="px-2 py-2 font-medium text-right">Unit Price</th>
-                        <th className="px-2 py-2 font-medium text-right">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lineItems.map((it, i) => (
-                        <tr key={i} className="border-b border-border/40 last:border-0">
-                          <td className="px-2 py-2.5 font-medium text-foreground">{it.name || 'Custom item'}{it.description && <span className="block text-xs text-muted-foreground font-normal">{it.description}</span>}</td>
-                          <td className="px-2 py-2.5 text-center text-muted-foreground">{it.quantity || 1}</td>
-                          <td className="px-2 py-2.5 text-right text-muted-foreground">{symbol}{(Number(it.unitCost) || 0).toFixed(2)}</td>
-                          <td className="px-2 py-2.5 text-right text-muted-foreground">{symbol}{(Number(it.unitPrice) || 0).toFixed(2)}</td>
-                          <td className="px-2 py-2.5 text-right font-semibold text-foreground">{symbol}{((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1)).toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr className="border-t border-border/60">
-                        <td colSpan={3} />
-                        <td className="px-2 py-2 text-right text-sm text-muted-foreground">Total cost</td>
-                        <td className="px-2 py-2 text-right text-sm text-muted-foreground">{symbol}{totalCost.toFixed(2)}</td>
-                      </tr>
-                      <tr>
-                        <td colSpan={3} />
-                        <td className="px-2 py-1 text-right text-sm font-semibold text-foreground">Total price</td>
-                        <td className="px-2 py-1 text-right text-base font-bold text-foreground">{symbol}{totalPrice.toFixed(2)}</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              )}
-            </FormSectionCard>
-
-            {/* Labor is now merged into the "Time tracking" card above. */}
-
-            {/* Expenses (list + Add Expense) */}
-            <FormSectionCard icon={DollarSign} title="Expenses" description="Track all expenses for this job in one place.">
-              <JobExpensesSection job={{ id: job.id, title: job.title, customerName: job.customerName }} />
-            </FormSectionCard>
-
-            {/* Scheduled visits (interactive table + dialogs) */}
-            <FormSectionCard icon={CalendarDays} title="Scheduled visits">
-              <ScheduledVisitsSection
-                job={{ id: job.id, title: job.title, customerName: job.customerName, jobNumber: job.jobNumber }}
-                employees={employees.map((e) => ({ id: e.id, name: e.name }))}
-                checklists={checklists.map((c) => ({ id: c.id, name: c.title }))}
-              />
-            </FormSectionCard>
 
             {/* Billing */}
             <FormSectionCard icon={FileText} title="Billing">
