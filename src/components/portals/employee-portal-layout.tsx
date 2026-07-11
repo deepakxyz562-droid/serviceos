@@ -79,6 +79,7 @@ import { useAppStore } from '@/store/app-store';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/client-auth';
+import { getVapidPublicKey, urlBase64ToUint8Array } from '@/lib/push-client';
 import { JobCompletionScreen } from '@/components/job/job-completion-screen';
 // Product / Service (line items) + Expenses + Scheduled visits sections
 // — employees can add & edit these directly from the job detail sheet.
@@ -538,8 +539,9 @@ function useEmployeeRecord(employeeId: string | null) {
  * backend push fan-out code is correct, `sendWebPushToUser()` finds 0
  * PushSubscription rows and no push is ever delivered.
  *
- * This hook closes that gap: on portal mount, if push is supported AND the
- * VAPID public key is present in the client bundle AND the employee already
+ * This hook closes that gap: on portal mount, if push is supported AND a
+ * VAPID public key is available (build-time-inlined OR fetched at runtime
+ * from /api/notifications/push/vapid-public-key) AND the employee already
  * granted notification permission on a prior visit AND there's no existing
  * PushSubscription, we call `pushManager.subscribe()` + POST to the
  * subscribe endpoint. This makes push "just work" for returning employees
@@ -553,28 +555,20 @@ function usePushAutoSubscribe() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-    const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-    if (!vapidKey) return;
     if (Notification.permission !== 'granted') return;
 
     let cancelled = false;
 
     (async () => {
       try {
+        // Resolve the VAPID key (build-time fast path → runtime fetch
+        // fallback). Abort early if the server isn't configured.
+        const vapidKey = await getVapidPublicKey();
+        if (cancelled || !vapidKey) return;
+
         const reg = await navigator.serviceWorker.ready;
         const existing = await reg.pushManager.getSubscription();
         if (cancelled || existing) return; // already subscribed
-
-        // Convert the VAPID public key to the Uint8Array form pushManager
-        // expects. Same helper the manual subscribe path uses.
-        function urlBase64ToUint8Array(base64String: string): Uint8Array {
-          const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-          const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-          const raw = window.atob(base64);
-          const output = new Uint8Array(raw.length);
-          for (let i = 0; i < raw.length; ++i) output[i] = raw.charCodeAt(i);
-          return output;
-        }
 
         const sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
@@ -617,7 +611,8 @@ function usePushAutoSubscribe() {
  *
  * Renders only when ALL of these are true:
  *  - Push is supported in this browser
- *  - The VAPID public key is present (server is configured)
+ *  - A VAPID public key is available (build-time-inlined OR fetched at
+ *    runtime from /api/notifications/push/vapid-public-key)
  *  - Notification permission is `default` (never asked) — if `granted` the
  *    auto-subscribe hook already handles it; if `denied` there's nothing we
  *    can do from code (user must change it in browser settings).
@@ -632,6 +627,9 @@ function PushEnableBanner() {
   const [dismissed, setDismissed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission>('default');
+  // vapidKeyAvailable starts false and flips true once we confirm a key is
+  // present (either from the build-time-inlined env or the runtime fetch).
+  const [vapidKeyAvailable, setVapidKeyAvailable] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -644,6 +642,16 @@ function PushEnableBanner() {
       // localStorage may be blocked (private mode) — just hide the banner.
       setDismissed(true);
     }
+
+    // Resolve the VAPID key (hybrid: build-time fast path → runtime fetch).
+    // If a key is found, flip vapidKeyAvailable so the banner can render.
+    let cancelled = false;
+    getVapidPublicKey().then((key) => {
+      if (!cancelled) setVapidKeyAvailable(Boolean(key));
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Hide if push isn't supported / VAPID missing / already granted or denied.
@@ -651,8 +659,7 @@ function PushEnableBanner() {
     && 'Notification' in window
     && 'serviceWorker' in navigator
     && 'PushManager' in window;
-  const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  if (!supported || !vapidKey || dismissed || permission !== 'default') return null;
+  if (!supported || !vapidKeyAvailable || dismissed || permission !== 'default') return null;
 
   const handleEnable = async () => {
     setBusy(true);
@@ -666,16 +673,16 @@ function PushEnableBanner() {
         });
         return;
       }
-      // 2) Subscribe via the service worker + persist server-side.
-      const reg = await navigator.serviceWorker.ready;
-      function urlBase64ToUint8Array(base64String: string): Uint8Array {
-        const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-        const raw = window.atob(base64);
-        const output = new Uint8Array(raw.length);
-        for (let i = 0; i < raw.length; ++i) output[i] = raw.charCodeAt(i);
-        return output;
+      // 2) Resolve the VAPID key (cached from the mount-time fetch), subscribe
+      //    via the service worker + persist server-side.
+      const vapidKey = await getVapidPublicKey();
+      if (!vapidKey) {
+        toast.error('Push notifications are not configured', {
+          description: 'Missing VAPID public key on the server.',
+        });
+        return;
       }
+      const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(vapidKey),

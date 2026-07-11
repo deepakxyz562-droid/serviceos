@@ -11,24 +11,11 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-
-/**
- * Convert a base64-url-encoded string into a Uint8Array (needed for the
- * `applicationServerKey` argument to `pushManager.subscribe`).
- */
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw =
-    typeof window !== 'undefined'
-      ? window.atob(base64)
-      : Buffer.from(base64, 'base64').toString('binary');
-  const output = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) {
-    output[i] = raw.charCodeAt(i);
-  }
-  return output;
-}
+import {
+  getVapidPublicKey,
+  getInlinedVapidPublicKey,
+  urlBase64ToUint8Array,
+} from '@/lib/push-client';
 
 type NotificationPermission = 'default' | 'granted' | 'denied';
 
@@ -47,9 +34,18 @@ interface UsePushPermissionReturn {
  * usePushPermission
  * -----------------
  * Tracks browser support + permission state for push notifications and
- * exposes subscribe/unsubscribe helpers. The VAPID public key is read from
- * `NEXT_PUBLIC_VAPID_PUBLIC_KEY` — if it's not set, `subscribe()` will fail
- * gracefully with a toast and `vapidKeyAvailable` will be false.
+ * exposes subscribe/unsubscribe helpers.
+ *
+ * VAPID key resolution is HYBRID:
+ *   - If `NEXT_PUBLIC_VAPID_PUBLIC_KEY` was inlined at build time, the
+ *     `vapidKey` state initializes to it immediately (synchronous, no flash).
+ *   - Otherwise we fetch it at runtime from
+ *     `/api/notifications/push/vapid-public-key` (reads server env on each
+ *     request) so adding the env var on Vercel/Netlify takes effect without
+ *     a redeploy. See src/lib/push-client.ts for the caching layer.
+ *
+ * `subscribe()` also awaits the key on demand, so clicking Enable before the
+ * runtime fetch resolves still works.
  *
  * Initial `supported`/`permission` are read via lazy useState initializers
  * (guarded for SSR). The existing subscription is fetched asynchronously
@@ -75,7 +71,13 @@ function usePushPermission(): UsePushPermissionReturn {
     null
   );
 
-  const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  // vapidKey state: initialized synchronously from the build-time-inlined
+  // value (if any), then resolved at runtime via getVapidPublicKey() when the
+  // build-time value is absent. `vapidKeyAvailable` drives the UI warning +
+  // Enable-button disabled state.
+  const [vapidKey, setVapidKey] = useState<string | null>(() =>
+    getInlinedVapidPublicKey()
+  );
   const vapidKeyAvailable = Boolean(vapidKey);
 
   // Refresh the existing PushSubscription from the SW registration.
@@ -114,6 +116,20 @@ function usePushPermission(): UsePushPermissionReturn {
     };
   }, [supported]);
 
+  // Resolve the VAPID public key at runtime when the build-time value is
+  // missing. This runs once on mount; getVapidPublicKey() caches the result
+  // so the subscribe path and other callers share the same fetch.
+  useEffect(() => {
+    if (vapidKey) return; // already have it (build-time fast path)
+    let cancelled = false;
+    getVapidPublicKey().then((key) => {
+      if (!cancelled && key) setVapidKey(key);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [vapidKey]);
+
   const requestPermission =
     useCallback(async (): Promise<NotificationPermission> => {
       if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -133,7 +149,11 @@ function usePushPermission(): UsePushPermissionReturn {
       if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
         return null;
       }
-      if (!vapidKey) {
+      // Resolve the key on demand so clicking Enable before the runtime
+      // fetch resolves still works (and so this callback doesn't need the
+      // vapidKey state as a dependency that would force re-creation).
+      const key = vapidKey || (await getVapidPublicKey());
+      if (!key) {
         toast.error('Push notifications are not configured', {
           description: 'Missing VAPID public key on the server.',
         });
@@ -158,7 +178,7 @@ function usePushPermission(): UsePushPermissionReturn {
 
         const sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(vapidKey),
+          applicationServerKey: urlBase64ToUint8Array(key),
         });
         const json = sub.toJSON();
         setSubscription(json);
