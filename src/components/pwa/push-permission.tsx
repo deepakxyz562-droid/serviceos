@@ -162,6 +162,28 @@ function usePushPermission(): UsePushPermissionReturn {
         });
         const json = sub.toJSON();
         setSubscription(json);
+
+        // Persist the subscription server-side so the backend can actually
+        // send pushes to this device. Without this step the subscription
+        // lives only in the browser and is lost on uninstall/SW eviction.
+        if (json.endpoint) {
+          try {
+            await fetch('/api/notifications/push/subscribe?XTransformPort=3000', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                endpoint: json.endpoint,
+                keys: json.keys,
+                expirationTime: json.expirationTime ?? null,
+              }),
+            });
+          } catch (err) {
+            // Non-fatal: the subscription still works locally; we just won't
+            // receive server-pushed notifications until this succeeds.
+            console.warn('[push] Failed to persist subscription server-side:', err);
+          }
+        }
+
         return json;
       } catch (err) {
         console.error('Push subscribe failed:', err);
@@ -177,6 +199,7 @@ function usePushPermission(): UsePushPermissionReturn {
     try {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
+      const endpoint = sub?.endpoint;
       if (!sub) {
         setSubscription(null);
         return true;
@@ -184,6 +207,19 @@ function usePushPermission(): UsePushPermissionReturn {
       const ok = await sub.unsubscribe();
       if (ok) {
         setSubscription(null);
+      }
+
+      // Tell the server to deactivate this device's subscription row.
+      if (endpoint) {
+        try {
+          await fetch('/api/notifications/push/subscribe?XTransformPort=3000', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endpoint }),
+          });
+        } catch (err) {
+          console.warn('[push] Failed to remove subscription server-side:', err);
+        }
       }
       return ok;
     } catch (err) {

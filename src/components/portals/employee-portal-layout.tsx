@@ -15,7 +15,6 @@ import {
   Moon,
   Sun,
   ChevronDown,
-  Settings,
   CheckCircle2,
   AlertCircle,
   Timer,
@@ -55,6 +54,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -87,6 +91,7 @@ import {
 } from '@/components/views/leads-view';
 import { JobExpensesSection } from '@/components/job/job-expenses-section';
 import { ScheduledVisitsSection } from '@/components/job/scheduled-visits-section';
+import { PushPermissionCard } from '@/components/pwa/push-permission';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -2220,25 +2225,116 @@ function AttendanceView() {
 // ─── Sub-View: Inbox ────────────────────────────────────────────────────────
 
 function InboxView() {
+  // Real notifications inbox — pulls from /api/notifications (the same feed
+  // the header bell reads). Replaces the old hardcoded "No messages yet"
+  // stub so employees can actually see + dismiss job-assignment alerts,
+  // invoice updates, etc.
+  const { notifications, unreadCount, loading, markAllRead, markRead } = useNotifications();
+  const [filter, setFilter] = useState<'all' | 'unread'>('all');
+
+  const shown = filter === 'unread' ? notifications.filter((n) => !n.isRead) : notifications;
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Inbox header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h3 className="text-base font-semibold text-foreground">Inbox</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+          </p>
+        </div>
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-medium text-foreground">Messages</h3>
+          <div className="flex rounded-lg border border-border overflow-hidden">
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn('rounded-none h-8 text-xs', filter === 'all' && 'bg-muted')}
+              onClick={() => setFilter('all')}
+            >
+              All
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn('rounded-none h-8 text-xs', filter === 'unread' && 'bg-muted')}
+              onClick={() => setFilter('unread')}
+            >
+              Unread
+            </Button>
+          </div>
+          {unreadCount > 0 && (
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={markAllRead}>
+              <CheckCircle2 className="size-3.5 mr-1.5" />
+              Mark all read
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Empty state */}
+      {/* List */}
       <Card>
-        <CardContent className="p-12 text-center">
-          <div className="mx-auto size-16 rounded-full bg-muted flex items-center justify-center mb-4">
-            <Mail className="size-8 text-muted-foreground" />
-          </div>
-          <h3 className="text-base font-semibold text-foreground mb-1">No messages yet</h3>
-          <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-            Your team messages and notifications will appear here. Check back when your manager sends you a message.
-          </p>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">
+              <Loader2 className="size-6 mx-auto mb-2 animate-spin" />
+              Loading…
+            </div>
+          ) : shown.length === 0 ? (
+            <div className="p-10 text-center text-muted-foreground">
+              <div className="mx-auto size-14 rounded-full bg-muted flex items-center justify-center mb-3">
+                {filter === 'unread' ? <CheckCircle2 className="size-7 text-emerald-500" /> : <Mail className="size-7" />}
+              </div>
+              <h3 className="text-sm font-semibold text-foreground mb-1">
+                {filter === 'unread' ? 'No unread notifications' : 'No notifications yet'}
+              </h3>
+              <p className="text-xs max-w-sm mx-auto">
+                {filter === 'unread'
+                  ? 'You have read everything. New job assignments and updates will appear here.'
+                  : 'Job assignments, status updates, and team messages will appear here.'}
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border max-h-[70vh] overflow-y-auto">
+              {shown.map((n) => {
+                const { icon: Icon, color, bg } = notifIconFor(n.type);
+                return (
+                  <button
+                    key={n.id}
+                    onClick={() => {
+                      if (!n.isRead) markRead(n.id);
+                    }}
+                    className={cn(
+                      'w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors',
+                      !n.isRead && 'bg-emerald-50/50 dark:bg-emerald-950/20'
+                    )}
+                  >
+                    <div className={cn('size-9 rounded-full flex items-center justify-center shrink-0 mt-0.5', bg)}>
+                      <Icon className={cn('size-4', color)} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className={cn('text-sm leading-snug', !n.isRead ? 'font-semibold text-foreground' : 'font-medium text-foreground')}>
+                          {n.title}
+                        </p>
+                        <span className="text-[10px] text-muted-foreground shrink-0 mt-0.5">
+                          {getTimeAgo(new Date(n.createdAt))}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{n.message}</p>
+                      {n.actionUrl && (
+                        <span className="inline-flex items-center gap-1 mt-1.5 text-[11px] font-medium text-emerald-600">
+                          <ArrowRight className="size-3" />
+                          {n.actionLabel || 'View'}
+                        </span>
+                      )}
+                    </div>
+                    {!n.isRead && <span className="size-2 rounded-full bg-emerald-500 shrink-0 mt-1.5" />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -2519,6 +2615,10 @@ function ProfileView({ employeeId }: { employeeId: string }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Push notifications — lets the employee enable Web Push so they get
+          real device notifications when a job is assigned to them. */}
+      <PushPermissionCard />
     </div>
   );
 }
@@ -2600,6 +2700,221 @@ function EmployeeSidebar({
         </button>
       </div>
     </div>
+  );
+}
+
+// ─── Notifications hook + bell ───────────────────────────────────────────────
+// Fetches the current user's in-app notifications from /api/notifications and
+// exposes a refetch + mark-as-read helper. Used by both the header bell and
+// the Inbox sub-view so they stay in sync.
+
+interface AppNotificationRow {
+  id: string;
+  type: string;
+  category: string;
+  title: string;
+  message: string;
+  isRead: boolean;
+  isArchived: boolean;
+  actionUrl: string | null;
+  priority: string;
+  createdAt: string;
+}
+
+function useNotifications() {
+  const [notifications, setNotifications] = useState<AppNotificationRow[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch('/api/notifications?filter=all&limit=50&XTransformPort=3000');
+      if (!res.ok) return;
+      const data = await res.json();
+      setNotifications(Array.isArray(data?.notifications) ? data.notifications : []);
+      setUnreadCount(Number(data?.unreadCount ?? 0));
+    } catch {
+      // Silent — the bell just shows 0.
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh();
+    // Poll every 60s so the badge stays fresh without a WebSocket. Cheap
+    // because /api/notifications is a simple scoped COUNT + SELECT.
+    const id = setInterval(refresh, 60_000);
+    return () => clearInterval(id);
+  }, [refresh]);
+
+  const markAllRead = useCallback(async () => {
+    // Fire-and-forget; optimistically update the UI.
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    setUnreadCount(0);
+    try {
+      await fetch('/api/notifications?XTransformPort=3000', { method: 'PATCH' });
+    } catch {
+      /* non-fatal */
+    }
+  }, []);
+
+  const markRead = useCallback(async (id: string) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
+    );
+    setUnreadCount((c) => Math.max(0, c - 1));
+    try {
+      await fetch('/api/notifications?XTransformPort=3000', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, isRead: true }),
+      });
+    } catch {
+      /* non-fatal */
+    }
+  }, []);
+
+  return { notifications, unreadCount, loading, refresh, markAllRead, markRead };
+}
+
+// Map a notification type → lucide icon + tailwind color classes (mirrors the
+// server-side iconForType() so the client doesn't need a round-trip).
+function notifIconFor(type: string): { icon: React.ElementType; color: string; bg: string } {
+  switch (type) {
+    case 'job_assigned':
+      return { icon: Briefcase, color: 'text-violet-600', bg: 'bg-violet-100 dark:bg-violet-900/30' };
+    case 'job_started':
+      return { icon: Play, color: 'text-blue-600', bg: 'bg-blue-100 dark:bg-blue-900/30' };
+    case 'job_completed':
+      return { icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-100 dark:bg-emerald-900/30' };
+    case 'invoice_created':
+    case 'invoice_paid':
+      return { icon: FileText, color: 'text-blue-600', bg: 'bg-blue-100 dark:bg-blue-900/30' };
+    case 'lead_assigned':
+      return { icon: UserCircle, color: 'text-emerald-600', bg: 'bg-emerald-100 dark:bg-emerald-900/30' };
+    default:
+      return { icon: Bell, color: 'text-slate-600', bg: 'bg-slate-100 dark:bg-slate-800' };
+  }
+}
+
+function NotificationBell() {
+  const { notifications, unreadCount, loading, markAllRead, markRead } = useNotifications();
+  const [open, setOpen] = useState(false);
+
+  const recent = notifications.slice(0, 8);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="icon" className="size-9 relative" aria-label="Notifications">
+          <Bell className="size-[18px]" />
+          {unreadCount > 0 && (
+            <span className="absolute top-1 right-1 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 p-0" >
+        <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+          <span className="text-sm font-semibold">Notifications</span>
+          {unreadCount > 0 && (
+            <Button variant="ghost" size="sm" className="h-7 text-xs text-emerald-600" onClick={markAllRead}>
+              Mark all read
+            </Button>
+          )}
+        </div>
+        <ScrollArea className="max-h-80">
+          {loading ? (
+            <div className="p-4 text-center text-xs text-muted-foreground">Loading…</div>
+          ) : recent.length === 0 ? (
+            <div className="p-6 text-center text-muted-foreground">
+              <Bell className="size-8 mx-auto mb-2 opacity-40" />
+              <p className="text-sm">No notifications yet</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {recent.map((n) => {
+                const { icon: Icon, color, bg } = notifIconFor(n.type);
+                return (
+                  <button
+                    key={n.id}
+                    onClick={() => {
+                      if (!n.isRead) markRead(n.id);
+                    }}
+                    className={cn(
+                      'w-full flex items-start gap-2.5 px-3 py-2.5 text-left hover:bg-muted/50 transition-colors',
+                      !n.isRead && 'bg-emerald-50/50 dark:bg-emerald-950/20'
+                    )}
+                  >
+                    <div className={cn('size-7 rounded-full flex items-center justify-center shrink-0 mt-0.5', bg)}>
+                      <Icon className={cn('size-3.5', color)} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-foreground leading-snug">{n.title}</p>
+                      <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5">{n.message}</p>
+                      <p className="text-[10px] text-muted-foreground/70 mt-1">{getTimeAgo(new Date(n.createdAt))}</p>
+                    </div>
+                    {!n.isRead && <span className="size-2 rounded-full bg-emerald-500 shrink-0 mt-1.5" />}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </ScrollArea>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ─── Mobile bottom tab bar ───────────────────────────────────────────────────
+// Persistent one-thumb navigation for phones. Shown only < md (768px). On
+// desktop the sidebar handles nav. 5 tabs: Home, My Jobs, Schedule,
+// Attendance, Profile. The Inbox is reachable via the notification bell.
+const BOTTOM_NAV_ITEMS: { id: EmployeeSubView; label: string; icon: typeof LayoutDashboard }[] = [
+  { id: 'home', label: 'Home', icon: LayoutDashboard },
+  { id: 'my-jobs', label: 'Jobs', icon: Briefcase },
+  { id: 'schedule', label: 'Schedule', icon: CalendarDays },
+  { id: 'attendance', label: 'Clock', icon: Clock },
+  { id: 'profile', label: 'Profile', icon: UserCircle },
+];
+
+function MobileBottomNav({
+  activeView,
+  onViewChange,
+}: {
+  activeView: EmployeeSubView;
+  onViewChange: (v: EmployeeSubView) => void;
+}) {
+  return (
+    <nav
+      className="md:hidden fixed bottom-0 inset-x-0 z-40 border-t border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      aria-label="Primary"
+    >
+      <div className="grid grid-cols-5 h-14">
+        {BOTTOM_NAV_ITEMS.map((item) => {
+          const isActive = activeView === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => onViewChange(item.id)}
+              className={cn(
+                'flex flex-col items-center justify-center gap-0.5 transition-colors',
+                isActive
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+              aria-current={isActive ? 'page' : undefined}
+            >
+              <item.icon className={cn('size-[22px]', isActive && 'scale-110 transition-transform')} />
+              <span className="text-[10px] font-medium leading-none">{item.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
 
@@ -2719,12 +3034,8 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
             {/* Dark mode toggle */}
             <ThemeToggleButton />
 
-            {/* Notification bell */}
-            <Button variant="ghost" size="icon" className="size-9 relative">
-              <Bell className="size-[18px]" />
-              <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-red-500" />
-              <span className="sr-only">Notifications</span>
-            </Button>
+            {/* Notification bell — wired to /api/notifications */}
+            <NotificationBell />
 
             {/* Avatar dropdown */}
             <DropdownMenu>
@@ -2744,8 +3055,8 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
                   Profile
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setActiveView('inbox')}>
-                  <Settings className="size-4 mr-2" />
-                  Settings
+                  <Inbox className="size-4 mr-2" />
+                  Inbox
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={onLogout} className="text-red-600 focus:text-red-600">
@@ -2757,11 +3068,14 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
           </div>
         </header>
 
-        {/* Content */}
-        <main className="flex-1 overflow-auto bg-muted/30 p-4 lg:p-6">
+        {/* Content — extra bottom padding on mobile clears the fixed bottom tab bar */}
+        <main className="flex-1 overflow-auto bg-muted/30 p-4 lg:p-6 pb-20 md:pb-6">
           {renderSubView()}
         </main>
       </div>
+
+      {/* Mobile bottom tab bar (phones only) */}
+      <MobileBottomNav activeView={activeView} onViewChange={handleViewChange} />
     </div>
   );
 }

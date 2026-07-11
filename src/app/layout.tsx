@@ -39,14 +39,17 @@ export const metadata: Metadata = {
   formatDetection: { telephone: false },
   icons: {
     icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
       { url: "/logo.svg", sizes: "any", type: "image/svg+xml" },
       { url: "/icon.svg", sizes: "any", type: "image/svg+xml" },
     ],
-    // Apple touch icons: we only ship an SVG, but Safari requires a PNG for
-    // apple-touch-icon. Rather than 404 on every page load, we point at the
-    // SVG (Safari will simply skip it if it can't render, instead of logging
-    // a network error for a missing file).
-    apple: [{ url: "/icon.svg", sizes: "180x180", type: "image/svg+xml" }],
+    // iOS requires a PNG apple-touch-icon (it does NOT render SVG). Ship a
+    // real 180×180 PNG so "Add to Home Screen" shows our logo on iPhone.
+    apple: [
+      { url: "/icon-180.png", sizes: "180x180", type: "image/png" },
+      { url: "/icon-167.png", sizes: "167x167", type: "image/png" },
+    ],
   },
   appleWebApp: {
     capable: true,
@@ -79,8 +82,10 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="format-detection" content="telephone=no" />
         <meta name="msapplication-TileColor" content="#10b981" />
-        <link rel="apple-touch-icon" href="/icon.svg" />
-        <link rel="apple-touch-startup-image" href="/icon.svg" />
+        <link rel="apple-touch-icon" href="/icon-180.png" />
+        <link rel="apple-touch-icon" sizes="167x167" href="/icon-167.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png" />
+        <link rel="apple-touch-startup-image" href="/icon-512.png" />
       </head>
       <body
         className={`${poppins.variable} ${geistMono.variable} antialiased bg-background text-foreground font-sans`}

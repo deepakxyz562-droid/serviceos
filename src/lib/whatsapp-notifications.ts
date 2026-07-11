@@ -2,6 +2,8 @@ import { db } from '@/lib/db'
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
 import { resolveWhatsAppConfig } from '@/lib/whatsapp-config'
 import { deductWhatsAppCredit } from '@/lib/credit-management'
+import { createNotification } from '@/lib/notifications'
+import { sendWebPushToUser } from '@/lib/web-push-send'
 
 // ==========================================
 // TYPES
@@ -267,6 +269,62 @@ export async function notifyEmployeeJobAssigned(
     // and would violate the FK constraint (Prisma P2003) and abort the log.
     tenantId: (job.tenantId as string) || undefined,
   })
+
+  // ── Multi-channel fan-out: in-app + web push ────────────────────────────
+  // WhatsApp is great, but employees on iOS especially won't see a push
+  // unless we also create an AppNotification row + fire a Web Push. We
+  // resolve the employee's linked User account (which carries the tenantId)
+  // and fire both channels in the background. All errors are swallowed so
+  // a failure here never affects the job-creation HTTP response.
+  const employeeUserId = (employee.userId as string) || null
+  if (employeeUserId) {
+    try {
+      // Resolve tenantId via the user account (preferred) or the job's
+      // workspace → tenant. We need it for both createNotification and
+      // sendWebPushToUser.
+      let tenantId: string | null = null
+      const userAccount = await db.user.findUnique({
+        where: { id: employeeUserId },
+        select: { tenantId: true },
+      })
+      tenantId = userAccount?.tenantId ?? null
+      if (!tenantId && (job.workspaceId as string)) {
+        const ws = await db.workspace.findUnique({
+          where: { id: job.workspaceId as string },
+          select: { tenantId: true },
+        })
+        tenantId = ws?.tenantId ?? null
+      }
+      if (tenantId) {
+        // 1) In-app notification (shows up in the bell + inbox).
+        await createNotification({
+          tenantId,
+          recipientId: employeeUserId,
+          type: 'job_assigned',
+          title: `New job assigned: #${jobNumber}`,
+          message: `${job.title || 'Untitled'} • ${job.customerName || 'Customer'} • ${scheduledDate} ${scheduledTime}`,
+          actionUrl: `/?view=jobs&job=${job.id}`,
+          actionLabel: 'View job',
+          priority: 'high',
+          senderType: 'system',
+          customerId: (job.customerId as string) || undefined,
+          sourceType: 'Job',
+          sourceId: job.id as string,
+        })
+
+        // 2) Web Push to every active device the employee has registered.
+        await sendWebPushToUser(employeeUserId, tenantId, {
+          title: `New job assigned: #${jobNumber}`,
+          body: `${job.title || 'Untitled'} • ${job.customerName || 'Customer'} • ${scheduledDate} ${scheduledTime}`,
+          url: `/?view=jobs&job=${job.id}`,
+          tag: `job_assigned_${job.id}`,
+          requireInteraction: true,
+        })
+      }
+    } catch (err) {
+      console.error('[notifyEmployeeJobAssigned] in-app/push fan-out failed:', err)
+    }
+  }
 }
 
 export async function notifyEmployeeJobStarted(

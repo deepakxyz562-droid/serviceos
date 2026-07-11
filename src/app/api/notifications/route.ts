@@ -206,3 +206,70 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+/**
+ * PATCH /api/notifications
+ *
+ * Update notification state for the current user. Two modes:
+ *   1. Single notification: body `{ id, isRead }` — flips isRead + sets readAt
+ *   2. Mark all read: body `{ all: true }` or empty body — marks every
+ *      unread, non-archived notification for the user as read.
+ *
+ * Always scoped to the authenticated user's own notifications (recipientId
+ * = user.id) so a forged id can't touch another user's rows.
+ */
+export async function PATCH(request: NextRequest) {
+  try {
+    const user = await getAuthUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    if (!user.tenantId) {
+      return NextResponse.json({ error: 'Tenant context required' }, { status: 400 });
+    }
+
+    const body = await request.json().catch(() => ({}));
+
+    // Mode 1: single notification
+    if (body?.id && typeof body.id === 'string') {
+      const isRead = body.isRead !== false; // default true
+      // Update only if the row belongs to this user (recipientId scope).
+      const updated = await db.appNotification.updateMany({
+        where: {
+          id: body.id,
+          tenantId: user.tenantId,
+          recipientId: user.id,
+        },
+        data: {
+          isRead,
+          readAt: isRead ? new Date() : null,
+        },
+      });
+      if (updated.count === 0) {
+        return NextResponse.json({ error: 'Notification not found' }, { status: 404 });
+      }
+      return NextResponse.json({ ok: true, count: updated.count });
+    }
+
+    // Mode 2: mark all read
+    const result = await db.appNotification.updateMany({
+      where: {
+        tenantId: user.tenantId,
+        recipientId: user.id,
+        isRead: false,
+        isArchived: false,
+      },
+      data: {
+        isRead: true,
+        readAt: new Date(),
+      },
+    });
+    return NextResponse.json({ ok: true, count: result.count });
+  } catch (error) {
+    console.error('[notifications] PATCH failed:', error);
+    return NextResponse.json(
+      { error: 'Failed to update notification' },
+      { status: 500 }
+    );
+  }
+}

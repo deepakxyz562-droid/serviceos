@@ -301,6 +301,19 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Job ID is required' }, { status: 400 })
     }
 
+    // ── Detect assignee change (re-assignment) so we can notify the new
+    // assignee. We snapshot the old assigneeId BEFORE the update; if it
+    // differs from the incoming value, the new assignee gets the same
+    // multi-channel (WhatsApp + in-app + push) notification as on creation.
+    let previousAssigneeId: string | null = null
+    if (data.assigneeId !== undefined) {
+      const existing = await db.job.findUnique({
+        where: { id },
+        select: { assigneeId: true },
+      })
+      previousAssigneeId = existing?.assigneeId ?? null
+    }
+
     // Handle date fields
     const updateData: Record<string, unknown> = { ...data }
     if (data.scheduledAt) updateData.scheduledAt = new Date(data.scheduledAt)
@@ -316,6 +329,29 @@ export async function PUT(request: NextRequest) {
         resource: true,
       },
     })
+
+    // ── Re-assignment notification ───────────────────────────────────
+    // If the assignee changed AND a new assignee exists, notify them the
+    // same way as a fresh assignment (WhatsApp + in-app + push). Detached
+    // so it never blocks the HTTP response.
+    const newAssigneeId = (data.assigneeId as string | null) ?? null
+    if (
+      newAssigneeId &&
+      newAssigneeId !== previousAssigneeId
+    ) {
+      db.employee
+        .findUnique({ where: { id: newAssigneeId } })
+        .then((employee) => {
+          if (!employee) return
+          notifyEmployeeJobAssigned(job as unknown as Record<string, unknown>, employee as unknown as Record<string, unknown>).catch((e) =>
+            console.error('Failed to send re-assignment notification:', e)
+          )
+          dispatchJobEvent('job.assigned', job, { employee, customer: null }).catch((err) =>
+            console.error('[EventWebhook] Background dispatch failed for job.assigned:', err)
+          )
+        })
+        .catch((e) => console.error('[Jobs PUT] re-assign lookup failed:', e))
+    }
 
     // ─── Fire event webhook: job.cancelled ────────────────────────
     if (data.status === 'cancelled') {

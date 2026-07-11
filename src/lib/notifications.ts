@@ -343,3 +343,13 @@ export function getVapidKeys(): {
   const privateKey = process.env.VAPID_PRIVATE_KEY || null;
   return { publicKey, privateKey };
 }
+
+/**
+ * Convenience: does the running server have the VAPID keys it needs to
+ * actually send Web Push messages? Used by API routes (e.g. push/subscribe)
+ * to 503 gracefully when the operator hasn't configured VAPID yet.
+ */
+export function isWebPushConfigured(): boolean {
+  const { publicKey, privateKey } = getVapidKeys();
+  return Boolean(publicKey) && Boolean(privateKey);
+}
