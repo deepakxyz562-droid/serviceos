@@ -1,6 +1,6 @@
 'use client';
 
-import { lazy, Suspense, Component, ReactNode, ErrorInfo } from 'react';
+import { lazy, Suspense, Component, ReactNode, ErrorInfo, useEffect } from 'react';
 import { useAppStore } from '@/store/app-store';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { AppSidebar } from '@/components/layout/sidebar';
@@ -290,6 +290,18 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   const isMobile = useIsMobile();
   const trialStatus = useTrialStatus();
 
+  // Sync dark mode to <html> so that <body> (which carries `bg-background`
+  // but lives outside this wrapper) also picks up the dark background vars.
+  // The wrapper is `fixed inset-0` and covers the full viewport, so this is
+  // purely defensive — it ensures any sub-pixel rendering gap below the
+  // wrapper is the same color as the nav, invisible in both light and dark.
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) root.classList.add('dark');
+    else root.classList.remove('dark');
+    return () => { root.classList.remove('dark'); };
+  }, [darkMode]);
+
   // Resolve the active view component
   const ActiveView = viewComponents[currentView] || DashboardView;
 
@@ -298,7 +310,10 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
 
   return (
     <div
-      className={cn('h-[100dvh] flex overflow-hidden bg-background', darkMode && 'dark')}
+      className={cn(
+        'fixed inset-0 flex overflow-hidden bg-background',
+        darkMode && 'dark',
+      )}
     >
       <AppSidebar onLogout={onLogout} />
 
