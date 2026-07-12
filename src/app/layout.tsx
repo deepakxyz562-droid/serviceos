@@ -82,6 +82,8 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="format-detection" content="telephone=no" />
         <meta name="msapplication-TileColor" content="#10b981" />
+        <link rel="icon" href="/favicon.png" type="image/png" sizes="32x32" />
+        <link rel="icon" href="/favicon-16.png" type="image/png" sizes="16x16" />
         <link rel="apple-touch-icon" href="/icon-180.png" />
         <link rel="apple-touch-icon" sizes="167x167" href="/icon-167.png" />
         <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png" />
