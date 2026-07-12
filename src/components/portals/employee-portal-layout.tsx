@@ -551,6 +551,102 @@ function useEmployeeRecord(employeeId: string | null) {
  * that's annoying and many browsers block auto-prompts. The push-enable
  * banner on the Home view (see HomeView) surfaces the opt-in.
  */
+/**
+ * useJobDetailSheet
+ * ------------------
+ * Shared state machine for opening the JobDetailSheet from ANY view that
+ * lists jobs (HomeView's "Today's Schedule", MyJobsView, etc.).
+ *
+ * Encapsulates everything a job list needs to open a job + run lifecycle
+ * actions (accept / start_travel / arrive / start_work / pause / resume /
+ * complete) against POST /api/employee/jobs/[id]/lifecycle:
+ *   - selectedJob        — the job currently shown in the sheet (or null)
+ *   - setSelectedJob     — open / close the sheet
+ *   - actionLoading      — `${action}-${jobId}` of the in-flight action (for
+ *                          button spinners) or null
+ *   - handleLifecycleAction(action, jobId) — POSTs the action, toasts the
+ *                          result, refetches the jobs list, and auto-closes
+ *                          the sheet on `complete`.
+ *
+ * The sync useEffect keeps `selectedJob` in lock-step with the fresh `jobs`
+ * array after every refetch — this is the fix for the "next action button
+ * doesn't advance" bug (the lifecycle POST response doesn't include the
+ * derived `lifecycleState` / `lifecycleTimestamps` fields, so we must read
+ * them back from the refetched list).
+ *
+ * Extracted from MyJobsView so HomeView can reuse the exact same behaviour
+ * without duplicating ~80 lines of state + handler + effect code.
+ */
+function useJobDetailSheet({
+  jobs,
+  refetch,
+}: {
+  jobs: Job[];
+  refetch: () => Promise<void> | void;
+}) {
+  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // ── Sync selectedJob from the jobs array whenever jobs change ────────
+  // After a lifecycle action (accept/start_travel/arrive/etc.) we call
+  // `refetch()`, which recomputes `lifecycleState` + `lifecycleTimestamps`
+  // on the server. The raw lifecycle POST response does NOT include those
+  // derived fields, so we read them back from the fresh list and replace
+  // `selectedJob` entirely — the sheet then re-renders with the new stage
+  // and the "Next" button advances automatically.
+  useEffect(() => {
+    if (!selectedJob) return;
+    const fresh = jobs.find((j) => j.id === selectedJob.id);
+    if (fresh && fresh !== selectedJob) {
+      setSelectedJob(fresh);
+    }
+  }, [jobs, selectedJob]);
+
+  // ── V1.5 Job lifecycle action handler ──
+  const handleLifecycleAction = async (action: string, jobId: string) => {
+    setActionLoading(`${action}-${jobId}`);
+    try {
+      const res = await fetch(
+        `/api/employee/jobs/${jobId}/lifecycle?XTransformPort=3000`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action }),
+        }
+      );
+      if (res.ok) {
+        const actionLabels: Record<string, string> = {
+          accept: 'accepted',
+          start_travel: 'travel started',
+          arrive: 'arrived',
+          start_work: 'work started',
+          pause: 'paused',
+          resume: 'resumed',
+          complete: 'completed',
+        };
+        toast.success(`Job ${actionLabels[action] || action} successfully`);
+        // refetch() updates the `jobs` array; the sync effect above will
+        // refresh `selectedJob` from the new data so the action buttons
+        // advance.
+        await refetch();
+        // Auto-close the sheet once the job is completed.
+        if (action === 'complete') {
+          setSelectedJob(null);
+        }
+      } else {
+        const err = await res.json().catch(() => ({ error: `Failed to ${action} job` }));
+        toast.error(err.error || `Failed to ${action} job`);
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  return { selectedJob, setSelectedJob, actionLoading, handleLifecycleAction };
+}
+
 function usePushAutoSubscribe() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -856,10 +952,25 @@ function ErrorCard({ message, onRetry }: { message: string; onRetry?: () => void
 
 // ─── Sub-View: Home ─────────────────────────────────────────────────────────
 
-function HomeView({ employeeId }: { employeeId: string }) {
+function HomeView({
+  employeeId,
+  onViewChange,
+}: {
+  employeeId: string;
+  onViewChange?: (view: EmployeeSubView) => void;
+}) {
   const { auth } = useAppStore();
   const { jobs, loading, error, refetch } = useEmployeeJobs(employeeId);
   const { employee } = useEmployeeRecord(employeeId);
+  // Shared job-detail-sheet state machine — lets the employee tap a job in
+  // "Today's Schedule" and open the full JobDetailSheet (with accept / start /
+  // complete lifecycle actions) directly from the home screen, exactly like
+  // MyJobsView. Before this, the Today's Schedule rows rendered an ArrowRight
+  // icon that LOOKED tappable but had no onClick — so tapping a job on the
+  // home screen (the natural first action after login) did nothing on iOS,
+  // Android, and desktop alike.
+  const { selectedJob, setSelectedJob, actionLoading, handleLifecycleAction } =
+    useJobDetailSheet({ jobs, refetch });
 
   const employeeName = employee?.name || auth.user?.name || auth.user?.email || 'Employee';
   const firstName = employeeName.split(' ')[0] || 'Employee';
@@ -998,8 +1109,26 @@ function HomeView({ employeeId }: { employeeId: string }) {
         {/* Today's Schedule */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Today&apos;s Schedule</CardTitle>
-            <CardDescription>Your appointments and tasks for today</CardDescription>
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <CardTitle className="text-base">Today&apos;s Schedule</CardTitle>
+                <CardDescription>Your appointments and tasks for today</CardDescription>
+              </div>
+              {/* "View All" → switches to the My Jobs view. Surfaces the full
+                  job list so employees who want to see non-today jobs know
+                  where to look. Hidden when there are no jobs at all. */}
+              {jobs.length > 0 && onViewChange && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="shrink-0 h-7 px-2 text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                  onClick={() => onViewChange('my-jobs')}
+                >
+                  View All
+                  <ArrowRight className="size-3 ml-1" />
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="space-y-3">
             {loading ? (
@@ -1013,18 +1142,40 @@ function HomeView({ employeeId }: { employeeId: string }) {
               todayJobs.map((job) => {
                 const stage = resolveLifecycleStage(job);
                 return (
-                  <div key={job.id} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+                  <div
+                    key={job.id}
+                    role="button"
+                    tabIndex={0}
+                    // touch-action: manipulation removes the 300ms tap delay on
+                    // mobile and ensures taps fire as clicks immediately on iOS
+                    // WebKit + Android Chrome. -webkit-tap-highlight-color kills
+                    // the grey flash on tap. active:scale gives tactile feedback.
+                    style={{
+                      touchAction: 'manipulation',
+                      WebkitTapHighlightColor: 'transparent',
+                    }}
+                    className="group flex items-start gap-3 p-3 rounded-lg bg-muted/50 hover:bg-muted hover:border-emerald-300 dark:hover:border-emerald-700 border border-transparent transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/40 active:scale-[0.99]"
+                    onClick={() => setSelectedJob(job)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedJob(job);
+                      }
+                    }}
+                  >
                     <div className="text-xs font-mono text-muted-foreground min-w-[70px] pt-0.5">
                       {job.scheduledAt ? formatTime(job.scheduledAt) : 'TBD'}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{job.title}</p>
+                      <p className="text-sm font-medium text-foreground truncate group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
+                        {job.title}
+                      </p>
                       <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                         <Badge variant="outline" className="text-[10px] h-5">{job.type || 'Job'}</Badge>
                         {stage && getStatusBadge(stage)}
                       </div>
                     </div>
-                    <ArrowRight className="size-4 text-muted-foreground shrink-0 mt-0.5" />
+                    <ArrowRight className="size-4 text-muted-foreground shrink-0 mt-0.5 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all" />
                   </div>
                 );
               })
@@ -1094,11 +1245,27 @@ function HomeView({ employeeId }: { employeeId: string }) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Job Detail Sheet — same component MyJobsView uses. Opens when the
+          employee taps a job in "Today's Schedule" above. Renders the full
+          job detail (customer, address, lifecycle progress, line items,
+          photos, signatures) + the accept / start_travel / arrive /
+          start_work / pause / resume / complete action buttons. */}
+      <JobDetailSheet
+        job={selectedJob}
+        open={!!selectedJob}
+        onClose={() => setSelectedJob(null)}
+        onAction={handleLifecycleAction}
+        onJobCompleted={async () => {
+          toast.success('Job completed successfully');
+          await refetch();
+          setSelectedJob(null);
+        }}
+        actionLoading={actionLoading}
+      />
     </div>
   );
 }
-
-// ─── Job Detail Sheet (used by MyJobsView & HomeView) ──────────────────────────
 
 // ─── V1.5 Lifecycle Progress (compact pill row) ─────────────────────────────
 // Renders the 7 stages of the V1.5 job lifecycle as a row of small pills,
@@ -1718,9 +1885,12 @@ function JobDetailSheet({
 
 function MyJobsView({ employeeId }: { employeeId: string }) {
   const [filter, setFilter] = useState<string>('all');
-  const [selectedJob, setSelectedJob] = useState<Job | null>(null);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const { jobs, loading, error, refetch } = useEmployeeJobs(employeeId);
+  // Shared job-detail-sheet state machine (selectedJob + actionLoading +
+  // handleLifecycleAction + the sync-from-jobs effect). Extracted so
+  // HomeView can reuse the exact same behaviour.
+  const { selectedJob, setSelectedJob, actionLoading, handleLifecycleAction } =
+    useJobDetailSheet({ jobs, refetch });
 
   const filteredJobs = filter === 'all'
     ? jobs
@@ -1731,74 +1901,6 @@ function MyJobsView({ employeeId }: { employeeId: string }) {
         const stage = resolveLifecycleStage(j);
         return stage === filter || j.status === filter;
       });
-
-  // ── Sync selectedJob from the jobs array whenever jobs change ────────
-  // This is the fix for the "next button not updating" bug. After a
-  // lifecycle action (accept/start_travel/arrive/etc.) we call `refetch()`,
-  // which recomputes `lifecycleState` + `lifecycleTimestamps` on the server
-  // (see /api/employee/jobs route). Previously the handler tried to patch
-  // `selectedJob` from the raw lifecycle POST response — but that response
-  // doesn't include `lifecycleState`/`lifecycleTimestamps` (they're derived
-  // fields), so the optimistic patch copied STALE values via `prev`, and
-  // `resolveLifecycleStage(job)` kept returning the OLD stage → the action
-  // button never advanced.
-  //
-  // This effect fires AFTER `refetch()` updates `jobs`. It finds the
-  // matching job in the fresh list (which has the correct derived fields)
-  // and replaces `selectedJob` entirely. The sheet then re-renders with
-  // the new stage → the "Next" button advances automatically.
-  useEffect(() => {
-    if (!selectedJob) return;
-    const fresh = jobs.find((j) => j.id === selectedJob.id);
-    if (fresh && fresh !== selectedJob) {
-      // Only update if the reference actually changed (avoids infinite loops
-      // since mapJobRow returns a new object per fetch — the `!==` check on
-      // the object reference is enough because useEmployeeJobs replaces the
-      // whole array on refetch).
-      setSelectedJob(fresh);
-    }
-  }, [jobs, selectedJob]);
-
-  // ── V1.5 Job lifecycle action handler ──
-  // Calls POST /api/employee/jobs/[id]/lifecycle with the full V1.5 action
-  // set: accept, start_travel, arrive, start_work, pause, resume, complete.
-  const handleLifecycleAction = async (action: string, jobId: string) => {
-    setActionLoading(`${action}-${jobId}`);
-    try {
-      const res = await fetch(`/api/employee/jobs/${jobId}/lifecycle?XTransformPort=3000`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
-      });
-      if (res.ok) {
-        const actionLabels: Record<string, string> = {
-          accept: 'accepted',
-          start_travel: 'travel started',
-          arrive: 'arrived',
-          start_work: 'work started',
-          pause: 'paused',
-          resume: 'resumed',
-          complete: 'completed',
-        };
-        toast.success(`Job ${actionLabels[action] || action} successfully`);
-        // refetch() updates the `jobs` array; the useEffect above will sync
-        // `selectedJob` from the fresh data (with correct lifecycleState +
-        // lifecycleTimestamps), so the sheet's action buttons advance.
-        await refetch();
-        // Auto-close the sheet once the job is completed.
-        if (action === 'complete') {
-          setSelectedJob(null);
-        }
-      } else {
-        const err = await res.json().catch(() => ({ error: `Failed to ${action} job` }));
-        toast.error(err.error || `Failed to ${action} job`);
-      }
-    } catch {
-      toast.error('Network error');
-    } finally {
-      setActionLoading(null);
-    }
-  };
 
   const filterOptions: { value: string; label: string }[] = [
     { value: 'all', label: 'All' },
@@ -1857,7 +1959,12 @@ function MyJobsView({ employeeId }: { employeeId: string }) {
                   key={job.id}
                   role="button"
                   tabIndex={0}
-                  className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-lg border border-border hover:border-emerald-300 dark:hover:border-emerald-700 transition-colors hover:bg-muted/30 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                  // touch-action: manipulation removes the 300ms tap delay on
+                  // mobile and ensures taps fire as clicks immediately on iOS
+                  // WebKit + Android Chrome. -webkit-tap-highlight-color kills
+                  // the grey flash on tap. Both are no-ops on desktop.
+                  style={{ touchAction: 'manipulation', WebkitTapHighlightColor: 'transparent' }}
+                  className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-lg border border-border hover:border-emerald-300 dark:hover:border-emerald-700 transition-colors hover:bg-muted/30 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/40 active:scale-[0.99]"
                   onClick={() => setSelectedJob(job)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
@@ -3298,7 +3405,7 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
 
     switch (activeView) {
       case 'home':
-        return <HomeView employeeId={employeeId} />;
+        return <HomeView employeeId={employeeId} onViewChange={handleViewChange} />;
       case 'my-jobs':
         return <MyJobsView employeeId={employeeId} />;
       case 'schedule':
@@ -3310,7 +3417,7 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
       case 'profile':
         return <ProfileView employeeId={employeeId} />;
       default:
-        return <HomeView employeeId={employeeId} />;
+        return <HomeView employeeId={employeeId} onViewChange={handleViewChange} />;
     }
   };
 
