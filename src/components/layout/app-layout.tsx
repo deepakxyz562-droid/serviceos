@@ -323,7 +323,11 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
         <main
           className={cn(
             'flex-1 overflow-auto animate-fade-in',
-            isCanvas ? 'p-0' : isMobile ? 'p-3 sm:p-4 bg-background' : 'p-4 lg:p-6 bg-background',
+            isCanvas
+              ? 'p-0'
+              : isMobile
+                ? 'p-3 sm:p-4 bg-background pb-[calc(4rem+env(safe-area-inset-bottom,0px))]'
+                : 'p-4 lg:p-6 bg-background',
           )}
         >
           <ViewErrorBoundary>
@@ -333,10 +337,15 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
           </ViewErrorBoundary>
         </main>
 
-        {/* Mobile bottom nav — part of the flex column flow so it sits
-            naturally below the scrolling <main>. No fixed positioning means
-            no overlay, so <main> needs no bottom padding and there is no
-            visible gap when content is shorter than the viewport. */}
+        {/* Mobile bottom nav — `position: fixed; bottom: 0` so it touches the
+            TRUE screen bottom on iOS standalone (the `fixed inset-0` wrapper
+            + `100dvh` approach does NOT reliably reach the bottom on iOS WebKit
+            in standalone PWA mode, leaving a ~34px gap below the nav). The
+            nav's own `paddingBottom: env(safe-area-inset-bottom)` fills the
+            home-indicator zone. <main> has matching bottom padding so content
+            is not hidden behind the fixed nav. Since both <main> and the nav
+            use `bg-background`, the padding area is the same color as the nav
+            — no visible gap when content is shorter than the viewport. */}
         <MobileBottomNav />
       </div>
 
