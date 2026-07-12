@@ -8,6 +8,7 @@ import {
   setLifecycleTimestamp,
   type LifecycleTimestamps,
 } from '@/lib/job-lifecycle';
+import { sendWebPushToUser } from '@/lib/web-push-send';
 
 /**
  * Job Lifecycle API — V1.5
@@ -104,6 +105,21 @@ async function resolveTenantAndAdmins(workspaceId: string | null) {
 
 /**
  * Create an AppNotification for a recipient (wrapped — never throws).
+ *
+ * In addition to writing the in-app notification row, this ALSO fires a
+ * real Web Push to the recipient's devices via sendWebPushToUser(). This
+ * is what makes job notifications arrive even when the employee's app is
+ * CLOSED — the push goes to APNs/FCM, which wakes the device and shows a
+ * system notification via the service worker's `push` event handler.
+ *
+ * Without the push call, the in-app row only surfaces when the app is
+ * open (via 60s polling in useNotifications), so employees with a closed
+ * app would never know a job was assigned until they reopen the app.
+ *
+ * sendWebPushToUser() is a safe no-op (returns { sent: 0 }) when the
+ * recipient has no push subscriptions — so users who haven't enabled push
+ * are unaffected. The push is wrapped in fireAndForget so a push failure
+ * never breaks the job lifecycle.
  */
 async function safeCreateNotification(params: {
   tenantId: string | null;
@@ -133,6 +149,20 @@ async function safeCreateNotification(params: {
       priority: params.priority ?? 'normal',
     },
   });
+
+  // Fire a real Web Push so the recipient sees a system notification on
+  // their device even if the app is closed. Covers ALL job events that
+  // call safeCreateNotification: job_assigned, job_accepted,
+  // technician_on_route, job_arrived, job_completed, invoice_generated.
+  fireAndForget('notify.push', () =>
+    sendWebPushToUser(params.recipientId, params.tenantId, {
+      title: params.title,
+      body: params.message,
+      url: params.actionUrl || '/',
+      tag: `job-${params.type}`,
+      data: { type: params.type, ...(params.metadataJson || {}) },
+    })
+  );
 }
 
 /**
