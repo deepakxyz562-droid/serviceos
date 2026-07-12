@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAppStore } from '@/store/app-store';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -15,6 +15,7 @@ import {
   Key,
   Settings,
   LogOut,
+  Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +31,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 // ─── View label mapping ─────────────────────────────────────────────────────
 
@@ -100,9 +102,44 @@ const viewLabels: Record<ViewType, string> = {
   notifications: 'Notifications',
 };
 
+// ─── PWA install helpers ────────────────────────────────────────────────────
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
+function isStandaloneDisplay(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.matchMedia('(display-mode: window-controls-overlay)').matches ||
+      (window.navigator as unknown as { standalone?: boolean }).standalone === true
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isIOS(): boolean {
+  if (typeof window === 'undefined') return false;
+  const ua = window.navigator.userAgent || '';
+  const platform = (window.navigator as unknown as { platform?: string }).platform || '';
+  const isIpad =
+    /Mac/.test(platform) &&
+    'ontouchend' in document &&
+    (navigator.maxTouchPoints ?? 0) > 1;
+  return /iPad|iPhone|iPod/.test(ua) || isIpad;
+}
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
-export function AppHeader() {
+interface AppHeaderProps {
+  onLogout?: () => void;
+}
+
+export function AppHeader({ onLogout }: AppHeaderProps) {
   const {
     currentView,
     darkMode,
@@ -118,8 +155,23 @@ export function AppHeader() {
   const isCanvas = currentView === 'canvas';
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
 
   const setCurrentView = useAppStore((s) => s.setCurrentView);
+
+  // Capture beforeinstallprompt so the avatar "Install app" entry can
+  // re-trigger the native install flow. This mirrors install-prompt.tsx but
+  // is self-contained — calling prompt() consumes the event, so whichever
+  // UI (banner or menu) the user clicks first wins; the other becomes a no-op.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
 
   // ─── Live unread count (polled every 30s) ────────────────────────────
   // Falls back to a static "3" for unauthenticated users so the bell still
@@ -141,6 +193,32 @@ export function AppHeader() {
     setNotifOpen(false);
     setCurrentView('notifications');
   }, [setCurrentView]);
+
+  const goSettings = useCallback(() => setCurrentView('settings'), [setCurrentView]);
+  const goCredentials = useCallback(() => setCurrentView('credentials'), [setCurrentView]);
+
+  const handleInstallClick = useCallback(() => {
+    if (isStandaloneDisplay()) {
+      toast.info('ServiceOS is already installed');
+      return;
+    }
+    if (isIOS()) {
+      toast.info('Add to Home Screen', {
+        description: 'In Safari, tap the Share button, then "Add to Home Screen".',
+      });
+      return;
+    }
+    if (deferredPrompt) {
+      deferredPrompt
+        .prompt()
+        .catch(() => toast.error('Could not show install prompt'));
+      deferredPrompt.userChoice.finally(() => setDeferredPrompt(null));
+      return;
+    }
+    toast.info('Install ServiceOS', {
+      description: 'Use your browser menu → "Install app" or "Add to Home Screen".',
+    });
+  }, [deferredPrompt]);
 
   // Get user initials for avatar
   const getUserInitials = () => {
@@ -187,7 +265,7 @@ export function AppHeader() {
       </Button>
 
       {/* ─── Current view title ────────────────────────────────────────── */}
-      <h1 className="text-base sm:text-lg font-semibold tracking-tight whitespace-nowrap truncate">
+      <h1 className="text-base sm:text-lg font-semibold tracking-tight whitespace-nowrap truncate min-w-0">
         {viewLabels[currentView] || 'Dashboard'}
       </h1>
 
@@ -283,12 +361,12 @@ export function AppHeader() {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* ─── Dark mode toggle ────────────────────────────────────────── */}
+        {/* ─── Dark mode toggle (desktop only — mobile uses avatar dropdown) ── */}
         <Button
           variant="ghost"
           size="icon"
           onClick={toggleDarkMode}
-          className="h-9 w-9"
+          className="hidden sm:flex h-9 w-9"
           aria-label="Toggle dark mode"
         >
           {darkMode ? (
@@ -298,8 +376,8 @@ export function AppHeader() {
           )}
         </Button>
 
-        {/* ─── Separator ──────────────────────────────────────────────── */}
-        <Separator orientation="vertical" className="h-6 mx-0.5 sm:mx-1" />
+        {/* ─── Separator (desktop only) ───────────────────────────────── */}
+        <Separator orientation="vertical" className="h-6 mx-0.5 sm:mx-1 hidden sm:block" />
 
         {/* ─── User avatar dropdown ────────────────────────────────────── */}
         <DropdownMenu>
@@ -328,20 +406,35 @@ export function AppHeader() {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="cursor-pointer gap-2">
+            <DropdownMenuItem className="cursor-pointer gap-2" onClick={goSettings}>
               <User className="size-4" />
               Profile
             </DropdownMenuItem>
-            <DropdownMenuItem className="cursor-pointer gap-2">
+            <DropdownMenuItem className="cursor-pointer gap-2" onClick={goCredentials}>
               <Key className="size-4" />
               API Keys
             </DropdownMenuItem>
-            <DropdownMenuItem className="cursor-pointer gap-2">
+            <DropdownMenuItem className="cursor-pointer gap-2" onClick={goSettings}>
               <Settings className="size-4" />
               Settings
             </DropdownMenuItem>
+            {/* Dark mode toggle — mobile only (desktop has the icon button) */}
+            <DropdownMenuItem className="cursor-pointer gap-2 sm:hidden" onClick={toggleDarkMode}>
+              {darkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
+              {darkMode ? 'Light mode' : 'Dark mode'}
+            </DropdownMenuItem>
+            {/* Install app — lets users re-trigger install after dismissing banner */}
+            <DropdownMenuItem className="cursor-pointer gap-2" onClick={handleInstallClick}>
+              <Download className="size-4" />
+              Install app
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" className="cursor-pointer gap-2">
+            <DropdownMenuItem
+              variant="destructive"
+              className="cursor-pointer gap-2"
+              onClick={onLogout}
+              disabled={!onLogout}
+            >
               <LogOut className="size-4" />
               Log out
             </DropdownMenuItem>

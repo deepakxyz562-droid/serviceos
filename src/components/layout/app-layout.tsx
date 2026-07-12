@@ -304,13 +304,13 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
       <AppSidebar onLogout={onLogout} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <AppHeader />
+        <AppHeader onLogout={onLogout} />
 
         <main
           className={cn(
             'flex-1 overflow-auto animate-fade-in',
             isCanvas ? 'p-0' : isMobile ? 'p-3 sm:p-4 bg-background' : 'p-4 lg:p-6 bg-background',
-            isMobile && 'pb-mobile-nav'
+            !isCanvas && 'pb-mobile-nav'
           )}
         >
           <ViewErrorBoundary>

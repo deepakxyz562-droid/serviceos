@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useAppStore } from '@/store/app-store';
 import type { ViewType } from '@/types/workflow';
 import {
@@ -11,6 +12,7 @@ import {
   ShieldCheck,
   Target,
   Settings,
+  Calendar,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -20,11 +22,18 @@ interface MobileNavItem {
   icon: React.ElementType;
 }
 
-const regularNavItems: MobileNavItem[] = [
+// Full candidate list for owner/admin mobile nav. Items are filtered by the
+// superadmin "disabled menus" config (same /api/menu-visibility source the
+// desktop sidebar uses) so the mobile bottom nav respects the same hide rules.
+// Calendar is included as a fallback so the nav stays 4 slots wide when
+// Omnichannel is disabled.
+const ownerNavCandidates: MobileNavItem[] = [
   { view: 'dashboard', label: 'Home', icon: LayoutDashboard },
   { view: 'jobs', label: 'Jobs', icon: Briefcase },
   { view: 'omnichannel', label: 'Inbox', icon: Inbox },
   { view: 'contacts', label: 'People', icon: Users },
+  { view: 'calendar', label: 'Calendar', icon: Calendar },
+  { view: 'leads', label: 'Leads', icon: Target },
 ];
 
 const superadminNavItems: MobileNavItem[] = [
@@ -37,8 +46,38 @@ const superadminNavItems: MobileNavItem[] = [
 export function MobileBottomNav() {
   const { currentView, setCurrentView, toggleMobileSidebar, auth } = useAppStore();
 
+  const [disabledMenus, setDisabledMenus] = useState<string[]>([]);
+
   const isSuperAdmin = !!(auth.user?.isSuperAdmin || auth.user?.role === 'superadmin' || auth.user?.role === 'super_admin' || (auth.user?.role === 'admin' && !auth.user?.tenantId));
-  const navItems = isSuperAdmin ? superadminNavItems : regularNavItems;
+
+  // Fetch menu visibility for non-superadmin users (mirrors sidebar.tsx).
+  // Superadmin bypasses the fetch entirely.
+  useEffect(() => {
+    if (isSuperAdmin) return;
+    let cancelled = false;
+    async function fetchMenuVisibility() {
+      try {
+        const res = await fetch('/api/menu-visibility?XTransformPort=3000');
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled) setDisabledMenus(data.disabledMenus || []);
+        }
+      } catch {
+        // Silently fail - all menus remain visible
+      }
+    }
+    fetchMenuVisibility();
+    return () => { cancelled = true; };
+  }, [auth.user?.role, auth.user?.tenantId, auth.user?.isSuperAdmin, isSuperAdmin]);
+
+  // Pick the first 4 non-disabled candidates so the nav stays a consistent
+  // width. If fewer than 4 are available, the nav simply renders fewer items
+  // (plus the More button).
+  const navItems: MobileNavItem[] = isSuperAdmin
+    ? superadminNavItems
+    : ownerNavCandidates
+        .filter((item) => !disabledMenus.includes(item.view))
+        .slice(0, 4);
 
   return (
     <nav

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useAppStore } from '@/store/app-store';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { useBelowLg } from '@/hooks/use-mobile';
 import type { ViewType } from '@/types/workflow';
 import {
   LayoutDashboard,
@@ -730,10 +730,13 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
 
 export function AppSidebar({ onLogout }: AppSidebarProps) {
   const { leftSidebarOpen, mobileSidebarOpen, setMobileSidebarOpen } = useAppStore();
-  const isMobile = useIsMobile();
+  const isBelowLg = useBelowLg();
 
-  // Mobile: render as Sheet (drawer)
-  if (isMobile) {
+  // Render as a Sheet drawer for ALL viewports below lg (1024px) — not just
+  // below md (768px). The hamburger (header) and "More" button (bottom nav)
+  // are both `lg:hidden`, so they're visible (and need to work) on tablet too.
+  // `toggleMobileSidebar` controls `mobileSidebarOpen`, which this Sheet reads.
+  if (isBelowLg) {
     return (
       <Sheet open={mobileSidebarOpen} onOpenChange={setMobileSidebarOpen}>
         <SheetContent
@@ -749,7 +752,7 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
     );
   }
 
-  // Desktop: render as fixed sidebar
+  // Desktop (≥ 1024px): render as fixed sidebar
   return (
     <aside
       className={cn(
