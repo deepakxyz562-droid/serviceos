@@ -59,8 +59,15 @@ export default function UpdatePrompt() {
       });
     };
 
+    const isDev = process.env.NODE_ENV !== 'production';
+    // Match PwaProvider's dev-aware SW URL so both register the SAME script
+    // (/sw.js?dev=1 in dev). Using two different script URLs for the same
+    // scope would create two competing registrations; the dev flag also
+    // tells the SW to bypass its fetch handler (see sw.js).
+    const swUrl = isDev ? '/sw.js?dev=1' : '/sw.js';
+
     navigator.serviceWorker
-      .register('/sw.js', { scope: '/' })
+      .register(swUrl, { scope: '/' })
       .then((reg) => {
         registration = reg;
         // Catch the case where a new SW is already waiting on first load.

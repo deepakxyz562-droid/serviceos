@@ -3,20 +3,41 @@
  * ------------------------------
  * Capabilities:
  *   1. App-shell pre-caching on install (/, /manifest.json, /logo.svg, /icon.svg, /offline.html)
+ *      — SKIPPED in dev mode (?dev=1) to avoid caching Next.js dev renders.
  *   2. Cache cleanup + clients.claim() on activate
- *   3. Fetch strategies:
+ *   3. Fetch strategies (ALL SKIPPED in dev mode — passthrough — so Next.js
+ *      HMR and dev renders are never cached/served stale):
  *        - Network-first for /api/ (fall back to cache, then offline JSON)
  *        - Stale-while-revalidate for /_next/static/ assets
  *        - Cache-first for images and fonts
  *        - Network-first with cache fallback for HTML navigation, falling back to /offline.html
  *   4. Background Sync: 'serviceos-sync' event notifies all clients to replay queued mutations
  *   5. Push Notifications: parses payload, shows notification with View/Dismiss actions
+ *      — ALWAYS active (including dev) so real Web Push works in `next dev`.
  *   6. Notification click: focuses existing client (and postMessages data) or opens new client
  *   7. Message listener: SKIP_WAITING activates new SW immediately; CLEAR_CACHE wipes the cache
+ *
+ * DEV MODE:
+ *   When registered as `/sw.js?dev=1` (which PwaProvider does in
+ *   `process.env.NODE_ENV !== 'production'`), the SW detects the flag via
+ *   `self.location.search` and disables ALL caching + the fetch handler.
+ *   This lets the SW exist (so `pushManager.subscribe()` works and push
+ *   events fire) without interfering with Next.js hot-reload or serving
+ *   stale dev pages. The push + notificationclick handlers stay active.
  */
 
 const CACHE_NAME = 'serviceos-v3';
 const OFFLINE_URL = '/offline.html';
+
+// Detect dev mode from the SW's own URL. PwaProvider registers this script
+// as `/sw.js?dev=1` when running under `next dev`. This is race-free because
+// the query param is part of the SW script URL and is available the moment
+// the SW evaluates — before any fetch/push event can fire.
+const IS_DEV =
+  typeof self !== 'undefined' &&
+  typeof self.location !== 'undefined' &&
+  typeof self.location.search === 'string' &&
+  new URLSearchParams(self.location.search).has('dev');
 
 // App-shell assets pre-cached on install. All of these MUST exist in /public
 // to avoid cache.addAll() rejecting the whole install. We use only files we
@@ -33,6 +54,12 @@ const APP_SHELL = [
 // Install — pre-cache the app shell
 // ---------------------------------------------------------------------------
 self.addEventListener('install', (event) => {
+  if (IS_DEV) {
+    // Dev mode: skip app-shell precache (don't cache Next.js dev renders).
+    // Still skipWaiting() so the SW activates immediately and push works.
+    self.skipWaiting();
+    return;
+  }
   event.waitUntil(
     caches
       .open(CACHE_NAME)
@@ -68,6 +95,12 @@ self.addEventListener('activate', (event) => {
 // Fetch — routing strategies
 // ---------------------------------------------------------------------------
 self.addEventListener('fetch', (event) => {
+  // Dev mode: bypass the fetch handler entirely. The browser handles all
+  // requests normally — no caching, no offline fallback. This keeps Next.js
+  // HMR / fast-refresh working and prevents stale dev renders from being
+  // served from cache. Push + notificationclick handlers remain active.
+  if (IS_DEV) return;
+
   const { request } = event;
   const url = new URL(request.url);
 
