@@ -367,11 +367,16 @@ html {
   height: env(safe-area-inset-top, 0px);
 }
 
-/* Prevent iOS bounce scroll on standalone mode */
+/* Prevent iOS bounce scroll on standalone mode.
+   `height: 100dvh` (not `100%`) so html/body span the FULL screen — including
+   the home-indicator safe-area zone. With `viewport-fit=cover`, `100%` resolves
+   to the safe-area height and clips the layout short, leaving a ~34px gap
+   below the mobile bottom nav. `100dvh` includes the safe areas so the nav's
+   `padding-bottom: env(safe-area-inset-bottom)` can correctly fill that zone. */
 @media all and (display-mode: standalone) {
   html, body {
     overflow: hidden;
-    height: 100%;
+    height: 100dvh;
     overscroll-behavior: none;
   }
 }
