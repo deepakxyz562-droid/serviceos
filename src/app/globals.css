@@ -354,15 +354,6 @@ html {
   }
 }
 
-/* Mobile bottom navigation safe area — only applies below lg (1024px)
-   where the MobileBottomNav (lg:hidden) is visible. Prevents content
-   from scrolling under the bottom nav on phone AND tablet. */
-@media (max-width: 1023px) {
-  .pb-mobile-nav {
-    padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
-  }
-}
-
 /* Touch target minimum size */
 @media (pointer: coarse) {
   .touch-target {

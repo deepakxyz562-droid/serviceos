@@ -309,7 +309,6 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
           className={cn(
             'flex-1 overflow-auto animate-fade-in',
             isCanvas ? 'p-0' : isMobile ? 'p-3 sm:p-4 bg-background' : 'p-4 lg:p-6 bg-background',
-            !isCanvas && 'pb-mobile-nav'
           )}
         >
           <ViewErrorBoundary>
@@ -318,9 +317,13 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
             </Suspense>
           </ViewErrorBoundary>
         </main>
-      </div>
 
-      <MobileBottomNav />
+        {/* Mobile bottom nav — part of the flex column flow so it sits
+            naturally below the scrolling <main>. No fixed positioning means
+            no overlay, so <main> needs no bottom padding and there is no
+            visible gap when content is shorter than the viewport. */}
+        <MobileBottomNav />
+      </div>
 
       {/* Trial-expiry paywall overlay — blocks all views except 'billing'
           when the tenant's trial has expired. Forces the user to add a
