@@ -372,12 +372,20 @@ html {
    the home-indicator safe-area zone. With `viewport-fit=cover`, `100%` resolves
    to the safe-area height and clips the layout short, leaving a ~34px gap
    below the mobile bottom nav. `100dvh` includes the safe areas so the nav's
-   `padding-bottom: env(safe-area-inset-bottom)` can correctly fill that zone. */
+   `padding-bottom: env(safe-area-inset-bottom)` can correctly fill that zone.
+
+   `background-color: var(--background)` on html ensures html itself carries
+   the app background (previously only body had it, leaving html transparent).
+   Combined with the white manifest `background_color`, any sub-pixel gap
+   below the webview — whether from an iOS `fixed inset-0` quirk or a
+   `100dvh` ≠ true-screen-height mismatch — is filled with the same color as
+   the nav, making it invisible in both light and dark mode. */
 @media all and (display-mode: standalone) {
   html, body {
     overflow: hidden;
     height: 100dvh;
     overscroll-behavior: none;
+    background-color: var(--background);
   }
 }
 
