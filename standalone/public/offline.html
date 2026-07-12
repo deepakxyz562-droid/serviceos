@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#10b981" />
+  <title>You're offline — ServiceOS</title>
+  <style>
+    *,
+    *::before,
+    *::after { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background:
+        radial-gradient(1200px 600px at 50% -10%, rgba(16, 185, 129, 0.10), transparent 60%),
+        #f8fafc;
+      color: #0f172a;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 16px;
+      padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .card {
+      width: 100%;
+      max-width: 420px;
+      background: #ffffff;
+      border-radius: 20px;
+      padding: 32px 28px;
+      box-shadow:
+        0 1px 2px rgba(15, 23, 42, 0.04),
+        0 12px 32px rgba(15, 23, 42, 0.08);
+      border: 1px solid rgba(15, 23, 42, 0.06);
+      text-align: center;
+    }
+
+    .logo {
+      width: 56px;
+      height: 56px;
+      margin: 0 auto 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #ecfdf5;
+      border-radius: 16px;
+      border: 1px solid #a7f3d0;
+    }
+
+    .logo svg { width: 32px; height: 32px; display: block; }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: #0f172a;
+    }
+
+    p {
+      margin: 0 0 24px;
+      font-size: 15px;
+      line-height: 1.55;
+      color: #475569;
+    }
+
+    .retry-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 12px;
+      background: #10b981;
+      color: #ffffff;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s ease, transform 0.05s ease;
+      -webkit-tap-highlight-color: transparent;
+      min-height: 44px;
+    }
+
+    .retry-btn:hover { background: #059669; }
+    .retry-btn:active { transform: translateY(1px); }
+
+    .status {
+      margin-top: 18px;
+      font-size: 12px;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 18px;
+    }
+
+    .spinner {
+      width: 12px;
+      height: 12px;
+      border: 2px solid #cbd5e1;
+      border-top-color: #10b981;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: none;
+    }
+
+    .spinner.active { display: inline-block; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .footer {
+      margin-top: 24px;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+
+    .footer strong { color: #10b981; font-weight: 600; }
+
+    @media (prefers-color-scheme: dark) {
+      html, body {
+        background:
+          radial-gradient(1200px 600px at 50% -10%, rgba(16, 185, 129, 0.16), transparent 60%),
+          #0f172a;
+        color: #e2e8f0;
+      }
+      .card {
+        background: #1e293b;
+        border-color: rgba(255, 255, 255, 0.06);
+        box-shadow:
+          0 1px 2px rgba(0, 0, 0, 0.2),
+          0 12px 32px rgba(0, 0, 0, 0.35);
+      }
+      h1 { color: #f1f5f9; }
+      p { color: #94a3b8; }
+      .logo { background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.35); }
+      .status { color: #64748b; }
+    }
+  </style>
+</head>
+<body>
+  <main class="card" role="main">
+    <div class="logo" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2.5C7 2.5 3 6.5 3 11.5c0 4.4 3.2 8.1 7.4 8.9.4.1.6-.2.6-.4v-1.6c-2.6.6-3.2-1.1-3.2-1.1-.4-1.1-1.1-1.4-1.1-1.4-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .9.1-.7.3-1.1.6-1.4-2.1-.2-4.3-1-4.3-4.6 0-1 .4-1.8 1-2.5-.1-.3-.4-1.2.1-2.4 0 0 .8-.3 2.6 1 .8-.2 1.6-.3 2.4-.3.8 0 1.6.1 2.4.3 1.8-1.3 2.6-1 2.6-1 .5 1.2.2 2.1.1 2.4.6.6 1 1.5 1 2.5 0 3.6-2.2 4.4-4.3 4.6.3.3.6.9.6 1.8v2.7c0 .2.2.5.6.4 4.2-.8 7.4-4.5 7.4-8.9 0-5-4-9-9-9z" fill="#10b981"/>
+      </svg>
+    </div>
+
+    <h1>You&rsquo;re offline</h1>
+    <p>
+      ServiceOS can&rsquo;t reach the internet right now. Your work is saved and
+      will sync automatically when you&rsquo;re back online.
+    </p>
+
+    <button class="retry-btn" id="retryBtn" type="button" onclick="window.location.reload()">
+      Try again
+    </button>
+
+    <div class="status" id="status" aria-live="polite">
+      <span class="spinner" id="spinner"></span>
+      <span id="statusText">Waiting for connection&hellip;</span>
+    </div>
+
+    <div class="footer">
+      <strong>ServiceOS</strong> &middot; Field Service Platform
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      var spinner = document.getElementById('spinner');
+      var statusText = document.getElementById('statusText');
+      var retryBtn = document.getElementById('retryBtn');
+
+      function updateStatus() {
+        if (navigator.onLine) {
+          spinner.classList.add('active');
+          statusText.textContent = 'Back online — reloading\u2026';
+          // Auto-reload when connection returns
+          setTimeout(function () {
+            window.location.reload();
+          }, 600);
+        } else {
+          spinner.classList.remove('active');
+          statusText.textContent = 'Waiting for connection\u2026';
+        }
+      }
+
+      window.addEventListener('online', updateStatus);
+      window.addEventListener('offline', updateStatus);
+      updateStatus();
+
+      // Poll every 10 seconds — if we come back online, auto-reload
+      setInterval(function () {
+        if (navigator.onLine) {
+          statusText.textContent = 'Back online — reloading\u2026';
+          spinner.classList.add('active');
+          window.location.reload();
+        }
+      }, 10000);
+
+      retryBtn.addEventListener('click', function () {
+        spinner.classList.add('active');
+        statusText.textContent = 'Checking connection\u2026';
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -238,8 +238,13 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
 
   return (
     <header className={cn(
-      'flex items-center h-16 px-3 sm:px-5 border-b border-border/70 bg-background shrink-0 gap-2 sm:gap-4',
-      // Safe area for iOS notch on standalone mode
+      // Height extends INTO the notch (background fills safe zone) while
+      // pt-[env(safe-area-inset-top)] keeps the 64px content row below it.
+      // Without the calc() the border-box h-16 would leave only ~17px for
+      // content on notched devices (64px - 47px notch = 17px → squished).
+      'flex items-center h-[calc(4rem+env(safe-area-inset-top,0px))] px-3 sm:px-5 border-b border-border/70 bg-background shrink-0 gap-2 sm:gap-4',
+      // Safe area for iOS notch on standalone mode — pushes content row down
+      // so it sits below the notch/status bar.
       'pt-[env(safe-area-inset-top,0px)]'
     )}>
       {/* ─── Mobile menu toggle ────────────────────────────────────────── */}

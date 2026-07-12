@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 -H 0.0.0.0",
-    "build": "prisma generate && next build && node scripts/standalone-cleanup.js",
+    "build": "prisma generate && next build && node scripts/standalone-cleanup.js && bash scripts/sync-public-to-standalone.sh",
+    "sync-public": "bash scripts/sync-public-to-standalone.sh",
     "start": "next start",
     "lint": "eslint .",
     "postinstall": "prisma generate",

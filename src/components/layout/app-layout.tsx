@@ -299,7 +299,6 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   return (
     <div
       className={cn('h-[100dvh] flex overflow-hidden bg-background', darkMode && 'dark')}
-      style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
     >
       <AppSidebar onLogout={onLogout} />
 
