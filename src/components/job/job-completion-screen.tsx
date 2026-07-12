@@ -236,7 +236,7 @@ export function JobCompletionScreen({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl h-[92vh] sm:h-[88vh] p-0 gap-0 overflow-hidden flex flex-col">
+      <DialogContent className="max-w-4xl h-[92dvh] sm:h-[88dvh] p-0 gap-0 overflow-hidden flex flex-col">
         {/* Header */}
         <DialogHeader className="px-6 py-4 border-b border-border/60 bg-muted/30 shrink-0">
           <DialogTitle className="flex items-center gap-2 text-lg">
@@ -488,12 +488,13 @@ export function JobCompletionScreen({
         </div>
 
         {/* Footer */}
-        <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/30 shrink-0">
+        <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/30 shrink-0 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
           <Button
             type="button"
             variant="outline"
             onClick={() => onOpenChange(false)}
             disabled={submitting}
+            className="min-h-[44px]"
           >
             Cancel
           </Button>
@@ -501,7 +502,7 @@ export function JobCompletionScreen({
             type="button"
             onClick={handleComplete}
             disabled={!allPass || submitting}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px]"
           >
             {submitting ? (
               <Loader2 className="size-4 mr-1.5 animate-spin" />

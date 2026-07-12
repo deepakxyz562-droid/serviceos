@@ -282,25 +282,25 @@ export function ChecklistBuilder({
   return (
     <div className="max-w-6xl mx-auto space-y-4">
       {/* ─── Top bar ─────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-3 sticky top-0 z-10 -mx-4 px-4 py-3 bg-background/80 backdrop-blur border-b">
+      <div className="flex items-center justify-between gap-3 sticky top-0 z-10 -mx-3 px-3 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6 py-3 bg-background border-b flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
-          <Button variant="ghost" size="sm" onClick={onCancel} className="gap-1 shrink-0">
+          <Button variant="ghost" size="sm" onClick={onCancel} className="gap-1 shrink-0 min-h-[44px]">
             <ArrowLeft className="size-4" /> Back
           </Button>
           <div className="min-w-0">
             <h2 className="text-lg font-bold leading-tight truncate">
               {initial?.id ? 'Edit checklist' : 'New checklist'}
             </h2>
-            <p className="text-xs text-muted-foreground">Build a reusable on-site checklist</p>
+            <p className="text-xs text-muted-foreground hidden sm:block">Build a reusable on-site checklist</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
           {/* Preview / Edit toggle */}
           <div className="flex items-center rounded-md border p-0.5">
             <Button
               size="sm"
               variant={mode === 'preview' ? 'default' : 'ghost'}
-              className="h-7 text-xs"
+              className="h-9 text-xs"
               onClick={() => setMode('preview')}
             >
               <Eye className="size-3 mr-1" /> Preview
@@ -308,7 +308,7 @@ export function ChecklistBuilder({
             <Button
               size="sm"
               variant={mode === 'edit' ? 'default' : 'ghost'}
-              className="h-7 text-xs"
+              className="h-9 text-xs"
               onClick={() => setMode('edit')}
             >
               <Pencil className="size-3 mr-1" /> Edit
@@ -319,7 +319,7 @@ export function ChecklistBuilder({
             <Button
               size="sm"
               variant={device === 'mobile' ? 'default' : 'ghost'}
-              className="h-7 w-7 p-0"
+              className="h-9 w-9 p-0"
               onClick={() => setDevice('mobile')}
               title="Mobile preview"
             >
@@ -328,18 +328,18 @@ export function ChecklistBuilder({
             <Button
               size="sm"
               variant={device === 'desktop' ? 'default' : 'ghost'}
-              className="h-7 w-7 p-0"
+              className="h-9 w-9 p-0"
               onClick={() => setDevice('desktop')}
               title="Desktop preview"
             >
               <Monitor className="size-3.5" />
             </Button>
           </div>
-          <Separator orientation="vertical" className="h-6" />
-          <Button variant="outline" onClick={onCancel}>
+          <Separator orientation="vertical" className="h-6 hidden sm:block" />
+          <Button variant="outline" onClick={onCancel} className="min-h-[44px]">
             <X className="size-4 mr-1" /> Cancel
           </Button>
-          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSave} disabled={saving}>
+          <Button className="bg-emerald-600 hover:bg-emerald-700 min-h-[44px]" onClick={handleSave} disabled={saving}>
             {saving ? <RefreshCw className="size-4 mr-1 animate-spin" /> : <Save className="size-4 mr-1" />}
             Save
           </Button>

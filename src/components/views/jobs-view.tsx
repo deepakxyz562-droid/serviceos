@@ -54,6 +54,7 @@ import {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { FormSectionCard, FormPageHeader } from '@/components/shared/form-section-card';
 import { useAppStore, type JobPrefillData } from '@/store/app-store';
 import { ChecklistExecution } from '@/components/job/checklist-execution';
@@ -666,7 +667,7 @@ function TimeTrackingSection({
           <button
             onClick={() => onAction('start_work', job.id)}
             disabled={!!lifecycleLoadingAction}
-            className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm"
+            className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm"
           >
             {lifecycleLoadingAction === 'start_work' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <PlayCircle className="size-4 mr-1.5" />} Start Working
           </button>
@@ -676,14 +677,14 @@ function TimeTrackingSection({
             <button
               onClick={() => onAction('pause', job.id)}
               disabled={!!lifecycleLoadingAction}
-              className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted disabled:opacity-60 transition-colors"
+              className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted disabled:opacity-60 transition-colors"
             >
               {lifecycleLoadingAction === 'pause' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <PauseCircle className="size-4 mr-1.5" />} Pause
             </button>
             <button
               onClick={onOpenCompletion}
               disabled={!!lifecycleLoadingAction}
-              className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 transition-colors shadow-sm"
+              className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 transition-colors shadow-sm"
             >
               <StopCircle className="size-4 mr-1.5" /> Complete
             </button>
@@ -694,14 +695,14 @@ function TimeTrackingSection({
             <button
               onClick={() => onAction('resume', job.id)}
               disabled={!!lifecycleLoadingAction}
-              className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm"
+              className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm"
             >
               {lifecycleLoadingAction === 'resume' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <PlayCircle className="size-4 mr-1.5" />} Resume
             </button>
             <button
               onClick={onOpenCompletion}
               disabled={!!lifecycleLoadingAction}
-              className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 transition-colors shadow-sm"
+              className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 transition-colors shadow-sm"
             >
               <StopCircle className="size-4 mr-1.5" /> Complete
             </button>
@@ -866,7 +867,7 @@ function GpsRouteSection({
         </div>
         <button
           onClick={onOpenRoute}
-          className="inline-flex items-center justify-center h-8 px-3 rounded-lg text-sm font-medium text-emerald-700 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+          className="inline-flex items-center justify-center min-h-[44px] px-3 rounded-lg text-sm font-medium text-emerald-700 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 transition-colors"
         >
           <MapPinned className="size-4 mr-1.5" /> View on Map
         </button>
@@ -899,6 +900,9 @@ export function JobsView() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const isMobile = useIsMobile();
+  // On mobile, always render cards — the 9-column table is unreadable on phones.
+  const effectiveViewMode = isMobile ? 'cards' : viewMode;
 
   // Form mode — 'list' shows the job list, 'form' shows the full-page
   // New/Edit Job form (mirrors the lead form's page behaviour), 'detail'
@@ -1923,7 +1927,7 @@ export function JobsView() {
   const getMoreActionsMenu = (job: Job) => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => e.stopPropagation()} title="More actions">
+        <Button variant="ghost" size="icon" className="h-9 w-9 min-h-[44px]" onClick={(e) => e.stopPropagation()} title="More actions">
           <MoreVertical className="size-4" />
         </Button>
       </DropdownMenuTrigger>
@@ -1948,7 +1952,7 @@ export function JobsView() {
       case 'pending':
         return (
           <div className="flex items-center gap-1 justify-end">
-            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs" onClick={(e) => { e.stopPropagation(); openAssignDialog(job); }}>
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-9 text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); openAssignDialog(job); }}>
               <User className="size-3 mr-1" /> Assign
             </Button>
             {moreMenu}
@@ -1957,7 +1961,7 @@ export function JobsView() {
       case 'assigned':
         return (
           <div className="flex items-center gap-1 justify-end">
-            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-7 text-xs" onClick={(e) => { e.stopPropagation(); handleLifecycleAction('start', job.id); }} disabled={loadingJobId === job.id && loadingAction === 'start'}>
+            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-9 text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); handleLifecycleAction('start', job.id); }} disabled={loadingJobId === job.id && loadingAction === 'start'}>
               {loadingJobId === job.id && loadingAction === 'start' ? <Loader2 className="size-3 mr-1 animate-spin" /> : <Play className="size-3 mr-1" />} Start
             </Button>
             {moreMenu}
@@ -1966,7 +1970,7 @@ export function JobsView() {
       case 'in_progress':
         return (
           <div className="flex items-center gap-1 justify-end">
-            <Button size="sm" className="bg-green-600 hover:bg-green-700 h-7 text-xs" onClick={(e) => { e.stopPropagation(); handleLifecycleAction('complete', job.id); }} disabled={loadingJobId === job.id && loadingAction === 'complete'}>
+            <Button size="sm" className="bg-green-600 hover:bg-green-700 h-9 text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); handleLifecycleAction('complete', job.id); }} disabled={loadingJobId === job.id && loadingAction === 'complete'}>
               {loadingJobId === job.id && loadingAction === 'complete' ? <Loader2 className="size-3 mr-1 animate-spin" /> : <CheckCircle2 className="size-3 mr-1" />} Complete
             </Button>
             {moreMenu}
@@ -1977,7 +1981,7 @@ export function JobsView() {
       default:
         return (
           <div className="flex items-center gap-1 justify-end">
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={(e) => { e.stopPropagation(); openJobDetail(job); }}>
+            <Button size="sm" variant="outline" className="h-9 text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); openJobDetail(job); }}>
               <Eye className="size-3 mr-1" /> View
             </Button>
             {moreMenu}
@@ -2063,7 +2067,7 @@ export function JobsView() {
             <button
               type="button"
               onClick={addCustomField}
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-sm font-medium text-emerald-700 border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50 transition-colors"
+              className="inline-flex items-center gap-1.5 min-h-[44px] px-3 rounded-md text-sm font-medium text-emerald-700 border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50 transition-colors"
             >
               <Plus className="size-4" /> Add Field
             </button>
@@ -2076,29 +2080,31 @@ export function JobsView() {
           ) : (
             <div className="space-y-2">
               {jobForm.customFields.map((f) => (
-                <div key={f.id} className="grid grid-cols-[140px_1fr_auto] gap-2 items-center">
+                <div key={f.id} className="grid grid-cols-1 sm:grid-cols-[140px_1fr_auto] gap-2 items-center">
                   <Input
                     className="form-input h-9 text-sm"
                     placeholder="Label (e.g. PO #)"
                     value={f.label}
                     onChange={(e) => updateCustomField(f.id, { label: e.target.value })}
                   />
-                  <Input
-                    className="form-input h-9 text-sm"
-                    placeholder="Value"
-                    value={f.value}
-                    onChange={(e) => updateCustomField(f.id, { value: e.target.value })}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="size-8 text-red-500 hover:text-red-600"
-                    onClick={() => removeCustomField(f.id)}
-                    title="Remove field"
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      className="form-input h-9 text-sm flex-1"
+                      placeholder="Value"
+                      value={f.value}
+                      onChange={(e) => updateCustomField(f.id, { value: e.target.value })}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-9 text-red-500 hover:text-red-600 shrink-0 min-h-[44px]"
+                      onClick={() => removeCustomField(f.id)}
+                      title="Remove field"
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -2623,7 +2629,7 @@ export function JobsView() {
     return (
       <div className="w-full space-y-6">
         {/* ─── Sticky page header (Back + title + actions) ────────── */}
-        <div className="form-page-header -mx-4 px-4 sm:-mx-6 sm:px-6 py-3 mb-2">
+        <div className="form-page-header -mx-3 px-3 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6 py-3 mb-2">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3 min-w-0">
               <button
@@ -2641,7 +2647,7 @@ export function JobsView() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground leading-tight truncate">{job.title}</h2>
-                  <button title="Edit job" onClick={() => openEditJob(job)} className="text-muted-foreground hover:text-emerald-600 transition-colors shrink-0">
+                  <button title="Edit job" onClick={() => openEditJob(job)} className="inline-flex items-center justify-center size-9 -m-1 text-muted-foreground hover:text-emerald-600 transition-colors shrink-0">
                     <Pencil className="size-4" />
                   </button>
                 </div>
@@ -2655,17 +2661,17 @@ export function JobsView() {
             <div className="flex items-center gap-2 shrink-0">
               {/* Status-aware lifecycle action (primary) */}
               {job.status === 'pending' && (
-                <button onClick={() => openAssignDialog(job)} className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm">
+                <button onClick={() => openAssignDialog(job)} className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm">
                   <User className="size-4 mr-1.5" /> Assign
                 </button>
               )}
               {job.status === 'assigned' && (
-                <button onClick={() => handleLifecycleAction('start', job.id)} disabled={lifecycleLoading} className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm">
+                <button onClick={() => handleLifecycleAction('start', job.id)} disabled={lifecycleLoading} className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm">
                   {lifecycleLoading && loadingAction === 'start' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Play className="size-4 mr-1.5" />} Start Job
                 </button>
               )}
               {job.status === 'in_progress' && (
-                <button onClick={() => openCompletionDialog(job)} disabled={lifecycleLoading} className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 transition-colors shadow-sm">
+                <button onClick={() => openCompletionDialog(job)} disabled={lifecycleLoading} className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 transition-colors shadow-sm">
                   {lifecycleLoading && loadingAction === 'complete' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <CheckCircle2 className="size-4 mr-1.5" />} Complete
                 </button>
               )}
@@ -2674,7 +2680,7 @@ export function JobsView() {
                   await fetch(`/api/jobs/${job.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: job.id, status: 'pending' }) });
                   toast.success('Job reopened'); fetchJobs();
                   const r = await fetch(`/api/jobs/lifecycle?jobId=${job.id}`); if (r.ok) setSelectedJob(await r.json());
-                }} className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm">
+                }} className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm">
                   Reopen Job
                 </button>
               )}
@@ -2686,11 +2692,11 @@ export function JobsView() {
                 }}
                 title="Message customer"
                 disabled={!job.customerId}
-                className="inline-flex items-center justify-center h-9 px-3 rounded-lg text-sm font-medium text-emerald-700 border border-emerald-600/40 bg-emerald-500/5 hover:bg-emerald-500/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center justify-center min-h-[44px] px-3 rounded-lg text-sm font-medium text-emerald-700 border border-emerald-600/40 bg-emerald-500/5 hover:bg-emerald-500/15 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <Mail className="size-4 mr-1.5" /> Message
               </button>
-              <button onClick={() => openEditJob(job)} className="inline-flex items-center justify-center h-9 px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors">
+              <button onClick={() => openEditJob(job)} className="inline-flex items-center justify-center min-h-[44px] px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors">
                 <Pencil className="size-4 mr-1.5" /> Edit
               </button>
               <button title="More actions" className="inline-flex items-center justify-center size-9 rounded-lg text-foreground border border-border bg-background hover:bg-muted transition-colors">
@@ -2701,7 +2707,7 @@ export function JobsView() {
         </div>
 
         {/* ─── Two-column layout ─────────────────────────────────── */}
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
           {/* ── Left column: main job details ── */}
           <div className="space-y-6 min-w-0">
             {/* ── Client + Job details (same row on desktop) ─────────────── */}
@@ -2756,7 +2762,7 @@ export function JobsView() {
                   <button
                     onClick={() => handleLifecycleTransition('accept', job.id)}
                     disabled={!!lifecycleLoadingAction}
-                    className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm"
+                    className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm"
                   >
                     {lifecycleLoadingAction === 'accept' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Check className="size-4 mr-1.5" />} Accept
                   </button>
@@ -2765,7 +2771,7 @@ export function JobsView() {
                   <button
                     onClick={() => handleLifecycleTransition('start_travel', job.id)}
                     disabled={!!lifecycleLoadingAction}
-                    className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 disabled:opacity-60 transition-colors shadow-sm"
+                    className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-semibold text-white bg-amber-500 hover:bg-amber-600 disabled:opacity-60 transition-colors shadow-sm"
                   >
                     {lifecycleLoadingAction === 'start_travel' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Navigation className="size-4 mr-1.5" />} Start Travel
                   </button>
@@ -2774,7 +2780,7 @@ export function JobsView() {
                   <button
                     onClick={() => handleLifecycleTransition('arrive', job.id)}
                     disabled={!!lifecycleLoadingAction}
-                    className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-60 transition-colors shadow-sm"
+                    className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-60 transition-colors shadow-sm"
                   >
                     {lifecycleLoadingAction === 'arrive' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <MapPin className="size-4 mr-1.5" />} Mark Arrived
                   </button>
@@ -2783,7 +2789,7 @@ export function JobsView() {
                   <button
                     onClick={() => handleLifecycleTransition('start_work', job.id)}
                     disabled={!!lifecycleLoadingAction}
-                    className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm"
+                    className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm"
                   >
                     {lifecycleLoadingAction === 'start_work' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Wrench className="size-4 mr-1.5" />} Start Work
                   </button>
@@ -2792,7 +2798,7 @@ export function JobsView() {
                   <button
                     onClick={() => handleLifecycleTransition('pause', job.id)}
                     disabled={!!lifecycleLoadingAction}
-                    className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted disabled:opacity-60 transition-colors"
+                    className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted disabled:opacity-60 transition-colors"
                   >
                     {lifecycleLoadingAction === 'pause' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Pause className="size-4 mr-1.5" />} Pause
                   </button>
@@ -2801,7 +2807,7 @@ export function JobsView() {
                   <button
                     onClick={() => handleLifecycleTransition('resume', job.id)}
                     disabled={!!lifecycleLoadingAction}
-                    className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm"
+                    className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm"
                   >
                     {lifecycleLoadingAction === 'resume' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Play className="size-4 mr-1.5" />} Resume
                   </button>
@@ -2810,7 +2816,7 @@ export function JobsView() {
                   <button
                     onClick={() => openCompletionDialog(job)}
                     disabled={!!lifecycleLoadingAction}
-                    className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 transition-colors shadow-sm"
+                    className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 transition-colors shadow-sm"
                   >
                     <CheckCircle2 className="size-4 mr-1.5" /> Complete
                   </button>
@@ -2819,7 +2825,7 @@ export function JobsView() {
                   <button
                     onClick={() => handleLifecycleTransition('generate_invoice', job.id)}
                     disabled={!!lifecycleLoadingAction}
-                    className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm"
+                    className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm"
                   >
                     {lifecycleLoadingAction === 'generate_invoice' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <FileText className="size-4 mr-1.5" />} Generate Invoice
                   </button>
@@ -3208,10 +3214,10 @@ export function JobsView() {
             {/* Danger actions */}
             {!['completed', 'cancelled'].includes(job.status) && (
               <div className="flex flex-wrap gap-2 pt-2">
-                <button onClick={() => handleCancelJob(job.id)} disabled={cancellingJobId === job.id} className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-medium text-red-600 border border-red-200 bg-background hover:bg-red-50 disabled:opacity-60 transition-colors">
+                <button onClick={() => handleCancelJob(job.id)} disabled={cancellingJobId === job.id} className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-medium text-red-600 border border-red-200 bg-background hover:bg-red-50 disabled:opacity-60 transition-colors">
                   {cancellingJobId === job.id ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <XCircle className="size-4 mr-1.5" />} Cancel Job
                 </button>
-                <button onClick={() => setDeletingJob(job)} className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-medium text-red-600 border border-red-200 bg-background hover:bg-red-50 transition-colors">
+                <button onClick={() => setDeletingJob(job)} className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-medium text-red-600 border border-red-200 bg-background hover:bg-red-50 transition-colors">
                   <Trash2 className="size-4 mr-1.5" /> Delete
                 </button>
               </div>
@@ -3219,7 +3225,7 @@ export function JobsView() {
           </div>
 
           {/* ── Right column: sidebar ── */}
-          <div className="space-y-6 xl:sticky xl:top-4">
+          <div className="space-y-6 lg:sticky lg:top-4">
             {/* Profit margin */}
             <FormSectionCard icon={TrendingUp} title="Profit margin">
               <div className="space-y-2">
@@ -3253,13 +3259,13 @@ export function JobsView() {
             {/* Quick actions */}
             <FormSectionCard icon={Briefcase} title="Actions">
               <div className="grid grid-cols-1 gap-2">
-                <button onClick={() => openEditJob(job)} className="inline-flex items-center justify-start gap-2 h-9 px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors">
+                <button onClick={() => openEditJob(job)} className="inline-flex items-center justify-start gap-2 min-h-[44px] px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors">
                   <Pencil className="size-4" /> Edit job
                 </button>
-                <button onClick={handlePrintJob} className="inline-flex items-center justify-start gap-2 h-9 px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors">
+                <button onClick={handlePrintJob} className="inline-flex items-center justify-start gap-2 min-h-[44px] px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors">
                   <Printer className="size-4" /> Print / PDF
                 </button>
-                <button onClick={() => handleEmailClient(job)} className="inline-flex items-center justify-start gap-2 h-9 px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors">
+                <button onClick={() => handleEmailClient(job)} className="inline-flex items-center justify-start gap-2 min-h-[44px] px-3 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors">
                   <Send className="size-4" /> Email client
                 </button>
               </div>
@@ -3338,16 +3344,18 @@ export function JobsView() {
       {/* ─── Status Filter Tabs + Search ─────────────────────────── */}
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-3">
-          <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-auto">
-            <TabsList>
-              <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
-              <TabsTrigger value="pending" className="text-xs">Pending</TabsTrigger>
-              <TabsTrigger value="assigned" className="text-xs">Assigned</TabsTrigger>
-              <TabsTrigger value="in_progress" className="text-xs">In Progress</TabsTrigger>
-              <TabsTrigger value="completed" className="text-xs">Completed</TabsTrigger>
-              <TabsTrigger value="cancelled" className="text-xs">Cancelled</TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0 flex-1 min-w-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-auto">
+              <TabsList className="h-11">
+                <TabsTrigger value="all" className="text-xs min-h-[44px]">All</TabsTrigger>
+                <TabsTrigger value="pending" className="text-xs min-h-[44px]">Pending</TabsTrigger>
+                <TabsTrigger value="assigned" className="text-xs min-h-[44px]">Assigned</TabsTrigger>
+                <TabsTrigger value="in_progress" className="text-xs min-h-[44px]">In Progress</TabsTrigger>
+                <TabsTrigger value="completed" className="text-xs min-h-[44px]">Completed</TabsTrigger>
+                <TabsTrigger value="cancelled" className="text-xs min-h-[44px]">Cancelled</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-3 items-center">
@@ -3360,9 +3368,9 @@ export function JobsView() {
               className="pl-9"
             />
           </div>
-          <div className="flex gap-1 border rounded-md p-0.5">
-            <Button size="sm" variant={viewMode === 'cards' ? 'default' : 'ghost'} className="h-7 text-xs px-2" onClick={() => setViewMode('cards')}>Cards</Button>
-            <Button size="sm" variant={viewMode === 'table' ? 'default' : 'ghost'} className="h-7 text-xs px-2" onClick={() => setViewMode('table')}>Table</Button>
+          <div className="hidden sm:flex gap-1 border rounded-md p-0.5">
+            <Button size="sm" variant={viewMode === 'cards' ? 'default' : 'ghost'} className="h-9 text-xs px-2 min-h-[44px]" onClick={() => setViewMode('cards')}>Cards</Button>
+            <Button size="sm" variant={viewMode === 'table' ? 'default' : 'ghost'} className="h-9 text-xs px-2 min-h-[44px]" onClick={() => setViewMode('table')}>Table</Button>
           </div>
           <Button variant="outline" size="sm" onClick={() => fetchJobs()}>
             <RefreshCw className="size-3.5 mr-1" /> Refresh
@@ -3390,7 +3398,7 @@ export function JobsView() {
           <p className="text-lg font-medium">No jobs found</p>
           <p className="text-sm">Create a new job or adjust your filters</p>
         </div>
-      ) : viewMode === 'cards' ? (
+      ) : effectiveViewMode === 'cards' ? (
         /* ─── Card View ────────────────────────────────────────────── */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {jobs.map((job) => (
@@ -3497,7 +3505,7 @@ export function JobsView() {
 
       {/* ─── Assign Employee Dialog ────────────────────────────────────── */}
       <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
-        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
+        <DialogContent className="max-w-lg max-h-[90dvh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Assign Employee</DialogTitle>
             <DialogDescription>{assigningJob ? `Select an employee for: ${assigningJob.title}` : 'Select an employee'}</DialogDescription>
@@ -3517,7 +3525,7 @@ export function JobsView() {
                 {employees.filter((e) => e.status === 'available').length === 0 ? (
                   <div className="text-center py-6 text-muted-foreground text-sm">No available employees</div>
                 ) : (
-                  <ScrollArea className="max-h-[50vh]">
+                  <ScrollArea className="max-h-[50dvh]">
                     <div className="space-y-2">
                       {employees.filter((e) => e.status === 'available').map((emp) => {
                         let skills: string[] = [];
@@ -3617,7 +3625,7 @@ export function JobsView() {
               GPS path recorded for this job. Open in Google Maps for a full turn-by-turn view.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+          <div className="space-y-3 max-h-[60dvh] overflow-y-auto pb-[env(safe-area-inset-bottom,0px)]">
             {routeLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="size-6 animate-spin text-emerald-600" />
@@ -3703,7 +3711,7 @@ export function JobsView() {
                       href={mapsUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center h-9 px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm w-full"
+                      className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm w-full"
                     >
                       <ExternalLink className="size-4 mr-1.5" /> Open in Google Maps
                     </a>

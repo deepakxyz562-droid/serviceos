@@ -120,7 +120,7 @@ export function JobExpensesSection({ job }: { job: JobLite }) {
         <Button
           variant="outline"
           size="sm"
-          className="h-8 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+          className="h-9 text-emerald-700 border-emerald-200 hover:bg-emerald-50 min-h-[44px]"
           onClick={() => setDialogOpen(true)}
         >
           <Plus className="size-3.5 mr-1" /> Add Expense
@@ -151,7 +151,7 @@ export function JobExpensesSection({ job }: { job: JobLite }) {
                     href={e.receiptUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-[10px] text-emerald-700 hover:underline"
+                    className="text-xs text-emerald-700 hover:underline inline-flex items-center min-h-[44px] px-1"
                   >
                     View receipt
                   </a>
@@ -270,7 +270,7 @@ function AddExpenseDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-md max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Expense</DialogTitle>
           <DialogDescription>
@@ -327,7 +327,7 @@ function AddExpenseDialog({
           <div>
             <Label className="text-xs text-muted-foreground">Receipt (optional)</Label>
             <div className="flex items-center gap-2">
-              <label className="flex items-center gap-1.5 px-3 py-2 rounded-md border border-dashed border-border text-sm text-muted-foreground hover:bg-muted cursor-pointer">
+              <label className="flex items-center gap-1.5 px-3 py-2.5 rounded-md border border-dashed border-border text-sm text-muted-foreground hover:bg-muted cursor-pointer min-h-[44px]">
                 <UploadCloud className="size-4" />
                 <span>{uploading ? 'Uploading…' : 'Upload receipt'}</span>
                 <input
@@ -344,7 +344,7 @@ function AddExpenseDialog({
               {receiptUrl && (
                 <Badge variant="secondary" className="gap-1">
                   <FileText className="size-3" /> Receipt attached
-                  <button onClick={() => setReceiptUrl('')}><X className="size-3" /></button>
+                  <button onClick={() => setReceiptUrl('')} className="inline-flex items-center justify-center size-6 -m-1 hover:text-red-600 transition-colors"><X className="size-3" /></button>
                 </Badge>
               )}
             </div>
@@ -361,11 +361,11 @@ function AddExpenseDialog({
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+        <DialogFooter className="pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving} className="min-h-[44px]">
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">
+          <Button onClick={handleSave} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700 min-h-[44px]">
             {saving ? <Loader2 className="size-4 mr-1 animate-spin" /> : null}
             Add Expense
           </Button>

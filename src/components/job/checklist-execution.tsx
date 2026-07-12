@@ -560,7 +560,7 @@ export function ChecklistExecution({
                       onClick={() => toggleItem(item.id)}
                       disabled={isLocked}
                       className={cn(
-                        'shrink-0 mt-0.5 size-7 rounded-md border-2 flex items-center justify-center transition-all',
+                        'shrink-0 mt-0.5 size-9 rounded-md border-2 flex items-center justify-center transition-all',
                         item.checked
                           ? 'bg-emerald-600 border-emerald-600 text-white'
                           : 'border-muted-foreground/30 hover:border-emerald-500 bg-background',
@@ -706,7 +706,7 @@ export function ChecklistExecution({
                             size="sm"
                             disabled={isLocked}
                             onClick={() => fileInputRefs.current[item.id]?.click()}
-                            className="gap-1.5"
+                            className="gap-1.5 min-h-[44px]"
                           >
                             <Camera className="size-3.5" />
                             {item.photoUrl ? 'Replace photo' : 'Attach photo'}
@@ -724,7 +724,7 @@ export function ChecklistExecution({
 
       {/* ─── Footer actions ───────────────────────────────────────────── */}
       {checklist.status !== 'completed' && (
-        <Card className="form-card sticky bottom-3 z-10 shadow-lg">
+        <Card className="form-card shadow-lg sticky z-30 bottom-[calc(4rem+1rem+env(safe-area-inset-bottom,0px))] lg:bottom-3">
           <CardContent className="p-3 flex items-center gap-2 flex-wrap">
             <Button
               type="button"
@@ -732,7 +732,7 @@ export function ChecklistExecution({
               size="sm"
               onClick={markAllComplete}
               disabled={saving || totalItems === 0}
-              className="gap-1.5"
+              className="gap-1.5 min-h-[44px]"
             >
               {saving ? (
                 <Loader2 className="size-3.5 animate-spin" />
@@ -747,7 +747,7 @@ export function ChecklistExecution({
               size="sm"
               onClick={saveAll}
               disabled={saving}
-              className="gap-1.5"
+              className="gap-1.5 min-h-[44px]"
             >
               {saving ? (
                 <Loader2 className="size-3.5 animate-spin" />
@@ -762,7 +762,7 @@ export function ChecklistExecution({
               size="sm"
               onClick={completeChecklist}
               disabled={!canComplete || completing}
-              className="bg-emerald-600 hover:bg-emerald-700 gap-1.5"
+              className="bg-emerald-600 hover:bg-emerald-700 gap-1.5 min-h-[44px]"
             >
               {completing ? (
                 <Loader2 className="size-3.5 animate-spin" />
