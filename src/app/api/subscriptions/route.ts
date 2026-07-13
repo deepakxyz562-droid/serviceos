@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { seedPlans, getActivePlans } from '@/lib/billing-seed';
+import { cache } from '@/lib/cache';
+
+// 30s cache — this endpoint is polled every 60s. Caching cuts DB load in half
+// and eliminates redundant seedPlans() writes.
+const SUBSCRIPTION_CACHE_TTL = 30_000;
 
 /**
  * Safely parse a JSON string that should be an object. Returns {} on null,
@@ -43,6 +48,15 @@ export async function GET() {
     const tenantId = authUser.tenantId;
     if (!tenantId) {
       return NextResponse.json({ error: 'No tenant associated with user' }, { status: 400 });
+    }
+
+    // PERFORMANCE: cache the GET response for 30s. This endpoint is polled
+    // every 60s by useTrialStatus, and each poll runs 9-10 DB queries + the
+    // seedPlans() write. Caching cuts that to ~0 DB queries on cache hits.
+    const cacheKey = `subscription:${tenantId}`;
+    const cached = cache.get<Record<string, unknown>>(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
     }
 
     const subscription = await db.subscription.findFirst({
@@ -162,20 +176,11 @@ export async function GET() {
     }));
 
     // ─── Plan catalog (DB-backed, Phase 3) ──────────────────────────────
-    // Idempotent seed so the catalog always exists, then fetch for the UI.
-    //
-    // NOTE: seedPlans() does a write (create) for each missing plan. On
-    // serverless (Netlify + Supabase REST), this can fail if the Plan table
-    // doesn't exist yet, has RLS blocking writes, or has a schema mismatch.
-    // We MUST NOT let a seed failure abort the entire GET — the subscription
-    // data above is the critical payload; the plan catalog is supplementary.
-    // So we wrap seedPlans() in try/catch and gracefully degrade to an empty
-    // plans array if seeding/fetching fails.
-    try {
-      await seedPlans();
-    } catch (seedErr) {
-      console.error('[Subscriptions] seedPlans() failed (non-fatal):', seedErr);
-    }
+    // PERFORMANCE: seedPlans() does a write (create) for each missing plan.
+    // Calling it on every GET (this endpoint is polled every 60s by every
+    // authenticated admin) generated a ton of unnecessary disk I/O and
+    // transaction log writes. Now we only seed if getActivePlans() returns
+    // an empty list — i.e., the catalog genuinely doesn't exist yet.
     let plans: Array<{
       id: string; code: string; name: string; description: string | null;
       monthlyPrice: number; yearlyPrice: number; currency: string;
@@ -183,7 +188,16 @@ export async function GET() {
       features: Record<string, boolean>; popular: boolean; sortOrder: number;
     }> = [];
     try {
-      const planRows = await getActivePlans();
+      let planRows = await getActivePlans();
+      // Only seed if the catalog is genuinely empty — avoids per-request writes.
+      if (planRows.length === 0) {
+        try {
+          await seedPlans();
+          planRows = await getActivePlans();
+        } catch (seedErr) {
+          console.error('[Subscriptions] seedPlans() failed (non-fatal):', seedErr);
+        }
+      }
       plans = planRows.map((p) => ({
         id: p.code,
         code: p.code,
@@ -205,7 +219,7 @@ export async function GET() {
       console.error('[Subscriptions] getActivePlans() failed (non-fatal):', plansErr);
     }
 
-    return NextResponse.json({
+    const responsePayload = {
       subscription: subscription
         ? {
             id: subscription.id,
@@ -259,7 +273,11 @@ export async function GET() {
       pendingDowngrade, // { plan, effectiveAt, billingCycle } | null
       billingEvents, // last 10 audit-log entries
       plans, // DB-backed plan catalog for the UI
-    });
+    };
+
+    cache.set(cacheKey, responsePayload, SUBSCRIPTION_CACHE_TTL);
+
+    return NextResponse.json(responsePayload);
   } catch (error) {
     console.error('Get subscription error:', error);
     return NextResponse.json(
@@ -425,6 +443,9 @@ export async function POST(request: NextRequest) {
         createdAt: subscription.createdAt,
       },
     });
+
+    // Invalidate the GET cache — subscription state changed.
+    cache.invalidateByPrefix('subscription:');
   } catch (error) {
     console.error('Update subscription error:', error);
     return NextResponse.json(

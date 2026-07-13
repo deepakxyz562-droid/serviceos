@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 import { JourneyEngine } from '@/lib/journey-engine'
+import { cache } from '@/lib/cache'
+
+// 90s cache — journeys change infrequently (only on stage transitions).
+const JOURNEY_LIST_CACHE_TTL = 90_000
 
 // GET /api/journey - List journeys with filters
 export async function GET(request: NextRequest) {
@@ -24,6 +28,14 @@ export async function GET(request: NextRequest) {
     if (jobId) where.jobId = jobId
     if (customerId) where.customerId = customerId
 
+    // PERFORMANCE: cache list queries — the dashboard fetches this on every
+    // mount and there's no need to hit the DB for unchanged data.
+    const cacheKey = `journey:${authUser?.id || 'anon'}:${authUser?.tenantId || ''}:${stage || ''}:${jobId || ''}:${customerId || ''}:${page}:${limit}`
+    const cached = cache.get<{ journeys: unknown[]; pagination: unknown }>(cacheKey)
+    if (cached) {
+      return NextResponse.json(cached)
+    }
+
     const [journeys, total] = await Promise.all([
       db.customerJourney.findMany({
         where,
@@ -39,10 +51,14 @@ export async function GET(request: NextRequest) {
       db.customerJourney.count({ where }),
     ])
 
-    return NextResponse.json({
+    const result = {
       journeys,
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-    })
+    }
+
+    cache.set(cacheKey, result, JOURNEY_LIST_CACHE_TTL)
+
+    return NextResponse.json(result)
   } catch (error) {
     console.error('Error listing journeys:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

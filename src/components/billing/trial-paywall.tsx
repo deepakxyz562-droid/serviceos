@@ -31,6 +31,13 @@ export interface TrialStatus {
 }
 
 export function useTrialStatus(): TrialStatus {
+  const authUser = useAppStore((s) => s.auth.user);
+  const isCustomerOrEmployee = authUser?.role === 'customer' || authUser?.role === 'employee';
+  // Only poll /api/subscriptions for tenant-scoped (admin/owner/superadmin)
+  // sessions. Customers and employees have no tenant billing UI, and polling
+  // for them just generates endless 401s (987 in the dev log!).
+  const shouldPoll = !!authUser?.id && !isCustomerOrEmployee;
+
   const [state, setState] = useState<{
     isTrialExpired: boolean;
     planStatus: string;
@@ -42,7 +49,7 @@ export function useTrialStatus(): TrialStatus {
     planStatus: 'trial',
     trialEndsAt: null,
     daysRemainingInTrial: null,
-    loading: true,
+    loading: shouldPoll,
   });
 
   const refresh = useCallback(async () => {
@@ -63,21 +70,52 @@ export function useTrialStatus(): TrialStatus {
   }, []);
 
   useEffect(() => {
-    // Fire initial fetch + set up polling. Using a local flag + microtask
-    // deferral avoids the "setState in effect" lint warning while still
-    // updating synchronously enough for the UI.
+    // PERFORMANCE: Skip entirely for unauthenticated / customer / employee
+    // sessions. Previously this fired every 60s forever for every visitor,
+    // generating ~987 401 errors in a single dev session.
+    if (!shouldPoll) {
+      // Defer the setState via a microtask so we don't trigger a synchronous
+      // re-render inside the effect body (which React lint flags as a
+      // cascading-render hazard).
+      Promise.resolve().then(() => {
+        setState((prev) => (prev.loading ? { ...prev, loading: false } : prev));
+      });
+      return;
+    }
+
     let cancelled = false;
     const doFetch = async () => {
       await refresh();
       if (cancelled) return;
     };
     doFetch();
-    const id = setInterval(refresh, 60_000);
+
+    // Pause polling when the tab is hidden so background tabs don't burn
+    // mobile data/battery.
+    let id: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (id) return;
+      id = setInterval(refresh, 60_000);
+    };
+    const stop = () => {
+      if (id) {
+        clearInterval(id);
+        id = null;
+      }
+    };
+    const onVisibility = () => {
+      if (document.hidden) stop();
+      else { refresh(); start(); }
+    };
+    start();
+    document.addEventListener('visibilitychange', onVisibility);
+
     return () => {
       cancelled = true;
-      clearInterval(id);
+      stop();
+      document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [refresh]);
+  }, [refresh, shouldPoll]);
 
   return { ...state, refresh };
 }

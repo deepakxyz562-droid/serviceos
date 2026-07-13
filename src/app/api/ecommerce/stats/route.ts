@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { cache } from '@/lib/cache'
+
+// 90s cache — ecommerce stats are computed from order history and don't
+// change second-by-second. The dashboard only loads this on mount.
+const ECOMMERCE_STATS_CACHE_TTL = 90_000
 
 // GET /api/ecommerce/stats - Get ecommerce dashboard stats
 export async function GET() {
@@ -11,6 +16,15 @@ export async function GET() {
     }
 
     const tenantId = auth.tenantId
+
+    // PERFORMANCE: 12 parallel queries already run via Promise.all below, but
+    // the whole result is recomputed on every dashboard mount. Cache it so
+    // re-mounts within 90s are instant.
+    const cacheKey = `ecommerce-stats:${tenantId}`
+    const cached = cache.get<Record<string, unknown>>(cacheKey)
+    if (cached) {
+      return NextResponse.json(cached)
+    }
     const now = new Date()
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const thirtyDaysAgo = new Date(now)
@@ -243,7 +257,7 @@ export async function GET() {
       totalSyncedCustomers: ic.totalSyncedCustomers,
     }))
 
-    return NextResponse.json({
+    const responsePayload = {
       // Key metrics
       ordersToday,
       revenueToday: Math.round(revenueToday * 100) / 100,
@@ -267,7 +281,11 @@ export async function GET() {
       topProducts,
       storeRevenueByProvider,
       integrations: integrationsSummary,
-    })
+    }
+
+    cache.set(cacheKey, responsePayload, ECOMMERCE_STATS_CACHE_TTL)
+
+    return NextResponse.json(responsePayload)
   } catch (error) {
     console.error('Error fetching ecommerce stats:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

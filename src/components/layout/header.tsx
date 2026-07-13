@@ -173,9 +173,12 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  // ─── Live unread count (polled every 30s) ────────────────────────────
-  // Falls back to a static "3" for unauthenticated users so the bell still
-  // shows something — but once authed, the real count is fetched.
+  // ─── Live unread count (polled every 60s, only when authenticated) ───
+  // PERFORMANCE: Previously polled every 30s forever, even when the user was
+  // logged out / on the landing page — generating thousands of wasted 401s.
+  // Now: only run when the user is actually authenticated, and pause when the
+  // tab is hidden so background tabs don't burn mobile data/battery.
+  const isAuthenticated = !!auth.user?.id;
   const { data: unreadData } = useQuery<{ unreadCount: number }>({
     queryKey: ['unread-count'],
     queryFn: async () => {
@@ -183,9 +186,12 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
       if (!res.ok) throw new Error('failed');
       return res.json();
     },
-    refetchInterval: 30_000,
-    refetchOnWindowFocus: true,
-    staleTime: 15_000,
+    enabled: isAuthenticated,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: isAuthenticated,
+    refetchIntervalInBackground: false,
+    staleTime: 30_000,
+    retry: false,
   });
   const unreadCount = unreadData?.unreadCount ?? 0;
 

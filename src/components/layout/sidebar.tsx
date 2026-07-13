@@ -402,11 +402,13 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
   // fetch entirely (the filter below ignores `disabledMenus` when isSuperAdmin),
   // so we early-return without touching state — avoids a synchronous setState
   // in the effect body.
+  // PERFORMANCE: ?XTransformPort=3000 is required so Caddy routes this to the
+  // Next.js dev server (otherwise it 401s and pollutes the dev log).
   useEffect(() => {
     if (isSuperAdmin) return;
     async function fetchMenuVisibility() {
       try {
-        const res = await fetch('/api/menu-visibility');
+        const res = await fetch('/api/menu-visibility?XTransformPort=3000');
         if (res.ok) {
           const data = await res.json();
           setDisabledMenus(data.disabledMenus || []);

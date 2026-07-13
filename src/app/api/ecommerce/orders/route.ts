@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 import { Prisma } from '@prisma/client'
+import { cache } from '@/lib/cache'
+
+// 90s cache — the dashboard only loads 5 recent orders on mount; no need
+// to re-query the DB for unchanged data.
+const ECOMMERCE_ORDERS_CACHE_TTL = 90_000
 
 // GET /api/ecommerce/orders - List ecommerce orders with filtering
 //
@@ -31,6 +36,18 @@ export async function GET(request: NextRequest) {
     const offset = Math.max(parseInt(searchParams.get('offset') || '0'), 0)
     const dateFrom = searchParams.get('dateFrom')
     const dateTo = searchParams.get('dateTo')
+
+    // PERFORMANCE: cache high-frequency list queries (no search, no date
+    // filter). The dashboard's "recent orders" widget hits this with
+    // ?limit=5 on every mount.
+    const isCacheable = !search && !dateFrom && !dateTo
+    const cacheKey = `ecommerce-orders:${auth.id}:${auth.tenantId || ''}:${auth.role}:${status || ''}:${provider || ''}:${limit}:${offset}`
+    if (isCacheable) {
+      const cached = cache.get<{ orders: unknown[]; total: number; limit: number; offset: number; hasMore: boolean }>(cacheKey)
+      if (cached) {
+        return NextResponse.json(cached)
+      }
+    }
 
     // Build the where clause
     const where: Record<string, unknown> = {}
@@ -128,13 +145,19 @@ export async function GET(request: NextRequest) {
       rawData: safeJsonParse(order.rawDataJson, {}),
     }))
 
-    return NextResponse.json({
+    const responsePayload = {
       orders: result,
       total,
       limit,
       offset,
       hasMore: offset + limit < total,
-    })
+    }
+
+    if (isCacheable) {
+      cache.set(cacheKey, responsePayload, ECOMMERCE_ORDERS_CACHE_TTL)
+    }
+
+    return NextResponse.json(responsePayload)
   } catch (error) {
     console.error('Error listing ecommerce orders:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { cache } from '@/lib/cache';
 
 const GLOBAL_CONFIG_KEY = 'globalMenuConfig';
+
+// 5-minute cache — menu visibility rarely changes. The sidebar + mobile nav
+// both fetch this on every page mount, so caching eliminates 99% of calls.
+// (51 + 53 = 104 redundant calls in the dev log.)
+const MENU_VISIBILITY_CACHE_TTL = 5 * 60 * 1000;
 
 // Helper: safely parse settingsJson from a tenant record
 function parseSettings(raw: unknown): Record<string, unknown> {
@@ -30,6 +36,13 @@ export async function GET(request: NextRequest) {
     if (!tenantId) {
       // Superadmin or user without tenant — return all enabled
       return NextResponse.json({ disabledMenus: [] });
+    }
+
+    // Cache lookup — keyed by tenantId only (same for all users in a tenant).
+    const cacheKey = `menu-visibility:${tenantId}`;
+    const cached = cache.get<{ disabledMenus: string[] }>(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
     }
 
     const disabledKeys = new Set<string>();
@@ -72,7 +85,10 @@ export async function GET(request: NextRequest) {
       // Tenant configs might not exist yet
     }
 
-    return NextResponse.json({ disabledMenus: Array.from(disabledKeys) });
+    const result = { disabledMenus: Array.from(disabledKeys) };
+    cache.set(cacheKey, result, MENU_VISIBILITY_CACHE_TTL);
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error('[Menu Visibility] Error:', error);
     return NextResponse.json({ disabledMenus: [] });

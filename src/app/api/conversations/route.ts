@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { cache } from '@/lib/cache'
+
+// 60s cache for the dashboard's WhatsApp widget — polls every 60s.
+const CONVERSATION_LIST_CACHE_TTL = 60_000
 
 // GET /api/conversations - List conversations with filters
 //
@@ -39,10 +43,45 @@ export async function GET(request: NextRequest) {
     if (status) where.status = status
     if (phone) where.customerPhone = { contains: phone }
 
+    // PERFORMANCE: Cache high-frequency list queries (no phone search).
+    // The dashboard polls /api/conversations?status=active every 60s —
+    // caching means most polls hit the cache instead of the DB.
+    const isCacheable = !phone
+    const cacheKey = `conversations:${authUser?.id || 'anon'}:${authUser?.tenantId || tenantId || ''}:${status || ''}:${customerIdParam || ''}:${page}:${limit}`
+
+    if (isCacheable) {
+      const cached = cache.get<{ conversations: unknown[]; pagination: unknown }>(cacheKey)
+      if (cached) {
+        return NextResponse.json(cached)
+      }
+    }
+
     const [conversations, total] = await Promise.all([
       db.conversation.findMany({
         where,
-        include: {
+        // PERFORMANCE: select only the fields the UI consumes. Previously
+        // this used `include` which returned ALL scalar fields (including
+        // the large messagesJson / metadataJson blobs that the dashboard
+        // never reads). Trimming those cuts payload size ~5x.
+        select: {
+          id: true,
+          conversationId: true,
+          customerPhone: true,
+          customerName: true,
+          customerWhatsappId: true,
+          status: true,
+          currentStage: true,
+          channel: true,
+          lastMessageAt: true,
+          lastMessageBody: true,
+          lastDirection: true,
+          customerId: true,
+          leadId: true,
+          jobId: true,
+          tenantId: true,
+          workspaceId: true,
+          createdAt: true,
+          updatedAt: true,
           customer: { select: { id: true, name: true, phone: true, email: true } },
           lead: { select: { id: true, name: true, status: true, serviceType: true } },
           job: { select: { id: true, title: true, status: true } },
@@ -54,10 +93,16 @@ export async function GET(request: NextRequest) {
       db.conversation.count({ where }),
     ])
 
-    return NextResponse.json({
+    const result = {
       conversations,
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-    })
+    }
+
+    if (isCacheable) {
+      cache.set(cacheKey, result, CONVERSATION_LIST_CACHE_TTL)
+    }
+
+    return NextResponse.json(result)
   } catch (error) {
     console.error('Error listing conversations:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -110,6 +155,9 @@ export async function POST(request: NextRequest) {
         job: { select: { id: true, title: true, status: true } },
       },
     })
+
+    // New conversation changes list results — invalidate cache.
+    cache.invalidateByPrefix('conversations:')
 
     return NextResponse.json({ conversation }, { status: 201 })
   } catch (error) {
