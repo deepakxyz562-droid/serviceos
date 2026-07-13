@@ -443,7 +443,7 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
       initial={{ y: -100 }}
       animate={{ y: 0 }}
       transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 pt-[env(safe-area-inset-top,0px)] ${
         scrolled ? 'bg-white/85 backdrop-blur-xl border-b border-border shadow-sm' : 'bg-transparent'
       }`}
     >
@@ -504,7 +504,7 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
 
 function HeroSection({ onGetStarted, onTryDemo }: { onGetStarted: () => void; onTryDemo?: () => void }) {
   return (
-    <section className="relative overflow-hidden bg-background pt-28 pb-16 lg:pt-32 lg:pb-24">
+    <section className="relative overflow-hidden bg-background pt-[calc(7rem+env(safe-area-inset-top,0px))] pb-16 lg:pt-[calc(8rem+env(safe-area-inset-top,0px))] lg:pb-24">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.08),transparent_55%)]" />
       <div
         className="absolute inset-0 opacity-[0.4]"
@@ -1427,7 +1427,7 @@ function FinalCTASection({ onGetStarted }: { onGetStarted: () => void }) {
 
 function Footer() {
   return (
-    <footer className="bg-foreground text-background mt-auto">
+    <footer className="bg-foreground text-background mt-auto pb-[env(safe-area-inset-bottom,0px)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
           <div className="col-span-2">
