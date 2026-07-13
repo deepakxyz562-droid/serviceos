@@ -383,7 +383,7 @@ html {
 @media all and (display-mode: standalone) {
   html, body {
     overflow: hidden;
-    height: 100dvh;
+    height: 100vh;
     overscroll-behavior: none;
     background-color: var(--background);
   }
