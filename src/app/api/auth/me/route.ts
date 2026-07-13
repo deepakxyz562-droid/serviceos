@@ -7,9 +7,14 @@ export async function GET() {
     const authUser = await getAuthUser();
 
     if (!authUser) {
+      // Return 200 with null user instead of 401. This is the standard
+      // pattern for session-check endpoints (cf. NextAuth /api/auth/session)
+      // and avoids the browser logging a noisy "Failed to load resource: 401"
+      // console error on every landing-page load when the visitor is not
+      // logged in. The client checks `if (data.user)` — null is handled.
       return NextResponse.json(
-        { error: 'Not authenticated' },
-        { status: 401 }
+        { user: null, tenant: null, authenticated: false },
+        { status: 200 }
       );
     }
 

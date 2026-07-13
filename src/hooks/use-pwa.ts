@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useState, useCallback, useSyncExternalStore } from 'react';
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt(): Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
-}
+import {
+  subscribeToDeferredPrompt,
+  requestInstall,
+  type BeforeInstallPromptEvent,
+} from '@/lib/pwa-install';
 
 interface PWAState {
   isInstallable: boolean;
@@ -139,18 +139,22 @@ export function usePWA() {
     };
   }, []);
 
-  // beforeinstallprompt + appinstalled event subscriptions.
-  // setState calls live inside the event-handler callbacks (allowed by the
-  // set-state-in-effect rule).
+  // Subscribe to the SHARED deferred-prompt store (owned by install-prompt.tsx).
+  // This hook no longer registers its own `beforeinstallprompt` listener —
+  // doing so caused duplicate preventDefault() calls and Chrome's console
+  // warning: "Banner not shown: beforeinstallpromptevent.preventDefault()
+  // called."
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    return subscribeToDeferredPrompt((e) => {
+      setInstallPrompt(e);
+      setIsInstallable(!!e);
+    });
+  }, []);
 
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      const promptEvent = e as BeforeInstallPromptEvent;
-      setIsInstallable(true);
-      setInstallPrompt(promptEvent);
-    };
+  // appinstalled event subscription.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
 
     const handleAppInstalled = () => {
       setIsInstallable(false);
@@ -158,13 +162,8 @@ export function usePWA() {
       setDismissed(false);
     };
 
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleAppInstalled);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-      window.removeEventListener('appinstalled', handleAppInstalled);
-    };
+    return () => window.removeEventListener('appinstalled', handleAppInstalled);
   }, []);
 
   // Derived values (computed inline — no effect needed)
@@ -180,8 +179,8 @@ export function usePWA() {
     if (!installPrompt) return false;
 
     try {
-      await installPrompt.prompt();
-      const { outcome } = await installPrompt.userChoice;
+      // Delegate to the shared module — it manages the single deferred event.
+      const outcome = await requestInstall();
       if (outcome === 'accepted') {
         setIsInstallable(false);
         setInstallPrompt(null);

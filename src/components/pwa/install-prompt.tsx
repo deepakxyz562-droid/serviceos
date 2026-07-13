@@ -5,11 +5,10 @@ import { Download, X, Share, PlusSquare } from 'lucide-react';
 import Image from 'next/image';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
-}
+import {
+  setDeferredPrompt as publishDeferredPrompt,
+  type BeforeInstallPromptEvent,
+} from '@/lib/pwa-install';
 
 const DISMISS_KEY = 'serviceos_install_dismissed';
 const DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -79,7 +78,7 @@ function isIOS(): boolean {
  * page paints.
  */
 export default function InstallPrompt() {
-  const [deferredPrompt, setDeferredPrompt] =
+  const [deferredPrompt, setLocalDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [visible, setVisible] = useState(false);
   const [installed, setInstalled] = useState(false);
@@ -98,11 +97,22 @@ export default function InstallPrompt() {
     let iosTimer: number | undefined;
 
     const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
       const promptEvent = e as BeforeInstallPromptEvent;
-      setDeferredPrompt(promptEvent);
 
-      if (isDismissedRecently(DISMISS_KEY)) return;
+      // Only suppress Chrome's native mini-infobar if we're actually going
+      // to show our custom banner. If the user dismissed recently, let
+      // Chrome handle it natively (avoids the "Banner not shown" warning).
+      const dismissed = isDismissedRecently(DISMISS_KEY);
+      if (!dismissed) {
+        e.preventDefault();
+      }
+
+      // Always store the event locally + publish to the shared module so
+      // other components (header "Install app" menu) can trigger it too.
+      setLocalDeferredPrompt(promptEvent);
+      publishDeferredPrompt(promptEvent);
+
+      if (dismissed) return;
 
       // Small delay so the banner doesn't fight the initial page paint.
       showTimer = window.setTimeout(() => setVisible(true), 1500);
@@ -112,7 +122,8 @@ export default function InstallPrompt() {
       setInstalled(true);
       setVisible(false);
       setIosVisible(false);
-      setDeferredPrompt(null);
+      setLocalDeferredPrompt(null);
+      publishDeferredPrompt(null);
       toast.success('ServiceOS installed', {
         description: 'You can now launch it from your home screen.',
       });
@@ -150,7 +161,8 @@ export default function InstallPrompt() {
       console.error('Install prompt failed:', err);
       toast.error('Could not show install prompt');
     } finally {
-      setDeferredPrompt(null);
+      setLocalDeferredPrompt(null);
+      publishDeferredPrompt(null);
       setVisible(false);
     }
   }, [deferredPrompt]);
@@ -158,7 +170,8 @@ export default function InstallPrompt() {
   const handleDismiss = useCallback(() => {
     markDismissed(DISMISS_KEY);
     setVisible(false);
-    setDeferredPrompt(null);
+    setLocalDeferredPrompt(null);
+    publishDeferredPrompt(null);
   }, []);
 
   const handleIosDismiss = useCallback(() => {

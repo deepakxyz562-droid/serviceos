@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
+import { requestInstall, subscribeToDeferredPrompt } from '@/lib/pwa-install';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -104,11 +105,6 @@ const viewLabels: Record<ViewType, string> = {
 
 // ─── PWA install helpers ────────────────────────────────────────────────────
 
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
-}
-
 function isStandaloneDisplay(): boolean {
   if (typeof window === 'undefined') return false;
   try {
@@ -155,22 +151,16 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
   const isCanvas = currentView === 'canvas';
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [hasInstallPrompt, setHasInstallPrompt] = useState(false);
 
   const setCurrentView = useAppStore((s) => s.setCurrentView);
 
-  // Capture beforeinstallprompt so the avatar "Install app" entry can
-  // re-trigger the native install flow. This mirrors install-prompt.tsx but
-  // is self-contained — calling prompt() consumes the event, so whichever
-  // UI (banner or menu) the user clicks first wins; the other becomes a no-op.
+  // Subscribe to the shared deferred-prompt store. Only install-prompt.tsx
+  // registers the actual `beforeinstallprompt` window listener; this avoids
+  // duplicate preventDefault() calls that triggered Chrome's console warning.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-    };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
+    return subscribeToDeferredPrompt((e) => setHasInstallPrompt(!!e));
   }, []);
 
   // ─── Live unread count (polled every 60s, only when authenticated) ───
@@ -203,7 +193,7 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
   const goSettings = useCallback(() => setCurrentView('settings'), [setCurrentView]);
   const goCredentials = useCallback(() => setCurrentView('credentials'), [setCurrentView]);
 
-  const handleInstallClick = useCallback(() => {
+  const handleInstallClick = useCallback(async () => {
     if (isStandaloneDisplay()) {
       toast.info('ServiceOS is already installed');
       return;
@@ -214,17 +204,16 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
       });
       return;
     }
-    if (deferredPrompt) {
-      deferredPrompt
-        .prompt()
-        .catch(() => toast.error('Could not show install prompt'));
-      deferredPrompt.userChoice.finally(() => setDeferredPrompt(null));
-      return;
+    // Delegate to the shared module — it holds the single deferred event.
+    const outcome = await requestInstall();
+    if (outcome === 'unavailable') {
+      toast.info('Install ServiceOS', {
+        description: 'Use your browser menu → "Install app" or "Add to Home Screen".',
+      });
+    } else if (outcome === 'accepted') {
+      toast.success('Installing ServiceOS…');
     }
-    toast.info('Install ServiceOS', {
-      description: 'Use your browser menu → "Install app" or "Add to Home Screen".',
-    });
-  }, [deferredPrompt]);
+  }, []);
 
   // Get user initials for avatar
   const getUserInitials = () => {
