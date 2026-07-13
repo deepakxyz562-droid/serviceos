@@ -1313,7 +1313,7 @@ export function ContactsView() {
               )}
             </div>
           ) : (
-            <ScrollArea className="max-h-[1200px]">
+            <div className="max-h-[1200px] overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1535,7 +1535,7 @@ export function ContactsView() {
                   })}
                 </TableBody>
               </Table>
-            </ScrollArea>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -1939,7 +1939,7 @@ export function ContactsView() {
 
                   <div>
                     <h4 className="text-sm font-medium mb-2">Preview ({importPreview.length} rows shown)</h4>
-                    <ScrollArea className="max-h-48">
+                    <div className="max-h-48 overflow-auto">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -1956,7 +1956,7 @@ export function ContactsView() {
                           ))}
                         </TableBody>
                       </Table>
-                    </ScrollArea>
+                    </div>
                   </div>
                 </>
               )}

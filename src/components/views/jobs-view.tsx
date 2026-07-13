@@ -3463,7 +3463,7 @@ export function JobsView() {
       ) : (
         /* ─── Table View ───────────────────────────────────────────── */
         <Card>
-          <ScrollArea className="max-h-[600px]">
+          <div className="max-h-[600px] overflow-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -3497,7 +3497,7 @@ export function JobsView() {
                 ))}
               </TableBody>
             </Table>
-          </ScrollArea>
+          </div>
         </Card>
       )}
         </>

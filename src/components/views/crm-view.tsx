@@ -712,7 +712,7 @@ export function CrmView() {
                     <p>No jobs yet</p>
                   </div>
                 ) : (
-                  <ScrollArea className="max-h-[500px]">
+                  <div className="max-h-[500px] overflow-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -739,7 +739,7 @@ export function CrmView() {
                         ))}
                       </TableBody>
                     </Table>
-                  </ScrollArea>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -1009,7 +1009,7 @@ export function CrmView() {
             </div>
           ) : (
             <Card>
-              <ScrollArea className="max-h-[600px]">
+              <div className="max-h-[600px] overflow-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -1020,9 +1020,9 @@ export function CrmView() {
                       </TableHead>
                       <TableHead>Phone</TableHead>
                       <TableHead>Email</TableHead>
-                      <TableHead>Address</TableHead>
-                      <TableHead>Portal</TableHead>
-                      <TableHead>
+                      <TableHead className="hidden md:table-cell">Address</TableHead>
+                      <TableHead className="hidden md:table-cell">Portal</TableHead>
+                      <TableHead className="hidden md:table-cell">
                         <button className="flex items-center gap-1 hover:text-foreground" onClick={() => handleSort('createdAt')}>
                           Added <ArrowUpDown className="size-3" />
                         </button>
@@ -1066,14 +1066,14 @@ export function CrmView() {
                             </span>
                           ) : '--'}
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">
+                        <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate hidden md:table-cell">
                           {customer.address ? (
                             <span className="flex items-center gap-1">
                               <MapPin className="size-3 shrink-0" /> {customer.address}
                             </span>
                           ) : '--'}
                         </TableCell>
-                        <TableCell className="text-xs">
+                        <TableCell className="text-xs hidden md:table-cell">
                           {customer.invitationStatus === 'accepted' ? (
                             <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[10px]">
                               <Check className="size-2.5 mr-1" /> Active
@@ -1092,7 +1092,7 @@ export function CrmView() {
                             </Badge>
                           )}
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
+                        <TableCell className="text-xs text-muted-foreground hidden md:table-cell">
                           {formatDate(customer.createdAt)}
                         </TableCell>
                         <TableCell className="text-right" onClick={e => e.stopPropagation()}>
@@ -1132,7 +1132,7 @@ export function CrmView() {
                     ))}
                   </TableBody>
                 </Table>
-              </ScrollArea>
+              </div>
             </Card>
           )}
         </TabsContent>

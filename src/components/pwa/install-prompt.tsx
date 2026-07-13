@@ -172,7 +172,7 @@ export default function InstallPrompt() {
   if (visible && deferredPrompt) {
     return (
       <div
-        className="fixed bottom-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 pb-[env(safe-area-inset-bottom,0px)]"
+        className="fixed left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 bottom-[calc(4rem+1rem+env(safe-area-inset-bottom,0px))] lg:bottom-4"
         role="dialog"
         aria-label="Install ServiceOS"
         aria-live="polite"
@@ -236,7 +236,7 @@ export default function InstallPrompt() {
   if (iosVisible) {
     return (
       <div
-        className="fixed bottom-4 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 pb-[env(safe-area-inset-bottom,0px)]"
+        className="fixed left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 bottom-[calc(4rem+1rem+env(safe-area-inset-bottom,0px))] lg:bottom-4"
         role="dialog"
         aria-label="Add ServiceOS to Home Screen"
         aria-live="polite"

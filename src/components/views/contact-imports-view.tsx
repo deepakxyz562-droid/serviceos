@@ -423,7 +423,7 @@ export function ContactImportsView() {
       ) : (
         <Card>
           <CardContent className="p-0">
-            <ScrollArea className="max-h-[65vh]">
+            <div className="max-h-[65vh] overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -512,7 +512,7 @@ export function ContactImportsView() {
                   })}
                 </TableBody>
               </Table>
-            </ScrollArea>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -619,7 +619,7 @@ export function ContactImportsView() {
                   <div className="space-y-2">
                     <Label>Preview (first 5 rows)</Label>
                     <div className="rounded-md border overflow-hidden">
-                      <ScrollArea className="max-h-40">
+                      <div className="max-h-40 overflow-auto">
                         <Table>
                           <TableHeader>
                             <TableRow>
@@ -638,7 +638,7 @@ export function ContactImportsView() {
                             ))}
                           </TableBody>
                         </Table>
-                      </ScrollArea>
+                      </div>
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {parsedRows.length} row(s) parsed • {buildContactsFromCsv().length} valid contact(s) after mapping

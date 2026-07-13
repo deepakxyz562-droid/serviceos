@@ -840,7 +840,7 @@ export function SegmentsView() {
                   <Badge variant="outline" className="text-[10px]">{selectedSegment.matchLogic.toUpperCase()}</Badge>
                 )}
               </div>
-              <ScrollArea className="max-h-[50vh]">
+              <div className="max-h-[50vh] overflow-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -900,7 +900,7 @@ export function SegmentsView() {
                     })}
                   </TableBody>
                 </Table>
-              </ScrollArea>
+              </div>
 
               {previewPagination && previewPagination.totalPages > 1 && (
                 <div className="flex items-center justify-between pt-3">

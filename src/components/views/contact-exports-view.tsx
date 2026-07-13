@@ -350,7 +350,7 @@ export function ContactExportsView() {
       ) : (
         <Card>
           <CardContent className="p-0">
-            <ScrollArea className="max-h-[65vh]">
+            <div className="max-h-[65vh] overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -390,7 +390,7 @@ export function ContactExportsView() {
                   })}
                 </TableBody>
               </Table>
-            </ScrollArea>
+            </div>
           </CardContent>
         </Card>
       )}

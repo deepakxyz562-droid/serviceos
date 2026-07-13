@@ -403,7 +403,7 @@ export function AudienceAnalyticsView() {
           {data.recentImports.length === 0 ? (
             <p className="text-center text-sm text-muted-foreground py-8">No recent imports</p>
           ) : (
-            <ScrollArea className="max-h-72">
+            <div className="max-h-72 overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -441,7 +441,7 @@ export function AudienceAnalyticsView() {
                   ))}
                 </TableBody>
               </Table>
-            </ScrollArea>
+            </div>
           )}
         </CardContent>
       </Card>

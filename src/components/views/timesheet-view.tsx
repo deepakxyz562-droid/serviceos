@@ -535,7 +535,7 @@ function EmployeeTimesheet() {
               <p className="text-sm text-muted-foreground">No shifts recorded in the last 30 days.</p>
             </div>
           ) : (
-            <ScrollArea className="max-h-[28rem]">
+            <div className="max-h-[28rem] overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
@@ -566,7 +566,7 @@ function EmployeeTimesheet() {
                   ))}
                 </TableBody>
               </Table>
-            </ScrollArea>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -709,7 +709,7 @@ function OwnerTimesheet() {
               </p>
             </div>
           ) : (
-            <ScrollArea className="max-h-[32rem]">
+            <div className="max-h-[32rem] overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
@@ -766,7 +766,7 @@ function OwnerTimesheet() {
                   ))}
                 </TableBody>
               </Table>
-            </ScrollArea>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -858,7 +858,7 @@ function EmployeeDrilldown({ row, onClose }: { row: TeamRow; onClose: () => void
         ) : shifts.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-6">No shifts recorded in the last 30 days.</p>
         ) : (
-          <ScrollArea className="max-h-[22rem]">
+          <div className="max-h-[22rem] overflow-auto">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/40 hover:bg-muted/40">
@@ -887,7 +887,7 @@ function EmployeeDrilldown({ row, onClose }: { row: TeamRow; onClose: () => void
                 ))}
               </TableBody>
             </Table>
-          </ScrollArea>
+          </div>
         )}
 
         <div className="flex justify-end pt-2">

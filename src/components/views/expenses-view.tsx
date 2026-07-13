@@ -443,7 +443,7 @@ export function ExpensesView() {
               </Button>
             </div>
           ) : (
-            <ScrollArea className="max-h-[calc(100vh-22rem)]">
+            <div className="max-h-[calc(100vh-22rem)] overflow-auto">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
@@ -564,7 +564,7 @@ export function ExpensesView() {
                   ))}
                 </TableBody>
               </Table>
-            </ScrollArea>
+            </div>
           )}
         </CardContent>
       </Card>

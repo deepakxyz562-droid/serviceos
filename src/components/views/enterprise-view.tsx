@@ -216,7 +216,7 @@ export function EnterpriseView() {
         <TabsContent value="permissions">
           <Card>
             <CardContent className="p-4">
-              <ScrollArea className="max-h-96">
+              <div className="max-h-96 overflow-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -243,7 +243,7 @@ export function EnterpriseView() {
                     ))}
                   </TableBody>
                 </Table>
-              </ScrollArea>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

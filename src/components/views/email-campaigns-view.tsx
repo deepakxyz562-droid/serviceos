@@ -483,7 +483,7 @@ export function EmailCampaignsView() {
                 No email logs yet. Send a campaign to see logs here.
               </div>
             ) : (
-              <ScrollArea className="max-h-96 rounded-md border">
+              <div className="max-h-96 rounded-md border overflow-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -522,7 +522,7 @@ export function EmailCampaignsView() {
                     })}
                   </TableBody>
                 </Table>
-              </ScrollArea>
+              </div>
             )}
           </CardContent>
         </Card>
