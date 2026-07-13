@@ -274,7 +274,7 @@ export function DocumentCenterView() {
     } finally {
       setIsLoading(false);
     }
-  }, [searchQuery, typeFilter, categoryFilter]);
+  }, [searchQuery, typeFilter, categoryFilter, demoPageSize]);
 
   useEffect(() => {
     fetchDocuments();

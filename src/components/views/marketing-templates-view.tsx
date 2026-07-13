@@ -19,6 +19,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -112,6 +113,9 @@ function getCategoryColor(category: string): string {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function MarketingTemplatesView() {
+  // Demo-mode page size cap (5 for demo tenant, else 50)
+  const demoPageSize = useDemoPageSize(50);
+
   const [templates, setTemplates] = useState<CampaignTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -140,7 +144,7 @@ export function MarketingTemplatesView() {
     try {
       const params = new URLSearchParams();
       if (categoryFilter !== 'all') params.set('category', categoryFilter);
-      params.set('limit', '50');
+      params.set('limit', String(demoPageSize));
 
       const res = await fetch(`/api/campaign-templates?${params.toString()}`);
       if (res.ok) {
@@ -156,7 +160,7 @@ export function MarketingTemplatesView() {
     } finally {
       setIsLoading(false);
     }
-  }, [categoryFilter]);
+  }, [categoryFilter, demoPageSize]);
 
   useEffect(() => {
     loadTemplates();

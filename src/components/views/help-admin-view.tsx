@@ -81,6 +81,7 @@ import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -207,6 +208,8 @@ function formatRelative(dateStr: string) {
 
 export function HelpAdminView() {
   const { auth, setCurrentView } = useAppStore();
+  // Demo-mode page size cap (5 for demo tenant, else 50)
+  const demoPageSize = useDemoPageSize(50);
   const activeView = (auth.user?.isSuperAdmin || auth.user?.role === 'superadmin') ?
     (window.location.pathname === '/help-admin-kb' ? 'kb' : 'default') : 'default';
 
@@ -257,14 +260,14 @@ export function HelpAdminView() {
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (priorityFilter !== 'all') params.set('priority', priorityFilter);
       if (searchQuery) params.set('search', searchQuery);
-      params.set('limit', '50');
+      params.set('limit', String(demoPageSize));
       const res = await fetch(`/api/support/tickets?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setTickets(data.tickets || []);
       }
     } catch (err) { console.error(err); } finally { setTicketsLoading(false); }
-  }, [statusFilter, priorityFilter, searchQuery]);
+  }, [statusFilter, priorityFilter, searchQuery, demoPageSize]);
 
   const fetchCategories = useCallback(async () => {
     try {
@@ -275,13 +278,13 @@ export function HelpAdminView() {
 
   const fetchAnnouncements = useCallback(async () => {
     try {
-      const res = await fetch('/api/support/announcements?limit=50');
+      const res = await fetch(`/api/support/announcements?limit=${demoPageSize}`);
       if (res.ok) {
         const data = await res.json();
         setAnnouncements(data.announcements || []);
       }
     } catch (err) { console.error(err); }
-  }, []);
+  }, [demoPageSize]);
 
   const fetchTicketDetail = useCallback(async (ticketId: string) => {
     try {

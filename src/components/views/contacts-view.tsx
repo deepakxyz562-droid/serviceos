@@ -124,6 +124,7 @@ const SOURCE_OPTIONS = [
 ];
 
 const PAGE_SIZE_OPTIONS: Array<{ value: number | 'all'; label: string }> = [
+  { value: 5, label: '5 / page' },
   { value: 20, label: '20 / page' },
   { value: 50, label: '50 / page' },
   { value: 100, label: '100 / page' },

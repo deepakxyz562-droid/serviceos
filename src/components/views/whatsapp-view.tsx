@@ -24,6 +24,7 @@ import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 import { useRealtime } from '@/hooks/use-realtime';
+import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 import { WhatsAppWorkflowTemplates } from '@/components/whatsapp/whatsapp-workflow-templates';
 import { WhatsAppCreditBanner } from '@/components/whatsapp-credit-banner';
 import { WhatsAppSetupWizard } from '@/components/whatsapp/whatsapp-setup-wizard';
@@ -189,6 +190,10 @@ function IntentBadge({ intent, confidence }: { intent?: string | null; confidenc
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export function WhatsAppView() {
+  // Demo-mode page size cap (5 for demo tenant, else 50) — applies to
+  // conversations, WhatsApp-sourced leads, and notification log lists.
+  const demoPageSize = useDemoPageSize(50);
+
   const [activeTab, setActiveTab] = useState('conversations');
   const [conversations, setConversations] = useState<ConversationData[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<ConversationData | null>(null);
@@ -234,7 +239,7 @@ export function WhatsAppView() {
   const fetchConversations = useCallback(async () => {
     setLoadingConvos(true);
     try {
-      const res = await fetch('/api/conversations?XTransformPort=3000&limit=50');
+      const res = await fetch(`/api/conversations?XTransformPort=3000&limit=${demoPageSize}`);
       if (res.ok) {
         const data = await res.json();
         setConversations(data.conversations || []);
@@ -246,12 +251,12 @@ export function WhatsAppView() {
     } finally {
       setLoadingConvos(false);
     }
-  }, []);
+  }, [demoPageSize]);
 
   const fetchLeads = useCallback(async () => {
     setLoadingLeads(true);
     try {
-      const res = await fetch('/api/leads?XTransformPort=3000&source=whatsapp&limit=50');
+      const res = await fetch(`/api/leads?XTransformPort=3000&source=whatsapp&limit=${demoPageSize}`);
       if (res.ok) {
         const data = await res.json();
         setWhatsappLeads(data.leads || []);
@@ -263,12 +268,12 @@ export function WhatsAppView() {
     } finally {
       setLoadingLeads(false);
     }
-  }, []);
+  }, [demoPageSize]);
 
   const fetchNotificationLogs = useCallback(async () => {
     setLoadingLogs(true);
     try {
-      const res = await fetch('/api/notification-logs?XTransformPort=3000&type=whatsapp&limit=50');
+      const res = await fetch(`/api/notification-logs?XTransformPort=3000&type=whatsapp&limit=${demoPageSize}`);
       if (res.ok) {
         const data = await res.json();
         setNotificationLogs(Array.isArray(data) ? data : []);
@@ -280,7 +285,7 @@ export function WhatsAppView() {
     } finally {
       setLoadingLogs(false);
     }
-  }, []);
+  }, [demoPageSize]);
 
   const fetchTemplates = useCallback(async () => {
     setTemplates([

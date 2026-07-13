@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { QueryProvider } from "@/providers/query-provider";
 import { PwaProvider } from "@/components/pwa/pwa-provider";
+import { CookieConsentBanner } from "@/components/legal/cookie-consent-banner";
 
 const poppins = Poppins({
   variable: "--font-poppins",
@@ -96,6 +97,7 @@ export default function RootLayout({
           {children}
           <Toaster position="top-center" />
           <PwaProvider />
+          <CookieConsentBanner />
         </QueryProvider>
       </body>
     </html>

@@ -72,6 +72,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
+import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -754,6 +755,9 @@ type FilterTab = 'all' | 'unread' | 'archived';
 export function NotificationsView() {
   const queryClient = useQueryClient();
 
+  // Demo-mode page size cap (5 for demo tenant, else 50)
+  const demoPageSize = useDemoPageSize(50);
+
   // ─── Filter state ──────────────────────────────────────────────────────────
   const [tab, setTab] = useState<FilterTab>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -772,9 +776,9 @@ export function NotificationsView() {
   const queryKey = useMemo(
     () => [
       'notifications',
-      { tab, typeFilter, categoryFilter, search: searchDebounced },
+      { tab, typeFilter, categoryFilter, search: searchDebounced, demoPageSize },
     ],
-    [tab, typeFilter, categoryFilter, searchDebounced]
+    [tab, typeFilter, categoryFilter, searchDebounced, demoPageSize]
   );
 
   const { data, isLoading, isFetching, refetch } = useQuery<NotificationsResponse>({
@@ -785,7 +789,7 @@ export function NotificationsView() {
       if (typeFilter !== 'all') params.set('type', typeFilter);
       if (categoryFilter !== 'all') params.set('category', categoryFilter);
       if (searchDebounced) params.set('search', searchDebounced);
-      params.set('limit', '50');
+      params.set('limit', String(demoPageSize));
       params.set('XTransformPort', '3000');
       const res = await fetch(`/api/notifications?${params.toString()}`);
       if (!res.ok) {

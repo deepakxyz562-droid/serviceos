@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { authFetch } from '@/lib/client-auth';
 import { useAppStore } from '@/store/app-store';
+import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -350,6 +351,8 @@ export function CampaignsView() {
   // re-open it.
   const pendingCreate = useAppStore((s) => s.pendingCreate);
   const setPendingCreate = useAppStore((s) => s.setPendingCreate);
+  // Demo-mode page size cap (5 for demo tenant, else 50)
+  const demoPageSize = useDemoPageSize(50);
 
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -417,7 +420,7 @@ export function CampaignsView() {
     try {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.set('status', statusFilter);
-      params.set('limit', '50');
+      params.set('limit', String(demoPageSize));
       // Exclude broadcasts from campaigns view
       params.set('type', 'promotional,reminder,seasonal,re_engagement,follow_up');
 
@@ -435,7 +438,7 @@ export function CampaignsView() {
     } finally {
       setIsLoading(false);
     }
-  }, [statusFilter]);
+  }, [statusFilter, demoPageSize]);
 
   useEffect(() => {
     loadCampaigns();

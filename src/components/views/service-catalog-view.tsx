@@ -63,6 +63,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/api';
+import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -149,6 +150,9 @@ function formatDuration(minutes: number): string {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function ServiceCatalogView() {
+  // Demo-mode page size cap (5 for demo tenant, else 100)
+  const demoPageSize = useDemoPageSize(100);
+
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -173,7 +177,7 @@ export function ServiceCatalogView() {
       const params = new URLSearchParams();
       if (searchQuery) params.set('search', searchQuery);
       if (categoryFilter && categoryFilter !== 'all') params.set('category', categoryFilter);
-      params.set('limit', '100');
+      params.set('limit', String(demoPageSize));
 
       const qs = params.toString();
       const url = `/api/services${qs ? `?${qs}` : ''}`;
@@ -196,7 +200,7 @@ export function ServiceCatalogView() {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, categoryFilter]);
+  }, [searchQuery, categoryFilter, demoPageSize]);
 
   useEffect(() => {
     fetchServices();

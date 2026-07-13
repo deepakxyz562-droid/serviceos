@@ -24,6 +24,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { authFetch } from '@/lib/client-auth';
+import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -267,6 +268,9 @@ function getChannelColor(channel: string) {
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function BroadcastView() {
+  // Demo-mode page size cap (5 for demo tenant, else 50)
+  const demoPageSize = useDemoPageSize(50);
+
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -320,7 +324,7 @@ export function BroadcastView() {
     setError(null);
     try {
       const params = new URLSearchParams();
-      params.set('limit', '50');
+      params.set('limit', String(demoPageSize));
       params.set('type', 'broadcast');
 
       const res = await authFetch(`/api/campaigns?${params.toString()}`);
@@ -362,7 +366,7 @@ export function BroadcastView() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [demoPageSize]);
 
   useEffect(() => {
     loadBroadcasts();
