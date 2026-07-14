@@ -19,15 +19,15 @@ import {
 
 import {
   Building2, Users, DollarSign, CreditCard, TrendingUp, TrendingDown,
-  Search, Loader2, ShieldCheck, ShieldAlert, Shield, Eye, Ban, Play,
+  Search, Loader2, ShieldCheck, ShieldAlert, Shield, Eye, Ban,
   Menu, ToggleLeft, ToggleRight, Flag, Settings2, Pause, PlayCircle,
   LayoutDashboard, UsersRound, Megaphone, ShoppingCart, MessageSquare,
-  Bot, Workflow, Radio, Wallet, BookOpen, Cpu, ChevronDown,
+  Bot, Workflow, Radio, Wallet, BookOpen, Cpu, ChevronDown, ChevronRight,
   CheckCircle2, XCircle, AlertTriangle, ArrowUpDown, RefreshCw,
   Plus, Trash2, Edit3, FileText, Clock, Activity, Globe,
   BarChart3, UserCog, Zap, Calendar, Target, Briefcase,
   Filter, Key, Store, FileInput, Receipt, Settings,
-  Plug, Database, HardDrive,
+  Plug, Database, HardDrive, Server, LineChart, Sparkles,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,7 +36,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -53,6 +52,10 @@ import { Progress } from '@/components/ui/progress';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { IntegrationsTab } from '@/components/views/superadmin-integrations-tab';
 import { ProvidersTab } from '@/components/views/superadmin-providers-tab';
+import {
+  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  BarChart, Bar, Cell,
+} from 'recharts';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -174,9 +177,9 @@ interface CreditInfo {
   ownEmailProviderConnected: boolean;
 }
 
-// ─── Constants ───────────────────────────────────────────────────────────────
+// ─── Constants: Product Module Structure (aligned with the app sidebar) ──────
 
-const MENU_SECTIONS = [
+const MODULE_SECTIONS = [
   { key: 'CRM', label: 'CRM', icon: UsersRound, color: 'emerald' },
   { key: 'Communication', label: 'Communication', icon: MessageSquare, color: 'sky' },
   { key: 'Marketing', label: 'Marketing', icon: Megaphone, color: 'amber' },
@@ -256,9 +259,72 @@ const FEATURE_DEFINITIONS = [
   { key: 'advanced_analytics', label: 'Advanced Analytics', description: 'Detailed analytics with custom reports and dashboards' },
 ];
 
+// Map each feature-flag key to the product module it belongs in.
+// This drives the merged "Modules" tab — features + menu items grouped by module.
+const FEATURE_MODULE_MAP: Record<string, string> = {
+  whatsapp_crm: 'Communication',
+  ai_assistant: 'AI & More',
+  campaigns: 'Marketing',
+  workflows: 'Automation',
+  chatbot_builder: 'AI & More',
+  form_builder: 'Automation',
+  omnichannel: 'Communication',
+  sales_pipeline: 'CRM',
+  journey_automation: 'Automation',
+  knowledge_base: 'AI & More',
+  marketplace: 'System',
+  custom_domains: 'System',
+  api_access: 'System',
+  bulk_operations: 'System',
+  advanced_analytics: 'System',
+};
+
 const PLAN_AMOUNTS: Record<string, number> = {
   trial: 0, starter: 29, growth: 79, pro: 149, enterprise: 0,
 };
+
+// ─── Navigation config (left sub-nav) ────────────────────────────────────────
+
+type TabKey =
+  | 'dashboard' | 'tenants' | 'subscriptions' | 'credits' | 'users'
+  | 'modules' | 'integrations' | 'providers' | 'audit-logs';
+
+interface NavGroup {
+  label: string;
+  items: { key: TabKey; label: string; icon: typeof Building2 }[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    label: 'Overview',
+    items: [
+      { key: 'dashboard', label: 'Dashboard', icon: BarChart3 },
+    ],
+  },
+  {
+    label: 'Tenants & Revenue',
+    items: [
+      { key: 'tenants', label: 'Tenants', icon: Building2 },
+      { key: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
+      { key: 'credits', label: 'Credits', icon: Wallet },
+      { key: 'users', label: 'Users', icon: Users },
+    ],
+  },
+  {
+    label: 'Platform Control',
+    items: [
+      { key: 'modules', label: 'Modules', icon: LayoutDashboard },
+      { key: 'integrations', label: 'Integrations', icon: Plug },
+      { key: 'providers', label: 'Providers', icon: Server },
+    ],
+  },
+  {
+    label: 'Security',
+    items: [
+      { key: 'audit-logs', label: 'Audit Logs', icon: FileText },
+    ],
+  },
+];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -281,53 +347,69 @@ function formatDateTime(dateStr: string | null | undefined): string {
   } catch { return dateStr; }
 }
 
-function getStatusBadge(status: string) {
+function timeAgo(dateStr: string | null | undefined): string {
+  if (!dateStr) return '—';
+  try {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    if (days < 30) return `${days}d ago`;
+    return formatDate(dateStr);
+  } catch { return dateStr; }
+}
+
+// Theme-token status badges — uses the app's bg-*/text-* token families so they
+// render correctly in both light and dark mode.
+function getStatusBadgeClasses(status: string) {
   const map: Record<string, string> = {
-    active: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-    trial: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-    suspended: 'bg-red-500/10 text-red-400 border-red-500/20',
-    paused: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-    cancelled: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
-    expired: 'bg-red-500/10 text-red-400 border-red-500/20',
+    active: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+    trial: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
+    suspended: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
+    paused: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
+    cancelled: 'bg-muted text-muted-foreground border-border',
+    expired: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20',
   };
   return map[status] || map.trial;
 }
 
-function getPlanBadge(plan: string) {
+function getPlanBadgeClasses(plan: string) {
   const map: Record<string, string> = {
-    trial: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
-    starter: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
-    growth: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-    pro: 'bg-teal-500/10 text-teal-400 border-teal-500/20',
-    professional: 'bg-teal-500/10 text-teal-400 border-teal-500/20',
-    enterprise: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
+    trial: 'bg-muted text-muted-foreground border-border',
+    starter: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20',
+    growth: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+    pro: 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20',
+    professional: 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20',
+    enterprise: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20',
   };
   return map[plan] || map.trial;
 }
 
-function getSeverityBadge(severity: string) {
-  const map: Record<string, string> = {
-    critical: 'bg-red-500/10 text-red-400 border-red-500/20',
-    high: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
-    medium: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-    low: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
-  };
-  return map[severity] || map.low;
-}
+const ROLE_BADGE_CLASSES: Record<string, string> = {
+  owner: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+  admin: 'text-teal-600 dark:text-teal-400 bg-teal-500/10 border-teal-500/20',
+  manager: 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20',
+  employee: 'text-muted-foreground bg-muted border-border',
+  technician: 'text-sky-600 dark:text-sky-400 bg-sky-500/10 border-sky-500/20',
+  superadmin: 'text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/20',
+};
 
 // ─── Skeleton Components ─────────────────────────────────────────────────────
 
-function KPISkeleton({ count = 5 }: { count?: number }) {
+function KPISkeleton({ count = 4 }: { count?: number }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {Array.from({ length: count }).map((_, i) => (
-        <Card key={i} className="bg-slate-900 border-slate-800">
+        <Card key={i} className="card-shadow">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <Skeleton className="size-10 rounded-lg bg-slate-800" />
+              <Skeleton className="size-10 rounded-lg" />
               <div className="flex-1 space-y-2">
-                <Skeleton className="h-3 w-20 bg-slate-800" />
-                <Skeleton className="h-6 w-16 bg-slate-800" />
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-6 w-16" />
               </div>
             </div>
           </CardContent>
@@ -339,15 +421,15 @@ function KPISkeleton({ count = 5 }: { count?: number }) {
 
 function TableSkeleton({ rows = 5 }: { rows?: number }) {
   return (
-    <Card className="bg-slate-900 border-slate-800">
+    <Card className="card-shadow">
       <CardContent className="p-4 space-y-3">
         {Array.from({ length: rows }).map((_, i) => (
           <div key={i} className="flex items-center gap-4">
-            <Skeleton className="h-4 w-32 bg-slate-800" />
-            <Skeleton className="h-4 w-16 bg-slate-800" />
-            <Skeleton className="h-4 w-20 bg-slate-800" />
-            <Skeleton className="h-4 w-16 bg-slate-800" />
-            <Skeleton className="h-4 w-24 ml-auto bg-slate-800" />
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-4 w-24 ml-auto" />
           </div>
         ))}
       </CardContent>
@@ -355,13 +437,80 @@ function TableSkeleton({ rows = 5 }: { rows?: number }) {
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
+function EmptyState({ icon: Icon, title, subtitle, action }: {
+  icon: typeof Building2;
+  title: string;
+  subtitle?: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <Card className="border-dashed">
+      <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+        <div className="size-14 rounded-full bg-muted flex items-center justify-center mb-4">
+          <Icon className="size-7 text-muted-foreground" />
+        </div>
+        <p className="text-base font-medium text-foreground">{title}</p>
+        {subtitle && <p className="text-sm text-muted-foreground mt-1 max-w-sm">{subtitle}</p>}
+        {action && <div className="mt-4">{action}</div>}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── KPI Card (consistent with main app dashboard) ───────────────────────────
+
+function KpiCard({ label, value, icon: Icon, trend, color, sub }: {
+  label: string;
+  value: string | number;
+  icon: typeof Building2;
+  trend?: number | null;
+  color: 'emerald' | 'sky' | 'amber' | 'red' | 'teal' | 'violet';
+  sub?: string;
+}) {
+  const colorMap: Record<string, string> = {
+    emerald: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    sky: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
+    amber: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+    red: 'bg-red-500/10 text-red-600 dark:text-red-400',
+    teal: 'bg-teal-500/10 text-teal-600 dark:text-teal-400',
+    violet: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+  };
+  return (
+    <Card className="card-shadow card-hover">
+      <CardContent className="p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-muted-foreground truncate">{label}</p>
+            <div className="flex items-baseline gap-2 mt-1">
+              <p className="text-2xl font-bold text-foreground tracking-tight">{value}</p>
+              {trend !== null && trend !== undefined && (
+                <span className={cn(
+                  'inline-flex items-center text-[11px] font-semibold',
+                  trend >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
+                )}>
+                  {trend >= 0 ? <TrendingUp className="size-3 mr-0.5" /> : <TrendingDown className="size-3 mr-0.5" />}
+                  {Math.abs(trend)}%
+                </span>
+              )}
+            </div>
+            {sub && <p className="text-[11px] text-muted-foreground mt-1">{sub}</p>}
+          </div>
+          <div className={cn('size-10 rounded-lg flex items-center justify-center shrink-0', colorMap[color])}>
+            <Icon className="size-5" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 
 export function SuperAdminView() {
-  const { currency, format, formatCompact, symbol } = useCompanyCurrency();
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const { format } = useCompanyCurrency();
+  const [activeTab, setActiveTab] = useState<TabKey>('dashboard');
   const { auth, setCurrentView } = useAppStore();
   const queryClient = useQueryClient();
   const toggleFeatureFlagMutation = useToggleFeatureFlag();
@@ -372,9 +521,11 @@ export function SuperAdminView() {
   if (!isSuperAdmin) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
-        <ShieldAlert className="size-16 text-red-400 opacity-50" />
-        <h2 className="text-xl font-semibold text-white">Access Denied</h2>
-        <p className="text-slate-400">You do not have permission to access the Super Admin panel.</p>
+        <div className="size-16 rounded-full bg-red-500/10 flex items-center justify-center">
+          <ShieldAlert className="size-8 text-red-500" />
+        </div>
+        <h2 className="text-xl font-semibold text-foreground">Access Denied</h2>
+        <p className="text-sm text-muted-foreground">You do not have permission to access the Super Admin panel.</p>
         <Button variant="outline" onClick={() => setCurrentView('dashboard')} className="mt-2">
           Go to Dashboard
         </Button>
@@ -420,7 +571,6 @@ export function SuperAdminView() {
   const featureFlags: FeatureFlagDef[] = useMemo(() => {
     if (!flagsData) return FEATURE_DEFINITIONS.map((d) => ({ ...d, enabled: false }));
     const arr = Array.isArray(flagsData) ? flagsData : (flagsData as Record<string, unknown>)?.flags || [];
-    // Merge with definitions to ensure all features appear
     return FEATURE_DEFINITIONS.map((def) => {
       const existing = (arr as FeatureFlagDef[]).find((f) => f.key === def.key);
       return { ...def, enabled: existing?.enabled ?? false, config: existing?.config };
@@ -483,26 +633,16 @@ export function SuperAdminView() {
             });
           } else {
             results.push({
-              tenantId: tenant.id,
-              tenantName: tenant.name,
-              plan: tenant.plan,
-              trialWhatsappCredits: 10,
-              trialWhatsappUsed: 0,
-              platformWhatsappEnabled: true,
-              ownWhatsappConnected: false,
-              ownEmailProviderConnected: false,
+              tenantId: tenant.id, tenantName: tenant.name, plan: tenant.plan,
+              trialWhatsappCredits: 10, trialWhatsappUsed: 0,
+              platformWhatsappEnabled: true, ownWhatsappConnected: false, ownEmailProviderConnected: false,
             });
           }
         } catch {
           results.push({
-            tenantId: tenant.id,
-            tenantName: tenant.name,
-            plan: tenant.plan,
-            trialWhatsappCredits: 10,
-            trialWhatsappUsed: 0,
-            platformWhatsappEnabled: true,
-            ownWhatsappConnected: false,
-            ownEmailProviderConnected: false,
+            tenantId: tenant.id, tenantName: tenant.name, plan: tenant.plan,
+            trialWhatsappCredits: 10, trialWhatsappUsed: 0,
+            platformWhatsappEnabled: true, ownWhatsappConnected: false, ownEmailProviderConnected: false,
           });
         }
       }
@@ -516,17 +656,14 @@ export function SuperAdminView() {
     if (tenants.length > 0 && creditsData.length === 0) {
       fetchAllCredits();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenants.length]);
+  }, [tenants.length, creditsData.length, fetchAllCredits]);
 
-  // Auto-select first tenant for feature flags
   useEffect(() => {
     if (tenants.length > 0 && !selectedTenantForFlags) {
       setSelectedTenantForFlags(tenants[0].id);
     }
   }, [tenants, selectedTenantForFlags]);
 
-  // Auto-select first tenant for menu items only when in tenant scope
   useEffect(() => {
     if (menuScope === 'tenant' && tenants.length > 0 && !selectedTenantForMenu) {
       setSelectedTenantForMenu(tenants[0].id);
@@ -534,11 +671,10 @@ export function SuperAdminView() {
   }, [tenants, selectedTenantForMenu, menuScope]);
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 1. DASHBOARD TAB
+  // 1. DASHBOARD TAB — Command Center
   // ═══════════════════════════════════════════════════════════════════════════
 
   function DashboardTab() {
-    // Use statsData from the parent hook (useSaasStats → /api/superadmin/stats)
     const stats = (statsData as PlatformStats) || null;
     const loading = statsLoading;
 
@@ -547,318 +683,362 @@ export function SuperAdminView() {
       refetchTenants();
     }, [refetchStats, refetchTenants]);
 
-    // Tenant growth chart data (from tenants by month)
-    const tenantGrowthData = useMemo(() => {
-      if (!tenants.length) return [];
-      const months: Record<string, number> = {};
+    // Revenue & tenant growth data (6 months) for recharts
+    const growthChartData = useMemo(() => {
+      const months: Record<string, { tenants: number; revenue: number }> = {};
       const now = new Date();
       for (let i = 5; i >= 0; i--) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const key = d.toLocaleDateString('en-US', { month: 'short' });
-        months[key] = 0;
+        months[key] = { tenants: 0, revenue: 0 };
       }
       tenants.forEach((t) => {
         try {
           const d = new Date(t.createdAt);
           const key = d.toLocaleDateString('en-US', { month: 'short' });
-          if (key in months) months[key]++;
+          if (key in months) {
+            months[key].tenants++;
+            months[key].revenue += t.mrr;
+          }
         } catch { /* ignore */ }
       });
-      return Object.entries(months).map(([month, count]) => ({ month, count }));
+      return Object.entries(months).map(([month, v]) => ({ month, ...v }));
     }, [tenants]);
 
-    const maxGrowth = Math.max(...tenantGrowthData.map((d) => d.count), 1);
-
-    // Recent signups (last 5 tenants)
     const recentSignups = useMemo(() =>
       [...tenants].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5),
     [tenants]);
 
-    // Platform alerts
     const alerts = useMemo(() => {
       const list: { type: 'warning' | 'error' | 'info'; message: string; tenant?: string }[] = [];
-      tenants.filter((t) => t.planStatus === 'suspended').forEach((t) => {
+      tenants.filter((t) => t.planStatus === 'suspended').slice(0, 3).forEach((t) => {
         list.push({ type: 'error', message: `Tenant "${t.name}" is suspended`, tenant: t.name });
       });
-      tenants.filter((t) => t.planStatus === 'trial').forEach((t) => {
+      tenants.filter((t) => t.planStatus === 'trial').slice(0, 3).forEach((t) => {
         list.push({ type: 'warning', message: `Tenant "${t.name}" is on trial`, tenant: t.name });
       });
       if (list.length === 0) {
         list.push({ type: 'info', message: 'No active alerts. Platform is healthy.' });
       }
-      return list;
+      return list.slice(0, 6);
     }, [tenants]);
 
-    if (loading) return <KPISkeleton count={5} />;
+    // Platform health score: weighted metric (0-100)
+    const healthScore = useMemo(() => {
+      const total = tenants.length || 1;
+      const active = tenants.filter((t) => t.planStatus === 'active').length;
+      const suspended = tenants.filter((t) => t.planStatus === 'suspended').length;
+      const trial = tenants.filter((t) => t.planStatus === 'trial').length;
+      const score = Math.round(((active * 1.0) + (trial * 0.6) + (suspended * 0)) / total * 100);
+      return Math.min(score, 100);
+    }, [tenants]);
 
-    const kpiCards = [
-      { label: 'Total Tenants', value: stats?.totalTenants ?? 0, icon: Building2, trend: stats?.trends?.tenants, color: 'emerald' },
-      { label: 'Active Users', value: stats?.activeUsers ?? stats?.totalUsers ?? 0, icon: Users, trend: stats?.trends?.users, color: 'sky' },
-      { label: 'MRR', value: format(stats?.mrr ?? 0), icon: DollarSign, trend: stats?.trends?.revenue, color: 'emerald', isFormatted: true },
-      { label: 'ARR', value: format(stats?.arr ?? 0), icon: TrendingUp, trend: null, color: 'teal', isFormatted: true },
-      { label: 'Churn Rate', value: `${stats?.avgChurnRate ?? 0}%`, icon: TrendingDown, trend: null, color: stats?.avgChurnRate && stats.avgChurnRate > 5 ? 'red' : 'emerald', isFormatted: true },
-    ];
+    const trialCount = tenants.filter((t) => t.planStatus === 'trial').length;
+    const suspendedCount = tenants.filter((t) => t.planStatus === 'suspended').length;
+
+    if (loading) return (
+      <div className="space-y-6">
+        <KPISkeleton count={4} />
+        <Skeleton className="h-64 rounded-lg" />
+      </div>
+    );
 
     return (
       <div className="space-y-6">
-        {/* KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-          {kpiCards.map((card) => {
-            const Icon = card.icon;
-            const colorMap: Record<string, string> = {
-              emerald: 'bg-emerald-500/10 text-emerald-400',
-              sky: 'bg-sky-500/10 text-sky-400',
-              teal: 'bg-teal-500/10 text-teal-400',
-              red: 'bg-red-500/10 text-red-400',
-            };
-            return (
-              <Card key={card.label} className="bg-slate-900 border-slate-800 hover:border-slate-700 transition-colors">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className={cn('size-10 rounded-lg flex items-center justify-center shrink-0', colorMap[card.color])}>
-                      <Icon className="size-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs text-slate-400 truncate">{card.label}</p>
-                      <div className="flex items-baseline gap-2">
-                        <p className="text-xl font-bold text-white">{card.value}</p>
-                        {card.trend !== null && card.trend !== undefined && (
-                          <span className={cn(
-                            'inline-flex items-center text-[10px] font-medium',
-                            card.trend >= 0 ? 'text-emerald-400' : 'text-red-400',
-                          )}>
-                            {card.trend >= 0 ? <TrendingUp className="size-3 mr-0.5" /> : <TrendingDown className="size-3 mr-0.5" />}
-                            {Math.abs(card.trend)}%
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+        {/* Row 1: 4 KPI cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <KpiCard
+            label="Total Tenants"
+            value={stats?.totalTenants ?? tenants.length}
+            icon={Building2}
+            trend={stats?.trends?.tenants}
+            color="emerald"
+            sub={`${stats?.activeTenants ?? tenants.filter(t => t.planStatus === 'active').length} active`}
+          />
+          <KpiCard
+            label="Active Users"
+            value={stats?.activeUsers ?? stats?.totalUsers ?? users.length}
+            icon={Users}
+            trend={stats?.trends?.users}
+            color="sky"
+            sub={`${stats?.totalUsers ?? users.length} total`}
+          />
+          <KpiCard
+            label="Monthly Revenue"
+            value={format(stats?.mrr ?? 0)}
+            icon={DollarSign}
+            trend={stats?.trends?.revenue}
+            color="emerald"
+            sub={`ARR ${format(stats?.arr ?? 0)}`}
+          />
+          <KpiCard
+            label="Platform Health"
+            value={`${healthScore}%`}
+            icon={ShieldCheck}
+            color={healthScore >= 80 ? 'emerald' : healthScore >= 60 ? 'amber' : 'red'}
+            sub={`${suspendedCount} suspended · ${trialCount} trial`}
+          />
         </div>
 
+        {/* Row 2: Revenue & Tenant Growth chart (2/3) + Platform Health (1/3) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Tenant Growth Chart */}
-          <Card className="bg-slate-900 border-slate-800 lg:col-span-2">
+          <Card className="card-shadow lg:col-span-2">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-white">Tenant Growth</CardTitle>
-              <CardDescription className="text-xs text-slate-400">New tenants per month</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <LineChart className="size-4 text-primary" />
+                    Growth & Revenue
+                  </CardTitle>
+                  <CardDescription className="text-xs text-muted-foreground">New tenants and MRR by month</CardDescription>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="flex items-end gap-2 h-40">
-                {tenantGrowthData.map((d) => (
-                  <div key={d.month} className="flex-1 flex flex-col items-center gap-1">
-                    <span className="text-[10px] text-slate-400">{d.count}</span>
-                    <div
-                      className="w-full bg-emerald-500/20 rounded-t-md transition-all hover:bg-emerald-500/30 min-h-[4px]"
-                      style={{ height: `${Math.max((d.count / maxGrowth) * 120, 4)}px` }}
-                    />
-                    <span className="text-[10px] text-slate-500">{d.month}</span>
-                  </div>
-                ))}
-              </div>
+              <ResponsiveContainer width="100%" height={240}>
+                <AreaChart data={growthChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorTenants" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="oklch(0.696 0.17 162.48)" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="oklch(0.696 0.17 162.48)" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="oklch(0.6 0.118 184.704)" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="oklch(0.6 0.118 184.704)" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.928 0.005 256)" strokeOpacity={0.5} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'oklch(0.55 0.015 256)' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: 'oklch(0.55 0.015 256)' }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'oklch(1 0 0)',
+                      border: '1px solid oklch(0.928 0.005 256)',
+                      borderRadius: '0.5rem',
+                      fontSize: '12px',
+                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                    }}
+                  />
+                  <Area type="monotone" dataKey="tenants" stroke="oklch(0.696 0.17 162.48)" strokeWidth={2} fill="url(#colorTenants)" name="New Tenants" />
+                  <Area type="monotone" dataKey="revenue" stroke="oklch(0.6 0.118 184.704)" strokeWidth={2} fill="url(#colorRevenue)" name="MRR Added" />
+                </AreaChart>
+              </ResponsiveContainer>
             </CardContent>
           </Card>
 
-          {/* Recent Signups */}
-          <Card className="bg-slate-900 border-slate-800">
+          {/* Platform Health panel */}
+          <Card className="card-shadow">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-white">Recent Signups</CardTitle>
+              <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Activity className="size-4 text-primary" />
+                Platform Health
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-3 max-h-48 overflow-y-auto">
-                {recentSignups.length === 0 ? (
-                  <p className="text-sm text-slate-500 text-center py-4">No tenants yet</p>
-                ) : recentSignups.map((t) => (
-                  <div key={t.id} className="flex items-center gap-3">
-                    <div className="size-8 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
-                      <Building2 className="size-3.5 text-emerald-400" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-white truncate">{t.name}</p>
-                      <p className="text-[10px] text-slate-400">{formatDate(t.createdAt)}</p>
-                    </div>
-                    <Badge variant="outline" className={cn('text-[10px] capitalize', getPlanBadge(t.plan))}>
-                      {t.plan}
+            <CardContent className="space-y-4">
+              {/* Health score gauge */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs text-muted-foreground">Health Score</span>
+                  <span className={cn(
+                    'text-sm font-bold',
+                    healthScore >= 80 ? 'text-emerald-600 dark:text-emerald-400' :
+                    healthScore >= 60 ? 'text-amber-600 dark:text-amber-400' :
+                    'text-red-600 dark:text-red-400'
+                  )}>{healthScore}%</span>
+                </div>
+                <Progress value={healthScore} className="h-2" />
+              </div>
+
+              {/* Mini stats */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-lg bg-muted/50 p-2.5">
+                  <p className="text-[10px] text-muted-foreground">Trial</p>
+                  <p className="text-lg font-bold text-amber-600 dark:text-amber-400">{trialCount}</p>
+                </div>
+                <div className="rounded-lg bg-muted/50 p-2.5">
+                  <p className="text-[10px] text-muted-foreground">Suspended</p>
+                  <p className="text-lg font-bold text-red-600 dark:text-red-400">{suspendedCount}</p>
+                </div>
+              </div>
+
+              {/* Storage status */}
+              {storageStatus && (
+                <div className="rounded-lg border border-border p-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-muted-foreground">File Storage</span>
+                    <Badge variant="outline" className={cn(
+                      'text-[10px] capitalize',
+                      storageStatus.activeProvider === 's3'
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                        : storageStatus.activeProvider === 'supabase'
+                        ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20'
+                        : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                    )}>
+                      {storageStatus.activeProvider}
                     </Badge>
                   </div>
+                </div>
+              )}
+
+              {/* Alerts */}
+              <div className="space-y-1.5">
+                {alerts.slice(0, 3).map((alert, i) => (
+                  <div key={i} className={cn(
+                    'flex items-start gap-2 p-2 rounded-md text-xs',
+                    alert.type === 'error' ? 'bg-red-500/5 text-red-600 dark:text-red-400' :
+                    alert.type === 'warning' ? 'bg-amber-500/5 text-amber-600 dark:text-amber-400' :
+                    'bg-muted text-muted-foreground'
+                  )}>
+                    {alert.type === 'error' ? <ShieldAlert className="size-3.5 shrink-0 mt-0.5" /> :
+                     alert.type === 'warning' ? <AlertTriangle className="size-3.5 shrink-0 mt-0.5" /> :
+                     <CheckCircle2 className="size-3.5 shrink-0 mt-0.5" />}
+                    <span className="line-clamp-2">{alert.message}</span>
+                  </div>
                 ))}
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Credits Overview */}
-        <Card className="bg-slate-900 border-slate-800">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Wallet className="size-4 text-emerald-400" />
-                <CardTitle className="text-sm font-medium text-white">Trial Credits Overview</CardTitle>
+        {/* Row 3: Recent Signups (1/2) + Quick Actions (1/2) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card className="card-shadow">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <Building2 className="size-4 text-primary" />
+                  Recent Signups
+                </CardTitle>
+                <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground" onClick={() => setActiveTab('tenants')}>
+                  View all <ChevronRight className="size-3 ml-0.5" />
+                </Button>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => fetchAllCredits()}
-                disabled={creditsLoading}
-                className="h-7 text-xs text-slate-400 hover:text-white"
-              >
-                {creditsLoading ? <Loader2 className="size-3 mr-1 animate-spin" /> : <RefreshCw className="size-3 mr-1" />} Refresh
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {creditsData.length === 0 ? (
-              <div className="flex items-center justify-center py-8 text-slate-500">
-                <Loader2 className="size-4 mr-2 animate-spin" /> Loading credit data...
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-                  <div className="size-9 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
-                    <Clock className="size-4 text-amber-400" />
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-slate-400">Trial Tenants</p>
-                    <p className="text-lg font-bold text-amber-400">{creditsData.filter((c) => c.plan === 'trial').length}</p>
-                  </div>
+            </CardHeader>
+            <CardContent>
+              {recentSignups.length === 0 ? (
+                <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+                  No tenants yet
                 </div>
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-sky-500/5 border border-sky-500/20">
-                  <div className="size-9 rounded-full bg-sky-500/10 flex items-center justify-center shrink-0">
-                    <BarChart3 className="size-4 text-sky-400" />
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-slate-400">Avg Credits Used</p>
-                    <p className="text-lg font-bold text-sky-400">
-                      {(() => {
-                        const trial = creditsData.filter((c) => c.plan === 'trial');
-                        return trial.length > 0 ? (trial.reduce((s, c) => s + c.trialWhatsappUsed, 0) / trial.length).toFixed(1) : '0';
-                      })()}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-red-500/5 border border-red-500/20">
-                  <div className="size-9 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
-                    <AlertTriangle className="size-4 text-red-400" />
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-slate-400">Exhausted Credits</p>
-                    <p className="text-lg font-bold text-red-400">
-                      {creditsData.filter((c) => c.plan === 'trial' && c.trialWhatsappUsed >= c.trialWhatsappCredits).length}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Platform Alerts */}
-        <Card className="bg-slate-900 border-slate-800">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-white">Platform Alerts</CardTitle>
-              <Button variant="ghost" size="sm" onClick={handleRefresh} className="h-7 text-xs text-slate-400 hover:text-white">
-                <RefreshCw className="size-3 mr-1" /> Refresh
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {alerts.map((alert, i) => (
-                <div key={i} className={cn(
-                  'flex items-center gap-3 p-3 rounded-lg border',
-                  alert.type === 'error' ? 'bg-red-500/5 border-red-500/20' :
-                  alert.type === 'warning' ? 'bg-amber-500/5 border-amber-500/20' :
-                  'bg-sky-500/5 border-sky-500/20',
-                )}>
-                  {alert.type === 'error' ? <ShieldAlert className="size-4 text-red-400 shrink-0" /> :
-                   alert.type === 'warning' ? <AlertTriangle className="size-4 text-amber-400 shrink-0" /> :
-                   <CheckCircle2 className="size-4 text-sky-400 shrink-0" />}
-                  <span className="text-sm text-slate-300">{alert.message}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* File Storage */}
-        <Card className="bg-slate-900 border-slate-800">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-sm font-medium text-white">File Storage</CardTitle>
-                <CardDescription className="text-xs text-slate-400">Image & file upload storage provider</CardDescription>
-              </div>
-              {storageStatus ? (
-                <Badge className={storageStatus.activeProvider === 's3' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : storageStatus.activeProvider === 'supabase' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-amber-500/20 text-amber-400 border-amber-500/30'}>
-                  {storageStatus.activeProvider === 's3' ? 'AWS S3' : storageStatus.activeProvider === 'supabase' ? 'Supabase' : 'Local'}
-                </Badge>
               ) : (
-                <Badge variant="outline" className="text-slate-500">Checking...</Badge>
+                <div className="space-y-2">
+                  {recentSignups.map((t) => (
+                    <div key={t.id} className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 transition-colors">
+                      <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                        <Building2 className="size-4 text-primary" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-foreground truncate">{t.name}</p>
+                        <p className="text-[11px] text-muted-foreground">{timeAgo(t.createdAt)}</p>
+                      </div>
+                      <Badge variant="outline" className={cn('text-[10px] capitalize', getPlanBadgeClasses(t.plan))}>
+                        {t.plan}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
               )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {storageStatus?.activeProvider === 's3' ? (
-              <div className="space-y-3">
-                <div className="flex items-center gap-4 p-4 rounded-lg bg-emerald-500/5 border border-emerald-500/20">
-                  <div className="flex items-center justify-center size-12 rounded-full bg-emerald-500/10">
-                    <Database className="size-6 text-emerald-400" />
+            </CardContent>
+          </Card>
+
+          <Card className="card-shadow">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Zap className="size-4 text-primary" />
+                Quick Actions
+              </CardTitle>
+              <CardDescription className="text-xs text-muted-foreground">Jump to common admin tasks</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setActiveTab('tenants')}
+                  className="flex flex-col items-start gap-2 p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors text-left"
+                >
+                  <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                    <Plus className="size-4 text-primary" />
                   </div>
                   <div>
-                    <p className="font-medium text-sm text-white">AWS S3 Bucket</p>
-                    <p className="text-xs text-slate-400">
-                      {storageStatus.providers.s3.bucket} ({storageStatus.providers.s3.region})
-                    </p>
-                    <p className="text-xs mt-0.5 text-emerald-400">
-                      {storageStatus.bucketSetup?.ok ? '✓ Bucket ready — accepting uploads' : storageStatus.bucketSetup?.message || 'Checking...'}
-                    </p>
+                    <p className="text-sm font-medium text-foreground">Add Tenant</p>
+                    <p className="text-[11px] text-muted-foreground">Create new workspace</p>
                   </div>
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="p-2 rounded-lg bg-slate-800/50">
-                    <p className="text-[10px] text-slate-500">S3</p>
-                    <p className="text-xs font-semibold text-emerald-400">Active</p>
+                </button>
+                <button
+                  onClick={() => setActiveTab('credits')}
+                  className="flex flex-col items-start gap-2 p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors text-left"
+                >
+                  <div className="size-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                    <Wallet className="size-4 text-amber-600 dark:text-amber-400" />
                   </div>
-                  <div className="p-2 rounded-lg bg-slate-800/50">
-                    <p className="text-[10px] text-slate-500">Supabase</p>
-                    <p className="text-xs font-semibold text-slate-400">{storageStatus.providers.supabase.configured ? 'Available' : 'Not Set'}</p>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Grant Credits</p>
+                    <p className="text-[11px] text-muted-foreground">Manage WhatsApp credits</p>
                   </div>
-                  <div className="p-2 rounded-lg bg-slate-800/50">
-                    <p className="text-[10px] text-slate-500">Local</p>
-                    <p className="text-xs font-semibold text-slate-500">Fallback</p>
+                </button>
+                <button
+                  onClick={() => setActiveTab('modules')}
+                  className="flex flex-col items-start gap-2 p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors text-left"
+                >
+                  <div className="size-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
+                    <Flag className="size-4 text-violet-600 dark:text-violet-400" />
                   </div>
-                </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Toggle Features</p>
+                    <p className="text-[11px] text-muted-foreground">Enable/disable modules</p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => setActiveTab('audit-logs')}
+                  className="flex flex-col items-start gap-2 p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors text-left"
+                >
+                  <div className="size-8 rounded-lg bg-sky-500/10 flex items-center justify-center">
+                    <FileText className="size-4 text-sky-600 dark:text-sky-400" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">View Audit Log</p>
+                    <p className="text-[11px] text-muted-foreground">Track platform activity</p>
+                  </div>
+                </button>
               </div>
-            ) : storageStatus?.activeProvider === 'supabase' ? (
-              <div className="flex items-center gap-4 p-4 rounded-lg bg-blue-500/5 border border-blue-500/20">
-                <div className="flex items-center justify-center size-12 rounded-full bg-blue-500/10">
-                  <Database className="size-6 text-blue-400" />
-                </div>
-                <div>
-                  <p className="font-medium text-sm text-white">Supabase Storage</p>
-                  <p className="text-xs text-slate-400">Files stored in Supabase buckets</p>
-                  <p className="text-xs mt-0.5 text-blue-400">Active — set AWS_S3_BUCKET in .env to upgrade to S3</p>
-                </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Row 4: Churn / extra metrics */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <Card className="card-shadow">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="size-10 rounded-lg bg-teal-500/10 flex items-center justify-center shrink-0">
+                <TrendingUp className="size-5 text-teal-600 dark:text-teal-400" />
               </div>
-            ) : (
-              <div className="flex items-center gap-4 p-4 rounded-lg bg-amber-500/5 border border-amber-500/20">
-                <div className="flex items-center justify-center size-12 rounded-full bg-amber-500/10">
-                  <HardDrive className="size-6 text-amber-400" />
-                </div>
-                <div>
-                  <p className="font-medium text-sm text-white">Local Filesystem</p>
-                  <p className="text-xs text-amber-400">Files stored on server disk — not recommended for production</p>
-                  <p className="text-xs text-slate-500 mt-0.5">Set AWS S3 credentials in .env for cloud storage</p>
-                </div>
+              <div>
+                <p className="text-xs text-muted-foreground">ARR</p>
+                <p className="text-xl font-bold text-foreground">{format(stats?.arr ?? 0)}</p>
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+          <Card className="card-shadow">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="size-10 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
+                <TrendingDown className="size-5 text-red-600 dark:text-red-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Churn Rate</p>
+                <p className="text-xl font-bold text-foreground">{stats?.avgChurnRate ?? 0}%</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="card-shadow">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="size-10 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+                <CreditCard className="size-5 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Active Subscriptions</p>
+                <p className="text-xl font-bold text-foreground">{stats?.activeSubscriptions ?? subscriptions.length}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }
@@ -906,9 +1086,7 @@ export function SuperAdminView() {
       }
       setSaving(true);
       try {
-        const endpoint = suspendDialog.action === 'delete'
-          ? `/api/superadmin/tenants/${suspendDialog.tenant.id}`
-          : `/api/superadmin/tenants/${suspendDialog.tenant.id}`;
+        const endpoint = `/api/superadmin/tenants/${suspendDialog.tenant.id}`;
         const method = suspendDialog.action === 'delete' ? 'DELETE' : 'PATCH';
         const body = suspendDialog.action === 'suspend'
           ? { status: 'suspended', reason: suspendReason.trim() }
@@ -991,14 +1169,9 @@ export function SuperAdminView() {
     const handleCreditEdit = (tenant: Tenant) => {
       const existing = creditsData.find((c) => c.tenantId === tenant.id);
       const creditInfo: CreditInfo = existing ?? {
-        tenantId: tenant.id,
-        tenantName: tenant.name,
-        plan: tenant.plan,
-        trialWhatsappCredits: 10,
-        trialWhatsappUsed: 0,
-        platformWhatsappEnabled: true,
-        ownWhatsappConnected: false,
-        ownEmailProviderConnected: false,
+        tenantId: tenant.id, tenantName: tenant.name, plan: tenant.plan,
+        trialWhatsappCredits: 10, trialWhatsappUsed: 0,
+        platformWhatsappEnabled: true, ownWhatsappConnected: false, ownEmailProviderConnected: false,
       };
       setCreditEditTenant(creditInfo);
       setCreditEditForm({
@@ -1016,10 +1189,7 @@ export function SuperAdminView() {
         const res = await fetch('/api/admin/credits', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tenantId: creditEditTenant.tenantId,
-            ...creditEditForm,
-          }),
+          body: JSON.stringify({ tenantId: creditEditTenant.tenantId, ...creditEditForm }),
         });
         if (res.ok) {
           toast.success('Credit settings updated');
@@ -1041,20 +1211,19 @@ export function SuperAdminView() {
         {/* Search, Filters, Create */}
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
-              placeholder="Search tenants..."
-              className="pl-9 bg-slate-900 border-slate-800 text-white placeholder:text-slate-500"
+              placeholder="Search tenants by name or email..."
+              className="pl-9"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <Select value={planFilter} onValueChange={setPlanFilter}>
-            <SelectTrigger className="w-full sm:w-[130px] bg-slate-900 border-slate-800 text-white">
-              <SelectValue placeholder="Plan" />
-            </SelectTrigger>
+            <SelectTrigger className="w-full sm:w-[140px]"><SelectValue placeholder="Plan" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Plans</SelectItem>
+              <SelectItem value="trial">Trial</SelectItem>
               <SelectItem value="starter">Starter</SelectItem>
               <SelectItem value="growth">Growth</SelectItem>
               <SelectItem value="pro">Pro</SelectItem>
@@ -1062,9 +1231,7 @@ export function SuperAdminView() {
             </SelectContent>
           </Select>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-[130px] bg-slate-900 border-slate-800 text-white">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
+            <SelectTrigger className="w-full sm:w-[140px]"><SelectValue placeholder="Status" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="active">Active</SelectItem>
@@ -1072,33 +1239,33 @@ export function SuperAdminView() {
               <SelectItem value="suspended">Suspended</SelectItem>
             </SelectContent>
           </Select>
-          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => setCreateDialog(true)}>
+          <Button onClick={() => setCreateDialog(true)} className="shrink-0">
             <Plus className="size-4 mr-1.5" /> New Tenant
           </Button>
         </div>
 
         {/* Table */}
         {tenantsLoading ? <TableSkeleton /> : filteredTenants.length === 0 ? (
-          <Card className="bg-slate-900 border-slate-800 border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-16 text-slate-500">
-              <Building2 className="size-14 mb-4 opacity-30" />
-              <p className="text-lg font-medium">No tenants found</p>
-            </CardContent>
-          </Card>
+          <EmptyState
+            icon={Building2}
+            title="No tenants found"
+            subtitle="Try adjusting your filters, or create a new tenant to get started."
+            action={<Button onClick={() => setCreateDialog(true)}><Plus className="size-4 mr-1.5" /> New Tenant</Button>}
+          />
         ) : (
-          <Card className="bg-slate-900 border-slate-800">
-            <ScrollArea className="max-h-96">
+          <Card className="card-shadow">
+            <ScrollArea className="max-h-[calc(100vh-320px)]">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-slate-800 hover:bg-transparent">
-                    <TableHead className="text-slate-400">Name</TableHead>
-                    <TableHead className="text-slate-400">Plan</TableHead>
-                    <TableHead className="text-slate-400">Status</TableHead>
-                    <TableHead className="text-slate-400 text-center">WA Credits</TableHead>
-                    <TableHead className="text-slate-400 text-center">Email</TableHead>
-                    <TableHead className="text-slate-400 text-right">MRR</TableHead>
-                    <TableHead className="text-slate-400 text-center">Users</TableHead>
-                    <TableHead className="text-slate-400 text-right">Actions</TableHead>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>Name</TableHead>
+                    <TableHead>Plan</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-center">WA Credits</TableHead>
+                    <TableHead className="text-center">Email</TableHead>
+                    <TableHead className="text-right">MRR</TableHead>
+                    <TableHead className="text-center">Users</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1106,67 +1273,72 @@ export function SuperAdminView() {
                     const tenantCredit = creditsData.find((c) => c.tenantId === tenant.id);
                     const isPaidWithOwnWhatsApp = tenantCredit && tenantCredit.plan !== 'trial' && tenantCredit.ownWhatsappConnected;
                     return (
-                      <TableRow key={tenant.id} className="border-slate-800 hover:bg-slate-800/50">
-                        <TableCell className="font-medium text-white">{tenant.name}</TableCell>
+                      <TableRow key={tenant.id}>
+                        <TableCell className="font-medium text-foreground">
+                          <div className="flex items-center gap-2">
+                            <div className="size-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                              <Building2 className="size-3.5 text-primary" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate">{tenant.name}</p>
+                              <p className="text-[11px] text-muted-foreground truncate">{tenant.email}</p>
+                            </div>
+                          </div>
+                        </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadge(tenant.plan))}>
+                          <Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadgeClasses(tenant.plan))}>
                             {tenant.plan}
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={cn('capitalize text-[10px]', getStatusBadge(tenant.suspendedAt ? 'suspended' : tenant.planStatus))}>
-                            {tenant.suspendedAt ? 'suspended' : tenant.planStatus}
+                          <Badge variant="outline" className={cn('capitalize text-[10px]', getStatusBadgeClasses(tenant.planStatus))}>
+                            {tenant.planStatus}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-center">
-                          {!tenantCredit ? (
-                            <span className="text-[10px] text-slate-500">—</span>
-                          ) : isPaidWithOwnWhatsApp ? (
-                            <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px]">Unlimited</Badge>
+                          {isPaidWithOwnWhatsApp ? (
+                            <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px]">Unlimited</Badge>
+                          ) : tenantCredit ? (
+                            <span className="text-xs text-muted-foreground">{tenantCredit.trialWhatsappUsed}/{tenantCredit.trialWhatsappCredits}</span>
                           ) : (
-                            <span className={cn(
-                              'text-xs',
-                              tenantCredit.trialWhatsappUsed >= tenantCredit.trialWhatsappCredits ? 'text-red-400 font-medium' : 'text-slate-400',
-                            )}>
-                              {tenantCredit.trialWhatsappUsed}/{tenantCredit.trialWhatsappCredits}
-                            </span>
+                            <span className="text-xs text-muted-foreground">—</span>
                           )}
                         </TableCell>
                         <TableCell className="text-center">
                           {tenantCredit?.ownEmailProviderConnected ? (
-                            <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px]">Own</Badge>
+                            <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px]">Own</Badge>
                           ) : (
-                            <Badge variant="outline" className="text-slate-500 text-[10px] border-slate-700">Platform</Badge>
+                            <Badge variant="outline" className="text-[10px] text-muted-foreground">Platform</Badge>
                           )}
                         </TableCell>
-                        <TableCell className="text-right text-slate-300">{format(tenant.mrr)}</TableCell>
-                        <TableCell className="text-center text-slate-300">{tenant.userCount}</TableCell>
+                        <TableCell className="text-right text-foreground">{format(tenant.mrr)}</TableCell>
+                        <TableCell className="text-center text-muted-foreground">{tenant.userCount}</TableCell>
                         <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button variant="ghost" size="sm" className="h-7 px-2 text-slate-400 hover:text-emerald-400" onClick={() => handleCreditEdit(tenant)} title="Edit Credits">
-                              <Wallet className="size-3.5" />
-                            </Button>
-                            <Button variant="ghost" size="sm" className="h-7 px-2 text-slate-400 hover:text-white" onClick={() => setViewTenant(tenant)}>
+                          <div className="flex items-center justify-end gap-0.5">
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setViewTenant(tenant)} title="View">
                               <Eye className="size-3.5" />
                             </Button>
-                            <Button variant="ghost" size="sm" className="h-7 px-2 text-slate-400 hover:text-emerald-400" onClick={() => { setEditPlanDialog(tenant); setNewPlan(tenant.plan); }}>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => { setEditPlanDialog(tenant); setNewPlan(tenant.plan); }} title="Edit Plan">
                               <Edit3 className="size-3.5" />
                             </Button>
-                            {tenant.suspendedAt || tenant.planStatus === 'suspended' ? (
-                              <Button variant="ghost" size="sm" className="h-7 px-2 text-emerald-400 hover:text-emerald-300" onClick={() => { setSuspendReason(''); setSuspendDialog({ tenant, action: 'reactivate' }); }}>
-                                <Play className="size-3.5" />
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleCreditEdit(tenant)} title="Credits">
+                              <Wallet className="size-3.5" />
+                            </Button>
+                            {tenant.planStatus === 'suspended' ? (
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700" onClick={() => setSuspendDialog({ tenant, action: 'reactivate' })} title="Reactivate">
+                                <PlayCircle className="size-3.5" />
                               </Button>
                             ) : (
-                              <Button variant="ghost" size="sm" className="h-7 px-2 text-red-400 hover:text-red-300" onClick={() => { setSuspendReason(''); setSuspendDialog({ tenant, action: 'suspend' }); }}>
-                                <Ban className="size-3.5" />
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700" onClick={() => { setSuspendReason(''); setSuspendDialog({ tenant, action: 'suspend' }); }} title="Suspend">
+                                <Pause className="size-3.5" />
                               </Button>
                             )}
-                            <Button variant="ghost" size="sm" className="h-7 px-2 text-red-400 hover:text-red-300" onClick={() => setSuspendDialog({ tenant, action: 'delete' })}>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 hover:text-red-700" onClick={() => setSuspendDialog({ tenant, action: 'delete' })} title="Delete">
                               <Trash2 className="size-3.5" />
                             </Button>
                           </div>
-                      </TableCell>
-                    </TableRow>
+                        </TableCell>
+                      </TableRow>
                     );
                   })}
                 </TableBody>
@@ -1175,111 +1347,104 @@ export function SuperAdminView() {
           </Card>
         )}
 
-        {/* Suspend/Reactivate/Delete Dialog */}
-        <Dialog open={!!suspendDialog} onOpenChange={(open) => { if (!open) setSuspendDialog(null); }}>
-          <DialogContent className="bg-slate-900 border-slate-800 text-white">
+        {/* View Tenant Dialog */}
+        <Dialog open={!!viewTenant} onOpenChange={(open) => { if (!open) setViewTenant(null); }}>
+          <DialogContent className="sm:max-w-lg">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                {suspendDialog?.action === 'suspend' ? <><Ban className="size-5 text-red-400" /> Suspend Tenant</> :
-                 suspendDialog?.action === 'delete' ? <><Trash2 className="size-5 text-red-400" /> Delete Tenant</> :
-                 <><Play className="size-5 text-emerald-400" /> Reactivate Tenant</>}
+                <Building2 className="size-5 text-primary" /> {viewTenant?.name}
               </DialogTitle>
-              <DialogDescription className="text-slate-400">
-                {suspendDialog?.action === 'suspend' ? `Suspend "${suspendDialog?.tenant.name}"? They will lose access.` :
-                 suspendDialog?.action === 'delete' ? `Delete "${suspendDialog?.tenant.name}"? This is a soft delete.` :
-                 `Reactivate "${suspendDialog?.tenant.name}"? They will regain access.`}
+              <DialogDescription>Tenant details</DialogDescription>
+            </DialogHeader>
+            {viewTenant && (
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><Label className="text-muted-foreground text-xs">Email</Label><p className="text-foreground">{viewTenant.email || '—'}</p></div>
+                <div><Label className="text-muted-foreground text-xs">Phone</Label><p className="text-foreground">{viewTenant.phone || '—'}</p></div>
+                <div><Label className="text-muted-foreground text-xs">Plan</Label><Badge variant="outline" className={cn('capitalize', getPlanBadgeClasses(viewTenant.plan))}>{viewTenant.plan}</Badge></div>
+                <div><Label className="text-muted-foreground text-xs">Status</Label><Badge variant="outline" className={cn('capitalize', getStatusBadgeClasses(viewTenant.planStatus))}>{viewTenant.planStatus}</Badge></div>
+                <div><Label className="text-muted-foreground text-xs">Industry</Label><p className="text-foreground">{viewTenant.industry || '—'}</p></div>
+                <div><Label className="text-muted-foreground text-xs">Country</Label><p className="text-foreground">{viewTenant.country || '—'}</p></div>
+                <div><Label className="text-muted-foreground text-xs">Currency</Label><p className="text-foreground">{viewTenant.currency || '—'}</p></div>
+                <div><Label className="text-muted-foreground text-xs">Users</Label><p className="text-foreground">{viewTenant.userCount}</p></div>
+                <div><Label className="text-muted-foreground text-xs">MRR</Label><p className="text-foreground">{format(viewTenant.mrr)}</p></div>
+                <div><Label className="text-muted-foreground text-xs">ARR</Label><p className="text-foreground">{format(viewTenant.arr)}</p></div>
+                <div><Label className="text-muted-foreground text-xs">Created</Label><p className="text-foreground">{formatDate(viewTenant.createdAt)}</p></div>
+                <div><Label className="text-muted-foreground text-xs">Onboarding</Label><p className="text-foreground">{viewTenant.onboardingCompleted ? 'Completed' : 'Pending'}</p></div>
+                {viewTenant.suspendedAt && (
+                  <div className="col-span-2"><Label className="text-muted-foreground text-xs">Suspended</Label><p className="text-red-600 dark:text-red-400 text-xs">{formatDateTime(viewTenant.suspendedAt)} — {viewTenant.suspensionReason || 'No reason'}</p></div>
+                )}
+              </div>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setViewTenant(null)}>Close</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Suspend/Reactivate/Delete Dialog */}
+        <Dialog open={!!suspendDialog} onOpenChange={(open) => { if (!open) { setSuspendDialog(null); setSuspendReason(''); } }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                {suspendDialog?.action === 'suspend' ? <Pause className="size-5 text-amber-500" /> :
+                 suspendDialog?.action === 'delete' ? <Trash2 className="size-5 text-red-500" /> :
+                 <PlayCircle className="size-5 text-emerald-500" />}
+                {suspendDialog?.action === 'suspend' ? 'Suspend Tenant' : suspendDialog?.action === 'delete' ? 'Delete Tenant' : 'Reactivate Tenant'}
+              </DialogTitle>
+              <DialogDescription>
+                {suspendDialog?.action === 'delete'
+                  ? `This will permanently delete "${suspendDialog?.tenant.name}" and all its data. This cannot be undone.`
+                  : suspendDialog?.action === 'suspend'
+                  ? `This will block access for "${suspendDialog?.tenant.name}".`
+                  : `This will restore access for "${suspendDialog?.tenant.name}".`}
               </DialogDescription>
             </DialogHeader>
             {suspendDialog?.action === 'suspend' && (
               <div className="space-y-2">
-                <Label className="text-slate-300">Reason for suspension *</Label>
+                <Label>Reason for suspension</Label>
                 <Textarea
-                  placeholder="Enter reason..."
+                  placeholder="e.g. Payment failure, policy violation..."
                   value={suspendReason}
                   onChange={(e) => setSuspendReason(e.target.value)}
-                  className="bg-slate-800 border-slate-700 text-white"
                   rows={3}
                 />
               </div>
             )}
             <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setSuspendDialog(null)} className="border-slate-700 text-slate-300">Cancel</Button>
-              {suspendDialog?.action === 'suspend' ? (
-                <Button variant="destructive" onClick={handleAction} disabled={!suspendReason.trim() || saving}>
-                  {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Ban className="size-4 mr-1.5" />} Suspend
-                </Button>
-              ) : suspendDialog?.action === 'delete' ? (
-                <Button variant="destructive" onClick={handleAction} disabled={saving}>
-                  {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Trash2 className="size-4 mr-1.5" />} Delete
-                </Button>
-              ) : (
-                <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleAction} disabled={saving}>
-                  {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Play className="size-4 mr-1.5" />} Reactivate
-                </Button>
-              )}
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* View Tenant Details Dialog */}
-        <Dialog open={!!viewTenant} onOpenChange={(open) => { if (!open) setViewTenant(null); }}>
-          <DialogContent className="bg-slate-900 border-slate-800 text-white sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Building2 className="size-5 text-emerald-400" /> Tenant Details
-              </DialogTitle>
-            </DialogHeader>
-            {viewTenant && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div><p className="text-xs text-slate-400">Name</p><p className="font-medium">{viewTenant.name}</p></div>
-                  <div><p className="text-xs text-slate-400">Email</p><p className="font-medium">{viewTenant.email || '—'}</p></div>
-                  <div><p className="text-xs text-slate-400">Plan</p><Badge variant="outline" className={cn('capitalize text-xs', getPlanBadge(viewTenant.plan))}>{viewTenant.plan}</Badge></div>
-                  <div><p className="text-xs text-slate-400">Status</p><Badge variant="outline" className={cn('capitalize text-xs', getStatusBadge(viewTenant.suspendedAt ? 'suspended' : viewTenant.planStatus))}>{viewTenant.suspendedAt ? 'suspended' : viewTenant.planStatus}</Badge></div>
-                  <div><p className="text-xs text-slate-400">MRR</p><p className="font-medium">{format(viewTenant.mrr)}</p></div>
-                  <div><p className="text-xs text-slate-400">Users</p><p className="font-medium">{viewTenant.userCount}</p></div>
-                  <div><p className="text-xs text-slate-400">Industry</p><p className="font-medium">{viewTenant.industry || '—'}</p></div>
-                  <div><p className="text-xs text-slate-400">Created</p><p className="font-medium">{formatDate(viewTenant.createdAt)}</p></div>
-                </div>
-                {viewTenant.suspensionReason && (
-                  <div className="p-3 rounded-lg bg-red-500/5 border border-red-500/20">
-                    <p className="text-xs text-red-400 font-medium">Suspension Reason</p>
-                    <p className="text-sm text-slate-300 mt-1">{viewTenant.suspensionReason}</p>
-                  </div>
-                )}
-              </div>
-            )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setViewTenant(null)} className="border-slate-700 text-slate-300">Close</Button>
+              <Button variant="outline" onClick={() => { setSuspendDialog(null); setSuspendReason(''); }}>Cancel</Button>
+              <Button
+                variant={suspendDialog?.action === 'reactivate' ? 'default' : 'destructive'}
+                onClick={handleAction}
+                disabled={saving || (suspendDialog?.action === 'suspend' && !suspendReason.trim())}
+              >
+                {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : null}
+                {suspendDialog?.action === 'suspend' ? 'Suspend' : suspendDialog?.action === 'delete' ? 'Delete' : 'Reactivate'}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
         {/* Edit Plan Dialog */}
         <Dialog open={!!editPlanDialog} onOpenChange={(open) => { if (!open) setEditPlanDialog(null); }}>
-          <DialogContent className="bg-slate-900 border-slate-800 text-white sm:max-w-md">
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Edit3 className="size-5 text-emerald-400" /> Change Plan
-              </DialogTitle>
-              <DialogDescription className="text-slate-400">Change plan for {editPlanDialog?.name}</DialogDescription>
+              <DialogTitle className="flex items-center gap-2"><Edit3 className="size-5 text-primary" /> Change Plan</DialogTitle>
+              <DialogDescription>Update the plan for {editPlanDialog?.name}</DialogDescription>
             </DialogHeader>
             <Select value={newPlan} onValueChange={setNewPlan}>
-              <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
-                <SelectValue placeholder="Select plan" />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Select plan" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="trial">Trial</SelectItem>
-                <SelectItem value="starter">Starter ($29/mo)</SelectItem>
-                <SelectItem value="growth">Growth ($79/mo)</SelectItem>
-                <SelectItem value="pro">Pro ($149/mo)</SelectItem>
-                <SelectItem value="enterprise">Enterprise (Custom)</SelectItem>
+                <SelectItem value="starter">Starter</SelectItem>
+                <SelectItem value="growth">Growth</SelectItem>
+                <SelectItem value="pro">Pro</SelectItem>
+                <SelectItem value="enterprise">Enterprise</SelectItem>
               </SelectContent>
             </Select>
             <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setEditPlanDialog(null)} className="border-slate-700 text-slate-300">Cancel</Button>
-              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleEditPlan} disabled={saving || !newPlan}>
-                {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <CheckCircle2 className="size-4 mr-1.5" />} Save
+              <Button variant="outline" onClick={() => setEditPlanDialog(null)}>Cancel</Button>
+              <Button onClick={handleEditPlan} disabled={saving || !newPlan}>
+                {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : null} Update Plan
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1287,20 +1452,18 @@ export function SuperAdminView() {
 
         {/* Create Tenant Dialog */}
         <Dialog open={createDialog} onOpenChange={setCreateDialog}>
-          <DialogContent className="bg-slate-900 border-slate-800 text-white sm:max-w-md">
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Plus className="size-5 text-emerald-400" /> Create New Tenant
-              </DialogTitle>
+              <DialogTitle className="flex items-center gap-2"><Plus className="size-5 text-primary" /> Create New Tenant</DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
-              <div><Label className="text-slate-300">Company Name *</Label><Input className="bg-slate-800 border-slate-700 text-white mt-1" value={newTenantForm.name} onChange={(e) => setNewTenantForm((p) => ({ ...p, name: e.target.value }))} placeholder="Acme Corp" /></div>
-              <div><Label className="text-slate-300">Owner Email *</Label><Input className="bg-slate-800 border-slate-700 text-white mt-1" type="email" value={newTenantForm.email} onChange={(e) => setNewTenantForm((p) => ({ ...p, email: e.target.value }))} placeholder="admin@acme.com" /></div>
-              <div><Label className="text-slate-300">Owner Name</Label><Input className="bg-slate-800 border-slate-700 text-white mt-1" value={newTenantForm.ownerName} onChange={(e) => setNewTenantForm((p) => ({ ...p, ownerName: e.target.value }))} placeholder="John Doe" /></div>
-              <div><Label className="text-slate-300">Password</Label><Input className="bg-slate-800 border-slate-700 text-white mt-1" type="password" value={newTenantForm.password} onChange={(e) => setNewTenantForm((p) => ({ ...p, password: e.target.value }))} placeholder="••••••••" /></div>
-              <div><Label className="text-slate-300">Plan</Label>
+              <div><Label>Company Name *</Label><Input className="mt-1" value={newTenantForm.name} onChange={(e) => setNewTenantForm((p) => ({ ...p, name: e.target.value }))} placeholder="Acme Corp" /></div>
+              <div><Label>Owner Email *</Label><Input className="mt-1" type="email" value={newTenantForm.email} onChange={(e) => setNewTenantForm((p) => ({ ...p, email: e.target.value }))} placeholder="admin@acme.com" /></div>
+              <div><Label>Owner Name</Label><Input className="mt-1" value={newTenantForm.ownerName} onChange={(e) => setNewTenantForm((p) => ({ ...p, ownerName: e.target.value }))} placeholder="John Doe" /></div>
+              <div><Label>Password</Label><Input className="mt-1" type="password" value={newTenantForm.password} onChange={(e) => setNewTenantForm((p) => ({ ...p, password: e.target.value }))} placeholder="••••••••" /></div>
+              <div><Label>Plan</Label>
                 <Select value={newTenantForm.plan} onValueChange={(v) => setNewTenantForm((p) => ({ ...p, plan: v }))}>
-                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white mt-1"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="trial">Trial</SelectItem>
                     <SelectItem value="starter">Starter</SelectItem>
@@ -1312,8 +1475,8 @@ export function SuperAdminView() {
               </div>
             </div>
             <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setCreateDialog(false)} className="border-slate-700 text-slate-300">Cancel</Button>
-              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreateTenant} disabled={creating || !newTenantForm.name.trim() || !newTenantForm.email.trim()}>
+              <Button variant="outline" onClick={() => setCreateDialog(false)}>Cancel</Button>
+              <Button onClick={handleCreateTenant} disabled={creating || !newTenantForm.name.trim() || !newTenantForm.email.trim()}>
                 {creating ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Plus className="size-4 mr-1.5" />} Create
               </Button>
             </DialogFooter>
@@ -1322,62 +1485,47 @@ export function SuperAdminView() {
 
         {/* Credit Edit Dialog */}
         <Dialog open={!!creditEditTenant} onOpenChange={(open) => { if (!open) setCreditEditTenant(null); }}>
-          <DialogContent className="bg-slate-900 border-slate-800 text-white sm:max-w-md">
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Wallet className="size-5 text-emerald-400" /> Edit Credit Settings
-              </DialogTitle>
-              <DialogDescription className="text-slate-400">
-                Manage credits for {creditEditTenant?.tenantName}
-              </DialogDescription>
+              <DialogTitle className="flex items-center gap-2"><Wallet className="size-5 text-primary" /> Edit Credit Settings</DialogTitle>
+              <DialogDescription>Manage credits for {creditEditTenant?.tenantName}</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label className="text-slate-300">Trial WhatsApp Credits</Label>
+                <Label>Trial WhatsApp Credits</Label>
                 <Input
-                  type="number"
-                  min={0}
+                  type="number" min={0}
                   value={creditEditForm.trialWhatsappCredits}
                   onChange={(e) => setCreditEditForm((p) => ({ ...p, trialWhatsappCredits: parseInt(e.target.value) || 0 }))}
-                  className="bg-slate-800 border-slate-700 text-white"
                 />
-                <p className="text-[11px] text-slate-500">Current usage: {creditEditTenant?.trialWhatsappUsed ?? 0} credits used</p>
+                <p className="text-[11px] text-muted-foreground">Current usage: {creditEditTenant?.trialWhatsappUsed ?? 0} credits used</p>
               </div>
-              <Separator className="bg-slate-800" />
+              <Separator />
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label className="text-slate-300">Platform WhatsApp</Label>
-                  <p className="text-[11px] text-slate-500">Enable platform-provided WhatsApp</p>
+                  <Label>Platform WhatsApp</Label>
+                  <p className="text-[11px] text-muted-foreground">Enable platform-provided WhatsApp</p>
                 </div>
-                <Switch
-                  checked={creditEditForm.platformWhatsappEnabled}
-                  onCheckedChange={(checked) => setCreditEditForm((p) => ({ ...p, platformWhatsappEnabled: checked }))}
-                />
+                <Switch checked={creditEditForm.platformWhatsappEnabled} onCheckedChange={(checked) => setCreditEditForm((p) => ({ ...p, platformWhatsappEnabled: checked }))} />
               </div>
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label className="text-slate-300">Own WhatsApp Connected</Label>
-                  <p className="text-[11px] text-slate-500">Tenant has connected their own WhatsApp</p>
+                  <Label>Own WhatsApp Connected</Label>
+                  <p className="text-[11px] text-muted-foreground">Tenant has connected their own WhatsApp</p>
                 </div>
-                <Switch
-                  checked={creditEditForm.ownWhatsappConnected}
-                  onCheckedChange={(checked) => setCreditEditForm((p) => ({ ...p, ownWhatsappConnected: checked }))}
-                />
+                <Switch checked={creditEditForm.ownWhatsappConnected} onCheckedChange={(checked) => setCreditEditForm((p) => ({ ...p, ownWhatsappConnected: checked }))} />
               </div>
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label className="text-slate-300">Own Email Provider</Label>
-                  <p className="text-[11px] text-slate-500">Tenant has connected their own email provider</p>
+                  <Label>Own Email Provider</Label>
+                  <p className="text-[11px] text-muted-foreground">Tenant has connected their own email provider</p>
                 </div>
-                <Switch
-                  checked={creditEditForm.ownEmailProviderConnected}
-                  onCheckedChange={(checked) => setCreditEditForm((p) => ({ ...p, ownEmailProviderConnected: checked }))}
-                />
+                <Switch checked={creditEditForm.ownEmailProviderConnected} onCheckedChange={(checked) => setCreditEditForm((p) => ({ ...p, ownEmailProviderConnected: checked }))} />
               </div>
             </div>
             <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setCreditEditTenant(null)} className="border-slate-700 text-slate-300">Cancel</Button>
-              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleCreditSave} disabled={creditSaving}>
+              <Button variant="outline" onClick={() => setCreditEditTenant(null)}>Cancel</Button>
+              <Button onClick={handleCreditSave} disabled={creditSaving}>
                 {creditSaving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <CheckCircle2 className="size-4 mr-1.5" />} Save
               </Button>
             </DialogFooter>
@@ -1403,7 +1551,6 @@ export function SuperAdminView() {
       return subscriptions.filter((s) => s.status === statusFilter);
     }, [subscriptions, statusFilter]);
 
-    // Plan distribution
     const planDistribution = useMemo(() => {
       const dist: Record<string, number> = {};
       subscriptions.forEach((s) => { dist[s.plan] = (dist[s.plan] || 0) + 1; });
@@ -1412,6 +1559,14 @@ export function SuperAdminView() {
 
     const totalSubs = subscriptions.length;
     const maxDist = Math.max(...Object.values(planDistribution), 1);
+
+    const planChartColors: Record<string, string> = {
+      trial: 'oklch(0.7 0 0)',
+      starter: 'oklch(0.6 0.15 245)',
+      growth: 'oklch(0.696 0.17 162.48)',
+      pro: 'oklch(0.6 0.118 184.704)',
+      enterprise: 'oklch(0.55 0.2 303)',
+    };
 
     const handleAction = async () => {
       if (!actionDialog) return;
@@ -1448,59 +1603,48 @@ export function SuperAdminView() {
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
-            { label: 'Active', value: subscriptions.filter((s) => s.status === 'active').length, icon: CheckCircle2, color: 'emerald' },
-            { label: 'Trial', value: subscriptions.filter((s) => s.status === 'trial').length, icon: Clock, color: 'amber' },
-            { label: 'Paused', value: subscriptions.filter((s) => s.status === 'paused').length, icon: Pause, color: 'sky' },
-            { label: 'Cancelled', value: subscriptions.filter((s) => s.status === 'cancelled').length, icon: XCircle, color: 'red' },
-          ].map((stat) => {
-            const Icon = stat.icon;
-            const colorMap: Record<string, string> = { emerald: 'text-emerald-400', amber: 'text-amber-400', sky: 'text-sky-400', red: 'text-red-400' };
-            return (
-              <Card key={stat.label} className="bg-slate-900 border-slate-800">
-                <CardContent className="p-4 flex items-center gap-3">
-                  <Icon className={cn('size-5', colorMap[stat.color])} />
-                  <div>
-                    <p className="text-xs text-slate-400">{stat.label}</p>
-                    <p className={cn('text-xl font-bold', colorMap[stat.color])}>{stat.value}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+            { label: 'Active', value: subscriptions.filter((s) => s.status === 'active').length, icon: CheckCircle2, color: 'emerald' as const },
+            { label: 'Trial', value: subscriptions.filter((s) => s.status === 'trial').length, icon: Clock, color: 'amber' as const },
+            { label: 'Paused', value: subscriptions.filter((s) => s.status === 'paused').length, icon: Pause, color: 'sky' as const },
+            { label: 'Cancelled', value: subscriptions.filter((s) => s.status === 'cancelled').length, icon: XCircle, color: 'red' as const },
+          ].map((stat) => <KpiCard key={stat.label} label={stat.label} value={stat.value} icon={stat.icon} color={stat.color} />)}
         </div>
 
         {/* Plan Distribution + Table */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="bg-slate-900 border-slate-800">
+          <Card className="card-shadow">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-white">Plan Distribution</CardTitle>
+              <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <BarChart3 className="size-4 text-primary" />
+                Plan Distribution
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {Object.entries(planDistribution).map(([plan, count]) => (
-                  <div key={plan} className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-300 capitalize">{plan}</span>
-                      <span className="text-xs text-slate-400">{count} ({totalSubs > 0 ? Math.round((count / totalSubs) * 100) : 0}%)</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
-                      <div className="h-full rounded-full bg-emerald-500/60 transition-all" style={{ width: `${(count / maxDist) * 100}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={Object.entries(planDistribution).map(([plan, count]) => ({ plan, count }))} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.928 0.005 256)" strokeOpacity={0.5} />
+                  <XAxis dataKey="plan" tick={{ fontSize: 10, fill: 'oklch(0.55 0.015 256)' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: 'oklch(0.55 0.015 256)' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <Tooltip contentStyle={{ backgroundColor: 'oklch(1 0 0)', border: '1px solid oklch(0.928 0.005 256)', borderRadius: '0.5rem', fontSize: '12px' }} />
+                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                    {Object.entries(planDistribution).map(([plan]) => (
+                      <Cell key={plan} fill={planChartColors[plan] || 'oklch(0.696 0.17 162.48)'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             </CardContent>
           </Card>
 
-          <Card className="bg-slate-900 border-slate-800 lg:col-span-2">
+          <Card className="card-shadow lg:col-span-2">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-sm font-medium text-white">All Subscriptions</CardTitle>
-                  <CardDescription className="text-xs text-slate-400">{filteredSubs.length} found</CardDescription>
+                  <CardTitle className="text-sm font-semibold text-foreground">All Subscriptions</CardTitle>
+                  <CardDescription className="text-xs text-muted-foreground">{filteredSubs.length} found</CardDescription>
                 </div>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-[130px] bg-slate-800 border-slate-700 text-white text-xs">
+                  <SelectTrigger className="w-[130px] text-xs">
                     <Filter className="size-3 mr-1" /><SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1514,132 +1658,94 @@ export function SuperAdminView() {
               </div>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="max-h-80">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-slate-800 hover:bg-transparent">
-                      <TableHead className="text-slate-400">Tenant</TableHead>
-                      <TableHead className="text-slate-400">Plan</TableHead>
-                      <TableHead className="text-slate-400">Status</TableHead>
-                      <TableHead className="text-slate-400 text-right">Amount</TableHead>
-                      <TableHead className="text-slate-400 text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredSubs.map((sub) => (
-                      <TableRow key={sub.id} className="border-slate-800 hover:bg-slate-800/50">
-                        <TableCell className="font-medium text-white">{sub.tenantName}</TableCell>
-                        <TableCell><Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadge(sub.plan))}>{sub.plan}</Badge></TableCell>
-                        <TableCell><Badge variant="outline" className={cn('capitalize text-[10px]', getStatusBadge(sub.status))}>{sub.status}</Badge></TableCell>
-                        <TableCell className="text-right text-slate-300">{format(sub.amount)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            {sub.status === 'active' && (
-                              <Button variant="ghost" size="sm" className="h-7 px-2 text-amber-400 hover:text-amber-300" onClick={() => { setActionReason(''); setActionDialog({ sub, action: 'pause' }); }}>
-                                <Pause className="size-3.5" />
-                              </Button>
-                            )}
-                            {sub.status === 'paused' && (
-                              <Button variant="ghost" size="sm" className="h-7 px-2 text-emerald-400 hover:text-emerald-300" onClick={() => setActionDialog({ sub, action: 'resume' })}>
-                                <PlayCircle className="size-3.5" />
-                              </Button>
-                            )}
-                            {(sub.status === 'active' || sub.status === 'paused') && (
-                              <>
-                                <Button variant="ghost" size="sm" className="h-7 px-2 text-sky-400 hover:text-sky-300" onClick={() => { setNewPlan(sub.plan); setActionDialog({ sub, action: 'change_plan' }); }}>
-                                  <Edit3 className="size-3.5" />
+              {subsLoading ? <TableSkeleton /> : filteredSubs.length === 0 ? (
+                <EmptyState icon={CreditCard} title="No subscriptions found" />
+              ) : (
+                <ScrollArea className="max-h-80">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead>Tenant</TableHead>
+                        <TableHead>Plan</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Amount</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredSubs.map((sub) => (
+                        <TableRow key={sub.id}>
+                          <TableCell className="font-medium text-foreground">{sub.tenantName}</TableCell>
+                          <TableCell><Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadgeClasses(sub.plan))}>{sub.plan}</Badge></TableCell>
+                          <TableCell><Badge variant="outline" className={cn('capitalize text-[10px]', getStatusBadgeClasses(sub.status))}>{sub.status}</Badge></TableCell>
+                          <TableCell className="text-right text-foreground">{format(sub.amount)}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-0.5">
+                              {sub.status === 'active' && (
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-amber-600 hover:text-amber-700" onClick={() => { setActionReason(''); setActionDialog({ sub, action: 'pause' }); }} title="Pause">
+                                  <Pause className="size-3.5" />
                                 </Button>
-                                <Button variant="ghost" size="sm" className="h-7 px-2 text-red-400 hover:text-red-300" onClick={() => setActionDialog({ sub, action: 'cancel' })}>
+                              )}
+                              {sub.status === 'paused' && (
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700" onClick={() => setActionDialog({ sub, action: 'resume' })} title="Resume">
+                                  <PlayCircle className="size-3.5" />
+                                </Button>
+                              )}
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-sky-600 hover:text-sky-700" onClick={() => { setNewPlan(sub.plan); setActionDialog({ sub, action: 'change_plan' }); }} title="Change Plan">
+                                <Edit3 className="size-3.5" />
+                              </Button>
+                              {sub.status !== 'cancelled' && (
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 hover:text-red-700" onClick={() => { setActionReason(''); setActionDialog({ sub, action: 'cancel' }); }} title="Cancel">
                                   <XCircle className="size-3.5" />
                                 </Button>
-                              </>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Wallet/Credit View */}
-        <Card className="bg-slate-900 border-slate-800">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-white">Usage Overview (View Only)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ScrollArea className="max-h-48">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-slate-800 hover:bg-transparent">
-                    <TableHead className="text-slate-400">Tenant</TableHead>
-                    <TableHead className="text-slate-400 text-center">AI Usage</TableHead>
-                    <TableHead className="text-slate-400 text-center">WhatsApp</TableHead>
-                    <TableHead className="text-slate-400 text-center">Seats</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {subscriptions.slice(0, 10).map((sub) => (
-                    <TableRow key={sub.id} className="border-slate-800 hover:bg-slate-800/50">
-                      <TableCell className="text-white text-sm">{sub.tenantName}</TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <Progress value={sub.aiQuota > 0 ? (sub.aiUsageCount / sub.aiQuota) * 100 : 0} className="h-1.5 w-16" />
-                          <span className="text-[10px] text-slate-400">{sub.aiUsageCount}/{sub.aiQuota}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <Progress value={sub.whatsappQuota > 0 ? (sub.whatsappUsageCount / sub.whatsappQuota) * 100 : 0} className="h-1.5 w-16" />
-                          <span className="text-[10px] text-slate-400">{sub.whatsappUsageCount}/{sub.whatsappQuota}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center text-slate-300 text-sm">{sub.seatCount}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </ScrollArea>
-          </CardContent>
-        </Card>
-
         {/* Action Dialog */}
-        <Dialog open={!!actionDialog} onOpenChange={(open) => { if (!open) setActionDialog(null); }}>
-          <DialogContent className="bg-slate-900 border-slate-800 text-white sm:max-w-md">
+        <Dialog open={!!actionDialog} onOpenChange={(open) => { if (!open) { setActionDialog(null); setActionReason(''); setNewPlan(''); } }}>
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>
                 {actionDialog?.action === 'pause' ? 'Pause Subscription' :
                  actionDialog?.action === 'resume' ? 'Resume Subscription' :
                  actionDialog?.action === 'cancel' ? 'Cancel Subscription' : 'Change Plan'}
               </DialogTitle>
-              <DialogDescription className="text-slate-400">
-                For tenant: {actionDialog?.sub.tenantName}
-              </DialogDescription>
+              <DialogDescription>{actionDialog?.sub.tenantName} — {actionDialog?.sub.plan} plan</DialogDescription>
             </DialogHeader>
-            {(actionDialog?.action === 'pause' || actionDialog?.action === 'cancel') && (
-              <div className="space-y-2">
-                <Label className="text-slate-300">Reason *</Label>
-                <Textarea className="bg-slate-800 border-slate-700 text-white" value={actionReason} onChange={(e) => setActionReason(e.target.value)} rows={2} placeholder="Enter reason..." />
-              </div>
-            )}
-            {actionDialog?.action === 'change_plan' && (
+            {actionDialog?.action === 'change_plan' ? (
               <Select value={newPlan} onValueChange={setNewPlan}>
-                <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="trial">Trial</SelectItem>
-                  <SelectItem value="starter">Starter ($29/mo)</SelectItem>
-                  <SelectItem value="growth">Growth ($79/mo)</SelectItem>
-                  <SelectItem value="pro">Pro ($149/mo)</SelectItem>
+                  <SelectItem value="starter">Starter</SelectItem>
+                  <SelectItem value="growth">Growth</SelectItem>
+                  <SelectItem value="pro">Pro</SelectItem>
                   <SelectItem value="enterprise">Enterprise</SelectItem>
                 </SelectContent>
               </Select>
-            )}
+            ) : (actionDialog?.action === 'pause' || actionDialog?.action === 'cancel') ? (
+              <div className="space-y-2">
+                <Label>Reason (optional)</Label>
+                <Textarea placeholder="e.g. Customer request, payment issue..." value={actionReason} onChange={(e) => setActionReason(e.target.value)} rows={3} />
+              </div>
+            ) : null}
             <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setActionDialog(null)} className="border-slate-700 text-slate-300">Cancel</Button>
-              <Button className={cn(actionDialog?.action === 'cancel' ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700')} onClick={handleAction} disabled={saving}>
+              <Button variant="outline" onClick={() => { setActionDialog(null); setActionReason(''); setNewPlan(''); }}>Cancel</Button>
+              <Button
+                variant={actionDialog?.action === 'resume' ? 'default' : actionDialog?.action === 'change_plan' ? 'default' : 'destructive'}
+                onClick={handleAction}
+                disabled={saving || (actionDialog?.action === 'change_plan' && !newPlan)}
+              >
                 {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : null} Confirm
               </Button>
             </DialogFooter>
@@ -1650,205 +1756,74 @@ export function SuperAdminView() {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 4. FEATURE FLAGS TAB
+  // 4. MODULES TAB (merged Feature Flags + Menu Items, grouped by product module)
   // ═══════════════════════════════════════════════════════════════════════════
 
-  function FeatureFlagsTab() {
+  function ModulesTab() {
+    const [expandedModule, setExpandedModule] = useState<string | null>('CRM');
     const [localFlags, setLocalFlags] = useState<FeatureFlagDef[]>([]);
+    const [localMenuItems, setLocalMenuItems] = useState<MenuItemDef[]>([]);
+    const [moduleView, setModuleView] = useState<'features' | 'menu'>('features');
     const [saving, setSaving] = useState(false);
 
-    useEffect(() => {
-      setLocalFlags(featureFlags);
-    }, [featureFlags]);
+    useEffect(() => { setLocalFlags(featureFlags); }, [featureFlags]);
+    useEffect(() => { setLocalMenuItems(menuItems); }, [menuItems]);
 
-    const handleToggle = (key: string) => {
-      const flag = localFlags.find((f) => f.key === key);
-      if (!flag || !selectedTenantForFlags) return;
+    const effectiveTenantId = moduleView === 'features' ? selectedTenantForFlags : (menuScope === 'tenant' ? selectedTenantForMenu : undefined);
 
+    const handleToggleFlag = (flagKey: string) => {
+      if (!selectedTenantForFlags) { toast.error('Please select a tenant first'); return; }
+      const flag = localFlags.find((f) => f.key === flagKey);
+      if (!flag) return;
       const newEnabled = !flag.enabled;
-      setLocalFlags((prev) => prev.map((f) => f.key === key ? { ...f, enabled: newEnabled } : f));
-
+      setLocalFlags((prev) => prev.map((f) => f.key === flagKey ? { ...f, enabled: newEnabled } : f));
       toggleFeatureFlagMutation.mutate(
-        { tenantId: selectedTenantForFlags, featureKey: key, enabled: newEnabled },
+        { tenantId: selectedTenantForFlags, flagKey, enabled: newEnabled },
         {
           onError: () => {
-            setLocalFlags((prev) => prev.map((f) => f.key === key ? { ...f, enabled: !newEnabled } : f));
-            toast.error('Failed to toggle feature flag');
+            setLocalFlags((prev) => prev.map((f) => f.key === flagKey ? { ...f, enabled: !newEnabled } : f));
+            toast.error('Failed to toggle feature');
           },
-          onSuccess: () => {
-            toast.success(`${flag.label} ${newEnabled ? 'enabled' : 'disabled'}`);
-          },
+          onSuccess: () => toast.success(`${flag.label} ${newEnabled ? 'enabled' : 'disabled'}`),
         },
       );
     };
 
-    const handleEnableAll = () => {
-      if (!selectedTenantForFlags) return;
+    const handleToggleMenuItem = (itemKey: string) => {
+      const item = localMenuItems.find((i) => i.key === itemKey);
+      if (!item) return;
+      if (menuScope === 'tenant' && !selectedTenantForMenu) { toast.error('Please select a tenant first'); return; }
+      const newEnabled = !item.enabled;
+      setLocalMenuItems((prev) => prev.map((i) => i.key === itemKey ? { ...i, enabled: newEnabled } : i));
+      toggleMenuItemMutation.mutate(
+        { tenantId: effectiveTenantId, menuKey: itemKey, enabled: newEnabled, scope: menuScope },
+        {
+          onError: () => {
+            setLocalMenuItems((prev) => prev.map((i) => i.key === itemKey ? { ...i, enabled: !newEnabled } : i));
+            toast.error('Failed to toggle menu item');
+          },
+          onSuccess: () => toast.success(`${item.label} ${newEnabled ? 'enabled' : 'disabled'} ${menuScope === 'global' ? 'globally' : 'for tenant'}`),
+        },
+      );
+    };
+
+    const handleEnableAllFlags = () => {
+      if (!selectedTenantForFlags) { toast.error('Please select a tenant first'); return; }
       setLocalFlags((prev) => prev.map((f) => ({ ...f, enabled: true })));
-      // Save all
       setSaving(true);
       fetch('/api/superadmin/feature-flags', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tenantId: selectedTenantForFlags, flags: localFlags.map((f) => ({ key: f.key, enabled: true })) }),
       }).then(() => { toast.success('All features enabled'); setSaving(false); }).catch(() => { toast.error('Failed'); setSaving(false); });
     };
 
-    const handleDisableAll = () => {
-      if (!selectedTenantForFlags) return;
-      setLocalFlags((prev) => prev.map((f) => ({ ...f, enabled: false })));
-      setSaving(true);
-      fetch('/api/superadmin/feature-flags', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenantId: selectedTenantForFlags, flags: localFlags.map((f) => ({ key: f.key, enabled: false })) }),
-      }).then(() => { toast.success('All features disabled'); setSaving(false); }).catch(() => { toast.error('Failed'); setSaving(false); });
-    };
-
-    const enabledCount = localFlags.filter((f) => f.enabled).length;
-
-    return (
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* Left Panel */}
-        <div className="w-full lg:w-64 shrink-0 space-y-4">
-          <Card className="bg-slate-900 border-slate-800">
-            <CardHeader className="pb-3"><CardTitle className="text-sm text-white">Select Tenant</CardTitle></CardHeader>
-            <CardContent className="pt-0">
-              <Select value={selectedTenantForFlags} onValueChange={setSelectedTenantForFlags}>
-                <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue placeholder="Choose tenant..." /></SelectTrigger>
-                <SelectContent>
-                  {tenants.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </CardContent>
-          </Card>
-          <div className="space-y-2">
-            <Button variant="outline" size="sm" className="w-full text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10" onClick={handleEnableAll} disabled={!selectedTenantForFlags || saving}>
-              <ToggleRight className="size-4 mr-1.5" /> Enable All
-            </Button>
-            <Button variant="outline" size="sm" className="w-full border-slate-700 text-slate-300 hover:bg-slate-800" onClick={handleDisableAll} disabled={!selectedTenantForFlags || saving}>
-              <ToggleLeft className="size-4 mr-1.5" /> Disable All
-            </Button>
-          </div>
-          <Separator className="bg-slate-800" />
-          <div className="text-sm text-slate-400 space-y-1">
-            <p className="font-medium text-white">Summary</p>
-            <p>Enabled: <span className="text-emerald-400">{enabledCount}</span>/{localFlags.length}</p>
-          </div>
-        </div>
-
-        {/* Right Panel - Flags Grid */}
-        <div className="flex-1 min-w-0">
-          {flagsLoading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-lg bg-slate-800" />)}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {localFlags.map((flag) => (
-                <div key={flag.key} className={cn(
-                  'flex flex-col gap-2 rounded-lg border p-4 transition-all',
-                  flag.enabled
-                    ? 'bg-emerald-500/5 border-emerald-500/20'
-                    : 'bg-slate-900 border-slate-800 opacity-60',
-                )}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Flag className={cn('size-4', flag.enabled ? 'text-emerald-400' : 'text-slate-500')} />
-                      <span className="text-sm font-medium text-white">{flag.label}</span>
-                    </div>
-                    <Switch
-                      checked={flag.enabled}
-                      onCheckedChange={() => handleToggle(flag.key)}
-                      disabled={!selectedTenantForFlags}
-                    />
-                  </div>
-                  <p className="text-xs text-slate-400 line-clamp-2">{flag.description}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // 5. MENU ITEMS TAB
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  function MenuItemsTab() {
-    const [localItems, setLocalItems] = useState<MenuItemDef[]>([]);
-    const [saving, setSaving] = useState(false);
-
-    useEffect(() => {
-      setLocalItems(menuItems);
-    }, [menuItems]);
-
-    const effectiveTenantId = menuScope === 'global' ? undefined : selectedTenantForMenu;
-
-    const handleToggle = (itemKey: string) => {
-      const item = localItems.find((i) => i.key === itemKey);
-      if (!item) return;
-      if (menuScope === 'tenant' && !selectedTenantForMenu) {
-        toast.error('Please select a tenant first');
-        return;
-      }
-
-      const newEnabled = !item.enabled;
-      setLocalItems((prev) => prev.map((i) => i.key === itemKey ? { ...i, enabled: newEnabled } : i));
-
-      toggleMenuItemMutation.mutate(
-        { tenantId: effectiveTenantId, menuKey: itemKey, enabled: newEnabled, scope: menuScope },
-        {
-          onError: (err: Error) => {
-            setLocalItems((prev) => prev.map((i) => i.key === itemKey ? { ...i, enabled: !newEnabled } : i));
-            toast.error(`Failed to toggle menu item: ${err.message || 'Unknown error'}`);
-          },
-          onSuccess: () => {
-            toast.success(`${item.label} ${newEnabled ? 'enabled' : 'disabled'} ${menuScope === 'global' ? 'globally' : 'for tenant'}`);
-          },
-        },
-      );
-    };
-
-    const handleBulkToggle = (sectionKey: string, enabled: boolean) => {
-      if (menuScope === 'tenant' && !selectedTenantForMenu) {
-        toast.error('Please select a tenant first');
-        return;
-      }
-      setLocalItems((prev) => prev.map((i) => i.section === sectionKey ? { ...i, enabled } : i));
-      const sectionItems = localItems.filter((i) => i.section === sectionKey);
-      fetch('/api/superadmin/menu-items', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenantId: effectiveTenantId,
-          scope: menuScope,
-          items: sectionItems.map((i) => ({ key: i.key, enabled, label: i.label, icon: i.icon, section: i.section })),
-        }),
-      }).then((res) => {
-        if (!res.ok) return res.json().then((d: { error?: string }) => { throw new Error(d.error || 'Failed'); });
-        toast.success(`${sectionKey} ${enabled ? 'enabled' : 'disabled'}`);
-        // Invalidate queries to refresh state
-        queryClient.invalidateQueries({ queryKey: ['globalMenuItems'] });
-        queryClient.invalidateQueries({ queryKey: ['menuItems'] });
-      }).catch((err: Error) => toast.error(`Failed: ${err.message}`));
-    };
-
-    const handleEnableAll = () => {
-      if (menuScope === 'tenant' && !selectedTenantForMenu) {
-        toast.error('Please select a tenant first');
-        return;
-      }
-      setLocalItems((prev) => prev.map((i) => ({ ...i, enabled: true })));
+    const handleEnableAllMenu = () => {
+      if (menuScope === 'tenant' && !selectedTenantForMenu) { toast.error('Please select a tenant first'); return; }
+      setLocalMenuItems((prev) => prev.map((i) => ({ ...i, enabled: true })));
       setSaving(true);
       fetch('/api/superadmin/menu-items', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenantId: effectiveTenantId, scope: menuScope, items: localItems.map((i) => ({ key: i.key, enabled: true })) }),
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId: effectiveTenantId, scope: menuScope, items: localMenuItems.map((i) => ({ key: i.key, enabled: true })) }),
       }).then((res) => {
         if (!res.ok) return res.json().then((d: { error?: string }) => { throw new Error(d.error || 'Failed'); });
         toast.success('All menu items enabled');
@@ -1858,166 +1833,200 @@ export function SuperAdminView() {
       }).catch((err: Error) => { toast.error(`Failed: ${err.message}`); setSaving(false); });
     };
 
-    const handleDisableAll = () => {
-      if (menuScope === 'tenant' && !selectedTenantForMenu) {
-        toast.error('Please select a tenant first');
-        return;
-      }
-      setLocalItems((prev) => prev.map((i) => ({ ...i, enabled: false })));
-      setSaving(true);
-      fetch('/api/superadmin/menu-items', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tenantId: effectiveTenantId, scope: menuScope, items: localItems.map((i) => ({ key: i.key, enabled: false })) }),
-      }).then((res) => {
-        if (!res.ok) return res.json().then((d: { error?: string }) => { throw new Error(d.error || 'Failed'); });
-        toast.success('All menu items disabled');
-        queryClient.invalidateQueries({ queryKey: ['globalMenuItems'] });
-        queryClient.invalidateQueries({ queryKey: ['menuItems'] });
-        setSaving(false);
-      }).catch((err: Error) => { toast.error(`Failed: ${err.message}`); setSaving(false); });
-    };
-
-    // Group by section
-    const itemsBySection = useMemo(() => {
-      const sections: Record<string, MenuItemDef[]> = {};
-      MENU_SECTIONS.forEach((s) => { sections[s.key] = []; });
-      localItems.forEach((item) => {
-        const sectionKey = item.section || 'System';
-        if (!sections[sectionKey]) sections[sectionKey] = [];
-        sections[sectionKey].push(item);
+    // Group features by module
+    const featuresByModule = useMemo(() => {
+      const map: Record<string, FeatureFlagDef[]> = {};
+      MODULE_SECTIONS.forEach((s) => { map[s.key] = []; });
+      localFlags.forEach((f) => {
+        const moduleKey = FEATURE_MODULE_MAP[f.key] || 'System';
+        if (!map[moduleKey]) map[moduleKey] = [];
+        map[moduleKey].push(f);
       });
-      return sections;
-    }, [localItems]);
+      return map;
+    }, [localFlags]);
 
-    const isLoading = menuScope === 'global' ? globalMenuLoading : menuLoading;
+    const menuByModule = useMemo(() => {
+      const map: Record<string, MenuItemDef[]> = {};
+      MODULE_SECTIONS.forEach((s) => { map[s.key] = []; });
+      localMenuItems.forEach((item) => {
+        const sectionKey = item.section || 'System';
+        if (!map[sectionKey]) map[sectionKey] = [];
+        map[sectionKey].push(item);
+      });
+      return map;
+    }, [localMenuItems]);
 
     return (
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* Left Panel */}
-        <div className="w-full lg:w-64 shrink-0 space-y-4">
-          {/* Scope Selector */}
-          <Card className="bg-slate-900 border-slate-800">
-            <CardHeader className="pb-3"><CardTitle className="text-sm text-white">Menu Visibility Scope</CardTitle></CardHeader>
-            <CardContent className="pt-0 space-y-3">
-              <div className="flex gap-2">
-                <Button
-                  variant={menuScope === 'global' ? 'default' : 'outline'}
-                  size="sm"
-                  className={cn(
-                    'flex-1 text-xs',
-                    menuScope === 'global'
-                      ? 'bg-red-600 hover:bg-red-700 text-white'
-                      : 'border-slate-700 text-slate-300 hover:bg-slate-800'
-                  )}
-                  onClick={() => setMenuScope('global')}
-                >
-                  <Shield className="size-3.5 mr-1.5" /> Global
-                </Button>
-                <Button
-                  variant={menuScope === 'tenant' ? 'default' : 'outline'}
-                  size="sm"
-                  className={cn(
-                    'flex-1 text-xs',
-                    menuScope === 'tenant'
-                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                      : 'border-slate-700 text-slate-300 hover:bg-slate-800'
-                  )}
-                  onClick={() => setMenuScope('tenant')}
-                >
-                  <Building2 className="size-3.5 mr-1.5" /> Tenant
-                </Button>
-              </div>
-              {menuScope === 'global' && (
-                <div className="p-2 rounded-lg bg-red-500/5 border border-red-500/20">
-                  <p className="text-[11px] text-red-400 font-medium">Global changes affect ALL tenants</p>
+      <div className="space-y-4">
+        {/* Scope controls */}
+        <Card className="card-shadow">
+          <CardContent className="p-4">
+            <div className="flex flex-col lg:flex-row gap-4 lg:items-center lg:justify-between">
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Feature vs Menu toggle */}
+                <div className="flex rounded-lg border border-border p-0.5 bg-muted/30">
+                  <button
+                    onClick={() => setModuleView('features')}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                      moduleView === 'features' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    <Flag className="size-3.5" /> Features
+                  </button>
+                  <button
+                    onClick={() => setModuleView('menu')}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                      moduleView === 'menu' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    <Menu className="size-3.5" /> Menu Items
+                  </button>
                 </div>
-              )}
-              {menuScope === 'tenant' && (
-                <Select value={selectedTenantForMenu} onValueChange={setSelectedTenantForMenu}>
-                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue placeholder="Choose tenant..." /></SelectTrigger>
-                  <SelectContent>
-                    {tenants.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              )}
-            </CardContent>
-          </Card>
-          <div className="space-y-2">
-            <Button variant="outline" size="sm" className="w-full text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/10" onClick={handleEnableAll} disabled={(menuScope === 'tenant' && !selectedTenantForMenu) || saving}>
-              <ToggleRight className="size-4 mr-1.5" /> Enable All
-            </Button>
-            <Button variant="outline" size="sm" className="w-full border-slate-700 text-slate-300 hover:bg-slate-800" onClick={handleDisableAll} disabled={(menuScope === 'tenant' && !selectedTenantForMenu) || saving}>
-              <ToggleLeft className="size-4 mr-1.5" /> Disable All
-            </Button>
-          </div>
-          <Separator className="bg-slate-800" />
-          <div className="text-sm text-slate-400 space-y-1">
-            <p className="font-medium text-white">Summary</p>
-            <p>Enabled: <span className="text-emerald-400">{localItems.filter((i) => i.enabled).length}</span>/{localItems.length}</p>
-            <p>Scope: <span className={menuScope === 'global' ? 'text-red-400' : 'text-emerald-400'}>{menuScope === 'global' ? 'All Tenants' : 'Per-Tenant'}</span></p>
-          </div>
-        </div>
 
-        {/* Right Panel - Menu Items by Section */}
-        <div className="flex-1 min-w-0">
-          {isLoading ? (
-            <div className="space-y-6">
-              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-lg bg-slate-800" />)}
-            </div>
-          ) : (
-            <ScrollArea className="max-h-[calc(100vh-300px)]">
-              <div className="space-y-4">
-                {MENU_SECTIONS.map((section) => {
-                  const items = itemsBySection[section.key] || [];
-                  if (items.length === 0) return null;
-                  const SectionIcon = section.icon;
-                  return (
-                    <Card key={section.key} className="bg-slate-900 border-slate-800">
-                      <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <SectionIcon className="size-4 text-emerald-400" />
-                            <CardTitle className="text-sm text-white">{section.label}</CardTitle>
-                            <Badge variant="secondary" className="text-[10px] h-5 bg-slate-800 text-slate-300">
-                              {items.filter((i) => i.enabled).length}/{items.length}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button variant="ghost" size="sm" className="h-7 text-xs text-emerald-400 hover:text-emerald-300" onClick={() => handleBulkToggle(section.key, true)}>Enable All</Button>
-                            <Button variant="ghost" size="sm" className="h-7 text-xs text-slate-400 hover:text-slate-300" onClick={() => handleBulkToggle(section.key, false)}>Disable All</Button>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                          {items.map((item) => (
-                            <div key={item.id || item.key} className={cn(
-                              'flex flex-col items-center justify-center gap-2 rounded-lg border p-3 transition-all',
-                              item.enabled
-                                ? 'border-emerald-500/20 bg-emerald-500/5'
-                                : 'border-slate-800 bg-slate-900/50 opacity-60',
-                            )}>
-                              <span className="text-xs font-medium text-center text-white truncate w-full">{item.label}</span>
-                              <Switch checked={item.enabled} onCheckedChange={() => handleToggle(item.key)} disabled={menuScope === 'tenant' && !selectedTenantForMenu} className="scale-75" />
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+                {/* Tenant selector for features */}
+                {moduleView === 'features' ? (
+                  <Select value={selectedTenantForFlags} onValueChange={setSelectedTenantForFlags}>
+                    <SelectTrigger className="w-[180px] text-xs h-8"><SelectValue placeholder="Select tenant..." /></SelectTrigger>
+                    <SelectContent>
+                      {tenants.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <>
+                    <div className="flex rounded-lg border border-border p-0.5 bg-muted/30">
+                      <button
+                        onClick={() => setMenuScope('global')}
+                        className={cn('flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors',
+                          menuScope === 'global' ? 'bg-red-500 text-white' : 'text-muted-foreground hover:text-foreground')}
+                      >
+                        <Shield className="size-3" /> Global
+                      </button>
+                      <button
+                        onClick={() => setMenuScope('tenant')}
+                        className={cn('flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors',
+                          menuScope === 'tenant' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
+                      >
+                        <Building2 className="size-3" /> Tenant
+                      </button>
+                    </div>
+                    {menuScope === 'tenant' && (
+                      <Select value={selectedTenantForMenu} onValueChange={setSelectedTenantForMenu}>
+                        <SelectTrigger className="w-[180px] text-xs h-8"><SelectValue placeholder="Select tenant..." /></SelectTrigger>
+                        <SelectContent>
+                          {tenants.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </>
+                )}
               </div>
-            </ScrollArea>
-          )}
+
+              <Button variant="outline" size="sm" onClick={moduleView === 'features' ? handleEnableAllFlags : handleEnableAllMenu} disabled={saving} className="shrink-0">
+                <ToggleRight className="size-4 mr-1.5 text-primary" /> Enable All
+              </Button>
+            </div>
+
+            {/* Summary bar */}
+            <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground border-t border-border pt-3">
+              <span>
+                {moduleView === 'features' ? 'Features' : 'Menu items'} enabled:&nbsp;
+                <span className="font-semibold text-foreground">
+                  {moduleView === 'features' ? localFlags.filter(f => f.enabled).length : localMenuItems.filter(i => i.enabled).length}
+                </span>
+                /{moduleView === 'features' ? localFlags.length : localMenuItems.length}
+              </span>
+              {moduleView === 'menu' && menuScope === 'global' && (
+                <Badge variant="outline" className="text-[10px] text-red-600 dark:text-red-400 border-red-500/20 bg-red-500/5">
+                  Global changes affect ALL tenants
+                </Badge>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Module cards grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {MODULE_SECTIONS.map((section) => {
+            const features = featuresByModule[section.key] || [];
+            const menus = menuByModule[section.key] || [];
+            const items = moduleView === 'features' ? features : menus;
+            const enabledCount = items.filter(i => i.enabled).length;
+            const SectionIcon = section.icon;
+            const isExpanded = expandedModule === section.key;
+            if (items.length === 0) return null;
+
+            const colorMap: Record<string, string> = {
+              emerald: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+              sky: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
+              amber: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+              violet: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+              orange: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
+              teal: 'bg-teal-500/10 text-teal-600 dark:text-teal-400',
+              slate: 'bg-muted text-muted-foreground',
+              rose: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
+              indigo: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
+            };
+
+            return (
+              <Card key={section.key} className="card-shadow card-hover">
+                <CardHeader className="pb-3">
+                  <button
+                    onClick={() => setExpandedModule(isExpanded ? null : section.key)}
+                    className="flex items-center justify-between w-full text-left"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className={cn('size-9 rounded-lg flex items-center justify-center', colorMap[section.color])}>
+                        <SectionIcon className="size-4.5" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-sm font-semibold text-foreground">{section.label}</CardTitle>
+                        <p className="text-[11px] text-muted-foreground">{enabledCount}/{items.length} enabled</p>
+                      </div>
+                    </div>
+                    <ChevronDown className={cn('size-4 text-muted-foreground transition-transform', isExpanded && 'rotate-180')} />
+                  </button>
+                </CardHeader>
+                {isExpanded && (
+                  <CardContent className="pt-0 space-y-1.5">
+                    {(moduleView === 'features' ? flagsLoading : (menuScope === 'global' ? globalMenuLoading : menuLoading)) ? (
+                      <div className="space-y-2">
+                        {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 rounded-md" />)}
+                      </div>
+                    ) : (
+                      items.map((item) => (
+                        <div key={(item as { id?: string; key: string }).id || (item as { key: string }).key} className={cn(
+                          'flex items-center justify-between gap-2 rounded-md border p-2.5 transition-colors',
+                          item.enabled ? 'border-primary/20 bg-primary/5' : 'border-border bg-muted/30'
+                        )}>
+                          <div className="min-w-0 flex-1">
+                            <p className={cn('text-sm font-medium truncate', item.enabled ? 'text-foreground' : 'text-muted-foreground')}>
+                              {(item as { label: string }).label}
+                            </p>
+                            {'description' in item && (item as { description?: string }).description && (
+                              <p className="text-[11px] text-muted-foreground truncate">{(item as { description?: string }).description}</p>
+                            )}
+                          </div>
+                          <Switch
+                            checked={item.enabled}
+                            onCheckedChange={() => moduleView === 'features' ? handleToggleFlag((item as FeatureFlagDef).key) : handleToggleMenuItem((item as MenuItemDef).key)}
+                          />
+                        </div>
+                      ))
+                    )}
+                  </CardContent>
+                )}
+              </Card>
+            );
+          })}
         </div>
       </div>
     );
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 6. USERS TAB
+  // 5. USERS TAB
   // ═══════════════════════════════════════════════════════════════════════════
 
   function UsersTab() {
@@ -2062,24 +2071,15 @@ export function SuperAdminView() {
       }
     };
 
-    const roleColors: Record<string, string> = {
-      owner: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
-      admin: 'text-teal-400 bg-teal-500/10 border-teal-500/20',
-      manager: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
-      employee: 'text-slate-400 bg-slate-500/10 border-slate-500/20',
-      technician: 'text-sky-400 bg-sky-500/10 border-sky-500/20',
-      superadmin: 'text-red-400 bg-red-500/10 border-red-500/20',
-    };
-
     return (
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
-            <Input className="pl-9 bg-slate-900 border-slate-800 text-white placeholder:text-slate-500" placeholder="Search users..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input className="pl-9" placeholder="Search users by name, email, or tenant..." value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
           <Select value={roleFilter} onValueChange={setRoleFilter}>
-            <SelectTrigger className="w-full sm:w-[130px] bg-slate-900 border-slate-800 text-white"><SelectValue placeholder="Role" /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-[140px]"><SelectValue placeholder="Role" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Roles</SelectItem>
               <SelectItem value="owner">Owner</SelectItem>
@@ -2091,53 +2091,49 @@ export function SuperAdminView() {
         </div>
 
         {usersLoading ? <TableSkeleton /> : filteredUsers.length === 0 ? (
-          <Card className="bg-slate-900 border-slate-800 border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-16 text-slate-500">
-              <Users className="size-14 mb-4 opacity-30" /><p className="text-lg font-medium">No users found</p>
-            </CardContent>
-          </Card>
+          <EmptyState icon={Users} title="No users found" subtitle="Try adjusting your search or filters." />
         ) : (
-          <Card className="bg-slate-900 border-slate-800">
-            <ScrollArea className="max-h-96">
+          <Card className="card-shadow">
+            <ScrollArea className="max-h-[calc(100vh-320px)]">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-slate-800 hover:bg-transparent">
-                    <TableHead className="text-slate-400">Name</TableHead>
-                    <TableHead className="text-slate-400">Email</TableHead>
-                    <TableHead className="text-slate-400">Role</TableHead>
-                    <TableHead className="text-slate-400">Status</TableHead>
-                    <TableHead className="text-slate-400">Tenant</TableHead>
-                    <TableHead className="text-slate-400 text-right">Actions</TableHead>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Tenant</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredUsers.map((user) => (
-                    <TableRow key={user.id} className="border-slate-800 hover:bg-slate-800/50">
-                      <TableCell className="font-medium text-white">{user.name}</TableCell>
-                      <TableCell className="text-slate-400">{user.email}</TableCell>
+                    <TableRow key={user.id}>
+                      <TableCell className="font-medium text-foreground">{user.name}</TableCell>
+                      <TableCell className="text-muted-foreground">{user.email}</TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={cn('capitalize text-[10px]', roleColors[user.role] || roleColors.employee)}>
+                        <Badge variant="outline" className={cn('capitalize text-[10px]', ROLE_BADGE_CLASSES[user.role] || ROLE_BADGE_CLASSES.employee)}>
                           {user.role}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={cn('text-[10px]', user.isActive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20')}>
+                        <Badge variant="outline" className={cn('text-[10px]', user.isActive ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20')}>
                           {user.isActive ? 'Active' : 'Inactive'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-slate-400 text-sm">{user.tenantName || '—'}</TableCell>
+                      <TableCell className="text-muted-foreground text-sm">{user.tenantName || '—'}</TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="flex items-center justify-end gap-0.5">
                           {user.isActive ? (
-                            <Button variant="ghost" size="sm" className="h-7 px-2 text-red-400 hover:text-red-300" onClick={() => setActionDialog({ user, action: 'deactivate' })}>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 hover:text-red-700" onClick={() => setActionDialog({ user, action: 'deactivate' })} title="Deactivate">
                               <Ban className="size-3.5" />
                             </Button>
                           ) : (
-                            <Button variant="ghost" size="sm" className="h-7 px-2 text-emerald-400 hover:text-emerald-300" onClick={() => setActionDialog({ user, action: 'activate' })}>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700" onClick={() => setActionDialog({ user, action: 'activate' })} title="Activate">
                               <CheckCircle2 className="size-3.5" />
                             </Button>
                           )}
-                          <Button variant="ghost" size="sm" className="h-7 px-2 text-sky-400 hover:text-sky-300" onClick={() => { setNewRole(user.role); setActionDialog({ user, action: 'change_role' }); }}>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-sky-600 hover:text-sky-700" onClick={() => { setNewRole(user.role); setActionDialog({ user, action: 'change_role' }); }} title="Change Role">
                             <UserCog className="size-3.5" />
                           </Button>
                         </div>
@@ -2152,16 +2148,16 @@ export function SuperAdminView() {
 
         {/* Action Dialog */}
         <Dialog open={!!actionDialog} onOpenChange={(open) => { if (!open) setActionDialog(null); }}>
-          <DialogContent className="bg-slate-900 border-slate-800 text-white sm:max-w-md">
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>
                 {actionDialog?.action === 'activate' ? 'Activate User' : actionDialog?.action === 'deactivate' ? 'Deactivate User' : 'Change Role'}
               </DialogTitle>
-              <DialogDescription className="text-slate-400">User: {actionDialog?.user.name} ({actionDialog?.user.email})</DialogDescription>
+              <DialogDescription>User: {actionDialog?.user.name} ({actionDialog?.user.email})</DialogDescription>
             </DialogHeader>
             {actionDialog?.action === 'change_role' && (
               <Select value={newRole} onValueChange={setNewRole}>
-                <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="owner">Owner</SelectItem>
                   <SelectItem value="admin">Admin</SelectItem>
@@ -2171,8 +2167,11 @@ export function SuperAdminView() {
               </Select>
             )}
             <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setActionDialog(null)} className="border-slate-700 text-slate-300">Cancel</Button>
-              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleAction} disabled={saving}>
+              <Button variant="outline" onClick={() => setActionDialog(null)}>Cancel</Button>
+              <Button
+                variant={actionDialog?.action === 'deactivate' ? 'destructive' : 'default'}
+                onClick={handleAction} disabled={saving}
+              >
                 {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : null} Confirm
               </Button>
             </DialogFooter>
@@ -2183,7 +2182,7 @@ export function SuperAdminView() {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 7. AUDIT LOGS TAB
+  // 6. AUDIT LOGS TAB
   // ═══════════════════════════════════════════════════════════════════════════
 
   function AuditLogsTab() {
@@ -2191,15 +2190,13 @@ export function SuperAdminView() {
     const [loading, setLoading] = useState(true);
     const [actionFilter, setActionFilter] = useState('');
     const [tenantFilter, setTenantFilter] = useState('');
-    const [userFilter, setUserFilter] = useState('');
 
     const fetchLogs = useCallback(async () => {
       setLoading(true);
       try {
         const params = new URLSearchParams();
         if (actionFilter) params.set('action', actionFilter);
-        if (tenantFilter) params.set('tenantId', tenantFilter);
-        if (userFilter) params.set('userId', userFilter);
+        if (tenantFilter && tenantFilter !== 'all') params.set('tenantId', tenantFilter);
         const res = await fetch(`/api/superadmin/audit-logs?${params.toString()}`);
         if (res.ok) {
           const data = await res.json();
@@ -2212,61 +2209,60 @@ export function SuperAdminView() {
       } finally {
         setLoading(false);
       }
-    }, [actionFilter, tenantFilter, userFilter]);
+    }, [actionFilter, tenantFilter]);
 
     useEffect(() => { fetchLogs(); }, [fetchLogs]);
 
     return (
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row gap-3">
-          <Input className="bg-slate-900 border-slate-800 text-white placeholder:text-slate-500" placeholder="Filter by action..." value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} />
-          <Select value={tenantFilter} onValueChange={setTenantFilter}>
-            <SelectTrigger className="w-full sm:w-[180px] bg-slate-900 border-slate-800 text-white"><SelectValue placeholder="All Tenants" /></SelectTrigger>
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input className="pl-9" placeholder="Filter by action (e.g. login, update, delete)..." value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} />
+          </div>
+          <Select value={tenantFilter || 'all'} onValueChange={setTenantFilter}>
+            <SelectTrigger className="w-full sm:w-[200px]"><SelectValue placeholder="All Tenants" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Tenants</SelectItem>
               {tenants.map((t) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" onClick={fetchLogs} className="border-slate-700 text-slate-300 h-9">
+          <Button variant="outline" size="sm" onClick={fetchLogs} className="shrink-0">
             <RefreshCw className="size-3.5 mr-1.5" /> Refresh
           </Button>
         </div>
 
         {loading ? <TableSkeleton /> : logs.length === 0 ? (
-          <Card className="bg-slate-900 border-slate-800 border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-16 text-slate-500">
-              <FileText className="size-14 mb-4 opacity-30" /><p className="text-lg font-medium">No audit logs found</p>
-            </CardContent>
-          </Card>
+          <EmptyState icon={FileText} title="No audit logs found" subtitle="Audit logs will appear here as platform activity occurs." />
         ) : (
-          <Card className="bg-slate-900 border-slate-800">
-            <ScrollArea className="max-h-96">
+          <Card className="card-shadow">
+            <ScrollArea className="max-h-[calc(100vh-320px)]">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-slate-800 hover:bg-transparent">
-                    <TableHead className="text-slate-400">Action</TableHead>
-                    <TableHead className="text-slate-400">Resource</TableHead>
-                    <TableHead className="text-slate-400">User ID</TableHead>
-                    <TableHead className="text-slate-400">Tenant</TableHead>
-                    <TableHead className="text-slate-400">IP</TableHead>
-                    <TableHead className="text-slate-400">When</TableHead>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>Action</TableHead>
+                    <TableHead>Resource</TableHead>
+                    <TableHead>User</TableHead>
+                    <TableHead>Tenant</TableHead>
+                    <TableHead>IP</TableHead>
+                    <TableHead>When</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {logs.map((log) => (
-                    <TableRow key={log.id} className="border-slate-800 hover:bg-slate-800/50">
+                    <TableRow key={log.id}>
                       <TableCell>
-                        <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-400 border-sky-500/20">
+                        <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20">
                           {log.action}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-slate-300 text-sm">
+                      <TableCell className="text-foreground text-sm">
                         {log.resourceType ? `${log.resourceType}${log.resourceId ? ` #${log.resourceId.slice(0, 8)}` : ''}` : '—'}
                       </TableCell>
-                      <TableCell className="text-slate-400 text-xs font-mono">{log.userId ? log.userId.slice(0, 8) + '...' : '—'}</TableCell>
-                      <TableCell className="text-slate-400 text-xs font-mono">{log.tenantId ? log.tenantId.slice(0, 8) + '...' : '—'}</TableCell>
-                      <TableCell className="text-slate-400 text-xs font-mono">{log.ip || '—'}</TableCell>
-                      <TableCell className="text-slate-400 text-xs">{formatDateTime(log.createdAt)}</TableCell>
+                      <TableCell className="text-muted-foreground text-xs font-mono">{log.userId ? log.userId.slice(0, 8) + '…' : '—'}</TableCell>
+                      <TableCell className="text-muted-foreground text-xs font-mono">{log.tenantId ? log.tenantId.slice(0, 8) + '…' : '—'}</TableCell>
+                      <TableCell className="text-muted-foreground text-xs font-mono">{log.ip || '—'}</TableCell>
+                      <TableCell className="text-muted-foreground text-xs">{formatDateTime(log.createdAt)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -2279,7 +2275,7 @@ export function SuperAdminView() {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 8. CREDITS TAB
+  // 7. CREDITS TAB
   // ═══════════════════════════════════════════════════════════════════════════
 
   function CreditsTab() {
@@ -2299,7 +2295,6 @@ export function SuperAdminView() {
       return creditsData.filter((c) => c.tenantName.toLowerCase().includes(q));
     }, [creditsData, search]);
 
-    // Stats
     const trialTenants = creditsData.filter((c) => c.plan === 'trial');
     const avgCreditsUsed = trialTenants.length > 0
       ? (trialTenants.reduce((s, c) => s + c.trialWhatsappUsed, 0) / trialTenants.length).toFixed(1)
@@ -2323,10 +2318,7 @@ export function SuperAdminView() {
         const res = await fetch('/api/admin/credits', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tenantId: editDialog.tenantId,
-            ...editForm,
-          }),
+          body: JSON.stringify({ tenantId: editDialog.tenantId, ...editForm }),
         });
         if (res.ok) {
           toast.success('Credit settings updated successfully');
@@ -2347,59 +2339,18 @@ export function SuperAdminView() {
       <div className="space-y-4">
         {/* Credit Overview Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card className="bg-slate-900 border-slate-900 hover:border-slate-800 transition-colors">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="size-10 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                <Clock className="size-5 text-amber-400" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Trial Tenants</p>
-                <p className="text-xl font-bold text-amber-400">{trialTenants.length}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-slate-900 border-slate-900 hover:border-slate-800 transition-colors">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="size-10 rounded-lg bg-sky-500/10 flex items-center justify-center shrink-0">
-                <BarChart3 className="size-5 text-sky-400" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Avg Credits Used</p>
-                <p className="text-xl font-bold text-sky-400">{avgCreditsUsed}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-slate-900 border-slate-900 hover:border-slate-800 transition-colors">
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="size-10 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
-                <AlertTriangle className="size-5 text-red-400" />
-              </div>
-              <div>
-                <p className="text-xs text-slate-400">Exhausted Credits</p>
-                <p className="text-xl font-bold text-red-400">{exhaustedTenants.length}</p>
-              </div>
-            </CardContent>
-          </Card>
+          <KpiCard label="Trial Tenants" value={trialTenants.length} icon={Clock} color="amber" />
+          <KpiCard label="Avg Credits Used" value={avgCreditsUsed} icon={BarChart3} color="sky" />
+          <KpiCard label="Exhausted Credits" value={exhaustedTenants.length} icon={AlertTriangle} color="red" />
         </div>
 
         {/* Search + Refresh */}
         <div className="flex gap-3">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
-            <Input
-              placeholder="Search tenants..."
-              className="pl-9 bg-slate-900 border-slate-800 text-white placeholder:text-slate-500"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+            <Input placeholder="Search tenants..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => fetchAllCredits()}
-            disabled={creditsLoading}
-            className="border-slate-700 text-slate-300 hover:text-white h-9"
-          >
+          <Button variant="outline" size="sm" onClick={() => fetchAllCredits()} disabled={creditsLoading} className="shrink-0">
             {creditsLoading ? <Loader2 className="size-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="size-3.5 mr-1.5" />}
             Refresh
           </Button>
@@ -2407,79 +2358,56 @@ export function SuperAdminView() {
 
         {/* Table */}
         {creditsLoading && creditsData.length === 0 ? <TableSkeleton /> : filteredCredits.length === 0 ? (
-          <Card className="bg-slate-900 border-slate-800 border-dashed">
-            <CardContent className="flex flex-col items-center justify-center py-16 text-slate-500">
-              <Wallet className="size-14 mb-4 opacity-30" />
-              <p className="text-lg font-medium">No credit data found</p>
-            </CardContent>
-          </Card>
+          <EmptyState icon={Wallet} title="No credit data found" subtitle="Credit data loads after tenants are fetched." />
         ) : (
-          <Card className="bg-slate-900 border-slate-800">
-            <ScrollArea className="max-h-96">
+          <Card className="card-shadow">
+            <ScrollArea className="max-h-[calc(100vh-380px)]">
               <Table>
                 <TableHeader>
-                  <TableRow className="border-slate-800 hover:bg-transparent">
-                    <TableHead className="text-slate-400">Tenant</TableHead>
-                    <TableHead className="text-slate-400">Plan</TableHead>
-                    <TableHead className="text-slate-400 text-center">WhatsApp Credits</TableHead>
-                    <TableHead className="text-slate-400 text-center">Platform WA</TableHead>
-                    <TableHead className="text-slate-400 text-center">Own WA</TableHead>
-                    <TableHead className="text-slate-400 text-center">Email Provider</TableHead>
-                    <TableHead className="text-slate-400 text-right">Actions</TableHead>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>Tenant</TableHead>
+                    <TableHead>Plan</TableHead>
+                    <TableHead className="text-center">WhatsApp Credits</TableHead>
+                    <TableHead className="text-center">Platform WA</TableHead>
+                    <TableHead className="text-center">Own WA</TableHead>
+                    <TableHead className="text-center">Email Provider</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredCredits.map((credit) => {
                     const isPaidWithOwnWhatsApp = credit.plan !== 'trial' && credit.ownWhatsappConnected;
                     return (
-                      <TableRow key={credit.tenantId} className="border-slate-800 hover:bg-slate-800/50">
-                        <TableCell className="font-medium text-white">{credit.tenantName}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadge(credit.plan))}>
-                            {credit.plan}
-                          </Badge>
-                        </TableCell>
+                      <TableRow key={credit.tenantId}>
+                        <TableCell className="font-medium text-foreground">{credit.tenantName}</TableCell>
+                        <TableCell><Badge variant="outline" className={cn('capitalize text-[10px]', getPlanBadgeClasses(credit.plan))}>{credit.plan}</Badge></TableCell>
                         <TableCell className="text-center">
                           {isPaidWithOwnWhatsApp ? (
-                            <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px]">Unlimited</Badge>
+                            <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px]">Unlimited</Badge>
                           ) : (
                             <div className="flex items-center justify-center gap-2">
-                              <Progress
-                                value={credit.trialWhatsappCredits > 0 ? (credit.trialWhatsappUsed / credit.trialWhatsappCredits) * 100 : 0}
-                                className="h-1.5 w-16"
-                              />
-                              <span className={cn(
-                                'text-xs',
-                                credit.trialWhatsappUsed >= credit.trialWhatsappCredits ? 'text-red-400 font-medium' : 'text-slate-400',
-                              )}>
+                              <Progress value={credit.trialWhatsappCredits > 0 ? (credit.trialWhatsappUsed / credit.trialWhatsappCredits) * 100 : 0} className="h-1.5 w-16" />
+                              <span className={cn('text-xs', credit.trialWhatsappUsed >= credit.trialWhatsappCredits ? 'text-red-600 dark:text-red-400 font-medium' : 'text-muted-foreground')}>
                                 {credit.trialWhatsappUsed}/{credit.trialWhatsappCredits}
                               </span>
                             </div>
                           )}
                         </TableCell>
                         <TableCell className="text-center">
-                          {credit.platformWhatsappEnabled ? (
-                            <CheckCircle2 className="size-4 text-emerald-400 inline-block" />
-                          ) : (
-                            <XCircle className="size-4 text-red-400 inline-block" />
-                          )}
+                          {credit.platformWhatsappEnabled ? <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400 inline-block" /> : <XCircle className="size-4 text-red-600 dark:text-red-400 inline-block" />}
                         </TableCell>
                         <TableCell className="text-center">
-                          {credit.ownWhatsappConnected ? (
-                            <CheckCircle2 className="size-4 text-emerald-400 inline-block" />
-                          ) : (
-                            <XCircle className="size-4 text-slate-500 inline-block" />
-                          )}
+                          {credit.ownWhatsappConnected ? <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400 inline-block" /> : <XCircle className="size-4 text-muted-foreground inline-block" />}
                         </TableCell>
                         <TableCell className="text-center">
                           {credit.ownEmailProviderConnected ? (
-                            <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-[10px]">Own</Badge>
+                            <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px]">Own</Badge>
                           ) : (
-                            <Badge variant="outline" className="text-slate-500 text-[10px] border-slate-700">Platform</Badge>
+                            <Badge variant="outline" className="text-[10px] text-muted-foreground">Platform</Badge>
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button variant="ghost" size="sm" className="h-7 px-2 text-slate-400 hover:text-emerald-400" onClick={() => handleEdit(credit)}>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleEdit(credit)} title="Edit Credits">
                             <Edit3 className="size-3.5" />
                           </Button>
                         </TableCell>
@@ -2494,62 +2422,43 @@ export function SuperAdminView() {
 
         {/* Edit Credits Dialog */}
         <Dialog open={!!editDialog} onOpenChange={(open) => { if (!open) setEditDialog(null); }}>
-          <DialogContent className="bg-slate-900 border-slate-800 text-white sm:max-w-md">
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Wallet className="size-5 text-emerald-400" /> Edit Credit Settings
-              </DialogTitle>
-              <DialogDescription className="text-slate-400">
-                Manage credits for {editDialog?.tenantName}
-              </DialogDescription>
+              <DialogTitle className="flex items-center gap-2"><Wallet className="size-5 text-primary" /> Edit Credit Settings</DialogTitle>
+              <DialogDescription>Manage credits for {editDialog?.tenantName}</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label className="text-slate-300">Trial WhatsApp Credits</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={editForm.trialWhatsappCredits}
-                  onChange={(e) => setEditForm((p) => ({ ...p, trialWhatsappCredits: parseInt(e.target.value) || 0 }))}
-                  className="bg-slate-800 border-slate-700 text-white"
-                />
-                <p className="text-[11px] text-slate-500">Current usage: {editDialog?.trialWhatsappUsed ?? 0} credits used</p>
+                <Label>Trial WhatsApp Credits</Label>
+                <Input type="number" min={0} value={editForm.trialWhatsappCredits} onChange={(e) => setEditForm((p) => ({ ...p, trialWhatsappCredits: parseInt(e.target.value) || 0 }))} />
+                <p className="text-[11px] text-muted-foreground">Current usage: {editDialog?.trialWhatsappUsed ?? 0} credits used</p>
               </div>
-              <Separator className="bg-slate-800" />
+              <Separator />
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label className="text-slate-300">Platform WhatsApp</Label>
-                  <p className="text-[11px] text-slate-500">Enable platform-provided WhatsApp</p>
+                  <Label>Platform WhatsApp</Label>
+                  <p className="text-[11px] text-muted-foreground">Enable platform-provided WhatsApp</p>
                 </div>
-                <Switch
-                  checked={editForm.platformWhatsappEnabled}
-                  onCheckedChange={(checked) => setEditForm((p) => ({ ...p, platformWhatsappEnabled: checked }))}
-                />
+                <Switch checked={editForm.platformWhatsappEnabled} onCheckedChange={(checked) => setEditForm((p) => ({ ...p, platformWhatsappEnabled: checked }))} />
               </div>
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label className="text-slate-300">Own WhatsApp Connected</Label>
-                  <p className="text-[11px] text-slate-500">Tenant has connected their own WhatsApp</p>
+                  <Label>Own WhatsApp Connected</Label>
+                  <p className="text-[11px] text-muted-foreground">Tenant has connected their own WhatsApp</p>
                 </div>
-                <Switch
-                  checked={editForm.ownWhatsappConnected}
-                  onCheckedChange={(checked) => setEditForm((p) => ({ ...p, ownWhatsappConnected: checked }))}
-                />
+                <Switch checked={editForm.ownWhatsappConnected} onCheckedChange={(checked) => setEditForm((p) => ({ ...p, ownWhatsappConnected: checked }))} />
               </div>
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <Label className="text-slate-300">Own Email Provider</Label>
-                  <p className="text-[11px] text-slate-500">Tenant has connected their own email provider</p>
+                  <Label>Own Email Provider</Label>
+                  <p className="text-[11px] text-muted-foreground">Tenant has connected their own email provider</p>
                 </div>
-                <Switch
-                  checked={editForm.ownEmailProviderConnected}
-                  onCheckedChange={(checked) => setEditForm((p) => ({ ...p, ownEmailProviderConnected: checked }))}
-                />
+                <Switch checked={editForm.ownEmailProviderConnected} onCheckedChange={(checked) => setEditForm((p) => ({ ...p, ownEmailProviderConnected: checked }))} />
               </div>
             </div>
             <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setEditDialog(null)} className="border-slate-700 text-slate-300">Cancel</Button>
-              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSave} disabled={saving}>
+              <Button variant="outline" onClick={() => setEditDialog(null)}>Cancel</Button>
+              <Button onClick={handleSave} disabled={saving}>
                 {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <CheckCircle2 className="size-4 mr-1.5" />} Save
               </Button>
             </DialogFooter>
@@ -2560,98 +2469,107 @@ export function SuperAdminView() {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // Fallback stats helper
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  function getFallbackStats(): PlatformStats {
-    return {
-      totalTenants: tenants.length, activeTenants: tenants.filter((t) => t.planStatus === 'active').length,
-      suspendedTenants: tenants.filter((t) => t.planStatus === 'suspended').length, trialTenants: tenants.filter((t) => t.planStatus === 'trial').length,
-      totalUsers: users.length, activeUsers: users.filter((u) => u.isActive).length,
-      totalRevenue: tenants.reduce((s, t) => s + t.mrr, 0), mrr: tenants.reduce((s, t) => s + t.mrr, 0),
-      arr: tenants.reduce((s, t) => s + t.arr, 0), avgChurnRate: 0, activeSubscriptions: subscriptions.length,
-      communication: { totalConversations: 0, activeConversations: 0 },
-      healthMetrics: [], recentSecurityEvents: [], recentAuditLogs: [],
-      trends: { tenants: 0, users: 0, revenue: 0, subscriptions: 0 },
-    };
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════
   // RENDER
   // ═══════════════════════════════════════════════════════════════════════════
 
+  const currentNavLabel = NAV_GROUPS.flatMap(g => g.items).find(i => i.key === activeTab)?.label || 'Dashboard';
+
   return (
-    <div className="space-y-6 w-full">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600 shrink-0">
-            <ShieldCheck className="size-5 text-white" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-white truncate">Super Admin Portal</h1>
-              <Badge className="bg-red-500/10 text-red-400 border-red-500/20 text-[10px]">Admin</Badge>
+    <div className="flex flex-col lg:flex-row gap-6 w-full">
+      {/* Left sub-navigation (desktop) */}
+      <aside className="hidden lg:flex flex-col w-56 shrink-0">
+        <div className="sticky top-0 space-y-1">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.label} className="mb-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-3 mb-1.5">{group.label}</p>
+              <div className="space-y-0.5">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.key;
+                  return (
+                    <button
+                      key={item.key}
+                      onClick={() => setActiveTab(item.key)}
+                      className={cn(
+                        'flex items-center gap-2.5 w-full px-3 py-2 rounded-md text-sm font-medium transition-colors text-left',
+                        isActive
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                      )}
+                    >
+                      <Icon className="size-4 shrink-0" />
+                      <span className="truncate">{item.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-            <p className="text-sm text-slate-400">Platform-wide management &amp; analytics</p>
-          </div>
+          ))}
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => { refetchStats(); refetchTenants(); }} className="min-h-[36px] border-slate-700 text-slate-300 hover:text-white">
-            <RefreshCw className="size-4 mr-1.5" /> Refresh
-          </Button>
-          <Badge variant="outline" className="text-xs px-3 py-1 border-emerald-500/30 text-emerald-400 bg-emerald-500/5">
-            <span className="size-1.5 bg-emerald-500 rounded-full mr-1.5 animate-pulse" /> Live
-          </Badge>
+      </aside>
+
+      {/* Mobile horizontal tab bar */}
+      <div className="lg:hidden -mx-1 px-1">
+        <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-thin">
+          {NAV_GROUPS.flatMap(g => g.items).map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.key;
+            return (
+              <button
+                key={item.key}
+                onClick={() => setActiveTab(item.key)}
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap shrink-0',
+                  isActive ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                )}
+              >
+                <Icon className="size-3.5" />
+                {item.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="flex flex-wrap h-auto gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
-          <TabsTrigger value="dashboard" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
-            <BarChart3 className="size-3.5" /><span className="hidden sm:inline">Dashboard</span>
-          </TabsTrigger>
-          <TabsTrigger value="tenants" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
-            <Building2 className="size-3.5" /><span className="hidden sm:inline">Tenants</span>
-          </TabsTrigger>
-          <TabsTrigger value="subscriptions" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
-            <CreditCard className="size-3.5" /><span className="hidden sm:inline">Subscriptions</span>
-          </TabsTrigger>
-          <TabsTrigger value="feature-flags" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
-            <Flag className="size-3.5" /><span className="hidden sm:inline">Features</span>
-          </TabsTrigger>
-          <TabsTrigger value="menu-items" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
-            <Menu className="size-3.5" /><span className="hidden sm:inline">Menu Items</span>
-          </TabsTrigger>
-          <TabsTrigger value="integrations" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
-            <Plug className="size-3.5" /><span className="hidden sm:inline">Integrations</span>
-          </TabsTrigger>
-          <TabsTrigger value="providers" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
-            <Settings2 className="size-3.5" /><span className="hidden sm:inline">Providers</span>
-          </TabsTrigger>
-          <TabsTrigger value="users" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
-            <UserCog className="size-3.5" /><span className="hidden sm:inline">Users</span>
-          </TabsTrigger>
-          <TabsTrigger value="audit-logs" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
-            <FileText className="size-3.5" /><span className="hidden sm:inline">Audit Logs</span>
-          </TabsTrigger>
-          <TabsTrigger value="credits" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
-            <Wallet className="size-3.5" /><span className="hidden sm:inline">Credits</span>
-          </TabsTrigger>
-        </TabsList>
+      {/* Main content */}
+      <div className="flex-1 min-w-0 space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center size-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 shrink-0 shadow-sm">
+              <ShieldCheck className="size-5 text-primary-foreground" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-foreground truncate">Super Admin</h1>
+                <Badge className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 text-[10px]">PLATFORM</Badge>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {currentNavLabel} · Platform-wide management &amp; analytics
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => { refetchStats(); refetchTenants(); }} className="min-h-[36px]">
+              <RefreshCw className="size-4 mr-1.5" /> Refresh
+            </Button>
+            <Badge variant="outline" className="text-xs px-3 py-1 border-primary/30 text-primary bg-primary/5">
+              <span className="size-1.5 bg-primary rounded-full mr-1.5 animate-pulse" /> Live
+            </Badge>
+          </div>
+        </div>
 
-        <TabsContent value="dashboard"><DashboardTab /></TabsContent>
-        <TabsContent value="tenants"><TenantsTab /></TabsContent>
-        <TabsContent value="subscriptions"><SubscriptionsTab /></TabsContent>
-        <TabsContent value="feature-flags"><FeatureFlagsTab /></TabsContent>
-        <TabsContent value="menu-items"><MenuItemsTab /></TabsContent>
-        <TabsContent value="integrations"><IntegrationsTab /></TabsContent>
-        <TabsContent value="providers"><ProvidersTab /></TabsContent>
-        <TabsContent value="users"><UsersTab /></TabsContent>
-        <TabsContent value="audit-logs"><AuditLogsTab /></TabsContent>
-        <TabsContent value="credits"><CreditsTab /></TabsContent>
-      </Tabs>
+        {/* Tab content */}
+        {activeTab === 'dashboard' && <DashboardTab />}
+        {activeTab === 'tenants' && <TenantsTab />}
+        {activeTab === 'subscriptions' && <SubscriptionsTab />}
+        {activeTab === 'modules' && <ModulesTab />}
+        {activeTab === 'integrations' && <IntegrationsTab />}
+        {activeTab === 'providers' && <ProvidersTab />}
+        {activeTab === 'users' && <UsersTab />}
+        {activeTab === 'audit-logs' && <AuditLogsTab />}
+        {activeTab === 'credits' && <CreditsTab />}
+      </div>
     </div>
   );
 }

@@ -220,10 +220,10 @@ const SMS_PROVIDER_CONFIGS: Record<string, { label: string; fields: { key: strin
 
 function StatusBadge({ status }: { status: string }) {
   const config: Record<string, { color: string; icon: React.ElementType; label: string }> = {
-    active: { color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20', icon: CheckCircle2, label: 'Active' },
-    inactive: { color: 'text-slate-400 bg-slate-500/10 border-slate-500/20', icon: XCircle, label: 'Inactive' },
-    paused: { color: 'text-amber-400 bg-amber-500/10 border-amber-500/20', icon: AlertTriangle, label: 'Paused' },
-    error: { color: 'text-red-400 bg-red-500/10 border-red-500/20', icon: AlertTriangle, label: 'Error' },
+    active: { color: 'text-primary bg-primary/10 border-primary/20', icon: CheckCircle2, label: 'Active' },
+    inactive: { color: 'text-muted-foreground bg-muted border-border', icon: XCircle, label: 'Inactive' },
+    paused: { color: 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/20', icon: AlertTriangle, label: 'Paused' },
+    error: { color: 'text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/20', icon: AlertTriangle, label: 'Error' },
   };
   const c = config[status] || config.inactive;
   const Icon = c.icon;
@@ -550,12 +550,12 @@ export function ProvidersTab() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-            <Settings2 className="size-5 text-emerald-400" /> API &amp; Provider Management
+          <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+            <Settings2 className="size-5 text-primary" /> API &amp; Provider Management
           </h3>
-          <p className="text-sm text-slate-400">Manage Meta API, WhatsApp, SMS, and Email provider configurations for the platform.</p>
+          <p className="text-sm text-muted-foreground">Manage Meta API, WhatsApp, SMS, and Email provider configurations for the platform.</p>
         </div>
-        <Button variant="outline" size="sm" onClick={fetchAll} className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700">
+        <Button variant="outline" size="sm" onClick={fetchAll} className="bg-muted border-border text-foreground hover:bg-muted">
           <RefreshCw className="size-3.5 mr-1.5" /> Refresh
         </Button>
       </div>
@@ -563,20 +563,20 @@ export function ProvidersTab() {
       {/* Summary Cards */}
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
         {[
-          { label: 'WhatsApp', value: whatsappProviders.length, active: whatsappProviders.filter(p => p.status === 'active').length, icon: MessageSquare, color: 'text-emerald-400' },
-          { label: 'SMS', value: smsProviders.length, active: smsProviders.filter(p => p.status === 'active').length, icon: Phone, color: 'text-sky-400' },
-          { label: 'Platform Email', value: platformEmailProviders.length, active: platformEmailProviders.filter(p => p.status === 'active').length, icon: Mail, color: 'text-amber-400' },
-          { label: 'Total Providers', value: commProviders.length + emailProviders.length, active: [...commProviders, ...emailProviders].filter(p => p.status === 'active').length, icon: Globe, color: 'text-violet-400' },
+          { label: 'WhatsApp', value: whatsappProviders.length, active: whatsappProviders.filter(p => p.status === 'active').length, icon: MessageSquare, color: 'text-primary' },
+          { label: 'SMS', value: smsProviders.length, active: smsProviders.filter(p => p.status === 'active').length, icon: Phone, color: 'text-sky-600 dark:text-sky-400' },
+          { label: 'Platform Email', value: platformEmailProviders.length, active: platformEmailProviders.filter(p => p.status === 'active').length, icon: Mail, color: 'text-amber-600 dark:text-amber-400' },
+          { label: 'Total Providers', value: commProviders.length + emailProviders.length, active: [...commProviders, ...emailProviders].filter(p => p.status === 'active').length, icon: Globe, color: 'text-violet-600 dark:text-violet-400' },
         ].map(s => {
           const Icon = s.icon;
           return (
-            <Card key={s.label} className="bg-slate-900 border-slate-800 p-4">
+            <Card key={s.label} className="bg-card border-border p-4">
               <div className="flex items-center gap-2">
                 <Icon className={cn('size-4', s.color)} />
                 <div>
-                  <p className="text-xs text-slate-400">{s.label}</p>
+                  <p className="text-xs text-muted-foreground">{s.label}</p>
                   <p className={cn('text-lg font-bold', s.color)}>{s.value}</p>
-                  <p className="text-[10px] text-slate-500">{s.active} active</p>
+                  <p className="text-[10px] text-muted-foreground">{s.active} active</p>
                 </div>
               </div>
             </Card>
@@ -586,14 +586,14 @@ export function ProvidersTab() {
 
       {/* Provider Tabs */}
       <Tabs value={activeSubTab} onValueChange={setActiveSubTab}>
-        <TabsList className="flex gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800 h-auto flex-wrap">
-          <TabsTrigger value="whatsapp" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
+        <TabsList className="flex gap-1 bg-card p-1 rounded-lg border border-border h-auto flex-wrap">
+          <TabsTrigger value="whatsapp" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-foreground text-muted-foreground">
             <MessageSquare className="size-3.5" /><span className="hidden sm:inline">WhatsApp / Meta API</span><span className="sm:hidden">WhatsApp</span>
           </TabsTrigger>
-          <TabsTrigger value="sms" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
+          <TabsTrigger value="sms" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-foreground text-muted-foreground">
             <Phone className="size-3.5" /><span className="hidden sm:inline">SMS Providers</span><span className="sm:hidden">SMS</span>
           </TabsTrigger>
-          <TabsTrigger value="email" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white text-slate-400">
+          <TabsTrigger value="email" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-foreground text-muted-foreground">
             <Mail className="size-3.5" /><span className="hidden sm:inline">Email Providers</span><span className="sm:hidden">Email</span>
           </TabsTrigger>
         </TabsList>
@@ -601,7 +601,7 @@ export function ProvidersTab() {
         {/* ─── WhatsApp / Meta API Tab ─────────────────────────────────── */}
         <TabsContent value="whatsapp" className="space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-muted-foreground">
               Manage WhatsApp/Meta API providers used for trial users and platform messaging.
             </p>
             <Button size="sm" onClick={() => openCommCreate('whatsapp')} className="bg-emerald-600 hover:bg-emerald-700">
@@ -610,33 +610,33 @@ export function ProvidersTab() {
           </div>
 
           {whatsappProviders.length === 0 ? (
-            <Card className="bg-slate-900/50 border-slate-800">
+            <Card className="bg-card/50 border-border">
               <CardContent className="p-8 text-center">
-                <MessageSquare className="size-10 text-slate-600 mx-auto mb-3" />
-                <p className="text-sm text-slate-400">No WhatsApp providers configured</p>
-                <p className="text-xs text-slate-500 mt-1">Add a Meta Cloud API provider to enable WhatsApp messaging for trial users.</p>
+                <MessageSquare className="size-10 text-muted-foreground mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">No WhatsApp providers configured</p>
+                <p className="text-xs text-muted-foreground mt-1">Add a Meta Cloud API provider to enable WhatsApp messaging for trial users.</p>
               </CardContent>
             </Card>
           ) : (
             <div className="grid gap-3">
               {whatsappProviders.map(p => (
-                <Card key={p.id} className="bg-slate-900 border-slate-800">
+                <Card key={p.id} className="bg-card border-border">
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-2">
-                          <h4 className="text-sm font-medium text-white">{p.name}</h4>
+                          <h4 className="text-sm font-medium text-foreground">{p.name}</h4>
                           <StatusBadge status={p.status} />
                           {p.isDefault && (
-                            <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/20">
+                            <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
                               <Key className="size-2.5 mr-0.5" /> Default
                             </Badge>
                           )}
-                          <Badge variant="outline" className="text-[10px] bg-slate-800 text-slate-300 border-slate-700">
+                          <Badge variant="outline" className="text-[10px] bg-muted text-foreground border-border">
                             {WHATSAPP_PROVIDER_CONFIGS[p.provider]?.label || p.provider}
                           </Badge>
                           {!p.sendingEnabled && (
-                            <Badge variant="outline" className="text-[10px] bg-red-500/10 text-red-400 border-red-500/20">
+                            <Badge variant="outline" className="text-[10px] bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20">
                               <PowerOff className="size-2.5 mr-0.5" /> Sending Disabled
                             </Badge>
                           )}
@@ -645,24 +645,24 @@ export function ProvidersTab() {
                         <div className="grid gap-1.5 grid-cols-1 sm:grid-cols-2">
                           {Object.entries(p.config).map(([key, value]) => (
                             <div key={key} className="flex items-center gap-1.5 text-xs">
-                              <span className="text-slate-500 shrink-0">{key}:</span>
-                              <span className="text-slate-300 truncate font-mono">
+                              <span className="text-muted-foreground shrink-0">{key}:</span>
+                              <span className="text-foreground truncate font-mono">
                                 {value === '••••••••' ? (
                                   <span className="flex items-center gap-1">
                                     ••••••••
-                                    <button onClick={() => toggleSecret(`${p.id}-${key}`)} className="text-slate-500 hover:text-slate-300">
+                                    <button onClick={() => toggleSecret(`${p.id}-${key}`)} className="text-muted-foreground hover:text-foreground">
                                       {showSecrets[`${p.id}-${key}`] ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
                                     </button>
                                   </span>
                                 ) : (
-                                  value || <span className="text-slate-600 italic">empty</span>
+                                  value || <span className="text-muted-foreground italic">empty</span>
                                 )}
                               </span>
                             </div>
                           ))}
                         </div>
                         {/* Stats */}
-                        <div className="flex items-center gap-3 mt-2 text-[10px] text-slate-500">
+                        <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
                           <span>Sent: {p.totalSent}</span>
                           <span>Delivered: {p.totalDelivered}</span>
                           <span>Failed: {p.totalFailed}</span>
@@ -671,10 +671,10 @@ export function ProvidersTab() {
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        <Button variant="ghost" size="sm" onClick={() => openCommEdit(p)} className="text-slate-400 hover:text-white h-8 w-8 p-0">
+                        <Button variant="ghost" size="sm" onClick={() => openCommEdit(p)} className="text-muted-foreground hover:text-foreground h-8 w-8 p-0">
                           <Edit3 className="size-3.5" />
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => deleteCommProvider(p.id)} className="text-red-400 hover:text-red-300 h-8 w-8 p-0">
+                        <Button variant="ghost" size="sm" onClick={() => deleteCommProvider(p.id)} className="text-red-600 dark:text-red-400 hover:text-red-300 h-8 w-8 p-0">
                           <Trash2 className="size-3.5" />
                         </Button>
                       </div>
@@ -689,7 +689,7 @@ export function ProvidersTab() {
         {/* ─── SMS Providers Tab ────────────────────────────────────────── */}
         <TabsContent value="sms" className="space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-muted-foreground">
               Manage SMS providers for platform messaging.
             </p>
             <Button size="sm" onClick={() => openCommCreate('sms')} className="bg-emerald-600 hover:bg-emerald-700">
@@ -698,53 +698,53 @@ export function ProvidersTab() {
           </div>
 
           {smsProviders.length === 0 ? (
-            <Card className="bg-slate-900/50 border-slate-800">
+            <Card className="bg-card/50 border-border">
               <CardContent className="p-8 text-center">
-                <Phone className="size-10 text-slate-600 mx-auto mb-3" />
-                <p className="text-sm text-slate-400">No SMS providers configured</p>
-                <p className="text-xs text-slate-500 mt-1">Add an SMS provider like Twilio to enable SMS messaging.</p>
+                <Phone className="size-10 text-muted-foreground mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">No SMS providers configured</p>
+                <p className="text-xs text-muted-foreground mt-1">Add an SMS provider like Twilio to enable SMS messaging.</p>
               </CardContent>
             </Card>
           ) : (
             <div className="grid gap-3">
               {smsProviders.map(p => (
-                <Card key={p.id} className="bg-slate-900 border-slate-800">
+                <Card key={p.id} className="bg-card border-border">
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-2">
-                          <h4 className="text-sm font-medium text-white">{p.name}</h4>
+                          <h4 className="text-sm font-medium text-foreground">{p.name}</h4>
                           <StatusBadge status={p.status} />
                           {p.isDefault && (
-                            <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/20">
+                            <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
                               <Key className="size-2.5 mr-0.5" /> Default
                             </Badge>
                           )}
-                          <Badge variant="outline" className="text-[10px] bg-slate-800 text-slate-300 border-slate-700">
+                          <Badge variant="outline" className="text-[10px] bg-muted text-foreground border-border">
                             {SMS_PROVIDER_CONFIGS[p.provider]?.label || p.provider}
                           </Badge>
                         </div>
                         <div className="grid gap-1.5 grid-cols-1 sm:grid-cols-2">
                           {Object.entries(p.config).map(([key, value]) => (
                             <div key={key} className="flex items-center gap-1.5 text-xs">
-                              <span className="text-slate-500 shrink-0">{key}:</span>
-                              <span className="text-slate-300 truncate font-mono">
-                                {value === '••••••••' ? '••••••••' : (value || <span className="text-slate-600 italic">empty</span>)}
+                              <span className="text-muted-foreground shrink-0">{key}:</span>
+                              <span className="text-foreground truncate font-mono">
+                                {value === '••••••••' ? '••••••••' : (value || <span className="text-muted-foreground italic">empty</span>)}
                               </span>
                             </div>
                           ))}
                         </div>
-                        <div className="flex items-center gap-3 mt-2 text-[10px] text-slate-500">
+                        <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
                           <span>Sent: {p.totalSent}</span>
                           <span>Delivered: {p.totalDelivered}</span>
                           <span>Failed: {p.totalFailed}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        <Button variant="ghost" size="sm" onClick={() => openCommEdit(p)} className="text-slate-400 hover:text-white h-8 w-8 p-0">
+                        <Button variant="ghost" size="sm" onClick={() => openCommEdit(p)} className="text-muted-foreground hover:text-foreground h-8 w-8 p-0">
                           <Edit3 className="size-3.5" />
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => deleteCommProvider(p.id)} className="text-red-400 hover:text-red-300 h-8 w-8 p-0">
+                        <Button variant="ghost" size="sm" onClick={() => deleteCommProvider(p.id)} className="text-red-600 dark:text-red-400 hover:text-red-300 h-8 w-8 p-0">
                           <Trash2 className="size-3.5" />
                         </Button>
                       </div>
@@ -759,7 +759,7 @@ export function ProvidersTab() {
         {/* ─── Email Providers Tab ──────────────────────────────────────── */}
         <TabsContent value="email" className="space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-muted-foreground">
               Manage platform-level email providers for transactional and marketing emails.
             </p>
             <Button size="sm" onClick={openEmailCreate} className="bg-emerald-600 hover:bg-emerald-700">
@@ -768,60 +768,60 @@ export function ProvidersTab() {
           </div>
 
           {emailProviders.length === 0 ? (
-            <Card className="bg-slate-900/50 border-slate-800">
+            <Card className="bg-card/50 border-border">
               <CardContent className="p-8 text-center">
-                <Mail className="size-10 text-slate-600 mx-auto mb-3" />
-                <p className="text-sm text-slate-400">No email providers configured</p>
-                <p className="text-xs text-slate-500 mt-1">Add a platform email provider to enable transactional and marketing emails.</p>
+                <Mail className="size-10 text-muted-foreground mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">No email providers configured</p>
+                <p className="text-xs text-muted-foreground mt-1">Add a platform email provider to enable transactional and marketing emails.</p>
               </CardContent>
             </Card>
           ) : (
             <div className="grid gap-3">
               {emailProviders.map(p => (
-                <Card key={p.id} className={cn('border', p.isPlatform ? 'bg-slate-900 border-emerald-900/30' : 'bg-slate-900/70 border-slate-800')}>
+                <Card key={p.id} className={cn('border', p.isPlatform ? 'bg-card border-emerald-900/30' : 'bg-card/70 border-border')}>
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap mb-2">
-                          <h4 className="text-sm font-medium text-white">{p.name}</h4>
+                          <h4 className="text-sm font-medium text-foreground">{p.name}</h4>
                           <StatusBadge status={p.status} />
                           {p.isPlatform && (
-                            <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                            <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">
                               <Shield className="size-2.5 mr-0.5" /> Platform
                             </Badge>
                           )}
                           {p.isDefaultTransactional && (
-                            <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-400 border-sky-500/20">
+                            <Badge variant="outline" className="text-[10px] bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20">
                               Default Transactional
                             </Badge>
                           )}
                           {p.isDefaultMarketing && (
-                            <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/20">
+                            <Badge variant="outline" className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">
                               Default Marketing
                             </Badge>
                           )}
-                          <Badge variant="outline" className="text-[10px] bg-slate-800 text-slate-300 border-slate-700">
+                          <Badge variant="outline" className="text-[10px] bg-muted text-foreground border-border">
                             {EMAIL_PROVIDER_CONFIGS[p.providerType]?.label || p.providerType}
                           </Badge>
-                          <Badge variant="outline" className="text-[10px] bg-slate-800 text-slate-300 border-slate-700 capitalize">
+                          <Badge variant="outline" className="text-[10px] bg-muted text-foreground border-border capitalize">
                             {p.usageType}
                           </Badge>
                         </div>
-                        <div className="flex items-center gap-4 text-xs text-slate-400 mb-2">
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground mb-2">
                           <span>From: {p.fromName} &lt;{p.fromEmail}&gt;</span>
                           {p.replyTo && <span>Reply-To: {p.replyTo}</span>}
                         </div>
                         <div className="grid gap-1.5 grid-cols-1 sm:grid-cols-2">
                           {Object.entries(p.config).map(([key, value]) => (
                             <div key={key} className="flex items-center gap-1.5 text-xs">
-                              <span className="text-slate-500 shrink-0">{key}:</span>
-                              <span className="text-slate-300 truncate font-mono">
-                                {String(value) === '••••••••' ? '••••••••' : (String(value) || <span className="text-slate-600 italic">empty</span>)}
+                              <span className="text-muted-foreground shrink-0">{key}:</span>
+                              <span className="text-foreground truncate font-mono">
+                                {String(value) === '••••••••' ? '••••••••' : (String(value) || <span className="text-muted-foreground italic">empty</span>)}
                               </span>
                             </div>
                           ))}
                         </div>
-                        <div className="flex items-center gap-3 mt-2 text-[10px] text-slate-500">
+                        <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground">
                           <span>Sent: {p.totalSent}</span>
                           <span>Delivered: {p.totalDelivered}</span>
                           <span>Failed: {p.totalFailed}</span>
@@ -829,10 +829,10 @@ export function ProvidersTab() {
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        <Button variant="ghost" size="sm" onClick={() => openEmailEdit(p)} className="text-slate-400 hover:text-white h-8 w-8 p-0">
+                        <Button variant="ghost" size="sm" onClick={() => openEmailEdit(p)} className="text-muted-foreground hover:text-foreground h-8 w-8 p-0">
                           <Edit3 className="size-3.5" />
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => deleteEmailProvider(p.id)} className="text-red-400 hover:text-red-300 h-8 w-8 p-0">
+                        <Button variant="ghost" size="sm" onClick={() => deleteEmailProvider(p.id)} className="text-red-600 dark:text-red-400 hover:text-red-300 h-8 w-8 p-0">
                           <Trash2 className="size-3.5" />
                         </Button>
                       </div>
@@ -847,13 +847,13 @@ export function ProvidersTab() {
 
       {/* ─── Email Provider Dialog ──────────────────────────────────────── */}
       <Dialog open={showEmailDialog} onOpenChange={(open) => { if (!open) { setShowEmailDialog(false); resetEmailForm(); } }}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto bg-slate-950 border-slate-800">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto bg-background border-border">
           <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
-              <Mail className="size-5 text-emerald-400" />
+            <DialogTitle className="text-foreground flex items-center gap-2">
+              <Mail className="size-5 text-primary" />
               {editingEmailProvider ? 'Edit Email Provider' : 'Add Email Provider'}
             </DialogTitle>
-            <DialogDescription className="text-slate-400">
+            <DialogDescription className="text-muted-foreground">
               {editingEmailProvider ? 'Update the email provider configuration.' : 'Configure a new platform-level email provider for transactional and marketing emails.'}
             </DialogDescription>
           </DialogHeader>
@@ -862,17 +862,17 @@ export function ProvidersTab() {
             {/* Basic Info */}
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label className="text-slate-300 text-xs">Provider Name *</Label>
+                <Label className="text-foreground text-xs">Provider Name *</Label>
                 <Input value={emailForm.name} onChange={e => setEmailForm(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="e.g., AWS SES Production" className="bg-slate-900 border-slate-700 text-white text-sm" />
+                  placeholder="e.g., AWS SES Production" className="bg-card border-border text-foreground text-sm" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-slate-300 text-xs">Provider Type *</Label>
+                <Label className="text-foreground text-xs">Provider Type *</Label>
                 <Select value={emailForm.providerType} onValueChange={(val) => setEmailForm(prev => ({ ...prev, providerType: val, config: {} }))}>
-                  <SelectTrigger className="bg-slate-900 border-slate-700 text-white text-sm">
+                  <SelectTrigger className="bg-card border-border text-foreground text-sm">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-slate-700">
+                  <SelectContent className="bg-card border-border">
                     {Object.entries(EMAIL_PROVIDER_CONFIGS).map(([key, { label }]) => (
                       <SelectItem key={key} value={key}>{label}</SelectItem>
                     ))}
@@ -883,30 +883,30 @@ export function ProvidersTab() {
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label className="text-slate-300 text-xs">From Name *</Label>
+                <Label className="text-foreground text-xs">From Name *</Label>
                 <Input value={emailForm.fromName} onChange={e => setEmailForm(prev => ({ ...prev, fromName: e.target.value }))}
-                  placeholder="ServiceOS" className="bg-slate-900 border-slate-700 text-white text-sm" />
+                  placeholder="ServiceOS" className="bg-card border-border text-foreground text-sm" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-slate-300 text-xs">From Email *</Label>
+                <Label className="text-foreground text-xs">From Email *</Label>
                 <Input value={emailForm.fromEmail} onChange={e => setEmailForm(prev => ({ ...prev, fromEmail: e.target.value }))}
-                  placeholder="noreply@example.com" type="email" className="bg-slate-900 border-slate-700 text-white text-sm" />
+                  placeholder="noreply@example.com" type="email" className="bg-card border-border text-foreground text-sm" />
               </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label className="text-slate-300 text-xs">Reply-To</Label>
+                <Label className="text-foreground text-xs">Reply-To</Label>
                 <Input value={emailForm.replyTo} onChange={e => setEmailForm(prev => ({ ...prev, replyTo: e.target.value }))}
-                  placeholder="support@example.com" type="email" className="bg-slate-900 border-slate-700 text-white text-sm" />
+                  placeholder="support@example.com" type="email" className="bg-card border-border text-foreground text-sm" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-slate-300 text-xs">Usage Type</Label>
+                <Label className="text-foreground text-xs">Usage Type</Label>
                 <Select value={emailForm.usageType} onValueChange={val => setEmailForm(prev => ({ ...prev, usageType: val }))}>
-                  <SelectTrigger className="bg-slate-900 border-slate-700 text-white text-sm">
+                  <SelectTrigger className="bg-card border-border text-foreground text-sm">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-slate-700">
+                  <SelectContent className="bg-card border-border">
                     <SelectItem value="both">Both</SelectItem>
                     <SelectItem value="transactional">Transactional Only</SelectItem>
                     <SelectItem value="marketing">Marketing Only</SelectItem>
@@ -915,19 +915,19 @@ export function ProvidersTab() {
               </div>
             </div>
 
-            <Separator className="bg-slate-800" />
+            <Separator className="bg-muted" />
 
             {/* Config Fields */}
             <div>
-              <Label className="text-slate-300 text-xs flex items-center gap-1.5 mb-3">
-                <Key className="size-3.5 text-amber-400" />
+              <Label className="text-foreground text-xs flex items-center gap-1.5 mb-3">
+                <Key className="size-3.5 text-amber-600 dark:text-amber-400" />
                 {EMAIL_PROVIDER_CONFIGS[emailForm.providerType]?.label || 'Provider'} Configuration
               </Label>
               <div className="grid gap-3 sm:grid-cols-2">
                 {getEmailConfigFields().map(field => (
                   <div key={field.key} className="space-y-1.5">
-                    <Label className="text-slate-400 text-xs">
-                      {field.label} {field.required && <span className="text-red-400">*</span>}
+                    <Label className="text-muted-foreground text-xs">
+                      {field.label} {field.required && <span className="text-red-600 dark:text-red-400">*</span>}
                     </Label>
                     <div className="relative">
                       <Input
@@ -939,7 +939,7 @@ export function ProvidersTab() {
                         }))}
                         placeholder={field.placeholder}
                         className={cn(
-                          'bg-slate-900 border-slate-700 text-white text-sm pr-9',
+                          'bg-card border-border text-foreground text-sm pr-9',
                           field.type === 'password' && 'font-mono',
                         )}
                       />
@@ -947,7 +947,7 @@ export function ProvidersTab() {
                         <button
                           type="button"
                           onClick={() => toggleSecret(`email-${field.key}`)}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                         >
                           {showSecrets[`email-${field.key}`] ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                         </button>
@@ -958,41 +958,41 @@ export function ProvidersTab() {
               </div>
             </div>
 
-            <Separator className="bg-slate-800" />
+            <Separator className="bg-muted" />
 
             {/* Flags */}
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex items-center justify-between p-3 rounded-lg bg-slate-900 border border-slate-800">
+              <div className="flex items-center justify-between p-3 rounded-lg bg-card border border-border">
                 <div>
-                  <p className="text-sm text-white">Platform Provider</p>
-                  <p className="text-xs text-slate-400">Platform-paid email provider</p>
+                  <p className="text-sm text-foreground">Platform Provider</p>
+                  <p className="text-xs text-muted-foreground">Platform-paid email provider</p>
                 </div>
                 <Switch checked={emailForm.isPlatform} onCheckedChange={val => setEmailForm(prev => ({ ...prev, isPlatform: val }))} />
               </div>
-              <div className="flex items-center justify-between p-3 rounded-lg bg-slate-900 border border-slate-800">
+              <div className="flex items-center justify-between p-3 rounded-lg bg-card border border-border">
                 <div>
-                  <p className="text-sm text-white">Default Transactional</p>
-                  <p className="text-xs text-slate-400">Use for transactional emails</p>
+                  <p className="text-sm text-foreground">Default Transactional</p>
+                  <p className="text-xs text-muted-foreground">Use for transactional emails</p>
                 </div>
                 <Switch checked={emailForm.isDefaultTransactional} onCheckedChange={val => setEmailForm(prev => ({ ...prev, isDefaultTransactional: val }))} />
               </div>
-              <div className="flex items-center justify-between p-3 rounded-lg bg-slate-900 border border-slate-800">
+              <div className="flex items-center justify-between p-3 rounded-lg bg-card border border-border">
                 <div>
-                  <p className="text-sm text-white">Default Marketing</p>
-                  <p className="text-xs text-slate-400">Use for marketing emails</p>
+                  <p className="text-sm text-foreground">Default Marketing</p>
+                  <p className="text-xs text-muted-foreground">Use for marketing emails</p>
                 </div>
                 <Switch checked={emailForm.isDefaultMarketing} onCheckedChange={val => setEmailForm(prev => ({ ...prev, isDefaultMarketing: val }))} />
               </div>
-              <div className="flex items-center justify-between p-3 rounded-lg bg-slate-900 border border-slate-800">
+              <div className="flex items-center justify-between p-3 rounded-lg bg-card border border-border">
                 <div>
-                  <p className="text-sm text-white">Status</p>
-                  <p className="text-xs text-slate-400">Enable or pause this provider</p>
+                  <p className="text-sm text-foreground">Status</p>
+                  <p className="text-xs text-muted-foreground">Enable or pause this provider</p>
                 </div>
                 <Select value={emailForm.status} onValueChange={val => setEmailForm(prev => ({ ...prev, status: val }))}>
-                  <SelectTrigger className="w-28 bg-slate-800 border-slate-700 text-white text-xs h-8">
+                  <SelectTrigger className="w-28 bg-muted border-border text-foreground text-xs h-8">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-slate-700">
+                  <SelectContent className="bg-card border-border">
                     <SelectItem value="active">Active</SelectItem>
                     <SelectItem value="paused">Paused</SelectItem>
                   </SelectContent>
@@ -1002,7 +1002,7 @@ export function ProvidersTab() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowEmailDialog(false); resetEmailForm(); }} className="bg-slate-800 border-slate-700 text-slate-300">
+            <Button variant="outline" onClick={() => { setShowEmailDialog(false); resetEmailForm(); }} className="bg-muted border-border text-foreground">
               Cancel
             </Button>
             <Button onClick={saveEmailProvider} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">
@@ -1015,13 +1015,13 @@ export function ProvidersTab() {
 
       {/* ─── Communication Provider Dialog ──────────────────────────────── */}
       <Dialog open={showCommDialog} onOpenChange={(open) => { if (!open) { setShowCommDialog(false); resetCommForm(); } }}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto bg-slate-950 border-slate-800">
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto bg-background border-border">
           <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
-              {commForm.type === 'whatsapp' ? <MessageSquare className="size-5 text-emerald-400" /> : <Phone className="size-5 text-sky-400" />}
+            <DialogTitle className="text-foreground flex items-center gap-2">
+              {commForm.type === 'whatsapp' ? <MessageSquare className="size-5 text-primary" /> : <Phone className="size-5 text-sky-600 dark:text-sky-400" />}
               {editingCommProvider ? `Edit ${commForm.type === 'whatsapp' ? 'WhatsApp' : 'SMS'} Provider` : `Add ${commForm.type === 'whatsapp' ? 'WhatsApp/Meta API' : 'SMS'} Provider`}
             </DialogTitle>
-            <DialogDescription className="text-slate-400">
+            <DialogDescription className="text-muted-foreground">
               {commForm.type === 'whatsapp'
                 ? 'Configure Meta Cloud API or another WhatsApp Business provider for trial messaging.'
                 : 'Configure an SMS provider for platform messaging.'}
@@ -1032,17 +1032,17 @@ export function ProvidersTab() {
             {/* Basic Info */}
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label className="text-slate-300 text-xs">Provider Name *</Label>
+                <Label className="text-foreground text-xs">Provider Name *</Label>
                 <Input value={commForm.name} onChange={e => setCommForm(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="e.g., Meta Cloud API - Trial" className="bg-slate-900 border-slate-700 text-white text-sm" />
+                  placeholder="e.g., Meta Cloud API - Trial" className="bg-card border-border text-foreground text-sm" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-slate-300 text-xs">Provider Service *</Label>
+                <Label className="text-foreground text-xs">Provider Service *</Label>
                 <Select value={commForm.provider} onValueChange={val => setCommForm(prev => ({ ...prev, provider: val, config: {} }))}>
-                  <SelectTrigger className="bg-slate-900 border-slate-700 text-white text-sm">
+                  <SelectTrigger className="bg-card border-border text-foreground text-sm">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-slate-700">
+                  <SelectContent className="bg-card border-border">
                     {getCommProviderOptions().map(([key, { label }]) => (
                       <SelectItem key={key} value={key}>{label}</SelectItem>
                     ))}
@@ -1051,12 +1051,12 @@ export function ProvidersTab() {
               </div>
             </div>
 
-            <Separator className="bg-slate-800" />
+            <Separator className="bg-muted" />
 
             {/* Config Fields */}
             <div>
-              <Label className="text-slate-300 text-xs flex items-center gap-1.5 mb-3">
-                <Key className="size-3.5 text-amber-400" />
+              <Label className="text-foreground text-xs flex items-center gap-1.5 mb-3">
+                <Key className="size-3.5 text-amber-600 dark:text-amber-400" />
                 {commForm.type === 'whatsapp'
                   ? (WHATSAPP_PROVIDER_CONFIGS[commForm.provider]?.label || commForm.provider)
                   : (SMS_PROVIDER_CONFIGS[commForm.provider]?.label || commForm.provider)
@@ -1065,8 +1065,8 @@ export function ProvidersTab() {
               <div className="grid gap-3 sm:grid-cols-2">
                 {getCommConfigFields().map(field => (
                   <div key={field.key} className="space-y-1.5">
-                    <Label className="text-slate-400 text-xs">
-                      {field.label} {field.required && <span className="text-red-400">*</span>}
+                    <Label className="text-muted-foreground text-xs">
+                      {field.label} {field.required && <span className="text-red-600 dark:text-red-400">*</span>}
                     </Label>
                     <div className="relative">
                       <Input
@@ -1078,7 +1078,7 @@ export function ProvidersTab() {
                         }))}
                         placeholder={field.placeholder}
                         className={cn(
-                          'bg-slate-900 border-slate-700 text-white text-sm pr-9',
+                          'bg-card border-border text-foreground text-sm pr-9',
                           field.type === 'password' && 'font-mono',
                         )}
                       />
@@ -1086,7 +1086,7 @@ export function ProvidersTab() {
                         <button
                           type="button"
                           onClick={() => toggleSecret(`comm-${field.key}`)}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                         >
                           {showSecrets[`comm-${field.key}`] ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                         </button>
@@ -1097,56 +1097,56 @@ export function ProvidersTab() {
               </div>
             </div>
 
-            <Separator className="bg-slate-800" />
+            <Separator className="bg-muted" />
 
             {/* Settings */}
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex items-center justify-between p-3 rounded-lg bg-slate-900 border border-slate-800">
+              <div className="flex items-center justify-between p-3 rounded-lg bg-card border border-border">
                 <div>
-                  <p className="text-sm text-white">Default Provider</p>
-                  <p className="text-xs text-slate-400">Set as default for this type</p>
+                  <p className="text-sm text-foreground">Default Provider</p>
+                  <p className="text-xs text-muted-foreground">Set as default for this type</p>
                 </div>
                 <Switch checked={commForm.isDefault} onCheckedChange={val => setCommForm(prev => ({ ...prev, isDefault: val }))} />
               </div>
-              <div className="flex items-center justify-between p-3 rounded-lg bg-slate-900 border border-slate-800">
+              <div className="flex items-center justify-between p-3 rounded-lg bg-card border border-border">
                 <div>
-                  <p className="text-sm text-white">Sending Enabled</p>
-                  <p className="text-xs text-slate-400">Enable message sending</p>
+                  <p className="text-sm text-foreground">Sending Enabled</p>
+                  <p className="text-xs text-muted-foreground">Enable message sending</p>
                 </div>
                 <Switch checked={commForm.sendingEnabled} onCheckedChange={val => setCommForm(prev => ({ ...prev, sendingEnabled: val }))} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-slate-300 text-xs">Daily Limit</Label>
+                <Label className="text-foreground text-xs">Daily Limit</Label>
                 <Input type="number" value={commForm.dailyLimit} onChange={e => setCommForm(prev => ({ ...prev, dailyLimit: Number(e.target.value) }))}
-                  className="bg-slate-900 border-slate-700 text-white text-sm" />
+                  className="bg-card border-border text-foreground text-sm" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-slate-300 text-xs">Monthly Limit</Label>
+                <Label className="text-foreground text-xs">Monthly Limit</Label>
                 <Input type="number" value={commForm.monthlyLimit} onChange={e => setCommForm(prev => ({ ...prev, monthlyLimit: Number(e.target.value) }))}
-                  className="bg-slate-900 border-slate-700 text-white text-sm" />
+                  className="bg-card border-border text-foreground text-sm" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-slate-300 text-xs">Status</Label>
+                <Label className="text-foreground text-xs">Status</Label>
                 <Select value={commForm.status} onValueChange={val => setCommForm(prev => ({ ...prev, status: val }))}>
-                  <SelectTrigger className="bg-slate-900 border-slate-700 text-white text-sm">
+                  <SelectTrigger className="bg-card border-border text-foreground text-sm">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-slate-700">
+                  <SelectContent className="bg-card border-border">
                     <SelectItem value="active">Active</SelectItem>
                     <SelectItem value="inactive">Inactive</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-slate-300 text-xs">Tenant ID (optional)</Label>
+                <Label className="text-foreground text-xs">Tenant ID (optional)</Label>
                 <Input value={commForm.tenantId} onChange={e => setCommForm(prev => ({ ...prev, tenantId: e.target.value }))}
-                  placeholder="Leave empty for platform-wide" className="bg-slate-900 border-slate-700 text-white text-sm" />
+                  placeholder="Leave empty for platform-wide" className="bg-card border-border text-foreground text-sm" />
               </div>
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowCommDialog(false); resetCommForm(); }} className="bg-slate-800 border-slate-700 text-slate-300">
+            <Button variant="outline" onClick={() => { setShowCommDialog(false); resetCommForm(); }} className="bg-muted border-border text-foreground">
               Cancel
             </Button>
             <Button onClick={saveCommProvider} disabled={saving} className="bg-emerald-600 hover:bg-emerald-700">

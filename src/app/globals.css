@@ -382,7 +382,6 @@ html {
    the nav, making it invisible in both light and dark mode. */
 @media all and (display-mode: standalone) {
   html, body {
-    overflow: hidden;
     height: 100vh;
     overscroll-behavior: none;
     background-color: var(--background);
