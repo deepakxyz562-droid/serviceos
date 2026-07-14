@@ -28,6 +28,10 @@ import {
   BarChart3, UserCog, Zap, Calendar, Target, Briefcase,
   Filter, Key, Store, FileInput, Receipt, Settings,
   Plug, Database, HardDrive, Server, LineChart, Sparkles,
+  // New icons for the expanded enterprise nav
+  LayoutGrid, Palette, Mail, MessageCircle, Bell, Lock,
+  ListTodo, Terminal, LifeBuoy, ClipboardList, Languages,
+  ChevronLeft, X,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -56,6 +60,48 @@ import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   BarChart, Bar, Cell,
 } from 'recharts';
+import { lazy, Suspense } from 'react';
+
+// ─── Lazy-loaded enterprise sections ─────────────────────────────────────────
+// Each new section is a separate file under superadmin/sections/. Lazy-loading
+// keeps the initial bundle small (the dev server OOMs on 8k-line files in this
+// 4GB container) and lets each section code-split naturally.
+const CommandCenterSection = lazy(() => import('@/components/views/superadmin/sections/command-center').then(m => ({ default: m.CommandCenterSection })));
+const AICenterSection = lazy(() => import('@/components/views/superadmin/sections/ai-center').then(m => ({ default: m.AICenterSection })));
+const MarketplaceSection = lazy(() => import('@/components/views/superadmin/sections/marketplace').then(m => ({ default: m.MarketplaceSection })));
+const IndustryTemplatesSection = lazy(() => import('@/components/views/superadmin/sections/industry-templates').then(m => ({ default: m.IndustryTemplatesSection })));
+const PlatformSettingsSection = lazy(() => import('@/components/views/superadmin/sections/platform-settings').then(m => ({ default: m.PlatformSettingsSection })));
+const ThemeBrandingSection = lazy(() => import('@/components/views/superadmin/sections/theme-branding').then(m => ({ default: m.ThemeBrandingSection })));
+const EmailServicesSection = lazy(() => import('@/components/views/superadmin/sections/email-services').then(m => ({ default: m.EmailServicesSection })));
+const SMSServicesSection = lazy(() => import('@/components/views/superadmin/sections/sms-services').then(m => ({ default: m.SMSServicesSection })));
+const WhatsAppProvidersSection = lazy(() => import('@/components/views/superadmin/sections/whatsapp-providers').then(m => ({ default: m.WhatsAppProvidersSection })));
+const PushNotificationsSection = lazy(() => import('@/components/views/superadmin/sections/push-notifications').then(m => ({ default: m.PushNotificationsSection })));
+const AuthenticationSection = lazy(() => import('@/components/views/superadmin/sections/authentication').then(m => ({ default: m.AuthenticationSection })));
+const SecurityCenterSection = lazy(() => import('@/components/views/superadmin/sections/security-center').then(m => ({ default: m.SecurityCenterSection })));
+const AbuseDetectionSection = lazy(() => import('@/components/views/superadmin/sections/abuse-detection').then(m => ({ default: m.AbuseDetectionSection })));
+const AnalyticsSection = lazy(() => import('@/components/views/superadmin/sections/analytics').then(m => ({ default: m.AnalyticsSection })));
+const PlatformReportsSection = lazy(() => import('@/components/views/superadmin/sections/platform-reports').then(m => ({ default: m.PlatformReportsSection })));
+const BackgroundJobsSection = lazy(() => import('@/components/views/superadmin/sections/background-jobs').then(m => ({ default: m.BackgroundJobsSection })));
+const SystemLogsSection = lazy(() => import('@/components/views/superadmin/sections/system-logs').then(m => ({ default: m.SystemLogsSection })));
+const SupportCenterSection = lazy(() => import('@/components/views/superadmin/sections/support-center').then(m => ({ default: m.SupportCenterSection })));
+const KnowledgeBaseSection = lazy(() => import('@/components/views/superadmin/sections/knowledge-base').then(m => ({ default: m.KnowledgeBaseSection })));
+const AnnouncementsSection = lazy(() => import('@/components/views/superadmin/sections/announcements').then(m => ({ default: m.AnnouncementsSection })));
+const LocalizationSection = lazy(() => import('@/components/views/superadmin/sections/localization').then(m => ({ default: m.LocalizationSection })));
+const StorageSection = lazy(() => import('@/components/views/superadmin/sections/storage').then(m => ({ default: m.StorageSection })));
+const InfrastructureSection = lazy(() => import('@/components/views/superadmin/sections/infrastructure').then(m => ({ default: m.InfrastructureSection })));
+const SystemHealthSection = lazy(() => import('@/components/views/superadmin/sections/system-health').then(m => ({ default: m.SystemHealthSection })));
+
+// Lightweight Suspense fallback for lazy-loaded sections.
+function SectionLoader() {
+  return (
+    <div className="flex items-center justify-center h-64">
+      <div className="flex flex-col items-center gap-3">
+        <Loader2 className="size-7 animate-spin text-primary" />
+        <span className="text-sm text-muted-foreground">Loading section…</span>
+      </div>
+    </div>
+  );
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -284,10 +330,31 @@ const PLAN_AMOUNTS: Record<string, number> = {
 };
 
 // ─── Navigation config (left sub-nav) ────────────────────────────────────────
+//
+// Enterprise structure: 8 groups, 30 items. Mirrors the user's spec:
+//   Overview · BUSINESS · PLATFORM · COMMUNICATION · SECURITY · OPERATIONS · SUPPORT · SYSTEM
+// Existing tabs (Tenants, Subscriptions, Users, Credits, Modules→Feature Flags,
+// Integrations, Audit Logs) stay inline in this file (their closures depend on
+// shared hooks/state above). The 21 NEW sections are lazy-loaded from
+// `superadmin/sections/*.tsx` for code-splitting.
 
 type TabKey =
-  | 'dashboard' | 'tenants' | 'subscriptions' | 'credits' | 'users'
-  | 'modules' | 'integrations' | 'providers' | 'audit-logs';
+  // Overview
+  | 'dashboard'
+  // BUSINESS
+  | 'tenants' | 'subscriptions' | 'users' | 'credits' | 'industry-templates'
+  // PLATFORM
+  | 'platform-settings' | 'theme-branding' | 'marketplace' | 'integrations' | 'ai-center'
+  // COMMUNICATION
+  | 'email-services' | 'sms-services' | 'whatsapp-providers' | 'push-notifications'
+  // SECURITY
+  | 'authentication' | 'security-center' | 'audit-logs' | 'abuse-detection'
+  // OPERATIONS
+  | 'analytics' | 'platform-reports' | 'background-jobs' | 'system-logs'
+  // SUPPORT
+  | 'support-center' | 'knowledge-base' | 'announcements'
+  // SYSTEM
+  | 'feature-flags' | 'localization' | 'storage' | 'infrastructure' | 'system-health';
 
 interface NavGroup {
   label: string;
@@ -298,32 +365,87 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Overview',
     items: [
-      { key: 'dashboard', label: 'Dashboard', icon: BarChart3 },
+      { key: 'dashboard', label: 'Command Center', icon: Activity },
     ],
   },
   {
-    label: 'Tenants & Revenue',
+    label: 'Business',
     items: [
-      { key: 'tenants', label: 'Tenants', icon: Building2 },
+      { key: 'tenants', label: 'Workspaces', icon: Building2 },
       { key: 'subscriptions', label: 'Subscriptions', icon: CreditCard },
-      { key: 'credits', label: 'Credits', icon: Wallet },
       { key: 'users', label: 'Users', icon: Users },
+      { key: 'credits', label: 'Credits', icon: Wallet },
+      { key: 'industry-templates', label: 'Industry Templates', icon: LayoutGrid },
     ],
   },
   {
-    label: 'Platform Control',
+    label: 'Platform',
     items: [
-      { key: 'modules', label: 'Modules', icon: LayoutDashboard },
+      { key: 'platform-settings', label: 'Platform Settings', icon: Settings },
+      { key: 'theme-branding', label: 'Theme & Branding', icon: Palette },
+      { key: 'marketplace', label: 'Marketplace', icon: Store },
       { key: 'integrations', label: 'Integrations', icon: Plug },
-      { key: 'providers', label: 'Providers', icon: Server },
+      { key: 'ai-center', label: 'AI Center', icon: Sparkles },
+    ],
+  },
+  {
+    label: 'Communication',
+    items: [
+      { key: 'email-services', label: 'Email Services', icon: Mail },
+      { key: 'sms-services', label: 'SMS Services', icon: MessageSquare },
+      { key: 'whatsapp-providers', label: 'WhatsApp Providers', icon: MessageCircle },
+      { key: 'push-notifications', label: 'Push Notifications', icon: Bell },
     ],
   },
   {
     label: 'Security',
     items: [
+      { key: 'authentication', label: 'Authentication', icon: Lock },
+      { key: 'security-center', label: 'Security Center', icon: ShieldCheck },
       { key: 'audit-logs', label: 'Audit Logs', icon: FileText },
+      { key: 'abuse-detection', label: 'Abuse Detection', icon: ShieldAlert },
     ],
   },
+  {
+    label: 'Operations',
+    items: [
+      { key: 'analytics', label: 'Analytics', icon: BarChart3 },
+      { key: 'platform-reports', label: 'Platform Reports', icon: ClipboardList },
+      { key: 'background-jobs', label: 'Background Jobs', icon: ListTodo },
+      { key: 'system-logs', label: 'System Logs', icon: Terminal },
+    ],
+  },
+  {
+    label: 'Support',
+    items: [
+      { key: 'support-center', label: 'Support Center', icon: LifeBuoy },
+      { key: 'knowledge-base', label: 'Knowledge Base', icon: BookOpen },
+      { key: 'announcements', label: 'Announcements', icon: Megaphone },
+    ],
+  },
+  {
+    label: 'System',
+    items: [
+      { key: 'feature-flags', label: 'Feature Flags', icon: Flag },
+      { key: 'localization', label: 'Localization', icon: Languages },
+      { key: 'storage', label: 'Storage', icon: HardDrive },
+      { key: 'infrastructure', label: 'Infrastructure', icon: Server },
+      { key: 'system-health', label: 'System Health', icon: Activity },
+    ],
+  },
+];
+
+// Bottom status-bar simulated health data. Real platform-health endpoints
+// don't exist yet — this gives the enterprise feel without faking an API.
+interface StatusBarItem { key: string; label: string; status: 'healthy' | 'warning' | 'critical'; value: string; }
+const INITIAL_STATUS: StatusBarItem[] = [
+  { key: 'api', label: 'API', status: 'healthy', value: '12ms' },
+  { key: 'db', label: 'DB', status: 'healthy', value: '3ms' },
+  { key: 'queue', label: 'Queue', status: 'healthy', value: '0' },
+  { key: 'email', label: 'Email', status: 'healthy', value: 'OK' },
+  { key: 'sms', label: 'SMS', status: 'healthy', value: 'OK' },
+  { key: 'ai', label: 'AI', status: 'healthy', value: 'Online' },
+  { key: 'storage', label: 'Storage', status: 'healthy', value: '78%' },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -515,6 +637,31 @@ export function SuperAdminView() {
   const queryClient = useQueryClient();
   const toggleFeatureFlagMutation = useToggleFeatureFlag();
   const toggleMenuItemMutation = useToggleMenuItem();
+
+  // Mobile sidebar drawer (slides in from the left below `lg:`).
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Bottom status bar — simulated live health data. Updates every 8s with
+  // small jittered values to feel alive. Real platform-health endpoints
+  // don't exist yet — this is a clearly-labeled demo indicator.
+  const [statusItems, setStatusItems] = useState<StatusBarItem[]>(INITIAL_STATUS);
+  const [lastSynced, setLastSynced] = useState<Date | null>(null);
+  useEffect(() => {
+    setLastSynced(new Date());
+    const id = setInterval(() => {
+      setStatusItems((prev) => prev.map((item) => {
+        // Light jitter on the value; status stays healthy (real warnings
+        // would come from a real /api/health endpoint).
+        if (item.key === 'api') return { ...item, value: `${8 + Math.floor(Math.random() * 8)}ms` };
+        if (item.key === 'db') return { ...item, value: `${2 + Math.floor(Math.random() * 4)}ms` };
+        if (item.key === 'queue') return { ...item, value: `${Math.floor(Math.random() * 6)}` };
+        if (item.key === 'storage') return { ...item, value: `${77 + Math.floor(Math.random() * 3)}%` };
+        return item;
+      }));
+      setLastSynced(new Date());
+    }, 8000);
+    return () => clearInterval(id);
+  }, []);
 
   // Guard: Only superadmin users can access this view
   const isSuperAdmin = !!(auth.user?.isSuperAdmin || auth.user?.role === 'superadmin' || auth.user?.role === 'super_admin' || (auth.user?.role === 'admin' && !auth.user?.tenantId));
@@ -975,7 +1122,7 @@ export function SuperAdminView() {
                   </div>
                 </button>
                 <button
-                  onClick={() => setActiveTab('modules')}
+                  onClick={() => setActiveTab('feature-flags')}
                   className="flex flex-col items-start gap-2 p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors text-left"
                 >
                   <div className="size-8 rounded-lg bg-violet-500/10 flex items-center justify-center">
@@ -2472,104 +2619,214 @@ export function SuperAdminView() {
   // RENDER
   // ═══════════════════════════════════════════════════════════════════════════
 
-  const currentNavLabel = NAV_GROUPS.flatMap(g => g.items).find(i => i.key === activeTab)?.label || 'Dashboard';
+  const currentNavLabel = NAV_GROUPS.flatMap(g => g.items).find(i => i.key === activeTab)?.label || 'Command Center';
+  const currentNavGroup = NAV_GROUPS.find(g => g.items.some(i => i.key === activeTab))?.label || 'Overview';
+
+  // Helper to render the active section. Existing inline tabs (which depend
+  // on closure state) are rendered directly; new sections are lazy-loaded
+  // inside <Suspense> for code-splitting.
+  const renderActiveSection = () => {
+    // Existing inline tabs (closure-dependent)
+    if (activeTab === 'tenants') return <TenantsTab />;
+    if (activeTab === 'subscriptions') return <SubscriptionsTab />;
+    if (activeTab === 'feature-flags') return <ModulesTab />;
+    if (activeTab === 'integrations') return <IntegrationsTab />;
+    if (activeTab === 'users') return <UsersTab />;
+    if (activeTab === 'audit-logs') return <AuditLogsTab />;
+    if (activeTab === 'credits') return <CreditsTab />;
+
+    // New lazy-loaded enterprise sections
+    return (
+      <Suspense fallback={<SectionLoader />}>
+        {activeTab === 'dashboard' && <CommandCenterSection />}
+        {activeTab === 'industry-templates' && <IndustryTemplatesSection />}
+        {activeTab === 'platform-settings' && <PlatformSettingsSection />}
+        {activeTab === 'theme-branding' && <ThemeBrandingSection />}
+        {activeTab === 'marketplace' && <MarketplaceSection />}
+        {activeTab === 'ai-center' && <AICenterSection />}
+        {activeTab === 'email-services' && <EmailServicesSection />}
+        {activeTab === 'sms-services' && <SMSServicesSection />}
+        {activeTab === 'whatsapp-providers' && <WhatsAppProvidersSection />}
+        {activeTab === 'push-notifications' && <PushNotificationsSection />}
+        {activeTab === 'authentication' && <AuthenticationSection />}
+        {activeTab === 'security-center' && <SecurityCenterSection />}
+        {activeTab === 'abuse-detection' && <AbuseDetectionSection />}
+        {activeTab === 'analytics' && <AnalyticsSection />}
+        {activeTab === 'platform-reports' && <PlatformReportsSection />}
+        {activeTab === 'background-jobs' && <BackgroundJobsSection />}
+        {activeTab === 'system-logs' && <SystemLogsSection />}
+        {activeTab === 'support-center' && <SupportCenterSection />}
+        {activeTab === 'knowledge-base' && <KnowledgeBaseSection />}
+        {activeTab === 'announcements' && <AnnouncementsSection />}
+        {activeTab === 'localization' && <LocalizationSection />}
+        {activeTab === 'storage' && <StorageSection />}
+        {activeTab === 'infrastructure' && <InfrastructureSection />}
+        {activeTab === 'system-health' && <SystemHealthSection />}
+      </Suspense>
+    );
+  };
+
+  // Sidebar nav body — shared between the desktop <aside> and the mobile drawer.
+  // Clicking an item also closes the mobile drawer.
+  const navBody = (
+    <nav className="space-y-1">
+      {NAV_GROUPS.map((group) => (
+        <div key={group.label} className="mb-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80 px-3 mb-1.5">{group.label}</p>
+          <div className="space-y-0.5">
+            {group.items.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.key;
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => { setActiveTab(item.key); setMobileNavOpen(false); }}
+                  className={cn(
+                    'flex items-center gap-2.5 w-full px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors text-left',
+                    isActive
+                      ? 'bg-primary text-primary-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  )}
+                >
+                  <Icon className="size-4 shrink-0" />
+                  <span className="truncate">{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </nav>
+  );
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 w-full">
-      {/* Left sub-navigation (desktop) */}
-      <aside className="hidden lg:flex flex-col w-56 shrink-0">
-        <div className="sticky top-0 space-y-1">
-          {NAV_GROUPS.map((group) => (
-            <div key={group.label} className="mb-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-3 mb-1.5">{group.label}</p>
-              <div className="space-y-0.5">
-                {group.items.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = activeTab === item.key;
-                  return (
-                    <button
-                      key={item.key}
-                      onClick={() => setActiveTab(item.key)}
-                      className={cn(
-                        'flex items-center gap-2.5 w-full px-3 py-2 rounded-md text-sm font-medium transition-colors text-left',
-                        isActive
-                          ? 'bg-primary text-primary-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                      )}
-                    >
-                      <Icon className="size-4 shrink-0" />
-                      <span className="truncate">{item.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      </aside>
+    <div className="flex flex-col w-full min-h-[calc(100vh-3.5rem)]">
+      {/* ─── Top Bar (sticky) ──────────────────────────────────────────────── */}
+      <header className="sticky top-0 z-30 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 bg-background/95 backdrop-blur border-b border-border">
+        <div className="flex items-center gap-3">
+          {/* Mobile: open sidebar drawer */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="lg:hidden h-9 w-9 p-0"
+            onClick={() => setMobileNavOpen(true)}
+            aria-label="Open navigation"
+          >
+            <Menu className="size-5" />
+          </Button>
 
-      {/* Mobile horizontal tab bar */}
-      <div className="lg:hidden -mx-1 px-1">
-        <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-thin">
-          {NAV_GROUPS.flatMap(g => g.items).map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.key;
-            return (
-              <button
-                key={item.key}
-                onClick={() => setActiveTab(item.key)}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap shrink-0',
-                  isActive ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
-                )}
-              >
-                <Icon className="size-3.5" />
-                {item.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Main content */}
-      <div className="flex-1 min-w-0 space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center size-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 shrink-0 shadow-sm">
-              <ShieldCheck className="size-5 text-primary-foreground" />
+          {/* Brand + section breadcrumb */}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex items-center justify-center size-9 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shrink-0 shadow-sm">
+              <ShieldCheck className="size-5 text-white" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 hidden sm:block">
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-foreground truncate">Super Admin</h1>
-                <Badge className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 text-[10px]">PLATFORM</Badge>
+                <h1 className="text-base font-bold text-foreground truncate">ServiceOS Platform</h1>
+                <Badge className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 text-[9px] font-semibold px-1.5 py-0">SA</Badge>
               </div>
-              <p className="text-sm text-muted-foreground">
-                {currentNavLabel} · Platform-wide management &amp; analytics
+              <p className="text-[11px] text-muted-foreground truncate">
+                {currentNavGroup} · <span className="text-foreground font-medium">{currentNavLabel}</span>
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => { refetchStats(); refetchTenants(); }} className="min-h-[36px]">
-              <RefreshCw className="size-4 mr-1.5" /> Refresh
+
+          {/* Search (desktop only — too cramped on mobile) */}
+          <div className="hidden md:flex items-center relative flex-1 max-w-md mx-auto">
+            <Search className="size-4 text-muted-foreground absolute left-3 pointer-events-none" />
+            <Input
+              placeholder="Search workspaces, users, logs…"
+              className="pl-9 h-9 bg-muted/50 border-transparent focus-visible:bg-background focus-visible:border-border text-sm"
+            />
+          </div>
+
+          <div className="flex items-center gap-1.5 ml-auto">
+            {/* Last synced indicator */}
+            <div className="hidden lg:flex items-center gap-1.5 text-[11px] text-muted-foreground mr-2">
+              <CheckCircle2 className="size-3.5 text-emerald-500" />
+              <span>Synced {lastSynced ? lastSynced.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'}</span>
+            </div>
+            {/* Refresh */}
+            <Button variant="ghost" size="sm" className="h-9 w-9 p-0" onClick={() => { refetchStats(); refetchTenants(); }} aria-label="Refresh data">
+              <RefreshCw className="size-4" />
             </Button>
-            <Badge variant="outline" className="text-xs px-3 py-1 border-primary/30 text-primary bg-primary/5">
-              <span className="size-1.5 bg-primary rounded-full mr-1.5 animate-pulse" /> Live
+            {/* AI button */}
+            <Button variant="ghost" size="sm" className="h-9 w-9 p-0 text-primary" aria-label="AI Assistant">
+              <Sparkles className="size-4" />
+            </Button>
+            {/* Live badge */}
+            <Badge variant="outline" className="text-[10px] px-2 py-0.5 border-primary/30 text-primary bg-primary/5 hidden sm:inline-flex">
+              <span className="size-1.5 bg-primary rounded-full mr-1 animate-pulse" /> Live
             </Badge>
           </div>
         </div>
+      </header>
 
-        {/* Tab content */}
-        {activeTab === 'dashboard' && <DashboardTab />}
-        {activeTab === 'tenants' && <TenantsTab />}
-        {activeTab === 'subscriptions' && <SubscriptionsTab />}
-        {activeTab === 'modules' && <ModulesTab />}
-        {activeTab === 'integrations' && <IntegrationsTab />}
-        {activeTab === 'providers' && <ProvidersTab />}
-        {activeTab === 'users' && <UsersTab />}
-        {activeTab === 'audit-logs' && <AuditLogsTab />}
-        {activeTab === 'credits' && <CreditsTab />}
+      {/* ─── Mobile slide-out nav drawer ──────────────────────────────────── */}
+      {mobileNavOpen && (
+        <div className="lg:hidden fixed inset-0 z-50">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setMobileNavOpen(false)}
+            aria-hidden="true"
+          />
+          <div className="absolute left-0 top-0 bottom-0 w-72 max-w-[85vw] bg-background border-r border-border shadow-xl flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center size-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600">
+                  <ShieldCheck className="size-4 text-white" />
+                </div>
+                <span className="text-sm font-bold text-foreground">ServiceOS Platform</span>
+              </div>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setMobileNavOpen(false)} aria-label="Close navigation">
+                <X className="size-4" />
+              </Button>
+            </div>
+            <ScrollArea className="flex-1 p-3">{navBody}</ScrollArea>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Body: sidebar (desktop) + main content ──────────────────────── */}
+      <div className="flex flex-1 min-h-0">
+        {/* Left sidebar — sticky, scrollable */}
+        <aside className="hidden lg:flex flex-col w-60 shrink-0 border-r border-border -ml-4 sm:-ml-6 lg:-ml-8 pr-3">
+          <div className="sticky top-[calc(3.5rem+1px)] h-[calc(100vh-3.5rem-1px-2rem)] overflow-y-auto py-4 pl-4 sm:pl-6 lg:pl-8 pr-3">
+            {navBody}
+          </div>
+        </aside>
+
+        {/* Main content */}
+        <main className="flex-1 min-w-0 py-6">
+          {renderActiveSection()}
+        </main>
       </div>
+
+      {/* ─── Bottom Status Bar (sticky bottom) ──────────────────────────────── */}
+      <footer className="sticky bottom-0 z-20 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-2 bg-background/95 backdrop-blur border-t border-border">
+        <div className="flex items-center gap-3 overflow-x-auto scrollbar-thin">
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground shrink-0">
+            <span className="size-1.5 bg-emerald-500 rounded-full animate-pulse" />
+            PLATFORM HEALTH
+          </span>
+          <div className="h-3 w-px bg-border shrink-0" />
+          {statusItems.map((item) => {
+            const dotColor = item.status === 'healthy' ? 'bg-emerald-500' : item.status === 'warning' ? 'bg-amber-500' : 'bg-red-500';
+            return (
+              <div key={item.key} className="flex items-center gap-1.5 shrink-0">
+                <span className={cn('size-1.5 rounded-full', dotColor, item.status === 'healthy' && 'animate-pulse')} />
+                <span className="text-[11px] font-medium text-muted-foreground">{item.label}</span>
+                <span className="text-[11px] font-mono text-foreground">{item.value}</span>
+              </div>
+            );
+          })}
+          <div className="h-3 w-px bg-border shrink-0" />
+          <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-medium shrink-0 ml-auto">
+            <span className="size-1 rounded-full bg-amber-500" />
+            Demo data
+          </span>
+        </div>
+      </footer>
     </div>
   );
 }
