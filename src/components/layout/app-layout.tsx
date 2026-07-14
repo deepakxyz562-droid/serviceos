@@ -308,6 +308,32 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
   // Canvas view needs no padding for full-screen editor
   const isCanvas = currentView === 'canvas';
 
+  // ─── Full-takeover console: SuperAdmin owns the entire viewport ─────────
+  // The superadmin shell has its OWN top bar + left sidebar + bottom status
+  // bar. Rendering the app sidebar/header/bottom-nav alongside it produces
+  // a confusing "double sidebar" (two competing navigation columns with
+  // overlapping group names like "Platform" and "Operations"). When the
+  // superadmin console is active we hand over the full viewport to it and
+  // skip the tenant app chrome entirely. The superadmin top bar exposes a
+  // "Back to App" button that restores the normal tenant shell.
+  const isSuperAdminConsole = currentView === 'superadmin';
+
+  // ─── SuperAdmin console — full-takeover (no app sidebar / header / bottom
+  // nav). The console component renders its own three-panel layout. ───────
+  if (isSuperAdminConsole) {
+    return (
+      <div className={cn('fixed inset-0 flex overflow-hidden bg-background', darkMode && 'dark')}>
+        <ViewErrorBoundary>
+          <Suspense fallback={<ViewLoader />}>
+            <SuperAdminView />
+          </Suspense>
+        </ViewErrorBoundary>
+        {/* Trial paywall still applies — superadmin can be locked out too. */}
+        <TrialPaywallOverlay trialStatus={trialStatus} />
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(
