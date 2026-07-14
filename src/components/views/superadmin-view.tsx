@@ -31,7 +31,7 @@ import {
   // New icons for the expanded enterprise nav
   LayoutGrid, Palette, Mail, MessageCircle, Bell, Lock,
   ListTodo, Terminal, LifeBuoy, ClipboardList, Languages,
-  ChevronLeft, X,
+  ChevronLeft, X, LayoutList,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -90,6 +90,7 @@ const LocalizationSection = lazy(() => import('@/components/views/superadmin/sec
 const StorageSection = lazy(() => import('@/components/views/superadmin/sections/storage').then(m => ({ default: m.StorageSection })));
 const InfrastructureSection = lazy(() => import('@/components/views/superadmin/sections/infrastructure').then(m => ({ default: m.InfrastructureSection })));
 const SystemHealthSection = lazy(() => import('@/components/views/superadmin/sections/system-health').then(m => ({ default: m.SystemHealthSection })));
+const MenuManagementSection = lazy(() => import('@/components/views/superadmin/sections/menu-management').then(m => ({ default: m.MenuManagementSection })));
 
 // Lightweight Suspense fallback for lazy-loaded sections.
 function SectionLoader() {
@@ -344,7 +345,7 @@ type TabKey =
   // BUSINESS
   | 'tenants' | 'subscriptions' | 'users' | 'credits' | 'industry-templates'
   // PLATFORM
-  | 'platform-settings' | 'theme-branding' | 'marketplace' | 'integrations' | 'ai-center'
+  | 'platform-settings' | 'theme-branding' | 'marketplace' | 'integrations' | 'ai-center' | 'menu-management'
   // COMMUNICATION
   | 'email-services' | 'sms-services' | 'whatsapp-providers' | 'push-notifications'
   // SECURITY
@@ -386,6 +387,7 @@ const NAV_GROUPS: NavGroup[] = [
       { key: 'marketplace', label: 'Marketplace', icon: Store },
       { key: 'integrations', label: 'Integrations', icon: Plug },
       { key: 'ai-center', label: 'AI Center', icon: Sparkles },
+      { key: 'menu-management', label: 'Menu Management', icon: LayoutList },
     ],
   },
   {
@@ -2644,6 +2646,7 @@ export function SuperAdminView() {
         {activeTab === 'theme-branding' && <ThemeBrandingSection />}
         {activeTab === 'marketplace' && <MarketplaceSection />}
         {activeTab === 'ai-center' && <AICenterSection />}
+        {activeTab === 'menu-management' && <MenuManagementSection />}
         {activeTab === 'email-services' && <EmailServicesSection />}
         {activeTab === 'sms-services' && <SMSServicesSection />}
         {activeTab === 'whatsapp-providers' && <WhatsAppProvidersSection />}
@@ -2700,10 +2703,26 @@ export function SuperAdminView() {
   );
 
   return (
-    <div className="flex flex-col w-full min-h-[calc(100vh-3.5rem)]">
+    <div className="flex flex-col w-full h-dvh overflow-hidden">
       {/* ─── Top Bar (sticky) ──────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-30 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 bg-background/95 backdrop-blur border-b border-border">
+      <header className="shrink-0 z-30 px-4 sm:px-6 lg:px-8 py-3 bg-background/95 backdrop-blur border-b border-border">
         <div className="flex items-center gap-3">
+          {/* Back to App — restores the normal tenant shell (sidebar/header).
+              The superadmin console is a full-takeover view; this is the
+              single exit back to the tenant app experience. */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 h-9 text-muted-foreground hover:text-foreground"
+            onClick={() => useAppStore.getState().setCurrentView('dashboard')}
+            aria-label="Back to app"
+          >
+            <ChevronLeft className="size-4" />
+            <span className="hidden sm:inline text-[13px] font-medium">Back to App</span>
+          </Button>
+
+          <div className="h-5 w-px bg-border shrink-0 hidden sm:block" />
+
           {/* Mobile: open sidebar drawer */}
           <Button
             variant="ghost"
@@ -2789,21 +2808,22 @@ export function SuperAdminView() {
 
       {/* ─── Body: sidebar (desktop) + main content ──────────────────────── */}
       <div className="flex flex-1 min-h-0">
-        {/* Left sidebar — sticky, scrollable */}
-        <aside className="hidden lg:flex flex-col w-60 shrink-0 border-r border-border -ml-4 sm:-ml-6 lg:-ml-8 pr-3">
-          <div className="sticky top-[calc(3.5rem+1px)] h-[calc(100vh-3.5rem-1px-2rem)] overflow-y-auto py-4 pl-4 sm:pl-6 lg:pl-8 pr-3">
-            {navBody}
-          </div>
+        {/* Left sidebar — own scroll, fills the body height */}
+        <aside className="hidden lg:flex flex-col w-60 shrink-0 border-r border-border pl-4 sm:pl-6 lg:pl-8 pr-3 py-4 overflow-y-auto">
+          {navBody}
         </aside>
 
-        {/* Main content */}
-        <main className="flex-1 min-w-0 py-6">
+        {/* Main content — own scroll so the top bar and bottom status bar
+            stay pinned. The outer shell is h-dvh, so the main pane scrolls
+            independently instead of the whole page scrolling under sticky
+            chrome (which previously caused double-scrollbar artifacts). */}
+        <main className="flex-1 min-w-0 overflow-y-auto p-4 sm:p-6 lg:p-8">
           {renderActiveSection()}
         </main>
       </div>
 
-      {/* ─── Bottom Status Bar (sticky bottom) ──────────────────────────────── */}
-      <footer className="sticky bottom-0 z-20 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-2 bg-background/95 backdrop-blur border-t border-border">
+      {/* ─── Bottom Status Bar ──────────────────────────────────────────────── */}
+      <footer className="shrink-0 z-20 px-4 sm:px-6 lg:px-8 py-2 bg-background/95 backdrop-blur border-t border-border">
         <div className="flex items-center gap-3 overflow-x-auto scrollbar-thin">
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground shrink-0">
             <span className="size-1.5 bg-emerald-500 rounded-full animate-pulse" />
