@@ -12,12 +12,6 @@ import {
   CreditCard,
 } from "lucide-react";
 import { InvoiceGeneratorClient } from "./invoice-generator-client";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://serviceos.com"),
@@ -196,7 +190,7 @@ export default function InvoiceGeneratorPage() {
             </span>
           </Link>
           <div className="flex items-center gap-2 sm:gap-3">
-            <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+            <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
               <ShieldCheck className="h-3.5 w-3.5" />
               100% Free · No sign-up
             </span>
@@ -311,18 +305,25 @@ export default function InvoiceGeneratorPage() {
                 Everything you need to know about the free invoice generator.
               </p>
             </div>
-            <Accordion type="single" collapsible className="w-full">
+            {/* Native <details>/<summary> — zero-JS, fully accessible, SEO-friendly */}
+            <div className="space-y-3">
               {faqs.map((faq, i) => (
-                <AccordionItem key={i} value={`item-${i}`}>
-                  <AccordionTrigger className="text-left text-base font-medium text-foreground">
+                <details
+                  key={i}
+                  className="group rounded-lg border bg-card px-4 sm:px-5 py-1 shadow-sm [&_summary::-webkit-details-marker]:hidden"
+                >
+                  <summary className="flex cursor-pointer items-center justify-between gap-3 py-3 text-left text-base font-medium text-foreground marker:hidden select-none">
                     {faq.q}
-                  </AccordionTrigger>
-                  <AccordionContent className="text-sm sm:text-base text-muted-foreground leading-relaxed">
+                    <span className="ml-auto inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-border text-muted-foreground transition-transform group-open:rotate-45" aria-hidden="true">
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+                    </span>
+                  </summary>
+                  <p className="pb-4 text-sm sm:text-base text-muted-foreground leading-relaxed">
                     {faq.a}
-                  </AccordionContent>
-                </AccordionItem>
+                  </p>
+                </details>
               ))}
-            </Accordion>
+            </div>
           </div>
         </section>
 

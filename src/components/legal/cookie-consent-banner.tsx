@@ -149,7 +149,7 @@ export function CookieConsentBanner() {
           <Card className="gap-0 rounded-xl border border-border bg-white p-5 shadow-lg sm:p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
               <div className="hidden sm:flex sm:h-10 sm:w-10 sm:shrink-0 sm:items-center sm:justify-center sm:rounded-lg sm:bg-emerald-50">
-                <Cookie className="h-5 w-5 text-emerald-600" aria-hidden="true" />
+                <Cookie className="h-5 w-5 text-emerald-700" aria-hidden="true" />
               </div>
               <div className="min-w-0 flex-1">
                 <h2 className="text-base font-semibold text-foreground sm:text-lg">
@@ -164,7 +164,7 @@ export function CookieConsentBanner() {
                   , you consent to our use of cookies. See our{" "}
                   <Link
                     href="/cookie-policy"
-                    className="font-medium text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
+                    className="font-medium text-emerald-700 underline underline-offset-2 hover:text-emerald-800"
                   >
                     Cookie Policy
                   </Link>

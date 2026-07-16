@@ -121,14 +121,15 @@ const PAYMENT_TERMS: Record<string, number> = {
   net_60: 60,
 };
 
+// Accent colors use 700-level shades for WCAG AA contrast (≥4.5:1) with white text.
 const ACCENT_COLORS = [
-  { name: "Emerald", value: "#10b981" },
-  { name: "Blue", value: "#3b82f6" },
-  { name: "Indigo", value: "#6366f1" },
-  { name: "Purple", value: "#8b5cf6" },
-  { name: "Rose", value: "#f43f5e" },
-  { name: "Amber", value: "#f59e0b" },
-  { name: "Slate", value: "#475569" },
+  { name: "Emerald", value: "#047857" },
+  { name: "Blue", value: "#1d4ed8" },
+  { name: "Indigo", value: "#4338ca" },
+  { name: "Purple", value: "#6d28d9" },
+  { name: "Rose", value: "#be123c" },
+  { name: "Amber", value: "#b45309" },
+  { name: "Slate", value: "#334155" },
 ];
 
 const STORAGE_KEY = "serviceos-invoice-generator-v1";
@@ -172,7 +173,7 @@ const defaultData: InvoiceData = {
   shippingFee: 0,
   amountPaid: 0,
   currency: "USD",
-  accentColor: "#10b981",
+  accentColor: "#047857",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -679,6 +680,7 @@ export function InvoiceGeneratorClient() {
             onClick={handleNewInvoice}
             variant="outline"
             className="gap-2"
+            aria-label="Start a new invoice"
           >
             <FileText className="h-4 w-4" />
             <span className="hidden sm:inline">New</span> Invoice
@@ -687,6 +689,7 @@ export function InvoiceGeneratorClient() {
             onClick={handleReset}
             variant="ghost"
             className="gap-2 text-muted-foreground"
+            aria-label="Reset invoice to defaults"
           >
             <RotateCcw className="h-4 w-4" />
             <span className="hidden sm:inline">Reset</span>
@@ -936,8 +939,14 @@ export function InvoiceGeneratorClient() {
                     />
                   </div>
                   <div className="col-span-4 sm:col-span-2">
-                    <Label className="field-label sm:hidden">Qty</Label>
+                    <Label
+                      htmlFor={`item-qty-${item.id}`}
+                      className="field-label sm:hidden"
+                    >
+                      Qty
+                    </Label>
                     <Input
+                      id={`item-qty-${item.id}`}
                       type="number"
                       min={0}
                       step="any"
@@ -946,11 +955,20 @@ export function InvoiceGeneratorClient() {
                         updateItem(item.id, "quantity", e.target.value)
                       }
                       className="text-right text-sm"
+                      aria-label={`Quantity for item ${
+                        item.description || "untitled"
+                      }`}
                     />
                   </div>
                   <div className="col-span-4 sm:col-span-2">
-                    <Label className="field-label sm:hidden">Rate</Label>
+                    <Label
+                      htmlFor={`item-rate-${item.id}`}
+                      className="field-label sm:hidden"
+                    >
+                      Rate
+                    </Label>
                     <Input
+                      id={`item-rate-${item.id}`}
                       type="number"
                       min={0}
                       step="any"
@@ -959,6 +977,9 @@ export function InvoiceGeneratorClient() {
                         updateItem(item.id, "rate", e.target.value)
                       }
                       className="text-right text-sm"
+                      aria-label={`Rate for item ${
+                        item.description || "untitled"
+                      }`}
                     />
                   </div>
                   <div className="col-span-3 sm:col-span-1 text-right text-sm font-medium pt-2 sm:pt-2.5">
