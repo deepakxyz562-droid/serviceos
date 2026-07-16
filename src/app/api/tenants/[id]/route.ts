@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
 
 // GET /api/tenants/[id] - Get tenant details
 export async function GET(
@@ -83,6 +85,28 @@ export async function GET(
           totalLeads: tenant._count.leads,
           totalInvoices: tenant._count.invoices,
         },
+        // ── Public Business Hub fields ────────────────────────────────────
+        publicProfileEnabled: tenant.publicProfileEnabled,
+        publicSlug: tenant.publicSlug,
+        city: tenant.city,
+        state: tenant.state,
+        postalCode: tenant.postalCode,
+        tagline: tenant.tagline,
+        description: tenant.description,
+        coverImage: tenant.coverImage,
+        galleryJson: tenant.galleryJson,
+        businessHoursJson: tenant.businessHoursJson,
+        serviceAreasJson: tenant.serviceAreasJson,
+        socialLinksJson: tenant.socialLinksJson,
+        faqsJson: tenant.faqsJson,
+        rating: tenant.rating,
+        reviewCount: tenant.reviewCount,
+        seoTitle: tenant.seoTitle,
+        seoDescription: tenant.seoDescription,
+        // Computed canonical public URL (for the "Preview" button)
+        publicUrl: tenant.publicProfileEnabled
+          ? `/${mapIndustryToUrlSlug(tenant.industry)}/${slugifyCity(tenant.city)}/${tenant.publicSlug || tenant.slug}`
+          : null,
       },
     });
   } catch (error) {
@@ -137,6 +161,22 @@ export async function PUT(
       settingsJson,
       onboardingCompleted,
       onboardingStep,
+      // ── Public Business Hub fields ────────────────────────────────────
+      publicProfileEnabled,
+      publicSlug,
+      city,
+      state,
+      postalCode,
+      tagline,
+      description,
+      coverImage,
+      galleryJson,
+      businessHoursJson,
+      serviceAreasJson,
+      socialLinksJson,
+      faqsJson,
+      seoTitle,
+      seoDescription,
     } = body;
 
     // Build update data - only include provided fields
@@ -154,10 +194,46 @@ export async function PUT(
     if (onboardingCompleted !== undefined) updateData.onboardingCompleted = onboardingCompleted;
     if (onboardingStep !== undefined) updateData.onboardingStep = onboardingStep;
 
+    // Public Business Hub fields (all optional — only written when provided)
+    if (publicProfileEnabled !== undefined) updateData.publicProfileEnabled = publicProfileEnabled;
+    if (publicSlug !== undefined) {
+      // Empty string → null (so the UNIQUE constraint allows it)
+      updateData.publicSlug = publicSlug?.trim() || null;
+    }
+    if (city !== undefined) updateData.city = city?.trim() || null;
+    if (state !== undefined) updateData.state = state?.trim() || null;
+    if (postalCode !== undefined) updateData.postalCode = postalCode?.trim() || null;
+    if (tagline !== undefined) updateData.tagline = tagline?.trim() || null;
+    if (description !== undefined) updateData.description = description?.trim() || null;
+    if (coverImage !== undefined) updateData.coverImage = coverImage?.trim() || null;
+    if (galleryJson !== undefined) updateData.galleryJson = typeof galleryJson === 'string' ? galleryJson : JSON.stringify(galleryJson || []);
+    if (businessHoursJson !== undefined) updateData.businessHoursJson = typeof businessHoursJson === 'string' ? businessHoursJson : JSON.stringify(businessHoursJson || {});
+    if (serviceAreasJson !== undefined) updateData.serviceAreasJson = typeof serviceAreasJson === 'string' ? serviceAreasJson : JSON.stringify(serviceAreasJson || []);
+    if (socialLinksJson !== undefined) updateData.socialLinksJson = typeof socialLinksJson === 'string' ? socialLinksJson : JSON.stringify(socialLinksJson || {});
+    if (faqsJson !== undefined) updateData.faqsJson = typeof faqsJson === 'string' ? faqsJson : JSON.stringify(faqsJson || []);
+    if (seoTitle !== undefined) updateData.seoTitle = seoTitle?.trim() || null;
+    if (seoDescription !== undefined) updateData.seoDescription = seoDescription?.trim() || null;
+
     const tenant = await db.tenant.update({
       where: { id },
       data: updateData,
     });
+
+    // Revalidate the public Business Hub page so ISR picks up the changes
+    // immediately (the page exports `revalidate = 3600` but we force a refresh
+    // on save so the owner sees their edits instantly).
+    try {
+      const industrySeg = mapIndustryToUrlSlug(tenant.industry);
+      const citySeg = slugifyCity(tenant.city);
+      const slugSeg = tenant.publicSlug || tenant.slug;
+      if (industrySeg && citySeg && slugSeg) {
+        revalidatePath(`/${industrySeg}/${citySeg}/${slugSeg}`);
+      }
+      // Also revalidate the sitemap (business may have toggled visibility)
+      revalidatePath('/sitemap.xml');
+    } catch {
+      // revalidatePath can throw in some edge runtime contexts — non-fatal
+    }
 
     return NextResponse.json({
       tenant: {
@@ -178,6 +254,27 @@ export async function PUT(
         settingsJson: tenant.settingsJson,
         onboardingCompleted: tenant.onboardingCompleted,
         onboardingStep: tenant.onboardingStep,
+        // ── Public Business Hub fields (echo back) ──────────────────────
+        publicProfileEnabled: tenant.publicProfileEnabled,
+        publicSlug: tenant.publicSlug,
+        city: tenant.city,
+        state: tenant.state,
+        postalCode: tenant.postalCode,
+        tagline: tenant.tagline,
+        description: tenant.description,
+        coverImage: tenant.coverImage,
+        galleryJson: tenant.galleryJson,
+        businessHoursJson: tenant.businessHoursJson,
+        serviceAreasJson: tenant.serviceAreasJson,
+        socialLinksJson: tenant.socialLinksJson,
+        faqsJson: tenant.faqsJson,
+        rating: tenant.rating,
+        reviewCount: tenant.reviewCount,
+        seoTitle: tenant.seoTitle,
+        seoDescription: tenant.seoDescription,
+        publicUrl: tenant.publicProfileEnabled
+          ? `/${mapIndustryToUrlSlug(tenant.industry)}/${slugifyCity(tenant.city)}/${tenant.publicSlug || tenant.slug}`
+          : null,
         updatedAt: tenant.updatedAt,
       },
     });

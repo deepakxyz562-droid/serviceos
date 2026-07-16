@@ -56,6 +56,7 @@ import { toast } from 'sonner';
 import { CURRENCIES as SHARED_CURRENCIES } from '@/lib/currency';
 import { invalidateCurrencyCache } from '@/hooks/use-company-currency';
 import { authFetch } from '@/lib/api';
+import { PublicHubTab } from '@/components/settings/public-hub-tab';
 
 // ─── Event Webhook Types ──────────────────────────────────────────────────
 
@@ -753,6 +754,11 @@ export function SettingsView() {
             <Plug className="size-4" />
             <span className="hidden sm:inline">Integrations</span>
             <span className="sm:hidden">Apps</span>
+          </TabsTrigger>
+          <TabsTrigger value="hub" className="gap-1.5 rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm px-3 py-2">
+            <Globe className="size-4" />
+            <span className="hidden sm:inline">Public Hub</span>
+            <span className="sm:hidden">Hub</span>
           </TabsTrigger>
         </TabsList>
 
@@ -1808,6 +1814,25 @@ export function SettingsView() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+        </TabsContent>
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            Public Hub Tab — manage the public-facing Business Hub page
+            (/{industry}/{city}/{slug}). All editing happens inside the
+            PublicHubTab component (separate file for maintainability).
+        ══════════════════════════════════════════════════════════════════ */}
+        <TabsContent value="hub" className="space-y-6">
+          {tenantLoading ? (
+            <div className="flex items-center justify-center py-12 text-muted-foreground">
+              <Loader2 className="size-5 animate-spin mr-2" /> Loading public hub settings...
+            </div>
+          ) : (
+            <PublicHubTab
+              tenantId={tenantId}
+              industry={companyForm.industry}
+              slug={workspaceSlug}
+            />
+          )}
         </TabsContent>
 
       </Tabs>

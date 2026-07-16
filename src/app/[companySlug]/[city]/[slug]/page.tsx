@@ -107,8 +107,18 @@ export default async function PublicBusinessHubPage({
   const { business, needsRedirect, canonicalUrl } = await getPublicBusinessByUrl(industry, city, slug)
 
   // 301 redirect to canonical URL when segments don't match the DB.
+  // Use a RELATIVE path (strip the origin) so the redirect works on any
+  // domain — localhost in dev, serviceos.cc in prod, or a custom domain.
+  // NOTE: permanentRedirect() throws a NEXT_REDIRECT error internally, so we
+  // must NOT wrap it in try/catch (the catch would intercept the redirect).
   if (needsRedirect && canonicalUrl) {
-    permanentRedirect(canonicalUrl)
+    let redirectPath = canonicalUrl
+    try {
+      redirectPath = new URL(canonicalUrl).pathname
+    } catch {
+      // canonicalUrl is already a relative path — use as-is
+    }
+    permanentRedirect(redirectPath)
   }
 
   if (!business) {

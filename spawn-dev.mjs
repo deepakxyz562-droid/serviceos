@@ -3,7 +3,7 @@
 import { spawn } from 'child_process';
 import { openSync, writeFileSync, closeSync } from 'fs';
 
-const CWD = '/home/z/my-project/serviceos';
+const CWD = '/home/z/my-project';
 const LOG = `${CWD}/dev.log`;
 const PID_FILE = `${CWD}/next-dev.pid`;
 const MAX_RESTARTS = 10;
