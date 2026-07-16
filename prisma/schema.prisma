@@ -40,6 +40,28 @@ model Tenant {
   mrr               Float    @default(0)
   arr               Float    @default(0)
   churnRate         Float    @default(0)
+
+  // ── Public Business Hub (programmatic SEO) ──────────────────────────────
+  // Powers the public-facing profile at /{industry}/{city}/{slug}.
+  // A tenant is auto-indexed only when the profile is "rich enough":
+  // description ≥ 100 chars, ≥ 3 active services, ≥ 1 image, publicProfileEnabled = true.
+  publicProfileEnabled  Boolean  @default(false)
+  publicSlug            String?  @unique  // defaults to slug if not set; used in /b/[publicSlug] short URL
+  city                  String?
+  state                 String?
+  postalCode            String?
+  tagline               String?  // short one-liner under business name
+  description           String?  // long-form About text (min 100 chars for indexing)
+  coverImage            String?  // hero/cover image URL
+  galleryJson           String   @default("[]")  // array of {url, caption}
+  businessHoursJson     String   @default("{}")  // {mon: {open: "09:00", close: "17:00"}, ...}
+  serviceAreasJson      String   @default("[]")  // array of area names
+  socialLinksJson       String   @default("{}")  // {facebook, instagram, twitter, linkedin, youtube}
+  faqsJson              String   @default("[]")  // array of {question, answer}
+  rating                Float    @default(0)     // aggregate rating (0-5)
+  reviewCount           Int      @default(0)
+  seoTitle              String?
+  seoDescription        String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -69,6 +91,8 @@ model Tenant {
   metaLeads         MetaLead[]
   googleAdsLeadConfig GoogleAdsLeadConfig?
   googleAdsLeads    GoogleAdsLead[]
+  // Public chat (visitor widget)
+  publicChatSessions PublicChatSession[]
 
   @@index([slug])
   @@index([plan])
@@ -287,24 +311,29 @@ model User {
 // ==========================================
 
 model Service {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  category    String   @default("general")
-  basePrice   Float    @default(0)
-  duration    Int      @default(60)
-  icon        String?
-  isActive    Boolean  @default(true)
-  checklistId String?  // -> Checklist.id (auto-attached when a job is created for this service)
-  tenantId    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  longDescription String?  // SEO-rich long-form description for public service pages
+  slug            String?  // URL-safe slug for /{industry}/{city}/{slug}/{service-slug}
+  image           String?  // service image URL
+  category        String   @default("general")
+  basePrice       Float    @default(0)
+  duration        Int      @default(60)
+  icon            String?
+  isActive        Boolean  @default(true)
+  isPublic        Boolean  @default(true)  // show on public business hub
+  checklistId     String?  // -> Checklist.id (auto-attached when a job is created for this service)
+  tenantId        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   tenant Tenant? @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([category])
   @@index([checklistId])
+  @@index([isPublic])
 }
 
 // ==========================================
@@ -482,21 +511,31 @@ model Expense {
 // ==========================================
 
 model Review {
-  id          String   @id @default(cuid())
-  rating      Int      @default(5)
-  comment     String?
-  jobId       String?  @unique
-  customerId  String?
-  employeeId  String?
-  tenantId    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(cuid())
+  rating          Int      @default(5)
+  comment         String?
+  authorName      String?  // reviewer's display name (fallback if Customer is null)
+  source          String   @default("internal")  // internal, google, facebook, manual
+  status          String   @default("published")  // published, pending, hidden
+  responseJson    String   @default("{}")  // owner's response: {text, respondedAt}
+  externalUrl     String?  // link to original review (Google, Facebook)
+  npsScore        Int?  // Net Promoter Score (0-10) if collected
+  googleReviewId  String?  // Google review ID for dedup
+  reviewUrl       String?  // public URL of the review
+  jobId           String?  @unique
+  customerId      String?
+  employeeId      String?
+  tenantId        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   tenant      Tenant?  @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([employeeId])
   @@index([rating])
+  @@index([status])
+  @@index([source])
 }
 
 // ==========================================
@@ -3798,4 +3837,51 @@ model OfflineMutation {
 
   @@index([tenantId, userId, status])
   @@index([tenantId, status, createdAt])
+}
+
+// ==========================================
+// PUBLIC CHAT (visitor widget → admin inbox)
+// ==========================================
+// Anonymous website visitors start a chat session via the embeddable widget.
+// Each session is scoped to a tenant. Messages flow in real time via socket.io
+// to the admin inbox; admin replies flow back to the widget.
+
+model PublicChatSession {
+  id              String   @id @default(cuid())
+  tenantId        String
+  visitorName     String?
+  visitorPhone    String?
+  visitorEmail    String?
+  visitorFingerprint String?  // simple dedup / rate-limit key
+  status          String   @default("active")  // active, closed, claimed
+  claimedById     String?  // employee who claimed the chat
+  lastMessageAt   DateTime?
+  unreadCount     Int      @default(0)
+  metadataJson    String   @default("{}")  // {browser, os, referrer, currentPage, ...}
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  messages        PublicChatMessage[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+  @@index([status, lastMessageAt])
+}
+
+model PublicChatMessage {
+  id              String   @id @default(cuid())
+  sessionId       String
+  senderType      String   // visitor, admin, system
+  senderId        String?  // employee id if senderType=admin
+  senderName      String?
+  body            String
+  attachmentsJson String   @default("[]")  // [{url, type, name}]
+  readAt          DateTime?  // when visitor read it (for admin messages) or admin read it (for visitor)
+  createdAt       DateTime @default(now())
+
+  session         PublicChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@index([senderType, readAt])
 }

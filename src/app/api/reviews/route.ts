@@ -101,6 +101,7 @@ export async function POST(request: NextRequest) {
     const {
       rating,
       comment,
+      authorName,
       jobId,
       customerId,
       employeeId,
@@ -119,10 +120,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // All fields written here exist on the Review model (see prisma/schema.prisma —
+    // PHASE-1-SCHEMA added authorName, source, status, responseJson, externalUrl,
+    // npsScore, googleReviewId, reviewUrl). `externalUrl` is intentionally not
+    // exposed via this API — it's a schema-level alias of `reviewUrl` reserved
+    // for future import-from-Google workflows.
     const review = await db.review.create({
       data: {
         rating: parseInt(String(rating)),
         comment: comment || null,
+        authorName: authorName || null,
         jobId: jobId || null,
         customerId: customerId || null,
         employeeId: employeeId || null,

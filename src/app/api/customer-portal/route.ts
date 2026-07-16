@@ -48,11 +48,23 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Build the portal URL
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || ''
+    // Build the portal URL.
+    //
+    // IMPORTANT: We emit `/?mgl=TOKEN&redirect=/` URLs (the canonical customer
+    // magic-link shape) — NOT `/portal/[token]` URLs. The `/portal/[token]`
+    // path is a dead route (no `src/app/portal/[token]/page.tsx` exists), so
+    // any link we hand out would 404 on click. The home page
+    // (`src/app/page.tsx`) already detects `?mgl=` on first load, POSTs the
+    // token to `/api/auth/customer/exchange-magic-link`, auto-authenticates
+    // the customer, sets the `serviceos_session` cookie, and (when `redirect`
+    // is present) stashes the deep-link target in `sessionStorage.mgl_redirect`
+    // for the customer portal to consume on mount. This mirrors the
+    // `issueCustomerMagicLink` helper in `src/lib/customer-magic-link.ts`.
+    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
+    const redirect = '/' // customer portal root — the layout deep-links from mgl_redirect
     const portalUrl = baseUrl
-      ? `${baseUrl}/portal/${token}`
-      : `/portal/${token}`
+      ? `${baseUrl}/?mgl=${token}&redirect=${encodeURIComponent(redirect)}`
+      : `/?mgl=${token}&redirect=${encodeURIComponent(redirect)}`
 
     return NextResponse.json({
       success: true,
@@ -94,7 +106,7 @@ export async function GET(request: NextRequest) {
         orderBy: { createdAt: 'desc' },
       })
 
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || ''
+      const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || '').replace(/\/$/, '')
 
       return NextResponse.json(
         sessions.map(session => ({
@@ -105,9 +117,11 @@ export async function GET(request: NextRequest) {
           customerPhone: session.customerPhone,
           expiresAt: toISOString(session.expiresAt as Date | string),
           lastAccessedAt: toISOString(session.lastAccessedAt as Date | string),
+          // Mirror the POST handler: emit `/?mgl=TOKEN&redirect=/` URLs that
+          // the home page (`src/app/page.tsx`) consumes — NOT dead `/portal/[token]` URLs.
           portalUrl: baseUrl
-            ? `${baseUrl}/portal/${session.token}`
-            : `/portal/${session.token}`,
+            ? `${baseUrl}/?mgl=${session.token}&redirect=${encodeURIComponent('/')}`
+            : `/?mgl=${session.token}&redirect=${encodeURIComponent('/')}`,
         }))
       )
     }

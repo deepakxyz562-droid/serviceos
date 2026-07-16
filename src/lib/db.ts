@@ -5,7 +5,7 @@ import { shouldUseSupabaseDB, supabaseDb } from './supabase-db'
 // PrismaClient singleton needs to be recreated. Without this, the global
 // singleton keeps the OLD client (missing new fields/models) even after
 // `prisma db push` regenerates the @prisma/client package.
-const PRISMA_SCHEMA_VERSION = '2025-07-15-jobvisits-module'
+const PRISMA_SCHEMA_VERSION = '2025-07-22-public-business-hub'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined

@@ -5,6 +5,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { QueryProvider } from "@/providers/query-provider";
 import { PwaProvider } from "@/components/pwa/pwa-provider";
 import { CookieConsentBanner } from "@/components/legal/cookie-consent-banner";
+import { StructuredData } from "@/components/seo/structured-data";
+import { getOrganizationSchema, getWebsiteSchema } from "@/lib/seo/schemas";
 
 const poppins = Poppins({
   variable: "--font-poppins",
@@ -91,6 +93,11 @@ export default function RootLayout({
       <body
         className={`${poppins.variable} ${geistMono.variable} antialiased bg-background text-foreground font-sans`}
       >
+        {/* Site-wide structured data: Organization + WebSite schema.
+            Injected on every page so Google can understand the entity. */}
+        <StructuredData
+          data={[getOrganizationSchema(), getWebsiteSchema()]}
+        />
         <QueryProvider>
           {children}
           <Toaster position="top-center" />

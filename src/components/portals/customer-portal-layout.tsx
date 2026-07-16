@@ -1591,9 +1591,50 @@ function InvoicesView({ initialInvoiceId }: { initialInvoiceId?: string | null }
                           <TableCell className="text-xs text-right font-medium">{formatCurrency(invoice.total || invoice.amount)}</TableCell>
                           <TableCell>{getInvoiceStatusBadge(invoice.status)}</TableCell>
                           <TableCell className="text-right">
-                            <Button variant="ghost" size="icon" className="size-7" onClick={(e) => e.stopPropagation()}>
-                              <Download className="size-3.5" />
-                            </Button>
+                            <div className="flex items-center justify-end gap-1">
+                              {/* Download — opens a printable HTML view in a new tab.
+                                  The user can then use the browser's Print → Save as PDF
+                                  flow to download a PDF copy. The endpoint enforces
+                                  customer-ownership server-side (404 for other invoices). */}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-7"
+                                title="Download / Print invoice"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.open(
+                                    apiUrl(`/api/invoices/${invoice.id}/print`),
+                                    '_blank',
+                                    'noopener,noreferrer'
+                                  );
+                                }}
+                              >
+                                <Download className="size-3.5" />
+                              </Button>
+                              {/* Pay — online invoice payment flow is not yet wired
+                                  (the existing /api/paypal/create-order endpoint is
+                                  SaaS-subscription-only). Show a clear actionable toast
+                                  instead of being a dead button. Disabled (hidden) for
+                                  invoices that are already paid or cancelled. */}
+                              {invoice.status !== 'paid' && invoice.status !== 'cancelled' ? (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-7 text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/30"
+                                  title="Pay invoice"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toast.info('Online payment coming soon', {
+                                      description:
+                                        'Please contact us to pay this invoice, or use the Download button to print a copy for your records.',
+                                    });
+                                  }}
+                                >
+                                  <CreditCard className="size-3.5" />
+                                </Button>
+                              ) : null}
+                            </div>
                           </TableCell>
                         </TableRow>
                         {isExpanded ? (

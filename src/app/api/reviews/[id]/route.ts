@@ -55,8 +55,13 @@ export async function PUT(
     }
 
     const updateData: Record<string, unknown> = {};
+    // All these fields exist on the Review model in prisma/schema.prisma
+    // (PHASE-1-SCHEMA added authorName, source, status, responseJson,
+    // npsScore, googleReviewId, reviewUrl). `externalUrl` is intentionally
+    // omitted — it's a schema-level alias of `reviewUrl` reserved for future
+    // import-from-Google workflows.
     const allowedFields = [
-      'rating', 'comment', 'status', 'source', 'npsScore',
+      'rating', 'comment', 'authorName', 'status', 'source', 'npsScore',
       'responseJson', 'googleReviewId', 'reviewUrl',
     ];
 
