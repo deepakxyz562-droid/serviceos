@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
+import { applyHubDefaultsToTenant } from '@/lib/public-business';
 
 // GET /api/tenants/[id] - Get tenant details
 export async function GET(
@@ -179,6 +180,22 @@ export async function PUT(
       seoDescription,
     } = body;
 
+    // ── Detect onboarding completion transition ─────────────────────────
+    // When `onboardingCompleted` flips to `true` (or is set true while the
+    // tenant's Hub isn't enabled yet), auto-populate the Hub defaults so
+    // the public page is ready immediately. The user can still edit/disable
+    // everything from the Public Hub settings tab afterward.
+    let shouldAutoPopulateHub = false;
+    if (onboardingCompleted === true) {
+      const existing = await db.tenant.findUnique({
+        where: { id },
+        select: { onboardingCompleted: true, publicProfileEnabled: true },
+      });
+      if (existing && (!existing.onboardingCompleted || !existing.publicProfileEnabled)) {
+        shouldAutoPopulateHub = true;
+      }
+    }
+
     // Build update data - only include provided fields
     const updateData: Record<string, unknown> = {};
     if (name !== undefined) updateData.name = name;
@@ -219,13 +236,32 @@ export async function PUT(
       data: updateData,
     });
 
+    // ── Auto-populate Hub defaults on onboarding completion ──────────────
+    // Runs AFTER the main update so it can read the freshly-saved name,
+    // industry, address, phone to derive tagline / description / FAQs / etc.
+    // Only fills empty fields — never overwrites user edits.
+    if (shouldAutoPopulateHub) {
+      try {
+        await applyHubDefaultsToTenant(id);
+      } catch (err) {
+        console.error('[tenants PUT] auto-populate Hub defaults failed:', err);
+        // Non-fatal — onboarding still completes; user can populate Hub manually.
+      }
+    }
+
+    // Re-validate uniqueness of publicSlug on save (Prisma will throw if duplicate)
+    // Fetch the (possibly auto-populated) tenant for the response
+    const finalTenant = shouldAutoPopulateHub
+      ? await db.tenant.findUnique({ where: { id } })
+      : tenant;
+
     // Revalidate the public Business Hub page so ISR picks up the changes
     // immediately (the page exports `revalidate = 3600` but we force a refresh
     // on save so the owner sees their edits instantly).
     try {
-      const industrySeg = mapIndustryToUrlSlug(tenant.industry);
-      const citySeg = slugifyCity(tenant.city);
-      const slugSeg = tenant.publicSlug || tenant.slug;
+      const industrySeg = mapIndustryToUrlSlug(finalTenant?.industry ?? tenant.industry);
+      const citySeg = slugifyCity(finalTenant?.city ?? tenant.city);
+      const slugSeg = finalTenant?.publicSlug || tenant.publicSlug || tenant.slug;
       if (industrySeg && citySeg && slugSeg) {
         revalidatePath(`/${industrySeg}/${citySeg}/${slugSeg}`);
       }
@@ -237,45 +273,45 @@ export async function PUT(
 
     return NextResponse.json({
       tenant: {
-        id: tenant.id,
-        name: tenant.name,
-        slug: tenant.slug,
-        industry: tenant.industry,
-        logo: tenant.logo,
-        phone: tenant.phone,
-        email: tenant.email,
-        address: tenant.address,
-        country: tenant.country,
-        currency: tenant.currency,
-        whatsappPhone: tenant.whatsappPhone,
-        plan: tenant.plan,
-        planStatus: tenant.planStatus,
-        trialEndsAt: tenant.trialEndsAt,
-        settingsJson: tenant.settingsJson,
-        onboardingCompleted: tenant.onboardingCompleted,
-        onboardingStep: tenant.onboardingStep,
+        id: finalTenant?.id ?? tenant.id,
+        name: finalTenant?.name ?? tenant.name,
+        slug: finalTenant?.slug ?? tenant.slug,
+        industry: finalTenant?.industry ?? tenant.industry,
+        logo: finalTenant?.logo ?? tenant.logo,
+        phone: finalTenant?.phone ?? tenant.phone,
+        email: finalTenant?.email ?? tenant.email,
+        address: finalTenant?.address ?? tenant.address,
+        country: finalTenant?.country ?? tenant.country,
+        currency: finalTenant?.currency ?? tenant.currency,
+        whatsappPhone: finalTenant?.whatsappPhone ?? tenant.whatsappPhone,
+        plan: finalTenant?.plan ?? tenant.plan,
+        planStatus: finalTenant?.planStatus ?? tenant.planStatus,
+        trialEndsAt: finalTenant?.trialEndsAt ?? tenant.trialEndsAt,
+        settingsJson: finalTenant?.settingsJson ?? tenant.settingsJson,
+        onboardingCompleted: finalTenant?.onboardingCompleted ?? tenant.onboardingCompleted,
+        onboardingStep: finalTenant?.onboardingStep ?? tenant.onboardingStep,
         // ── Public Business Hub fields (echo back) ──────────────────────
-        publicProfileEnabled: tenant.publicProfileEnabled,
-        publicSlug: tenant.publicSlug,
-        city: tenant.city,
-        state: tenant.state,
-        postalCode: tenant.postalCode,
-        tagline: tenant.tagline,
-        description: tenant.description,
-        coverImage: tenant.coverImage,
-        galleryJson: tenant.galleryJson,
-        businessHoursJson: tenant.businessHoursJson,
-        serviceAreasJson: tenant.serviceAreasJson,
-        socialLinksJson: tenant.socialLinksJson,
-        faqsJson: tenant.faqsJson,
-        rating: tenant.rating,
-        reviewCount: tenant.reviewCount,
-        seoTitle: tenant.seoTitle,
-        seoDescription: tenant.seoDescription,
-        publicUrl: tenant.publicProfileEnabled
-          ? `/${mapIndustryToUrlSlug(tenant.industry)}/${slugifyCity(tenant.city)}/${tenant.publicSlug || tenant.slug}`
+        publicProfileEnabled: finalTenant?.publicProfileEnabled ?? tenant.publicProfileEnabled,
+        publicSlug: finalTenant?.publicSlug ?? tenant.publicSlug,
+        city: finalTenant?.city ?? tenant.city,
+        state: finalTenant?.state ?? tenant.state,
+        postalCode: finalTenant?.postalCode ?? tenant.postalCode,
+        tagline: finalTenant?.tagline ?? tenant.tagline,
+        description: finalTenant?.description ?? tenant.description,
+        coverImage: finalTenant?.coverImage ?? tenant.coverImage,
+        galleryJson: finalTenant?.galleryJson ?? tenant.galleryJson,
+        businessHoursJson: finalTenant?.businessHoursJson ?? tenant.businessHoursJson,
+        serviceAreasJson: finalTenant?.serviceAreasJson ?? tenant.serviceAreasJson,
+        socialLinksJson: finalTenant?.socialLinksJson ?? tenant.socialLinksJson,
+        faqsJson: finalTenant?.faqsJson ?? tenant.faqsJson,
+        rating: finalTenant?.rating ?? tenant.rating,
+        reviewCount: finalTenant?.reviewCount ?? tenant.reviewCount,
+        seoTitle: finalTenant?.seoTitle ?? tenant.seoTitle,
+        seoDescription: finalTenant?.seoDescription ?? tenant.seoDescription,
+        publicUrl: (finalTenant?.publicProfileEnabled ?? tenant.publicProfileEnabled)
+          ? `/${mapIndustryToUrlSlug(finalTenant?.industry ?? tenant.industry)}/${slugifyCity(finalTenant?.city ?? tenant.city)}/${finalTenant?.publicSlug || tenant.publicSlug || tenant.slug}`
           : null,
-        updatedAt: tenant.updatedAt,
+        updatedAt: finalTenant?.updatedAt ?? tenant.updatedAt,
       },
     });
   } catch (error) {

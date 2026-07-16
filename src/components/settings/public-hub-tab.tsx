@@ -38,6 +38,8 @@ import {
   XCircle,
   AlertCircle,
   Image as ImageIcon,
+  Upload,
+  X,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -49,6 +51,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { authFetch } from '@/lib/api';
 import { toast } from 'sonner';
+import { RichTextEditor } from '@/components/templates/rich-text-editor';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -133,12 +136,31 @@ function emptyForm(): HubForm {
 
 // ─── Component ─────────────────────────────────────────────────────────────
 
+// ─── Image upload helper ─────────────────────────────────────────────────
+// Posts a File to /api/public-hub/upload and returns the resulting URL.
+// Used by both the cover-image uploader and the gallery uploader.
+async function uploadImage(file: File, kind: 'cover' | 'gallery'): Promise<string> {
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('kind', kind);
+  const res = await authFetch('/api/public-hub/upload', { method: 'POST', body: fd });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Upload failed');
+  }
+  const data = await res.json();
+  return data.url as string;
+}
+
 export function PublicHubTab({ tenantId, industry, slug }: Props) {
   const [form, setForm] = useState<HubForm>(emptyForm);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [newArea, setNewArea] = useState('');
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
+  // Upload state — shown as a small spinner overlay on the upload tile.
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [uploadingGalleryIdx, setUploadingGalleryIdx] = useState<number | null>(null);
 
   // ── Load existing Hub data from the API ──────────────────────────────────
   const loadHub = useCallback(async () => {
@@ -248,7 +270,9 @@ export function PublicHubTab({ tenantId, industry, slug }: Props) {
   const urlPreview = `${urlIndustry}/${urlCity.toLowerCase().replace(/\s+/g, '-')}/${urlSlug.toLowerCase().replace(/\s+/g, '-')}`;
 
   // ── Indexability checklist (mirrors the "rich enough" rule) ──────────────
-  const descLongEnough = form.description.trim().length >= 100;
+  // Strip HTML tags before counting characters so the SEO check is accurate.
+  const descPlain = form.description.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const descLongEnough = descPlain.length >= 100;
   const hasCity = form.city.trim().length > 0;
   const hasIndustry = (industry || '').length > 0;
   const hasImage = Boolean(form.coverImage) || form.gallery.length > 0;
@@ -408,21 +432,20 @@ export function PublicHubTab({ tenantId, industry, slug }: Props) {
             <div className="flex items-center justify-between">
               <Label htmlFor="description" className="text-sm font-medium">Description</Label>
               <span className={`text-xs ${descLongEnough ? 'text-emerald-600' : 'text-amber-600'}`}>
-                {form.description.length} / 100 min
+                {form.description.replace(/<[^>]+>/g, '').length} / 100 min
               </span>
             </div>
-            <Textarea
-              id="description"
+            <RichTextEditor
               value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              onChange={(html) => setForm({ ...form, description: html })}
               placeholder="Tell customers what you do, where you operate, and why they should choose you. Aim for 2-3 paragraphs (200-500 words is ideal for SEO)."
-              rows={6}
+              ariaLabel="Business description"
             />
             <p className="text-xs text-muted-foreground flex items-center gap-1.5">
               {descLongEnough ? (
                 <><CheckCircle2 className="size-3.5 text-emerald-600" /> Long enough for search indexing</>
               ) : (
-                <><AlertCircle className="size-3.5 text-amber-600" /> Add {100 - form.description.length} more characters to be indexed</>
+                <><AlertCircle className="size-3.5 text-amber-600" /> Add {100 - form.description.replace(/<[^>]+>/g, '').length} more characters to be indexed</>
               )}
             </p>
           </div>
@@ -543,52 +566,161 @@ export function PublicHubTab({ tenantId, industry, slug }: Props) {
             </div>
             <div>
               <CardTitle className="text-base">Images</CardTitle>
-              <CardDescription>Cover image and photo gallery (paste image URLs)</CardDescription>
+              <CardDescription>Upload a cover image and photos of your work. You can also paste image URLs.</CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* ── Cover image ────────────────────────────────────────────────── */}
           <div className="space-y-2">
-            <Label htmlFor="cover-image" className="text-sm font-medium">Cover image URL</Label>
-            <Input
-              id="cover-image"
-              value={form.coverImage}
-              onChange={(e) => setForm({ ...form, coverImage: e.target.value })}
-              placeholder="https://example.com/your-cover-photo.jpg"
-            />
-            {form.coverImage && (
-              <div className="mt-2 rounded-lg overflow-hidden border max-w-sm">
-                <img src={form.coverImage} alt="Cover preview" className="w-full h-32 object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            <Label htmlFor="cover-image" className="text-sm font-medium">Cover image</Label>
+            {form.coverImage ? (
+              <div className="relative group rounded-lg overflow-hidden border max-w-sm">
+                <img
+                  src={form.coverImage}
+                  alt="Cover preview"
+                  className="w-full h-40 object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={uploadingCover}
+                    onClick={() => document.getElementById('cover-upload-input')?.click()}
+                    className="gap-1.5"
+                  >
+                    {uploadingCover ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
+                    Replace
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setForm({ ...form, coverImage: '' })}
+                    className="gap-1.5"
+                  >
+                    <X className="size-3.5" /> Remove
+                  </Button>
+                </div>
               </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => document.getElementById('cover-upload-input')?.click()}
+                disabled={uploadingCover}
+                className="flex flex-col items-center justify-center gap-2 w-full max-w-sm h-40 rounded-lg border-2 border-dashed border-muted-foreground/30 hover:border-emerald-500 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 transition-colors text-muted-foreground"
+              >
+                {uploadingCover ? (
+                  <><Loader2 className="size-6 animate-spin" /> <span className="text-sm">Uploading...</span></>
+                ) : (
+                  <><Upload className="size-6" /> <span className="text-sm font-medium">Click to upload cover image</span> <span className="text-xs">PNG, JPG, WebP up to 8MB</span></>
+                )}
+              </button>
             )}
+            <input
+              id="cover-upload-input"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setUploadingCover(true);
+                try {
+                  const url = await uploadImage(file, 'cover');
+                  setForm({ ...form, coverImage: url });
+                  toast.success('Cover image uploaded');
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : 'Upload failed');
+                } finally {
+                  setUploadingCover(false);
+                  e.target.value = '';
+                }
+              }}
+            />
+            <details className="text-xs text-muted-foreground">
+              <summary className="cursor-pointer hover:text-foreground">Or paste an image URL instead</summary>
+              <Input
+                id="cover-image"
+                value={form.coverImage}
+                onChange={(e) => setForm({ ...form, coverImage: e.target.value })}
+                placeholder="https://example.com/your-cover-photo.jpg"
+                className="mt-2 text-sm"
+              />
+            </details>
           </div>
 
           <Separator />
 
-          {/* Gallery — repeatable */}
+          {/* ── Gallery ───────────────────────────────────────────────────── */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <Label className="text-sm font-medium">Photo gallery</Label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setForm({ ...form, gallery: [...form.gallery, { url: '', caption: '' }] })}
-                className="gap-1.5"
-              >
-                <Plus className="size-3.5" /> Add photo
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => document.getElementById('gallery-upload-input')?.click()}
+                  disabled={uploadingGalleryIdx !== null}
+                  className="gap-1.5"
+                >
+                  {uploadingGalleryIdx === -1 ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
+                  Upload photo
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setForm({ ...form, gallery: [...form.gallery, { url: '', caption: '' }] })}
+                  className="gap-1.5"
+                >
+                  <Plus className="size-3.5" /> Add by URL
+                </Button>
+              </div>
             </div>
+            {/* Hidden file input for gallery uploads. Reused for each "Upload photo" click. */}
+            <input
+              id="gallery-upload-input"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setUploadingGalleryIdx(-1);
+                try {
+                  const url = await uploadImage(file, 'gallery');
+                  setForm({ ...form, gallery: [...form.gallery, { url, caption: '' }] });
+                  toast.success('Photo added to gallery');
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : 'Upload failed');
+                } finally {
+                  setUploadingGalleryIdx(null);
+                  e.target.value = '';
+                }
+              }}
+            />
             {form.gallery.length === 0 && (
-              <p className="text-xs text-muted-foreground">No gallery photos yet. Add photos of your work, team, or storefront.</p>
+              <div className="flex flex-col items-center justify-center gap-2 w-full h-32 rounded-lg border-2 border-dashed border-muted-foreground/20 text-muted-foreground">
+                <Camera className="size-6" />
+                <p className="text-xs">No gallery photos yet. Add photos of your work, team, or storefront.</p>
+              </div>
             )}
             {form.gallery.map((item, i) => (
               <div key={i} className="flex gap-3 items-start p-3 rounded-lg border bg-muted/20">
-                <div className="size-16 rounded-md overflow-hidden border bg-muted shrink-0 flex items-center justify-center">
+                <div className="relative size-16 rounded-md overflow-hidden border bg-muted shrink-0 flex items-center justify-center">
                   {item.url ? (
                     <img src={item.url} alt={item.caption || 'Gallery'} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).src = ''; }} />
                   ) : (
                     <Camera className="size-5 text-muted-foreground" />
+                  )}
+                  {uploadingGalleryIdx === i && (
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                      <Loader2 className="size-4 animate-spin text-white" />
+                    </div>
                   )}
                 </div>
                 <div className="flex-1 space-y-2">
@@ -612,6 +744,41 @@ export function PublicHubTab({ tenantId, industry, slug }: Props) {
                     placeholder="Caption (optional)"
                     className="text-sm"
                   />
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => document.getElementById(`gallery-replace-${i}`)?.click()}
+                      disabled={uploadingGalleryIdx !== null}
+                      className="gap-1.5 h-7 text-xs"
+                    >
+                      <Upload className="size-3" /> Replace
+                    </Button>
+                    <input
+                      id={`gallery-replace-${i}`}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        setUploadingGalleryIdx(i);
+                        try {
+                          const url = await uploadImage(file, 'gallery');
+                          const next = [...form.gallery];
+                          next[i] = { ...next[i], url };
+                          setForm({ ...form, gallery: next });
+                          toast.success('Photo replaced');
+                        } catch (err) {
+                          toast.error(err instanceof Error ? err.message : 'Upload failed');
+                        } finally {
+                          setUploadingGalleryIdx(null);
+                          e.target.value = '';
+                        }
+                      }}
+                    />
+                  </div>
                 </div>
                 <Button
                   type="button"
@@ -776,16 +943,16 @@ export function PublicHubTab({ tenantId, industry, slug }: Props) {
                   <Trash2 className="size-4" />
                 </Button>
               </div>
-              <Textarea
+              <RichTextEditor
                 value={faq.answer}
-                onChange={(e) => {
+                onChange={(html) => {
                   const next = [...form.faqs];
-                  next[i] = { ...next[i], answer: e.target.value };
+                  next[i] = { ...next[i], answer: html };
                   setForm({ ...form, faqs: next });
                 }}
                 placeholder="We serve the greater Denver metro area including Aurora, Lakewood, and Englewood."
-                rows={2}
-                className="text-sm"
+                ariaLabel={`Answer for FAQ ${i + 1}`}
+                className="[&_[contenteditable]]:min-h-[80px]"
               />
             </div>
           ))}

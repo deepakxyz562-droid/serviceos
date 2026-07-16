@@ -224,11 +224,15 @@ export default async function PublicBusinessHubPage({
                   <h2 id="about-heading" className="text-2xl font-bold tracking-tight mb-4">
                     About {business.name}
                   </h2>
-                  <div className="prose prose-slate dark:prose-invert max-w-none">
-                    <p className="text-muted-foreground leading-relaxed whitespace-pre-line">
-                      {business.description}
-                    </p>
-                  </div>
+                  <div
+                    className="prose prose-slate dark:prose-invert max-w-none prose-p:text-muted-foreground prose-p:leading-relaxed prose-a:text-emerald-700 dark:prose-a:text-emerald-400 prose-a:no-underline hover:prose-a:underline prose-strong:text-foreground prose-headings:text-foreground"
+                    // Description is now authored via a rich HTML editor in the
+                    // Public Hub settings tab. We render it verbatim — the
+                    // editor only produces a safe subset (no <script> / inline
+                    // event handlers) and the content is owned by the tenant
+                    // admin themselves, so this is acceptable for a public page.
+                    dangerouslySetInnerHTML={{ __html: business.description }}
+                  />
                   {serviceAreas.length > 0 && (
                     <div className="mt-6">
                       <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-1.5">
@@ -334,9 +338,10 @@ export default async function PublicBusinessHubPage({
                           <span>{f.question}</span>
                           <ChevronRight className="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" />
                         </summary>
-                        <div className="px-4 pb-4 pt-0 text-sm text-muted-foreground leading-relaxed">
-                          {f.answer}
-                        </div>
+                        <div
+                          className="prose prose-sm dark:prose-invert max-w-none px-4 pb-4 pt-0 prose-p:text-muted-foreground prose-p:leading-relaxed prose-a:text-emerald-700 dark:prose-a:text-emerald-400 prose-a:no-underline hover:prose-a:underline prose-strong:text-foreground"
+                          dangerouslySetInnerHTML={{ __html: f.answer }}
+                        />
                       </details>
                     ))}
                   </div>
@@ -458,8 +463,8 @@ function PublicBusinessHero({
   if (!business) return null
   return (
     <section className="border-b bg-gradient-to-b from-emerald-50/60 to-background dark:from-emerald-950/20">
-      {/* Cover image */}
-      {business.coverImage && (
+      {/* Cover image — or a gradient banner fallback when no cover is set */}
+      {business.coverImage ? (
         <div className="h-40 sm:h-56 w-full overflow-hidden bg-muted">
           <img
             src={business.coverImage}
@@ -468,6 +473,11 @@ function PublicBusinessHero({
             loading="eager"
           />
         </div>
+      ) : (
+        <div
+          aria-hidden
+          className="h-32 sm:h-40 w-full bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 dark:from-emerald-800 dark:via-teal-800 dark:to-cyan-900"
+        />
       )}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">

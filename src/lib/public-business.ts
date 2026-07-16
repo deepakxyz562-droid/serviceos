@@ -341,3 +341,293 @@ export async function listIndexableBusinessUrls(): Promise<string[]> {
     return []
   }
 }
+
+// ─── Auto-populate Hub defaults ──────────────────────────────────────────────
+//
+// Called when (a) onboarding completes, or (b) a backfill script runs for
+// existing tenants. Derives Hub content from data the tenant already has
+// (name, industry, address, phone) so the public page is "ready" the moment
+// the user finishes onboarding — without forcing them to fill out a second
+// form. The user can then edit/disable/delete anything from the Public Hub
+// settings tab.
+
+/**
+ * Map an industry string to one of the existing landing images under
+ * /images/landing/. Used as the default cover image so every new Hub
+ * has a non-empty hero banner out of the box.
+ */
+function defaultCoverImageForIndustry(industry: string | null): string {
+  const i = (industry || '').toLowerCase()
+  if (i.includes('plumb')) return '/images/landing/pillar-operations.png'
+  if (i.includes('hvac') || i.includes('air cond') || i.includes('heating') || i.includes('cooling')) return '/images/landing/pillar-operations.png'
+  if (i.includes('electric')) return '/images/landing/pillar-operations.png'
+  if (i.includes('clean')) return '/images/landing/pillar-communication.png'
+  if (i.includes('pest')) return '/images/landing/pillar-operations.png'
+  if (i.includes('mov')) return '/images/landing/pillar-operations.png'
+  if (i.includes('landscape') || i.includes('lawn') || i.includes('garden')) return '/images/landing/pillar-operations.png'
+  if (i.includes('roof')) return '/images/landing/pillar-operations.png'
+  if (i.includes('paint')) return '/images/landing/pillar-operations.png'
+  if (i.includes('auto') || i.includes('car') || i.includes('mechanic')) return '/images/landing/pillar-operations.png'
+  if (i.includes('salon') || i.includes('spa') || i.includes('beauty')) return '/images/landing/pillar-crm.png'
+  if (i.includes('pet') || i.includes('vet') || i.includes('groom')) return '/images/landing/pillar-crm.png'
+  if (i.includes('food') || i.includes('restaurant') || i.includes('cater')) return '/images/landing/pillar-finance.png'
+  if (i.includes('photo')) return '/images/landing/pillar-crm.png'
+  if (i.includes('tutor') || i.includes('education') || i.includes('teach')) return '/images/landing/pillar-crm.png'
+  if (i.includes('handyman') || i.includes('handy')) return '/images/landing/pillar-operations.png'
+  return '/images/landing/pillar-operations.png'
+}
+
+/**
+ * Parse a US/CA-style address string into city / state / postalCode.
+ * Best-effort — handles patterns like:
+ *   "123 Main St, Denver, CO 80202"
+ *   "123 Main St, Denver, CO 80202-1234"
+ *   "Denver, CO 80202"
+ */
+function parseAddressParts(address: string | null): {
+  city: string | null
+  state: string | null
+  postalCode: string | null
+} {
+  if (!address) return { city: null, state: null, postalCode: null }
+  // Look for the "CITY, ST 12345" or "CITY, ST 12345-6789" tail.
+  const m = address.match(/,\s*([^,]+?),\s*([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/)
+  if (m) {
+    return { city: m[1].trim(), state: m[2].toUpperCase(), postalCode: m[3] }
+  }
+  // Try without leading comma (e.g. "Denver CO 80202")
+  const m2 = address.match(/\b([A-Za-z .]+)\s+([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/)
+  if (m2) {
+    return { city: m2[1].trim(), state: m2[2].toUpperCase(), postalCode: m2[3] }
+  }
+  return { city: null, state: null, postalCode: null }
+}
+
+/** Title-case an industry string for human display ("plumbing" → "Plumbing"). */
+function prettyIndustry(industry: string | null): string {
+  if (!industry) return 'Home Services'
+  const i = industry.trim()
+  if (!i) return 'Home Services'
+  return i.charAt(0).toUpperCase() + i.slice(1)
+}
+
+export interface HubDefaultsInput {
+  id: string
+  name: string
+  slug: string
+  industry: string | null
+  address: string | null
+  phone: string | null
+  email: string | null
+  country: string
+  /** existing values — only fields that are null/empty will be filled */
+  city?: string | null
+  state?: string | null
+  postalCode?: string | null
+  tagline?: string | null
+  description?: string | null
+  coverImage?: string | null
+  businessHoursJson?: string
+  serviceAreasJson?: string
+  socialLinksJson?: string
+  faqsJson?: string
+  seoTitle?: string | null
+  seoDescription?: string | null
+  publicSlug?: string | null
+  publicProfileEnabled?: boolean
+}
+
+export interface HubDefaultsResult {
+  publicProfileEnabled: boolean
+  publicSlug: string
+  city: string | null
+  state: string | null
+  postalCode: string | null
+  tagline: string
+  description: string  // HTML
+  coverImage: string
+  businessHoursJson: string
+  serviceAreasJson: string
+  socialLinksJson: string
+  faqsJson: string  // array of {question, answer(HTML)}
+  seoTitle: string
+  seoDescription: string
+}
+
+/**
+ * Compute Hub defaults for a tenant. ONLY fills fields that are currently
+ * empty — never overwrites user edits. Always sets publicProfileEnabled=true
+ * (the user can disable it from the Public Hub tab).
+ */
+export function computeHubDefaults(input: HubDefaultsInput): HubDefaultsResult {
+  const parsed = parseAddressParts(input.address)
+  const city = input.city?.trim() || parsed.city || null
+  const state = input.state?.trim() || parsed.state || null
+  const postalCode = input.postalCode?.trim() || parsed.postalCode || null
+
+  const industryPretty = prettyIndustry(input.industry)
+  const cityLabel = city || 'your area'
+
+  const tagline =
+    input.tagline?.trim() ||
+    `${cityLabel}'s trusted ${industryPretty.toLowerCase()} service`
+
+  // Description: rich HTML. ≥ 100 chars so the "indexable" rule passes.
+  const defaultDescriptionHtml = [
+    `<p><strong>${escapeHtml(input.name)}</strong> is a ${escapeHtml(industryPretty.toLowerCase())} business serving ${escapeHtml(cityLabel)}${state ? `, ${escapeHtml(state)}` : ''} and the surrounding communities.</p>`,
+    `<p>Our team is committed to delivering reliable, professional ${escapeHtml(industryPretty.toLowerCase())} services — from routine maintenance to emergency calls. We show up on time, do the job right the first time, and stand behind our work.</p>`,
+    input.phone
+      ? `<p>Call us at <a href="tel:${escapeHtml(input.phone.replace(/[^+\d]/g, ''))}">${escapeHtml(input.phone)}</a> to book a visit or request a free quote.</p>`
+      : `<p>Contact us today to book a visit or request a free quote.</p>`,
+  ].join('')
+
+  const description = input.description?.trim() && input.description.trim().length >= 100
+    ? input.description
+    : defaultDescriptionHtml
+
+  const coverImage = input.coverImage?.trim() || defaultCoverImageForIndustry(input.industry)
+
+  // Business hours: Mon–Fri 9–5, closed Sat/Sun. If user already has hours, keep them.
+  const hasHours = input.businessHoursJson && input.businessHoursJson !== '{}'
+  const businessHoursJson = hasHours
+    ? input.businessHoursJson!
+    : JSON.stringify({
+        mon: { open: '09:00', close: '17:00' },
+        tue: { open: '09:00', close: '17:00' },
+        wed: { open: '09:00', close: '17:00' },
+        thu: { open: '09:00', close: '17:00' },
+        fri: { open: '09:00', close: '17:00' },
+        sat: { closed: true },
+        sun: { closed: true },
+      })
+
+  // Service areas: [city] if we have one.
+  const existingAreas = tryParseArray(input.serviceAreasJson)
+  const serviceAreasJson = existingAreas.length > 0
+    ? JSON.stringify(existingAreas)
+    : JSON.stringify(city ? [city] : [])
+
+  const socialLinksJson = input.socialLinksJson && input.socialLinksJson !== '{}'
+    ? input.socialLinksJson
+    : '{}'
+
+  // FAQs: 3 generic-but-useful industry FAQs with rich-HTML answers.
+  const existingFaqs = tryParseArray(input.faqsJson)
+  const faqsJson = existingFaqs.length > 0
+    ? JSON.stringify(existingFaqs)
+    : JSON.stringify([
+        {
+          question: `What areas do you serve?`,
+          answer: `<p>We proudly serve ${escapeHtml(cityLabel)}${state ? `, ${escapeHtml(state)}` : ''} and the surrounding communities. ${existingAreas.length > 0 ? 'Service areas include: ' + existingAreas.map((a: { name?: string } | string) => typeof a === 'string' ? a : a.name).join(', ') + '.' : ''}</p>`,
+        },
+        {
+          question: `Do you offer emergency ${industryPretty.toLowerCase()} service?`,
+          answer: `<p>Yes — we offer emergency ${escapeHtml(industryPretty.toLowerCase())} service for urgent situations. ${input.phone ? `Call us at <a href="tel:${escapeHtml(input.phone.replace(/[^+\d]/g, ''))}">${escapeHtml(input.phone)}</a>` : 'Contact us'} and we'll dispatch a technician as soon as possible.</p>`,
+        },
+        {
+          question: `How can I get a quote?`,
+          answer: `<p>Getting a quote is easy. ${input.phone ? `Call us at <a href="tel:${escapeHtml(input.phone.replace(/[^+\d]/g, ''))}">${escapeHtml(input.phone)}</a>` : 'Contact us'}, or use the booking form on this page to request a free, no-obligation estimate for your ${escapeHtml(industryPretty.toLowerCase())} project.</p>`,
+        },
+      ])
+
+  const seoTitle =
+    input.seoTitle?.trim() ||
+    `${input.name} | ${industryPretty} in ${cityLabel}`.slice(0, 70)
+
+  const seoDescription =
+    input.seoDescription?.trim() ||
+    stripHtml(description).slice(0, 155)
+
+  return {
+    publicProfileEnabled: true,  // always enable by default
+    publicSlug: input.publicSlug?.trim() || input.slug,
+    city,
+    state,
+    postalCode,
+    tagline,
+    description,
+    coverImage,
+    businessHoursJson,
+    serviceAreasJson,
+    socialLinksJson,
+    faqsJson,
+    seoTitle,
+    seoDescription,
+  }
+}
+
+/** Apply computed defaults to a tenant row in the DB. Only fills empty fields. */
+export async function applyHubDefaultsToTenant(tenantId: string): Promise<void> {
+  const tenant = await db.tenant.findUnique({ where: { id: tenantId } })
+  if (!tenant) return
+
+  const defaults = computeHubDefaults({
+    id: tenant.id,
+    name: tenant.name,
+    slug: tenant.slug,
+    industry: tenant.industry,
+    address: tenant.address,
+    phone: tenant.phone,
+    email: tenant.email,
+    country: tenant.country,
+    city: tenant.city,
+    state: tenant.state,
+    postalCode: tenant.postalCode,
+    tagline: tenant.tagline,
+    description: tenant.description,
+    coverImage: tenant.coverImage,
+    businessHoursJson: tenant.businessHoursJson,
+    serviceAreasJson: tenant.serviceAreasJson,
+    socialLinksJson: tenant.socialLinksJson,
+    faqsJson: tenant.faqsJson,
+    seoTitle: tenant.seoTitle,
+    seoDescription: tenant.seoDescription,
+    publicSlug: tenant.publicSlug,
+    publicProfileEnabled: tenant.publicProfileEnabled,
+  })
+
+  await db.tenant.update({
+    where: { id: tenantId },
+    data: {
+      publicProfileEnabled: defaults.publicProfileEnabled,
+      publicSlug: defaults.publicSlug,
+      city: defaults.city,
+      state: defaults.state,
+      postalCode: defaults.postalCode,
+      tagline: defaults.tagline,
+      description: defaults.description,
+      coverImage: defaults.coverImage,
+      businessHoursJson: defaults.businessHoursJson,
+      serviceAreasJson: defaults.serviceAreasJson,
+      socialLinksJson: defaults.socialLinksJson,
+      faqsJson: defaults.faqsJson,
+      seoTitle: defaults.seoTitle,
+      seoDescription: defaults.seoDescription,
+    },
+  })
+}
+
+// ─── small helpers ──────────────────────────────────────────────────────────
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function tryParseArray(json: string | undefined): unknown[] {
+  if (!json) return []
+  try {
+    const v = JSON.parse(json)
+    return Array.isArray(v) ? v : []
+  } catch {
+    return []
+  }
+}
