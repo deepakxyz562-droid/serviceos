@@ -413,3 +413,71 @@ html {
 .animate-fade-in {
   animation: fade-in 0.2s ease-out;
 }
+
+/* ─── Field label helper (used by invoice-generator form) ─────────────────── */
+.field-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  margin-bottom: 0.25rem;
+  display: block;
+}
+
+/* ─── Print styles for the Invoice Generator ────────────────────────────────
+   When the user clicks "Download PDF", we call window.print(). These rules
+   hide EVERYTHING except the invoice preview and lay it out as a clean A4/Letter
+   page so the browser's "Save as PDF" produces a professional, vector-quality
+   invoice with no app chrome. */
+@media print {
+  /* Hide app chrome on the invoice-generator page */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Reset the page layout so the invoice fills the page */
+  html,
+  body {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* On the invoice-generator route, hide everything except the invoice preview.
+     The page wrapper, header, hero, SEO content, and footer all carry .no-print
+     already, but this catches any stray siblings. */
+  body * {
+    visibility: hidden;
+  }
+  .invoice-preview,
+  .invoice-preview * {
+    visibility: visible;
+  }
+
+  /* Position the invoice at the top of the page, full width, no shadow/border */
+  .invoice-preview {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  /* Page setup: A4/Letter margins. Most browsers respect these. */
+  @page {
+    size: auto;
+    margin: 12mm;
+  }
+
+  /* Prevent awkward breaks inside line items / totals */
+  .invoice-preview table,
+  .invoice-preview tbody,
+  .invoice-preview tr,
+  .invoice-preview td,
+  .invoice-preview th {
+    page-break-inside: avoid;
+  }
+}

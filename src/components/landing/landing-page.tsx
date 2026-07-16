@@ -404,11 +404,8 @@ const footerLinks = {
     { label: 'WhatsApp (Add-on)', href: '#channels' },
     { label: 'Unified Inbox', href: '#features' },
   ],
-  company: [
-    { label: 'About', href: '#' },
-    { label: 'Blog', href: '#' },
-    { label: 'Careers', href: '#' },
-    { label: 'Contact', href: '/contact-us' },
+  freeTools: [
+    { label: 'Free Invoice Generator', href: '/invoice-generator' },
   ],
   legal: [
     { label: 'Privacy Policy', href: '/privacy-policy' },
@@ -1429,7 +1426,7 @@ function Footer() {
   return (
     <footer className="bg-foreground text-background mt-auto pb-[env(safe-area-inset-bottom,0px)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-8">
           <div className="col-span-2">
             <div className="flex items-center gap-2.5 mb-4">
               <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
@@ -1469,6 +1466,15 @@ function Footer() {
             <h4 className="text-background font-semibold text-sm mb-4">Channels</h4>
             <ul className="space-y-2.5">
               {footerLinks.channels.map((link) => (
+                <li key={link.label}><a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a></li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="text-background font-semibold text-sm mb-4">Free Tools</h4>
+            <ul className="space-y-2.5">
+              {footerLinks.freeTools.map((link) => (
                 <li key={link.label}><a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a></li>
               ))}
             </ul>
