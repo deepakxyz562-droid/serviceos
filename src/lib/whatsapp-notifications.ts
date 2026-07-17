@@ -4,6 +4,9 @@ import { resolveWhatsAppConfig } from '@/lib/whatsapp-config'
 import { deductWhatsAppCredit } from '@/lib/credit-management'
 import { createNotification } from '@/lib/notifications'
 import { sendWebPushToUser } from '@/lib/web-push-send'
+import { sendSmsMessage } from '@/lib/sms-send'
+import { resolveTenantId } from '@/lib/owner-notifications'
+import { hasRecentPush, markPushSent } from '@/lib/lifecycle-push-dispatcher'
 
 // ==========================================
 // TYPES
@@ -21,6 +24,31 @@ interface NotificationPayload {
   employeeId?: string
   customerId?: string
   tenantId?: string
+  /**
+   * Lifecycle event identifier — used for NotificationLog metadata + in-app
+   * notification `type`. e.g. "job.assigned", "lead.created", "job.completed".
+   * When omitted, the in-app notification falls back to type "reminder".
+   */
+  eventType?: string
+  /**
+   * Short SMS body. If omitted, derived from `subject` + the first lines of
+   * `message` (truncated to 160 chars). SMS is sent via sendSmsMessage() →
+   * the configured SMS provider (SNS / Twilio / etc.) so delivery is REAL
+   * even when WhatsApp is in simulated mode.
+   */
+  smsMessage?: string
+  /**
+   * Override the recipient userId for the in-app + push channels. If omitted,
+   * the userId is resolved from `employeeId` → Employee.userId (and as a
+   * last resort from `jobId` → Job.assigneeId → Employee.userId).
+   */
+  pushUserId?: string
+  /** Override the push + in-app notification title. Defaults to `subject`. */
+  pushTitle?: string
+  /** Override the push + in-app notification body. Defaults to a single-line summary of `message`. */
+  pushBody?: string
+  /** Deep-link URL for in-app + push. Defaults to `/?view=jobs&job={jobId}`. */
+  actionUrl?: string
 }
 
 interface SendResult {
@@ -104,21 +132,175 @@ async function sendNotificationWhatsAppMessage(
 }
 
 // ==========================================
-// MAIN NOTIFICATION SENDER + LOGGER
+// MULTI-CHANNEL LIFECYCLE DISPATCHER
 // ==========================================
+//
+// sendJobNotification() is the single chokepoint every job/lead notification
+// flows through. It fans out to FOUR channels in parallel (best-effort):
+//
+//   1. WhatsApp  — existing path (DB-resolved provider → Meta Cloud API → simulated)
+//   2. SMS       — sendSmsMessage() → SNS / Twilio / etc. (REAL delivery even
+//                  when WhatsApp is simulated). Writes NotificationLog type='sms'.
+//   3. In-app    — createNotification() → bell + inbox (for users with accounts)
+//   4. Web Push  — sendWebPushToUser() → device push (for users with accounts
+//                  AND a registered PushSubscription)
+//
+// Channels 3 + 4 require a userId. If `pushUserId` is not supplied, it is
+// resolved from `employeeId` → Employee.userId (and as a last resort from
+// `jobId` → Job.assigneeId → Employee.userId). Customers (recipientRole=
+// 'customer') typically don't have user accounts, so they only get WhatsApp +
+// SMS — which is the correct behaviour (customers aren't logged into the
+// dashboard, so in-app + push would have nowhere to land).
+//
+// Every channel is wrapped in its own try/catch and runs via Promise.allSettled,
+// so a failure in one channel never affects the others or the caller's HTTP
+// response.
 
-export async function sendJobNotification(payload: NotificationPayload): Promise<{ success: boolean; error?: string }> {
+/**
+ * Derive a short SMS body (≤160 chars) from the payload. SMS is much shorter
+ * than WhatsApp, so we collapse the multi-line WhatsApp message to a single
+ * line joined by " • " and prefix with the subject.
+ */
+/**
+ * Strip a string to plain ASCII suitable for SMS delivery.
+ * Removes Unicode emojis + WhatsApp *bold* / _italic_ / ~strike~ markers.
+ * Indian carriers (TRAI) frequently filter Unicode SMS (UCS-2) sent via SNS
+ * without a registered sender ID, so lifecycle SMS must be plain ASCII.
+ */
+function stripToPlainSms(input: string): string {
+  return input
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/_([^_]+)_/g, '$1')
+    .replace(/~([^~]+)~/g, '$1')
+    .replace(/[^\x00-\x7F]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function deriveSmsBody(payload: NotificationPayload): string {
+  if (payload.smsMessage) return stripToPlainSms(payload.smsMessage).slice(0, 160)
+  const subject = stripToPlainSms(payload.subject || '')
+  const firstLine = stripToPlainSms(
+    (payload.message || '')
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .join(' • '),
+  ).slice(0, 140)
+  if (subject && firstLine) return `${subject}: ${firstLine}`.slice(0, 160)
+  return (subject || firstLine || '').slice(0, 160)
+}
+
+function derivePushTitle(payload: NotificationPayload): string {
+  return (payload.pushTitle || payload.subject || 'ServiceOS update').slice(0, 80)
+}
+
+function derivePushBody(payload: NotificationPayload): string {
+  if (payload.pushBody) return payload.pushBody.slice(0, 200)
+  return (payload.message || '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join(' • ')
+    .slice(0, 200)
+}
+
+/**
+ * Map a lifecycle `eventType` string to one of the AppNotification `type`
+ * values defined in NOTIFICATION_TYPES — so the bell icon renders correctly.
+ * Falls back to "reminder" for unknown events.
+ */
+function mapEventTypeToInAppType(
+  eventType: string | undefined,
+  recipientRole: string | undefined,
+): string {
+  if (!eventType) return 'reminder'
+  if (eventType === 'job.assigned' || eventType === 'job.created' || eventType === 'booking.confirmed') return 'job_assigned'
+  if (eventType === 'job.started') return 'job_started'
+  if (eventType === 'job.on_route' || eventType === 'technician.on_route') return 'technician_on_route'
+  if (eventType === 'job.completed') return 'job_completed'
+  if (eventType === 'lead.assigned' || eventType === 'lead.created') return 'lead_assigned'
+  if (eventType === 'lead.updated') return 'lead_updated'
+  if (eventType === 'invoice.created' || eventType === 'invoice.sent') return 'invoice_created'
+  if (eventType === 'invoice.paid') return 'invoice_paid'
+  if (eventType === 'quote.sent' || eventType === 'quote.approved') return 'quote_approved'
+  if (eventType === 'quote.rejected') return 'quote_rejected'
+  if (eventType === 'customer.review') return 'customer_review'
+  // Role-based fallback for events without an explicit mapping.
+  if (recipientRole === 'employee' && eventType.startsWith('job.')) return 'job_assigned'
+  return 'reminder'
+}
+
+/**
+ * Resolve the recipient userId (for in-app + push) + a real Tenant.id
+ * (normalising workspaceId → tenantId via resolveTenantId). Returns
+ * { userId: null, tenantId: null } if no userId can be resolved (e.g. for
+ * customers, who don't have user accounts).
+ */
+async function resolveRecipientUserId(
+  payload: NotificationPayload,
+): Promise<{ userId: string | null; tenantId: string | null }> {
+  const resolvedTenantId = await resolveTenantId(payload.tenantId)
+
+  // 1. Explicit override
+  if (payload.pushUserId) {
+    return { userId: payload.pushUserId, tenantId: resolvedTenantId }
+  }
+  // 2. Employee → Employee.userId
+  if (payload.recipientRole === 'employee' && payload.employeeId) {
+    try {
+      const emp = await db.employee.findUnique({
+        where: { id: payload.employeeId },
+        select: { userId: true, tenantId: true },
+      })
+      if (emp?.userId) {
+        const empTenantId = await resolveTenantId(emp.tenantId || payload.tenantId)
+        return { userId: emp.userId, tenantId: empTenantId || resolvedTenantId }
+      }
+    } catch (e) {
+      console.warn('[sendJobNotification] resolveRecipientUserId(employee) failed:', e)
+    }
+  }
+  // 3. Job → Job.assigneeId → Employee.userId (last resort, for employee events
+  //    where the caller didn't pass employeeId)
+  if (payload.jobId) {
+    try {
+      const job = await db.job.findUnique({
+        where: { id: payload.jobId },
+        select: { assigneeId: true, workspaceId: true },
+      })
+      if (job?.assigneeId) {
+        const emp = await db.employee.findUnique({
+          where: { id: job.assigneeId },
+          select: { userId: true, tenantId: true },
+        })
+        if (emp?.userId) {
+          const empTenantId = await resolveTenantId(emp.tenantId || job.workspaceId || payload.tenantId)
+          return { userId: emp.userId, tenantId: empTenantId || resolvedTenantId }
+        }
+      }
+    } catch (e) {
+      console.warn('[sendJobNotification] resolveRecipientUserId(job) failed:', e)
+    }
+  }
+  return { userId: null, tenantId: resolvedTenantId }
+}
+
+// ── Channel 1: WhatsApp (existing logic, extracted into a helper) ──────────
+async function sendWhatsAppChannel(payload: NotificationPayload): Promise<SendResult> {
   let sendResult: SendResult = { success: true, simulated: true, externalId: `sim_${Date.now()}` }
 
-  // 1. Attempt to send the WhatsApp message
   try {
-    sendResult = await sendNotificationWhatsAppMessage(payload.to, payload.message, payload.type, payload.interactive, payload.tenantId)
+    sendResult = await sendNotificationWhatsAppMessage(
+      payload.to, payload.message, payload.type, payload.interactive, payload.tenantId,
+    )
   } catch (e) {
     console.error('WhatsApp send error:', e)
     sendResult = { success: false, error: String(e) }
   }
 
-  // 2. Create a NotificationLog entry (even if the send failed)
+  // NotificationLog entry (even if the send failed)
   try {
     await db.notificationLog.create({
       data: {
@@ -136,29 +318,26 @@ export async function sendJobNotification(payload: NotificationPayload): Promise
         tenantId: payload.tenantId,
         metadataJson: JSON.stringify({
           notificationType: payload.type || 'text',
+          eventType: payload.eventType,
           simulated: sendResult.simulated ?? false,
           error: sendResult.error,
         }),
       },
     })
   } catch (logError) {
-    console.error('Failed to create NotificationLog:', logError)
+    console.error('Failed to create WhatsApp NotificationLog:', logError)
   }
 
-  // 3. Update the job's notificationLogJson
+  // Update the job's notificationLogJson
   if (payload.jobId) {
     try {
       const job = await db.job.findUnique({ where: { id: payload.jobId } })
       if (job) {
         const existingLogs: unknown[] = (() => {
-          try {
-            return JSON.parse(job.notificationLogJson || '[]')
-          } catch {
-            return []
-          }
+          try { return JSON.parse(job.notificationLogJson || '[]') } catch { return [] }
         })()
-
         existingLogs.push({
+          channel: 'whatsapp',
           action: 'whatsapp_notification',
           to: payload.to,
           recipientName: payload.recipientName,
@@ -170,7 +349,6 @@ export async function sendJobNotification(payload: NotificationPayload): Promise
           error: sendResult.error,
           timestamp: new Date().toISOString(),
         })
-
         await db.job.update({
           where: { id: payload.jobId },
           data: { notificationLogJson: JSON.stringify(existingLogs) },
@@ -181,8 +359,180 @@ export async function sendJobNotification(payload: NotificationPayload): Promise
     }
   }
 
-  // 4. Return success/failure
-  return { success: sendResult.success, error: sendResult.error }
+  return sendResult
+}
+
+// ── Channel 2: SMS (NEW — SNS / Twilio / etc. via sendSmsMessage) ──────────
+// This is the channel that delivers REAL messages when WhatsApp is simulated.
+async function sendSmsChannel(
+  payload: NotificationPayload,
+  tenantId: string | null,
+): Promise<{ success: boolean; messageId?: string; simulated?: boolean; error?: string }> {
+  if (!payload.to) return { success: false, error: 'no recipient phone' }
+  const body = deriveSmsBody(payload)
+  if (!body) return { success: false, error: 'empty SMS body' }
+
+  try {
+    const result = await sendSmsMessage({
+      to: payload.to,
+      message: body,
+      tenantId: tenantId || undefined,
+    })
+
+    // NotificationLog for SMS
+    try {
+      await db.notificationLog.create({
+        data: {
+          type: 'sms',
+          recipient: payload.to,
+          recipientName: payload.recipientName,
+          recipientRole: payload.recipientRole,
+          subject: payload.subject,
+          message: body,
+          status: result.success ? 'sent' : 'failed',
+          externalId: result.messageId,
+          jobId: payload.jobId,
+          employeeId: payload.employeeId,
+          customerId: payload.customerId,
+          tenantId: tenantId || undefined,
+          metadataJson: JSON.stringify({
+            channel: 'sms',
+            eventType: payload.eventType,
+            simulated: !!result.simulated,
+            provider: result.provider,
+            credentialUsed: result.credentialUsed,
+            error: result.error,
+          }),
+        },
+      })
+    } catch (logError) {
+      console.error('Failed to create SMS NotificationLog:', logError)
+    }
+
+    // Also append to job.notificationLogJson so the job detail view shows the SMS send
+    if (payload.jobId) {
+      try {
+        const job = await db.job.findUnique({ where: { id: payload.jobId } })
+        if (job) {
+          const existingLogs: unknown[] = (() => {
+            try { return JSON.parse(job.notificationLogJson || '[]') } catch { return [] }
+          })()
+          existingLogs.push({
+            channel: 'sms',
+            to: payload.to,
+            subject: payload.subject,
+            status: result.success ? 'sent' : 'failed',
+            externalId: result.messageId,
+            simulated: !!result.simulated,
+            error: result.error,
+            timestamp: new Date().toISOString(),
+          })
+          await db.job.update({
+            where: { id: payload.jobId },
+            data: { notificationLogJson: JSON.stringify(existingLogs) },
+          })
+        }
+      } catch (updateError) {
+        console.error('Failed to update job notificationLogJson (sms):', updateError)
+      }
+    }
+
+    return result
+  } catch (err) {
+    console.error('[sendJobNotification] SMS channel failed:', err)
+    return { success: false, error: String(err) }
+  }
+}
+
+// ── Channel 3 + 4: In-app + Web Push (for users with accounts) ────────────
+//
+// DEDUP: The central lifecycle-push-dispatcher ALSO pushes to the assigned
+// employee for job.* / lead.* events. To avoid double-pushing the employee
+// (ad-hoc here + dispatcher), we consult the shared dedup cache keyed by
+// (userId, eventType, resourceId). Whichever fires first wins; the other is
+// a no-op. This means for events the dispatcher covers (job.assigned,
+// job.started, job.completed, lead.created), only ONE of the two paths
+// pushes — the other's WhatsApp + SMS still run, but the in-app + push are
+// skipped. For events the dispatcher does NOT cover (e.g. technician.on_route
+// which is a custom eventType), the ad-hoc path always pushes.
+async function sendInAppAndPushChannels(
+  payload: NotificationPayload,
+  userId: string,
+  tenantId: string,
+): Promise<void> {
+  const title = derivePushTitle(payload)
+  const body = derivePushBody(payload)
+  const actionUrl = payload.actionUrl || (payload.jobId ? `/?view=jobs&job=${payload.jobId}` : '/')
+  const inAppType = mapEventTypeToInAppType(payload.eventType, payload.recipientRole)
+
+  // Dedup against the central dispatcher. If the dispatcher already pushed
+  // this (userId, eventType, resourceId), skip the ad-hoc in-app + push.
+  const dedupResourceId = payload.jobId || payload.leadId || payload.customerId || payload.employeeId || null
+  if (payload.eventType && hasRecentPush(userId, payload.eventType, dedupResourceId)) {
+    return
+  }
+  if (payload.eventType) {
+    markPushSent(userId, payload.eventType, dedupResourceId)
+  }
+
+  // 3. In-app notification (bell + inbox)
+  try {
+    await createNotification({
+      tenantId,
+      recipientId: userId,
+      type: inAppType,
+      title,
+      message: body,
+      actionUrl,
+      actionLabel: payload.jobId ? 'View job' : 'Open',
+      priority: 'high',
+      senderType: 'system',
+      customerId: payload.customerId || undefined,
+      sourceType: payload.jobId ? 'Job' : undefined,
+      sourceId: payload.jobId || undefined,
+    })
+  } catch (err) {
+    console.error('[sendJobNotification] in-app create failed:', err)
+  }
+
+  // 4. Web Push (device notification)
+  try {
+    await sendWebPushToUser(userId, tenantId, {
+      title,
+      body,
+      url: actionUrl,
+      tag: `${inAppType}_${payload.jobId || payload.employeeId || Date.now()}`,
+      requireInteraction: payload.recipientRole === 'employee',
+    })
+  } catch (err) {
+    console.error('[sendJobNotification] web push failed:', err)
+  }
+}
+
+// ==========================================
+// MAIN DISPATCHER (replaces old sendJobNotification)
+// ==========================================
+export async function sendJobNotification(
+  payload: NotificationPayload,
+): Promise<{ success: boolean; error?: string }> {
+  // Resolve the recipient userId + real tenantId up front so all 4 channels
+  // can fire in parallel without serializing on the DB lookup.
+  const { userId, tenantId: resolvedTenantId } = await resolveRecipientUserId(payload)
+  const tenantId = resolvedTenantId
+
+  // Fan out to all channels in parallel. Each is best-effort (own try/catch
+  // inside). Promise.allSettled ensures one channel's rejection never short-
+  // circuits the others or bubbles to the caller.
+  const channels: Promise<unknown>[] = [
+    sendWhatsAppChannel(payload),
+    sendSmsChannel(payload, tenantId),
+  ]
+  if (userId && tenantId) {
+    channels.push(sendInAppAndPushChannels(payload, userId, tenantId))
+  }
+  await Promise.allSettled(channels)
+
+  return { success: true }
 }
 
 // ==========================================
@@ -219,68 +569,14 @@ export async function notifyEmployeeJobAssigned(
   const scheduledTime = (job.scheduledTime as string) || formatTime(job.scheduledAt as string | null)
   const notifTitle = `New job assigned: #${jobNumber}`
   const notifBody = `${job.title || 'Untitled'} • ${job.customerName || 'Customer'} • ${scheduledDate} ${scheduledTime}`
+  // (Multi-channel in-app + push fan-out is now handled centrally by
+  // sendJobNotification() — see the MULTI-CHANNEL LIFECYCLE DISPATCHER block
+  // above. The employeeId passed below lets it resolve the userId itself.)
 
-  // ── Multi-channel fan-out: in-app + web push ────────────────────────────
-  // This runs FIRST (before WhatsApp) and is fully independent. If WhatsApp
-  // isn't configured or throws, the employee still gets the in-app bell
-  // notification + a real device push (the channels that actually matter for
-  // mobile users). The WhatsApp send is wrapped in its own try/catch below.
-  const employeeUserId = (employee.userId as string) || null
-  if (employeeUserId) {
-    try {
-      // Resolve tenantId via the user account (preferred) or the job's
-      // workspace → tenant. We need it for both createNotification and
-      // sendWebPushToUser.
-      let tenantId: string | null = null
-      const userAccount = await db.user.findUnique({
-        where: { id: employeeUserId },
-        select: { tenantId: true },
-      })
-      tenantId = userAccount?.tenantId ?? null
-      if (!tenantId && (job.workspaceId as string)) {
-        const ws = await db.workspace.findUnique({
-          where: { id: job.workspaceId as string },
-          select: { tenantId: true },
-        })
-        tenantId = ws?.tenantId ?? null
-      }
-      if (tenantId) {
-        // 1) In-app notification (shows up in the bell + inbox).
-        await createNotification({
-          tenantId,
-          recipientId: employeeUserId,
-          type: 'job_assigned',
-          title: notifTitle,
-          message: notifBody,
-          actionUrl: `/?view=jobs&job=${job.id}`,
-          actionLabel: 'View job',
-          priority: 'high',
-          senderType: 'system',
-          customerId: (job.customerId as string) || undefined,
-          sourceType: 'Job',
-          sourceId: job.id as string,
-        })
-
-        // 2) Web Push to every active device the employee has registered.
-        await sendWebPushToUser(employeeUserId, tenantId, {
-          title: notifTitle,
-          body: notifBody,
-          url: `/?view=jobs&job=${job.id}`,
-          tag: `job_assigned_${job.id}`,
-          requireInteraction: true,
-        })
-      }
-    } catch (err) {
-      console.error('[notifyEmployeeJobAssigned] in-app/push fan-out failed:', err)
-    }
-  }
-
-  // ── WhatsApp channel (optional) ────────────────────────────────────────
-  // Only attempted if the employee actually has a phone. Failures here are
-  // swallowed so they never affect the in-app/push channels above (which
-  // already fired) or the job-creation HTTP response.
-  if (!employeePhone) return
-
+  // Build the WhatsApp message + interactive Accept/Reject buttons. These
+  // are only used if the employee has a phone; if not, the dispatcher skips
+  // the WhatsApp + SMS channels but still fires in-app + web push (using the
+  // employeeId to resolve the userId).
   const message = [
     '🔔 New Job Assigned',
     '',
@@ -326,13 +622,20 @@ export async function notifyEmployeeJobAssigned(
       employeeId: employee.id as string,
       customerId: (job.customerId as string) || undefined,
       // NOTE: NotificationLog.tenantId is a FK to Tenant. Job has `workspaceId`,
-      // not `tenantId`, so `job.tenantId` is always undefined here. Do NOT fall
-      // back to `employee.workspaceId` — that is a Workspace ID, not a Tenant ID,
-      // and would violate the FK constraint (Prisma P2003) and abort the log.
+      // not `tenantId`, so `job.tenantId` is always undefined here. The dispatcher
+      // normalises this via resolveTenantId() (workspaceId -> tenantId) for the
+      // SMS + push channels, so provider resolution works correctly.
       tenantId: (job.tenantId as string) || undefined,
+      // Multi-channel fields — fan out to SMS (SNS) + in-app + web push too.
+      eventType: 'job.assigned',
+      pushUserId: (employee.userId as string) || undefined,
+      pushTitle: notifTitle,
+      pushBody: notifBody,
+      smsMessage: `New Job #${jobNumber}: ${job.title || 'Untitled'} - ${job.customerName || 'Customer'} - ${scheduledDate} ${scheduledTime}. Confirm arrival.`,
+      actionUrl: `/?view=jobs&job=${job.id}`,
     })
   } catch (err) {
-    console.error('[notifyEmployeeJobAssigned] WhatsApp send failed (in-app + push already delivered):', err)
+    console.error('[notifyEmployeeJobAssigned] dispatcher failed:', err)
   }
 }
 
@@ -364,6 +667,12 @@ export async function notifyEmployeeJobStarted(
     employeeId: employee.id as string,
     customerId: (job.customerId as string) || undefined,
     tenantId: (job.tenantId as string) || undefined,
+    eventType: 'job.started',
+    pushUserId: (employee.userId as string) || undefined,
+    pushTitle: `Job started: #${jobNumber}`,
+    pushBody: `${job.title || 'Untitled'} - checked in at ${checkInTime}`,
+    smsMessage: `Job #${jobNumber} started: ${job.title || 'N/A'}. Checked in at ${checkInTime}.`,
+    actionUrl: `/?view=jobs&job=${job.id}`,
   })
 }
 
@@ -394,6 +703,12 @@ export async function notifyEmployeeJobCompleted(
     employeeId: employee.id as string,
     customerId: (job.customerId as string) || undefined,
     tenantId: (job.tenantId as string) || undefined,
+    eventType: 'job.completed',
+    pushUserId: (employee.userId as string) || undefined,
+    pushTitle: `Job completed: #${jobNumber}`,
+    pushBody: `Great work! Total completed: ${completedJobs}`,
+    smsMessage: `Job #${jobNumber} completed. Total completed: ${completedJobs}.`,
+    actionUrl: `/?view=jobs&job=${job.id}`,
   })
 }
 
@@ -429,6 +744,8 @@ export async function notifyCustomerJobAssigned(
     employeeId: (employee.id as string) || undefined,
     customerId: (job.customerId as string) || undefined,
     tenantId: (job.tenantId as string) || undefined,
+    eventType: 'job.assigned',
+    smsMessage: `Technician assigned: ${employee.name || 'N/A'}. Arrival: ${scheduledTime}. Service: ${job.title || 'N/A'}.`,
   })
 }
 
@@ -460,6 +777,8 @@ export async function notifyCustomerJobStarted(
     employeeId: (employee.id as string) || undefined,
     customerId: (job.customerId as string) || undefined,
     tenantId: (job.tenantId as string) || undefined,
+    eventType: 'technician.on_route',
+    smsMessage: `${employee.name || 'Your technician'} is on the way! Service: ${job.title || 'N/A'}. ETA: ${scheduledTime}.`,
   })
 }
 
@@ -540,6 +859,8 @@ export async function notifyCustomerJobCompleted(
     employeeId: (employee.id as string) || undefined,
     customerId: (job.customerId as string) || undefined,
     tenantId: (job.tenantId as string) || undefined,
+    eventType: 'job.completed',
+    smsMessage: `Service completed: #${jobNumber} ${job.title || 'N/A'} by ${employee.name || 'N/A'}. Thank you for choosing ${tenantName}!`,
   })
 }
 
@@ -575,6 +896,11 @@ export async function notifyEmployeeLeadAssigned(
     subject: `New Lead Assigned: ${lead.name || 'N/A'}`,
     employeeId: employee.id as string,
     tenantId: (lead.tenantId as string) || undefined,
+    eventType: 'lead.assigned',
+    pushUserId: (employee.userId as string) || undefined,
+    pushTitle: `New lead: ${lead.name || 'N/A'}`,
+    pushBody: `Source: ${lead.source || 'N/A'} - Priority: ${lead.priority || 'N/A'} - Value: ${lead.value || 'N/A'}`,
+    smsMessage: `New lead: ${lead.name || 'N/A'}, ${lead.phone || 'N/A'}, source: ${lead.source || 'N/A'}, priority: ${lead.priority || 'N/A'}. Follow up promptly.`,
   })
 }
 
@@ -602,6 +928,8 @@ export async function notifyCustomerLeadAssigned(
     subject: `Assigned Representative: ${employee.name || 'N/A'}`,
     employeeId: (employee.id as string) || undefined,
     tenantId: (lead.tenantId as string) || undefined,
+    eventType: 'lead.assigned',
+    smsMessage: `Hi ${lead.name || 'there'}! ${employee.name || 'A team member'} will assist you shortly.`,
   })
 }
 
@@ -632,5 +960,7 @@ export async function notifyCustomerBookingConfirmed(job: Record<string, unknown
     jobId: job.id as string,
     customerId: (job.customerId as string) || undefined,
     tenantId: (job.tenantId as string) || undefined,
+    eventType: 'booking.confirmed',
+    smsMessage: `Booking confirmed: #${jobNumber}, ${job.title || 'N/A'}, scheduled ${scheduledDate}. We will assign a technician shortly.`,
   })
 }

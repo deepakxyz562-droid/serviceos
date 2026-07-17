@@ -357,6 +357,10 @@ export async function POST(request: NextRequest) {
             eventType: 'lead.created',
             eventLabel: 'New Lead',
             whatsappMessage: waMessage,
+            // Plain-ASCII SMS body (no emojis) for reliable SNS delivery to
+            // Indian (+91) numbers. Emojis force UCS-2 encoding which TRAI
+            // frequently filters without a registered sender ID.
+            smsMessage: `New Lead: ${lead.name}, ${lead.phone}, source: ${lead.source}, priority: ${lead.priority}, value: ${leadValueStr}. Follow up promptly.`,
             leadId: lead.id,
           });
         } catch (waErr) {

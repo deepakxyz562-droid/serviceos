@@ -51,6 +51,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { PushPermissionCard } from '@/components/pwa/push-permission';
 import {
   Select,
   SelectContent,
@@ -592,6 +593,14 @@ function PreferencesDialog({ open, onOpenChange }: PreferencesDialogProps) {
                 />
               </div>
             </div>
+
+            {/* Device push registration — registers THIS browser/device for
+                real Web Push delivery. The "Push" toggle above only sets a
+                preference flag; this card actually calls pushManager.subscribe()
+                and creates a PushSubscription row so sendWebPushToUser() can
+                deliver to this device. Without this, toggling "Push" on does
+                nothing — no subscription exists to push to. */}
+            <PushPermissionCard />
 
             {/* Quiet hours */}
             <div>

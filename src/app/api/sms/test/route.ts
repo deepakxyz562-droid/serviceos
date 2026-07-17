@@ -67,6 +67,14 @@ export async function POST(request: NextRequest) {
       error: result.error,
       provider: result.provider || providerOverride,
       credentialUsed: result.credentialUsed,
+      // Debug fields — surface the raw provider response so failures are
+      // diagnosable. SNS returning a MessageId only means the publish was
+      // accepted; downstream carrier delivery (especially for India without
+      // a registered SenderID) may still fail silently.
+      httpStatus: result.httpStatus,
+      rawResponse: result.rawResponse,
+      sentMessage: testMessage,
+      sentTo: to,
     })
   } catch (err) {
     console.error('[/api/sms/test] Error:', err)

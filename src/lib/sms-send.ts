@@ -21,6 +21,10 @@ interface SendSmsResult {
   error?: string
   credentialUsed?: string
   provider?: string
+  /** Raw provider response body (for debugging). */
+  rawResponse?: string
+  /** HTTP status from the provider API. */
+  httpStatus?: number
 }
 
 function safeJsonParse(str: string | null, fallback: unknown = {}) {
@@ -340,12 +344,17 @@ function sigV4Sign(opts: {
   return { Authorization: authHeader, 'X-Amz-Date': amzDate }
 }
 
-async function sendAmazonSns(cfg: Record<string, string>, to: string, message: string): Promise<{ success: boolean; messageId?: string; error?: string }> {
+async function sendAmazonSns(cfg: Record<string, string>, to: string, message: string): Promise<{ success: boolean; messageId?: string; error?: string; rawResponse?: string; httpStatus?: number }> {
   const accessKeyId = cfg.accessKeyId
   const secretAccessKey = cfg.secretAccessKey
   const sessionToken = cfg.sessionToken
   const region = cfg.region || 'us-east-1'
   const messageType = cfg.messageType || 'Transactional' // Transactional | Promotional
+  // SenderID resolution: explicit cfg → env var fallback. For India (TRAI/DLT),
+  // a registered 6-letter alphanumeric SenderID is REQUIRED for transactional
+  // SMS delivery. Without it, SNS accepts the publish (HTTP 200 + MessageId)
+  // but downstream Indian carriers silently drop the message.
+  const senderId = cfg.senderId || process.env.AWS_SNS_SENDER_ID || ''
   if (!accessKeyId || !secretAccessKey) return { success: false, error: 'Amazon SNS requires accessKeyId + secretAccessKey' }
 
   const host = `sns.${region}.amazonaws.com`
@@ -361,10 +370,10 @@ async function sendAmazonSns(cfg: Record<string, string>, to: string, message: s
     'MessageAttributes.entry.1.Value.DataType': 'String',
     'MessageAttributes.entry.1.Value.StringValue': messageType,
   }
-  if (cfg.senderId) {
+  if (senderId) {
     params['MessageAttributes.entry.2.Name'] = 'AWS.SNS.SMS.SenderID'
     params['MessageAttributes.entry.2.Value.DataType'] = 'String'
-    params['MessageAttributes.entry.2.Value.StringValue'] = cfg.senderId.slice(0, 11)
+    params['MessageAttributes.entry.2.Value.StringValue'] = senderId.slice(0, 11)
   }
   const body = new URLSearchParams(params).toString()
 
@@ -385,17 +394,33 @@ async function sendAmazonSns(cfg: Record<string, string>, to: string, message: s
       body,
     })
     const text = await res.text()
+
+    // Always log the full SNS response at info level — this is critical for
+    // debugging delivery failures. SNS returning a MessageId only means the
+    // API accepted the publish request; downstream carrier delivery is
+    // asynchronous and may still fail (e.g. missing SenderID for India).
+    const senderIdLog = senderId ? `, senderId="${senderId}"` : ', senderId=<none — REQUIRED for India>'
+    console.log(`[SNS] Publish to ${to} (region=${region}, type=${messageType}${senderIdLog}) → HTTP ${res.status}`)
+    console.log(`[SNS] Response body: ${text.slice(0, 800)}`)
+
     // SNS returns XML. Extract MessageId from <MessageId>…</MessageId>
     const match = text.match(/<MessageId>([^<]+)<\/MessageId>/)
-    if (res.ok && match) return { success: true, messageId: match[1] }
+    if (res.ok && match) {
+      return { success: true, messageId: match[1], rawResponse: text, httpStatus: res.status }
+    }
     const errMatch = text.match(/<Message>([^<]+)<\/Message>/)
-    return { success: false, error: errMatch ? errMatch[1] : `SNS API error: ${res.status}` }
+    return {
+      success: false,
+      error: errMatch ? errMatch[1] : `SNS API error: ${res.status}`,
+      rawResponse: text,
+      httpStatus: res.status,
+    }
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : String(err) }
   }
 }
 
-const SENDER_BY_PROVIDER: Record<string, (cfg: Record<string, string>, to: string, msg: string) => Promise<{ success: boolean; messageId?: string; error?: string }>> = {
+const SENDER_BY_PROVIDER: Record<string, (cfg: Record<string, string>, to: string, msg: string) => Promise<{ success: boolean; messageId?: string; error?: string; rawResponse?: string; httpStatus?: number }>> = {
   twilio: sendTwilio,
   msg91: sendMsg91,
   plivo: sendPlivo,
@@ -469,6 +494,8 @@ export async function sendSmsMessage(options: SendSmsOptions): Promise<SendSmsRe
       error: r.error,
       credentialUsed: resolved.source,
       provider: resolved.provider,
+      rawResponse: r.rawResponse,
+      httpStatus: r.httpStatus,
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

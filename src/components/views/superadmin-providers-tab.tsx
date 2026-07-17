@@ -214,6 +214,16 @@ const SMS_PROVIDER_CONFIGS: Record<string, { label: string; fields: { key: strin
       { key: 'fromNumber', label: 'From Number', type: 'text', required: true },
     ],
   },
+  amazon_sns: {
+    label: 'Amazon SNS',
+    fields: [
+      { key: 'accessKeyId', label: 'Access Key ID', type: 'text', required: true },
+      { key: 'secretAccessKey', label: 'Secret Access Key', type: 'password', required: true },
+      { key: 'region', label: 'AWS Region', type: 'text', required: true, placeholder: 'ap-south-1' },
+      { key: 'senderId', label: 'Sender ID (REQUIRED for India)', type: 'text', required: false, placeholder: 'SERVOS' },
+      { key: 'messageType', label: 'Message Type', type: 'text', required: false, placeholder: 'Transactional (default) or Promotional' },
+    ],
+  },
 };
 
 // ─── Status Badge Helper ──────────────────────────────────────────────────

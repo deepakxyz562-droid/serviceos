@@ -23,6 +23,7 @@
 import { db } from '@/lib/db'
 import { sendEmail } from '@/lib/email-send'
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
+import { sendSmsMessage } from '@/lib/sms-send'
 import { getExchangeRate, convertCurrency } from '@/lib/currency'
 import { notifyOwner } from '@/lib/owner-notifications'
 import { issueCustomerMagicLink } from '@/lib/customer-magic-link'
@@ -643,16 +644,18 @@ export async function createDepositInvoiceFromBooking(bookingId: string, percent
 export interface SendInvoiceOptions {
   sendEmail?: boolean
   sendWhatsApp?: boolean
+  /** Send an SMS via the configured SMS provider (SNS / Twilio / etc.). Defaults to true. */
+  sendSms?: boolean
 }
 
-export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = { sendEmail: true, sendWhatsApp: true }): Promise<{ email?: { success: boolean; error?: string; simulated?: boolean }; whatsapp?: { success: boolean; error?: string; simulated?: boolean } }> {
+export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = { sendEmail: true, sendWhatsApp: true, sendSms: true }): Promise<{ email?: { success: boolean; error?: string; simulated?: boolean }; whatsapp?: { success: boolean; error?: string; simulated?: boolean }; sms?: { success: boolean; error?: string; simulated?: boolean } }> {
   const invoice = await db.invoice.findUnique({
     where: { id: invoiceId },
     include: { customer: true, tenant: true, job: true },
   })
   if (!invoice) return { email: { success: false, error: 'Invoice not found' } }
 
-  const result: { email?: { success: boolean; error?: string; simulated?: boolean }; whatsapp?: { success: boolean; error?: string; simulated?: boolean } } = {}
+  const result: { email?: { success: boolean; error?: string; simulated?: boolean }; whatsapp?: { success: boolean; error?: string; simulated?: boolean }; sms?: { success: boolean; error?: string; simulated?: boolean } } = {}
 
   // Build a compact text summary
   const rawItems = safeParse(invoice.itemsJson, []) as Array<{ description: string; quantity: number; rate: number; unitPrice: number; amount: number }> | { items?: Array<{ description: string; quantity: number; rate: number; unitPrice: number; amount: number }> }
@@ -739,11 +742,13 @@ export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = 
   }
 
   // ─── WhatsApp ──────────────────────────────────────────────────
+  // `waMagicUrl` is declared at function scope so the SMS block below can
+  // reuse it (avoids issuing a second magic link when WhatsApp already got one).
+  let waMagicUrl: string | null = null
   if (opts.sendWhatsApp && recipientPhone) {
     // For WhatsApp we can't render an HTML button, but if we have a magic
     // link (generated above OR re-attempted here for WhatsApp-only sends),
     // append a plain-text link so the customer can still tap into the portal.
-    let waMagicUrl: string | null = null
     if (invoice.customerId) {
       try {
         const magicLink = await issueCustomerMagicLink({
@@ -783,13 +788,73 @@ export async function sendInvoice(invoiceId: string, opts: SendInvoiceOptions = 
     result.whatsapp = { success: false, error: 'Customer has no phone number' }
   }
 
+  // ─── SMS (NEW — SNS / Twilio / etc. via sendSmsMessage) ─────────────────
+  // SMS is the channel that delivers a REAL message when WhatsApp is
+  // simulated. The body is short (<=160 chars) and includes the invoice
+  // number + total + a magic link so the customer can tap straight into the
+  // portal invoice view.
+  if (opts.sendSms !== false && recipientPhone) {
+    // Reuse the WhatsApp magic link if it was generated above; otherwise try
+    // to issue one now (best-effort).
+    let smsMagicUrl: string | null = waMagicUrl || null
+    if (!smsMagicUrl && invoice.customerId) {
+      try {
+        const magicLink = await issueCustomerMagicLink({
+          customerId: invoice.customerId,
+          redirect: `/invoices/${invoice.id}`,
+        })
+        smsMagicUrl = magicLink.url
+      } catch (err) {
+        console.warn(`[InvoiceAutomation] sendInvoice(${invoice.number}): SMS magic-link generation failed:`, err)
+      }
+    }
+    const dueStr = invoice.dueDate ? ` due ${new Date(invoice.dueDate).toLocaleDateString()}` : ''
+    const smsBody = `Invoice ${invoice.number} from ${invoice.tenant?.name || 'ServiceOS'}: ${invoiceTotal}${dueStr}.${smsMagicUrl ? ` View: ${smsMagicUrl}` : ''}`.slice(0, 160)
+    try {
+      const r = await sendSmsMessage({ to: recipientPhone, message: smsBody, tenantId: invoice.tenantId || undefined })
+      result.sms = { success: r.success, error: r.error, simulated: r.simulated }
+      // NotificationLog for SMS
+      try {
+        await db.notificationLog.create({
+          data: {
+            type: 'sms',
+            recipient: recipientPhone,
+            recipientName: customerName,
+            recipientRole: 'customer',
+            subject: `Invoice ${invoice.number}`,
+            message: smsBody,
+            status: r.success ? 'sent' : 'failed',
+            externalId: r.messageId,
+            customerId: invoice.customerId || undefined,
+            tenantId: invoice.tenantId || undefined,
+            metadataJson: JSON.stringify({
+              channel: 'sms',
+              eventType: 'invoice.sent',
+              invoiceId: invoice.id,
+              invoiceNumber: invoice.number,
+              simulated: !!r.simulated,
+              provider: r.provider,
+              error: r.error,
+            }),
+          },
+        })
+      } catch (logErr) {
+        console.error(`[InvoiceAutomation] sendInvoice(${invoice.number}): SMS NotificationLog create failed:`, logErr)
+      }
+    } catch (err) {
+      result.sms = { success: false, error: String(err) }
+    }
+  } else if (opts.sendSms !== false) {
+    result.sms = { success: false, error: 'Customer has no phone number' }
+  }
+
   // ── Flip invoice status to 'sent' if ANY channel succeeded ────
   // PREVIOUS BUG: The status flip was only inside the email success block,
   // so when email had no recipient but WhatsApp succeeded, the invoice
   // stayed in 'draft' even though WhatsApp was delivered. Now we check
-  // both channels after both have run.
+  // ALL channels (email + WhatsApp + SMS) after they have all run.
   const anyChannelSuccess =
-    (result.email?.success === true) || (result.whatsapp?.success === true)
+    (result.email?.success === true) || (result.whatsapp?.success === true) || (result.sms?.success === true)
   if (anyChannelSuccess && invoice.status === 'draft') {
     try {
       await db.invoice.update({ where: { id: invoiceId }, data: { status: 'sent', sentAt: new Date() } })
@@ -838,6 +903,8 @@ export async function markInvoicePaid(invoiceId: string): Promise<{ success: boo
           recipientRole: 'customer',
           subject: `Payment Confirmed: #${invoiceNumber}`,
           tenantId: invoice.tenantId || undefined,
+          eventType: 'invoice.paid',
+          smsMessage: `Payment confirmed: ${total} for invoice #${invoiceNumber}. Thank you!`,
         })
       }
     } catch (notifyErr) {
@@ -870,7 +937,7 @@ export async function markInvoicePaid(invoiceId: string): Promise<{ success: boo
 
 // ─── Core: send reminder ─────────────────────────────────────────────────────
 
-export async function sendInvoiceReminder(invoiceId: string): Promise<{ success: boolean; error?: string; email?: boolean; whatsapp?: boolean }> {
+export async function sendInvoiceReminder(invoiceId: string): Promise<{ success: boolean; error?: string; email?: boolean; whatsapp?: boolean; sms?: boolean }> {
   const invoice = await db.invoice.findUnique({
     where: { id: invoiceId },
     include: { customer: true, tenant: true },
@@ -882,6 +949,7 @@ export async function sendInvoiceReminder(invoiceId: string): Promise<{ success:
   const invoiceTotal = `$${Number(invoice.total).toFixed(2)} ${invoice.currency}`
   let emailSent = false
   let whatsappSent = false
+  let smsSent = false
 
   // Issue a magic-link URL (shared by both email and WhatsApp branches) so the
   // customer can one-click into their invoice on the portal. Wrapped in
@@ -934,7 +1002,52 @@ export async function sendInvoiceReminder(invoiceId: string): Promise<{ success:
     }
   }
 
-  return { success: emailSent || whatsappSent, email: emailSent, whatsapp: whatsappSent }
+  // ─── SMS reminder (NEW — SNS / Twilio / etc. via sendSmsMessage) ────────
+  // Real SMS delivery even when WhatsApp is simulated. Short body so it fits
+  // in a single SMS segment (<=160 chars).
+  if (invoice.customer?.phone) {
+    const dueStr = invoice.dueDate ? ` due ${new Date(invoice.dueDate).toLocaleDateString()}` : ''
+    const smsBody = `Reminder: Invoice ${invoice.number} for ${invoiceTotal}${dueStr}.${reminderMagicUrl ? ` View: ${reminderMagicUrl}` : ''} — ${invoice.tenant?.name || 'ServiceOS'}`.slice(0, 160)
+    try {
+      const r = await sendSmsMessage({
+        to: invoice.customer.phone,
+        message: smsBody,
+        tenantId: invoice.tenantId || undefined,
+      })
+      smsSent = r.success
+      try {
+        await db.notificationLog.create({
+          data: {
+            type: 'sms',
+            recipient: invoice.customer.phone,
+            recipientName: customerName,
+            recipientRole: 'customer',
+            subject: `Reminder: Invoice ${invoice.number}`,
+            message: smsBody,
+            status: r.success ? 'sent' : 'failed',
+            externalId: r.messageId,
+            customerId: invoice.customerId || undefined,
+            tenantId: invoice.tenantId || undefined,
+            metadataJson: JSON.stringify({
+              channel: 'sms',
+              eventType: 'invoice.reminder',
+              invoiceId: invoice.id,
+              invoiceNumber: invoice.number,
+              simulated: !!r.simulated,
+              provider: r.provider,
+              error: r.error,
+            }),
+          },
+        })
+      } catch (logErr) {
+        console.error(`[InvoiceAutomation] sendInvoiceReminder(${invoice.number}): SMS NotificationLog create failed:`, logErr)
+      }
+    } catch (err) {
+      console.error('[InvoiceAutomation] reminder SMS failed:', err)
+    }
+  }
+
+  return { success: emailSent || whatsappSent || smsSent, email: emailSent, whatsapp: whatsappSent, sms: smsSent }
 }
 
 // ─── Core: approve a pending_approval invoice ────────────────────────────────
