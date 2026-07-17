@@ -13,21 +13,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Building2,
-  MessageCircle,
   CreditCard,
   CheckCircle2,
   ArrowLeft,
   ArrowRight,
   Sparkles,
-  Phone,
-  Key,
   Shield,
   Crown,
   Star,
@@ -49,8 +45,6 @@ interface SaaSOnboardingProps {
   onComplete: () => void;
 }
 
-type WhatsAppOption = 'platform' | 'own-api' | 'skip';
-
 interface Step1Data {
   businessName: string;
   industry: string | null;
@@ -58,14 +52,6 @@ interface Step1Data {
   city: string;
   state: string;
   pincode: string;
-}
-
-interface Step2Data {
-  whatsappOption: WhatsAppOption;
-  whatsappPhone: string;
-  phoneNumberId: string;
-  businessAccountId: string;
-  accessToken: string;
 }
 
 interface Step3Data {
@@ -77,11 +63,13 @@ interface Step3Data {
 // Constants
 // ---------------------------------------------------------------------------
 
+// WhatsApp onboarding step has been REMOVED. Users can configure WhatsApp
+// later from Settings → WhatsApp. The wizard is now 3 steps:
+//   1. Your Business  →  2. Choose Your Plan  →  3. All Set!
 const STEPS = [
   { id: 1, label: 'Your Business', icon: Building2 },
-  { id: 2, label: 'Connect WhatsApp', icon: MessageCircle },
-  { id: 3, label: 'Choose Your Plan', icon: CreditCard },
-  { id: 4, label: 'All Set!', icon: CheckCircle2 },
+  { id: 2, label: 'Choose Your Plan', icon: CreditCard },
+  { id: 3, label: 'All Set!', icon: CheckCircle2 },
 ] as const;
 
 const INDUSTRIES = [
@@ -176,16 +164,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
     pincode: '',
   });
 
-  // Step 2
-  const [step2, setStep2] = useState<Step2Data>({
-    whatsappOption: 'platform',
-    whatsappPhone: '',
-    phoneNumberId: '',
-    businessAccountId: '',
-    accessToken: '',
-  });
-
-  // Step 3
+  // Step 3 (now step 2 in the UI after WhatsApp removal)
   const [step3, setStep3] = useState<Step3Data>({
     plan: 'growth',
     billing: 'monthly',
@@ -199,7 +178,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
 
   const goToStep = useCallback(
     (step: number) => {
-      if (step < 1 || step > 4) return;
+      if (step < 1 || step > 3) return;
       // Only allow jumping to completed steps or the next available step
       if (step > currentStep + 1) return;
       setDirection(step > currentStep ? 1 : -1);
@@ -209,7 +188,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   );
 
   const goNext = useCallback(() => {
-    if (currentStep < 4) {
+    if (currentStep < 3) {
       setDirection(1);
       setCurrentStep((s) => s + 1);
     }
@@ -268,20 +247,6 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
 
   const isStep1Valid = step1.businessName.trim().length > 0 && step1.industry !== null;
 
-  const isStep2Valid = (() => {
-    if (step2.whatsappOption === 'platform') {
-      return step2.whatsappPhone.trim().length >= 10;
-    }
-    if (step2.whatsappOption === 'own-api') {
-      return (
-        step2.phoneNumberId.trim().length > 0 &&
-        step2.businessAccountId.trim().length > 0 &&
-        step2.accessToken.trim().length > 0
-      );
-    }
-    return true; // skip
-  })();
-
   const handleStep1Next = useCallback(async () => {
     if (!isStep1Valid) {
       toast.error('Please fill in all required fields');
@@ -296,7 +261,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
         address: step1.address,
         city: step1.city,
         state: step1.state,
-        postalCode: step1.pincode,
+        pincode: step1.pincode,
       });
       toast.success('Business details saved!');
       goNext();
@@ -307,43 +272,13 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
     }
   }, [isStep1Valid, saveTenantProgress, step1, goNext]);
 
+  // (was handleStep3Next) Now the 2nd step — Choose Your Plan
   const handleStep2Next = useCallback(async () => {
-    if (!isStep2Valid) {
-      toast.error('Please complete the WhatsApp setup');
-      return;
-    }
-    setSaving(true);
-    try {
-      const payload: Record<string, any> = {
-        onboardingStep: 3,
-      };
-      if (step2.whatsappOption === 'platform') {
-        payload.whatsappPhone = step2.whatsappPhone;
-      } else if (step2.whatsappOption === 'own-api') {
-        payload.whatsappPhone = step2.whatsappPhone;
-        payload.whatsappConfigJson = JSON.stringify({
-          phoneNumberId: step2.phoneNumberId,
-          businessAccountId: step2.businessAccountId,
-          accessToken: step2.accessToken,
-          provider: 'meta-business',
-        });
-      }
-      await saveTenantProgress(payload);
-      toast.success('WhatsApp configuration saved!');
-      goNext();
-    } catch {
-      toast.error('Failed to save. Please try again.');
-    } finally {
-      setSaving(false);
-    }
-  }, [isStep2Valid, saveTenantProgress, step2, goNext]);
-
-  const handleStep3Next = useCallback(async () => {
     setSaving(true);
     try {
       await createSubscription(step3.plan, step3.billing);
       await saveTenantProgress({
-        onboardingStep: 4,
+        onboardingStep: 3,
         plan: step3.plan,
       });
       toast.success('Plan selected! Starting your free trial.');
@@ -355,11 +290,12 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
     }
   }, [createSubscription, saveTenantProgress, step3, goNext]);
 
+  // (was handleComplete) Now the 3rd step — All Set!
   const handleComplete = useCallback(async () => {
     setSaving(true);
     try {
       await saveTenantProgress({
-        onboardingStep: 4,
+        onboardingStep: 3,
         onboardingCompleted: true,
       });
       toast.success('Welcome to ServiceOS! 🎉');
@@ -374,9 +310,8 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   const handleNext = useCallback(() => {
     if (currentStep === 1) handleStep1Next();
     else if (currentStep === 2) handleStep2Next();
-    else if (currentStep === 3) handleStep3Next();
-    else if (currentStep === 4) handleComplete();
-  }, [currentStep, handleStep1Next, handleStep2Next, handleStep3Next, handleComplete]);
+    else if (currentStep === 3) handleComplete();
+  }, [currentStep, handleStep1Next, handleStep2Next, handleComplete]);
 
   // -------------------------------------------------------------------------
   // Format price
@@ -568,214 +503,11 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   );
 
   // -------------------------------------------------------------------------
-  // Render: Step 2 – Connect WhatsApp
+  // Render: Step 2 – Choose Your Plan
+  // (WhatsApp step removed — users configure WhatsApp from Settings → WhatsApp)
   // -------------------------------------------------------------------------
 
   const renderStep2 = () => (
-    <div className="space-y-6">
-      <div className="text-center">
-        <h2 className="text-2xl font-bold text-foreground">Connect WhatsApp</h2>
-        <p className="text-muted-foreground mt-1">
-          Set up WhatsApp to communicate with your customers
-        </p>
-      </div>
-
-      <RadioGroup
-        value={step2.whatsappOption}
-        onValueChange={(val) =>
-          setStep2((s) => ({ ...s, whatsappOption: val as WhatsAppOption }))
-        }
-        className="space-y-4"
-      >
-        {/* Option A: Platform WhatsApp */}
-        <div
-          className={cn(
-            'relative rounded-xl border-2 p-5 transition-all duration-200 cursor-pointer',
-            step2.whatsappOption === 'platform'
-              ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20'
-              : 'border-border hover:border-emerald-400/30',
-          )}
-          onClick={() => setStep2((s) => ({ ...s, whatsappOption: 'platform' }))}
-        >
-          <div className="flex items-start gap-3">
-            <RadioGroupItem value="platform" id="platform" className="mt-1" />
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="platform" className="text-base font-semibold cursor-pointer">
-                  Use Platform WhatsApp
-                </Label>
-                <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-0 text-[10px] px-2">
-                  Easiest
-                </Badge>
-              </div>
-              <p className="text-sm text-muted-foreground mt-1">
-                Just enter your WhatsApp number. Our platform handles all the setup,
-                messaging, and compliance.
-              </p>
-
-              <AnimatePresence>
-                {step2.whatsappOption === 'platform' && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="overflow-hidden"
-                  >
-                    <div className="mt-4 space-y-2">
-                      <Label htmlFor="whatsappPhone" className="text-sm font-medium">
-                        WhatsApp Number <span className="text-red-500">*</span>
-                      </Label>
-                      <div className="relative">
-                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          id="whatsappPhone"
-                          placeholder="+91 98765 43210"
-                          value={step2.whatsappPhone}
-                          onChange={(e) =>
-                            setStep2((s) => ({ ...s, whatsappPhone: e.target.value }))
-                          }
-                          className="h-11 pl-10"
-                        />
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-        </div>
-
-        {/* Option B: Own WhatsApp API */}
-        <div
-          className={cn(
-            'relative rounded-xl border-2 p-5 transition-all duration-200 cursor-pointer',
-            step2.whatsappOption === 'own-api'
-              ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20'
-              : 'border-border hover:border-emerald-400/30',
-          )}
-          onClick={() => setStep2((s) => ({ ...s, whatsappOption: 'own-api' }))}
-        >
-          <div className="flex items-start gap-3">
-            <RadioGroupItem value="own-api" id="own-api" className="mt-1" />
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="own-api" className="text-base font-semibold cursor-pointer">
-                  Connect Your Own WhatsApp API
-                </Label>
-                <Badge variant="outline" className="text-[10px] px-2">
-                  Advanced
-                </Badge>
-              </div>
-              <p className="text-sm text-muted-foreground mt-1">
-                Use your existing Meta Business Account and WhatsApp Business API
-                credentials.
-              </p>
-
-              <AnimatePresence>
-                {step2.whatsappOption === 'own-api' && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="overflow-hidden"
-                  >
-                    <div className="mt-4 space-y-3">
-                      <div className="space-y-2">
-                        <Label htmlFor="phoneNumberId" className="text-sm font-medium">
-                          Phone Number ID <span className="text-red-500">*</span>
-                        </Label>
-                        <div className="relative">
-                          <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input
-                            id="phoneNumberId"
-                            placeholder="Enter Phone Number ID"
-                            value={step2.phoneNumberId}
-                            onChange={(e) =>
-                              setStep2((s) => ({ ...s, phoneNumberId: e.target.value }))
-                            }
-                            className="h-11 pl-10"
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="businessAccountId" className="text-sm font-medium">
-                          Business Account ID <span className="text-red-500">*</span>
-                        </Label>
-                        <div className="relative">
-                          <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input
-                            id="businessAccountId"
-                            placeholder="Enter Business Account ID"
-                            value={step2.businessAccountId}
-                            onChange={(e) =>
-                              setStep2((s) => ({
-                                ...s,
-                                businessAccountId: e.target.value,
-                              }))
-                            }
-                            className="h-11 pl-10"
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="accessToken" className="text-sm font-medium">
-                          Access Token <span className="text-red-500">*</span>
-                        </Label>
-                        <div className="relative">
-                          <Key className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input
-                            id="accessToken"
-                            type="password"
-                            placeholder="Enter your access token"
-                            value={step2.accessToken}
-                            onChange={(e) =>
-                              setStep2((s) => ({ ...s, accessToken: e.target.value }))
-                            }
-                            className="h-11 pl-10"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-        </div>
-
-        {/* Option C: Skip */}
-        <div
-          className={cn(
-            'relative rounded-xl border-2 p-5 transition-all duration-200 cursor-pointer',
-            step2.whatsappOption === 'skip'
-              ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20'
-              : 'border-border hover:border-emerald-400/30',
-          )}
-          onClick={() => setStep2((s) => ({ ...s, whatsappOption: 'skip' }))}
-        >
-          <div className="flex items-start gap-3">
-            <RadioGroupItem value="skip" id="skip" className="mt-1" />
-            <div>
-              <Label htmlFor="skip" className="text-base font-semibold cursor-pointer">
-                Skip for now
-              </Label>
-              <p className="text-sm text-muted-foreground mt-1">
-                You can always configure WhatsApp later from your settings.
-              </p>
-            </div>
-          </div>
-        </div>
-      </RadioGroup>
-    </div>
-  );
-
-  // -------------------------------------------------------------------------
-  // Render: Step 3 – Choose Your Plan
-  // -------------------------------------------------------------------------
-
-  const renderStep3 = () => (
     <div className="space-y-6">
       <div className="text-center">
         <h2 className="text-2xl font-bold text-foreground">Choose Your Plan</h2>
@@ -938,10 +670,10 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   );
 
   // -------------------------------------------------------------------------
-  // Render: Step 4 – All Set!
+  // Render: Step 3 – All Set!
   // -------------------------------------------------------------------------
 
-  const renderStep4 = () => {
+  const renderStep3 = () => {
     const quickActions = [
       {
         icon: UserPlus,
@@ -954,12 +686,6 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
         label: 'Create First Job',
         description: 'Set up your first service job',
         color: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400',
-      },
-      {
-        icon: MessageCircle,
-        label: 'Connect WhatsApp',
-        description: 'Set up messaging',
-        color: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400',
       },
       {
         icon: LayoutDashboard,
@@ -1087,14 +813,10 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   // -------------------------------------------------------------------------
 
   const renderNavigation = () => {
-    if (currentStep === 4) return null;
+    if (currentStep === 3) return null;
 
     const isValid =
-      currentStep === 1
-        ? isStep1Valid
-        : currentStep === 2
-          ? isStep2Valid
-          : true;
+      currentStep === 1 ? isStep1Valid : true;
 
     return (
       <div className="flex items-center justify-between pt-4 mt-2 border-t">
@@ -1128,7 +850,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
             </>
           ) : (
             <>
-              {currentStep === 3 ? 'Start Free Trial' : 'Continue'}
+              {currentStep === 2 ? 'Start Free Trial' : 'Continue'}
               <ArrowRight className="h-4 w-4" />
             </>
           )}
@@ -1149,8 +871,6 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
         return renderStep2();
       case 3:
         return renderStep3();
-      case 4:
-        return renderStep4();
       default:
         return null;
     }

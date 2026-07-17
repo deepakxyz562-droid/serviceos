@@ -135,6 +135,23 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // Auto-seed dummy public business hub data so the new tenant has a
+    // starting point they can edit from Settings → Public Hub. (No workspace
+    // is created in this route, so we skip WhatsApp template auto-import.)
+    try {
+      const { seedPublicBusinessForTenant } = await import('@/lib/seed-public-business')
+      await seedPublicBusinessForTenant({
+        tenantId: tenant.id,
+        industry: tenant.industry || undefined,
+        city: tenant.city || undefined,
+        state: tenant.state || undefined,
+      })
+      console.log(`[Tenants API] Auto-seeded public hub for tenant ${tenant.id}`)
+    } catch (seedErr) {
+      console.warn('[Tenants API] Failed to auto-seed public business hub:', seedErr)
+      // Non-blocking — tenant can seed manually from Settings → Public Hub
+    }
+
     return NextResponse.json(tenant, { status: 201 })
   } catch (error) {
     console.error('Failed to create tenant:', error)

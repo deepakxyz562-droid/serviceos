@@ -231,8 +231,39 @@ export async function POST(request: NextRequest) {
           apiAccess: selectedPlan === 'pro' || selectedPlan === 'enterprise',
           prioritySupport: selectedPlan === 'enterprise',
         }),
+        // Trial credit system defaults (explicit for clarity)
+        trialWhatsappCredits: 10,
+        trialWhatsappUsed: 0,
+        platformWhatsappEnabled: true,
+        ownWhatsappConnected: false,
+        ownEmailProviderConnected: false,
       },
     });
+
+    // Auto-import notification WhatsApp templates for the new tenant
+    try {
+      const { autoImportNotificationTemplates } = await import('@/lib/auto-import-templates')
+      await autoImportNotificationTemplates(tenant.id, workspace.id, businessName)
+    } catch (importErr) {
+      console.warn('[Admin Tenants] Failed to auto-import notification templates:', importErr)
+      // Non-blocking — user can import manually later
+    }
+
+    // Auto-seed dummy public business hub data so the new tenant has a
+    // starting point they can edit from Settings → Public Hub.
+    try {
+      const { seedPublicBusinessForTenant } = await import('@/lib/seed-public-business')
+      await seedPublicBusinessForTenant({
+        tenantId: tenant.id,
+        industry: tenant.industry || undefined,
+        city: tenant.city || undefined,
+        state: tenant.state || undefined,
+      })
+      console.log(`[Admin Tenants] Auto-seeded public hub for tenant ${tenant.id}`)
+    } catch (seedErr) {
+      console.warn('[Admin Tenants] Failed to auto-seed public business hub:', seedErr)
+      // Non-blocking — tenant can seed manually from Settings → Public Hub
+    }
 
     return NextResponse.json(
       {

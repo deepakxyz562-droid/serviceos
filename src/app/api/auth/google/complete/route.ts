@@ -109,6 +109,35 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Auto-import notification WhatsApp templates for the new tenant
+    // (New Job Assigned, Technician Assigned, On The Way, Job Completed, Service Completed)
+    try {
+      const { autoImportNotificationTemplates } = await import('@/lib/auto-import-templates')
+      await autoImportNotificationTemplates(tenant.id, workspace.id, businessName)
+    } catch (importErr) {
+      console.warn('[Google Complete] Failed to auto-import notification templates:', importErr)
+      // Non-blocking — user can import manually later
+    }
+
+    // Auto-seed dummy public business hub data so the new tenant has a
+    // starting point they can edit from Settings → Public Hub. This populates
+    // the public profile (tagline, description, hours, FAQs, gallery),
+    // 4 demo services, and 5 demo reviews — all industry-aware. The tenant
+    // can edit or delete any of this from their dashboard.
+    try {
+      const { seedPublicBusinessForTenant } = await import('@/lib/seed-public-business')
+      await seedPublicBusinessForTenant({
+        tenantId: tenant.id,
+        industry: tenant.industry || undefined,
+        city: tenant.city || undefined,
+        state: tenant.state || undefined,
+      })
+      console.log(`[Google Complete] Auto-seeded public hub for tenant ${tenant.id}`)
+    } catch (seedErr) {
+      console.warn('[Google Complete] Failed to auto-seed public business hub:', seedErr)
+      // Non-blocking — tenant can seed manually from Settings → Public Hub
+    }
+
     // Generate new JWT with tenant info
     const updatedAuthUser = {
       id: authUser.id,
