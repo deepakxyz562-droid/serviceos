@@ -3,10 +3,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Industry Templates — pre-built industry configurations (forms, services,
 // workflows, branding) that new workspaces can install during onboarding.
+// Also includes the "Seed Public Hub" action for SuperAdmins to populate a
+// tenant's public business profile with editable dummy data.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { useState } from 'react';
 import {
   LayoutGrid, Store, Wind, Sparkles, Wrench, Zap, Flower2, HeartPulse, HardHat, Trees, ArrowRight,
+  Globe, Loader2, ExternalLink,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -15,6 +19,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { toast } from 'sonner';
 
 import { SectionHeader, DemoDataPill } from '@/components/views/superadmin/_shared';
@@ -55,6 +64,53 @@ const RECENTLY_USED: RecentlyUsed[] = [
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function IndustryTemplatesSection() {
+  // ─── Seed Public Hub state ──────────────────────────────────────────────
+  const [seeding, setSeeding] = useState(false);
+  const [seedName, setSeedName] = useState('John Plumbing');
+  const [seedIndustry, setSeedIndustry] = useState('Plumbing');
+  const [seedCity, setSeedCity] = useState('Dallas');
+  const [seedState, setSeedState] = useState('TX');
+  const [lastSeedResult, setLastSeedResult] = useState<{
+    tenantName: string;
+    publicUrl: string;
+    shortUrl: string;
+    servicesCreated: number;
+    reviewsCreated: number;
+  } | null>(null);
+
+  const handleSeed = async () => {
+    setSeeding(true);
+    setLastSeedResult(null);
+    try {
+      const res = await fetch('/api/superadmin/seed-public-business', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessName: seedName,
+          industry: seedIndustry,
+          city: seedCity,
+          state: seedState,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || `Failed (${res.status})`);
+      }
+      setLastSeedResult({
+        tenantName: data.tenantName,
+        publicUrl: data.publicUrl,
+        shortUrl: data.shortUrl,
+        servicesCreated: data.servicesCreated,
+        reviewsCreated: data.reviewsCreated,
+      });
+      toast.success(`Public hub seeded for "${data.tenantName}"`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to seed');
+    } finally {
+      setSeeding(false);
+    }
+  };
+
   return (
     <section className="space-y-6">
       <SectionHeader
@@ -63,6 +119,97 @@ export function IndustryTemplatesSection() {
         icon={LayoutGrid}
         actions={<DemoDataPill />}
       />
+
+      {/* ─── Seed Public Hub action card ─────────────────────────────────── */}
+      <Card className="card-shadow border-primary/30 bg-primary/5">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Globe className="size-4 text-primary" />
+            Seed Public Business Hub
+          </CardTitle>
+          <CardDescription>
+            Create a demo tenant with a rich public business profile (tagline, description,
+            services, reviews, gallery, FAQs) at <code>/&#123;industry&#125;/&#123;city&#125;/&#123;slug&#125;</code>.
+            The tenant can edit everything from Settings → Public Hub. New signups are auto-seeded too.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="seed-name" className="text-xs">Business Name</Label>
+              <Input
+                id="seed-name"
+                value={seedName}
+                onChange={(e) => setSeedName(e.target.value)}
+                placeholder="John Plumbing"
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Industry</Label>
+              <Select value={seedIndustry} onValueChange={setSeedIndustry}>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Plumbing">Plumbing</SelectItem>
+                  <SelectItem value="HVAC">HVAC</SelectItem>
+                  <SelectItem value="Electrical">Electrical</SelectItem>
+                  <SelectItem value="Cleaning">Cleaning</SelectItem>
+                  <SelectItem value="Landscaping">Landscaping</SelectItem>
+                  <SelectItem value="Salon">Salon &amp; Spa</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="seed-city" className="text-xs">City</Label>
+              <Input
+                id="seed-city"
+                value={seedCity}
+                onChange={(e) => setSeedCity(e.target.value)}
+                placeholder="Dallas"
+                className="h-9"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="seed-state" className="text-xs">State</Label>
+              <Input
+                id="seed-state"
+                value={seedState}
+                onChange={(e) => setSeedState(e.target.value)}
+                placeholder="TX"
+                className="h-9"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <Button onClick={handleSeed} disabled={seeding || !seedName.trim()} className="shrink-0">
+              {seeding ? (
+                <><Loader2 className="size-4 mr-2 animate-spin" /> Seeding…</>
+              ) : (
+                <><Globe className="size-4 mr-2" /> Seed Public Hub</>
+              )}
+            </Button>
+            {lastSeedResult && (
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <Badge variant="secondary" className="text-[10px]">
+                  ✓ {lastSeedResult.servicesCreated} services
+                </Badge>
+                <Badge variant="secondary" className="text-[10px]">
+                  ✓ {lastSeedResult.reviewsCreated} reviews
+                </Badge>
+                <a
+                  href={lastSeedResult.shortUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                >
+                  Open public hub <ExternalLink className="size-3" />
+                </a>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Info banner */}
       <Card className="card-shadow border-primary/30 bg-primary/5">
