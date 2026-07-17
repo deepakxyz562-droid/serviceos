@@ -14,6 +14,7 @@
 
 import { db } from '@/lib/db'
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas'
+import { getIndustryKit, durationToMinutes } from '@/lib/industry-kits'
 
 export interface PublicBusinessData {
   id: string
@@ -383,6 +384,10 @@ function defaultCoverImageForIndustry(industry: string | null): string {
  *   "123 Main St, Denver, CO 80202"
  *   "123 Main St, Denver, CO 80202-1234"
  *   "Denver, CO 80202"
+ *
+ * ALSO handles the JSON-string format produced by the Settings view
+ * (settings-view.tsx saves `address` as `JSON.stringify({street,city,state,pincode,country})`):
+ *   '{"street":"123 Main St","city":"Denver","state":"CO","pincode":"80202","country":"US"}'
  */
 function parseAddressParts(address: string | null): {
   city: string | null
@@ -390,6 +395,28 @@ function parseAddressParts(address: string | null): {
   postalCode: string | null
 } {
   if (!address) return { city: null, state: null, postalCode: null }
+
+  // ── JSON-string form (written by Settings view) ─────────────────────
+  const trimmed = address.trim()
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    try {
+      const obj = JSON.parse(trimmed) as {
+        city?: string | null
+        state?: string | null
+        pincode?: string | null
+        postalCode?: string | null
+      }
+      return {
+        city: (obj.city || '').trim() || null,
+        state: (obj.state || '').trim() || null,
+        postalCode: (obj.postalCode || obj.pincode || '').trim() || null,
+      }
+    } catch {
+      // fall through to regex parsing
+    }
+  }
+
+  // ── Plain-string form ───────────────────────────────────────────────
   // Look for the "CITY, ST 12345" or "CITY, ST 12345-6789" tail.
   const m = address.match(/,\s*([^,]+?),\s*([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)\s*$/)
   if (m) {
@@ -401,6 +428,45 @@ function parseAddressParts(address: string | null): {
     return { city: m2[1].trim(), state: m2[2].toUpperCase(), postalCode: m2[3] }
   }
   return { city: null, state: null, postalCode: null }
+}
+
+/**
+ * Format a tenant's `address` field for human-readable display.
+ *
+ * The address column is a plain `String?` in the schema, but the Settings
+ * view writes it as a JSON string `{"street","city","state","pincode","country"}`.
+ * This helper detects JSON and renders it as a readable single-line string.
+ * Non-JSON addresses are returned verbatim.
+ *
+ * Exported so the public Hub landing page can use it directly.
+ */
+export function formatAddressForDisplay(address: string | null | undefined): string {
+  if (!address) return ''
+  const trimmed = address.trim()
+  if (!trimmed) return ''
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    try {
+      const obj = JSON.parse(trimmed) as {
+        street?: string | null
+        city?: string | null
+        state?: string | null
+        pincode?: string | null
+        postalCode?: string | null
+        country?: string | null
+      }
+      const parts = [
+        obj.street?.trim(),
+        obj.city?.trim(),
+        obj.state?.trim(),
+        (obj.postalCode || obj.pincode || '').trim(),
+        obj.country?.trim(),
+      ].filter((p) => p && p.length > 0)
+      return parts.join(', ')
+    } catch {
+      // malformed JSON — fall through to return raw string
+    }
+  }
+  return trimmed
 }
 
 /** Title-case an industry string for human display ("plumbing" → "Plumbing"). */
@@ -556,6 +622,61 @@ export function computeHubDefaults(input: HubDefaultsInput): HubDefaultsResult {
   }
 }
 
+/**
+ * Seed default Service rows for a tenant from its industry kit.
+ *
+ * Looks up the tenant's `industry`, finds the matching kit in
+ * `industry-kits.ts` (HVAC, plumbing, cleaning, electrical, pest control,
+ * landscaping, roofing, general contractor), and inserts the kit's 8-10
+ * predefined services into the `Service` table with `isActive=true` and
+ * `isPublic=true` so they appear on the public Business Hub immediately.
+ *
+ * Safety: ONLY runs if the tenant has zero existing services — never
+ * creates duplicates or overwrites the user's manual setup.
+ *
+ * Returns the number of services inserted (0 if skipped or no kit found).
+ */
+export async function seedDefaultServicesForTenant(tenantId: string): Promise<number> {
+  const tenant = await db.tenant.findUnique({
+    where: { id: tenantId },
+    select: { id: true, industry: true },
+  })
+  if (!tenant || !tenant.industry) return 0
+
+  const kit = getIndustryKit(tenant.industry)
+  if (!kit || !kit.services || kit.services.length === 0) return 0
+
+  // ── Don't clobber an existing catalog ───────────────────────────────
+  // If the tenant already has ANY services (manual or seeded), skip.
+  // This respects the user's existing setup.
+  const existingCount = await db.service.count({ where: { tenantId } })
+  if (existingCount > 0) return 0
+
+  // ── Insert all kit services in parallel ─────────────────────────────
+  // Maps kit shape → Service model shape:
+  //   defaultPrice → basePrice
+  //   duration ("45m" | "1h 30m") → minutes (via durationToMinutes)
+  await Promise.all(
+    kit.services.map((s) =>
+      db.service.create({
+        data: {
+          name: s.name,
+          description: s.description || null,
+          category: s.category || 'general',
+          basePrice: s.defaultPrice ?? 0,
+          duration: s.duration ? durationToMinutes(s.duration) : 60,
+          icon: s.icon || null,
+          isActive: true,
+          isPublic: true,
+          tenantId,
+        },
+      })
+    )
+  )
+
+  return kit.services.length
+}
+
 /** Apply computed defaults to a tenant row in the DB. Only fills empty fields. */
 export async function applyHubDefaultsToTenant(tenantId: string): Promise<void> {
   const tenant = await db.tenant.findUnique({ where: { id: tenantId } })
@@ -605,6 +726,17 @@ export async function applyHubDefaultsToTenant(tenantId: string): Promise<void> 
       seoDescription: defaults.seoDescription,
     },
   })
+
+  // ── Also seed default Service rows from the industry kit ────────────
+  // This makes the "Services Offered" section on the public Hub render
+  // immediately on onboarding completion. Safe: only seeds if the tenant
+  // has zero existing services. Non-fatal: failures are logged but don't
+  // break onboarding.
+  try {
+    await seedDefaultServicesForTenant(tenantId)
+  } catch (err) {
+    console.error('[applyHubDefaultsToTenant] seedDefaultServicesForTenant failed:', err)
+  }
 }
 
 // ─── small helpers ──────────────────────────────────────────────────────────

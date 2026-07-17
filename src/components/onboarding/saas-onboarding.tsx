@@ -296,7 +296,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
         address: step1.address,
         city: step1.city,
         state: step1.state,
-        pincode: step1.pincode,
+        postalCode: step1.pincode,
       });
       toast.success('Business details saved!');
       goNext();

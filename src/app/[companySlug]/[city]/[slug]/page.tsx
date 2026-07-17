@@ -34,6 +34,7 @@ import {
   getPublicBusinessByUrl,
   getPublicServices,
   getPublicReviews,
+  formatAddressForDisplay,
   type PublicBusinessData,
   type PublicServiceData,
 } from '@/lib/public-business'
@@ -393,9 +394,12 @@ export default async function PublicBusinessHubPage({
                 <div className="rounded-xl border bg-card text-card-foreground shadow-sm p-5 space-y-3">
                   <h3 className="text-sm font-semibold text-foreground">Business Information</h3>
 
-                  {business.address && (
-                    <InfoRow icon={MapPin} label="Address" value={business.address} />
-                  )}
+                  {(() => {
+                    const displayAddress = formatAddressForDisplay(business.address)
+                    return displayAddress ? (
+                      <InfoRow icon={MapPin} label="Address" value={displayAddress} />
+                    ) : null
+                  })()}
                   {business.city && (
                     <InfoRow icon={MapPin} label="City" value={`${business.city}${business.state ? `, ${business.state}` : ''}`} />
                   )}

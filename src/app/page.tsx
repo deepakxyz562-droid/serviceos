@@ -405,8 +405,11 @@ export default function HomePage() {
         // SuperAdmin user — redirect to superadmin dashboard
         useAppStore.getState().setCurrentView('superadmin');
         toast.success('Welcome, Super Admin!');
-      } else if (!tenant) {
-        // New user without a tenant — show onboarding
+      } else if (!tenant || !tenant.onboardingCompleted) {
+        // New user without a tenant — OR an existing tenant that hasn't
+        // finished onboarding yet. The PATCH /api/tenants/[id] endpoint
+        // detects the `onboardingCompleted: true` transition and auto-
+        // populates the public Business Hub defaults at that moment.
         setShowOnboarding(true);
         toast.success('Welcome to ServiceOS! Let\'s set up your workspace.');
       } else {
