@@ -178,29 +178,94 @@ export async function DELETE(
       return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
     }
 
-    // Soft-delete: set isActive=false on all users belonging to this tenant
-    const result = await db.user.updateMany({
-      where: { tenantId: id },
-      data: { isActive: false },
-    });
+    // ─── HARD DELETE (permanent, irreversible) ─────────────────────────────
+    // The Tenant model has 30+ direct relations and the full schema has 140+
+    // models (~101 with tenantId, ~47 with workspaceId). Hardcoding a cascade
+    // for each is unmaintainable and brittle. Instead we:
+    //   1. Collect the tenant's workspace IDs (for workspace-scoped tables).
+    //   2. Temporarily disable SQLite FK enforcement.
+    //      (Safe: Prisma's SQLite connector uses connection_limit=1 by default,
+    //       so the PRAGMA persists across our subsequent statements on the same
+    //       connection. We re-enable it in `finally`.)
+    //   3. Dynamically enumerate every user table from sqlite_master.
+    //   4. For each table: if it has a `tenantId` column, DELETE WHERE
+    //      tenantId = id; else if it has a `workspaceId` column, DELETE WHERE
+    //      workspaceId IN (...the tenant's workspaces).
+    //   5. Finally DELETE the Tenant row itself.
+    // This auto-covers ALL current and future tables without code changes.
+    // ────────────────────────────────────────────────────────────────────────
 
-    // Also mark tenant as suspended
-    await db.tenant.update({
-      where: { id },
-      data: {
-        planStatus: 'suspended',
-        suspendedAt: new Date().toISOString(),
-        suspensionReason: 'Tenant soft-deleted by SuperAdmin',
-      },
+    // 1. Collect workspace IDs for this tenant
+    const workspaces = await db.workspace.findMany({
+      where: { tenantId: id },
+      select: { id: true },
     });
+    const wsIds = workspaces.map((w) => w.id);
+
+    // 2. Disable FK enforcement for the connection
+    await db.$executeRawUnsafe('PRAGMA foreign_keys = OFF');
+
+    let tablesCleared = 0;
+    try {
+      // 3. Enumerate every user table (skip SQLite internals + Prisma's migration table)
+      const tables = (await db.$queryRawUnsafe<{ name: string }[]>(`
+        SELECT name FROM sqlite_master
+        WHERE type='table'
+          AND name NOT LIKE 'sqlite_%'
+          AND name NOT LIKE '_prisma_%'
+          AND name NOT LIKE 'Migration%'
+          AND name NOT LIKE '__ Licensing %'
+      `)) as { name: string }[];
+
+      // 4. Delete matching rows from every relevant table
+      for (const { name } of tables) {
+        // Introspect columns for this table
+        const cols = (await db.$queryRawUnsafe<{ name: string }[]>(
+          `PRAGMA table_info(${JSON.stringify(name)})`,
+        )) as { name: string }[];
+        const colNames = cols.map((c) => c.name);
+
+        const hasTenantId = colNames.includes('tenantId');
+        const hasWorkspaceId = colNames.includes('workspaceId');
+
+        if (hasTenantId) {
+          // Tenant-scoped table — delete everything for this tenant
+          await db.$executeRawUnsafe(
+            `DELETE FROM ${JSON.stringify(name)} WHERE "tenantId" = ?`,
+            id,
+          );
+          tablesCleared++;
+        } else if (hasWorkspaceId && wsIds.length > 0) {
+          // Workspace-scoped table (no tenantId) — delete by workspaceId IN (...)
+          const placeholders = wsIds.map(() => '?').join(',');
+          await db.$executeRawUnsafe(
+            `DELETE FROM ${JSON.stringify(name)} WHERE "workspaceId" IN (${placeholders})`,
+            ...wsIds,
+          );
+          tablesCleared++;
+        }
+      }
+
+      // 5. Delete the Tenant row itself (the loop above skipped it because the
+      //    Tenant table has no `tenantId`/`workspaceId` column)
+      await db.tenant.delete({ where: { id } });
+    } finally {
+      // Always re-enable FK enforcement, even on failure
+      try {
+        await db.$executeRawUnsafe('PRAGMA foreign_keys = ON');
+      } catch {
+        // best-effort; connection will reset on next request anyway
+      }
+    }
 
     // Invalidate caches
     cache.invalidateByPrefix('superadmin:');
 
     return NextResponse.json({
       success: true,
-      message: `Tenant soft-deleted. ${result.count} users deactivated.`,
-      deactivatedUsers: result.count,
+      message: `Tenant "${existing.name}" permanently deleted. ${tablesCleared} related table(s) cleared.`,
+      tablesCleared,
+      workspacesRemoved: wsIds.length,
     });
   } catch (error) {
     console.error('[SuperAdmin Tenant DELETE] Error:', error);
