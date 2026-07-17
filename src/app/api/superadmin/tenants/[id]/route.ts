@@ -154,6 +154,139 @@ export async function PATCH(
   }
 }
 
+// ─── Hard-delete cascade helper ─────────────────────────────────────────────
+//
+// The Tenant model has 30+ direct relations; the full schema has 140 models
+// (~101 with a `tenantId` column, ~10 with only `workspaceId`). We hard-delete
+// by calling `db.<model>.deleteMany()` for every model — this works across ALL
+// database backends (SQLite, PostgreSQL, Supabase REST adapter) without any
+// raw SQL.
+//
+// Foreign-key constraints can block deletion (child rows referencing the rows
+// we're trying to delete). We handle this with a MULTI-PASS strategy:
+//   Pass 1: try every model. Tables with no blocking FKs succeed.
+//   Pass 2+: retry only the models that failed. By now their dependents are
+//            gone, so they succeed too.
+//   After MAX_PASSES, any still-failing models are logged but we proceed to
+//   delete the Tenant itself (which will throw if blocked — surfaced as 500).
+//
+// (The Supabase REST adapter silently returns {count:0} on FK errors instead
+//  of throwing, so we also verify with a `count()` check after each delete.)
+// ────────────────────────────────────────────────────────────────────────────
+
+// 101 models that have a `tenantId` column (auto-extracted from schema).
+const TENANT_SCOPED_MODELS = [
+  'ActivityLog', 'AdCampaign', 'AdConversion', 'AgentMonitor', 'AnalyticsSnapshot',
+  'Announcement', 'AppNotification', 'AssetServiceHistory', 'AuditLogEntry',
+  'BillingEvent', 'Booking', 'BrandKit', 'Campaign', 'CampaignTemplate',
+  'ChannelConfig', 'ChatLabel', 'Chatbot', 'ChatbotSession', 'CommunicationProvider',
+  'Contact', 'ContactExport', 'ContactImport', 'Conversation', 'ConversationExport',
+  'CustomerAsset', 'CustomerJourney', 'CustomerPortalSession', 'CustomerTimelineEntry',
+  'DataRetentionPolicy', 'Deal', 'Document', 'EcommerceOrder', 'EcommerceProduct',
+  'EcommerceSyncLog', 'EmailProvider', 'EmailTemplate', 'EmployeePerformance',
+  'EmployeeShift', 'EventWebhook', 'Expense', 'FeatureFlag', 'Form', 'FormResponse',
+  'GPSLocation', 'GoogleAdsLead', 'GoogleAdsLeadConfig', 'Group',
+  'HubIntegrationConnection', 'ImageLibrary', 'InboxMessage', 'IntegrationConfig',
+  'IntegrationConnection', 'Invitation', 'Invoice', 'JobChecklist', 'JobPhoto',
+  'JobSignature', 'JobTimeEntry', 'JobVisit', 'JourneyExecution', 'JourneyWorkflow',
+  'KnowledgeArticle', 'Lead', 'MarketplaceTemplate', 'MenuItemConfig', 'MetaLead',
+  'MetaLeadConfig', 'Notification', 'NotificationLog', 'NotificationPreference',
+  'OfflineMutation', 'OtpVerification', 'PaymentMethod', 'PublicChatSession',
+  'PushSubscription', 'Quote', 'RecurringInvoice', 'RetargetingLog',
+  'RetargetingRule', 'Review', 'RolePermission', 'RouteHistory', 'SecurityEvent',
+  'Segment', 'Service', 'Subscription', 'SubscriptionPayment', 'SupportCategory',
+  'SupportTicket', 'Tag', 'TimelineEvent', 'TriggerExecution', 'UnifiedMessage',
+  'User', 'WAForm', 'WAFormResponse', 'WAWebview', 'WebhookEndpoint', 'Workflow',
+  'WorkflowAutomation', 'Workspace',
+];
+
+// 10 models that have `workspaceId` but NOT `tenantId`.
+const WORKSPACE_ONLY_MODELS = [
+  'Checklist', 'ContactList', 'Credential', 'Customer', 'Employee',
+  'Folder', 'Job', 'Resource', 'Variable', 'WebhookSource',
+];
+
+/** Convert PascalCase model name → Prisma client property (camelCase-first). */
+function toModelKey(model: string): string {
+  return model.charAt(0).toLowerCase() + model.slice(1);
+}
+
+interface CascadeResult {
+  tablesCleared: number;
+  workspacesRemoved: number;
+  failedTables: string[];
+}
+
+async function hardDeleteTenantCascade(tenantId: string): Promise<CascadeResult> {
+  // 1. Collect workspace IDs for this tenant (for workspace-only-scoped tables)
+  const workspaces = await db.workspace.findMany({
+    where: { tenantId },
+    select: { id: true },
+  });
+  const wsIds = workspaces.map((w) => w.id);
+
+  // 2. Multi-pass delete
+  const MAX_PASSES = 6;
+  const pendingTenant = new Set(TENANT_SCOPED_MODELS);
+  const pendingWs = new Set(WORKSPACE_ONLY_MODELS);
+  const permanentlyFailed: string[] = [];
+  let tablesCleared = 0;
+
+  for (let pass = 1; pass <= MAX_PASSES; pass++) {
+    if (pendingTenant.size === 0 && pendingWs.size === 0) break;
+    let progressThisPass = false;
+
+    // ── Tenant-scoped models: delete by tenantId ──
+    for (const model of [...pendingTenant]) {
+      const key = toModelKey(model);
+      try {
+        await (db as unknown as Record<string, { deleteMany: (args: { where: { tenantId: string } }) => Promise<{ count: number }> }>)[key].deleteMany({ where: { tenantId } });
+        // Verify (handles Supabase adapter's silent-error behavior)
+        const remaining = await (db as unknown as Record<string, { count: (args: { where: { tenantId: string } }) => Promise<number> }>)[key].count({ where: { tenantId } });
+        if (remaining === 0) {
+          pendingTenant.delete(model);
+          tablesCleared++;
+          progressThisPass = true;
+        }
+      } catch {
+        // FK violation — will retry in next pass
+      }
+    }
+
+    // ── Workspace-only-scoped models: delete by workspaceId IN (...)
+    if (wsIds.length > 0) {
+      for (const model of [...pendingWs]) {
+        const key = toModelKey(model);
+        try {
+          await (db as unknown as Record<string, { deleteMany: (args: { where: { workspaceId: { in: string[] } } }) => Promise<{ count: number }> }>)[key].deleteMany({ where: { workspaceId: { in: wsIds } } });
+          const remaining = await (db as unknown as Record<string, { count: (args: { where: { workspaceId: { in: string[] } } }) => Promise<number> }>)[key].count({ where: { workspaceId: { in: wsIds } } });
+          if (remaining === 0) {
+            pendingWs.delete(model);
+            tablesCleared++;
+            progressThisPass = true;
+          }
+        } catch {
+          // FK violation — will retry in next pass
+        }
+      }
+    }
+
+    // If no progress was made this pass, remaining tables are blocked by
+    // circular deps or missing permissions — stop retrying.
+    if (!progressThisPass) break;
+  }
+
+  // Collect anything that couldn't be cleared
+  for (const m of pendingTenant) permanentlyFailed.push(m);
+  for (const m of pendingWs) permanentlyFailed.push(m);
+
+  return {
+    tablesCleared,
+    workspacesRemoved: wsIds.length,
+    failedTables: permanentlyFailed,
+  };
+}
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -179,83 +312,28 @@ export async function DELETE(
     }
 
     // ─── HARD DELETE (permanent, irreversible) ─────────────────────────────
-    // The Tenant model has 30+ direct relations and the full schema has 140+
-    // models (~101 with tenantId, ~47 with workspaceId). Hardcoding a cascade
-    // for each is unmaintainable and brittle. Instead we:
-    //   1. Collect the tenant's workspace IDs (for workspace-scoped tables).
-    //   2. Temporarily disable SQLite FK enforcement.
-    //      (Safe: Prisma's SQLite connector uses connection_limit=1 by default,
-    //       so the PRAGMA persists across our subsequent statements on the same
-    //       connection. We re-enable it in `finally`.)
-    //   3. Dynamically enumerate every user table from sqlite_master.
-    //   4. For each table: if it has a `tenantId` column, DELETE WHERE
-    //      tenantId = id; else if it has a `workspaceId` column, DELETE WHERE
-    //      workspaceId IN (...the tenant's workspaces).
-    //   5. Finally DELETE the Tenant row itself.
-    // This auto-covers ALL current and future tables without code changes.
-    // ────────────────────────────────────────────────────────────────────────
+    // Deletes the tenant + ALL related data across 111 tables using Prisma's
+    // standard model API (works on SQLite, PostgreSQL, and Supabase REST).
+    // Multi-pass retry handles foreign-key constraint ordering automatically.
+    const result = await hardDeleteTenantCascade(id);
 
-    // 1. Collect workspace IDs for this tenant
-    const workspaces = await db.workspace.findMany({
-      where: { tenantId: id },
-      select: { id: true },
-    });
-    const wsIds = workspaces.map((w) => w.id);
-
-    // 2. Disable FK enforcement for the connection
-    await db.$executeRawUnsafe('PRAGMA foreign_keys = OFF');
-
-    let tablesCleared = 0;
+    // Finally, delete the Tenant row itself.
+    // (By now all FK references to it should be gone; if any remain due to
+    // permanently-failed tables, this will throw and the whole operation
+    // rolls back conceptually — the tenant stays but its data is mostly gone.)
     try {
-      // 3. Enumerate every user table (skip SQLite internals + Prisma's migration table)
-      const tables = (await db.$queryRawUnsafe<{ name: string }[]>(`
-        SELECT name FROM sqlite_master
-        WHERE type='table'
-          AND name NOT LIKE 'sqlite_%'
-          AND name NOT LIKE '_prisma_%'
-          AND name NOT LIKE 'Migration%'
-          AND name NOT LIKE '__ Licensing %'
-      `)) as { name: string }[];
-
-      // 4. Delete matching rows from every relevant table
-      for (const { name } of tables) {
-        // Introspect columns for this table
-        const cols = (await db.$queryRawUnsafe<{ name: string }[]>(
-          `PRAGMA table_info(${JSON.stringify(name)})`,
-        )) as { name: string }[];
-        const colNames = cols.map((c) => c.name);
-
-        const hasTenantId = colNames.includes('tenantId');
-        const hasWorkspaceId = colNames.includes('workspaceId');
-
-        if (hasTenantId) {
-          // Tenant-scoped table — delete everything for this tenant
-          await db.$executeRawUnsafe(
-            `DELETE FROM ${JSON.stringify(name)} WHERE "tenantId" = ?`,
-            id,
-          );
-          tablesCleared++;
-        } else if (hasWorkspaceId && wsIds.length > 0) {
-          // Workspace-scoped table (no tenantId) — delete by workspaceId IN (...)
-          const placeholders = wsIds.map(() => '?').join(',');
-          await db.$executeRawUnsafe(
-            `DELETE FROM ${JSON.stringify(name)} WHERE "workspaceId" IN (${placeholders})`,
-            ...wsIds,
-          );
-          tablesCleared++;
-        }
-      }
-
-      // 5. Delete the Tenant row itself (the loop above skipped it because the
-      //    Tenant table has no `tenantId`/`workspaceId` column)
       await db.tenant.delete({ where: { id } });
-    } finally {
-      // Always re-enable FK enforcement, even on failure
-      try {
-        await db.$executeRawUnsafe('PRAGMA foreign_keys = ON');
-      } catch {
-        // best-effort; connection will reset on next request anyway
-      }
+    } catch (delErr) {
+      console.error('[SuperAdmin Tenant DELETE] Could not delete tenant row (FK blocked):', delErr);
+      console.error('[SuperAdmin Tenant DELETE] Tables that could not be cleared:', result.failedTables);
+      return NextResponse.json(
+        {
+          error: `Could not fully delete tenant — ${result.failedTables.length} table(s) still have referenced rows. See server logs.`,
+          failedTables: result.failedTables,
+          tablesCleared: result.tablesCleared,
+        },
+        { status: 500 },
+      );
     }
 
     // Invalidate caches
@@ -263,9 +341,10 @@ export async function DELETE(
 
     return NextResponse.json({
       success: true,
-      message: `Tenant "${existing.name}" permanently deleted. ${tablesCleared} related table(s) cleared.`,
-      tablesCleared,
-      workspacesRemoved: wsIds.length,
+      message: `Tenant "${existing.name}" permanently deleted. ${result.tablesCleared} table(s) cleared, ${result.workspacesRemoved} workspace(s) removed.`,
+      tablesCleared: result.tablesCleared,
+      workspacesRemoved: result.workspacesRemoved,
+      failedTables: result.failedTables.length > 0 ? result.failedTables : undefined,
     });
   } catch (error) {
     console.error('[SuperAdmin Tenant DELETE] Error:', error);
