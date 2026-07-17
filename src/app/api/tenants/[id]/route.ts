@@ -79,12 +79,12 @@ export async function GET(
         onboardingStep: tenant.onboardingStep,
         createdAt: tenant.createdAt,
         updatedAt: tenant.updatedAt,
-        currentSubscription: tenant.subscriptions[0] || null,
-        workspaces: tenant.workspaces,
+        currentSubscription: tenant.subscriptions?.[0] || null,
+        workspaces: tenant.workspaces ?? [],
         stats: {
-          totalUsers: tenant._count.users,
-          totalLeads: tenant._count.leads,
-          totalInvoices: tenant._count.invoices,
+          totalUsers: tenant._count?.users ?? 0,
+          totalLeads: tenant._count?.leads ?? 0,
+          totalInvoices: tenant._count?.invoices ?? 0,
         },
         // ── Public Business Hub fields ────────────────────────────────────
         publicProfileEnabled: tenant.publicProfileEnabled,
