@@ -114,7 +114,7 @@ export async function GET(request: NextRequest) {
       byDate.set(d.toISOString().slice(0, 10), 0);
     }
     for (const c of recentContactsForGrowth) {
-      const key = c.createdAt.toISOString().slice(0, 10);
+      const key = new Date(c.createdAt).toISOString().slice(0, 10);
       if (byDate.has(key)) {
         byDate.set(key, (byDate.get(key) || 0) + 1);
       }

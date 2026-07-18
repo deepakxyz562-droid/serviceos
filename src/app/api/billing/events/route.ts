@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
       invoiceNumber: e.invoiceNumber,
       paypalOrderId: e.paypalOrderId,
       paypalCaptureId: e.paypalCaptureId,
-      createdAt: e.createdAt.toISOString(),
+      createdAt: new Date(e.createdAt).toISOString(),
       metadata: e.metadata ? JSON.parse(e.metadata) : {},
     }));
 

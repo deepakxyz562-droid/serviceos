@@ -121,7 +121,7 @@ export async function GET() {
     });
     const billingHistory = payments.map((p) => ({
       id: p.id,
-      date: p.paidAt.toISOString(),
+      date: new Date(p.paidAt).toISOString(),
       description: p.description || `${p.plan} Plan - ${p.billingCycle === 'yearly' ? 'Yearly' : 'Monthly'}`,
       amount: p.amount,
       status: p.status === 'paid' ? 'Paid' : p.status === 'pending' ? 'Pending' : p.status === 'failed' ? 'Failed' : p.status === 'refunded' ? 'Refunded' : 'Paid',
@@ -150,7 +150,7 @@ export async function GET() {
     const pendingDowngrade = subscription?.pendingDowngradePlan
       ? {
           plan: subscription.pendingDowngradePlan,
-          effectiveAt: subscription.pendingDowngradeAt?.toISOString() ?? null,
+          effectiveAt: subscription.pendingDowngradeAt ? new Date(subscription.pendingDowngradeAt).toISOString() : null,
           billingCycle: subscription.pendingDowngradeCycle ?? null,
         }
       : null;
@@ -171,7 +171,7 @@ export async function GET() {
       paymentProvider: e.paymentProvider,
       payerEmail: e.payerEmail,
       invoiceNumber: e.invoiceNumber,
-      createdAt: e.createdAt.toISOString(),
+      createdAt: new Date(e.createdAt).toISOString(),
       metadata: safeParseObject(e.metadata),
     }));
 

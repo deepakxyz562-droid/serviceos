@@ -162,8 +162,8 @@ export async function GET(
         status: j.status,
         customerName: j.customerName,
         customerRating: j.customerRating,
-        createdAt: j.createdAt.toISOString(),
-        completedAt: j.completedAt ? j.completedAt.toISOString() : null,
+        createdAt: new Date(j.createdAt).toISOString(),
+        completedAt: j.completedAt ? new Date(j.completedAt).toISOString() : null,
         durationMinutes,
       };
     });

@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
     // Recent activity grouped by day
     const activityByDay: Record<string, number> = {};
     for (const d of recentDiscoveries) {
-      const day = d.createdAt.toISOString().split('T')[0];
+      const day = new Date(d.createdAt).toISOString().split('T')[0];
       activityByDay[day] = (activityByDay[day] || 0) + 1;
     }
 

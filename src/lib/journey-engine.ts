@@ -388,7 +388,7 @@ async function buildJourneyFromJob(jobId: string): Promise<CustomerJourney | nul
     stageHistory = [
       {
         stage: currentStage,
-        enteredAt: job.createdAt.toISOString(),
+        enteredAt: new Date(job.createdAt).toISOString(),
         triggeredBy: 'system',
       },
     ]
@@ -428,7 +428,7 @@ async function buildJourneyFromJob(jobId: string): Promise<CustomerJourney | nul
       title: job.title,
       status: job.status,
       address: job.address,
-      scheduledAt: job.scheduledAt?.toISOString(),
+      scheduledAt: job.scheduledAt ? new Date(job.scheduledAt).toISOString() : null,
       customerName: job.customerName,
       customerPhone: job.customerPhone,
       assigneeName: job.assigneeName,

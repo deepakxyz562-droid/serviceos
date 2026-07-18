@@ -144,7 +144,7 @@ export async function GET() {
       status: msg.status,
       messageType: msg.messageType,
       tenantId: msg.tenantId,
-      createdAt: msg.createdAt.toISOString(),
+      createdAt: new Date(msg.createdAt).toISOString(),
     }));
 
     // Connected numbers summary

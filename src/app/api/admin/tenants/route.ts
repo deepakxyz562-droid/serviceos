@@ -104,13 +104,13 @@ export async function GET(request: NextRequest) {
       phone: tenant.phone,
       plan: tenant.plan,
       planStatus: tenant.planStatus,
-      trialEndsAt: tenant.trialEndsAt?.toISOString() || null,
-      suspendedAt: tenant.suspendedAt?.toISOString() || null,
+      trialEndsAt: tenant.trialEndsAt ? new Date(tenant.trialEndsAt).toISOString() : null,
+      suspendedAt: tenant.suspendedAt ? new Date(tenant.suspendedAt).toISOString() : null,
       userCount: tenant._count.users,
       leadCount: tenant._count.leads,
       jobCount: jobCountMap[tenant.id] || 0,
       workspaceCount: tenant._count.workspaces,
-      createdAt: tenant.createdAt.toISOString(),
+      createdAt: new Date(tenant.createdAt).toISOString(),
     }));
 
     return NextResponse.json({ tenants: formattedTenants, total: formattedTenants.length });
