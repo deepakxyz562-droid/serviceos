@@ -144,7 +144,7 @@ export default async function PublicBusinessHubPage({
     authorName: r.authorName || 'Verified Customer',
     rating: r.rating,
     comment: r.comment || undefined,
-    datePublished: r.createdAt.toISOString().split('T')[0],
+    datePublished: new Date(r.createdAt).toISOString().split('T')[0],
     url: undefined,
   }))
 

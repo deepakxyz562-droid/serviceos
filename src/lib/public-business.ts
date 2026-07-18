@@ -276,7 +276,10 @@ export async function getPublicReviews(tenantId: string, limit = 10): Promise<Pu
       comment: r.comment,
       authorName: r.authorName,
       source: r.source,
-      createdAt: r.createdAt,
+      // PostgREST (Supabase REST adapter) returns dates as ISO strings,
+      // while Prisma returns Date objects. Normalize to Date so the
+      // interface contract (createdAt: Date) is always satisfied.
+      createdAt: r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt as string | number | Date),
       responseJson: r.responseJson,
     }))
   } catch {
