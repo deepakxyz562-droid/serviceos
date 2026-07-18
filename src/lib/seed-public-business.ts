@@ -19,6 +19,7 @@
  */
 
 import { db } from '@/lib/db'
+import { generateHubContent, type HubContent } from '@/lib/ai-client'
 
 // ─── Industry-specific dummy content ────────────────────────────────────────
 
@@ -156,6 +157,52 @@ function getIndustryDummy(industry?: string | null): IndustryDummy {
   return key ? INDUSTRY_DUMMIES[key] : GENERIC_DUMMY
 }
 
+/**
+ * Merge AI-generated hub content into the industry dummy baseline.
+ *
+ * AI replaces: tagline, description, faqs, and per-service descriptions
+ * (name + longDescription rewritten; price/duration/category/slug kept
+ * from the dummy baseline so pricing stays sensible).
+ *
+ * Dummy retains: coverImage, logo, gallery, serviceAreas, and any service
+ * the AI didn't cover (so we never lose a service because the AI skipped it).
+ *
+ * If `ai` is null (AI failed or wasn't called), returns the dummy verbatim.
+ */
+function mergeAiWithDummy(dummy: IndustryDummy, ai: HubContent | null): IndustryDummy {
+  if (!ai) return dummy
+
+  // Map AI service copy by name (case-insensitive) so we can match it to
+  // the dummy's baseline services without breaking on minor casing diffs.
+  const aiServiceByName = new Map<string, { description: string; longDescription: string }>()
+  for (const s of ai.services || []) {
+    if (s.name) aiServiceByName.set(s.name.toLowerCase(), {
+      description: s.description,
+      longDescription: s.longDescription,
+    })
+  }
+
+  const mergedServices = dummy.services.map((svc) => {
+    const aiSvc = aiServiceByName.get(svc.name.toLowerCase())
+    if (!aiSvc) return svc
+    return {
+      ...svc,
+      description: aiSvc.description || svc.description,
+      longDescription: aiSvc.longDescription || svc.longDescription,
+    }
+  })
+
+  return {
+    ...dummy,
+    tagline: ai.tagline || dummy.tagline,
+    description: ai.description || dummy.description,
+    faqs: (ai.faqs && ai.faqs.length > 0)
+      ? ai.faqs.map((f) => ({ question: f.question, answer: f.answer }))
+      : dummy.faqs,
+    services: mergedServices,
+  }
+}
+
 // ─── Public API ────────────────────────────────────────────────────────────
 
 export interface SeedPublicBusinessOptions {
@@ -198,7 +245,7 @@ export interface SeedPublicBusinessResult {
 export async function seedPublicBusinessForTenant(
   options: SeedPublicBusinessOptions = {},
 ): Promise<SeedPublicBusinessResult> {
-  const dummy = getIndustryDummy(options.industry)
+  const baselineDummy = getIndustryDummy(options.industry)
   let tenant
   let created = false
 
@@ -260,6 +307,27 @@ export async function seedPublicBusinessForTenant(
   // ─── Update the tenant's public profile fields ───────────────────────────
   const city = options.city || tenant.city || 'Dallas'
   const state = options.state || tenant.state || 'TX'
+
+  // ─── Generate per-tenant AI content (Pollinations.ai) ────────────────────
+  // Falls back to baselineDummy on any failure — onboarding must NEVER block.
+  // Skip AI when re-seeding an already-AI-seeded tenant (overwrite=false case
+  // is already short-circuited above; this guards the overwrite=true case
+  // so manual "Re-seed" doesn't burn AI calls unnecessarily).
+  const industryForAi = options.industry || tenant.industry || 'Home Services'
+  const aiContent = await generateHubContent({
+    businessName: tenant.name,
+    industry: industryForAi,
+    city,
+    state,
+    phone: tenant.phone,
+    services: baselineDummy.services.map((s) => s.name),
+  })
+  const dummy = mergeAiWithDummy(baselineDummy, aiContent)
+  if (aiContent) {
+    console.log(`[seed-public-business] AI content generated for tenant ${tenant.id} (${tenant.name})`)
+  } else {
+    console.warn(`[seed-public-business] AI content failed for tenant ${tenant.id}; using dummy fallback`)
+  }
 
   tenant = await db.tenant.update({
     where: { id: tenant.id },

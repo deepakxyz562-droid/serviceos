@@ -157,15 +157,35 @@ function getIndustryOptions(currentIndustry: string): string[] {
 }
 
 /**
- * Normalize legacy kebab-case industry values to the canonical
- * display form so the dropdown shows a clean value instead of an
- * unknown slug. Falls back to the original value if no mapping exists.
+ * Normalize legacy kebab-case industry values (saved by the onboarding
+ * flow at src/components/onboarding/saas-onboarding.tsx) to the canonical
+ * Title-Case display form used in the INDUSTRIES list above.
+ *
+ * Without this mapping, the Radix <Select> does case-sensitive value
+ * matching: `value="plumbing"` finds no `SelectItem value="Plumbing"`,
+ * so the dropdown silently renders the placeholder "Select industry"
+ * instead of the tenant's chosen industry.
+ *
+ * Falls back to the original value if no mapping exists (so custom /
+ * future industries still render something).
  */
 function normalizeIndustry(value: string): string {
   if (!value) return '';
   const map: Record<string, string> = {
     'home-services': 'Home Services',
     'packers-movers': 'Moving',
+    'plumbing': 'Plumbing',
+    'cleaning': 'Cleaning',
+    'window-cleaning': 'Cleaning',
+    'pest-control': 'Pest Control',
+    'hvac': 'HVAC',
+    'electrical': 'Electrical',
+    'landscaping': 'Landscaping',
+    'courier': 'Moving',
+    'home-repair': 'Home Services',
+    'salon-beauty': 'Other',
+    'roofing': 'Roofing',
+    'painting': 'Painting',
   };
   return map[value.toLowerCase()] || value;
 }
