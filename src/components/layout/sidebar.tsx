@@ -124,6 +124,7 @@ const ownerNavSections: NavSection[] = [
     items: [
       { view: 'leads', label: 'Leads', icon: Target },
       { view: 'customers', label: 'Customers', icon: Users },
+      { view: 'reviews', label: 'Reviews', icon: Star },
     ],
   },
   {

@@ -5,6 +5,112 @@ import { generateToken, generateSlug, COOKIE_OPTIONS } from '@/lib/auth';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 
+/**
+ * Create a tenant + workspace + subscription for a Google-authenticated user
+ * who doesn't have one yet.
+ *
+ * This used to live in /api/auth/google/complete (called from the
+ * GoogleOnboarding component). We now create the tenant directly in the
+ * OAuth callback so the user goes straight into the standard SaaS onboarding
+ * wizard (Settings → Business → Plan → Done) — same flow as email/password
+ * signups — instead of seeing a separate Google-specific onboarding screen.
+ *
+ * The tenant is created with `onboardingCompleted: false` so the SaaS
+ * onboarding wizard triggers on the next page load. The wizard collects
+ * business name, industry, address, and plan selection.
+ */
+async function createTenantForGoogleUser(userId: string, userEmail: string, userName: string) {
+  // Use the Google user's name as the initial business name. The SaaS
+  // onboarding wizard will let them change it on step 1.
+  const businessName = `${userName || userEmail.split('@')[0]}'s Business`;
+  const baseSlug = generateSlug(businessName);
+  let slug = baseSlug;
+  let slugCounter = 1;
+  while (await db.tenant.findUnique({ where: { slug } })) {
+    slug = `${baseSlug}-${slugCounter}`;
+    slugCounter++;
+  }
+
+  // Create tenant with onboardingCompleted=false so the SaaS wizard triggers.
+  const tenant = await db.tenant.create({
+    data: {
+      name: businessName,
+      slug,
+      email: userEmail,
+      plan: 'starter',
+      planStatus: 'trial',
+      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial
+      onboardingCompleted: false,
+      onboardingStep: 1,
+    },
+  });
+
+  // Create workspace linked to tenant.
+  const workspace = await db.workspace.create({
+    data: {
+      name: `${businessName} Workspace`,
+      slug: `${slug}-workspace`,
+      ownerId: userId,
+      tenantId: tenant.id,
+    },
+  });
+
+  // Link user to tenant + workspace.
+  await db.user.update({
+    where: { id: userId },
+    data: {
+      tenantId: tenant.id,
+      workspaceId: workspace.id,
+    },
+  });
+
+  // Create default subscription (starter plan, 14-day trial).
+  await db.subscription.create({
+    data: {
+      tenantId: tenant.id,
+      plan: 'starter',
+      status: 'trial',
+      amount: 0,
+      currency: 'USD',
+      billingCycle: 'monthly',
+      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+      maxUsers: 1,
+      maxJobs: 100,
+      maxWorkflows: 10,
+      featuresJson: JSON.stringify({
+        whatsappIntegration: true,
+        customWorkflows: false,
+        apiAccess: false,
+        prioritySupport: false,
+      }),
+      trialWhatsappCredits: 10,
+      trialWhatsappUsed: 0,
+      platformWhatsappEnabled: true,
+      ownWhatsappConnected: false,
+      ownEmailProviderConnected: false,
+    },
+  });
+
+  // Auto-import notification WhatsApp templates (best-effort, non-blocking).
+  try {
+    const { autoImportNotificationTemplates } = await import('@/lib/auto-import-templates');
+    await autoImportNotificationTemplates(tenant.id, workspace.id, businessName);
+  } catch (importErr) {
+    console.warn('[Google Callback] Failed to auto-import notification templates:', importErr);
+  }
+
+  // Auto-seed public business hub (best-effort, non-blocking).
+  try {
+    const { seedPublicBusinessForTenant } = await import('@/lib/seed-public-business');
+    await seedPublicBusinessForTenant({ tenantId: tenant.id });
+    console.log(`[Google Callback] Auto-seeded public hub for tenant ${tenant.id}`);
+  } catch (seedErr) {
+    console.warn('[Google Callback] Failed to auto-seed public business hub:', seedErr);
+  }
+
+  return { tenant, workspace };
+}
+
 interface GoogleTokenResponse {
   access_token: string;
   id_token: string;
@@ -206,14 +312,26 @@ export async function GET(request: NextRequest) {
 
       const baseUrl = getBaseUrl(request);
 
-      // If user has no tenant, they need to complete onboarding
+      // If user has no tenant, create one now and route them into the standard
+      // SaaS onboarding wizard (Business → Plan → Done). This replaces the old
+      // Google-specific onboarding screen — Google users now get the SAME
+      // onboarding flow as email/password signups.
       if (!existingUser.tenantId) {
-        const response = NextResponse.redirect(
-          `${baseUrl}/?google_onboarding=true&email=${encodeURIComponent(userInfo.email)}&name=${encodeURIComponent(userInfo.name || '')}&avatar=${encodeURIComponent(userInfo.picture || '')}`
+        const { tenant, workspace } = await createTenantForGoogleUser(
+          existingUser.id,
+          userInfo.email,
+          userInfo.name || userInfo.given_name || '',
         );
+        // Regenerate JWT with the new tenantId/workspaceId.
+        const newToken = generateToken({
+          ...authUser,
+          tenantId: tenant.id,
+          workspaceId: workspace.id,
+        });
+        const response = NextResponse.redirect(`${baseUrl}/?google_login=success`);
         response.cookies.set({
           ...COOKIE_OPTIONS,
-          value: token,
+          value: newToken,
         });
         return response;
       }
@@ -226,9 +344,10 @@ export async function GET(request: NextRequest) {
       return response;
     }
 
-    // ─── NEW USER: They need to complete onboarding (business details) ───
-    // Create a temporary user record with Google info
-    // The onboarding flow will collect business name, industry, phone
+    // ─── NEW USER: Create user + tenant immediately, then route to SaaS onboarding ───
+    // (Previously this created a temp user and redirected to GoogleOnboarding.
+    //  Now we create the full user+tenant+workspace+subscription here so the
+    //  SaaS onboarding wizard can take over — same flow as email/password.)
     const tempUser = await db.user.create({
       data: {
         email: userInfo.email,
@@ -239,26 +358,29 @@ export async function GET(request: NextRequest) {
         authProviderId: userInfo.sub,
         isActive: true,
         lastLoginAt: new Date(),
-        // No tenantId yet — will be set after onboarding
+        // No tenantId yet — set by createTenantForGoogleUser below.
       },
     });
 
-    // Generate a temporary JWT (limited, for onboarding only)
+    const { tenant, workspace } = await createTenantForGoogleUser(
+      tempUser.id,
+      userInfo.email,
+      userInfo.name || userInfo.given_name || '',
+    );
+
     const authUser = {
       id: tempUser.id,
       email: tempUser.email,
       name: tempUser.name,
       role: tempUser.role,
-      tenantId: null,
-      workspaceId: null,
+      tenantId: tenant.id,
+      workspaceId: workspace.id,
       avatar: tempUser.avatar,
     };
     const token = generateToken(authUser);
 
     const baseUrl = getBaseUrl(request);
-    const response = NextResponse.redirect(
-      `${baseUrl}/?google_onboarding=true&email=${encodeURIComponent(userInfo.email)}&name=${encodeURIComponent(userInfo.name || '')}&avatar=${encodeURIComponent(userInfo.picture || '')}`
-    );
+    const response = NextResponse.redirect(`${baseUrl}/?google_login=success`);
     response.cookies.set({
       ...COOKIE_OPTIONS,
       value: token,

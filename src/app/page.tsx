@@ -14,10 +14,6 @@ const AuthPage = dynamic(
   () => import('@/components/auth/auth-page').then(m => ({ default: m.AuthPage })),
   { ssr: false, loading: () => <ViewLoader /> }
 );
-const GoogleOnboarding = dynamic(
-  () => import('@/components/auth/google-onboarding').then(m => ({ default: m.GoogleOnboarding })),
-  { ssr: false, loading: () => <ViewLoader /> }
-);
 const SaaSOnboarding = dynamic(
   () => import('@/components/onboarding/saas-onboarding').then(m => ({ default: m.SaaSOnboarding })),
   { ssr: false, loading: () => <ViewLoader /> }
@@ -71,19 +67,18 @@ export default function HomePage() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [unauthView, setUnauthView] = useState<UnauthView>('landing');
-  const [googleOnboarding, setGoogleOnboarding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Handle Google OAuth callback URL parameters
-  const [googleOnboardingData, setGoogleOnboardingData] = useState<{ email: string; name: string; avatar: string }>({ email: '', name: '', avatar: '' });
-
+  // Handle Google OAuth callback URL parameters.
+  // NOTE: The old `?google_onboarding=true` param is no longer used — Google
+  // users now create their tenant in the OAuth callback route and go straight
+  // into the standard SaaS onboarding wizard (same as email/password signups).
   const handleOAuthCallback = useCallback(() => {
     if (typeof window === 'undefined') return;
 
     try {
       const params = new URLSearchParams(window.location.search);
       const googleLogin = params.get('google_login');
-      const googleOnboardingParam = params.get('google_onboarding');
       const authError = params.get('auth_error');
 
       if (authError) {
@@ -96,15 +91,6 @@ export default function HomePage() {
 
       if (googleLogin === 'success') {
         toast.success('Successfully signed in with Google!');
-        window.history.replaceState({}, '', window.location.pathname);
-      }
-
-      if (googleOnboardingParam === 'true') {
-        const email = params.get('email') || '';
-        const name = params.get('name') || '';
-        const avatar = params.get('avatar') || '';
-        setGoogleOnboardingData({ email, name, avatar });
-        setGoogleOnboarding(true);
         window.history.replaceState({}, '', window.location.pathname);
       }
     } catch (err) {
@@ -443,27 +429,6 @@ export default function HomePage() {
           </button>
         </div>
       </div>
-    );
-  }
-
-  if (googleOnboarding && !auth.tenant) {
-    return (
-      <>
-        <GoogleOnboarding
-          email={googleOnboardingData.email || auth.user?.email || ''}
-          name={googleOnboardingData.name || auth.user?.name || ''}
-          avatar={googleOnboardingData.avatar || auth.user?.avatar || ''}
-          onOnboardingComplete={(user: any, tenant?: any) => {
-            setGoogleOnboarding(false);
-            handleAuthSuccess(user, tenant);
-          }}
-          onBackToLanding={() => {
-            setGoogleOnboarding(false);
-          }}
-        />
-        <PWAInstallBanner />
-        <IOSInstallBanner />
-      </>
     );
   }
 

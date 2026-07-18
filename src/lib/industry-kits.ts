@@ -5,7 +5,6 @@
  *   - src/app/api/workspaces/industries/route.ts (industry picker list)
  *   - src/app/api/workspaces/[id]/seed/route.ts (install everything)
  *   - src/app/api/workflows/[id]/seed/route.ts (legacy single-workflow seed)
- *   - src/components/onboarding/industry-onboarding.tsx (UI picker)
  *   - src/components/onboarding/saas-onboarding.tsx (SaaS onboarding picker)
  *
  * Standard industry IDs (DO NOT rename — they are persisted on Workspace.industry):

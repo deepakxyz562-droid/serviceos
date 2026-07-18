@@ -24,7 +24,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { sendOwnerNotification } from '@/lib/public-business-notifications'
+import { notifyOwner } from '@/lib/owner-notifications'
 
 export const runtime = 'nodejs'
 
@@ -203,9 +203,58 @@ export async function POST(
       },
     })
 
-    // Fire-and-forget: notify the business owner (email + WhatsApp if configured).
+    // Fire-and-forget: notify the business owner via Email + in-app Bell
+    // notification (the two channels the user asked for).
+    //
+    // notifyOwner() is the modern multi-channel orchestrator. We pass:
+    //   - emailSubject + emailText + emailHtml  → email with full body
+    //   - leadId + actionUrl                    → bell links to the lead
+    //   - smsMessage: false                     → no SMS (user didn't ask for it)
+    //   - (no whatsappMessage)                  → no WhatsApp (user didn't ask)
+    // Web push still fires if the owner has browser push enabled (that's the
+    // bell on mobile/desktop — harmless if not configured).
+    //
     // Don't block the response — the visitor shouldn't wait for email delivery.
-    sendOwnerNotification(tenant, { lead, intent, name, phone, email, message }).catch((err) => {
+    const intentLabel =
+      intent === 'book' ? 'New Online Booking' :
+      intent === 'quote' ? 'New Quote Request' :
+      'New Service Request'
+
+    const emailLines = [
+      `${intentLabel} from your public business hub.`,
+      ``,
+      `Name: ${name}`,
+      `Phone: ${phone}`,
+      ...(email ? [`Email: ${email}`] : []),
+      ...(message ? [``, `Message:`, message] : []),
+      ``,
+      `View this lead in your ServiceOS dashboard.`,
+    ]
+    const emailText = emailLines.join('\n')
+    const emailHtml = `
+      <h2 style="margin:0 0 12px 0;color:#0f172a;">${intentLabel}</h2>
+      <p style="margin:0 0 16px 0;color:#475569;">From your public business hub.</p>
+      <table style="border-collapse:collapse;font-size:14px;color:#0f172a;">
+        <tr><td style="padding:4px 12px 4px 0;font-weight:600;">Name:</td><td>${name}</td></tr>
+        <tr><td style="padding:4px 12px 4px 0;font-weight:600;">Phone:</td><td>${phone}</td></tr>
+        ${email ? `<tr><td style="padding:4px 12px 4px 0;font-weight:600;">Email:</td><td>${email}</td></tr>` : ''}
+      </table>
+      ${message ? `<p style="margin:16px 0 4px 0;font-weight:600;color:#0f172a;">Message:</p><p style="margin:0;color:#475569;white-space:pre-wrap;">${message.replace(/</g, '&lt;')}</p>` : ''}
+      <p style="margin-top:24px;color:#94a3b8;font-size:12px;">View this lead in your ServiceOS dashboard.</p>
+    `
+
+    notifyOwner(tenant.id, {
+      eventType: 'lead.created',
+      eventLabel: intentLabel,
+      leadId: lead.id,
+      actionUrl: `/leads`,
+      smsMessage: false,             // user requested email + bell only
+      emailSubject: `${intentLabel}: ${name}`,
+      emailText,
+      emailHtml,
+      pushTitle: intentLabel,
+      pushBody: `${name} (${phone}) submitted a ${intent} from your public page.`,
+    }).catch((err) => {
       console.error('[public-business/book] notification error:', err)
     })
 
