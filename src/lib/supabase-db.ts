@@ -179,6 +179,15 @@ const TABLE_MAP: Record<string, string> = {
   appNotification: 'AppNotification',
   notificationPreference: 'NotificationPreference',
   pushSubscription: 'PushSubscription',
+  // ── Public Live Chat ──
+  // These models back the visitor-facing chat widget + admin Live Chat view.
+  // The default capitalization would produce the correct table names, but
+  // listing them explicitly ensures the Supabase adapter resolves them
+  // reliably. The tables MUST exist in Supabase (run `npx prisma db push`
+  // against the Supabase DATABASE_URL, or create them manually via the
+  // Supabase SQL editor).
+  publicChatSession: 'PublicChatSession',
+  publicChatMessage: 'PublicChatMessage',
 };
 
 // Known missing tables in Supabase (return empty results gracefully)
@@ -305,6 +314,19 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
     metaLeads: { targetTable: 'MetaLead', targetFkColumn: 'tenantId', isMany: true },
     googleAdsLeads: { targetTable: 'GoogleAdsLead', targetFkColumn: 'tenantId', isMany: true },
     publicChatSessions: { targetTable: 'PublicChatSession', targetFkColumn: 'tenantId', isMany: true },
+  },
+  // ── Public Live Chat relations ──
+  // PublicChatSession.messages is a one-to-many: PublicChatMessage has
+  // sessionId FK pointing back to PublicChatSession. Without this mapping,
+  // the admin /api/chat/sessions route's `include: { messages: ... }` is
+  // silently skipped by resolveIncludes, causing `s.messages` to be
+  // undefined and the route to crash on `s.messages[0]`.
+  PublicChatSession: {
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+    messages: { targetTable: 'PublicChatMessage', targetFkColumn: 'sessionId', isMany: true },
+  },
+  PublicChatMessage: {
+    session: { targetTable: 'PublicChatSession', fkColumn: 'sessionId' },
   },
   EventWebhook: {
     workspace: { targetTable: 'Workspace', fkColumn: 'workspaceId' },

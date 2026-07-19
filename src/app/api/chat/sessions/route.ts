@@ -41,17 +41,33 @@ export async function GET(request: NextRequest) {
       },
     })
 
-    const result = sessions.map((s) => ({
-      id: s.id,
-      visitorName: s.visitorName,
-      visitorPhone: s.visitorPhone,
-      visitorEmail: s.visitorEmail,
-      status: s.status,
-      unreadCount: s.unreadCount,
-      lastMessageAt: s.lastMessageAt,
-      createdAt: s.createdAt,
-      lastMessage: s.messages[0] || null,
-    }))
+    // Diagnostic log — helps distinguish "table empty" from "route crashed"
+    // when debugging "No active chat sessions" on production.
+    console.log(`[chat/sessions] tenantId=${user.tenantId} status=${status} found=${sessions.length}`)
+
+    const result = sessions.map((s) => {
+      // Defensive: `messages` may be undefined if the DB adapter didn't
+      // resolve the include (e.g. Supabase REST adapter without the
+      // relation mapping). Use optional chaining so the route doesn't
+      // crash with TypeError → 500 → "No active chat sessions".
+      // Also sort client-side by createdAt DESC and take the first, since
+      // the Supabase adapter doesn't pass through nested orderBy/take.
+      const sessionMessages = (s as { messages?: Array<{ body: string; senderType: string; createdAt: string }> }).messages
+      const sortedMessages = sessionMessages
+        ? [...sessionMessages].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        : []
+      return {
+        id: s.id,
+        visitorName: s.visitorName,
+        visitorPhone: s.visitorPhone,
+        visitorEmail: s.visitorEmail,
+        status: s.status,
+        unreadCount: s.unreadCount,
+        lastMessageAt: s.lastMessageAt,
+        createdAt: s.createdAt,
+        lastMessage: sortedMessages[0] || null,
+      }
+    })
 
     return NextResponse.json({ sessions: result })
   } catch (err) {
