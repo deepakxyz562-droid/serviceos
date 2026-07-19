@@ -25,6 +25,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { createNotification } from '@/lib/notifications'
 
 export const runtime = 'nodejs'
 
@@ -166,7 +167,10 @@ export async function POST(req: NextRequest) {
         visitorFingerprint: fp,
         status: 'active',
         lastMessageAt: new Date(),
-        unreadCount: 0,
+        // Start at 1 so the admin Live Chat view shows a red badge on the
+        // new session immediately. The admin view's 5s poll will pick this
+        // up and render the unread pill.
+        unreadCount: 1,
         metadataJson: JSON.stringify(metadata),
       },
     })
@@ -178,6 +182,57 @@ export async function POST(req: NextRequest) {
         body: 'Chat session started',
       },
     })
+
+    // --- Notify tenant admins (owners + admins) -----------------------------
+    // The header bell polls /api/notifications/unread-count every 60s, so
+    // creating an AppNotification here makes the bell ring within a minute
+    // of a visitor starting a chat — without needing socket.io. The admin
+    // LiveChatView already polls /api/chat/sessions every 5s, so once the
+    // admin clicks through, they get near-real-time message updates.
+    try {
+      const recipients = await db.user.findMany({
+        where: {
+          tenantId: tenant.id,
+          role: { in: ['owner', 'admin'] },
+          isActive: true,
+        },
+        select: { id: true },
+      })
+
+      const visitorLabel = visitorName || visitorEmail || 'A visitor'
+      const messageText = visitorName
+        ? `${visitorName} started a new live chat on your website`
+        : visitorEmail
+          ? `${visitorEmail} started a new live chat on your website`
+          : 'A new live chat was started on your website'
+
+      // Fire-and-forget — notification failures must not break chat creation.
+      await Promise.all(
+        recipients.map((r) =>
+          createNotification({
+            tenantId: tenant.id,
+            recipientId: r.id,
+            type: 'reminder',
+            category: 'customer',
+            title: 'New live chat request',
+            message: messageText,
+            priority: 'high',
+            actionUrl: '/?view=liveChat',
+            actionLabel: 'Open Live Chat',
+            senderType: 'system',
+            metadataJson: JSON.stringify({
+              sessionId: session.id,
+              visitorName,
+              visitorPhone,
+              visitorEmail,
+              source: 'public_chat',
+            }),
+          }),
+        ),
+      )
+    } catch (notifErr) {
+      console.warn('[public-chat/session] notification create failed:', notifErr)
+    }
 
     return NextResponse.json(
       {

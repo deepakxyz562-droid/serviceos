@@ -194,6 +194,21 @@ export default function HomePage() {
           } else if (data.user.isSuperAdmin || (data.user.role === 'admin' && !data.user.tenantId)) {
             useAppStore.getState().setCurrentView('superadmin');
           }
+          // Trigger SaaS onboarding wizard if the tenant hasn't completed it.
+          // This covers the Google OAuth redirect path: Google callback
+          // creates a tenant with onboardingCompleted=false and redirects to
+          // /?google_login=success — without this check, checkSession would
+          // set auth and render AppLayout (dashboard) instead of the wizard.
+          // (handleAuthSuccess already does this for email/password logins.)
+          if (
+            data.tenant &&
+            !data.tenant.onboardingCompleted &&
+            !data.user.isSuperAdmin &&
+            data.user.role !== 'customer' &&
+            data.user.role !== 'employee'
+          ) {
+            setShowOnboarding(true);
+          }
           if (typeof window !== 'undefined') {
             // Preserve existing token if available, or update with new one
             const existingAuth = localStorage.getItem('serviceos_auth');
@@ -234,6 +249,18 @@ export default function HomePage() {
             } else if (parsed.user.isSuperAdmin || (parsed.user.role === 'admin' && !parsed.user.tenantId)) {
               useAppStore.getState().setCurrentView('superadmin');
             }
+            // Trigger SaaS onboarding wizard if tenant hasn't completed it
+            // (covers localStorage session-restore path — same bug fix as the
+            // /api/auth/me branch above).
+            if (
+              parsed.tenant &&
+              !parsed.tenant.onboardingCompleted &&
+              !parsed.user.isSuperAdmin &&
+              parsed.user.role !== 'customer' &&
+              parsed.user.role !== 'employee'
+            ) {
+              setShowOnboarding(true);
+            }
             return;
           }
         }
@@ -241,7 +268,7 @@ export default function HomePage() {
     } catch {
       // localStorage read failed
     }
-  }, [setAuth]);
+  }, [setAuth, setShowOnboarding]);
 
   useEffect(() => {
     const init = async () => {
