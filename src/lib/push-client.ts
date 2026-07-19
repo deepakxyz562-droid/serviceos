@@ -52,6 +52,21 @@ export function urlBase64ToUint8Array(base64String: string): Uint8Array {
 }
 
 /**
+ * Convenience wrapper that returns the VAPID key as a `BufferSource`-typed
+ * value, for direct use as `pushManager.subscribe({ applicationServerKey })`.
+ * This avoids TypeScript 5.7+ type-narrowing issues where `Uint8Array` is no
+ * longer directly assignable to `BufferSource` in some lib.dom.d.ts versions.
+ *
+ * We cast through `unknown` because the runtime IS correct (Uint8Array IS a
+ * valid BufferSource per the Web IDL spec), but TS 5.7's stricter generic
+ * `Uint8Array<ArrayBufferLike>` no longer satisfies the `BufferSource` alias
+ * (`ArrayBufferView | ArrayBuffer`). The cast is safe and zero-cost at runtime.
+ */
+export function getApplicationServerKey(base64String: string): BufferSource {
+  return urlBase64ToUint8Array(base64String) as unknown as BufferSource;
+}
+
+/**
  * Resolve the VAPID public key for the current client.
  *
  * Resolution order:

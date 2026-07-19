@@ -52,6 +52,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { PushPermissionCard } from '@/components/pwa/push-permission';
+import { PushDiagnosticsCard } from '@/components/pwa/tenant-push-manager';
 import {
   Select,
   SelectContent,
@@ -601,6 +602,13 @@ function PreferencesDialog({ open, onOpenChange }: PreferencesDialogProps) {
                 deliver to this device. Without this, toggling "Push" on does
                 nothing — no subscription exists to push to. */}
             <PushPermissionCard />
+
+            {/* Push diagnostics — shows the full push pipeline status
+                (SW / VAPID / permission / subscription / server count)
+                plus a "Send test push" button and a "Re-enable push" button.
+                This is the debugging surface for "I installed the PWA on
+                iOS but push isn't working" — every step is visible. */}
+            <PushDiagnosticsCard />
 
             {/* Quiet hours */}
             <div>
