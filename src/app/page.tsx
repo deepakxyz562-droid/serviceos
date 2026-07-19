@@ -283,6 +283,44 @@ export default function HomePage() {
     init();
   }, [handleOAuthCallback, checkSession]);
 
+  // ── Deep-link view switching (?view=...) ─────────────────────────────────
+  // Notification actionUrls look like "/?view=liveChat" or "/?view=jobs".
+  // When an authenticated admin/owner clicks one, we switch to that view
+  // and strip the param so a refresh doesn't re-trigger it.
+  //
+  // This runs AFTER auth is confirmed (auth.isAuthenticated is true) so the
+  // AppLayout is mounted and ready to receive setCurrentView. We deliberately
+  // skip this for customer / employee / superadmin roles — their layouts
+  // either ignore setCurrentView or use a different navigation model, and
+  // applying a tenant view to them would be a no-op at best.
+  useEffect(() => {
+    if (!auth.isAuthenticated || typeof window === 'undefined') return;
+    const userRole = auth.user?.role;
+    const isPortalUser =
+      userRole === 'customer' ||
+      (auth.user as any)?.isCustomer ||
+      userRole === 'employee';
+    const isSuperAdmin =
+      (auth.user as any)?.isSuperAdmin ||
+      (userRole === 'admin' && !auth.user?.tenantId);
+    if (isPortalUser || isSuperAdmin) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const view = params.get('view');
+    if (!view) return;
+
+    // Apply + strip. Use replaceState so we don't create a new history entry
+    // (pressing browser-back should leave the app, not re-strip the param).
+    useAppStore.getState().setCurrentView(view);
+    const paramsCopy = new URLSearchParams(params);
+    paramsCopy.delete('view');
+    const remaining = paramsCopy.toString();
+    const newUrl = remaining
+      ? `${window.location.pathname}?${remaining}`
+      : window.location.pathname;
+    window.history.replaceState({}, '', newUrl);
+  }, [auth.isAuthenticated, auth.user]);
+
   // Global error handler
   useEffect(() => {
     let chunkRetryCount = 0;

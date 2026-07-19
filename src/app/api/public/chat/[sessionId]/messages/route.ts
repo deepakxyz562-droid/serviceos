@@ -24,6 +24,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { createNotification } from '@/lib/notifications'
 
 export const runtime = 'nodejs'
 
@@ -120,11 +121,31 @@ export async function POST(
     typeof body.visitorName === 'string' ? body.visitorName.trim() || null : null
 
   // Look up the session.
-  let session: { id: string; status: string; visitorName: string | null } | null = null
+  // We also fetch tenantId + unreadCount so we can notify the tenant when a
+  // visitor sends the first message since the admin last caught up. We only
+  // fire a notification when the previous unreadCount was 0 — this avoids
+  // spamming the bell with one notification per message in a rapid back-and-
+  // forth (the session-creation notification, or the prior message's
+  // notification, is still unread and already alerts the tenant).
+  let session: {
+    id: string
+    status: string
+    visitorName: string | null
+    visitorEmail: string | null
+    tenantId: string
+    unreadCount: number
+  } | null = null
   try {
     session = await db.publicChatSession.findUnique({
       where: { id: sessionId },
-      select: { id: true, status: true, visitorName: true },
+      select: {
+        id: true,
+        status: true,
+        visitorName: true,
+        visitorEmail: true,
+        tenantId: true,
+        unreadCount: true,
+      },
     })
   } catch (err) {
     console.error('[public-chat/messages POST] lookup error:', err)
@@ -171,6 +192,60 @@ export async function POST(
         ...(visitorName && !session.visitorName ? { visitorName } : {}),
       },
     })
+
+    // --- Notify tenant admins (owners + admins) -----------------------------
+    // Only fire when the admin had previously caught up (unreadCount was 0).
+    // If unreadCount was already > 0, the tenant already has an unread live-
+    // chat notification from session creation or a prior message — the admin
+    // LiveChatView polls every 5s and the bell badge already reflects the
+    // unread state, so a duplicate notification would just be noise.
+    //
+    // The header bell polls /api/notifications/unread-count every 60s, so
+    // the tenant sees the alert within a minute of the visitor's message —
+    // without needing socket.io.
+    if (session.unreadCount === 0) {
+      try {
+        const recipients = await db.user.findMany({
+          where: {
+            tenantId: session.tenantId,
+            role: { in: ['owner', 'admin'] },
+            isActive: true,
+          },
+          select: { id: true },
+        })
+
+        const visitorLabel = session.visitorName || session.visitorEmail || 'A visitor'
+        // Trim the message body for the notification preview (max 120 chars).
+        const preview = text.length > 120 ? text.slice(0, 117) + '...' : text
+        const messageText = `${visitorLabel}: ${preview}`
+
+        await Promise.all(
+          recipients.map((r) =>
+            createNotification({
+              tenantId: session.tenantId,
+              recipientId: r.id,
+              type: 'reminder',
+              category: 'customer',
+              title: 'New live chat message',
+              message: messageText,
+              priority: 'normal',
+              actionUrl: '/?view=liveChat',
+              actionLabel: 'Open Live Chat',
+              senderType: 'system',
+              metadataJson: JSON.stringify({
+                sessionId: session.id,
+                visitorName: session.visitorName,
+                visitorEmail: session.visitorEmail,
+                source: 'public_chat_message',
+              }),
+            }),
+          ),
+        )
+      } catch (notifErr) {
+        // Notification failures must never break message delivery.
+        console.warn('[public-chat/messages POST] notification create failed:', notifErr)
+      }
+    }
 
     return NextResponse.json(
       { messageId: message.id, createdAt: message.createdAt },
