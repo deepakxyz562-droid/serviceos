@@ -25,6 +25,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { createNotification } from '@/lib/notifications'
+import { sendWebPushToUser } from '@/lib/web-push-send'
 
 export const runtime = 'nodejs'
 
@@ -220,8 +221,8 @@ export async function POST(
         const messageText = `${visitorLabel}: ${preview}`
 
         await Promise.all(
-          recipients.map((r) =>
-            createNotification({
+          recipients.map(async (r) => {
+            await createNotification({
               tenantId: session.tenantId,
               recipientId: r.id,
               type: 'reminder',
@@ -238,8 +239,41 @@ export async function POST(
                 visitorEmail: session.visitorEmail,
                 source: 'public_chat_message',
               }),
-            }),
-          ),
+            })
+
+            // WhatsApp-style device push. The title is the VISITOR's name
+            // (like WhatsApp shows the sender) and the body is the actual
+            // message preview — so the admin sees "John: Hi, I need help
+            // with a plumbing issue" in the system notification, exactly
+            // like a WhatsApp message alert.
+            //
+            // tag=`livechat-{sessionId}` is the SAME tag used by the
+            // session-creation push, so this message notification REPLACES
+            // the "New live chat request" notification in place — the
+            // admin sees one notification per conversation that updates
+            // with the latest message, instead of stacking one per message.
+            // requireInteraction=true keeps it on screen (WhatsApp-style)
+            // until the admin clicks "View" to open the Live Chat view.
+            try {
+              await sendWebPushToUser(r.id, session.tenantId, {
+                title: visitorLabel,
+                body: preview,
+                url: '/?view=liveChat',
+                tag: `livechat-${session.id}`,
+                requireInteraction: true,
+                data: {
+                  type: 'live_chat_message',
+                  sessionId: session.id,
+                  view: 'liveChat',
+                  source: 'public_chat_message',
+                  visitorName: session.visitorName,
+                  visitorEmail: session.visitorEmail,
+                },
+              })
+            } catch (pushErr) {
+              console.warn('[public-chat/messages POST] push send failed:', pushErr)
+            }
+          }),
         )
       } catch (notifErr) {
         // Notification failures must never break message delivery.

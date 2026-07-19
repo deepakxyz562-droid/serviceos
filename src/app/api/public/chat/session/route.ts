@@ -26,6 +26,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { createNotification } from '@/lib/notifications'
+import { sendWebPushToUser } from '@/lib/web-push-send'
 
 export const runtime = 'nodejs'
 
@@ -207,9 +208,25 @@ export async function POST(req: NextRequest) {
           : 'A new live chat was started on your website'
 
       // Fire-and-forget — notification failures must not break chat creation.
+      // For each recipient we do TWO things:
+      //   1. createNotification() → in-app bell + inbox row (polled every 60s)
+      //   2. sendWebPushToUser()  → REAL Web Push to the admin's device(s).
+      //      This is what makes the chat alert behave like WhatsApp: a system
+      //      notification appears even if the admin's browser/app is CLOSED,
+      //      because the push goes through APNs (iOS) / FCM (Android) which
+      //      wake the device. sendWebPushToUser() is a safe no-op (returns
+      //      { sent: 0 }) when the admin has no PushSubscription — so admins
+      //      who haven't enabled push yet are unaffected.
+      //
+      // The push uses tag=`livechat-{sessionId}` + requireInteraction=true so
+      // the notification PERSISTS until the admin clicks it (WhatsApp-style:
+      // the alert doesn't auto-vanish after 5 seconds). Subsequent visitor
+      // messages reuse the SAME tag, so the notification is UPDATED in place
+      // rather than stacking — exactly like WhatsApp shows one notification
+      // per conversation, refreshed with the latest message.
       await Promise.all(
-        recipients.map((r) =>
-          createNotification({
+        recipients.map(async (r) => {
+          await createNotification({
             tenantId: tenant.id,
             recipientId: r.id,
             type: 'reminder',
@@ -227,8 +244,29 @@ export async function POST(req: NextRequest) {
               visitorEmail,
               source: 'public_chat',
             }),
-          }),
-        ),
+          })
+
+          // WhatsApp-style device push. Fire-and-forget — a push failure
+          // must never break chat creation. The in-app notification above
+          // already guarantees the bell rings.
+          try {
+            await sendWebPushToUser(r.id, tenant.id, {
+              title: 'New live chat request',
+              body: messageText,
+              url: '/?view=liveChat',
+              tag: `livechat-${session.id}`,
+              requireInteraction: true,
+              data: {
+                type: 'live_chat_session',
+                sessionId: session.id,
+                view: 'liveChat',
+                source: 'public_chat',
+              },
+            })
+          } catch (pushErr) {
+            console.warn('[public-chat/session] push send failed:', pushErr)
+          }
+        }),
       )
     } catch (notifErr) {
       console.warn('[public-chat/session] notification create failed:', notifErr)

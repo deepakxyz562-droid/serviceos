@@ -10,6 +10,7 @@ import { Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useTrialStatus, TrialPaywallOverlay } from '@/components/billing/trial-paywall';
+import { TenantPushManager } from '@/components/pwa/tenant-push-manager';
 
 // ─── Lazy-loaded views — organized by module ──────────────────────────────────
 
@@ -376,6 +377,12 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
             — no visible gap when content is shorter than the viewport. */}
         <MobileBottomNav />
       </div>
+
+      {/* Web Push enrolment for tenant admins — auto-subscribes when
+          permission is already granted, and shows a one-tap opt-in banner
+          so the admin can enable WhatsApp-style chat alerts. Must live
+          inside the tenant shell (not the superadmin takeover branch). */}
+      <TenantPushManager />
 
       {/* Trial-expiry paywall overlay — blocks all views except 'billing'
           when the tenant's trial has expired. Forces the user to add a
