@@ -39,6 +39,7 @@ import {
   type PublicServiceData,
 } from '@/lib/public-business'
 import { PublicBookingForm } from './booking-form'
+import { ChatWidget } from '@/components/public/chat-widget'
 
 // ── Route config ────────────────────────────────────────────────────────────
 // ISR: revalidate every 60 minutes so reviews / profile edits propagate
@@ -451,6 +452,9 @@ export default async function PublicBusinessHubPage({
       </main>
 
       <CornerstoneFooter />
+
+      {/* Visitor-facing live chat widget */}
+      <ChatWidget businessSlug={business.slug} businessName={business.name} />
     </div>
   )
 }
