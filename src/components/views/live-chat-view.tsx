@@ -178,7 +178,7 @@ export function LiveChatView() {
   return (
     <div className="flex h-[calc(100vh-8rem)] bg-background">
       {/* Session list */}
-      <div className={`${selectedSessionId ? 'hidden md:flex' : 'flex'} flex-col w-full md:w-80 border-r`}>
+      <div className={`${selectedSessionId ? 'hidden md:flex' : 'flex'} flex-col w-full md:w-80 border-r min-h-0`}>
         <div className="p-4 border-b">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <MessageSquare className="h-5 w-5 text-emerald-700" />
@@ -207,7 +207,7 @@ export function LiveChatView() {
         </div>
 
         {/* Session items */}
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 min-h-0">
           {loading ? (
             <div className="p-4 space-y-3">
               {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
@@ -272,7 +272,7 @@ export function LiveChatView() {
       </div>
 
       {/* Conversation panel */}
-      <div className={`${selectedSessionId ? 'flex' : 'hidden md:flex'} flex-col flex-1`}>
+      <div className={`${selectedSessionId ? 'flex' : 'hidden md:flex'} flex-col flex-1 min-h-0`}>
         {!selectedSession ? (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
@@ -328,7 +328,7 @@ export function LiveChatView() {
             </div>
 
             {/* Messages */}
-            <ScrollArea className="flex-1 p-4">
+            <ScrollArea className="flex-1 p-4 min-h-0">
               {loadingMessages ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 w-3/4" />)}
