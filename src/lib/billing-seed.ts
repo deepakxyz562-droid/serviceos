@@ -92,7 +92,7 @@ No card needed during the trial — only if you decide to continue.`,
     name: 'Pre-charge Reminder (1 day)',
     subject: 'URGENT: Your {{appName}} trial ends tomorrow',
     variablesJson:
-      '[{"key":"tenantName","label":"Tenant Name","required":true,"example":"AquaFlow"},{"key":"trialEndsAt","label":"Trial End Date","required":true,"example":"July 4, 2026"},{"key":"appName","label":"App Name","required":true,"example":"ServiceOS"},{"key":"billingUrl","label":"Billing URL","required":true,"example":"https://serviceos.cc/billing"},{"key":"planName","label":"Plan Name","required":true,"example":"Growth"},{"key":"planPrice","label":"Plan Price","required":true,"example":"$79/month"}]',
+      '[{"key":"tenantName","label":"Tenant Name","required":true,"example":"AquaFlow"},{"key":"trialEndsAt","label":"Trial End Date","required":true,"example":"July 4, 2026"},{"key":"appName","label":"App Name","required":true,"example":"ServiceOS"},{"key":"billingUrl","label":"Billing URL","required":true,"example":"https://serviceos.cc/billing"},{"key":"planName","label":"Plan Name","required":true,"example":"Growth"},{"key":"planPrice","label":"Plan Price","required":true,"example":"$25/month"}]',
     htmlBody: `<!DOCTYPE html>
 <html>
   <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1f2937;">
@@ -233,8 +233,8 @@ const PLAN_DEFS: PlanDef[] = [
     code: 'starter',
     name: 'Starter',
     description: 'For solo entrepreneurs & freelancers',
-    monthlyPrice: 29,
-    yearlyPrice: 290,
+    monthlyPrice: 10,
+    yearlyPrice: 60,
     maxUsers: 1,
     maxJobs: 100,
     maxWorkflows: 10,
@@ -252,8 +252,8 @@ const PLAN_DEFS: PlanDef[] = [
     code: 'growth',
     name: 'Growth',
     description: 'For growing service businesses',
-    monthlyPrice: 79,
-    yearlyPrice: 790,
+    monthlyPrice: 25,
+    yearlyPrice: 150,
     maxUsers: 5,
     maxJobs: 1000,
     maxWorkflows: 50,
@@ -272,8 +272,8 @@ const PLAN_DEFS: PlanDef[] = [
     code: 'pro',
     name: 'Pro',
     description: 'For scaling organizations',
-    monthlyPrice: 149,
-    yearlyPrice: 1490,
+    monthlyPrice: 50,
+    yearlyPrice: 300,
     maxUsers: 999,
     maxJobs: 99999,
     maxWorkflows: 999,
@@ -308,19 +308,37 @@ const PLAN_DEFS: PlanDef[] = [
   },
 ];
 
-/** Idempotently seed the Plan catalog. Safe to call repeatedly. */
+/**
+ * Idempotently seed/sync the Plan catalog. Safe to call repeatedly.
+ *
+ * Uses upsert so existing Plan rows are kept in sync with the canonical
+ * PLAN_DEFS (price changes, feature flags, descriptions propagate). This
+ * matters because pricing is now centralized in PLAN_DEFS — when we change
+ * a price here, the DB row must follow or the billing UI / PayPal orders
+ * would charge the stale amount. The only fields an admin can override
+ * without being clobbered are `isActive` and (optionally) `popular`, which
+ * we deliberately do NOT touch here.
+ */
 export async function seedPlans(): Promise<{ seeded: number; skipped: number }> {
   let seeded = 0;
   let skipped = 0;
   for (const p of PLAN_DEFS) {
     try {
-      const existing = await db.plan.findUnique({ where: { code: p.code } });
-      if (existing) {
-        skipped++;
-        continue;
-      }
-      await db.plan.create({
-        data: {
+      await db.plan.upsert({
+        where: { code: p.code },
+        update: {
+          name: p.name,
+          description: p.description,
+          monthlyPrice: p.monthlyPrice,
+          yearlyPrice: p.yearlyPrice,
+          maxUsers: p.maxUsers,
+          maxJobs: p.maxJobs,
+          maxWorkflows: p.maxWorkflows,
+          featuresJson: JSON.stringify(p.features),
+          popular: p.popular ?? false,
+          sortOrder: p.sortOrder,
+        },
+        create: {
           code: p.code,
           name: p.name,
           description: p.description,
@@ -341,7 +359,8 @@ export async function seedPlans(): Promise<{ seeded: number; skipped: number }> 
       // exist yet, has RLS blocking writes, or a concurrent request already
       // inserted the same code. Log and move on — the GET route wraps
       // seedPlans() in its own try/catch too, so this is defense-in-depth.
-      console.error(`[billing-seed] seedPlans: failed to seed plan "${p.code}" (non-fatal):`, err);
+      console.error(`[billing-seed] seedPlans: failed to upsert plan "${p.code}" (non-fatal):`, err);
+      skipped++;
     }
   }
   return { seeded, skipped };

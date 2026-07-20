@@ -1,22 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { logBillingEvent } from '@/lib/billing-events';
+import { getPayPalSubscription, isPayPalConfigured } from '@/lib/paypal';
 
 /**
  * POST /api/cron/renewal
  *
- * Runs daily. Two responsibilities:
+ * Runs daily. Three responsibilities:
  *
  * 1. Apply scheduled downgrades: any subscription with pendingDowngradeAt <= now
  *    gets its plan downgraded to pendingDowngradePlan, limits updated, and the
  *    pending fields cleared. Logs a 'downgrade_applied' BillingEvent.
  *
- * 2. (Future / PayPal Subscriptions API) Auto-renew active subscriptions whose
- *    endDate has passed. With PayPal Subscriptions API (Phase 3), PayPal
- *    handles the actual charge — this cron just needs to extend the endDate
- *    on our side after receiving the BILLING.SUBSCRIPTION.ACTIVATED webhook.
- *    For now (PayPal Orders API / one-time charges), renewal is manual: the
- *    user re-checks-out via the Subscription page.
+ * 2. Defensive PayPal status sync: for active PayPal RECURRING subscriptions
+ *    whose endDate has passed, fetch the current status from PayPal. If still
+ *    ACTIVE, PayPal likely already charged the customer and sent a
+ *    PAYMENT.SALE.COMPLETED webhook (which extends endDate). If our endDate is
+ *    still stale (webhook missed / delayed), extend it here. If PayPal says
+ *    SUSPENDED/CANCELLED/EXPIRED, sync the local status accordingly.
+ *
+ * 3. Mark expired: any non-recurring subscription (one-time / trial) whose
+ *    endDate passed and is still 'active' → mark 'expired'. This is the
+ *    one-time-payment path where renewal is manual.
  *
  * Auth: shared secret (CRON_SECRET env).
  *
@@ -36,6 +41,7 @@ export async function POST(request: NextRequest) {
     }
 
     const now = new Date();
+    const paypalReady = isPayPalConfigured();
 
     // ─── 1. Apply scheduled downgrades ────────────────────────────────
     const dueDowngrades = await db.subscription.findMany({
@@ -125,15 +131,147 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // ─── 2. Defensive PayPal recurring status sync ───────────────────
+    // Find active recurring subscriptions past their endDate. PayPal should
+    // have charged + sent a webhook by now. If not, we sync manually.
+    const syncResults: Array<{
+      subscriptionId: string;
+      tenantId: string;
+      paypalStatus: string;
+      action: string;
+    }> = [];
+
+    if (paypalReady) {
+      const dueRecurring = await db.subscription.findMany({
+        where: {
+          status: 'active',
+          paymentProvider: 'paypal',
+          paypalSubscriptionId: { not: null },
+          endDate: { lt: now },
+        },
+        take: 50, // cap per run
+      });
+
+      for (const sub of dueRecurring) {
+        try {
+          const ppSub = await getPayPalSubscription(sub.paypalSubscriptionId!);
+          const ppStatus = (ppSub.status as string) || 'UNKNOWN';
+          const statusMap: Record<string, string> = {
+            ACTIVE: 'active',
+            SUSPENDED: 'suspended',
+            CANCELLED: 'cancelled',
+            EXPIRED: 'expired',
+          };
+          const localStatus = statusMap[ppStatus];
+
+          if (ppStatus === 'ACTIVE') {
+            // PayPal is still charging — extend our endDate by one cycle from
+            // the stale endDate (the webhook handler extends from the last
+            // known endDate too, so this is consistent). If the webhook
+            // already ran, our endDate would already be in the future and
+            // this subscription wouldn't be in dueRecurring.
+            const newEndDate = new Date(sub.endDate);
+            if (sub.billingCycle === 'yearly') {
+              newEndDate.setFullYear(newEndDate.getFullYear() + 1);
+            } else {
+              newEndDate.setMonth(newEndDate.getMonth() + 1);
+            }
+            await db.subscription.update({
+              where: { id: sub.id },
+              data: { endDate: newEndDate, status: 'active' },
+            });
+            await db.tenant.update({
+              where: { id: sub.tenantId },
+              data: { planEndsAt: newEndDate, planStatus: 'active' },
+            });
+            syncResults.push({
+              subscriptionId: sub.id,
+              tenantId: sub.tenantId,
+              paypalStatus: ppStatus,
+              action: 'endDate_extended (webhook may have been missed)',
+            });
+          } else if (localStatus && localStatus !== sub.status) {
+            // PayPal suspended/cancelled/expired — sync local status
+            await db.subscription.update({
+              where: { id: sub.id },
+              data: { status: localStatus },
+            });
+            await db.tenant.update({
+              where: { id: sub.tenantId },
+              data: { planStatus: localStatus === 'active' ? 'active' : localStatus },
+            });
+            await logBillingEvent({
+              tenantId: sub.tenantId,
+              subscriptionId: sub.id,
+              type: localStatus === 'cancelled' ? 'cancel' : 'fail',
+              status: localStatus === 'cancelled' ? 'success' : 'failed',
+              amount: sub.amount,
+              description: `PayPal status sync (cron): ${ppStatus} → local ${localStatus}`,
+              paymentProvider: 'paypal',
+              metadata: { paypalSubscriptionId: sub.paypalSubscriptionId, paypalStatus: ppStatus },
+            });
+            syncResults.push({
+              subscriptionId: sub.id,
+              tenantId: sub.tenantId,
+              paypalStatus: ppStatus,
+              action: `status_synced → ${localStatus}`,
+            });
+          } else {
+            syncResults.push({
+              subscriptionId: sub.id,
+              tenantId: sub.tenantId,
+              paypalStatus: ppStatus,
+              action: 'no_change',
+            });
+          }
+        } catch (err) {
+          syncResults.push({
+            subscriptionId: sub.id,
+            tenantId: sub.tenantId,
+            paypalStatus: 'ERROR',
+            action: err instanceof Error ? err.message.slice(0, 100) : String(err).slice(0, 100),
+          });
+        }
+      }
+    }
+
+    // ─── 3. Mark expired one-time / trial subscriptions ───────────────
+    // Non-recurring subscriptions (no paypalSubscriptionId) whose endDate
+    // passed and are still 'active' or 'trial' → mark 'expired'.
+    const dueExpiry = await db.subscription.findMany({
+      where: {
+        status: { in: ['active', 'trial'] },
+        endDate: { lt: now },
+        paypalSubscriptionId: null,
+      },
+      take: 100,
+    });
+    let expiredCount = 0;
+    for (const sub of dueExpiry) {
+      try {
+        await db.subscription.update({
+          where: { id: sub.id },
+          data: { status: 'expired' },
+        });
+        await db.tenant.update({
+          where: { id: sub.tenantId },
+          data: { planStatus: sub.status === 'trial' ? 'trial_expired' : 'expired' },
+        });
+        expiredCount++;
+      } catch {
+        // best-effort
+      }
+    }
+
     return NextResponse.json({
       success: true,
       ranAt: now.toISOString(),
       downgradesApplied: downgradeResults.filter((r) => r.applied).length,
       downgradesFailed: downgradeResults.filter((r) => !r.applied).length,
       downgradeResults,
-      // Note: auto-renewal charges are handled by PayPal Subscriptions API
-      // webhooks (Phase 3) — not by this cron. This cron only extends endDate
-      // after the webhook confirms a successful recurring payment.
+      recurringSynced: syncResults.length,
+      syncResults,
+      expiredMarked: expiredCount,
     });
   } catch (error) {
     console.error('Cron renewal error:', error);

@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       const cycle = lastSub?.billingCycle || 'monthly';
       const price = cycle === 'yearly' ? plan?.yearlyPrice : plan?.monthlyPrice;
       const planName = plan?.name || 'Growth';
-      const planPrice = price ? `$${price}/${cycle === 'yearly' ? 'year' : 'month'}` : '$79/month';
+      const planPrice = price ? `$${price}/${cycle === 'yearly' ? 'year' : 'month'}` : '$25/month';
 
       // Use the trial-ending-1-day template (which has the "charged $X tomorrow" copy)
       const daysRemaining = getDaysRemaining(tenant.trialEndsAt);

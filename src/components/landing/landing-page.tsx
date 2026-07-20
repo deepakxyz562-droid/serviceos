@@ -320,8 +320,8 @@ interface PricingPlan {
 const pricingPlans: PricingPlan[] = [
   {
     name: 'Starter',
-    monthlyPrice: 29,
-    yearlyPrice: 290,
+    monthlyPrice: 10,
+    yearlyPrice: 60,
     description: 'For solo entrepreneurs',
     icon: Zap,
     features: ['1 user', '100 jobs/month', 'Email & SMS notifications', 'Basic CRM & leads', 'Invoice generation', 'Email support'],
@@ -329,8 +329,8 @@ const pricingPlans: PricingPlan[] = [
   },
   {
     name: 'Growth',
-    monthlyPrice: 79,
-    yearlyPrice: 790,
+    monthlyPrice: 25,
+    yearlyPrice: 150,
     description: 'For growing teams',
     icon: Building2,
     features: ['5 users', '1,000 jobs/month', 'Email + SMS included', 'Smart dispatch & routing', 'Advanced CRM & pipeline', 'AI Assistant', 'Priority support', 'WhatsApp add-on available'],
@@ -339,8 +339,8 @@ const pricingPlans: PricingPlan[] = [
   },
   {
     name: 'Pro',
-    monthlyPrice: 149,
-    yearlyPrice: 1490,
+    monthlyPrice: 50,
+    yearlyPrice: 300,
     description: 'For scaling businesses',
     icon: Shield,
     features: ['Unlimited users', 'Unlimited jobs', 'Email + SMS included', 'n8n automation builder', 'Custom workflows', 'API access', 'Dedicated support', 'WhatsApp add-on available'],
@@ -1299,7 +1299,7 @@ function PricingSection({ onGetStarted }: { onGetStarted: () => void }) {
                 <motion.div className="absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-primary shadow-sm" animate={{ x: yearly ? 28 : 0 }} transition={{ type: 'spring', stiffness: 500, damping: 30 }} />
               </button>
               <span className={`text-sm font-medium ${yearly ? 'text-foreground' : 'text-muted-foreground'}`}>
-                Yearly<Badge className="ml-2 bg-emerald-100 text-emerald-700 border-0 text-xs">Save 17%</Badge>
+                Yearly<Badge className="ml-2 bg-emerald-100 text-emerald-700 border-0 text-xs">Save 50%</Badge>
               </span>
             </div>
           </motion.div>
@@ -1326,7 +1326,7 @@ function PricingSection({ onGetStarted }: { onGetStarted: () => void }) {
               <div className="flex-shrink-0 flex items-center gap-3 sm:gap-4">
                 <div className="text-center">
                   <div className="flex items-baseline gap-2 justify-center">
-                    <span className="text-2xl text-muted-foreground line-through font-medium">$290</span>
+                    <span className="text-2xl text-muted-foreground line-through font-medium">$120</span>
                   </div>
                   <div className="flex items-baseline gap-1 justify-center">
                     <span className="text-5xl sm:text-6xl font-extrabold text-primary tracking-tight">$5</span>

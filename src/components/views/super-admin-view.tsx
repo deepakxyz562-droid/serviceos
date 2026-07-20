@@ -285,9 +285,9 @@ const roleColors: Record<string, string> = {
 };
 
 const planConfig: Record<string, { monthlyPrice: number; yearlyPrice: number; features: string[] }> = {
-  starter: { monthlyPrice: 29, yearlyPrice: 290, features: ['5 Users', '100 Jobs/month', '1 WhatsApp Number', 'Basic Analytics', 'Email Support'] },
-  growth: { monthlyPrice: 79, yearlyPrice: 790, features: ['25 Users', '500 Jobs/month', '3 WhatsApp Numbers', 'AI Assistant', 'Priority Support'] },
-  pro: { monthlyPrice: 149, yearlyPrice: 1490, features: ['50 Users', 'Unlimited Jobs', '10 WhatsApp Numbers', 'Advanced AI', 'Custom Workflows'] },
+  starter: { monthlyPrice: 10, yearlyPrice: 60, features: ['5 Users', '100 Jobs/month', '1 WhatsApp Number', 'Basic Analytics', 'Email Support'] },
+  growth: { monthlyPrice: 25, yearlyPrice: 150, features: ['25 Users', '500 Jobs/month', '3 WhatsApp Numbers', 'AI Assistant', 'Priority Support'] },
+  pro: { monthlyPrice: 50, yearlyPrice: 300, features: ['50 Users', 'Unlimited Jobs', '10 WhatsApp Numbers', 'Advanced AI', 'Custom Workflows'] },
   enterprise: { monthlyPrice: 0, yearlyPrice: 0, features: ['Unlimited Users', 'Unlimited Everything', 'Dedicated Support', 'Custom Integrations', 'SLA Guarantee'] },
 };
 
@@ -2122,9 +2122,9 @@ export function SuperAdminView() {
               <Select value={newTenant.plan} onValueChange={(v) => setNewTenant({ ...newTenant, plan: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="starter">Starter — $29/mo</SelectItem>
-                  <SelectItem value="growth">Growth — $79/mo</SelectItem>
-                  <SelectItem value="pro">Professional — $149/mo</SelectItem>
+                  <SelectItem value="starter">Starter — $10/mo</SelectItem>
+                  <SelectItem value="growth">Growth — $25/mo</SelectItem>
+                  <SelectItem value="pro">Pro — $50/mo</SelectItem>
                   <SelectItem value="enterprise">Enterprise — Custom</SelectItem>
                 </SelectContent>
               </Select>

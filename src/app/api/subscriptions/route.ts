@@ -309,7 +309,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { plan, billingCycle } = body;
+    const { plan, billingCycle, startMode } = body;
 
     if (!plan) {
       return NextResponse.json(
@@ -327,9 +327,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Define plan details — keep in sync with billing-seed.ts and paypal.ts
+    // `amount` is the monthly price. Yearly totals (50% off) live in
+    // PAYPAL_PLANS.yearlyPrice and the Plan catalog (db.plan.yearlyPrice).
     const planDetails: Record<string, { amount: number; maxUsers: number; maxJobs: number; maxWorkflows: number; features: Record<string, boolean> }> = {
       starter: {
-        amount: 29,
+        amount: 10,
         maxUsers: 1,
         maxJobs: 100,
         maxWorkflows: 10,
@@ -341,7 +343,7 @@ export async function POST(request: NextRequest) {
         },
       },
       growth: {
-        amount: 79,
+        amount: 25,
         maxUsers: 5,
         maxJobs: 1000,
         maxWorkflows: 50,
@@ -353,7 +355,7 @@ export async function POST(request: NextRequest) {
         },
       },
       pro: {
-        amount: 149,
+        amount: 50,
         maxUsers: 20,
         maxJobs: 99999,
         maxWorkflows: 999,
@@ -380,6 +382,12 @@ export async function POST(request: NextRequest) {
 
     const selectedPlan = planDetails[plan];
     const cycle = billingCycle || 'monthly';
+    // startMode: 'trial' (default) creates a 14-day free-trial subscription
+    // with no payment required. 'pay' creates an active subscription
+    // immediately (used when the user chooses "Subscribe & Pay Now" — the
+    // actual PayPal capture happens via /api/paypal/capture-order, which
+    // then overwrites this record with the paid amount + endDate).
+    const mode = startMode === 'pay' ? 'pay' : 'trial';
 
     // Get current subscription
     const currentSub = await db.subscription.findFirst({
@@ -388,24 +396,52 @@ export async function POST(request: NextRequest) {
     });
 
     const now = new Date();
-    const endDate = new Date(now);
-    if (cycle === 'yearly') {
-      endDate.setFullYear(endDate.getFullYear() + 1);
+
+    // Trial: 14-day window, status='trial', endDate = trialEndsAt.
+    // Pay: cycle-based endDate (1 month or 1 year), status='pending_payment'.
+    //   The user has chosen to pay now but hasn't completed PayPal checkout.
+    //   status stays 'pending_payment' until /api/paypal/activate-subscription
+    //   (recurring) or /api/paypal/capture-order (one-time) flips it to
+    //   'active'. The tenant retains trial access in the meantime.
+    const trialDays = 14;
+    const trialEndsAt = new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000);
+
+    let endDate: Date;
+    let subStatus: 'trial' | 'active' | 'pending_payment';
+    if (mode === 'trial') {
+      endDate = trialEndsAt;
+      subStatus = 'trial';
     } else {
-      endDate.setMonth(endDate.getMonth() + 1);
+      endDate = new Date(now);
+      if (cycle === 'yearly') {
+        endDate.setFullYear(endDate.getFullYear() + 1);
+      } else {
+        endDate.setMonth(endDate.getMonth() + 1);
+      }
+      subStatus = 'pending_payment';
     }
 
     // Create new subscription record
+    // startMode 'pay' creates a 'pending_payment' record — the user has
+    // expressed intent to pay but hasn't completed PayPal checkout yet.
+    // The actual activation happens via /api/paypal/activate-subscription
+    // (recurring) or /api/paypal/capture-order (one-time) after the user
+    // completes checkout on the billing page. Until then the tenant stays
+    // on trial so they retain 14-day trial access.
     const subscription = await db.subscription.create({
       data: {
         tenantId,
         plan,
-        status: 'active',
+        status: subStatus,
         amount: selectedPlan.amount,
         currency: 'USD',
         billingCycle: cycle,
         startDate: now,
         endDate,
+        // trialEndsAt is set for both modes — for 'pay' it's informational
+        // (the trial was bypassed); for 'trial' it's the gate the
+        // trial-paywall middleware checks.
+        trialEndsAt: mode === 'trial' ? trialEndsAt : null,
         maxUsers: selectedPlan.maxUsers,
         maxJobs: selectedPlan.maxJobs,
         maxWorkflows: selectedPlan.maxWorkflows,
@@ -413,16 +449,28 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Update tenant plan info
+    // Update tenant plan info:
+    //   - 'trial' mode → planStatus='trial' so trial-lifecycle cron +
+    //     trial-paywall middleware engage. trialEndsAt is set.
+    //   - 'pay' mode → planStatus stays 'trial' too! The user gets 14-day
+    //     trial access while they complete PayPal checkout. Only when
+    //     /api/paypal/activate-subscription runs does planStatus become
+    //     'active'. This prevents granting paid access before payment.
     await db.tenant.update({
       where: { id: tenantId },
       data: {
         plan,
-        planStatus: 'active',
+        planStatus: 'trial',
         planStartedAt: now,
         planEndsAt: endDate,
+        ...(mode === 'trial' ? { trialEndsAt } : {}),
       },
     });
+
+    // Invalidate the GET cache — subscription state changed. Must happen
+    // BEFORE the return or the cache would serve stale trial/status data
+    // for up to 30s after a plan change.
+    cache.invalidateByPrefix('subscription:');
 
     return NextResponse.json({
       subscription: {
@@ -443,9 +491,6 @@ export async function POST(request: NextRequest) {
         createdAt: subscription.createdAt,
       },
     });
-
-    // Invalidate the GET cache — subscription state changed.
-    cache.invalidateByPrefix('subscription:');
   } catch (error) {
     console.error('Update subscription error:', error);
     return NextResponse.json(

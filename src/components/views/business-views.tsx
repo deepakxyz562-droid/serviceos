@@ -372,7 +372,7 @@ export function BillingView() {
         <span className={cn('text-sm', !isYearly && 'font-semibold')}>Monthly</span>
         <Switch checked={isYearly} onCheckedChange={setIsYearly} />
         <span className={cn('text-sm', isYearly && 'font-semibold')}>Yearly</span>
-        {isYearly && <Badge className="bg-emerald-100 text-emerald-700 text-xs">Save 20%</Badge>}
+        {isYearly && <Badge className="bg-emerald-100 text-emerald-700 text-xs">Save 50%</Badge>}
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {plans.map(plan => (
@@ -380,7 +380,7 @@ export function BillingView() {
             {plan.popular && <div className="absolute top-0 right-0 bg-emerald-500 px-3 py-1 text-xs font-semibold text-white rounded-bl-lg">Popular</div>}
             <CardContent className="p-5">
               <h3 className="font-bold mb-1">{plan.name}</h3>
-              <div className="mb-3">{plan.price === 0 ? <p className="text-3xl font-bold">Custom</p> : <div className="flex items-baseline gap-1"><span className="text-3xl font-bold">${isYearly ? Math.round(plan.price * 0.8) : plan.price}</span><span className="text-sm text-muted-foreground">/mo</span></div>}</div>
+              <div className="mb-3">{plan.price === 0 ? <p className="text-3xl font-bold">Custom</p> : <div className="flex items-baseline gap-1"><span className="text-3xl font-bold">${isYearly ? Math.round(plan.price * 0.5) : plan.price}</span><span className="text-sm text-muted-foreground">/mo</span></div>}</div>
               <ul className="space-y-2 mb-5">{plan.features.map(f => <li key={f} className="flex items-start gap-2 text-xs"><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" /><span>{f}</span></li>)}</ul>
               <Button className={cn('w-full', plan.popular ? 'bg-emerald-600 hover:bg-emerald-700' : '')} variant={plan.popular ? 'default' : 'outline'}>{plan.price === 0 ? 'Contact Sales' : plan.popular ? 'Current Plan' : 'Select Plan'}</Button>
             </CardContent>

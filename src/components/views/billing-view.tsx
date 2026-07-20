@@ -163,8 +163,8 @@ const PLANS: Plan[] = [
   {
     id: 'starter',
     name: 'Starter',
-    monthlyPrice: 29,
-    yearlyPrice: 290,
+    monthlyPrice: 10,
+    yearlyPrice: 60,
     description: 'For solo entrepreneurs & freelancers',
     features: [
       { text: '1 user', included: true },
@@ -183,8 +183,8 @@ const PLANS: Plan[] = [
   {
     id: 'growth',
     name: 'Growth',
-    monthlyPrice: 79,
-    yearlyPrice: 790,
+    monthlyPrice: 25,
+    yearlyPrice: 150,
     description: 'For growing service businesses',
     popular: true,
     features: [
@@ -205,8 +205,8 @@ const PLANS: Plan[] = [
   {
     id: 'pro',
     name: 'Pro',
-    monthlyPrice: 149,
-    yearlyPrice: 1490,
+    monthlyPrice: 50,
+    yearlyPrice: 300,
     description: 'For scaling organizations',
     features: [
       { text: 'Unlimited users', included: true },
@@ -413,43 +413,51 @@ function PayPalCheckoutDialog({
     fetchConfig();
   }, []);
 
-  const handleCreateOrder = async () => {
+  // ─── Recurring subscription flow (PayPal Subscriptions API) ─────────
+  // createSubscription → calls our backend which creates a PayPal recurring
+  //   subscription + a local pending_payment record, returns the PayPal sub ID.
+  // onApprove → calls /api/paypal/activate-subscription which fetches the
+  //   sub details from PayPal and activates the local record.
+  // PayPal then auto-charges the customer each cycle and sends
+  //   PAYMENT.SALE.COMPLETED webhooks to /api/paypal/webhook, which extends
+  //   the endDate and records each renewal payment automatically.
+  const handleCreateSubscription = async () => {
     try {
-      const res = await fetch('/api/paypal/create-order', {
+      const res = await fetch('/api/paypal/create-subscription', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plan: plan.id, billingCycle }),
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to create order');
+        throw new Error(data.error || 'Failed to create subscription');
       }
-      return data.orderID;
+      return data.subscriptionId as string;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create PayPal order');
+      setError(err instanceof Error ? err.message : 'Failed to create PayPal subscription');
       throw err;
     }
   };
 
-  const handleApprove = async (orderId: string) => {
+  const handleApproveSubscription = async (subscriptionId: string) => {
     setIsProcessing(true);
     try {
-      const res = await fetch('/api/paypal/capture-order', {
+      const res = await fetch('/api/paypal/activate-subscription', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderID: orderId, plan: plan.id, billingCycle }),
+        body: JSON.stringify({ subscriptionId, plan: plan.id, billingCycle }),
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to capture payment');
+        throw new Error(data.error || 'Failed to activate subscription');
       }
-      toast.success(`Successfully upgraded to ${plan.name} plan!`, {
-        description: `Payment of ${format(price)} processed via PayPal`,
+      toast.success(`Successfully subscribed to ${plan.name} plan!`, {
+        description: `Recurring payment of ${format(price)}/${billingCycle === 'yearly' ? 'yr' : 'mo'} activated via PayPal. You'll be auto-charged each cycle.`,
       });
       onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Payment failed');
-      toast.error('Payment failed', {
+      setError(err instanceof Error ? err.message : 'Subscription activation failed');
+      toast.error('Subscription activation failed', {
         description: err instanceof Error ? err.message : 'Please try again.',
       });
     } finally {
@@ -466,7 +474,8 @@ function PayPalCheckoutDialog({
             Subscribe to {plan.name} Plan
           </DialogTitle>
           <DialogDescription>
-            Complete your payment via PayPal to activate your {plan.name} plan
+            Set up recurring billing via PayPal. You'll be automatically charged {format(price)}{' '}
+            {billingCycle === 'yearly' ? 'per year' : 'per month'} until you cancel.
           </DialogDescription>
         </DialogHeader>
 
@@ -499,12 +508,16 @@ function PayPalCheckoutDialog({
             )}
             <Separator />
             <div className="flex justify-between">
-              <span className="font-semibold">Total today</span>
+              <span className="font-semibold">Amount due today</span>
               <span className="text-lg font-bold text-emerald-600">
                 {format(prorationPreview && prorationPreview.proratedAmount > 0 ? price + prorationPreview.proratedAmount : price)}
                 <span className="text-sm text-muted-foreground font-normal">/{billingCycle === 'yearly' ? 'year' : 'month'}</span>
               </span>
             </div>
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <Shield className="h-3.5 w-3.5 text-emerald-500" />
+              Auto-renews {billingCycle === 'yearly' ? 'annually' : 'monthly'} · Cancel anytime from Settings → Subscription
+            </p>
           </div>
 
           {/* PayPal Info */}
@@ -548,7 +561,8 @@ function PayPalCheckoutDialog({
             <PayPalScriptProvider
               options={{
                 clientId: paypalConfig.clientId,
-                intent: 'capture',
+                intent: 'subscription',
+                vault: true,
                 currency: 'USD',
               }}
             >
@@ -557,19 +571,22 @@ function PayPalCheckoutDialog({
                   layout: 'vertical',
                   color: 'gold',
                   shape: 'rect',
-                  label: 'pay',
+                  label: 'subscribe',
                   height: 45,
                 }}
-                createOrder={handleCreateOrder}
+                createSubscription={handleCreateSubscription}
                 onApprove={async (data) => {
-                  await handleApprove(data.orderID);
+                  // data.subscriptionID is the PayPal recurring subscription ID
+                  if (data.subscriptionID) {
+                    await handleApproveSubscription(data.subscriptionID);
+                  }
                 }}
                 onError={(err) => {
                   console.error('PayPal button error:', err);
                   setError('PayPal encountered an error. Please try again.');
                 }}
                 onCancel={() => {
-                  toast.info('Payment cancelled', {
+                  toast.info('Subscription cancelled', {
                     description: 'Your subscription was not changed.',
                   });
                 }}
@@ -1135,7 +1152,7 @@ export function BillingView() {
           Yearly
         </Label>
         <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-          Save 17%!
+          Save 50%!
         </Badge>
       </div>
 
@@ -1179,13 +1196,20 @@ export function BillingView() {
                     <p className="text-3xl font-bold">Custom</p>
                   ) : (
                     <>
-                      <span className="text-3xl font-bold">{format(price)}</span>
+                      {isYearly && plan.monthlyPrice > 0 && (
+                        <p className="text-sm text-muted-foreground line-through mb-0.5">
+                          {format(plan.monthlyPrice * 12)}<span className="text-xs">/yr</span>
+                        </p>
+                      )}
+                      <span className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
+                        {format(price)}
+                      </span>
                       <span className="text-sm text-muted-foreground">
                         /{isYearly ? 'year' : 'month'}
                       </span>
                       {isYearly && plan.monthlyPrice > 0 && (
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {format(Math.round(plan.yearlyPrice / 12))}/mo billed annually
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">
+                          {format(Math.round(plan.yearlyPrice / 12))}/mo · 50% off
                         </p>
                       )}
                     </>

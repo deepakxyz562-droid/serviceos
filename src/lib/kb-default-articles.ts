@@ -1623,7 +1623,7 @@ ServiceOS offers four plans designed for businesses of different sizes.
 - **Workflows**: 5
 - **Storage**: 100 MB
 
-### Growth — $29/month
+### Growth — $25/month
 - **Users**: 5
 - **Jobs**: 500/month
 - **Customers**: 5,000
@@ -1633,7 +1633,7 @@ ServiceOS offers four plans designed for businesses of different sizes.
 - **Workflows**: 25
 - **Storage**: 1 GB
 
-### Pro — $79/month
+### Pro — $50/month
 - **Users**: 25
 - **Jobs**: Unlimited
 - **Customers**: Unlimited

@@ -57,6 +57,9 @@ interface Step1Data {
 interface Step3Data {
   plan: string;
   billing: 'monthly' | 'yearly';
+  // How the user wants to start: 'trial' (14-day free trial, no card) or
+  // 'pay' (subscribe & pay now via PayPal, immediate access).
+  startMode: 'trial' | 'pay';
 }
 
 // ---------------------------------------------------------------------------
@@ -91,7 +94,7 @@ const PLANS = [
     id: 'starter',
     name: 'Starter',
     monthlyPrice: 10,
-    yearlyPrice: 100, // 2 months free
+    yearlyPrice: 60, // 50% off annual
     description: 'Perfect for getting started',
     features: ['1 user', '100 jobs/month', '10 workflows', 'Email support'],
     icon: Zap,
@@ -100,7 +103,7 @@ const PLANS = [
     id: 'growth',
     name: 'Growth',
     monthlyPrice: 25,
-    yearlyPrice: 250,
+    yearlyPrice: 150, // 50% off annual
     description: 'For growing businesses',
     features: ['5 users', '1,000 jobs/month', '50 workflows', 'Priority support', 'Custom templates'],
     icon: Star,
@@ -110,7 +113,7 @@ const PLANS = [
     id: 'pro',
     name: 'Pro',
     monthlyPrice: 50,
-    yearlyPrice: 500,
+    yearlyPrice: 300, // 50% off annual
     description: 'For scaling operations',
     features: ['Unlimited users', 'Unlimited jobs', 'Unlimited workflows', 'Priority support', 'Custom templates', 'API access', 'Advanced analytics'],
     icon: Crown,
@@ -168,6 +171,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   const [step3, setStep3] = useState<Step3Data>({
     plan: 'growth',
     billing: 'monthly',
+    startMode: 'trial',
   });
 
   // -------------------------------------------------------------------------
@@ -224,12 +228,12 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   );
 
   const createSubscription = useCallback(
-    async (plan: string, billing: string) => {
+    async (plan: string, billing: string, startMode: 'trial' | 'pay') => {
       try {
         const res = await fetch('/api/subscriptions', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tenantId, plan, billing }),
+          body: JSON.stringify({ tenantId, plan, billing, startMode }),
         });
         if (!res.ok) {
           throw new Error('Failed to create subscription');
@@ -273,22 +277,36 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   }, [isStep1Valid, saveTenantProgress, step1, goNext]);
 
   // (was handleStep3Next) Now the 2nd step — Choose Your Plan
-  const handleStep2Next = useCallback(async () => {
-    setSaving(true);
-    try {
-      await createSubscription(step3.plan, step3.billing);
-      await saveTenantProgress({
-        onboardingStep: 3,
-        plan: step3.plan,
-      });
-      toast.success('Plan selected! Starting your free trial.');
-      goNext();
-    } catch {
-      toast.error('Failed to select plan. Please try again.');
-    } finally {
-      setSaving(false);
-    }
-  }, [createSubscription, saveTenantProgress, step3, goNext]);
+  // Handles both start modes:
+  //   'trial' → creates a 14-day free-trial subscription, advances to step 3.
+  //   'pay'   → creates an active subscription, advances to step 3. The actual
+  //             PayPal capture happens afterwards on the billing page (the
+  //             user is redirected there from step 3's "complete payment" CTA
+  //             if they chose 'pay').
+  const handleStep2Next = useCallback(
+    async (mode: 'trial' | 'pay') => {
+      setSaving(true);
+      try {
+        await createSubscription(step3.plan, step3.billing, mode);
+        await saveTenantProgress({
+          onboardingStep: 3,
+          plan: step3.plan,
+        });
+        toast.success(
+          mode === 'trial'
+            ? 'Plan selected! Your 14-day free trial has started.'
+            : 'Plan selected! Complete payment to activate your subscription.',
+        );
+        setStep3((s) => ({ ...s, startMode: mode }));
+        goNext();
+      } catch {
+        toast.error('Failed to select plan. Please try again.');
+      } finally {
+        setSaving(false);
+      }
+    },
+    [createSubscription, saveTenantProgress, step3, goNext],
+  );
 
   // (was handleComplete) Now the 3rd step — All Set!
   const handleComplete = useCallback(async () => {
@@ -309,9 +327,11 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
 
   const handleNext = useCallback(() => {
     if (currentStep === 1) handleStep1Next();
-    else if (currentStep === 2) handleStep2Next();
     else if (currentStep === 3) handleComplete();
-  }, [currentStep, handleStep1Next, handleStep2Next, handleComplete]);
+    // Step 2 has no single "next" — the plan cards themselves carry the
+    // two CTAs (Start Free Trial / Subscribe & Pay Now), each calling
+    // handleStep2Next('trial' | 'pay') directly.
+  }, [currentStep, handleStep1Next, handleComplete]);
 
   // -------------------------------------------------------------------------
   // Format price
@@ -558,7 +578,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
         </span>
         {step3.billing === 'yearly' && (
           <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-0 text-xs">
-            Save 2 months!
+            Save 50%!
           </Badge>
         )}
       </div>
@@ -622,13 +642,26 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
                       <span className="text-2xl font-bold text-foreground">Custom</span>
                     </div>
                   ) : (
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-2xl font-bold text-foreground">
-                        {formatPrice(price)}
-                      </span>
-                      <span className="text-sm text-muted-foreground">
-                        /{step3.billing === 'monthly' ? 'month' : 'year'}
-                      </span>
+                    <div>
+                      {/* Crossed-out original annual price (yearly only) */}
+                      {step3.billing === 'yearly' && (
+                        <p className="text-xs text-muted-foreground line-through mb-0.5">
+                          {formatPrice(plan.monthlyPrice * 12)}/yr
+                        </p>
+                      )}
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                          {formatPrice(price)}
+                        </span>
+                        <span className="text-sm text-muted-foreground">
+                          /{step3.billing === 'monthly' ? 'month' : 'year'}
+                        </span>
+                      </div>
+                      {step3.billing === 'yearly' && (
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">
+                          {formatPrice(Math.round(plan.yearlyPrice / 12))}/mo · 50% off
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -642,21 +675,74 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
                   ))}
                 </ul>
 
-                <Button
-                  type="button"
-                  variant={isSelected ? 'default' : 'outline'}
-                  className={cn(
-                    'w-full',
-                    isSelected &&
-                      'bg-emerald-600 hover:bg-emerald-700 text-white',
-                  )}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setStep3((s) => ({ ...s, plan: plan.id }));
-                  }}
-                >
-                  {plan.monthlyPrice === 0 ? 'Contact Sales' : 'Start Free Trial'}
-                </Button>
+                {/* Dual CTA: both "Start Free Trial" (14-day, no card) and
+                    "Subscribe & Pay Now" (immediate PayPal checkout) are
+                    offered on every paid plan once selected. Enterprise
+                    stays as "Contact Sales" (no self-serve checkout). */}
+                {plan.monthlyPrice === 0 ? (
+                  <Button
+                    type="button"
+                    variant={isSelected ? 'default' : 'outline'}
+                    className={cn(
+                      'w-full',
+                      isSelected && 'bg-emerald-600 hover:bg-emerald-700 text-white',
+                    )}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setStep3((s) => ({ ...s, plan: plan.id }));
+                    }}
+                  >
+                    Contact Sales
+                  </Button>
+                ) : isSelected ? (
+                  <div className="space-y-2">
+                    <Button
+                      type="button"
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+                      disabled={saving}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStep2Next('trial');
+                      }}
+                    >
+                      {saving ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-4 w-4" />
+                      )}
+                      Start Free Trial
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full gap-1.5"
+                      disabled={saving}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStep2Next('pay');
+                      }}
+                    >
+                      {saving ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <CreditCard className="h-4 w-4" />
+                      )}
+                      Subscribe &amp; Pay Now
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setStep3((s) => ({ ...s, plan: plan.id }));
+                    }}
+                  >
+                    Select {plan.name}
+                  </Button>
+                )}
               </CardContent>
             </Card>
           );
@@ -664,7 +750,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
       </div>
 
       <p className="text-center text-xs text-muted-foreground">
-        14-day free trial on all plans. No credit card required. Cancel anytime.
+        14-day free trial on all plans · No credit card required for trial · Cancel anytime · Yearly plans save 50% · Subscribe &amp; Pay Now sets up auto-recurring billing
       </p>
     </div>
   );
@@ -744,6 +830,46 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
           </motion.p>
         </div>
 
+        {/* If the user chose "Subscribe & Pay Now", surface a payment-pending
+            banner so they know to complete the PayPal checkout on the billing
+            page. Trial users see no such banner — they're already active. */}
+        {step3.startMode === 'pay' && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.55 }}
+            className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 dark:border-amber-800 dark:bg-amber-950/30"
+          >
+            <div className="flex items-center gap-3 flex-1">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/40">
+                <CreditCard className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                  Payment pending — complete your subscription
+                </p>
+                <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                  You chose the {step3.plan.charAt(0).toUpperCase() + step3.plan.slice(1)} plan ({step3.billing}). Visit Billing to set up auto-recurring PayPal billing and activate full access. You'll be charged automatically each {step3.billing === 'yearly' ? 'year' : 'month'} until you cancel.
+                </p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              className="bg-amber-600 hover:bg-amber-700 text-white gap-1.5 shrink-0"
+              onClick={() => {
+                onComplete();
+                // Defer the navigation so the onboarding dialog closes first.
+                setTimeout(() => {
+                  window.dispatchEvent(new CustomEvent('navigate', { detail: 'billing' }));
+                }, 100);
+              }}
+            >
+              <CreditCard className="h-4 w-4" />
+              Go to Billing
+            </Button>
+          </motion.div>
+        )}
+
         {/* Quick Actions */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -818,6 +944,30 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
     const isValid =
       currentStep === 1 ? isStep1Valid : true;
 
+    // Step 2 (Choose Your Plan) has no footer "Next" button — each plan card
+    // carries its own dual CTA (Start Free Trial / Subscribe & Pay Now), so
+    // a footer Next would be redundant and ambiguous. We only show Back.
+    if (currentStep === 2) {
+      return (
+        <div className="flex items-center justify-between pt-4 mt-2 border-t">
+          <Button
+            variant="outline"
+            onClick={goBack}
+            disabled={saving}
+            className="gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Button>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            Step {currentStep} of {STEPS.length}
+          </div>
+          {/* Spacer to keep the step indicator centered */}
+          <div className="w-[72px]" aria-hidden />
+        </div>
+      );
+    }
+
     return (
       <div className="flex items-center justify-between pt-4 mt-2 border-t">
         <Button
@@ -850,7 +1000,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
             </>
           ) : (
             <>
-              {currentStep === 2 ? 'Start Free Trial' : 'Continue'}
+              Continue
               <ArrowRight className="h-4 w-4" />
             </>
           )}

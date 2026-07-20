@@ -141,7 +141,7 @@ export async function sendTrialReminder(
     loginUrl: APP_URL,
     billingUrl: `${APP_URL}/billing`,
     planName: 'Growth',
-    planPrice: '$79/month',
+    planPrice: '$25/month',
     dataPreservedUntil,
   });
 

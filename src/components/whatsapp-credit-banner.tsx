@@ -227,7 +227,7 @@ export function WhatsAppCreditBanner({ onUpgradeClick, onConnectMetaClick, compa
                   <div>
                     <p className="font-medium text-sm">Upgrade Your Plan</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Get unlimited WhatsApp messaging, campaigns, and broadcasts with a paid plan starting at $29/month.
+                      Get unlimited WhatsApp messaging, campaigns, and broadcasts with a paid plan starting at $10/month.
                     </p>
                   </div>
                 </div>

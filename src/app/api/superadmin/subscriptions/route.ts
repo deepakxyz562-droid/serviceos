@@ -270,9 +270,9 @@ export async function PATCH(request: NextRequest) {
 
       const planAmounts: Record<string, number> = {
         trial: 0,
-        starter: 29,
-        growth: 79,
-        pro: 149,
+        starter: 10,
+        growth: 25,
+        pro: 50,
         enterprise: 0,
       };
 

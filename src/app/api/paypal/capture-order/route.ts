@@ -91,23 +91,25 @@ export async function POST(request: NextRequest) {
       : price;
 
     // Plan details — keep in sync with billing-seed.ts and paypal.ts PAYPAL_PLANS
+    // `amount` is the monthly price; the actual captured amount for yearly is
+    // taken from the PayPal order (capturedAmount) / planConfig.yearlyPrice.
     const planDetails: Record<string, { amount: number; maxUsers: number; maxJobs: number; maxWorkflows: number; features: Record<string, boolean> }> = {
       starter: {
-        amount: 29,
+        amount: 10,
         maxUsers: 1,
         maxJobs: 100,
         maxWorkflows: 10,
         features: { whatsappIntegration: true, customWorkflows: false, apiAccess: false, prioritySupport: false },
       },
       growth: {
-        amount: 79,
+        amount: 25,
         maxUsers: 5,
         maxJobs: 1000,
         maxWorkflows: 50,
         features: { whatsappIntegration: true, customWorkflows: true, apiAccess: false, prioritySupport: true },
       },
       pro: {
-        amount: 149,
+        amount: 50,
         maxUsers: 999,
         maxJobs: 99999,
         maxWorkflows: 999,

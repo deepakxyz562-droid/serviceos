@@ -233,13 +233,59 @@ export async function POST(request: NextRequest) {
       (l: { rel: string; href: string }) => l.rel === 'approve'
     )?.href;
 
+    // ─── Step 3: Create a pending_payment local Subscription record ────
+    // This records the user's intent to subscribe. When the user approves in
+    // PayPal and the frontend calls /api/paypal/activate-subscription, this
+    // record is updated to status='active' with the real paypalSubscriptionId.
+    //
+    // If the user never approves, this pending record is harmless — it has
+    // status='pending_payment' and the tenant stays on trial.
+    const now = new Date();
+    const endDate = new Date(now);
+    if (cycle === 'yearly') {
+      endDate.setFullYear(endDate.getFullYear() + 1);
+    } else {
+      endDate.setMonth(endDate.getMonth() + 1);
+    }
+
+    // Plan details for the local record (limits). Keep in sync with seed.
+    const planLimits: Record<string, { maxUsers: number; maxJobs: number; maxWorkflows: number; features: Record<string, boolean> }> = {
+      starter: { maxUsers: 1, maxJobs: 100, maxWorkflows: 10, features: { whatsappIntegration: true, customWorkflows: false, apiAccess: false, prioritySupport: false } },
+      growth: { maxUsers: 5, maxJobs: 1000, maxWorkflows: 50, features: { whatsappIntegration: true, customWorkflows: true, apiAccess: false, prioritySupport: true } },
+      pro: { maxUsers: 999, maxJobs: 99999, maxWorkflows: 999, features: { whatsappIntegration: true, customWorkflows: true, apiAccess: true, prioritySupport: true } },
+    };
+    const limits = planLimits[planCode] || planLimits.growth;
+
+    await db.subscription.create({
+      data: {
+        tenantId,
+        plan: planCode,
+        status: 'pending_payment',
+        amount: price,
+        currency: plan.currency || 'USD',
+        billingCycle: cycle,
+        startDate: now,
+        endDate,
+        // Store the PayPal subscription ID even at pending stage so the
+        // webhook handler can find this record if the webhook arrives
+        // before the frontend's onApprove call.
+        paypalSubscriptionId: subData.id,
+        paypalPlanId,
+        paymentProvider: 'paypal',
+        maxUsers: limits.maxUsers,
+        maxJobs: limits.maxJobs,
+        maxWorkflows: limits.maxWorkflows,
+        featuresJson: JSON.stringify(limits.features),
+      },
+    });
+
     // Audit log
     await logBillingEvent({
       tenantId,
       type: 'subscription_created',
       status: 'pending',
       amount: price,
-      description: `PayPal subscription created (pending approval): ${plan.name} (${cycle})`,
+      description: `PayPal recurring subscription created (pending approval): ${plan.name} (${cycle})`,
       providerResponse: subData,
       paymentProvider: 'paypal',
       metadata: {
@@ -247,6 +293,7 @@ export async function POST(request: NextRequest) {
         billingCycle: cycle,
         paypalSubscriptionId: subData.id,
         paypalPlanId,
+        recurring: true,
       },
     });
 
@@ -256,6 +303,7 @@ export async function POST(request: NextRequest) {
       paypalPlanId,
       approvalUrl: approvalLink,
       status: subData.status,
+      recurring: true,
     });
   } catch (error) {
     console.error('PayPal create-subscription error:', error);
