@@ -34,6 +34,7 @@ import {
   Loader2,
   Check,
 } from 'lucide-react';
+import { PayPalCheckoutDialog, type PaypalCheckoutPlan } from '@/components/billing/paypal-checkout-dialog';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -174,6 +175,16 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
     startMode: 'trial',
   });
 
+  // PayPal inline checkout (opened when the user picks "Subscribe & Pay Now"
+  // in step 2). The dialog handles create-subscription + activate-
+  // subscription end-to-end; on success we advance to step 3, on close we
+  // advance with the "payment pending" banner visible.
+  const [payCheckoutPlan, setPayCheckoutPlan] = useState<PaypalCheckoutPlan | null>(null);
+  // Tracks whether the inline PayPal checkout (opened from Step 2) completed
+  // successfully. Used on Step 3 to decide whether to show the "payment
+  // pending" banner (cancelled) or a "payment successful" banner (paid).
+  const [paymentCompleted, setPaymentCompleted] = useState(false);
+
   // -------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------
@@ -279,26 +290,48 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   // (was handleStep3Next) Now the 2nd step — Choose Your Plan
   // Handles both start modes:
   //   'trial' → creates a 14-day free-trial subscription, advances to step 3.
-  //   'pay'   → creates an active subscription, advances to step 3. The actual
-  //             PayPal capture happens afterwards on the billing page (the
-  //             user is redirected there from step 3's "complete payment" CTA
-  //             if they chose 'pay').
+  //   'pay'   → saves the tenant's plan choice, then opens the PayPal
+  //             checkout dialog INLINE (right here in onboarding). The dialog's
+  //             create-subscription + activate-subscription APIs create the
+  //             local Subscription record end-to-end, so we do NOT call
+  //             createSubscription() here for 'pay' mode (that would create a
+  //             duplicate pending_payment row). On dialog success → advance to
+  //             step 3. On dialog close → advance with the "payment pending"
+  //             banner visible as a fallback.
   const handleStep2Next = useCallback(
     async (mode: 'trial' | 'pay') => {
       setSaving(true);
       try {
-        await createSubscription(step3.plan, step3.billing, mode);
-        await saveTenantProgress({
-          onboardingStep: 3,
-          plan: step3.plan,
-        });
-        toast.success(
-          mode === 'trial'
-            ? 'Plan selected! Your 14-day free trial has started.'
-            : 'Plan selected! Complete payment to activate your subscription.',
-        );
-        setStep3((s) => ({ ...s, startMode: mode }));
-        goNext();
+        if (mode === 'trial') {
+          await createSubscription(step3.plan, step3.billing, 'trial');
+          await saveTenantProgress({
+            onboardingStep: 3,
+            plan: step3.plan,
+          });
+          toast.success('Plan selected! Your 14-day free trial has started.');
+          setStep3((s) => ({ ...s, startMode: 'trial' }));
+          goNext();
+        } else {
+          // 'pay' mode: open PayPal checkout inline.
+          const selectedPlan = PLANS.find((p) => p.id === step3.plan);
+          if (!selectedPlan || selectedPlan.monthlyPrice === 0) {
+            toast.error('Please select a paid plan to subscribe.');
+            return;
+          }
+          await saveTenantProgress({
+            onboardingStep: 3,
+            plan: step3.plan,
+          });
+          setStep3((s) => ({ ...s, startMode: 'pay' }));
+          setPayCheckoutPlan({
+            id: selectedPlan.id,
+            name: selectedPlan.name,
+            monthlyPrice: selectedPlan.monthlyPrice,
+            yearlyPrice: selectedPlan.yearlyPrice,
+          });
+          // Don't goNext() yet — wait for the PayPal dialog's
+          // onSuccess/onClose callback to advance.
+        }
       } catch {
         toast.error('Failed to select plan. Please try again.');
       } finally {
@@ -830,10 +863,32 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
           </motion.p>
         </div>
 
-        {/* If the user chose "Subscribe & Pay Now", surface a payment-pending
-            banner so they know to complete the PayPal checkout on the billing
-            page. Trial users see no such banner — they're already active. */}
-        {step3.startMode === 'pay' && (
+        {/* "Subscribe & Pay Now" outcome banner.
+            - If the inline PayPal checkout SUCCEEDED → show a green success
+              banner (subscription is active, auto-recurring billing set up).
+            - If the user CANCELLED the PayPal dialog → show an amber
+              "payment pending" banner directing them to Billing to complete. */}
+        {step3.startMode === 'pay' && paymentCompleted && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.55 }}
+            className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 dark:border-emerald-800 dark:bg-emerald-950/30"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/40">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+                Payment successful — subscription active
+              </p>
+              <p className="text-xs text-emerald-700 dark:text-emerald-400 mt-0.5">
+                Your {step3.plan.charAt(0).toUpperCase() + step3.plan.slice(1)} plan ({step3.billing}) is now active with auto-recurring PayPal billing. You'll be charged automatically each {step3.billing === 'yearly' ? 'year' : 'month'} until you cancel.
+              </p>
+            </div>
+          </motion.div>
+        )}
+        {step3.startMode === 'pay' && !paymentCompleted && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1027,6 +1082,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   };
 
   return (
+    <>
     <Dialog open onOpenChange={() => {/* not closeable */}}>
       <DialogContent
         showCloseButton={false}
@@ -1075,5 +1131,31 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
         {renderNavigation()}
       </DialogContent>
     </Dialog>
+
+    {/* ── Inline PayPal checkout ──────────────────────────────────────
+        Opened from Step 2's "Subscribe & Pay Now" button. The dialog
+        handles PayPal's create-subscription + activate-subscription flow
+        end-to-end. On success we advance to step 3; on close we advance
+        with the "payment pending" banner visible as a fallback. */}
+    {payCheckoutPlan && (
+      <PayPalCheckoutDialog
+        plan={payCheckoutPlan}
+        billingCycle={step3.billing}
+        onClose={() => {
+          setPayCheckoutPlan(null);
+          toast.info('Payment cancelled', {
+            description: 'You can complete payment later from the Subscription page.',
+          });
+          goNext();
+        }}
+        onSuccess={() => {
+          setPayCheckoutPlan(null);
+          setPaymentCompleted(true);
+          toast.success('Subscription activated! Welcome to ServiceOS 🎉');
+          goNext();
+        }}
+      />
+    )}
+    </>
   );
 }

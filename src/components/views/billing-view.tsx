@@ -26,7 +26,6 @@ import {
   FileText,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -53,6 +52,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { WhatsAppCreditBanner } from '@/components/whatsapp-credit-banner';
+import { PayPalCheckoutDialog } from '@/components/billing/paypal-checkout-dialog';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -74,7 +74,7 @@ interface BillingRecord {
 
 interface SubscriptionData {
   plan: 'starter' | 'growth' | 'pro' | 'enterprise';
-  status: 'active' | 'trialing' | 'past_due' | 'cancelled' | 'trial' | 'expired';
+  status: 'active' | 'trialing' | 'past_due' | 'cancelled' | 'trial' | 'expired' | 'pending_payment';
   billingCycle: 'monthly' | 'yearly';
   trialEndsAt: string | null;
   renewalDate: string | null;
@@ -147,14 +147,6 @@ interface Plan {
   description: string;
   popular?: boolean;
   features: PlanFeature[];
-}
-
-interface PayPalConfig {
-  configured: boolean;
-  clientId?: string;
-  isSandbox?: boolean;
-  merchantEmail?: string;
-  message?: string;
 }
 
 // ─── Plan Data ───────────────────────────────────────────────────────────────
@@ -371,291 +363,6 @@ const FALLBACK_DATA: SubscriptionData = {
   billingHistory: [],
 };
 
-// ─── PayPal Checkout Dialog ──────────────────────────────────────────────────
-
-function PayPalCheckoutDialog({
-  plan,
-  billingCycle,
-  onClose,
-  onSuccess,
-  prorationPreview,
-}: {
-  plan: Plan;
-  billingCycle: 'monthly' | 'yearly';
-  onClose: () => void;
-  onSuccess: () => void;
-  prorationPreview?: {
-    direction: string;
-    proratedAmount: number;
-    daysRemaining: number;
-    newPlan: string;
-  } | null;
-}) {
-  const { format } = useCompanyCurrency();
-  const [paypalConfig, setPaypalConfig] = useState<PayPalConfig | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const price = billingCycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
-
-  useEffect(() => {
-    async function fetchConfig() {
-      try {
-        const res = await fetch('/api/paypal/config');
-        const config = await res.json();
-        setPaypalConfig(config);
-      } catch {
-        setError('Failed to load PayPal configuration');
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchConfig();
-  }, []);
-
-  // ─── Recurring subscription flow (PayPal Subscriptions API) ─────────
-  // createSubscription → calls our backend which creates a PayPal recurring
-  //   subscription + a local pending_payment record, returns the PayPal sub ID.
-  // onApprove → calls /api/paypal/activate-subscription which fetches the
-  //   sub details from PayPal and activates the local record.
-  // PayPal then auto-charges the customer each cycle and sends
-  //   PAYMENT.SALE.COMPLETED webhooks to /api/paypal/webhook, which extends
-  //   the endDate and records each renewal payment automatically.
-  const handleCreateSubscription = async () => {
-    try {
-      const res = await fetch('/api/paypal/create-subscription', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: plan.id, billingCycle }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to create subscription');
-      }
-      return data.subscriptionId as string;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create PayPal subscription');
-      throw err;
-    }
-  };
-
-  const handleApproveSubscription = async (subscriptionId: string) => {
-    setIsProcessing(true);
-    try {
-      const res = await fetch('/api/paypal/activate-subscription', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subscriptionId, plan: plan.id, billingCycle }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to activate subscription');
-      }
-      toast.success(`Successfully subscribed to ${plan.name} plan!`, {
-        description: `Recurring payment of ${format(price)}/${billingCycle === 'yearly' ? 'yr' : 'mo'} activated via PayPal. You'll be auto-charged each cycle.`,
-      });
-      onSuccess();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Subscription activation failed');
-      toast.error('Subscription activation failed', {
-        description: err instanceof Error ? err.message : 'Please try again.',
-      });
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  return (
-    <Dialog open={true} onOpenChange={() => onClose()}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Wallet className="h-5 w-5 text-emerald-600" />
-            Subscribe to {plan.name} Plan
-          </DialogTitle>
-          <DialogDescription>
-            Set up recurring billing via PayPal. You'll be automatically charged {format(price)}{' '}
-            {billingCycle === 'yearly' ? 'per year' : 'per month'} until you cancel.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4">
-          {/* Order Summary */}
-          <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-            <h4 className="text-sm font-semibold text-foreground">Order Summary</h4>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Plan</span>
-              <span className="font-medium">{plan.name}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Billing Cycle</span>
-              <span className="font-medium capitalize">{billingCycle}</span>
-            </div>
-            {/* Proration preview (Phase 3) — shown when upgrading mid-cycle */}
-            {prorationPreview && prorationPreview.proratedAmount > 0 && (
-              <>
-                <Separator />
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Proration credit/debit</span>
-                  <span className="font-medium text-amber-600">
-                    +{format(prorationPreview.proratedAmount)}
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Prorated for {prorationPreview.daysRemaining} days remaining in your current cycle.
-                </p>
-              </>
-            )}
-            <Separator />
-            <div className="flex justify-between">
-              <span className="font-semibold">Amount due today</span>
-              <span className="text-lg font-bold text-emerald-600">
-                {format(prorationPreview && prorationPreview.proratedAmount > 0 ? price + prorationPreview.proratedAmount : price)}
-                <span className="text-sm text-muted-foreground font-normal">/{billingCycle === 'yearly' ? 'year' : 'month'}</span>
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-              <Shield className="h-3.5 w-3.5 text-emerald-500" />
-              Auto-renews {billingCycle === 'yearly' ? 'annually' : 'monthly'} · Cancel anytime from Settings → Subscription
-            </p>
-          </div>
-
-          {/* PayPal Info */}
-          {paypalConfig?.isSandbox && (
-            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
-              <Info className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
-              <p className="text-xs text-amber-700 dark:text-amber-400">
-                PayPal Sandbox mode is active. Use your sandbox test account to complete payment.
-              </p>
-            </div>
-          )}
-
-          {!paypalConfig?.configured && !loading && (
-            <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-950/30">
-              <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-xs font-medium text-red-700 dark:text-red-400">PayPal Not Configured</p>
-                <p className="text-xs text-red-600 dark:text-red-500 mt-0.5">
-                  Add PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET to your .env file to enable PayPal payments.
-                  You can still upgrade plans for demo purposes.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Error Display */}
-          {error && (
-            <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800 dark:bg-red-950/30">
-              <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
-              <p className="text-xs text-red-700 dark:text-red-400">{error}</p>
-            </div>
-          )}
-
-          {/* PayPal Buttons */}
-          {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
-              <span className="ml-2 text-sm text-muted-foreground">Loading PayPal...</span>
-            </div>
-          ) : paypalConfig?.configured && paypalConfig.clientId ? (
-            <PayPalScriptProvider
-              options={{
-                clientId: paypalConfig.clientId,
-                intent: 'subscription',
-                vault: true,
-                currency: 'USD',
-              }}
-            >
-              <PayPalButtons
-                style={{
-                  layout: 'vertical',
-                  color: 'gold',
-                  shape: 'rect',
-                  label: 'subscribe',
-                  height: 45,
-                }}
-                createSubscription={handleCreateSubscription}
-                onApprove={async (data) => {
-                  // data.subscriptionID is the PayPal recurring subscription ID
-                  if (data.subscriptionID) {
-                    await handleApproveSubscription(data.subscriptionID);
-                  }
-                }}
-                onError={(err) => {
-                  console.error('PayPal button error:', err);
-                  setError('PayPal encountered an error. Please try again.');
-                }}
-                onCancel={() => {
-                  toast.info('Subscription cancelled', {
-                    description: 'Your subscription was not changed.',
-                  });
-                }}
-                disabled={isProcessing}
-              />
-            </PayPalScriptProvider>
-          ) : (
-            /* Fallback: Demo upgrade when PayPal is not configured */
-            <div className="space-y-3">
-              <Button
-                className="w-full bg-emerald-600 text-white hover:bg-emerald-700 h-11"
-                onClick={async () => {
-                  setIsProcessing(true);
-                  try {
-                    const res = await fetch('/api/subscriptions', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        plan: plan.id,
-                        billingCycle,
-                      }),
-                    });
-                    if (!res.ok) throw new Error('Failed');
-                    toast.success(`Successfully upgraded to ${plan.name} plan!`);
-                    onSuccess();
-                  } catch {
-                    toast.error('Failed to upgrade plan');
-                  } finally {
-                    setIsProcessing(false);
-                  }
-                }}
-                disabled={isProcessing}
-              >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <Zap className="mr-2 h-4 w-4" />
-                    Upgrade to {plan.name} (Demo)
-                  </>
-                )}
-              </Button>
-              <p className="text-center text-xs text-muted-foreground">
-                Demo mode — no payment required. Configure PayPal to enable real payments.
-              </p>
-            </div>
-          )}
-
-          {isProcessing && (
-            <div className="flex items-center justify-center py-2">
-              <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
-              <span className="ml-2 text-xs text-muted-foreground">Processing payment...</span>
-            </div>
-          )}
-        </div>
-
-        <DialogFooter className="mt-2">
-          <Button variant="outline" onClick={onClose} disabled={isProcessing}>
-            Cancel
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export function BillingView() {
@@ -797,7 +504,24 @@ export function BillingView() {
       return;
     }
 
-    // Upgrade: fetch proration preview first, then open PayPal checkout.
+    // 'current' direction: only proceed if the user is in a trial or
+    // pending_payment state (i.e. converting to paid). An already-active
+    // subscription for the same plan has nothing to pay for.
+    if (
+      direction === 'current' &&
+      data.status !== 'trial' &&
+      data.status !== 'trialing' &&
+      data.status !== 'pending_payment'
+    ) {
+      setConfirmPlan(null);
+      return;
+    }
+
+    // Clear any stale proration preview from a previous upgrade attempt.
+    setProrationPreview(null);
+
+    // Upgrade / trial→paid conversion: fetch proration preview first, then
+    // open PayPal checkout.
     try {
       const res = await fetch(`/api/subscriptions/prorate?plan=${plan.id}`);
       if (res.ok) {
@@ -1038,12 +762,14 @@ export function BillingView() {
                 size="sm"
                 className="bg-emerald-600 text-white hover:bg-emerald-700 h-8 text-xs"
                 onClick={() => {
-                  const growthPlan = effectivePlans.find(p => p.id === 'growth');
-                  if (growthPlan) handleUpgrade(growthPlan);
+                  // Convert the user's current trial plan to paid (handles
+                  // all tiers — Starter/Growth/Pro — instead of hardcoding Growth).
+                  const currentPlanObj = effectivePlans.find(p => p.id === data.plan);
+                  if (currentPlanObj) handleUpgrade(currentPlanObj);
                 }}
               >
                 <Zap className="mr-1.5 h-3.5 w-3.5" />
-                Upgrade Now
+                Subscribe Now
               </Button>
             </div>
           )}
@@ -1052,8 +778,8 @@ export function BillingView() {
           {(data.status === 'trial' || data.status === 'trialing') && (
             <WhatsAppCreditBanner
               onUpgradeClick={() => {
-                const growthPlan = effectivePlans.find(p => p.id === 'growth');
-                if (growthPlan) handleUpgrade(growthPlan);
+                const currentPlanObj = effectivePlans.find(p => p.id === data.plan);
+                if (currentPlanObj) handleUpgrade(currentPlanObj);
               }}
               onConnectMetaClick={() => {
                 const event = new CustomEvent('navigate', { detail: 'integrations' })
@@ -1160,6 +886,11 @@ export function BillingView() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {effectivePlans.map((plan) => {
           const isCurrentPlan = plan.id === data.plan;
+          const isTrialOrPending =
+            data.status === 'trial' ||
+            data.status === 'trialing' ||
+            data.status === 'pending_payment';
+          const showSubscribeForCurrent = isCurrentPlan && isTrialOrPending;
           const price = isYearly ? plan.yearlyPrice : plan.monthlyPrice;
           const direction = getPlanDirection(plan);
           const isDowngrade = direction === 'downgrade';
@@ -1240,14 +971,24 @@ export function BillingView() {
               </CardContent>
               <CardFooter>
                 {isCurrentPlan ? (
-                  <Button
-                    variant="outline"
-                    className="w-full border-emerald-400 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-600 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
-                    disabled
-                  >
-                    <Check className="mr-2 h-4 w-4" />
-                    Current Plan
-                  </Button>
+                  showSubscribeForCurrent ? (
+                    <Button
+                      className="w-full bg-emerald-600 text-white hover:bg-emerald-700"
+                      onClick={() => handleUpgrade(plan)}
+                    >
+                      <Zap className="mr-2 h-4 w-4" />
+                      Subscribe & Pay Now
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="w-full border-emerald-400 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-600 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
+                      disabled
+                    >
+                      <Check className="mr-2 h-4 w-4" />
+                      Current Plan
+                    </Button>
+                  )
                 ) : plan.id === 'enterprise' ? (
                   <Button
                     variant="outline"
@@ -1378,12 +1119,12 @@ export function BillingView() {
                   size="sm"
                   className="bg-emerald-600 text-white hover:bg-emerald-700"
                   onClick={() => {
-                    const growthPlan = effectivePlans.find(p => p.id === 'growth');
-                    if (growthPlan) handleUpgrade(growthPlan);
+                    const currentPlanObj = effectivePlans.find(p => p.id === data.plan);
+                    if (currentPlanObj) handleUpgrade(currentPlanObj);
                   }}
                 >
                   <Zap className="mr-1.5 h-3.5 w-3.5" />
-                  Upgrade Plan
+                  Subscribe & Pay Now
                 </Button>
               )}
             </div>
