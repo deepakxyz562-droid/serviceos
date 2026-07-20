@@ -3,6 +3,11 @@ import { db } from '@/lib/db';
 import { generateToken, COOKIE_OPTIONS } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
+  // Block in production — this endpoint allows passwordless login as any user
+  // and must never be exposed outside development.
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not available' }, { status: 404 });
+  }
   try {
     const body = await request.json();
     const { email } = body;

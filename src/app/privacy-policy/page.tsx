@@ -4,11 +4,11 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Privacy Policy — ServiceOS CRM",
   description:
-    "Learn how ServiceOS CRM collects, uses, and protects your personal information, WhatsApp data, payment details, and business data. Last updated March 5, 2026.",
+    "Learn how ServiceOS CRM collects, uses, and protects your personal information, payment details, and business data. Last updated March 5, 2026.",
   openGraph: {
     title: "Privacy Policy — ServiceOS CRM",
     description:
-      "Learn how ServiceOS CRM collects, uses, and protects your personal information, WhatsApp data, payment details, and business data.",
+      "Learn how ServiceOS CRM collects, uses, and protects your personal information, payment details, and business data.",
     url: "https://serviceos.com/privacy-policy",
     siteName: "ServiceOS",
     type: "website",
@@ -23,11 +23,10 @@ const sections = [
   { id: "data-storage-security", label: "5. Data Storage & Security" },
   { id: "data-retention", label: "6. Data Retention" },
   { id: "your-rights", label: "7. Your Rights" },
-  { id: "whatsapp-meta", label: "8. WhatsApp & Meta Integration" },
-  { id: "international-transfers", label: "9. International Data Transfers" },
-  { id: "childrens-privacy", label: "10. Children's Privacy" },
-  { id: "changes", label: "11. Changes to This Policy" },
-  { id: "contact", label: "12. Contact Us" },
+  { id: "international-transfers", label: "8. International Data Transfers" },
+  { id: "childrens-privacy", label: "9. Children's Privacy" },
+  { id: "changes", label: "10. Changes to This Policy" },
+  { id: "contact", label: "11. Contact Us" },
 ];
 
 export default function PrivacyPolicyPage() {
@@ -126,7 +125,7 @@ export default function PrivacyPolicyPage() {
                   This policy applies to all users of the Service, including
                   business account holders, team members, customer portal users,
                   and visitors to our website. It covers our handling of personal
-                  information, business data, WhatsApp communications, payment
+                  information, business data, payment
                   data, and usage analytics.
                 </p>
               </section>
@@ -179,25 +178,26 @@ export default function PrivacyPolicyPage() {
                 </p>
 
                 <h3 className="text-lg font-semibold text-foreground mt-8 mb-3">
-                  2.3 WhatsApp Data
+                  2.3 Communication Data
                 </h3>
                 <p className="text-muted-foreground leading-relaxed mb-3">
-                  ServiceOS integrates with the WhatsApp Business API, provided
-                  by Meta Platforms, Inc. When you connect your WhatsApp Business
-                  account, the following data may be collected and processed:
+                  When you use our communication features, we collect and process
+                  data related to the messages and notifications sent through the
+                  Service (Email, SMS, Push, and In-App notifications):
                 </p>
                 <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed mb-6">
-                  <li>WhatsApp Business phone numbers</li>
-                  <li>Message content (sent and received via the Service)</li>
-                  <li>Message templates and template submission data</li>
-                  <li>Conversation metadata (timestamps, delivery status, read receipts)</li>
-                  <li>Contact profiles synced from WhatsApp</li>
-                  <li>WhatsApp Business account settings and configuration</li>
+                  <li>Email content, headers, and delivery metadata</li>
+                  <li>SMS message content and delivery status</li>
+                  <li>Push notification payloads and delivery receipts</li>
+                  <li>In-app notification content and read status</li>
+                  <li>Contact preferences and opt-in/opt-out status</li>
+                  <li>Conversation metadata (timestamps, status indicators)</li>
                 </ul>
                 <p className="text-muted-foreground leading-relaxed mb-6">
-                  WhatsApp messages are stored temporarily for service delivery
-                  and are subject to the data retention settings configured in
-                  your account. See Section 8 for details on our Meta integration.
+                  Communication data is stored temporarily for service delivery
+                  and is subject to the data retention settings configured in
+                  your account. See Section 6 for details on our data retention
+                  practices.
                 </p>
 
                 <h3 className="text-lg font-semibold text-foreground mt-8 mb-3">
@@ -291,7 +291,7 @@ export default function PrivacyPolicyPage() {
                     <strong>Service Delivery</strong> — to provide, maintain, and
                     improve the ServiceOS CRM platform, including processing your
                     business data, managing customer relationships, and delivering
-                    WhatsApp communications
+                    email, SMS, push, and in-app communications
                   </li>
                   <li>
                     <strong>Account Management</strong> — to create and manage
@@ -351,10 +351,6 @@ export default function PrivacyPolicyPage() {
                   assist us in operating the Service:
                 </p>
                 <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed mb-6">
-                  <li>
-                    <strong>Meta Platforms, Inc.</strong> — for WhatsApp Business
-                    API integration, message delivery, and template management
-                  </li>
                   <li>
                     <strong>Stripe, Inc.</strong> — for payment processing,
                     subscription billing, and invoice management
@@ -488,11 +484,6 @@ export default function PrivacyPolicyPage() {
                     within 30 days unless you request an export
                   </li>
                   <li>
-                    <strong>WhatsApp Messages</strong> — stored for the duration
-                    configured in your account settings (default: 90 days) and
-                    automatically purged thereafter
-                  </li>
-                  <li>
                     <strong>Billing Records</strong> — retained for 7 years as
                     required by tax and financial regulations
                   </li>
@@ -596,93 +587,11 @@ export default function PrivacyPolicyPage() {
                 </p>
               </section>
 
-              {/* ───── 8. WhatsApp & Meta Integration ───── */}
-              <section id="whatsapp-meta" className="scroll-mt-24 mb-12">
-                <h2 className="flex items-center gap-3 text-2xl font-bold text-foreground mb-4">
-                  <span className="inline-block h-7 w-1 rounded-full bg-gradient-to-b from-emerald-500 to-teal-600" />
-                  8. WhatsApp &amp; Meta Integration
-                </h2>
-                <p className="text-muted-foreground leading-relaxed mb-3">
-                  ServiceOS integrates with the WhatsApp Business API, which is
-                  operated by Meta Platforms, Inc. This section provides specific
-                  details about how data is handled in connection with this
-                  integration.
-                </p>
-
-                <h3 className="text-lg font-semibold text-foreground mt-6 mb-3">
-                  8.1 Data Shared with Meta
-                </h3>
-                <p className="text-muted-foreground leading-relaxed mb-3">
-                  When you use our WhatsApp integration, the following data may be
-                  shared with or accessible by Meta:
-                </p>
-                <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed mb-6">
-                  <li>Your WhatsApp Business phone number and display name</li>
-                  <li>Message content sent through the WhatsApp Business API</li>
-                  <li>Message templates submitted for approval</li>
-                  <li>Phone numbers of your contacts for message delivery</li>
-                  <li>Conversation metadata (timestamps, status indicators)</li>
-                  <li>Opt-in and opt-out status of your contacts</li>
-                </ul>
-
-                <h3 className="text-lg font-semibold text-foreground mt-6 mb-3">
-                  8.2 Message Storage
-                </h3>
-                <p className="text-muted-foreground leading-relaxed mb-6">
-                  WhatsApp messages processed through ServiceOS are stored
-                  temporarily on our servers to provide conversation threading,
-                  assignment, and analytics features. Messages are encrypted in
-                  transit and at rest. You can configure the retention period for
-                  messages in your account settings (default: 90 days). After the
-                  retention period, messages are permanently deleted from our
-                  systems.
-                </p>
-
-                <h3 className="text-lg font-semibold text-foreground mt-6 mb-3">
-                  8.3 Opt-In Requirements
-                </h3>
-                <p className="text-muted-foreground leading-relaxed mb-6">
-                  Before sending WhatsApp messages to contacts through ServiceOS,
-                  you must obtain explicit opt-in consent from each recipient in
-                  compliance with WhatsApp&apos;s Commerce Policy and Meta&apos;s
-                  Terms of Service. ServiceOS provides tools to manage opt-in and
-                  opt-out preferences, but it is your responsibility to ensure
-                  that you have proper consent before initiating communications.
-                </p>
-
-                <h3 className="text-lg font-semibold text-foreground mt-6 mb-3">
-                  8.4 Meta&apos;s Privacy Practices
-                </h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  Meta&apos;s processing of data received through the WhatsApp
-                  Business API is governed by Meta&apos;s own privacy policy and
-                  Data Processing Addendum. We encourage you to review{" "}
-                  <a
-                    href="https://www.whatsapp.com/legal/privacy-policy"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
-                  >
-                    WhatsApp&apos;s Privacy Policy
-                  </a>{" "}
-                  and{" "}
-                  <a
-                    href="https://www.facebook.com/privacy/policy/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-emerald-600 underline underline-offset-2 hover:text-emerald-700"
-                  >
-                    Meta&apos;s Privacy Policy
-                  </a>{" "}
-                  for more information on how Meta handles data.
-                </p>
-              </section>
-
-              {/* ───── 9. International Data Transfers ───── */}
+              {/* ───── 8. International Data Transfers ───── */}
               <section id="international-transfers" className="scroll-mt-24 mb-12">
                 <h2 className="flex items-center gap-3 text-2xl font-bold text-foreground mb-4">
                   <span className="inline-block h-7 w-1 rounded-full bg-gradient-to-b from-emerald-500 to-teal-600" />
-                  9. International Data Transfers
+                  8. International Data Transfers
                 </h2>
                 <p className="text-muted-foreground leading-relaxed mb-3">
                   ServiceOS is headquartered in the United States, and our primary
@@ -713,11 +622,11 @@ export default function PrivacyPolicyPage() {
                 </p>
               </section>
 
-              {/* ───── 10. Children's Privacy ───── */}
+              {/* ───── 9. Children's Privacy ───── */}
               <section id="childrens-privacy" className="scroll-mt-24 mb-12">
                 <h2 className="flex items-center gap-3 text-2xl font-bold text-foreground mb-4">
                   <span className="inline-block h-7 w-1 rounded-full bg-gradient-to-b from-emerald-500 to-teal-600" />
-                  10. Children&apos;s Privacy
+                  9. Children&apos;s Privacy
                 </h2>
                 <p className="text-muted-foreground leading-relaxed mb-3">
                   ServiceOS is a business-to-business (B2B) platform and is not
@@ -741,11 +650,11 @@ export default function PrivacyPolicyPage() {
                 </p>
               </section>
 
-              {/* ───── 11. Changes to This Policy ───── */}
+              {/* ───── 10. Changes to This Policy ───── */}
               <section id="changes" className="scroll-mt-24 mb-12">
                 <h2 className="flex items-center gap-3 text-2xl font-bold text-foreground mb-4">
                   <span className="inline-block h-7 w-1 rounded-full bg-gradient-to-b from-emerald-500 to-teal-600" />
-                  11. Changes to This Policy
+                  10. Changes to This Policy
                 </h2>
                 <p className="text-muted-foreground leading-relaxed mb-3">
                   We may update this Privacy Policy from time to time to reflect
@@ -773,11 +682,11 @@ export default function PrivacyPolicyPage() {
                 </p>
               </section>
 
-              {/* ───── 12. Contact Us ───── */}
+              {/* ───── 11. Contact Us ───── */}
               <section id="contact" className="scroll-mt-24 mb-12">
                 <h2 className="flex items-center gap-3 text-2xl font-bold text-foreground mb-4">
                   <span className="inline-block h-7 w-1 rounded-full bg-gradient-to-b from-emerald-500 to-teal-600" />
-                  12. Contact Us
+                  11. Contact Us
                 </h2>
                 <p className="text-muted-foreground leading-relaxed mb-3">
                   If you have any questions, concerns, or requests regarding this

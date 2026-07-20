@@ -52,7 +52,7 @@ const features: Feature[] = [
     icon: CloudSnow,
     title: "Pre-Storm Customer SMS Notifications",
     description:
-      "When a storm is forecast, ServiceOS sends every affected customer a WhatsApp or SMS notification: storm expected tonight, your plow service will trigger automatically. Customers know what to expect, and your phone stops ringing at 4 a.m.",
+      "When a storm is forecast, ServiceOS sends every affected customer an SMS and Push notification: storm expected tonight, your plow service will trigger automatically. Customers know what to expect, and your phone stops ringing at 4 a.m.",
   },
   {
     icon: Thermometer,

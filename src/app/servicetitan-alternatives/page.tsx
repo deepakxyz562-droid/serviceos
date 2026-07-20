@@ -49,13 +49,13 @@ const comparisonRows: { feature: string; serviceos: string; competitor: string }
   { feature: "Starting price", serviceos: "Free tier available", competitor: "$300+/mo (custom)" },
   { feature: "Setup time", serviceos: "Under 30 minutes", competitor: "Weeks to months" },
   { feature: "Best for business size", serviceos: "Solo → 50 techs", competitor: "20+ techs, large ops" },
-  { feature: "WhatsApp integration", serviceos: "Native, first-class", competitor: "Not native" },
+  { feature: "Email & SMS messaging", serviceos: "Native, first-class", competitor: "Not native" },
   { feature: "Mobile app", serviceos: "PWA (offline)", competitor: "Native iOS/Android" },
   { feature: "Software complexity", serviceos: "Simple, guided", competitor: "Enterprise, complex" },
   { feature: "Onboarding", serviceos: "Self-serve wizard", competitor: "Dedicated implementation" },
   { feature: "Free trial", serviceos: "Yes, no credit card", competitor: "Limited demo only" },
   { feature: "Multi-currency", serviceos: "Yes, built in", competitor: "USD-centric" },
-  { feature: "Best-fit market", serviceos: "Global, WhatsApp-first", competitor: "US large contractors" },
+  { feature: "Best-fit market", serviceos: "Global, multi-channel", competitor: "US large contractors" },
 ];
 
 const alternatives: {
@@ -74,7 +74,7 @@ const alternatives: {
     pricing: "Free tier → paid plans",
     url: "https://serviceos.com",
     description:
-      "A modern, WhatsApp-native FSM built for solo operators up to ~50-technician teams. Transparent pricing, fast setup, and a PWA technician app — without the enterprise complexity or implementation cost.",
+      "A modern, multi-channel FSM built for solo operators up to ~50-technician teams. Transparent pricing, fast setup, and a PWA technician app — without the enterprise complexity or implementation cost.",
     highlight: true,
   },
   {
@@ -163,9 +163,9 @@ const switchReasons = [
   },
   {
     icon: MessageSquare,
-    title: "WhatsApp-native, not US-only",
+    title: "Email & SMS-native, not US-only",
     description:
-      "ServiceTitan is built for large North American contractors. ServiceOS is built WhatsApp-first for India, LATAM, SEA, and other markets where WhatsApp is how business gets done.",
+      "ServiceTitan is built for large North American contractors. ServiceOS is built Email & SMS-first for India, LATAM, SEA, and other markets where SMS and email are how business gets done.",
   },
 ];
 
@@ -183,7 +183,7 @@ const faqs = [
   {
     question: "What's the best ServiceTitan alternative for small businesses?",
     answer:
-      "For small service businesses, the strongest ServiceTitan alternatives are ServiceOS, Jobber, and Housecall Pro. ServiceOS is the best choice if WhatsApp is your primary customer channel or you operate outside the US. Jobber is the most popular all-rounder for North American teams. Housecall Pro is a strong pick for US home services. For very small or budget-conscious teams, Kickserv offers a simpler starting point.",
+      "For small service businesses, the strongest ServiceTitan alternatives are ServiceOS, Jobber, and Housecall Pro. ServiceOS is the best choice if Email and SMS are your primary customer channels or you operate outside the US. Jobber is the most popular all-rounder for North American teams. Housecall Pro is a strong pick for US home services. For very small or budget-conscious teams, Kickserv offers a simpler starting point.",
   },
   {
     question: "How long does ServiceTitan implementation take?",
@@ -206,7 +206,7 @@ export default function ServiceTitanAlternativesPage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "ServiceOS — ServiceTitan Alternative",
     description:
-      "WhatsApp-native field service management software and ServiceTitan alternative for small and mid-size service businesses.",
+      "Email & SMS-native field service management software and ServiceTitan alternative for small and mid-size service businesses.",
     url: "https://serviceos.com/servicetitan-alternatives",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
@@ -477,10 +477,10 @@ export default function ServiceTitanAlternativesPage() {
             </div>
             <div className="rounded-xl border bg-card p-6 shadow-sm">
               <Smartphone className="h-6 w-6 text-emerald-700 mb-3" />
-              <h3 className="font-semibold text-foreground mb-2">WhatsApp-first, non-US market</h3>
+              <h3 className="font-semibold text-foreground mb-2">Multi-channel, non-US market</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 Pick <strong>ServiceOS</strong>. It is the only platform on this list built
-                WhatsApp-native for India, LATAM, and SEA from day one.
+                Email & SMS-native for India, LATAM, and SEA from day one.
               </p>
             </div>
           </div>

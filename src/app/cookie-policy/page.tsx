@@ -436,13 +436,6 @@ export default function CookiePolicyPage() {
                 </p>
                 <ul className="list-disc pl-6 space-y-2 text-muted-foreground leading-relaxed mb-6">
                   <li>
-                    <strong>WhatsApp Business API (Meta Platforms, Inc.)</strong>{" "}
-                    — Used to send and receive WhatsApp messages on your behalf.
-                    Meta may set cookies on its own domains (e.g., during OAuth
-                    connection flows). See Meta&apos;s Cookies Policy for
-                    details.
-                  </li>
-                  <li>
                     <strong>Google Analytics</strong> — Used to collect
                     aggregated, anonymized usage statistics. Google sets the{" "}
                     <code className="rounded bg-muted px-1.5 py-0.5 text-xs font-mono text-foreground">

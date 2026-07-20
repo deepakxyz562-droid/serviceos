@@ -11,7 +11,7 @@ const FEATURE_DEFINITIONS = [
   { key: 'chatbot_builder', label: 'Chatbot Builder', description: 'Build and deploy custom chatbots' },
   { key: 'form_builder', label: 'Form Builder', description: 'Create custom forms and surveys' },
   { key: 'omnichannel', label: 'Omnichannel', description: 'Unified communication across multiple channels' },
-  { key: 'sales_pipeline', label: 'Sales Pipeline', description: 'Manage deals and sales pipeline stages' },
+  { key: 'salesPipeline', label: 'Sales Pipeline', description: 'Manage deals and sales pipeline stages' },
   { key: 'journey_automation', label: 'Journey Automation', description: 'Create automated customer journey workflows' },
   { key: 'knowledge_base', label: 'Knowledge Base', description: 'Build and manage a knowledge base for support' },
   { key: 'marketplace', label: 'Marketplace', description: 'Access integrations and templates marketplace' },

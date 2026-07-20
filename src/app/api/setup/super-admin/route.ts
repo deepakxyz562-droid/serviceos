@@ -4,11 +4,22 @@ import { hashPassword } from '@/lib/auth';
 
 /**
  * One-time setup endpoint to create/update the super admin.
- * This should be called once during initial setup.
- * In production, this endpoint should be disabled or protected.
+ * In production, requires a SETUP_TOKEN header matching process.env.SETUP_TOKEN.
+ * Also blocked once a super admin already exists.
  */
-export async function POST() {
+export async function POST(request: Request) {
   try {
+    // In production, require a setup token to prevent unauthorized escalation
+    if (process.env.NODE_ENV === 'production') {
+      const setupToken = request.headers.get('x-setup-token');
+      if (!process.env.SETUP_TOKEN || setupToken !== process.env.SETUP_TOKEN) {
+        return NextResponse.json(
+          { error: 'Unauthorized. Setup token required.' },
+          { status: 403 }
+        );
+      }
+    }
+
     // Check if super admin already exists
     const existingAdmin = await db.user.findFirst({
       where: { isSuperAdmin: true },

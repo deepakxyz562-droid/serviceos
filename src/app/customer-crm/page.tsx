@@ -26,7 +26,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Customer CRM for Service Businesses — 360° Customer View | ServiceOS",
   description:
-    "A customer CRM built for service businesses, not sales teams. Contact info, job history, assets, service records, WhatsApp conversations, and payment status — all in one customer profile.",
+    "A customer CRM built for service businesses, not sales teams. Contact info, job history, assets, service records, Email & SMS conversations, and payment status — all in one customer profile.",
   keywords: [
     "customer crm",
     "service business crm",
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Customer CRM for Service Businesses — 360° Customer View | ServiceOS",
     description:
-      "Every customer's contact info, job history, assets, service records, WhatsApp conversations, and outstanding balances in one place. Built for service businesses, not sales pipelines.",
+      "Every customer's contact info, job history, assets, service records, Email & SMS conversations, and outstanding balances in one place. Built for service businesses, not sales pipelines.",
     url: "https://serviceos.com/customer-crm",
     siteName: "ServiceOS",
     type: "website",
@@ -67,9 +67,9 @@ const features: Feature[] = [
   },
   {
     icon: MessageSquare,
-    title: "WhatsApp conversation history",
+    title: "Email & SMS conversation history",
     description:
-      "Every WhatsApp message ever exchanged with a customer — quotes, reminders, follow-ups, casual chats — is automatically attached to their profile. Searchable, filterable, and visible to your whole team.",
+      "Every Email and SMS message ever exchanged with a customer — quotes, reminders, follow-ups, casual chats — is automatically attached to their profile. Searchable, filterable, and visible to your whole team.",
   },
   {
     icon: Wallet,
@@ -90,7 +90,7 @@ const profileSections = [
     icon: Phone,
     title: "Contact details",
     description:
-      "Phone, WhatsApp number, email, alternate contact, preferred contact method, language.",
+      "Phone, mobile number, email, alternate contact, preferred contact method, language.",
   },
   {
     icon: MapPin,
@@ -118,9 +118,9 @@ const profileSections = [
   },
   {
     icon: MessageSquare,
-    title: "WhatsApp conversations",
+    title: "Email & SMS conversations",
     description:
-      "Complete WhatsApp history with this customer — quotes, reminders, replies — searchable and shared with the team.",
+      "Complete Email and SMS history with this customer — quotes, reminders, replies — searchable and shared with the team.",
   },
   {
     icon: StickyNote,
@@ -140,7 +140,7 @@ const faqs = [
   {
     question: "How is this different from Salesforce or HubSpot?",
     answer:
-      "Salesforce, HubSpot, and most generic CRMs are built for B2B sales pipelines — leads, opportunities, deal stages, sales rep activity. Service businesses have an entirely different operational model: you don't have 'opportunities', you have recurring jobs; you don't have 'deal stages', you have service history per asset; you don't track 'sales rep activity', you track technician performance and customer satisfaction. ServiceOS is built specifically for service businesses. Where a generic CRM forces you to bend your operations to fit its sales-pipeline model, ServiceOS gives you a customer 360 view that reflects how service businesses actually work — assets, service history, recurring jobs, WhatsApp conversations, outstanding balances, and field technician context. You can be up and running in 30 minutes instead of spending months customizing a generic CRM to almost fit your needs.",
+      "Salesforce, HubSpot, and most generic CRMs are built for B2B sales pipelines — leads, opportunities, deal stages, sales rep activity. Service businesses have an entirely different operational model: you don't have 'opportunities', you have recurring jobs; you don't have 'deal stages', you have service history per asset; you don't track 'sales rep activity', you track technician performance and customer satisfaction. ServiceOS is built specifically for service businesses. Where a generic CRM forces you to bend your operations to fit its sales-pipeline model, ServiceOS gives you a customer 360 view that reflects how service businesses actually work — assets, service history, recurring jobs, Email & SMS conversations, outstanding balances, and field technician context. You can be up and running in 30 minutes instead of spending months customizing a generic CRM to almost fit your needs.",
   },
   {
     question: "Can I track customer equipment and assets?",
@@ -148,24 +148,24 @@ const faqs = [
       "Yes — asset and equipment tracking is a core part of the ServiceOS customer CRM. Every customer profile can have multiple assets: AC units, water heaters, boilers, electrical panels, security systems, appliances, elevators — anything you install, service, or maintain. Each asset has its own record with make, model, serial number, install date, warranty expiry, location on the property, and a complete service history. When a customer calls about a 'leaky water heater', you can instantly see exactly which water heater they mean, when it was installed, what repairs have been done on it, and whether it's still under warranty. This single feature eliminates hours of 'do you remember when we serviced that?' phone tag and helps you upsell maintenance contracts on aging equipment.",
   },
   {
-    question: "Can I see WhatsApp history per customer?",
+    question: "Can I see Email and SMS history per customer?",
     answer:
-      "Yes. Every WhatsApp message exchanged with a customer — quotes you sent, appointment reminders, follow-ups, their replies, casual conversations — is automatically linked to that customer's profile. You don't have to forward messages or copy-paste them into the CRM; ServiceOS does it for you based on the customer's phone number. Your whole team sees the same conversation history, so anyone answering the phone can pick up where the last conversation left off. You can search within a customer's message history (for example, 'show me everything about their AC unit'), filter by date range, and jump directly to a specific message in context. This is especially powerful in markets where WhatsApp is the primary business communication channel.",
+      "Yes. Every Email and SMS message exchanged with a customer — quotes you sent, appointment reminders, follow-ups, their replies, casual conversations — is automatically linked to that customer's profile. You don't have to forward messages or copy-paste them into the CRM; ServiceOS does it for you based on the customer's phone number and email. Your whole team sees the same conversation history, so anyone answering the phone can pick up where the last conversation left off. You can search within a customer's message history (for example, 'show me everything about their AC unit'), filter by date range, and jump directly to a specific message in context. This is especially powerful in markets where SMS and email are the primary business communication channels.",
   },
   {
     question: "Can I import my existing customer list?",
     answer:
-      "Yes — and the import process is designed to be painless. You can upload a CSV or Excel file of your existing customers, and ServiceOS will map your columns (name, phone, email, address, notes) to the right fields automatically. If you have data scattered across multiple sources — a WhatsApp contact list, an Excel sheet, an old CRM export — you can merge them into one clean customer database during import. ServiceOS will deduplicate based on phone number and email so you don't end up with two profiles for the same customer. If you have a large or messy customer list, our team can help with the migration as part of onboarding. Most service businesses with a few hundred to a few thousand customers complete the import in under an hour.",
+      "Yes — and the import process is designed to be painless. You can upload a CSV or Excel file of your existing customers, and ServiceOS will map your columns (name, phone, email, address, notes) to the right fields automatically. If you have data scattered across multiple sources — a phone contact list, an Excel sheet, an old CRM export — you can merge them into one clean customer database during import. ServiceOS will deduplicate based on phone number and email so you don't end up with two profiles for the same customer. If you have a large or messy customer list, our team can help with the migration as part of onboarding. Most service businesses with a few hundred to a few thousand customers complete the import in under an hour.",
   },
   {
     question: "Can I tag and segment customers?",
     answer:
-      "Yes. Tags are a flexible way to organize your customer base without forcing everyone into rigid categories. You can tag customers as 'VIP', 'residential', 'commercial', 'maintenance contract', 'one-time job', 'lead', 'churned', 'high-value', 'late-payer', or anything else that fits your business. A customer can have multiple tags. Once tagged, you can filter your customer list by any combination of tags — for example, 'show me all VIP customers with outstanding balances' or 'show me all commercial customers with annual maintenance contracts'. This is invaluable for targeted WhatsApp campaigns ('we're offering a 10% discount on AC servicing to all residential customers in this neighborhood'), renewal outreach ('contract expires in 60 days'), and operational reporting ('how many commercial customers did we serve last month?').",
+      "Yes. Tags are a flexible way to organize your customer base without forcing everyone into rigid categories. You can tag customers as 'VIP', 'residential', 'commercial', 'maintenance contract', 'one-time job', 'lead', 'churned', 'high-value', 'late-payer', or anything else that fits your business. A customer can have multiple tags. Once tagged, you can filter your customer list by any combination of tags — for example, 'show me all VIP customers with outstanding balances' or 'show me all commercial customers with annual maintenance contracts'. This is invaluable for targeted SMS and email campaigns ('we're offering a 10% discount on AC servicing to all residential customers in this neighborhood'), renewal outreach ('contract expires in 60 days'), and operational reporting ('how many commercial customers did we serve last month?').",
   },
   {
     question: "Is there a customer portal?",
     answer:
-      "Yes. ServiceOS includes an optional customer portal that gives your customers a self-service view of their relationship with your business. Through the portal, a customer can see their upcoming appointments, view past service history, download invoices and payment receipts, approve quotes, pay outstanding balances, and request new appointments — all without calling your office. The portal is accessed via a secure magic link sent over WhatsApp or email, so customers don't have to remember another password. The customer portal is especially valuable for commercial accounts with multiple stakeholders (a property manager who needs to share service records with ownership) and for service businesses that want to project a polished, professional image. You can enable or disable the portal per customer based on what makes sense for your business.",
+      "Yes. ServiceOS includes an optional customer portal that gives your customers a self-service view of their relationship with your business. Through the portal, a customer can see their upcoming appointments, view past service history, download invoices and payment receipts, approve quotes, pay outstanding balances, and request new appointments — all without calling your office. The portal is accessed via a secure magic link sent over email or SMS, so customers don't have to remember another password. The customer portal is especially valuable for commercial accounts with multiple stakeholders (a property manager who needs to share service records with ownership) and for service businesses that want to project a polished, professional image. You can enable or disable the portal per customer based on what makes sense for your business.",
   },
 ];
 
@@ -173,7 +173,7 @@ export default function CustomerCrmPage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "ServiceOS — Customer CRM for Service Businesses",
     description:
-      "A customer CRM purpose-built for field service businesses — 360-degree customer view, asset and equipment tracking, service history timeline, WhatsApp conversation history, outstanding balance tracking, and customer notes and tags.",
+      "A customer CRM purpose-built for field service businesses — 360-degree customer view, asset and equipment tracking, service history timeline, Email & SMS conversation history, outstanding balance tracking, and customer notes and tags.",
     url: "https://serviceos.com/customer-crm",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
@@ -288,12 +288,12 @@ export default function CustomerCrmPage() {
           customer communication is mostly email — logged manually by sales
           reps, often incomplete. In a service business, especially in markets
           like India, Latin America, Southeast Asia, and the Middle East, the
-          dominant channel is WhatsApp. Customers send photos of the broken
-          AC, ask for quotes, confirm appointments, and even pay — all on
-          WhatsApp. ServiceOS treats WhatsApp as a first-class channel. Every
-          WhatsApp message exchanged with a customer is automatically linked
-          to their profile, visible to your whole team, and searchable. When
-          a returning customer messages &quot;the AC isn&apos;t cooling
+          dominant channels are SMS and email. Customers send photos of the broken
+          AC, ask for quotes, confirm appointments, and even pay — all over
+          SMS and email. ServiceOS treats Email and SMS as first-class channels.
+          Every Email and SMS message exchanged with a customer is automatically
+          linked to their profile, visible to your whole team, and searchable.
+          When a returning customer messages &quot;the AC isn&apos;t cooling
           again&quot;, whoever picks up the conversation can see the full
           history — last service, parts replaced, technician notes — and
           respond intelligently instead of asking the customer to repeat
@@ -306,7 +306,7 @@ export default function CustomerCrmPage() {
           ServiceOS ties all of this together. When you open a customer, you
           see not just their contact info but their lifetime revenue,
           outstanding balance, upcoming appointments, active contracts, and
-          every invoice and payment — alongside the assets, WhatsApp history,
+          every invoice and payment — alongside the assets, Email & SMS history,
           and service timeline. That&apos;s the customer 360 view service
           businesses actually need: not a sales pipeline, but an operational
           command center for every relationship you have. No generic CRM can

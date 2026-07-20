@@ -21,7 +21,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Electrical Contractor Software — Dispatch, Invoice & Track | ServiceOS",
   description:
-    "Electrical contractor software for licensed electricians. Compliance and certification tracking, permit management, WhatsApp quotes and invoicing, multi-electrician dispatch. Start free.",
+    "Electrical contractor software for licensed electricians. Compliance and certification tracking, permit management, Email & SMS quotes and invoicing, multi-electrician dispatch. Start free.",
   keywords: [
     "electrical contractor software",
     "electrician CRM",
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Electrical Contractor Software | ServiceOS",
     description:
-      "From residential service calls to commercial installations — dispatch electricians, track permits and certifications, document jobs with photos, and invoice on WhatsApp.",
+      "From residential service calls to commercial installations — dispatch electricians, track permits and certifications, document jobs with photos, and invoice by Email & SMS.",
     url: "https://serviceos.com/electrical-contractor-software",
     siteName: "ServiceOS",
     type: "website",
@@ -55,9 +55,9 @@ const features: Feature[] = [
   },
   {
     icon: MessageSquare,
-    title: "WhatsApp Quotes & Invoices",
+    title: "Email & SMS Quotes & Invoices",
     description:
-      "Send detailed quotes for residential and commercial work directly through WhatsApp. Customers approve with a tap. Invoices generated from completed jobs and paid through secure WhatsApp payment links.",
+      "Send detailed quotes for residential and commercial work directly through Email & SMS. Customers approve with a tap. Invoices generated from completed jobs and paid through secure online payment links.",
   },
   {
     icon: Package,
@@ -98,7 +98,7 @@ const faqs = [
   {
     question: "Can I use ServiceOS to quote commercial electrical jobs?",
     answer:
-      "Absolutely. Commercial electrical quoting is more complex than residential — it involves detailed material takeoffs, labor estimates by trade, multi-day or multi-week timelines, and often a formal bid process. ServiceOS lets you build detailed quotes line by line: materials (with your markup), labor hours by electrician classification (master, journeyman, apprentice), equipment rental, subcontractor costs, and overhead. You can save quote templates for common job types (office build-out, warehouse lighting retrofit, restaurant kitchen circuit install) and generate new quotes from them in minutes. Quotes are sent to the customer via WhatsApp or email, and customers can approve electronically. Once approved, the quote converts directly into a job with all materials and labor pre-populated.",
+      "Absolutely. Commercial electrical quoting is more complex than residential — it involves detailed material takeoffs, labor estimates by trade, multi-day or multi-week timelines, and often a formal bid process. ServiceOS lets you build detailed quotes line by line: materials (with your markup), labor hours by electrician classification (master, journeyman, apprentice), equipment rental, subcontractor costs, and overhead. You can save quote templates for common job types (office build-out, warehouse lighting retrofit, restaurant kitchen circuit install) and generate new quotes from them in minutes. Quotes are sent to the customer via Email or SMS, and customers can approve electronically. Once approved, the quote converts directly into a job with all materials and labor pre-populated.",
   },
   {
     question: "Does ServiceOS help with safety documentation for electrical work?",
@@ -116,7 +116,7 @@ export default function ElectricalContractorSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "ServiceOS — Electrical Contractor Software",
     description:
-      "Electrician CRM and dispatch software with compliance and certification tracking, permit and inspection management, materials billing, WhatsApp quotes and invoicing, and multi-electrician dispatch.",
+      "Electrician CRM and dispatch software with compliance and certification tracking, permit and inspection management, materials billing, Email & SMS quotes and invoicing, and multi-electrician dispatch.",
     url: "https://serviceos.com/electrical-contractor-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
@@ -136,7 +136,7 @@ export default function ElectricalContractorSoftwarePage() {
       <CornerstoneHero
         eyebrow="Electrical Contractor Software"
         title="Electrical Contractor Software for Licensed Pros Who Move Fast"
-        subtitle="From residential service calls to commercial installations, ServiceOS helps electricians dispatch, track jobs, manage compliance documentation, and invoice — all from one WhatsApp-first platform."
+        subtitle="From residential service calls to commercial installations, ServiceOS helps electricians dispatch, track jobs, manage compliance documentation, and invoice — all from one platform with Email, SMS, and Push notifications."
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link

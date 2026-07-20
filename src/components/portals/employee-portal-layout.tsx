@@ -456,7 +456,7 @@ function useEmployeeJobs(employeeId: string | null) {
     try {
       // V1.5 endpoint: GET /api/employee/jobs?filter=all returns an enriched
       // flat array (with lifecycleState, lifecycleTimestamps, _counts).
-      const res = await fetch('/api/employee/jobs?filter=all&XTransformPort=3000');
+      const res = await authFetch('/api/employee/jobs?filter=all&XTransformPort=3000');
       if (!res.ok) throw new Error(`Failed to fetch jobs (${res.status})`);
       const data = await res.json();
       const rows: EmployeeJobsApiResponseRow[] = Array.isArray(data) ? data : (data?.jobs ?? []);
@@ -492,7 +492,7 @@ function useEmployeeRecord(employeeId: string | null) {
         // `employeeId` field (the dead `e.employeeId === employeeId` branch
         // in the prior implementation never matched) — so we look the row
         // up by its primary key directly via /api/employees/[id].
-        const res = await fetch(`/api/employees/${employeeId}?XTransformPort=3000`, {
+        const res = await authFetch(`/api/employees/${employeeId}?XTransformPort=3000`, {
           signal: controller.signal,
         });
         if (!res.ok) throw new Error(`Failed to fetch employee (${res.status})`);
@@ -606,7 +606,7 @@ function useJobDetailSheet({
   const handleLifecycleAction = async (action: string, jobId: string) => {
     setActionLoading(`${action}-${jobId}`);
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `/api/employee/jobs/${jobId}/lifecycle?XTransformPort=3000`,
         {
           method: 'POST',
@@ -680,7 +680,7 @@ function usePushAutoSubscribe() {
         if (!json.endpoint) return;
 
         // Persist server-side so the backend can actually send pushes.
-        const subRes = await fetch('/api/notifications/push/subscribe?XTransformPort=3000', {
+        const subRes = await authFetch('/api/notifications/push/subscribe?XTransformPort=3000', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -824,7 +824,7 @@ function PushEnableBanner() {
       });
       const json = sub.toJSON();
       if (json.endpoint) {
-        const subRes = await fetch('/api/notifications/push/subscribe?XTransformPort=3000', {
+        const subRes = await authFetch('/api/notifications/push/subscribe?XTransformPort=3000', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2268,7 +2268,7 @@ function AttendanceView() {
   // Pull today's shift + totals from the API.
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch('/api/employee/shift/today?XTransformPort=3000');
+      const res = await authFetch('/api/employee/shift/today?XTransformPort=3000');
       if (res.ok) {
         const data: TodayTotals = await res.json();
         setActiveShift(data.activeShift ?? null);
@@ -2289,7 +2289,7 @@ function AttendanceView() {
   const handleClockIn = async () => {
     setActionLoading('clockin');
     try {
-      const res = await fetch('/api/employee/shift?XTransformPort=3000', {
+      const res = await authFetch('/api/employee/shift?XTransformPort=3000', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -2316,7 +2316,7 @@ function AttendanceView() {
   const handleShiftAction = async (action: 'break' | 'resume' | 'clockout') => {
     setActionLoading(`shift-${action}`);
     try {
-      const res = await fetch('/api/employee/shift?XTransformPort=3000', {
+      const res = await authFetch('/api/employee/shift?XTransformPort=3000', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
@@ -3166,7 +3166,7 @@ function useNotifications() {
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch('/api/notifications?filter=all&limit=50&XTransformPort=3000');
+      const res = await authFetch('/api/notifications?filter=all&limit=50&XTransformPort=3000');
       if (!res.ok) return;
       const data = await res.json();
       setNotifications(Array.isArray(data?.notifications) ? data.notifications : []);
@@ -3191,7 +3191,7 @@ function useNotifications() {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     setUnreadCount(0);
     try {
-      await fetch('/api/notifications?XTransformPort=3000', { method: 'PATCH' });
+      await authFetch('/api/notifications?XTransformPort=3000', { method: 'PATCH' });
     } catch {
       /* non-fatal */
     }
@@ -3203,7 +3203,7 @@ function useNotifications() {
     );
     setUnreadCount((c) => Math.max(0, c - 1));
     try {
-      await fetch('/api/notifications?XTransformPort=3000', {
+      await authFetch('/api/notifications?XTransformPort=3000', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, isRead: true }),

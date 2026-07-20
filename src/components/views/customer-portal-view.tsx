@@ -7,12 +7,13 @@ import {
   RefreshCw, Loader2, AlertCircle, ChevronRight,
   Building2, User, CreditCard, Zap, Send,
   Globe, Copy, Plus, Search, QrCode, Link2, Eye,
+  Navigation, UserCheck, Wrench,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -30,6 +31,7 @@ import {
 import { toast } from 'sonner';
 import { useAppStore } from '@/store/app-store';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
+import { authFetch } from '@/lib/client-auth';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -89,6 +91,47 @@ interface PortalSession {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+/**
+ * 8-stage job lifecycle (subset shown to customers — paused/invoiced hidden).
+ * Matches src/lib/job-lifecycle.ts but kept self-contained here so the
+ * customer portal doesn't pull in server-only code.
+ */
+const LIFECYCLE_STAGES = [
+  { key: 'assigned',  label: 'Assigned',   icon: UserCheck },
+  { key: 'accepted',  label: 'Accepted',   icon: CheckCircle2 },
+  { key: 'travelling',label: 'Travelling', icon: Navigation },
+  { key: 'arrived',   label: 'Arrived',    icon: MapPin },
+  { key: 'working',   label: 'Working',    icon: Wrench },
+  { key: 'completed', label: 'Completed',  icon: CheckCircle2 },
+] as const;
+
+// Map of legacy / raw Job.status values → lifecycle stage key.
+const STATUS_TO_STAGE_KEY: Record<string, string> = {
+  assigned: 'assigned',
+  accepted: 'accepted',
+  travelling: 'travelling',
+  traveling: 'travelling',
+  en_route: 'travelling',
+  enroute: 'travelling',
+  arrived: 'arrived',
+  working: 'working',
+  in_progress: 'working',
+  completed: 'completed',
+  pending: 'assigned',
+};
+
+function getLifecycleStageKey(status: string): string {
+  return STATUS_TO_STAGE_KEY[status] ?? 'assigned';
+}
+
+function getLifecycleStageIndex(status: string): number {
+  const key = getLifecycleStageKey(status);
+  const idx = LIFECYCLE_STAGES.findIndex(s => s.key === key);
+  return idx === -1 ? 0 : idx;
+}
+
+// Legacy 5-step progress stepper (kept for backwards compat with the
+// existing JobProgressStepper component below).
 const JOB_STEPS = [
   { key: 'pending', label: 'Booked', icon: Calendar },
   { key: 'assigned', label: 'Assigned', icon: User },
@@ -235,11 +278,349 @@ function JobProgressStepper({ status }: { status: string }) {
   );
 }
 
+// ─── Live Job Tracker (customer-facing, polling-based) ──────────────────────
+
+interface GpsLocation {
+  latitude: number;
+  longitude: number;
+  capturedAt?: string;
+  accuracy?: number | null;
+  heading?: number | null;
+  speed?: number | null;
+}
+
+interface LiveJobTrackerProps {
+  booking: Booking;
+  portalToken?: string;
+  onSwitchBooking?: (id: string) => void;
+  otherActiveBookings?: Booking[];
+}
+
+/**
+ * LiveJobTracker — customer-facing live tracking card.
+ *
+ * Polls the customer-portal endpoint every 15 seconds (when portalToken is
+ * available) to refresh the booking + technician info, and polls
+ * `/api/gps/track?employeeId=<id>` to fetch the technician's latest GPS
+ * location. Shows the 8-stage lifecycle (assigned → accepted → travelling →
+ * arrived → working → completed), an ETA when the technician is en route,
+ * a live OpenStreetMap embed, and the technician's name + avatar.
+ *
+ * Polling is used instead of socket.io because the customer portal uses a
+ * separate portal-token auth system (different from the JWT the socket.io
+ * mini-service expects).
+ */
+function LiveJobTracker({ booking, portalToken, onSwitchBooking, otherActiveBookings = [] }: LiveJobTrackerProps) {
+  // Live state — start with the booking prop, then update from polls.
+  const [liveBooking, setLiveBooking] = useState<Booking>(booking);
+  const [technicianLocation, setTechnicianLocation] = useState<GpsLocation | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [isPolling, setIsPolling] = useState(false);
+
+  // Keep liveBooking in sync when the parent prop changes (e.g. when the
+  // user switches to a different active booking).
+  useEffect(() => {
+    setLiveBooking(booking);
+    setTechnicianLocation(null);
+    setLastUpdated(null);
+  }, [booking.id, booking.status, booking.updatedAt]);
+
+  // ── Poll the customer-portal endpoint to refresh booking data ──
+  // We hit /api/customer-portal/[token] (the same endpoint the parent uses
+  // for the initial fetch) and pick out the matching booking. This re-uses
+  // the portal-token auth flow rather than requiring a JWT.
+  useEffect(() => {
+    if (!portalToken) return; // No token → rely on parent's onRefresh prop
+
+    let cancelled = false;
+
+    const pollBooking = async () => {
+      try {
+        const res = await fetch(`/api/customer-portal/${portalToken}?XTransformPort=3000`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const bookings: Booking[] = Array.isArray(data?.bookings) ? data.bookings : [];
+        const match = bookings.find(b => b.id === booking.id);
+        if (match && !cancelled) {
+          setLiveBooking(match);
+          setLastUpdated(new Date());
+        }
+      } catch {
+        // Network errors are non-fatal — we'll retry on the next interval.
+      }
+    };
+
+    // Initial poll immediately, then every 15s.
+    pollBooking();
+    const interval = setInterval(pollBooking, 15000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [portalToken, booking.id]);
+
+  // ── Poll the GPS endpoint to get the technician's latest location ──
+  // The GPS endpoint doesn't require auth (the employeeId acts as a
+  // capability token). We use authFetch for consistency with the rest of
+  // the app — it gracefully degrades to plain fetch when no JWT is set.
+  const employeeId = liveBooking.assignee?.id;
+  const stageKey = getLifecycleStageKey(liveBooking.status);
+  const isTravelling = stageKey === 'travelling';
+
+  useEffect(() => {
+    if (!employeeId) {
+      setTechnicianLocation(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const pollGps = async () => {
+      if (cancelled) return;
+      setIsPolling(true);
+      try {
+        const res = await authFetch(`/api/gps/track?employeeId=${encodeURIComponent(employeeId)}&XTransformPort=3000`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const loc = data?.location;
+        if (loc && typeof loc.latitude === 'number' && typeof loc.longitude === 'number' && !cancelled) {
+          setTechnicianLocation({
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            capturedAt: loc.capturedAt,
+            accuracy: loc.accuracy ?? null,
+            heading: loc.heading ?? null,
+            speed: loc.speed ?? null,
+          });
+        }
+      } catch {
+        // Ignore — GPS may not be available yet (technician hasn't started travel).
+      } finally {
+        if (!cancelled) setIsPolling(false);
+      }
+    };
+
+    // Poll more frequently while travelling (every 15s), otherwise every 30s.
+    pollGps();
+    const interval = setInterval(pollGps, isTravelling ? 15000 : 30000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [employeeId, isTravelling]);
+
+  const currentIndex = getLifecycleStageIndex(liveBooking.status);
+  const progressPercent = (currentIndex / (LIFECYCLE_STAGES.length - 1)) * 100;
+
+  // ETA estimate: when travelling, show a simple " ETA ~X min" based on GPS
+  // speed if available, otherwise a static "On the way" message.
+  const etaMinutes = (() => {
+    if (!isTravelling) return null;
+    if (technicianLocation?.speed && technicianLocation.speed > 0) {
+      // Very rough: assume ~5 km average remaining distance if no job address
+      // coords available. Real implementation would compute haversine.
+      const remainingKm = 5;
+      const speedKmPerMin = (technicianLocation.speed * 60) / 1000;
+      if (speedKmPerMin > 0) {
+        return Math.max(1, Math.round(remainingKm / speedKmPerMin));
+      }
+    }
+    return null;
+  })();
+
+  // OpenStreetMap embed URL for the technician's current location.
+  const mapEmbedUrl = technicianLocation
+    ? `https://www.openstreetmap.org/export/embed.html?bbox=${technicianLocation.longitude - 0.01}%2C${technicianLocation.latitude - 0.01}%2C${technicianLocation.longitude + 0.01}%2C${technicianLocation.latitude + 0.01}&layer=mapnik&marker=${technicianLocation.latitude}%2C${technicianLocation.longitude}`
+    : null;
+
+  return (
+    <Card className="border-emerald-200 bg-white shadow-md">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-lg font-semibold flex items-center gap-2 text-emerald-900">
+              <Zap className="size-5 text-emerald-600" />
+              Job Tracker
+            </CardTitle>
+            <CardDescription className="flex items-center gap-1.5">
+              Real-time status of the active service
+              {lastUpdated && (
+                <span className="text-[10px] text-gray-400">
+                  · updated {timeAgo(lastUpdated.toISOString())}
+                </span>
+              )}
+              {portalToken && (
+                <span className="ml-1 inline-flex items-center gap-1 text-[10px] text-emerald-600">
+                  <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Live
+                </span>
+              )}
+            </CardDescription>
+          </div>
+          <Badge variant="outline" className={`${getStatusColor(liveBooking.status)} text-xs capitalize`}>
+            {liveBooking.status.replace('_', ' ')}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div>
+          <h3 className="font-medium text-gray-900">{liveBooking.title}</h3>
+          <div className="flex items-center gap-2 mt-1 text-sm text-gray-500 flex-wrap">
+            {liveBooking.address && (
+              <span className="flex items-center gap-1">
+                <MapPin className="size-3.5" /> {liveBooking.address}
+              </span>
+            )}
+            {liveBooking.scheduledAt && (
+              <span className="flex items-center gap-1">
+                <Calendar className="size-3.5" /> {formatDate(liveBooking.scheduledAt)} {formatTime(liveBooking.scheduledAt)}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* 8-stage lifecycle stepper */}
+        <div className="space-y-3">
+          <Progress value={progressPercent} className="h-2" />
+          <div className="flex items-start justify-between">
+            {LIFECYCLE_STAGES.map((stage, index) => {
+              const isCompleted = index < currentIndex;
+              const isCurrent = index === currentIndex;
+              const Icon = stage.icon;
+              return (
+                <div key={stage.key} className="flex flex-col items-center gap-1 flex-1">
+                  <div
+                    className={`flex items-center justify-center size-8 rounded-full border-2 transition-all ${
+                      isCompleted
+                        ? 'bg-emerald-500 border-emerald-500 text-white'
+                        : isCurrent
+                        ? 'bg-emerald-100 border-emerald-500 text-emerald-600'
+                        : 'bg-gray-50 border-gray-200 text-gray-300'
+                    }`}
+                  >
+                    <Icon className="size-4" />
+                  </div>
+                  <span className={`text-[10px] font-medium text-center ${
+                    isCompleted || isCurrent ? 'text-emerald-700' : 'text-gray-300'
+                  }`}>
+                    {stage.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ETA when travelling */}
+        {isTravelling && (
+          <div className="flex items-center gap-3 p-3 bg-sky-50 rounded-lg border border-sky-200">
+            <Navigation className="size-5 text-sky-600 animate-pulse" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-sky-900">
+                {etaMinutes ? `ETA ~${etaMinutes} min` : 'Technician is on the way'}
+              </p>
+              <p className="text-xs text-sky-700">
+                {technicianLocation
+                  ? `Last location update ${technicianLocation.capturedAt ? timeAgo(technicianLocation.capturedAt) : 'recently'}`
+                  : isPolling ? 'Locating technician…' : 'Waiting for location data…'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Live map when technician is en route */}
+        {isTravelling && mapEmbedUrl && technicianLocation && (
+          <div className="rounded-lg overflow-hidden border border-gray-200">
+            <iframe
+              title="Technician live location"
+              src={mapEmbedUrl}
+              className="w-full h-64"
+              style={{ border: 0 }}
+              loading="lazy"
+            />
+            <div className="p-2 bg-gray-50 text-[10px] text-gray-500 flex items-center justify-between">
+              <span className="flex items-center gap-1">
+                <MapPin className="size-3" />
+                {technicianLocation.latitude.toFixed(5)}, {technicianLocation.longitude.toFixed(5)}
+              </span>
+              <a
+                href={`https://www.openstreetmap.org/?mlat=${technicianLocation.latitude}&mlon=${technicianLocation.longitude}#map=15/${technicianLocation.latitude}/${technicianLocation.longitude}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-emerald-600 hover:underline flex items-center gap-0.5"
+              >
+                Open in Maps <ExternalLink className="size-2.5" />
+              </a>
+            </div>
+          </div>
+        )}
+
+        {/* Technician info */}
+        {liveBooking.assigneeName && (
+          <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-lg">
+            <Avatar className="size-9">
+              {liveBooking.assignee?.avatar ? (
+                <AvatarImage src={liveBooking.assignee.avatar} alt={liveBooking.assigneeName} />
+              ) : null}
+              <AvatarFallback className="bg-emerald-200 text-emerald-800 text-sm font-medium">
+                {liveBooking.assigneeName[0]?.toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <p className="text-sm font-medium text-gray-900">{liveBooking.assigneeName}</p>
+              <p className="text-xs text-gray-500">
+                Technician
+                {liveBooking.assignee?.rating ? ` · ★ ${liveBooking.assignee.rating}` : ''}
+              </p>
+            </div>
+            {liveBooking.assignee?.phone && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="ml-auto h-7 text-xs"
+                onClick={() => window.open(`tel:${liveBooking.assignee!.phone}`)}
+              >
+                <Phone className="size-3 mr-1" /> Call
+              </Button>
+            )}
+          </div>
+        )}
+
+        {/* Switch between multiple active bookings */}
+        {otherActiveBookings.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-gray-500">Track another:</span>
+            {otherActiveBookings.map(b => (
+              <Button
+                key={b.id}
+                variant="outline"
+                size="sm"
+                className="h-6 text-[10px] px-2"
+                onClick={() => onSwitchBooking?.(b.id)}
+              >
+                {b.title}
+              </Button>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── Portal Experience Component (reused for both direct access & preview) ──
 
-function PortalExperience({ portalData, onRefresh }: {
+function PortalExperience({ portalData, onRefresh, portalToken }: {
   portalData: PortalData;
   onRefresh?: () => void;
+  /**
+   * The customer portal token. When provided, the Job Tracker card polls
+   * `/api/customer-portal/[token]` every 15s to live-update the booking
+   * status, technician location, and ETA.
+   */
+  portalToken?: string;
 }) {
   const { currency, format } = useCompanyCurrency();
 
@@ -311,82 +692,14 @@ function PortalExperience({ portalData, onRefresh }: {
 
   return (
     <div className="space-y-4">
-      {/* Job Tracker */}
+      {/* Job Tracker — live-updating when portalToken is available */}
       {activeBooking && (
-        <Card className="border-emerald-200 bg-white shadow-md">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg font-semibold flex items-center gap-2 text-emerald-900">
-              <Zap className="size-5 text-emerald-600" />
-              Job Tracker
-            </CardTitle>
-            <CardDescription>Real-time status of the active service</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-medium text-gray-900">{activeBooking.title}</h3>
-                <div className="flex items-center gap-2 mt-1 text-sm text-gray-500">
-                  {activeBooking.address && (
-                    <span className="flex items-center gap-1">
-                      <MapPin className="size-3.5" /> {activeBooking.address}
-                    </span>
-                  )}
-                  {activeBooking.scheduledAt && (
-                    <span className="flex items-center gap-1">
-                      <Calendar className="size-3.5" /> {formatDate(activeBooking.scheduledAt)} {formatTime(activeBooking.scheduledAt)}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <Badge variant="outline" className={`${getStatusColor(activeBooking.status)} text-xs`}>
-                {activeBooking.status.replace('_', ' ')}
-              </Badge>
-            </div>
-
-            <JobProgressStepper status={activeBooking.status} />
-
-            {activeBooking.assigneeName && (
-              <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-lg">
-                <Avatar className="size-9">
-                  <AvatarFallback className="bg-emerald-200 text-emerald-800 text-sm font-medium">
-                    {activeBooking.assigneeName[0]}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{activeBooking.assigneeName}</p>
-                  <p className="text-xs text-gray-500">Technician</p>
-                </div>
-                {activeBooking.assignee?.phone && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="ml-auto h-7 text-xs"
-                    onClick={() => window.open(`tel:${activeBooking.assignee!.phone}`)}
-                  >
-                    <Phone className="size-3 mr-1" /> Call
-                  </Button>
-                )}
-              </div>
-            )}
-
-            {activeBookings.length > 1 && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-gray-500">Track another:</span>
-                {activeBookings.filter(b => b.id !== activeBooking.id).map(b => (
-                  <Button
-                    key={b.id}
-                    variant="outline"
-                    size="sm"
-                    className="h-6 text-[10px] px-2"
-                    onClick={() => setActiveBookingId(b.id)}
-                  >
-                    {b.title}
-                  </Button>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <LiveJobTracker
+          booking={activeBooking}
+          portalToken={portalToken}
+          onSwitchBooking={(id) => setActiveBookingId(id)}
+          otherActiveBookings={activeBookings.filter(b => b.id !== activeBooking.id)}
+        />
       )}
 
       {/* Tabs */}
@@ -1252,7 +1565,7 @@ function PortalManagementView() {
                     <span className="text-xs text-gray-500">Hi, {selectedCustomer.name}</span>
                   </div>
 
-                  <PortalExperience portalData={previewData} onRefresh={handleRefreshPreview} />
+                  <PortalExperience portalData={previewData} onRefresh={handleRefreshPreview} portalToken={previewToken ?? undefined} />
 
                   {/* Mini footer */}
                   <div className="mt-4 pt-3 border-t border-emerald-100 flex items-center justify-between text-[10px] text-gray-400">
@@ -1373,7 +1686,7 @@ function DirectPortalView({ token }: { token: string }) {
       </header>
 
       <main className="flex-1 max-w-4xl mx-auto px-4 py-6 w-full">
-        <PortalExperience portalData={portalData} onRefresh={fetchPortalData} />
+        <PortalExperience portalData={portalData} onRefresh={fetchPortalData} portalToken={token} />
       </main>
 
       <footer className="mt-auto border-t border-emerald-100 bg-white/50">

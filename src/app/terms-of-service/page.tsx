@@ -5,11 +5,11 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Terms of Service — ServiceOS CRM",
   description:
-    "Read the Terms of Service for ServiceOS CRM, the all-in-one operations platform for service businesses. Covers subscriptions, WhatsApp integration, data handling, and more. Last updated March 5, 2026.",
+    "Read the Terms of Service for ServiceOS CRM, the all-in-one operations platform for service businesses. Covers subscriptions, integrations, data handling, and more. Last updated March 5, 2026.",
   openGraph: {
     title: "Terms of Service — ServiceOS CRM",
     description:
-      "Read the Terms of Service for ServiceOS CRM, the all-in-one operations platform for service businesses. Covers subscriptions, WhatsApp integration, data handling, and more.",
+      "Read the Terms of Service for ServiceOS CRM, the all-in-one operations platform for service businesses. Covers subscriptions, integrations, data handling, and more.",
     url: "https://serviceos.com/terms-of-service",
     siteName: "ServiceOS",
     type: "website",
@@ -23,7 +23,7 @@ const sections = [
   { id: "subscription-billing", label: "4. Subscription & Billing" },
   { id: "acceptable-use", label: "5. Acceptable Use Policy" },
   { id: "intellectual-property", label: "6. Intellectual Property" },
-  { id: "whatsapp-third-party", label: "7. WhatsApp & Third-Party Services" },
+  { id: "third-party-services", label: "7. Third-Party Services" },
   { id: "data-privacy", label: "8. Data & Privacy" },
   { id: "user-content", label: "9. User Content" },
   { id: "service-level", label: "10. Service Level & Availability" },
@@ -149,7 +149,7 @@ export default function TermsOfServicePage() {
                   business operations platform designed for service-based
                   businesses. The Service enables businesses to manage customer
                   relationships, schedule and dispatch jobs, communicate via
-                  WhatsApp and other channels, process payments, generate
+                  email, SMS, push, and in-app channels, process payments, generate
                   invoices, handle bookings, and automate workflows.
                 </p>
                 <p className="text-muted-foreground leading-relaxed mb-4">
@@ -159,7 +159,7 @@ export default function TermsOfServicePage() {
                 <ul className="list-disc pl-6 space-y-1 text-muted-foreground mb-4">
                   <li>Customer and contact management</li>
                   <li>Job scheduling, dispatch, and lifecycle tracking</li>
-                  <li>WhatsApp Business API integration for messaging</li>
+                  <li>Email, SMS, push, and in-app messaging</li>
                   <li>Invoice generation, payment processing, and billing</li>
                   <li>Booking and appointment management</li>
                   <li>Marketing campaigns and audience segmentation</li>
@@ -208,8 +208,8 @@ export default function TermsOfServicePage() {
                   3.3 Business Verification
                 </h3>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  Certain features of the Service, including WhatsApp Business
-                  API integration and payment processing, may require business
+                  Certain features of the Service, including payment
+                  processing and certain communication features, may require business
                   verification. You agree to provide accurate business
                   information and documentation as requested. ServiceOS reserves
                   the right to suspend accounts that fail verification or
@@ -313,7 +313,7 @@ export default function TermsOfServicePage() {
                   are strictly prohibited:
                 </p>
                 <ul className="list-disc pl-6 space-y-1 text-muted-foreground mb-4">
-                  <li>Sending unsolicited or spam messages via any channel, including WhatsApp, email, or SMS</li>
+                  <li>Sending unsolicited or spam messages via any channel, including email or SMS</li>
                   <li>Transmitting content that is illegal, harmful, threatening, abusive, harassing, defamatory, or otherwise objectionable</li>
                   <li>Scraping, crawling, or extracting data from the Service or any third-party service integrated with the platform</li>
                   <li>Reverse engineering, decompiling, disassembling, or attempting to discover the source code of the Service</li>
@@ -383,69 +383,12 @@ export default function TermsOfServicePage() {
                 </p>
               </section>
 
-              {/* ───── 7. WhatsApp & Third-Party Services ───── */}
-              <section id="whatsapp-third-party" className="scroll-mt-24 mb-12">
+              {/* ───── 7. Third-Party Services ───── */}
+              <section id="third-party-services" className="scroll-mt-24 mb-12">
                 <h2 className="text-2xl font-bold text-foreground border-l-4 border-emerald-500 pl-4 mb-4">
-                  7. WhatsApp &amp; Third-Party Services
+                  7. Third-Party Services
                 </h2>
-
-                <h3 className="text-lg font-semibold text-foreground mt-6 mb-3">
-                  7.1 Meta API Compliance
-                </h3>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  ServiceOS integrates with the WhatsApp Business API provided
-                  by Meta Platforms, Inc. (&quot;Meta&quot;). Your use of
-                  WhatsApp-related features is subject to the Meta Platforms
-                  Terms of Service, the WhatsApp Business Terms of Service, and
-                  the WhatsApp Business API Terms of Service. You are
-                  responsible for complying with all applicable Meta policies.
-                </p>
-
-                <h3 className="text-lg font-semibold text-foreground mt-6 mb-3">
-                  7.2 WhatsApp Business Policy
-                </h3>
-                <p className="text-muted-foreground leading-relaxed mb-4">
-                  You must comply with the WhatsApp Business Policy at all times.
-                  This includes, but is not limited to, the following
-                  requirements:
-                </p>
-                <ul className="list-disc pl-6 space-y-1 text-muted-foreground mb-4">
-                  <li>You must not send unsolicited or promotional messages to users who have not opted in</li>
-                  <li>All marketing and notification messages must use pre-approved message templates</li>
-                  <li>You must obtain explicit opt-in consent from recipients before sending messages</li>
-                  <li>You must honor opt-out requests promptly and without exception</li>
-                  <li>You must not use WhatsApp for illegal, deceptive, or misleading purposes</li>
-                  <li>You must not send messages that violate the rights of any third party</li>
-                </ul>
-
-                <h3 className="text-lg font-semibold text-foreground mt-6 mb-3">
-                  7.3 Message Templates
-                </h3>
-                <p className="text-muted-foreground leading-relaxed mb-4">
-                  All message templates used through the WhatsApp Business API
-                  must be submitted for and receive approval from Meta before
-                  use. ServiceOS provides a template management interface, but
-                  approval decisions are made solely by Meta. You may not
-                  circumvent template approval requirements or use unapproved
-                  templates.
-                </p>
-
-                <h3 className="text-lg font-semibold text-foreground mt-6 mb-3">
-                  7.4 Rate Limits and Quotas
-                </h3>
-                <p className="text-muted-foreground leading-relaxed mb-4">
-                  WhatsApp messaging is subject to rate limits and quality-based
-                  messaging quotas set by Meta. ServiceOS does not control these
-                  limits and cannot guarantee any specific messaging throughput.
-                  Exceeding rate limits or receiving quality flags may result in
-                  temporary or permanent restrictions on your WhatsApp messaging
-                  capabilities.
-                </p>
-
-                <h3 className="text-lg font-semibold text-foreground mt-6 mb-3">
-                  7.5 Third-Party Services Generally
-                </h3>
-                <p className="text-muted-foreground leading-relaxed">
                   The Service may integrate with or provide links to third-party
                   services, including payment processors, communication
                   providers, and analytics platforms. Your use of third-party
@@ -453,6 +396,15 @@ export default function TermsOfServicePage() {
                   ServiceOS is not responsible for the availability, accuracy, or
                   legality of third-party services, and you use them at your own
                   risk.
+                </p>
+                <p className="text-muted-foreground leading-relaxed">
+                  You are responsible for complying with all applicable terms of
+                  service and policies of any third-party services you connect to
+                  or use in conjunction with the Service. This includes obtaining
+                  all necessary consents from your contacts before sending
+                  communications and honoring opt-out requests promptly.
+                  ServiceOS does not control and is not responsible for the
+                  practices of these third-party services.
                 </p>
               </section>
 
@@ -621,7 +573,7 @@ export default function TermsOfServicePage() {
                   <li>Fraudulent, abusive, or unlawful activity</li>
                   <li>Conduct that could cause harm to ServiceOS, its users, or third parties</li>
                   <li>Failure to pay applicable fees after reasonable notice</li>
-                  <li>Violation of third-party service policies, including Meta&apos;s WhatsApp Business Policy</li>
+                  <li>Violation of third-party service policies</li>
                 </ul>
                 <p className="text-muted-foreground leading-relaxed mb-4">
                   For terminations not involving immediate cause, ServiceOS will
@@ -713,7 +665,7 @@ export default function TermsOfServicePage() {
                   <li>Your use of the Service, including any use that violates these Terms</li>
                   <li>Your User Content, including claims that it infringes the rights of any third party</li>
                   <li>Your violation of any applicable laws or regulations</li>
-                  <li>Your violation of any third-party service terms, including Meta&apos;s WhatsApp Business Policy</li>
+                  <li>Your violation of any third-party service terms</li>
                   <li>Any claims by your customers or end users related to your use of the Service</li>
                 </ul>
                 <p className="text-muted-foreground leading-relaxed">

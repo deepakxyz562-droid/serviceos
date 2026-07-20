@@ -99,7 +99,7 @@ const faqs = [
   {
     question: "How does stump-grinding follow-up scheduling work?",
     answer:
-      "Every tree removal creates a stump, and that stump is a follow-up job — but most tree care businesses lose track of them in the rush. ServiceOS automatically schedules the stump grinding visit a few days after the removal, assigns it to the right crew with the right equipment (stump grinder, truck, cleanup), sends the customer a WhatsApp reminder, and queues the invoice. You can also offer removal plus grinding as a bundled package, with separate invoicing milestones if you prefer to bill the removal up front and the grinding on completion — capturing revenue that would otherwise be left on the table.",
+      "Every tree removal creates a stump, and that stump is a follow-up job — but most tree care businesses lose track of them in the rush. ServiceOS automatically schedules the stump grinding visit a few days after the removal, assigns it to the right crew with the right equipment (stump grinder, truck, cleanup), sends the customer an Email & SMS reminder, and queues the invoice. You can also offer removal plus grinding as a bundled package, with separate invoicing milestones if you prefer to bill the removal up front and the grinding on completion — capturing revenue that would otherwise be left on the table.",
   },
   {
     question: "How does ServiceOS help with insurance and property-damage documentation?",

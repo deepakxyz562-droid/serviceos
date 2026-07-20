@@ -8,7 +8,7 @@ import { getCanonicalUrlBySlug } from '@/lib/public-business'
  *
  * This is the shareable link businesses put on:
  *   - business cards
- *   - WhatsApp messages
+ *   - text messages
  *   - QR codes
  *   - print ads
  *

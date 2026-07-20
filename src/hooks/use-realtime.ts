@@ -2,29 +2,26 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { getToken } from '@/lib/client-auth';
+import { authFetch } from '@/lib/client-auth';
 
 /**
  * Whether the realtime socket.io server is expected to be reachable.
  *
- * The socket.io mini-service runs on port 3003 in local dev. In production on
- * Netlify (and other serverless hosts) there is no persistent socket server,
- * so attempting to connect just spams the browser console with WSS errors.
- *
- * We detect "production" as any non-localhost origin. This is intentionally
- * conservative: preview deploys, custom domains, and the Netlify main domain
- * are all treated as production.
+ * Historically this returned false on any non-localhost host because the
+ * socket.io mini-service was dev-only. The Caddy gateway now proxies the
+ * socket.io path through the same origin (using the `XTransformPort=3003`
+ * query param), so we always attempt the connection. The hook still
+ * degrades gracefully: if the server isn't reachable, `connected` stays
+ * false and the emit helpers become no-ops.
  */
 function isRealtimeServerAvailable(): boolean {
+  // SSR — no socket to connect to.
   if (typeof window === 'undefined') return false;
-  const host = window.location.hostname;
-  // localhost and 127.0.0.1 + dev preview origins run the mini-service
-  return (
-    host === 'localhost' ||
-    host === '127.0.0.1' ||
-    host === '0.0.0.0' ||
-    // Allow an explicit opt-in via env (e.g. for self-hosted prod with sockets)
-    process.env.NEXT_PUBLIC_ENABLE_REALTIME === 'true'
-  );
+  // Always attempt connection — the Caddy gateway proxies the socket.io
+  // path. If the gateway isn't configured, the socket simply fails to
+  // connect (handled silently in the connect_error handler below).
+  return true;
 }
 
 interface UseRealtimeOptions {
@@ -79,10 +76,9 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
   useEffect(() => {
     if (!enabled) return;
 
-    // In production (Netlify/serverless) there is no socket.io server to talk
-    // to. Skip the connection entirely so the browser console doesn't fill
-    // with WSS errors. The hook still works — `connected` just stays false
-    // and the emit helpers become no-ops.
+    // The Caddy gateway proxies the socket.io path. Always attempt the
+    // connection — if the gateway isn't configured, the socket simply
+    // fails to connect (handled silently in connect_error below).
     if (!isRealtimeServerAvailable()) return;
 
     // Prevent duplicate connections
@@ -92,14 +88,21 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
     let socket: Socket | null = null;
 
     try {
+      // Path MUST be '/' — the Caddy gateway uses the XTransformPort
+      // query param to route to port 3003.
       socket = io('/?XTransformPort=3003', {
+        path: '/',
         transports: ['websocket', 'polling'],
         autoConnect: true,
         reconnection: true,
-        reconnectionAttempts: 5, // Limit reconnection attempts instead of Infinity
+        reconnectionAttempts: 10,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 10000,
-        timeout: 10000, // Connection timeout
+        timeout: 10000,
+        // Authenticate the connection with the user's JWT. The server
+        // verifies the token, extracts tenantId, and joins the socket to
+        // a `tenant:<tenantId>` room.
+        auth: (cb) => cb({ token: getToken() }),
       });
     } catch (err) {
       console.warn('[useRealtime] Failed to create socket connection:', err);
@@ -111,7 +114,9 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
     socket.on('connect', () => {
       setConnected(true);
 
-      // Join tenant room if tenantId is provided
+      // Join tenant room if tenantId is provided (server already joins
+      // automatically based on the JWT, but the explicit emit lets us
+      // also pass the employeeId for presence tracking).
       if (tenantId) {
         socket?.emit('join-tenant', { tenantId, employeeId });
       }
@@ -121,22 +126,67 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
       setConnected(false);
     });
 
-    // Swallow connect errors silently. On dev environments where the
+    // Swallow connect errors silently. On environments where the
     // mini-service is briefly down, this would otherwise spam the console
     // every second during reconnection.
     socket.on('connect_error', () => {
       setConnected(false);
     });
 
+    // Listen for the server's "connected" acknowledgement (lets us know
+    // which room we were joined to).
+    socket.on('connected', (data: { room?: string; tenantId?: string }) => {
+      if (data?.room) {
+        // Server has joined us to a tenant room.
+      }
+    });
+
+    // ── Realtime event listeners ──
+    // These match the event names emitted by the EventBus bridge in
+    // src/lib/event-bus.ts (which forwards `job.*`, `employee.*`,
+    // `gps.*`, `shift.*` to the socket.io server).
+
     // Listen for employee status updates
+    socket.on('employee.status_changed', (data: any) => {
+      onEmployeeStatusRef.current?.(data);
+
+      // Track online employees based on status changes
+      if (data?.employeeId || data?.data?.employeeId) {
+        const empId = data.employeeId || data.data.employeeId;
+        const status = data.status || data.data?.status || data.data?.toStatus;
+        setOnlineEmployees((prev) => {
+          const next = new Set(prev);
+          if (
+            status === 'available' ||
+            status === 'busy' ||
+            status === 'traveling' ||
+            status === 'online'
+          ) {
+            next.add(empId);
+          } else if (status === 'offline' || status === 'leave') {
+            next.delete(empId);
+          }
+          return next;
+        });
+      }
+    });
+
+    // Legacy event name (backwards compat with older emit helpers)
     socket.on('employee-status', (data: any) => {
       onEmployeeStatusRef.current?.(data);
     });
 
-    // Listen for job updates
-    socket.on('job-update', (data: any) => {
-      onJobUpdateRef.current?.(data);
-    });
+    // Listen for job updates (covers all job.* events emitted by EventBus)
+    socket.on('job.created', (data: any) => onJobUpdateRef.current?.(data));
+    socket.on('job.updated', (data: any) => onJobUpdateRef.current?.(data));
+    socket.on('job.assigned', (data: any) => onJobUpdateRef.current?.(data));
+    socket.on('job.accepted', (data: any) => onJobUpdateRef.current?.(data));
+    socket.on('job.started', (data: any) => onJobUpdateRef.current?.(data));
+    socket.on('job.completed', (data: any) => onJobUpdateRef.current?.(data));
+    socket.on('job.cancelled', (data: any) => onJobUpdateRef.current?.(data));
+    socket.on('job.rejected', (data: any) => onJobUpdateRef.current?.(data));
+    // Legacy event name
+    socket.on('job-update', (data: any) => onJobUpdateRef.current?.(data));
 
     // Listen for presence updates - track online employees
     socket.on('presence-update', (data: any) => {
@@ -257,35 +307,121 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
 
 /**
  * usePresence - A hook for tracking employee online presence status.
- * Uses the socket.io connection from useRealtime to track which employees are online.
- * Falls back to polling-based simulation if socket is not connected.
+ *
+ * Subscribes to real-time `employee.status_changed` events via the
+ * socket.io connection (through useRealtime) and falls back to polling
+ * `/api/employees?XTransformPort=3000` every 30 seconds when the socket
+ * is not connected.
+ *
+ * Returns a map of employeeId → 'online' | 'away' | 'offline'.
  */
 export function usePresence(employeeIds: string[] = []): Record<string, 'online' | 'away' | 'offline'> {
   const [presence, setPresence] = useState<Record<string, 'online' | 'away' | 'offline'>>({});
 
+  // Subscribe to realtime status updates via useRealtime. We pass `enabled:
+  // true` so the socket connects even without a tenantId (the JWT carries
+  // the tenantId and the server joins the room automatically).
+  const { connected } = useRealtime({
+    enabled: true,
+    onEmployeeStatus: (data: any) => {
+      const payload = data?.data ?? data;
+      const empId = payload?.employeeId ?? data?.employeeId;
+      if (!empId) return;
+      const status = payload?.status ?? payload?.toStatus ?? data?.status;
+      setPresence((prev) => ({
+        ...prev,
+        [empId]: mapStatusToPresence(status),
+      }));
+    },
+  });
+
+  // Polling fallback: fetch the employee list every 30 seconds and derive
+  // presence from each employee's `status` / `lastSeenAt` fields. This
+  // keeps presence accurate even when the socket isn't connected.
   useEffect(() => {
-    const updatePresence = () => {
-      setPresence((prev) => {
-        const next = { ...prev };
-        for (const id of employeeIds) {
-          if (!next[id]) {
-            const statuses: Array<'online' | 'away' | 'offline'> = ['online', 'away', 'offline'];
-            next[id] = statuses[Math.floor(Math.random() * statuses.length)];
+    let cancelled = false;
+
+    const fetchPresence = async () => {
+      try {
+        const res = await authFetch('/api/employees?XTransformPort=3000');
+        if (!res.ok) return;
+        const data = await res.json();
+        const employees: Array<{
+          id: string;
+          status?: string;
+          lastSeenAt?: string | null;
+        }> = Array.isArray(data) ? data : (data?.employees ?? []);
+        if (!Array.isArray(employees) || employees.length === 0) return;
+        if (cancelled) return;
+
+        setPresence((prev) => {
+          const next: Record<string, 'online' | 'away' | 'offline'> = { ...prev };
+          const now = Date.now();
+          for (const emp of employees) {
+            if (!emp.id) continue;
+            // If the caller passed an explicit employeeIds list, only
+            // update those employees (leave others untouched).
+            if (employeeIds.length > 0 && !employeeIds.includes(emp.id)) continue;
+            next[emp.id] = derivePresenceFromEmployee(emp, now);
           }
-          // Small chance of status change for demo
-          if (Math.random() < 0.05) {
-            const statuses: Array<'online' | 'away' | 'offline'> = ['online', 'away', 'offline'];
-            next[id] = statuses[Math.floor(Math.random() * statuses.length)];
-          }
-        }
-        return next;
-      });
+          return next;
+        });
+      } catch {
+        // Network errors are non-fatal — we'll retry on the next interval.
+      }
     };
 
-    updatePresence();
-    const interval = setInterval(updatePresence, 30000);
-    return () => clearInterval(interval);
-  }, [employeeIds]);
+    fetchPresence();
+    const interval = setInterval(fetchPresence, 30000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [employeeIds.join(','), connected]);
 
   return presence;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function mapStatusToPresence(
+  status: string | undefined,
+): 'online' | 'away' | 'offline' {
+  if (!status) return 'offline';
+  const s = status.toLowerCase();
+  if (
+    s === 'available' ||
+    s === 'busy' ||
+    s === 'traveling' ||
+    s === 'in_transit' ||
+    s === 'online' ||
+    s === 'working'
+  ) {
+    return 'online';
+  }
+  if (s === 'away' || s === 'idle' || s === 'on_break') return 'away';
+  return 'offline';
+}
+
+function derivePresenceFromEmployee(
+  emp: { status?: string; lastSeenAt?: string | null },
+  nowMs: number,
+): 'online' | 'away' | 'offline' {
+  // First, derive from explicit status field (set by /api/employees/status).
+  const fromStatus = mapStatusToPresence(emp.status);
+  if (fromStatus === 'online') return 'online';
+
+  // Fall back to lastSeenAt staleness check.
+  if (emp.lastSeenAt) {
+    const lastSeen = new Date(emp.lastSeenAt).getTime();
+    const ageMs = nowMs - lastSeen;
+    if (Number.isFinite(ageMs)) {
+      if (ageMs < 2 * 60 * 1000) return 'online'; // seen in last 2 min
+      if (ageMs < 10 * 60 * 1000) return 'away';  // seen in last 10 min
+      return 'offline';
+    }
+  }
+
+  return fromStatus;
 }

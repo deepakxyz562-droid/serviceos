@@ -32,9 +32,9 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   title: "ServiceOS - The Operating System for Service Businesses",
-  description: "ServiceOS — The Operating System for service businesses. Replace WhatsApp chaos, Excel trackers, and paper forms. Leads, dispatch, invoicing, WhatsApp-first operations.",
+  description: "ServiceOS — The Operating System for service businesses. Replace scattered texts, emails, and spreadsheets. Leads, dispatch, invoicing, and automated Email, SMS & Push operations.",
   applicationName: "ServiceOS",
-  keywords: ["ServiceOS", "field service", "SaaS", "job management", "WhatsApp", "invoicing", "workflow automation", "service business"],
+  keywords: ["ServiceOS", "field service", "SaaS", "job management", "email notifications", "SMS notifications", "push notifications", "invoicing", "workflow automation", "service business"],
   authors: [{ name: "ServiceOS Team" }],
   manifest: "/manifest.json",
   formatDetection: { telephone: false },
@@ -59,14 +59,14 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "ServiceOS - The Operating System for Service Businesses",
-    description: "Replace WhatsApp chaos, Excel trackers, and paper forms with one powerful platform",
+    description: "Replace scattered texts, emails, and spreadsheets with one powerful platform",
     type: "website",
     siteName: "ServiceOS",
   },
   twitter: {
     card: "summary_large_image",
     title: "ServiceOS - The Operating System for Service Businesses",
-    description: "Replace WhatsApp chaos, Excel trackers, and paper forms with one powerful platform",
+    description: "Replace scattered texts, emails, and spreadsheets with one powerful platform",
   },
 };
 

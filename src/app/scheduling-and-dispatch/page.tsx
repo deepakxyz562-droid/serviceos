@@ -36,7 +36,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Scheduling & Dispatch Software for Field Service | ServiceOS",
     description:
-      "Drag-and-drop scheduling, smart dispatch, real-time GPS tracking, and route optimization in one platform. Stop juggling WhatsApp and Excel — start dispatching.",
+      "Drag-and-drop scheduling, smart dispatch, real-time GPS tracking, and route optimization in one platform. Stop juggling text messages and Excel — start dispatching.",
     url: "https://serviceos.com/scheduling-and-dispatch",
     siteName: "ServiceOS",
     type: "website",
@@ -55,13 +55,13 @@ const features: Feature[] = [
     icon: Sparkles,
     title: "Smart dispatch (skill + location matching)",
     description:
-      "When a new job comes in, ServiceOS recommends the best technician based on the skills required, current location, drive time, and remaining capacity. One click to assign. No more checking three WhatsApp groups to see who's free.",
+      "When a new job comes in, ServiceOS recommends the best technician based on the skills required, current location, drive time, and remaining capacity. One click to assign. No more checking three group text threads to see who's free.",
   },
   {
     icon: RefreshCw,
     title: "Recurring job scheduling",
     description:
-      "Set up recurring jobs once — weekly, monthly, quarterly, annual maintenance contracts — and ServiceOS auto-schedules every visit, sends the customer a WhatsApp reminder, and queues the invoice. Set it and forget it.",
+      "Set up recurring jobs once — weekly, monthly, quarterly, annual maintenance contracts — and ServiceOS auto-schedules every visit, sends the customer an SMS reminder, and queues the invoice. Set it and forget it.",
   },
   {
     icon: MapPin,
@@ -114,7 +114,7 @@ const faqs = [
   {
     question: "Can I schedule recurring jobs?",
     answer:
-      "Yes — recurring jobs are a first-class feature in ServiceOS. You define a job once (a weekly cleaning, a monthly pest-control visit, an annual AC service contract) and ServiceOS automatically creates every future occurrence, assigns the right technician based on your rules, sends the customer a WhatsApp reminder before each visit, and queues the invoice for after the job is marked complete. You can pause, skip, or reschedule any single occurrence without affecting the rest of the schedule. Most service businesses that run maintenance contracts cut their scheduling admin time by 80%+ after switching to ServiceOS.",
+      "Yes — recurring jobs are a first-class feature in ServiceOS. You define a job once (a weekly cleaning, a monthly pest-control visit, an annual AC service contract) and ServiceOS automatically creates every future occurrence, assigns the right technician based on your rules, sends the customer an SMS reminder before each visit, and queues the invoice for after the job is marked complete. You can pause, skip, or reschedule any single occurrence without affecting the rest of the schedule. Most service businesses that run maintenance contracts cut their scheduling admin time by 80%+ after switching to ServiceOS.",
   },
   {
     question: "How does smart dispatch work?",
@@ -124,12 +124,12 @@ const faqs = [
   {
     question: "Can technicians see their schedule on mobile?",
     answer:
-      "Yes. Each technician gets a mobile app — a progressive web app that installs on any phone, iPhone or Android, no app store required. They open the app to see today's job list, each job's full details (customer info, address, scope, notes, prior history), turn-by-turn navigation, and their upcoming schedule for the week. They can mark jobs as started, paused, or complete, capture photos and signatures, and clock in and out — all from their phone. New assignments pushed from the office appear instantly on the technician's app, and they get a WhatsApp notification so they never miss a dispatch.",
+      "Yes. Each technician gets a mobile app — a progressive web app that installs on any phone, iPhone or Android, no app store required. They open the app to see today's job list, each job's full details (customer info, address, scope, notes, prior history), turn-by-turn navigation, and their upcoming schedule for the week. They can mark jobs as started, paused, or complete, capture photos and signatures, and clock in and out — all from their phone. New assignments pushed from the office appear instantly on the technician's app, and they get a push notification so they never miss a dispatch.",
   },
   {
     question: "Does it handle emergency or urgent jobs?",
     answer:
-      "Absolutely — emergency dispatch is where ServiceOS shines. When a burst-pipe or no-heat call comes in, you open the live map, see every technician's current location and job status, and dispatch the closest qualified tech in seconds. The customer automatically receives a WhatsApp message with the technician's name, photo, and ETA. The technician receives full job details on their phone — including the customer's history, any prior repairs, and notes about the property. ServiceOS can also reroute the technician's remaining jobs automatically or surface them for manual reassignment. Most emergency-driven service businesses cut their average response time by 30–50% after switching to ServiceOS.",
+      "Absolutely — emergency dispatch is where ServiceOS shines. When a burst-pipe or no-heat call comes in, you open the live map, see every technician's current location and job status, and dispatch the closest qualified tech in seconds. The customer automatically receives an SMS message with the technician's name, photo, and ETA. The technician receives full job details on their phone — including the customer's history, any prior repairs, and notes about the property. ServiceOS can also reroute the technician's remaining jobs automatically or surface them for manual reassignment. Most emergency-driven service businesses cut their average response time by 30–50% after switching to ServiceOS.",
   },
   {
     question: "Can I track technicians in real-time?",
@@ -167,7 +167,7 @@ export default function SchedulingAndDispatchPage() {
       <CornerstoneHero
         eyebrow="Feature"
         title="Smart Scheduling & Dispatch Software for Field Service Businesses"
-        subtitle="Stop juggling WhatsApp groups and Excel calendars. Drag-and-drop scheduling, smart dispatch based on skills and location, and real-time technician tracking — all in one place."
+        subtitle="Stop juggling group texts and Excel calendars. Drag-and-drop scheduling, smart dispatch based on skills and location, and real-time technician tracking — all in one place."
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -188,7 +188,7 @@ export default function SchedulingAndDispatchPage() {
 
       <FeatureGrid
         title="Everything you need to schedule and dispatch jobs"
-        subtitle="One calendar to rule them all. Replace WhatsApp groups, paper schedules, and Excel calendars with a system built for service businesses."
+        subtitle="One calendar to rule them all. Replace group texts, paper schedules, and Excel calendars with a system built for service businesses."
         features={features}
       />
 
@@ -260,7 +260,7 @@ export default function SchedulingAndDispatchPage() {
           inspections — the <strong>recurring job engine</strong> is a quiet
           revenue hero. You define a contract once: customer, asset, service
           type, frequency, price, preferred technician. ServiceOS then
-          auto-schedules every future visit, sends the customer a WhatsApp
+          auto-schedules every future visit, sends the customer an SMS
           reminder 24 hours before, dispatches the technician, and queues the
           invoice for after the job is marked complete. You can pause a
           contract for a season, skip a single visit, or reschedule an
@@ -272,7 +272,7 @@ export default function SchedulingAndDispatchPage() {
           Once a job is dispatched, the technician receives full job details
           on their mobile app — customer info, address, scope, prior service
           history, photos from past visits — along with turn-by-turn
-          navigation. They get a WhatsApp notification too, so dispatches
+          navigation. They get a push notification too, so dispatches
           are never missed. As they move through their day, you see
           everything in real time: live GPS location, current job status,
           and ETA to the next appointment. The <strong>route optimization
@@ -293,7 +293,7 @@ export default function SchedulingAndDispatchPage() {
       />
 
       <CtaSection
-        title="Ready to stop juggling WhatsApp groups and Excel calendars?"
+        title="Ready to stop juggling group texts and Excel calendars?"
         subtitle="Set up your dispatch calendar in under 5 minutes. Free trial, no credit card required."
         primaryCta={{ label: "Start Scheduling Free", href: "/#signup" }}
         secondaryCta={{ label: "Talk to Sales", href: "/contact-us" }}

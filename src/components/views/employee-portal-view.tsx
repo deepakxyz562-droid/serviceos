@@ -19,6 +19,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { useRealtime } from '@/hooks/use-realtime';
+import { authFetch } from '@/lib/client-auth';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -311,14 +312,14 @@ export function EmployeePortalView() {
   const fetchCurrentEmployee = useCallback(async () => {
     try {
       // Try to get the user, then the employee linked via userId
-      const meRes = await fetch('/api/auth/me');
+      const meRes = await authFetch('/api/auth/me');
       let userId: string | undefined;
       if (meRes.ok) {
         const meData = await meRes.json();
         userId = meData.user?.id;
       }
       const url = userId ? `/api/employees?userId=${userId}` : '/api/employees';
-      const res = await fetch(url);
+      const res = await authFetch(url);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
@@ -340,7 +341,7 @@ export function EmployeePortalView() {
   // ── Fetch Active Shift ──
   const fetchShift = useCallback(async () => {
     try {
-      const res = await fetch('/api/employee/shift');
+      const res = await authFetch('/api/employee/shift');
       if (res.ok) {
         const data = await res.json();
         setActiveShift(data.shift || null);
@@ -353,7 +354,7 @@ export function EmployeePortalView() {
   // ── Fetch Today's Totals ──
   const fetchTodayTotals = useCallback(async () => {
     try {
-      const res = await fetch('/api/employee/shift/today');
+      const res = await authFetch('/api/employee/shift/today');
       if (res.ok) {
         const data = await res.json();
         setTodayTotals(data);
@@ -412,7 +413,7 @@ export function EmployeePortalView() {
     if (!currentEmployee?.id) return;
     const send = async () => {
       try {
-        await fetch('/api/employees/heartbeat', {
+        await authFetch('/api/employees/heartbeat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ employeeId: currentEmployee.id }),
@@ -540,7 +541,7 @@ export function EmployeePortalView() {
     ) => {
       setActionLoading(`${action}-${jobId}`);
       try {
-        const res = await fetch(`/api/employee/jobs/${jobId}/lifecycle`, {
+        const res = await authFetch(`/api/employee/jobs/${jobId}/lifecycle`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -625,7 +626,7 @@ export function EmployeePortalView() {
           // ignore — clock-in works without location
         }
       }
-      const res = await fetch('/api/employee/shift', {
+      const res = await authFetch('/api/employee/shift', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ latitude: lat, longitude: lng }),
@@ -652,7 +653,7 @@ export function EmployeePortalView() {
   const handleShiftAction = async (action: 'break' | 'resume' | 'clockout') => {
     setActionLoading(`shift-${action}`);
     try {
-      const res = await fetch('/api/employee/shift', {
+      const res = await authFetch('/api/employee/shift', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
@@ -710,7 +711,7 @@ export function EmployeePortalView() {
     if (!photoJobId || !photoDataUrl) return;
     setActionLoading('photo-upload');
     try {
-      const res = await fetch(`/api/jobs/${photoJobId}/photos`, {
+      const res = await authFetch(`/api/jobs/${photoJobId}/photos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -805,7 +806,7 @@ export function EmployeePortalView() {
     const dataUrl = canvas.toDataURL('image/png');
     setActionLoading('signature');
     try {
-      const res = await fetch(`/api/jobs/${signatureJobId}/signatures`, {
+      const res = await authFetch(`/api/jobs/${signatureJobId}/signatures`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -847,7 +848,7 @@ export function EmployeePortalView() {
     setShowChecklist(true);
     setActionLoading('checklist-load');
     try {
-      const res = await fetch(`/api/jobs/${jobId}/checklist`);
+      const res = await authFetch(`/api/jobs/${jobId}/checklist`);
       if (res.ok) {
         const data = await res.json();
         if (data.checklist && data.checklist.itemsJson) {
@@ -882,7 +883,7 @@ export function EmployeePortalView() {
     try {
       const allChecked = checklistItems.every((it) => it.checked);
       const status = markCompleted ? (allChecked ? 'completed' : 'completed') : 'in_progress';
-      const res = await fetch(`/api/jobs/${checklistJobId}/checklist`, {
+      const res = await authFetch(`/api/jobs/${checklistJobId}/checklist`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items: checklistItems, status }),
@@ -955,7 +956,7 @@ export function EmployeePortalView() {
     // Save completion notes to the job
     if (completionNotes.trim()) {
       try {
-        await fetch(`/api/jobs/${completingJobId}`, {
+        await authFetch(`/api/jobs/${completingJobId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: completingJobId, notes: completionNotes }),

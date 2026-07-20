@@ -70,7 +70,7 @@ const features: Feature[] = [
     icon: FileText,
     title: "Auto-Invoicing After Each Visit",
     description:
-      "The moment a technician marks a visit complete, ServiceOS generates the invoice and sends it via WhatsApp with a payment link. Recurring customers can be set to auto-charge on file — zero chasing, zero missed invoices.",
+      "The moment a technician marks a visit complete, ServiceOS generates the invoice and sends it via Email & SMS with a payment link. Recurring customers can be set to auto-charge on file — zero chasing, zero missed invoices.",
   },
   {
     icon: MapPin,
@@ -84,7 +84,7 @@ const faqs = [
   {
     question: "How does ServiceOS handle recurring lawn treatment schedules?",
     answer:
-      "Lawn care is a recurring business — weekly mows, biweekly visits, six-week fertilization cycles. You define each customer's program (services, frequency, price) once in ServiceOS, and it auto-generates every visit on the right day, assigns it to the right technician and route, sends the customer a WhatsApp reminder the day before, and queues the invoice after the visit is marked complete. When a customer's annual program renews, ServiceOS reschedules the next season's visits automatically and alerts you to any cancellations. Most lawn care businesses cut their office admin time by 60% or more after switching.",
+      "Lawn care is a recurring business — weekly mows, biweekly visits, six-week fertilization cycles. You define each customer's program (services, frequency, price) once in ServiceOS, and it auto-generates every visit on the right day, assigns it to the right technician and route, sends the customer an Email & SMS reminder the day before, and queues the invoice after the visit is marked complete. When a customer's annual program renews, ServiceOS reschedules the next season's visits automatically and alerts you to any cancellations. Most lawn care businesses cut their office admin time by 60% or more after switching.",
   },
   {
     question: "Can I track chemical and fertilizer applications per customer?",
@@ -99,12 +99,12 @@ const faqs = [
   {
     question: "How does weather rescheduling work?",
     answer:
-      "When rain, high wind, or extreme heat is forecast, ServiceOS flags the affected routes for the day and suggests make-up days based on each customer's flexibility and your available capacity. Customers receive an automated WhatsApp message letting them know about the reschedule — no calling 40 houses one by one. The rescheduled visit automatically inherits the original job details, pricing, and product list, so the technician just shows up and treats. Weather-related reschedules go from a full-day office fire drill to a few clicks on a dashboard.",
+      "When rain, high wind, or extreme heat is forecast, ServiceOS flags the affected routes for the day and suggests make-up days based on each customer's flexibility and your available capacity. Customers receive an automated Email & SMS message letting them know about the reschedule — no calling 40 houses one by one. The rescheduled visit automatically inherits the original job details, pricing, and product list, so the technician just shows up and treats. Weather-related reschedules go from a full-day office fire drill to a few clicks on a dashboard.",
   },
   {
     question: "Can customers pay automatically for recurring lawn care?",
     answer:
-      "Absolutely. You can store customer payment methods securely and set recurring programs to auto-charge after each visit — so a customer on a six-treatment fertilization program gets charged automatically after each application, with the invoice sent via WhatsApp as a receipt. For customers who prefer to pay manually, ServiceOS sends the invoice with a payment link and follows up with automated reminders for unpaid balances. Most lawn care businesses using ServiceOS get paid 2x faster and recover 5–10% in missed-billing revenue that previously slipped through the cracks.",
+      "Absolutely. You can store customer payment methods securely and set recurring programs to auto-charge after each visit — so a customer on a six-treatment fertilization program gets charged automatically after each application, with the invoice sent via Email & SMS as a receipt. For customers who prefer to pay manually, ServiceOS sends the invoice with a payment link and follows up with automated reminders for unpaid balances. Most lawn care businesses using ServiceOS get paid 2x faster and recover 5–10% in missed-billing revenue that previously slipped through the cracks.",
   },
   {
     question: "Does ServiceOS work for both mowing and chemical application businesses?",
@@ -209,7 +209,7 @@ export default function LawnCareSoftwarePage() {
                   "Per-customer chemical records — every product, rate, and date, ready for inspection",
                   "Routes optimized by neighborhood and day — 20–30% less drive time",
                   "Weather reschedules handled automatically — customers notified, make-ups queued",
-                  "Invoices sent on WhatsApp the moment the technician marks the visit done",
+                  "Invoices sent via Email & SMS the moment the technician marks the visit done",
                   "Route density map shows you exactly where to add customers and where to stop serving",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2">
@@ -268,7 +268,7 @@ export default function LawnCareSoftwarePage() {
           you did, and an easy way to pay — and they want it without picking
           up the phone. ServiceOS gives every customer a self-serve portal
           for schedules, treatment history, and invoices. Visits trigger
-          automatic WhatsApp reminders and post-visit invoices with payment
+          automatic Email & SMS reminders and post-visit invoices with payment
           links. Recurring programs can be set to auto-charge stored cards.
           The result: fewer office calls, faster payments, and customers who
           renew season after season because the experience is frictionless

@@ -84,7 +84,7 @@ const faqs = [
   {
     question: "How does ServiceOS help with painting estimates and quotes?",
     answer:
-      "ServiceOS turns a site visit into a professional quote fast. You measure the walls and ceilings, enter the paint system (primer, finish coats, product line), and ServiceOS calculates the gallon quantities, labor hours based on your production rates, materials, and your price. The quote goes to the customer on WhatsApp, where they approve with a tap. On approval, the quote converts into a scheduled job, material reservations, and a deposit invoice — no re-keying, no spreadsheets, no handwritten estimates that take an hour to write up. Most painting contractors cut their quoting time by 70% or more after switching.",
+      "ServiceOS turns a site visit into a professional quote fast. You measure the walls and ceilings, enter the paint system (primer, finish coats, product line), and ServiceOS calculates the gallon quantities, labor hours based on your production rates, materials, and your price. The quote goes to the customer via Email & SMS, where they approve with a tap in the customer portal. On approval, the quote converts into a scheduled job, material reservations, and a deposit invoice — no re-keying, no spreadsheets, no handwritten estimates that take an hour to write up. Most painting contractors cut their quoting time by 70% or more after switching.",
   },
   {
     question: "Can I manage multi-room and multi-phase painting projects?",

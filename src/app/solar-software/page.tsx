@@ -88,7 +88,7 @@ const faqs = [
   {
     question: "Can ServiceOS generate solar proposals and system designs?",
     answer:
-      "Yes. Once the site survey is complete, ServiceOS turns the data into a branded solar proposal — system size in kilowatts, panel count and model, inverter selection, estimated annual production in kilowatt-hours, payback period, and 25-year savings compared to utility rates. The proposal includes financing options if you offer them, and the customer signs electronically through a link sent by WhatsApp or email. The signed proposal moves the project straight into permitting and install planning, with the design specs attached to the project record. Your sales team quotes more jobs in a week, and every proposal looks consistent and professional.",
+      "Yes. Once the site survey is complete, ServiceOS turns the data into a branded solar proposal — system size in kilowatts, panel count and model, inverter selection, estimated annual production in kilowatt-hours, payback period, and 25-year savings compared to utility rates. The proposal includes financing options if you offer them, and the customer signs electronically through a link sent by Email & SMS. The signed proposal moves the project straight into permitting and install planning, with the design specs attached to the project record. Your sales team quotes more jobs in a week, and every proposal looks consistent and professional.",
   },
   {
     question: "How does ServiceOS track permitting and utility interconnection?",
@@ -108,7 +108,7 @@ const faqs = [
   {
     question: "How do recurring O&M contracts and lease billing work?",
     answer:
-      "Many solar companies run recurring revenue streams — monthly lease payments on financed systems, annual O&M contracts, monthly monitoring subscriptions — that are notoriously hard to track without dedicated software. ServiceOS lets you define each recurring billing relationship once with the customer, the amount, the frequency, and the payment method on file. The system charges the card on the scheduled date, sends a branded receipt, and flags any failed payment on the dashboard so you can follow up before the customer owes three months of unbilled service. O&M contracts also auto-schedule their annual or semi-annual visits, send the customer a WhatsApp reminder, and queue the technician dispatch. Recurring revenue becomes truly passive instead of a monthly administrative grind.",
+      "Many solar companies run recurring revenue streams — monthly lease payments on financed systems, annual O&M contracts, monthly monitoring subscriptions — that are notoriously hard to track without dedicated software. ServiceOS lets you define each recurring billing relationship once with the customer, the amount, the frequency, and the payment method on file. The system charges the card on the scheduled date, sends a branded receipt, and flags any failed payment on the dashboard so you can follow up before the customer owes three months of unbilled service. O&M contracts also auto-schedule their annual or semi-annual visits, send the customer an Email & SMS reminder, and queue the technician dispatch. Recurring revenue becomes truly passive instead of a monthly administrative grind.",
   },
 ];
 
@@ -168,7 +168,7 @@ export default function SolarSoftwarePage() {
               The chaos of running a solar installation business without software
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Most solar companies still juggle permitting spreadsheets, project folders in Google Drive, and WhatsApp threads for every install. Here&apos;s what that costs you — and what changes when you switch to ServiceOS.
+              Most solar companies still juggle permitting spreadsheets, project folders in Google Drive, and scattered email and text threads for every install. Here&apos;s what that costs you — and what changes when you switch to ServiceOS.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -229,7 +229,7 @@ export default function SolarSoftwarePage() {
           The PTO and monitoring side is where post-install revenue either gets captured or quietly slips away. Permission to operate is the milestone that determines when a project can be billed in full, and too many installed systems sit idle for weeks because nobody is tracking the utility approval. ServiceOS tracks PTO from final inspection through utility approval to system activation, and triggers the final invoice automatically when PTO is granted. Once the system is live, the monitoring integration pulls actual production data so you can spot underperforming systems before the customer calls you. A system producing 70 percent of expected output gets a service visit dispatched; a system producing 95 percent does not. You spend your O&M time on systems that actually need attention, instead of waiting for complaint calls.
         </p>
         <p>
-          Finally, there is the recurring revenue that most solar companies fail to operationalize. Monthly lease payments, annual O&M contracts, and monitoring subscriptions can add up to 10 to 20 percent of total revenue for a mature solar company — but only if they are tracked and billed consistently. ServiceOS runs all of it on autopilot. The system charges the customer's card on the scheduled date, sends a branded receipt, and flags any failed payment on the dashboard so you can follow up before it snowballs into three months of unbilled service. O&M contracts auto-schedule their visits, send WhatsApp reminders, and queue the technician dispatch. Recurring revenue becomes truly passive, which is what makes a solar company attractive to acquirers and resilient to the boom-and-bust cycle of new installs.
+          Finally, there is the recurring revenue that most solar companies fail to operationalize. Monthly lease payments, annual O&M contracts, and monitoring subscriptions can add up to 10 to 20 percent of total revenue for a mature solar company — but only if they are tracked and billed consistently. ServiceOS runs all of it on autopilot. The system charges the customer's card on the scheduled date, sends a branded receipt, and flags any failed payment on the dashboard so you can follow up before it snowballs into three months of unbilled service. O&M contracts auto-schedule their visits, send Email & SMS reminders, and queue the technician dispatch. Recurring revenue becomes truly passive, which is what makes a solar company attractive to acquirers and resilient to the boom-and-bust cycle of new installs.
         </p>
       </ContentSection>
 

@@ -75,7 +75,7 @@ const features: Feature[] = [
     icon: Sparkles,
     title: "Hard-Water Stain Surcharge Quoting",
     description:
-      "When a tech spots hard-water stains or oxidized frames during a routine clean, they tap a button to add a surcharge quote — with photos — sent to the customer through WhatsApp. Upsells that used to be a shoulder-shrug conversation now generate real revenue.",
+      "When a tech spots hard-water stains or oxidized frames during a routine clean, they tap a button to add a surcharge quote — with photos — sent to the customer via Email & SMS. Upsells that used to be a shoulder-shrug conversation now generate real revenue.",
   },
 ];
 
@@ -108,7 +108,7 @@ const faqs = [
   {
     question: "Can ServiceOS help me upsell hard-water stain removal and frame restoration?",
     answer:
-      "Yes, and these upsells are some of the highest-margin work a window cleaning company does. When a tech spots hard-water stains on a pane or oxidized vinyl frames during a routine clean, they tap a button in ServiceOS to generate a surcharge quote with photos of the affected area. The quote goes to the customer through WhatsApp, where they can approve it with one tap. If they approve, the surcharge gets added to that day's invoice. If they decline, the recommendation is on record — which matters when they call six months later complaining that the stains are worse. You capture revenue you used to leave on the table, and you build a documented record of every recommendation you made.",
+      "Yes, and these upsells are some of the highest-margin work a window cleaning company does. When a tech spots hard-water stains on a pane or oxidized vinyl frames during a routine clean, they tap a button in ServiceOS to generate a surcharge quote with photos of the affected area. The quote goes to the customer via Email & SMS, where they can approve it with one tap in the customer portal. If they approve, the surcharge gets added to that day's invoice. If they decline, the recommendation is on record — which matters when they call six months later complaining that the stains are worse. You capture revenue you used to leave on the table, and you build a documented record of every recommendation you made.",
   },
 ];
 

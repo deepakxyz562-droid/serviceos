@@ -151,11 +151,11 @@ _Do not share this code with anyone._`;
     return NextResponse.json({
       success: true,
       message: sendResult.simulated
-        ? `OTP sent (demo mode). Code: ${otpCode}`
+        ? 'OTP sent (demo mode) — check server logs for the code'
         : 'OTP sent via WhatsApp',
       simulated: sendResult.simulated || false,
-      // In demo/simulated mode, return the OTP so the user can test
-      ...(sendResult.simulated ? { otpCode } : {}),
+      // SECURITY: Never return the OTP code in the API response.
+      // In demo mode, the code is logged server-side for testing.
       phone: formatPhoneForDisplay(normalizedPhone),
     });
   } catch (error) {

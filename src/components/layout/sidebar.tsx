@@ -131,6 +131,7 @@ const ownerNavSections: NavSection[] = [
     title: 'Operations',
     items: [
       { view: 'jobs', label: 'Jobs', icon: Briefcase },
+      { view: 'dispatch', label: 'Live Dispatch', icon: Radio },
       { view: 'employees', label: 'Employees', icon: UserCog },
       { view: 'timesheet', label: 'Timesheet', icon: Clock },
       { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },

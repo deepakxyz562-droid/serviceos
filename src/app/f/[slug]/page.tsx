@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 import { HostedFormClient } from './hosted-form-client'
 
 // Hosted Form Page — Public form accessible via /f/[slug]
-// This renders a self-contained form for sharing on WhatsApp, Facebook, etc.
+// This renders a self-contained form for sharing via email, social media, etc.
 export const dynamic = 'force-dynamic'
 
 async function getForm(slug: string) {

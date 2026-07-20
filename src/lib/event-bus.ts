@@ -128,6 +128,97 @@ const JOB_EVENT_MAP: Record<string, JobEventType> = {
   'job.rejected':  'job.rejected',
 }
 
+// ─── Realtime Bridge ──────────────────────────────────────────────────────────
+
+/**
+ * Set of events that should be bridged to the socket.io realtime service.
+ * These are pushed to browser clients via the mini-service on port 3003.
+ */
+const REALTIME_BRIDGED_EVENTS: Set<string> = new Set([
+  // Job lifecycle events (job.*)
+  'job.created',
+  'job.updated',
+  'job.assigned',
+  'job.accepted',
+  'job.started',
+  'job.completed',
+  'job.cancelled',
+  'job.rejected',
+  // Employee presence / location
+  'employee.status_changed',
+  'employee.heartbeat',
+  'employee.location_updated',
+  // GPS pings (emitted by /api/gps/track if wired up)
+  'gps.ping',
+  // Shift events (shift.* / schedule.*)
+  'schedule.trigger',
+  'shift.started',
+  'shift.completed',
+  'shift.break_started',
+  'shift.break_ended',
+])
+
+/**
+ * Returns true if the given event name should be bridged to the realtime
+ * service. Matches the explicit set above plus the wildcard patterns
+ * `job.*`, `shift.*`, and `gps.*` so future events in those namespaces
+ * automatically flow through without needing to update the set.
+ */
+function shouldBridgeEvent(event: string): boolean {
+  if (REALTIME_BRIDGED_EVENTS.has(event)) return true
+  if (event.startsWith('job.')) return true
+  if (event.startsWith('shift.')) return true
+  if (event.startsWith('gps.')) return true
+  return false
+}
+
+/**
+ * Bridge an event to the socket.io realtime service by POSTing to the
+ * internal `/broadcast` endpoint on port 3003.
+ *
+ * This is fire-and-forget: any error is swallowed so a down realtime service
+ * never breaks the in-process event flow. Only events with a tenantId in
+ * their context are bridged (browser clients are joined to `tenant:<id>`
+ * rooms, so without a tenantId there is no room to emit to).
+ */
+function bridgeToRealtime(
+  event: ServiceEvent,
+  data: Record<string, any>,
+  tenantId?: string,
+): void {
+  if (!tenantId) return
+  if (!shouldBridgeEvent(event)) return
+
+  const internalSecret =
+    process.env.REALTIME_INTERNAL_SECRET || 'serviceos-internal'
+  const realtimeUrl =
+    process.env.REALTIME_BROADCAST_URL ||
+    'http://localhost:3003/broadcast'
+
+  const body = {
+    event,
+    room: `tenant:${tenantId}`,
+    payload: {
+      event,
+      timestamp: new Date().toISOString(),
+      tenantId,
+      data,
+    },
+  }
+
+  // Fire-and-forget — swallow errors silently.
+  fetch(realtimeUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-internal-secret': internalSecret,
+    },
+    body: JSON.stringify(body),
+  }).catch(() => {
+    /* ignore — realtime service may be down or unreachable */
+  })
+}
+
 // ─── EventBus Singleton ───────────────────────────────────────────────────────
 
 class EventBusClass {
@@ -258,6 +349,15 @@ class EventBusClass {
       })
     } catch (err) {
       console.error(`[EventBus] Failed to create AuditLog for "${event}":`, err)
+    }
+
+    // ── 4. Bridge to socket.io realtime service (fire-and-forget) ──
+    // Only events with a tenantId in their context are bridged (browser
+    // clients are joined to `tenant:<id>` rooms on the socket server).
+    try {
+      bridgeToRealtime(event, data, payload.tenantId)
+    } catch {
+      // Never let the realtime bridge break the in-process event flow.
     }
   }
 

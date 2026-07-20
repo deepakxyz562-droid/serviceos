@@ -98,7 +98,7 @@ const faqs = [
   {
     question: "Can I bill a roofing job in milestones instead of one lump sum?",
     answer:
-      "Yes, and most roofing contractors should. ServiceOS lets you define a milestone schedule on the project — for example, 30% deposit on contract signature, 30% on tear-off completion, 30% on shingle install, and 10% on final inspection. Each milestone triggers an invoice automatically when the corresponding phase is marked complete in the field. Customers pay through WhatsApp with a card or bank transfer link, and you see real-time status on every dollar outstanding. You stop carrying the homeowner's project on your supplier credit line for weeks at a time.",
+      "Yes, and most roofing contractors should. ServiceOS lets you define a milestone schedule on the project — for example, 30% deposit on contract signature, 30% on tear-off completion, 30% on shingle install, and 10% on final inspection. Each milestone triggers an invoice automatically when the corresponding phase is marked complete in the field. Customers pay through a secure online payment link with a card or bank transfer, and you see real-time status on every dollar outstanding. You stop carrying the homeowner's project on your supplier credit line for weeks at a time.",
   },
   {
     question: "How does ServiceOS track materials and supplier orders?",
@@ -168,7 +168,7 @@ export default function RoofingSoftwarePage() {
               The chaos of running a roofing business without software
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Most roofing contractors still juggle paper work orders, spreadsheet estimates, and WhatsApp groups. Here&apos;s what that costs you — and what changes when you switch to ServiceOS.
+              Most roofing contractors still juggle paper work orders, spreadsheet estimates, and text messages and scattered apps. Here&apos;s what that costs you — and what changes when you switch to ServiceOS.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -229,7 +229,7 @@ export default function RoofingSoftwarePage() {
           Storm season is where roofing CRM software earns its keep. After a hailstorm, a roofing contractor might inspect 40 homes in a week, each one requiring photos, annotated damage marks, a scope of work, and a claim package sent to the insurance adjuster. Without a proper system, that documentation lives across inspector phones, gets lost, and ends up delaying claim approvals by weeks. ServiceOS captures every photo in-app with timestamps and geotags, lets you annotate damage with arrows and category labels, and bundles the whole package into a clean PDF the adjuster can act on. Claims move faster, you close more storm work, and your inspectors stop being document handlers.
         </p>
         <p>
-          Finally, there is the cash flow problem unique to roofing. A residential re-roof can run 8,000 to 25,000 dollars in materials and labor — money the contractor typically front-ends before seeing a dime. Invoicing the entire balance at the end means carrying the homeowner&apos;s project on your supplier credit line for weeks. ServiceOS milestone invoicing fixes this: deposit on signature, second payment when tear-off completes, balance on final inspection. Each milestone triggers automatically when the crew marks the phase complete, the customer pays through WhatsApp, and you see real-time status on every outstanding dollar. Most roofing contractors using ServiceOS cut their days-sales-outstanding in half within the first 60 days.
+          Finally, there is the cash flow problem unique to roofing. A residential re-roof can run 8,000 to 25,000 dollars in materials and labor — money the contractor typically front-ends before seeing a dime. Invoicing the entire balance at the end means carrying the homeowner&apos;s project on your supplier credit line for weeks. ServiceOS milestone invoicing fixes this: deposit on signature, second payment when tear-off completes, balance on final inspection. Each milestone triggers automatically when the crew marks the phase complete, the customer pays through a secure online payment link, and you see real-time status on every outstanding dollar. Most roofing contractors using ServiceOS cut their days-sales-outstanding in half within the first 60 days.
         </p>
       </ContentSection>
 

@@ -21,7 +21,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Plumbing Software & CRM — Schedule, Dispatch & Invoice | ServiceOS",
   description:
-    "Plumbing business software for emergency dispatch, job tracking, parts inventory, and WhatsApp invoicing. The all-in-one plumbing CRM that helps plumbers get paid faster. Start free today.",
+    "Plumbing business software for emergency dispatch, job tracking, parts inventory, and Email & SMS invoicing. The all-in-one plumbing CRM that helps plumbers get paid faster. Start free today.",
   keywords: [
     "plumbing software",
     "plumbing CRM",
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Plumbing Software & CRM | ServiceOS",
     description:
-      "Dispatch technicians, track job history per asset, send WhatsApp quotes and invoices, and manage parts inventory. Plumbing software built for the way plumbers actually work.",
+      "Dispatch technicians, track job history per asset, send Email & SMS quotes and invoices, and manage parts inventory. Plumbing software built for the way plumbers actually work.",
     url: "https://serviceos.com/plumbing-software",
     siteName: "ServiceOS",
     type: "website",
@@ -46,7 +46,7 @@ const features: Feature[] = [
     icon: Siren,
     title: "Emergency Dispatch Routing",
     description:
-      "When a burst pipe call comes in, see every plumber's live location and dispatch the closest qualified technician in seconds. ETAs auto-shared with the customer through WhatsApp.",
+      "When a burst pipe call comes in, see every plumber's live location and dispatch the closest qualified technician in seconds. ETAs auto-shared with the customer through Email & SMS.",
   },
   {
     icon: History,
@@ -56,9 +56,9 @@ const features: Feature[] = [
   },
   {
     icon: MessageSquare,
-    title: "WhatsApp Quote Sending",
+    title: "Email & SMS Quotes",
     description:
-      "Build a quote in ServiceOS and send it straight to the customer's WhatsApp. They approve with a single tap. No more chasing approvals over phone calls or waiting days for an email reply.",
+      "Build a quote in ServiceOS and send it straight to the customer's inbox or phone via SMS. They approve with a single tap. No more chasing approvals over phone calls or waiting days for a reply.",
   },
   {
     icon: Camera,
@@ -70,7 +70,7 @@ const features: Feature[] = [
     icon: CalendarClock,
     title: "Recurring Maintenance Scheduling",
     description:
-      "Annual water heater flushes, bi-annual boiler service, backflow testing — set it once and ServiceOS auto-schedules every visit, sends the customer a WhatsApp reminder, and queues the invoice.",
+      "Annual water heater flushes, bi-annual boiler service, backflow testing — set it once and ServiceOS auto-schedules every visit, sends the customer an SMS reminder, and queues the invoice.",
   },
   {
     icon: Package,
@@ -84,12 +84,12 @@ const faqs = [
   {
     question: "How does ServiceOS handle emergency plumbing dispatch?",
     answer:
-      "When an emergency call comes in, ServiceOS shows you a live map of every technician's current location and job status. You can see who is closest, who is finishing up a job, and who has the right skills for the repair. With one click, the job is dispatched, the customer gets an ETA via WhatsApp, and the technician receives full job details — address, customer history, asset information, and any prior repairs — on their phone. Most plumbing businesses cut their average emergency response time by 30–50% after switching to ServiceOS.",
+      "When an emergency call comes in, ServiceOS shows you a live map of every technician's current location and job status. You can see who is closest, who is finishing up a job, and who has the right skills for the repair. With one click, the job is dispatched, the customer gets an ETA via SMS, and the technician receives full job details — address, customer history, asset information, and any prior repairs — on their phone. Most plumbing businesses cut their average emergency response time by 30–50% after switching to ServiceOS.",
   },
   {
     question: "Can I manage recurring service contracts for plumbing maintenance?",
     answer:
-      "Yes. ServiceOS is built for plumbing businesses that run annual water heater service contracts, bi-annual boiler inspections, and recurring backflow testing programs. You define the contract once — frequency, customer, asset, price — and ServiceOS automatically schedules each visit, sends the customer a WhatsApp reminder before the appointment, dispatches the technician, and generates the invoice after the job is marked complete. You can also track contract renewal dates so you never lose a maintenance customer to a competitor.",
+      "Yes. ServiceOS is built for plumbing businesses that run annual water heater service contracts, bi-annual boiler inspections, and recurring backflow testing programs. You define the contract once — frequency, customer, asset, price — and ServiceOS automatically schedules each visit, sends the customer an SMS reminder before the appointment, dispatches the technician, and generates the invoice after the job is marked complete. You can also track contract renewal dates so you never lose a maintenance customer to a competitor.",
   },
   {
     question: "How does parts and materials tracking work on plumbing jobs?",
@@ -99,7 +99,7 @@ const faqs = [
   {
     question: "Can customers pay on-site after a plumbing job is done?",
     answer:
-      "Yes. As soon as a technician marks the job complete, ServiceOS generates a professional invoice and sends it to the customer via WhatsApp with a secure payment link. Customers can pay by card, UPI, or bank transfer right from their phone — while the plumber is still on-site if needed. You see payment status in real time and can set up automatic reminders for unpaid invoices. Most plumbing businesses using ServiceOS get paid 2x faster than with paper invoices.",
+      "Yes. As soon as a technician marks the job complete, ServiceOS generates a professional invoice and sends it to the customer via Email & SMS with a secure payment link. Customers can pay by card, UPI, or bank transfer right from their phone — while the plumber is still on-site if needed. You see payment status in real time and can set up automatic reminders for unpaid invoices. Most plumbing businesses using ServiceOS get paid 2x faster than with paper invoices.",
   },
   {
     question: "How does ServiceOS help with managing multiple plumbers?",
@@ -117,7 +117,7 @@ export default function PlumbingSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "ServiceOS — Plumbing Business Software",
     description:
-      "Plumbing CRM and dispatch software with emergency routing, asset history, parts inventory, WhatsApp invoicing, and recurring maintenance contracts.",
+      "Plumbing CRM and dispatch software with emergency routing, asset history, parts inventory, Email & SMS invoicing, and recurring maintenance contracts.",
     url: "https://serviceos.com/plumbing-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
@@ -137,7 +137,7 @@ export default function PlumbingSoftwarePage() {
       <CornerstoneHero
         eyebrow="Plumbing Software"
         title="Plumbing Business Software That Keeps Your Pipes — and Schedule — Flowing"
-        subtitle="From emergency calls to scheduled maintenance, ServiceOS helps plumbing businesses dispatch technicians, track jobs, send invoices on WhatsApp, and get paid faster."
+        subtitle="From emergency calls to scheduled maintenance, ServiceOS helps plumbing businesses dispatch technicians, track jobs, send invoices by Email & SMS, and get paid faster."
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -170,8 +170,8 @@ export default function PlumbingSoftwarePage() {
               The chaos of running a plumbing business without software
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Most plumbing businesses still juggle WhatsApp groups, paper work
-              orders, and mental inventory. Here&apos;s what that costs you —
+              Most plumbing businesses still juggle text messages and scattered
+              apps, paper work orders, and mental inventory. Here&apos;s what that costs you —
               and what changes when you switch to ServiceOS.
             </p>
           </div>
@@ -183,7 +183,7 @@ export default function PlumbingSoftwarePage() {
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
-                  "Emergency calls lost in WhatsApp groups, no idea which plumber is closest",
+                  "Emergency calls lost in text messages and scattered apps, no idea which plumber is closest",
                   "No history of previous repairs when a customer calls about a leaky water heater",
                   "Parts inventory tracked in your head — \"I think we have 3 valve cartridges left\"",
                   "Invoices forgotten in the rush to the next emergency call",
@@ -207,7 +207,7 @@ export default function PlumbingSoftwarePage() {
                   "Live map shows every plumber — dispatch the closest qualified tech in seconds",
                   "Full asset history per customer — see every repair on that water heater instantly",
                   "Real-time inventory in the van and warehouse — parts auto-bill to the invoice",
-                  "Invoices generated and sent on WhatsApp the moment the job is marked done",
+                  "Invoices generated and sent by Email & SMS the moment the job is marked done",
                   "Maintenance contracts auto-scheduled — never miss a renewal again",
                   "Customer sees ETA, status, and invoice — no more \"where is my plumber?\" calls",
                 ].map((item) => (
@@ -241,7 +241,7 @@ export default function PlumbingSoftwarePage() {
           cracks. A customer forgets to schedule their annual service, a
           competitor swoops in, and you lose a long-term relationship. ServiceOS
           automates the entire maintenance contract lifecycle: scheduling,
-          customer reminders via WhatsApp, technician dispatch, invoicing, and
+          customer reminders via SMS, technician dispatch, invoicing, and
           renewal alerts. You set it once, and the recurring revenue keeps
           flowing.
         </p>
@@ -267,8 +267,8 @@ export default function PlumbingSoftwarePage() {
           the status? How much will it cost? With plumbing dispatch software
           from ServiceOS, all of this happens in one place. Live GPS shows every
           technician. Dispatch takes seconds. ETAs go to the customer
-          automatically. Quotes and plumbing invoicing flow through WhatsApp,
-          the channel customers actually check. The result: happier customers,
+          automatically. Quotes and plumbing invoicing flow through Email & SMS,
+          the channels customers actually check. The result: happier customers,
           more jobs per day, and faster payments.
         </p>
       </ContentSection>

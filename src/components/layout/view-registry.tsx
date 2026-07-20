@@ -40,6 +40,7 @@ const BookingView = lazy(() => import('@/components/views/booking-view').then(m 
 const CalendarView = lazy(() => import('@/components/views/calendar-view').then(m => ({ default: m.CalendarView })));
 const JobsView = lazy(() => import('@/components/views/jobs-view').then(m => ({ default: m.JobsView })));
 const DispatchView = lazy(() => import('@/components/views/dispatch-view').then(m => ({ default: m.DispatchView })));
+const RealtimeStatusView = lazy(() => import('@/components/views/realtime-status-view').then(m => ({ default: m.RealtimeStatusView })));
 const EmployeesView = lazy(() => import('@/components/views/employees-view').then(m => ({ default: m.EmployeesView })));
 const EmployeePerformanceView = lazy(() => import('@/components/views/employee-performance-view').then(m => ({ default: m.EmployeePerformanceView })));
 const TimesheetView = lazy(() => import('@/components/views/timesheet-view').then(m => ({ default: m.TimesheetView })));
@@ -137,6 +138,7 @@ const lazyViews: Partial<Record<ViewType, ComponentType>> = {
   calendar: CalendarView,
   jobs: JobsView,
   dispatch: DispatchView,
+  realtimeStatus: RealtimeStatusView,
   employees: EmployeesView,
   employeePerformance: EmployeePerformanceView,
   timesheet: TimesheetView,

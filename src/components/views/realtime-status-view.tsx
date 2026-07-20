@@ -1,17 +1,19 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Activity, CheckCircle2, Clock, Circle, ShieldCheck, Send, MapPin,
   ArrowRight, Briefcase, Battery, BatteryCharging, BatteryLow,
   BatteryMedium, BatteryFull, Navigation, RefreshCw, Star, Filter,
-  Settings2, ArrowUpRight, ArrowDownRight,
+  Settings2, ArrowUpRight, ArrowDownRight, Loader2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { authFetch } from '@/lib/client-auth';
+import { useRealtime } from '@/hooks/use-realtime';
 
 // ─── Shared StatCard ──────────────────────────────────────────────
 function StatCard({ title, value, subtitle, icon: Icon, color, bg, trend }: {
@@ -53,26 +55,17 @@ interface EmployeeStatusEntry {
   initials: string;
   role: string;
   status: EmployeeStatus;
-  lastSeen: string;
+  lastSeenAt: string | null;
+  lastSeenLabel: string;
   currentJob: string | null;
   location: string;
   batteryLevel: number;
   rating: number;
   jobsToday: number;
+  avatar?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
-
-const employeeStatuses: EmployeeStatusEntry[] = [
-  { id: 'e1', name: 'Mike Torres', initials: 'MT', role: 'Senior Plumber', status: 'Available', lastSeen: 'Just now', currentJob: null, location: 'Downtown District', batteryLevel: 85, rating: 4.8, jobsToday: 3 },
-  { id: 'e2', name: 'Ana Rodriguez', initials: 'AR', role: 'Cleaning Lead', status: 'Busy', lastSeen: '2 min ago', currentJob: 'JOB-1003 - Deep Clean', location: 'Riverside Heights', batteryLevel: 62, rating: 4.9, jobsToday: 4 },
-  { id: 'e3', name: 'David Chen', initials: 'DC', role: 'HVAC Technician', status: 'In Transit', lastSeen: 'Just now', currentJob: 'JOB-1002 - HVAC Repair', location: 'En route to Westfield', batteryLevel: 44, rating: 4.6, jobsToday: 2 },
-  { id: 'e4', name: 'Sarah Kim', initials: 'SK', role: 'Electrician', status: 'Busy', lastSeen: '5 min ago', currentJob: 'JOB-1006 - Panel Upgrade', location: 'Oakwood Estate', batteryLevel: 91, rating: 4.7, jobsToday: 3 },
-  { id: 'e5', name: 'James Patel', initials: 'JP', role: 'Plumber', status: 'Offline', lastSeen: '2 hrs ago', currentJob: null, location: 'Unknown', batteryLevel: 12, rating: 4.5, jobsToday: 0 },
-  { id: 'e6', name: 'Lisa Wang', initials: 'LW', role: 'Cleaning Tech', status: 'On Leave', lastSeen: '1 day ago', currentJob: null, location: 'N/A', batteryLevel: 0, rating: 4.8, jobsToday: 0 },
-  { id: 'e7', name: 'Robert Adams', initials: 'RA', role: 'HVAC Specialist', status: 'Available', lastSeen: 'Just now', currentJob: null, location: 'Central Hub', batteryLevel: 73, rating: 4.4, jobsToday: 2 },
-  { id: 'e8', name: 'Emily Foster', initials: 'EF', role: 'Electrician', status: 'In Transit', lastSeen: '1 min ago', currentJob: 'JOB-1008 - Wiring Install', location: 'En route to Elm St', batteryLevel: 56, rating: 4.6, jobsToday: 2 },
-  { id: 'e9', name: 'Carlos Mendez', initials: 'CM', role: 'Senior Cleaner', status: 'Busy', lastSeen: '3 min ago', currentJob: 'JOB-1009 - Office Clean', location: 'Business Park A', batteryLevel: 38, rating: 4.7, jobsToday: 5 },
-  { id: 'e10', name: 'Diana Lee', initials: 'DL', role: 'Plumber', status: 'Available', lastSeen: 'Just now', currentJob: null, location: 'Eastside Depot', batteryLevel: 97, rating: 4.9, jobsToday: 1 },
-];
 
 const statusConfig: Record<EmployeeStatus, { color: string; bgColor: string; dotColor: string; borderColor: string; badgeClass: string }> = {
   'Available': { color: 'text-emerald-700', bgColor: 'bg-emerald-50', dotColor: 'bg-emerald-500', borderColor: 'border-emerald-200', badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
@@ -93,18 +86,162 @@ function BatteryIndicator({ level }: { level: number }) {
   );
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────
+
+/**
+ * Map the Employee.status string (raw DB value) to the display status
+ * used by the view. Handles legacy values gracefully.
+ */
+function mapDbStatusToDisplay(rawStatus: string | null | undefined): EmployeeStatus {
+  if (!rawStatus) return 'Offline';
+  const s = rawStatus.toLowerCase();
+  if (s === 'available' || s === 'online') return 'Available';
+  if (s === 'busy' || s === 'working' || s === 'in_progress') return 'Busy';
+  if (s === 'traveling' || s === 'travel' || s === 'en_route' || s === 'in_transit') return 'In Transit';
+  if (s === 'leave' || s === 'on_leave' || s === 'on leave') return 'On Leave';
+  return 'Offline';
+}
+
+function timeAgo(dateStr: string | null | null): string {
+  if (!dateStr) return '—';
+  try {
+    const now = Date.now();
+    const then = new Date(dateStr).getTime();
+    if (!Number.isFinite(then)) return '—';
+    const diffMs = now - then;
+    if (diffMs < 0) return 'just now';
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
+  } catch {
+    return '—';
+  }
+}
+
+function getInitials(name: string): string {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+interface ApiEmployee {
+  id: string;
+  name: string;
+  role?: string | null;
+  status?: string | null;
+  location?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  rating?: number | null;
+  completedJobs?: number | null;
+  lastSeenAt?: string | null;
+  currentJobId?: string | null;
+  avatar?: string | null;
+  onLeaveUntil?: string | null;
+  phone?: string | null;
+}
+
+function mapApiToEntry(emp: ApiEmployee): EmployeeStatusEntry {
+  const display = mapDbStatusToDisplay(emp.status);
+  return {
+    id: emp.id,
+    name: emp.name || 'Unknown',
+    initials: getInitials(emp.name || ''),
+    role: emp.role || 'Technician',
+    status: display,
+    lastSeenAt: emp.lastSeenAt ?? null,
+    lastSeenLabel: timeAgo(emp.lastSeenAt ?? null),
+    currentJob: emp.currentJobId ? `Job ${emp.currentJobId.slice(-6)}` : null,
+    location: emp.location || (emp.latitude && emp.longitude ? `${emp.latitude.toFixed(3)}, ${emp.longitude.toFixed(3)}` : 'Unknown'),
+    batteryLevel: 0, // Not tracked on Employee model — would need GPS pings
+    rating: typeof emp.rating === 'number' ? Math.round(emp.rating * 10) / 10 : 0,
+    jobsToday: typeof emp.completedJobs === 'number' ? emp.completedJobs : 0,
+    avatar: emp.avatar ?? null,
+    latitude: emp.latitude ?? null,
+    longitude: emp.longitude ?? null,
+  };
+}
+
 export function RealtimeStatusView() {
   const [statusFilter, setStatusFilter] = useState<EmployeeStatus | 'All'>('All');
+  const [employees, setEmployees] = useState<EmployeeStatusEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const lastPollRef = useRef<number>(Date.now());
+
+  // ── Fetch the employee list with current status from /api/employees ──
+  const fetchEmployees = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    try {
+      const res = await authFetch('/api/employees?XTransformPort=3000');
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      const list: ApiEmployee[] = Array.isArray(data) ? data : (data?.employees ?? []);
+      const mapped = list.map(mapApiToEntry);
+      setEmployees(mapped);
+      setError(null);
+      lastPollRef.current = Date.now();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to load employees';
+      setError(msg);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  // Initial fetch + 30s polling fallback
+  useEffect(() => {
+    fetchEmployees();
+    const interval = setInterval(() => fetchEmployees(true), 30000);
+    return () => clearInterval(interval);
+  }, [fetchEmployees]);
+
+  // ── Subscribe to realtime status updates ──
+  // The useRealtime hook connects to the socket.io mini-service on port
+  // 3003 (via the Caddy gateway). When the EventBus emits an
+  // `employee.status_changed` event, the bridge POSTs it to the socket
+  // server, which fans it out to all subscribed clients in the same
+  // tenant room. We use the callback to live-update the entry.
+  const { connected: realtimeConnected } = useRealtime({
+    enabled: true,
+    onEmployeeStatus: (data: any) => {
+      const payload = data?.data ?? data;
+      const empId = payload?.employeeId ?? data?.employeeId;
+      if (!empId) return;
+      const newStatus = mapDbStatusToDisplay(payload?.status ?? payload?.toStatus ?? data?.status);
+      setEmployees((prev) =>
+        prev.map((e) =>
+          e.id === empId
+            ? {
+                ...e,
+                status: newStatus,
+                lastSeenAt: new Date().toISOString(),
+                lastSeenLabel: 'just now',
+              }
+            : e,
+        ),
+      );
+    },
+  });
 
   const filteredEmployees = statusFilter === 'All'
-    ? employeeStatuses
-    : employeeStatuses.filter(e => e.status === statusFilter);
+    ? employees
+    : employees.filter(e => e.status === statusFilter);
 
   const statusCounts = {
-    Available: employeeStatuses.filter(e => e.status === 'Available').length,
-    Busy: employeeStatuses.filter(e => e.status === 'Busy').length,
-    Offline: employeeStatuses.filter(e => e.status === 'Offline').length,
-    'On Leave': employeeStatuses.filter(e => e.status === 'On Leave').length,
+    Available: employees.filter(e => e.status === 'Available').length,
+    Busy: employees.filter(e => e.status === 'Busy').length,
+    Offline: employees.filter(e => e.status === 'Offline').length,
+    'On Leave': employees.filter(e => e.status === 'On Leave').length,
   };
 
   return (
@@ -120,14 +257,38 @@ export function RealtimeStatusView() {
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5">
-            <div className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[10px] text-muted-foreground">Live</span>
+            <div className={cn(
+              'size-2 rounded-full animate-pulse',
+              realtimeConnected ? 'bg-emerald-500' : 'bg-slate-300',
+            )} />
+            <span className="text-[10px] text-muted-foreground">
+              {realtimeConnected ? 'Live' : 'Polling'}
+            </span>
           </div>
-          <Button variant="outline" size="sm" className="gap-1.5 text-xs h-7">
-            <RefreshCw className="size-3" />Refresh
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-xs h-7"
+            onClick={() => fetchEmployees(true)}
+            disabled={refreshing}
+          >
+            {refreshing ? (
+              <Loader2 className="size-3 animate-spin" />
+            ) : (
+              <RefreshCw className="size-3" />
+            )}
+            Refresh
           </Button>
         </div>
       </div>
+
+      {error && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="p-4 text-sm text-red-700">
+            Failed to load employee data: {error}. Retrying every 30s.
+          </CardContent>
+        </Card>
+      )}
 
       {/* Status Count Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -157,7 +318,7 @@ export function RealtimeStatusView() {
             {status}
             {status !== 'All' && (
               <span className="text-[9px] opacity-70">
-                ({employeeStatuses.filter(e => e.status === status).length})
+                ({employees.filter(e => e.status === status).length})
               </span>
             )}
           </Button>
@@ -165,89 +326,104 @@ export function RealtimeStatusView() {
       </div>
 
       {/* Employee Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {filteredEmployees.map(emp => {
-          const config = statusConfig[emp.status];
-          const isOnline = emp.status === 'Available' || emp.status === 'Busy' || emp.status === 'In Transit';
-          return (
-            <Card key={emp.id} className={cn('hover:shadow-md transition-all relative overflow-hidden', config.borderColor, 'border')}>
-              {/* Status bar top */}
-              <div className={cn('h-1', config.dotColor)} />
-              <CardContent className="p-4">
-                <div className="flex items-start gap-3">
-                  <div className="relative">
-                    <Avatar className="size-10">
-                      <AvatarFallback className={cn('text-xs font-semibold', config.bgColor, config.color)}>
-                        {emp.initials}
-                      </AvatarFallback>
-                    </Avatar>
-                    {/* Live presence dot */}
-                    {isOnline && (
-                      <div className="absolute -bottom-0.5 -right-0.5">
-                        <div className={cn('size-3.5 rounded-full border-2 border-white', config.dotColor)} />
-                        <div className={cn('absolute inset-0 size-3.5 rounded-full animate-ping opacity-40', config.dotColor)} />
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="size-8 animate-spin text-emerald-600" />
+        </div>
+      ) : filteredEmployees.length === 0 ? (
+        <Card>
+          <CardContent className="p-12 text-center text-sm text-muted-foreground">
+            No employees {statusFilter !== 'All' ? `with status "${statusFilter}"` : 'found'}.
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filteredEmployees.map(emp => {
+            const config = statusConfig[emp.status];
+            const isOnline = emp.status === 'Available' || emp.status === 'Busy' || emp.status === 'In Transit';
+            return (
+              <Card key={emp.id} className={cn('hover:shadow-md transition-all relative overflow-hidden', config.borderColor, 'border')}>
+                {/* Status bar top */}
+                <div className={cn('h-1', config.dotColor)} />
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="relative">
+                      <Avatar className="size-10">
+                        {emp.avatar ? (
+                          <AvatarImage src={emp.avatar} alt={emp.name} />
+                        ) : null}
+                        <AvatarFallback className={cn('text-xs font-semibold', config.bgColor, config.color)}>
+                          {emp.initials}
+                        </AvatarFallback>
+                      </Avatar>
+                      {/* Live presence dot */}
+                      {isOnline && (
+                        <div className="absolute -bottom-0.5 -right-0.5">
+                          <div className={cn('size-3.5 rounded-full border-2 border-white', config.dotColor)} />
+                          <div className={cn('absolute inset-0 size-3.5 rounded-full animate-ping opacity-40', config.dotColor)} />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <p className="text-sm font-semibold truncate">{emp.name}</p>
+                        <Badge variant="outline" className={cn('text-[9px] shrink-0 px-1.5', config.badgeClass)}>
+                          {emp.status}
+                        </Badge>
                       </div>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{emp.role}</p>
+                    </div>
+                  </div>
+
+                  {/* Job Assignment */}
+                  {emp.currentJob && (
+                    <div className="mt-3 p-2 rounded-md bg-muted/50 border">
+                      <div className="flex items-center gap-1.5">
+                        <Briefcase className="size-3 text-emerald-600" />
+                        <span className="text-[10px] font-medium text-emerald-700 truncate">{emp.currentJob}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Info Row */}
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <MapPin className="size-3 text-muted-foreground" />
+                        <span className="text-[10px] text-muted-foreground truncate max-w-[140px]">{emp.location}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="size-3 text-muted-foreground" />
+                        <span className="text-[10px] text-muted-foreground">{emp.lastSeenLabel}</span>
+                      </div>
+                      {emp.batteryLevel > 0 && <BatteryIndicator level={emp.batteryLevel} />}
+                    </div>
+                  </div>
+
+                  {/* Bottom Stats */}
+                  <div className="mt-3 pt-3 border-t flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                      <Star className="size-3 text-amber-500 fill-amber-500" />
+                      <span className="text-[10px] font-medium">{emp.rating || '—'}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Briefcase className="size-3 text-muted-foreground" />
+                      <span className="text-[10px] text-muted-foreground">{emp.jobsToday} completed</span>
+                    </div>
+                    {emp.status === 'Available' && (
+                      <Button size="sm" variant="outline" className="h-6 text-[10px] px-2 gap-1 bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
+                        <Send className="size-2.5" />Assign
+                      </Button>
                     )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1">
-                      <p className="text-sm font-semibold truncate">{emp.name}</p>
-                      <Badge variant="outline" className={cn('text-[9px] shrink-0 px-1.5', config.badgeClass)}>
-                        {emp.status}
-                      </Badge>
-                    </div>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{emp.role}</p>
-                  </div>
-                </div>
-
-                {/* Job Assignment */}
-                {emp.currentJob && (
-                  <div className="mt-3 p-2 rounded-md bg-muted/50 border">
-                    <div className="flex items-center gap-1.5">
-                      <Briefcase className="size-3 text-emerald-600" />
-                      <span className="text-[10px] font-medium text-emerald-700 truncate">{emp.currentJob}</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Info Row */}
-                <div className="mt-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <MapPin className="size-3 text-muted-foreground" />
-                      <span className="text-[10px] text-muted-foreground truncate max-w-[140px]">{emp.location}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <Clock className="size-3 text-muted-foreground" />
-                      <span className="text-[10px] text-muted-foreground">{emp.lastSeen}</span>
-                    </div>
-                    <BatteryIndicator level={emp.batteryLevel} />
-                  </div>
-                </div>
-
-                {/* Bottom Stats */}
-                <div className="mt-3 pt-3 border-t flex items-center justify-between">
-                  <div className="flex items-center gap-1">
-                    <Star className="size-3 text-amber-500 fill-amber-500" />
-                    <span className="text-[10px] font-medium">{emp.rating}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Briefcase className="size-3 text-muted-foreground" />
-                    <span className="text-[10px] text-muted-foreground">{emp.jobsToday} today</span>
-                  </div>
-                  {emp.status === 'Available' && (
-                    <Button size="sm" variant="outline" className="h-6 text-[10px] px-2 gap-1 bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
-                      <Send className="size-2.5" />Assign
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {/* Auto-Status Rules */}
       <Card>

@@ -46,13 +46,13 @@ const features: Feature[] = [
     icon: Clock,
     title: "Same-Day Job Scheduling",
     description:
-      "A customer calls at 9 a.m. with a leaky faucet; you slot them in at 2 p.m. the same day. ServiceOS shows your live availability, sends the customer a WhatsApp confirmation with ETA, and pushes job details to your phone.",
+      "A customer calls at 9 a.m. with a leaky faucet; you slot them in at 2 p.m. the same day. ServiceOS shows your live availability, sends the customer an Email & SMS confirmation with ETA, and pushes job details to your phone.",
   },
   {
     icon: Hammer,
     title: "Flat-Rate vs Time-and-Materials Quoting",
     description:
-      "Quote a fixed price for a hang-a-ceiling-fan job, or bill T&M for a figure-out-why-the-door-sticks diagnostic. ServiceOS supports both — flat-rate quotes approved on WhatsApp, or timer-based T&M invoicing that starts when you arrive.",
+      "Quote a fixed price for a hang-a-ceiling-fan job, or bill T&M for a figure-out-why-the-door-sticks diagnostic. ServiceOS supports both — flat-rate quotes approved via Email & SMS, or timer-based T&M invoicing that starts when you arrive.",
   },
   {
     icon: ClipboardCheck,
@@ -70,7 +70,7 @@ const features: Feature[] = [
     icon: RefreshCw,
     title: "Recurring Maintenance Subscriptions",
     description:
-      "Offer quarterly home checkup subscriptions: HVAC filter changes, gutter cleans, smoke-alarm tests, small fixes caught early. ServiceOS auto-schedules each visit, charges the customer's card, and sends the WhatsApp reminder.",
+      "Offer quarterly home checkup subscriptions: HVAC filter changes, gutter cleans, smoke-alarm tests, small fixes caught early. ServiceOS auto-schedules each visit, charges the customer's card, and sends the Email & SMS reminder.",
   },
   {
     icon: History,
@@ -84,27 +84,27 @@ const faqs = [
   {
     question: "How does ServiceOS help a solo handyman run their business?",
     answer:
-      "ServiceOS is built for solo and small-team handyman businesses — the kind of operation where you're the owner, the estimator, the technician, and the biller all at once. Customers call or message with a job, you slot them into your calendar from your phone, ServiceOS sends them a WhatsApp confirmation with ETA, and when the job is done you tap to send a payment link and get paid before you leave. No spreadsheets, no paper invoices, no chasing payment. Most solo handymen using ServiceOS recover 3–5 hours of admin time every week and get paid on the spot on over 90% of jobs.",
+      "ServiceOS is built for solo and small-team handyman businesses — the kind of operation where you're the owner, the estimator, the technician, and the biller all at once. Customers call or message with a job, you slot them into your calendar from your phone, ServiceOS sends them an Email & SMS confirmation with ETA, and when the job is done you tap to send a payment link and get paid before you leave. No spreadsheets, no paper invoices, no chasing payment. Most solo handymen using ServiceOS recover 3–5 hours of admin time every week and get paid on the spot on over 90% of jobs.",
   },
   {
     question: "Can I quote both flat-rate and time-and-materials jobs?",
     answer:
-      "Yes. ServiceOS handles both quoting styles that handymen actually use. For a defined scope (hang a ceiling fan I already bought), send a flat-rate quote the customer approves on WhatsApp before you arrive. For a diagnostic (figure out why the door keeps sticking), start a T&M timer when you arrive, log materials as you use them, and stop the timer when you're done — ServiceOS builds the invoice from the actual time and materials. You can even mix the two on the same job: a flat diagnostic fee plus T&M for whatever you fix once you've diagnosed the problem.",
+      "Yes. ServiceOS handles both quoting styles that handymen actually use. For a defined scope (hang a ceiling fan I already bought), send a flat-rate quote the customer approves via Email & SMS before you arrive. For a diagnostic (figure out why the door keeps sticking), start a T&M timer when you arrive, log materials as you use them, and stop the timer when you're done — ServiceOS builds the invoice from the actual time and materials. You can even mix the two on the same job: a flat diagnostic fee plus T&M for whatever you fix once you've diagnosed the problem.",
   },
   {
     question: "How does on-site payment work for handymen?",
     answer:
-      "When you mark a job complete, ServiceOS generates the invoice and sends it to the customer's phone via WhatsApp with a secure payment link — while you're still standing in their kitchen. The customer taps the link, pays by card or bank transfer, and you see payment confirmation in real time before you walk out the door. No more I'll mail you a check, no more 30-day chases, no more writing off small unpaid invoices. Most handymen using ServiceOS collect payment on over 90% of jobs before they leave the site, which dramatically improves cash flow and eliminates the awkward follow-up call.",
+      "When you mark a job complete, ServiceOS generates the invoice and sends it to the customer's phone via Email & SMS with a secure payment link — while you're still standing in their kitchen. The customer taps the link, pays by card or bank transfer, and you see payment confirmation in real time before you walk out the door. No more I'll mail you a check, no more 30-day chases, no more writing off small unpaid invoices. Most handymen using ServiceOS collect payment on over 90% of jobs before they leave the site, which dramatically improves cash flow and eliminates the awkward follow-up call.",
   },
   {
     question: "Can I offer recurring maintenance subscriptions to my handyman customers?",
     answer:
-      "Absolutely. Many handymen are now offering quarterly home checkup subscriptions — HVAC filter changes, gutter cleans, smoke-alarm battery tests, small fixes caught early — as a way to smooth out income and build long-term customer relationships. You set up the subscription once in ServiceOS, and it auto-schedules each visit, charges the customer's stored card, sends them a WhatsApp reminder, and queues the work order. Recurring subscriptions turn one-off handyman customers into predictable monthly revenue, and they give you a reason to be in the house when bigger repair opportunities come up.",
+      "Absolutely. Many handymen are now offering quarterly home checkup subscriptions — HVAC filter changes, gutter cleans, smoke-alarm battery tests, small fixes caught early — as a way to smooth out income and build long-term customer relationships. You set up the subscription once in ServiceOS, and it auto-schedules each visit, charges the customer's stored card, sends them an Email & SMS reminder, and queues the work order. Recurring subscriptions turn one-off handyman customers into predictable monthly revenue, and they give you a reason to be in the house when bigger repair opportunities come up.",
   },
   {
     question: "How does ServiceOS handle scope creep on fixed-price handyman jobs?",
     answer:
-      "Scope creep is the silent margin killer for handymen. A customer agrees to hang a TV and then asks you to also patch the drywall, run the cables, and mount the soundbar. ServiceOS handles this with photo checklists: before you start, you photograph the agreed scope and attach it to the work order. When the customer asks for more, you can show the original scope and quote the additional work as a separate line item — sent and approved on WhatsApp before you do it. No more free work, no more awkward conversations at the door, and the customer understands exactly what they're paying for at each step.",
+      "Scope creep is the silent margin killer for handymen. A customer agrees to hang a TV and then asks you to also patch the drywall, run the cables, and mount the soundbar. ServiceOS handles this with photo checklists: before you start, you photograph the agreed scope and attach it to the work order. When the customer asks for more, you can show the original scope and quote the additional work as a separate line item — sent and approved via Email & SMS before you do it. No more free work, no more awkward conversations at the door, and the customer understands exactly what they're paying for at each step.",
   },
   {
     question: "How does customer history work for repeat handyman customers?",
@@ -208,7 +208,7 @@ export default function HandymanSoftwarePage() {
                   "Photo checklists lock in the agreed scope before you start",
                   "On-site card payment collected before you walk out the door",
                   "Full customer history of every fix — pulled up in seconds",
-                  "Same-day scheduling on your phone with WhatsApp ETA to the customer",
+                  "Same-day scheduling on your phone with Email & SMS ETA to the customer",
                   "Quarterly home checkup subscriptions set up once and auto-billed",
                   "T&M timer started on arrival, invoice built from actual time and materials",
                 ].map((item) => (
@@ -244,8 +244,8 @@ export default function HandymanSoftwarePage() {
           for the original quote. ServiceOS fixes this with photo
           checklists: before you start, you photograph the agreed scope and
           attach it to the work order. When the customer asks for more, you
-          can quote it as an additional line item — sent and approved on
-          WhatsApp before you do it. Scope creep goes from a margin drain to
+          can quote it as an additional line item — sent and approved via
+          Email & SMS before you do it. Scope creep goes from a margin drain to
           a revenue opportunity.
         </p>
         <p>
@@ -253,8 +253,8 @@ export default function HandymanSoftwarePage() {
           job without collecting payment — trusting that the customer will
           send a check that may or may not ever arrive. ServiceOS makes
           on-site payment the default: the moment you mark the job complete,
-          the invoice goes to the customer&apos;s phone via WhatsApp with a
-          secure payment link. They pay by card or bank transfer while
+          the invoice goes to the customer&apos;s phone via Email & SMS
+          with a secure payment link. They pay by card or bank transfer while
           you&apos;re still packing up your tools. No chasing, no 30-day
           waits, no writing off small unpaid invoices. Most handymen using
           ServiceOS collect payment on over 90% of jobs before they leave

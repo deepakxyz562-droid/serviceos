@@ -7,7 +7,6 @@ import {
   Phone,
   Clock,
   CheckCircle2,
-  MessageSquare,
   ChevronRight,
   Camera,
   Facebook,
@@ -374,17 +373,6 @@ export default async function PublicBusinessHubPage({
                         >
                           <Phone className="h-4 w-4" />
                           Call
-                        </a>
-                      )}
-                      {business.whatsappPhone && (
-                        <a
-                          href={`https://wa.me/${business.whatsappPhone.replace(/[^0-9]/g, '')}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-input bg-background px-3 py-2 text-sm font-medium hover:bg-accent transition-colors"
-                        >
-                          <MessageSquare className="h-4 w-4" />
-                          WhatsApp
                         </a>
                       )}
                     </div>

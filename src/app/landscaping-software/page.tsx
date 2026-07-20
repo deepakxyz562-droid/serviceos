@@ -46,7 +46,7 @@ const features: Feature[] = [
     icon: Trees,
     title: "Design-Build Project Proposals",
     description:
-      "Turn site visits into visual proposals with before photos, line-item scopes, and material lists. Customers approve the design-build quote on WhatsApp, and the approved proposal converts straight into a job and deposit invoice — no re-keying.",
+      "Turn site visits into visual proposals with before photos, line-item scopes, and material lists. Customers approve the design-build quote online, and the approved proposal converts straight into a job and deposit invoice — no re-keying.",
   },
   {
     icon: Truck,
@@ -76,7 +76,7 @@ const features: Feature[] = [
     icon: Droplets,
     title: "Quote-to-Invoice Flow",
     description:
-      "Build a quote from your price book, send it via WhatsApp, and on approval it converts to a scheduled job, a work order, and a final invoice. Irrigation, planting, hardscaping — all the same clean flow, no double entry.",
+      "Build a quote from your price book, send it via Email & SMS, and on approval it converts to a scheduled job, a work order, and a final invoice. Irrigation, planting, hardscaping — all the same clean flow, no double entry.",
   },
 ];
 
@@ -84,12 +84,12 @@ const faqs = [
   {
     question: "How does ServiceOS handle recurring weekly mowing routes?",
     answer:
-      "ServiceOS treats weekly and biweekly mow contracts as recurring schedules. You define the customer, the service (mow, trim, blow), the frequency, and the price — and ServiceOS auto-generates each visit on the right day, assigns it to the crew that owns that neighborhood, and queues the invoice after the crew marks the job done. Customers get a WhatsApp reminder the day before, and you get route-density reports that show which neighborhoods are profitable and which crews are running behind. Most landscape businesses cut drive time by 20–30% within the first month of using ServiceOS routing.",
+      "ServiceOS treats weekly and biweekly mow contracts as recurring schedules. You define the customer, the service (mow, trim, blow), the frequency, and the price — and ServiceOS auto-generates each visit on the right day, assigns it to the crew that owns that neighborhood, and queues the invoice after the crew marks the job done. Customers get an Email & SMS reminder the day before, and you get route-density reports that show which neighborhoods are profitable and which crews are running behind. Most landscape businesses cut drive time by 20–30% within the first month of using ServiceOS routing.",
   },
   {
     question: "Can I quote and sell design-build landscaping projects through ServiceOS?",
     answer:
-      "Yes. After a site visit, you build a proposal in ServiceOS with before photos, a line-item scope (plants, pavers, labor, equipment), and your price. The proposal goes to the customer on WhatsApp, where they approve with a single tap. On approval, ServiceOS creates the job, reserves the materials in inventory, schedules the crew, and generates a deposit invoice — so the design-build sale flows straight into operations without you re-entering a single line. Customers love the visual proposals, and you close more work without the back-and-forth of email threads.",
+      "Yes. After a site visit, you build a proposal in ServiceOS with before photos, a line-item scope (plants, pavers, labor, equipment), and your price. The proposal goes to the customer via Email & SMS, where they approve with a single tap in the customer portal. On approval, ServiceOS creates the job, reserves the materials in inventory, schedules the crew, and generates a deposit invoice — so the design-build sale flows straight into operations without you re-entering a single line. Customers love the visual proposals, and you close more work without the back-and-forth of email threads.",
   },
   {
     question: "How does material and plant inventory work for landscapers?",
@@ -104,7 +104,7 @@ const faqs = [
   {
     question: "How does invoicing work for landscaping businesses?",
     answer:
-      "As soon as a crew marks a job complete, ServiceOS generates a professional invoice with labor, materials, and photos attached, then sends it to the customer via WhatsApp with a secure payment link. For design-build projects, you can set up milestone invoicing — deposit on approval, progress billing at phase completions, final on walk-through. Customers pay by card or bank transfer from their phone, and you see payment status in real time with automated reminders for unpaid balances. Most landscape businesses using ServiceOS get paid 2x faster than with paper invoices.",
+      "As soon as a crew marks a job complete, ServiceOS generates a professional invoice with labor, materials, and photos attached, then sends it to the customer via Email & SMS with a secure payment link. For design-build projects, you can set up milestone invoicing — deposit on approval, progress billing at phase completions, final on walk-through. Customers pay by card or bank transfer from their phone, and you see payment status in real time with automated reminders for unpaid balances. Most landscape businesses using ServiceOS get paid 2x faster than with paper invoices.",
   },
   {
     question: "Can I manage both residential and commercial landscaping contracts?",
@@ -137,7 +137,7 @@ export default function LandscapingSoftwarePage() {
       <CornerstoneHero
         eyebrow="Landscaping Software"
         title="Landscaping Business Software That Keeps Your Crews — and Your Margins — Growing"
-        subtitle="From weekly mow routes to multi-week design-build projects, ServiceOS helps landscaping businesses optimize crews, quote faster, track materials, and get paid on WhatsApp."
+        subtitle="From weekly mow routes to multi-week design-build projects, ServiceOS helps landscaping businesses optimize crews, quote faster, track materials, and get paid via Email & SMS."
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -170,8 +170,9 @@ export default function LandscapingSoftwarePage() {
               The chaos of running a landscaping business without software
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Most landscaping businesses still juggle WhatsApp groups, paper
-              work orders, and a mental inventory of mulch. Here&apos;s what
+              Most landscaping businesses still juggle text messages and
+              scattered apps, paper work orders, and a mental inventory of
+              mulch. Here&apos;s what
               that costs you — and what changes when you switch to ServiceOS.
             </p>
           </div>
@@ -205,11 +206,11 @@ export default function LandscapingSoftwarePage() {
               <ul className="space-y-2 text-sm text-muted-foreground">
                 {[
                   "Routes optimized automatically — crews hit 8–12 jobs in the right order, every day",
-                  "Proposals sent on WhatsApp, customers approve with a tap, no more lost email threads",
+                  "Proposals sent via Email & SMS, customers approve with a tap, no more lost email threads",
                   "Materials auto-deduct from inventory and roll onto the invoice at your marked-up price",
                   "Recurring mow contracts set once — auto-scheduled for the whole season",
                   "Before/after photos on every job, attached to the work order and ready for disputes",
-                  "Invoices generated and sent on WhatsApp the moment the crew marks the job done",
+                  "Invoices generated and sent via Email & SMS the moment the crew marks the job done",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
@@ -252,8 +253,8 @@ export default function LandscapingSoftwarePage() {
           proposal that lives in an email thread can sit unanswered for weeks.
           A material list that lives in your head can blow a budget by 20%.
           ServiceOS turns site visits into visual proposals with before
-          photos, line-item scopes, and your price — sent to the customer on
-          WhatsApp, approved with a tap, and converted straight into a
+          photos, line-item scopes, and your price — sent to the customer
+          via Email & SMS, approved with a tap, and converted straight into a
           scheduled job with materials reserved and a deposit invoice
           generated. You close more design-build work, and you execute it
           with the materials and crew already lined up.

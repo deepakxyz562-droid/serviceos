@@ -21,7 +21,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Cleaning Business Software — Schedule, Track & Invoice | ServiceOS",
   description:
-    "Cleaning business software for recurring schedules, cleaner dispatch, GPS tracking, secure access management, and WhatsApp reminders. The cleaning CRM that grows recurring revenue.",
+    "Cleaning business software for recurring schedules, cleaner dispatch, GPS tracking, secure access management, and Email & SMS reminders. The cleaning CRM that grows recurring revenue.",
   keywords: [
     "cleaning business software",
     "cleaning CRM",
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Cleaning Business Software | ServiceOS",
     description:
-      "Schedule one-time deep cleans and recurring weekly services. Track which cleaner is where, send WhatsApp reminders, manage access codes securely, and never lose a payment.",
+      "Schedule one-time deep cleans and recurring weekly services. Track which cleaner is where, send Email & SMS reminders, manage access codes securely, and never lose a payment.",
     url: "https://serviceos.com/cleaning-business-software",
     siteName: "ServiceOS",
     type: "website",
@@ -62,9 +62,9 @@ const features: Feature[] = [
   },
   {
     icon: MessageSquare,
-    title: "WhatsApp Appointment Reminders",
+    title: "Email & SMS Appointment Reminders",
     description:
-      "Automated WhatsApp reminders before every clean — \"Your cleaner Maria arrives at 10 a.m. tomorrow.\" Customers confirm or reschedule with one tap. No-shows and locked-door surprises drop to near zero.",
+      "Automated Email & SMS reminders before every clean — \"Your cleaner Maria arrives at 10 a.m. tomorrow.\" Customers confirm or reschedule with one tap. No-shows and locked-door surprises drop to near zero.",
   },
   {
     icon: ListChecks,
@@ -76,7 +76,7 @@ const features: Feature[] = [
     icon: Receipt,
     title: "Recurring Invoicing",
     description:
-      "Set up recurring billing once and ServiceOS generates and sends invoices automatically — weekly, bi-weekly, monthly. Customers pay by card or UPI through a WhatsApp link. You track paid, pending, and overdue at a glance.",
+      "Set up recurring billing once and ServiceOS generates and sends invoices automatically — weekly, bi-weekly, monthly. Customers pay by card or bank transfer through a secure online payment link. You track paid, pending, and overdue at a glance.",
   },
 ];
 
@@ -104,12 +104,12 @@ const faqs = [
   {
     question: "Does ServiceOS handle recurring billing for cleaning contracts?",
     answer:
-      "Yes — recurring billing is fully automated in ServiceOS. When you set up a recurring schedule for a customer, you also set up the recurring billing: price, frequency (matches the cleaning cadence or a custom billing cycle), and payment method. ServiceOS then generates and sends invoices automatically on the schedule you define. Customers receive invoices via WhatsApp with a secure payment link — they pay by card, UPI, or bank transfer without leaving WhatsApp. You see a dashboard showing paid, pending, and overdue invoices at a glance, with automatic payment reminders sent to customers who haven't paid. Most cleaning businesses using ServiceOS eliminate overdue invoices almost entirely.",
+      "Yes — recurring billing is fully automated in ServiceOS. When you set up a recurring schedule for a customer, you also set up the recurring billing: price, frequency (matches the cleaning cadence or a custom billing cycle), and payment method. ServiceOS then generates and sends invoices automatically on the schedule you define. Customers receive invoices via Email and SMS with a secure payment link — they pay by card or bank transfer through the online customer portal. You see a dashboard showing paid, pending, and overdue invoices at a glance, with automatic payment reminders sent to customers who haven't paid. Most cleaning businesses using ServiceOS eliminate overdue invoices almost entirely.",
   },
   {
     question: "Can customers provide feedback after each cleaning visit?",
     answer:
-      "Yes. After every job, ServiceOS sends the customer an automated WhatsApp message thanking them for their business and asking for a quick rating (1–5 stars) and optional feedback. Positive feedback is automatically routed to your reviews page or Google Business profile (with the customer's permission). Negative feedback routes immediately to you so you can reach out and fix the issue before it becomes a bad review publicly. This continuous feedback loop helps you identify your best cleaners, catch quality issues early, and build a strong online reputation that drives new customer acquisition.",
+      "Yes. After every job, ServiceOS sends the customer an automated Email and SMS message thanking them for their business and asking for a quick rating (1–5 stars) and optional feedback. Positive feedback is automatically routed to your reviews page or Google Business profile (with the customer's permission). Negative feedback routes immediately to you so you can reach out and fix the issue before it becomes a bad review publicly. This continuous feedback loop helps you identify your best cleaners, catch quality issues early, and build a strong online reputation that drives new customer acquisition.",
   },
 ];
 
@@ -137,7 +137,7 @@ export default function CleaningBusinessSoftwarePage() {
       <CornerstoneHero
         eyebrow="Cleaning Business Software"
         title="Cleaning Business Software for Recurring Revenue & Happy Customers"
-        subtitle="Schedule one-time deep cleans and recurring weekly services. Track which cleaner is where, send WhatsApp reminders, and never lose track of a payment again."
+        subtitle="Schedule one-time deep cleans and recurring weekly services. Track which cleaner is where, send Email & SMS reminders, and never lose track of a payment again."
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -158,7 +158,7 @@ export default function CleaningBusinessSoftwarePage() {
 
       <FeatureGrid
         title="Everything a cleaning business needs to grow recurring revenue"
-        subtitle="Recurring schedules, reliable cleaner dispatch, secure access management, quality control, and recurring billing — all in one WhatsApp-first platform."
+        subtitle="Recurring schedules, reliable cleaner dispatch, secure access management, quality control, and recurring billing — all in one Email, SMS & Push platform."
         features={features}
       />
 
@@ -207,7 +207,7 @@ export default function CleaningBusinessSoftwarePage() {
                 {[
                   "GPS check-in alerts you the moment a cleaner doesn't arrive on time",
                   "Encrypted access vault — cleaners see only what they need, when they need it",
-                  "Automated WhatsApp reminders before every clean — no more surprises",
+                  "Automated Email & SMS reminders before every clean — no more surprises",
                   "Recurring invoices generated and sent automatically, payments tracked",
                   "Quality checklists with photo proof — consistent results every time",
                   "Drag-and-drop scheduling — change one visit without breaking the series",
@@ -272,9 +272,10 @@ export default function CleaningBusinessSoftwarePage() {
           checklists per service type and photo proof for problem areas, so
           you can spot quality issues before customers do. Recurring billing
           means every invoice goes out on time, every payment is tracked, and
-          every overdue balance is chased automatically — through WhatsApp, the
-          channel customers actually respond to. Together, these turn a chaotic
-          cleaning operation into a recurring revenue machine. That&apos;s
+          every overdue balance is chased automatically — through Email, SMS
+          and Push notifications, the channels customers actually respond to.
+          Together, these turn a chaotic cleaning operation into a recurring
+          revenue machine. That&apos;s
           what maid service software and janitorial software should do — not
           just schedule jobs, but protect and grow the recurring revenue that
           makes the business valuable.

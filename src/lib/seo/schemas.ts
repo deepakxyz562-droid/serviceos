@@ -21,7 +21,7 @@ export function getOrganizationSchema() {
     url: SITE_URL,
     logo: LOGO_URL,
     description:
-      "ServiceOS is the operating system for service businesses — scheduling, dispatch, invoicing, WhatsApp-first operations, and field service management.",
+      "ServiceOS is the operating system for service businesses — scheduling, dispatch, invoicing, Email, SMS & Push notifications, and field service management.",
     foundingDate: "2024",
     sameAs: [
       "https://twitter.com/serviceos",

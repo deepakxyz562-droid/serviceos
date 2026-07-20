@@ -21,7 +21,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "HVAC Software — Dispatch, Service & Invoice | ServiceOS",
   description:
-    "HVAC service software for seasonal demand, preventive maintenance contracts, equipment history, and certified technician dispatch. WhatsApp-first HVAC CRM. Start free today.",
+    "HVAC service software for seasonal demand, preventive maintenance contracts, equipment history, certified technician dispatch, and Email & SMS customer communication. Start free today.",
   keywords: [
     "hvac software",
     "hvac CRM",
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "HVAC Software — Dispatch, Service & Invoice | ServiceOS",
     description:
-      "Handle summer and winter demand spikes, track equipment service history, schedule preventive maintenance, and dispatch certified technicians — all in one WhatsApp-first HVAC CRM.",
+      "Handle summer and winter demand spikes, track equipment service history, schedule preventive maintenance, and dispatch certified technicians — all in one HVAC CRM with Email, SMS, and Push notifications.",
     url: "https://serviceos.com/hvac-software",
     siteName: "ServiceOS",
     type: "website",
@@ -58,13 +58,13 @@ const features: Feature[] = [
     icon: ShieldCheck,
     title: "Preventive Maintenance Contracts",
     description:
-      "Sell more maintenance agreements by making them effortless to deliver. ServiceOS auto-schedules seasonal tune-ups, sends WhatsApp reminders, dispatches the right tech, and renews the contract — automatically, every year.",
+      "Sell more maintenance agreements by making them effortless to deliver. ServiceOS auto-schedules seasonal tune-ups, sends SMS reminders, dispatches the right tech, and renews the contract — automatically, every year.",
   },
   {
     icon: MessageSquare,
-    title: "WhatsApp Service Reminders",
+    title: "Automated SMS Reminders",
     description:
-      "Filter changes, seasonal start-ups, and tune-up reminders sent automatically via WhatsApp — the channel customers actually read. Customers tap to confirm, you tap to schedule. Renewal rates double overnight.",
+      "Filter changes, seasonal start-ups, and tune-up reminders sent automatically via Email & SMS — the channels customers actually read. Customers tap to confirm, you tap to schedule. Renewal rates double overnight.",
   },
   {
     icon: Camera,
@@ -84,12 +84,12 @@ const faqs = [
   {
     question: "How does ServiceOS handle the summer and winter HVAC rush?",
     answer:
-      "Seasonal demand is the defining challenge of an HVAC business. When the first heatwave or cold snap hits, call volume can jump 5x overnight. ServiceOS handles the surge in three ways: first, an emergency triage queue that prioritizes calls by urgency (no AC in 100°F with elderly residents gets priority). Second, dynamic dispatch that shows every available technician, their certifications, and live location so you can route the right tech to the right job fast. Third, automated WhatsApp communication that keeps customers informed — ETA, technician name, status updates — so they stop calling you for updates. Most HVAC businesses using ServiceOS report handling 40% more rush-period calls without adding staff.",
+      "Seasonal demand is the defining challenge of an HVAC business. When the first heatwave or cold snap hits, call volume can jump 5x overnight. ServiceOS handles the surge in three ways: first, an emergency triage queue that prioritizes calls by urgency (no AC in 100°F with elderly residents gets priority). Second, dynamic dispatch that shows every available technician, their certifications, and live location so you can route the right tech to the right job fast. Third, automated Email, SMS, and Push notifications that keep customers informed — ETA, technician name, status updates — so they stop calling you for updates. Most HVAC businesses using ServiceOS report handling 40% more rush-period calls without adding staff.",
   },
   {
     question: "Can I track preventive maintenance contracts in ServiceOS?",
     answer:
-      "Yes — preventive maintenance contracts are a core workflow in ServiceOS. You define each contract once: customer, equipment, service frequency (spring tune-up, fall furnace check, bi-annual, quarterly), price, and renewal date. ServiceOS then automatically schedules each visit, sends the customer a WhatsApp reminder before the appointment, dispatches the technician, generates the invoice, and tracks the contract renewal date. When renewal time approaches, ServiceOS alerts you to reach out and lock in another year. HVAC businesses that switch to ServiceOS typically grow their maintenance contract revenue by 30–50% in the first year.",
+      "Yes — preventive maintenance contracts are a core workflow in ServiceOS. You define each contract once: customer, equipment, service frequency (spring tune-up, fall furnace check, bi-annual, quarterly), price, and renewal date. ServiceOS then automatically schedules each visit, sends the customer an SMS reminder before the appointment, dispatches the technician, generates the invoice, and tracks the contract renewal date. When renewal time approaches, ServiceOS alerts you to reach out and lock in another year. HVAC businesses that switch to ServiceOS typically grow their maintenance contract revenue by 30–50% in the first year.",
   },
   {
     question: "How does equipment service history work in HVAC software?",
@@ -109,7 +109,7 @@ const faqs = [
   {
     question: "Can I automate filter change and tune-up reminders to customers?",
     answer:
-      "Absolutely. Filter changes are the highest-leverage reminder an HVAC business can send — they keep equipment running efficiently, prevent expensive breakdowns, and generate goodwill (and often a tune-up visit). ServiceOS sends automated WhatsApp reminders at the interval you define for each piece of equipment — monthly for 1-inch filters, quarterly for 4-inch, annually for media filters. Customers tap to confirm they changed it themselves, or tap to schedule a service visit. This simple automation typically drives a 20–30% increase in tune-up visits and a meaningful drop in emergency breakdown calls.",
+      "Absolutely. Filter changes are the highest-leverage reminder an HVAC business can send — they keep equipment running efficiently, prevent expensive breakdowns, and generate goodwill (and often a tune-up visit). ServiceOS sends automated SMS reminders at the interval you define for each piece of equipment — monthly for 1-inch filters, quarterly for 4-inch, annually for media filters. Customers tap to confirm they changed it themselves, or tap to schedule a service visit. This simple automation typically drives a 20–30% increase in tune-up visits and a meaningful drop in emergency breakdown calls.",
   },
 ];
 
@@ -117,7 +117,7 @@ export default function HvacSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "ServiceOS — HVAC Service Software",
     description:
-      "HVAC CRM and dispatch software with seasonal demand scheduling, equipment asset tracking, preventive maintenance contracts, certified technician dispatch, and WhatsApp invoicing.",
+      "HVAC CRM and dispatch software with seasonal demand scheduling, equipment asset tracking, preventive maintenance contracts, certified technician dispatch, and Email & SMS invoicing.",
     url: "https://serviceos.com/hvac-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
@@ -137,7 +137,7 @@ export default function HvacSoftwarePage() {
       <CornerstoneHero
         eyebrow="HVAC Software"
         title="HVAC Service Software for Cooling, Heating & Everything in Between"
-        subtitle="Manage seasonal demand spikes, track equipment service history, schedule preventive maintenance, and send invoices that get paid — all in one WhatsApp-first platform."
+        subtitle="Manage seasonal demand spikes, track equipment service history, schedule preventive maintenance, and send invoices that get paid — all in one platform with Email, SMS, and Push notifications."
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -172,7 +172,7 @@ export default function HvacSoftwarePage() {
             <p className="text-muted-foreground max-w-2xl mx-auto">
               When the first heatwave hits, every HVAC business feels the same
               pain. Here&apos;s what changes when you replace spreadsheets and
-              WhatsApp groups with software designed for HVAC.
+              text messages and scattered apps with software designed for HVAC.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -209,7 +209,7 @@ export default function HvacSoftwarePage() {
                   "Maintenance contracts auto-renewed — never lose another one",
                   "Certification-aware dispatch — only qualified techs assigned",
                   "Refrigerant usage tracked per job with full compliance audit trail",
-                  "Customers get automated WhatsApp updates — they stop calling you",
+                  "Customers get automated SMS and Push updates — they stop calling you",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
@@ -241,7 +241,7 @@ export default function HvacSoftwarePage() {
           spreadsheets or paper files is a losing battle. Contracts get
           forgotten, customers don&apos;t get called, and a competitor swoops in
           with a friendly reminder. ServiceOS automates the entire maintenance
-          contract lifecycle: scheduling, WhatsApp reminders, dispatch,
+          contract lifecycle: scheduling, SMS reminders, dispatch,
           invoicing, and renewal. You set it once, and the recurring revenue
           keeps flowing.
         </p>

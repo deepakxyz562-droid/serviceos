@@ -169,7 +169,7 @@ export function PayPalCheckoutDialog({
 
   return (
     <Dialog open={true} onOpenChange={() => onClose()}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg" style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 20px)' }}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Wallet className="h-5 w-5 text-emerald-600" />

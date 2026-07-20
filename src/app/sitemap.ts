@@ -73,7 +73,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.9,
       changeFreq: "monthly",
     },
-    { path: "/serviceos-vs-jobber", priority: 0.8, changeFreq: "monthly" },
 
     // ─── Cornerstone: Feature pages ──────────────────────────────────────
     { path: "/scheduling-and-dispatch", priority: 0.8, changeFreq: "monthly" },

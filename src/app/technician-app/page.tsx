@@ -111,7 +111,7 @@ const dayInLife = [
     time: "Finish",
     title: "Get signature & mark complete",
     description:
-      "When the work is done, the customer signs on the phone screen to confirm satisfaction. The technician marks the job complete — which triggers the office to auto-generate the invoice and send it on WhatsApp.",
+      "When the work is done, the customer signs on the phone screen to confirm satisfaction. The technician marks the job complete — which triggers the office to auto-generate the invoice and send it by Email & SMS.",
   },
   {
     icon: Cloud,
@@ -126,7 +126,7 @@ const faqs = [
   {
     question: "Do technicians need to download an app?",
     answer:
-      "No app store visit required. ServiceOS is a progressive web app (PWA) — technicians open a link in their phone's browser (Chrome, Safari, Samsung Internet), tap 'Add to Home Screen', and it installs like a native app with its own icon, splash screen, and full-screen experience. This means zero friction on day one: no App Store account, no Google Play login, no waiting for downloads. It also means updates are instant — when we ship a new feature, every technician gets it the next time they open the app, no update prompts required. Most service businesses get their entire field team set up in under 10 minutes by sending a single WhatsApp link.",
+      "No app store visit required. ServiceOS is a progressive web app (PWA) — technicians open a link in their phone's browser (Chrome, Safari, Samsung Internet), tap 'Add to Home Screen', and it installs like a native app with its own icon, splash screen, and full-screen experience. This means zero friction on day one: no App Store account, no Google Play login, no waiting for downloads. It also means updates are instant — when we ship a new feature, every technician gets it the next time they open the app, no update prompts required. Most service businesses get their entire field team set up in under 10 minutes by sending a single SMS or email link.",
   },
   {
     question: "Does it work on iPhone and Android?",
@@ -151,7 +151,7 @@ const faqs = [
   {
     question: "Can technicians create invoices?",
     answer:
-      "Technicians don't create invoices from scratch — but they trigger them. When a technician marks a job complete, they capture the parts used, log their labor hours, attach before-and-after photos, and collect the customer's signature. ServiceOS then compiles all of that into a draft invoice automatically, with line items pulled from the work order, labor calculated from time entries, and tax applied based on the customer's location. The office reviews the draft and hits send — usually within 60 seconds of job completion. For technicians who are trusted to bill directly (solo operators, owner-technicians, senior field techs), you can grant them permission to send invoices straight from the field without office review. Either way, the customer receives a professional PDF invoice plus a payment link on WhatsApp instantly. No more end-of-week invoice catch-up marathons.",
+      "Technicians don't create invoices from scratch — but they trigger them. When a technician marks a job complete, they capture the parts used, log their labor hours, attach before-and-after photos, and collect the customer's signature. ServiceOS then compiles all of that into a draft invoice automatically, with line items pulled from the work order, labor calculated from time entries, and tax applied based on the customer's location. The office reviews the draft and hits send — usually within 60 seconds of job completion. For technicians who are trusted to bill directly (solo operators, owner-technicians, senior field techs), you can grant them permission to send invoices straight from the field without office review. Either way, the customer receives a professional PDF invoice plus a payment link by Email & SMS instantly. No more end-of-week invoice catch-up marathons.",
   },
 ];
 
@@ -263,7 +263,7 @@ export default function TechnicianAppPage() {
           a native app means the App Store and Google Play — accounts, review
           processes, update delays, and friction getting technicians to
           install it. A PWA installs in one tap from a link you send over
-          WhatsApp. No accounts, no stores, no waiting. Second, updates: when
+          SMS or email. No accounts, no stores, no waiting. Second, updates: when
           we ship a new feature or bug fix, every technician gets it the next
           time they open the app. There&apos;s no &quot;waiting for users to
           update&quot; problem that plagues native apps — including
@@ -298,7 +298,7 @@ export default function TechnicianAppPage() {
           dashboard automatically. The dispatcher sees the job is done in
           real time. The accountant sees the parts to bill. The system
           automatically compiles it all into a draft invoice, ready for the
-          office to review and send on WhatsApp. The customer gets a
+          office to review and send by Email & SMS. The customer gets a
           professional PDF invoice with a one-tap payment link within
           minutes of the technician leaving their driveway. No end-of-day
           phone calls to report job status. No end-of-week catch-up entering

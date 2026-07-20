@@ -2,12 +2,22 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import crypto from 'crypto'
 import { toISOString } from '@/lib/utils'
+import { getAuthUser } from '@/lib/auth'
 
 // POST /api/customer-portal - Generate customer portal session
+// Requires authenticated admin/owner — unauthenticated callers cannot mint sessions.
 export async function POST(request: NextRequest) {
   try {
+    const authUser = await getAuthUser()
+    if (!authUser || !['owner', 'admin', 'super_admin', 'manager'].includes(authUser.role)) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
+    }
+
     const body = await request.json()
-    const { customerId, phone, expiresInHours, tenantId } = body
+    const { customerId, phone, expiresInHours } = body
 
     if (!customerId && !phone) {
       return NextResponse.json(
@@ -92,10 +102,21 @@ export async function GET(request: NextRequest) {
     const tenantId = searchParams.get('tenantId')
 
     // List mode: return all portal sessions (optionally filtered by tenantId)
+    // Requires authentication — unauthenticated callers cannot list sessions.
     if (list === 'true') {
+      const authUser = await getAuthUser()
+      if (!authUser) {
+        return NextResponse.json(
+          { error: 'Authentication required' },
+          { status: 401 }
+        )
+      }
       const where: Record<string, unknown> = {}
-      if (tenantId) {
+      // Scope to the authenticated user's tenant (super_admin can pass tenantId explicitly)
+      if (authUser.role === 'super_admin' && tenantId) {
         where.tenantId = tenantId
+      } else if (authUser.tenantId) {
+        where.tenantId = authUser.tenantId
       }
 
       const sessions = await db.customerPortalSession.findMany({

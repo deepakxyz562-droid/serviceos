@@ -25,7 +25,7 @@ import {
 export const metadata: Metadata = {
   title: "10 Best Jobber Alternatives in 2026 — Free & Paid | ServiceOS",
   description:
-    "Looking for a Jobber alternative? We compare the top 10 Jobber alternatives and competitors for field service businesses — pricing, features, WhatsApp integration, and which is best for your market.",
+    "Looking for a Jobber alternative? We compare the top 10 Jobber alternatives and competitors for field service businesses — pricing, features, Email & SMS messaging, and which is best for your market.",
   keywords: [
     "jobber alternative",
     "jobber alternatives",
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "10 Best Jobber Alternatives in 2026 | ServiceOS",
     description:
-      "Compare the top 10 Jobber alternatives — features, pricing, WhatsApp integration, and which fits your field service business.",
+      "Compare the top 10 Jobber alternatives — features, pricing, Email & SMS messaging, and which fits your field service business.",
     url: "https://serviceos.com/jobber-alternatives",
     siteName: "ServiceOS",
     type: "article",
@@ -47,7 +47,7 @@ export const metadata: Metadata = {
 
 // ─── ServiceOS vs Jobber comparison rows ────────────────────────────────────
 const comparisonRows: { feature: string; serviceos: boolean; competitor: boolean }[] = [
-  { feature: "WhatsApp-native customer messaging", serviceos: true, competitor: false },
+  { feature: "Email & SMS customer messaging included", serviceos: true, competitor: false },
   { feature: "Transparent, public pricing", serviceos: true, competitor: false },
   { feature: "Offline-capable technician app (PWA)", serviceos: true, competitor: true },
   { feature: "Free invoice generator (no signup)", serviceos: true, competitor: false },
@@ -56,7 +56,7 @@ const comparisonRows: { feature: string; serviceos: boolean; competitor: boolean
   { feature: "Multi-currency & multi-language", serviceos: true, competitor: true },
   { feature: "Mobile-first PWA (no app store install)", serviceos: true, competitor: false },
   { feature: "Free plan for solo operators", serviceos: true, competitor: false },
-  { feature: "Pay-as-you-go WhatsApp credits", serviceos: true, competitor: false },
+  { feature: "No-code automation builder (n8n)", serviceos: true, competitor: false },
 ];
 
 // ─── Top 10 Jobber alternatives ─────────────────────────────────────────────
@@ -72,11 +72,11 @@ const alternatives: {
   {
     position: 1,
     name: "ServiceOS",
-    bestFor: "WhatsApp-first service businesses in India, LATAM & SEA",
+    bestFor: "Service businesses in India, LATAM & SEA",
     pricing: "Free tier → paid plans",
     url: "https://serviceos.com",
     description:
-      "A modern, WhatsApp-native field service platform built for non-US markets. PWA technician app, free invoice generator, multi-currency, and transparent pricing without per-user surprises.",
+      "A modern, multi-channel field service platform built for non-US markets. PWA technician app, free invoice generator, multi-currency, and transparent pricing without per-user surprises.",
     highlight: true,
   },
   {
@@ -86,7 +86,7 @@ const alternatives: {
     pricing: "$49–$200/mo",
     url: "https://housecallpro.com",
     description:
-      "A popular all-in-one FSM for US home services with strong dispatch, invoicing, and a polished mobile app. Less suited for WhatsApp-heavy markets.",
+      "A popular all-in-one FSM for US home services with strong dispatch, invoicing, and a polished mobile app. Less suited for multi-currency, non-US markets.",
   },
   {
     position: 3,
@@ -122,7 +122,7 @@ const alternatives: {
     pricing: "$49–$199/mo",
     url: "https://getjobber.com",
     description:
-      "The benchmark we are comparing against. Strong scheduling, good mobile app, large ecosystem — but no native WhatsApp, US-centric, and per-user pricing adds up.",
+      "The benchmark we are comparing against. Strong scheduling, good mobile app, large ecosystem — but no free tier, US-centric, and per-user pricing adds up.",
   },
   {
     position: 7,
@@ -149,7 +149,7 @@ const alternatives: {
     pricing: "$25–$85/user/mo",
     url: "https://synchroteam.com",
     description:
-      "Field service software with a focus on route optimization, time tracking, and a clean mobile app. Good international footprint but limited WhatsApp support.",
+      "Field service software with a focus on route optimization, time tracking, and a clean mobile app. Good international footprint but limited automation builder.",
   },
   {
     position: 10,
@@ -172,9 +172,9 @@ const switchReasons = [
   },
   {
     icon: MessageSquare,
-    title: "WhatsApp-first",
+    title: "Email & SMS included out-of-the-box",
     description:
-      "If your customers live on WhatsApp — most of the world does — ServiceOS treats WhatsApp as the primary channel, not an afterthought via third-party Zapier zaps.",
+      "If your customers prefer SMS or email — most of the world does — ServiceOS ships with Email and SMS messaging included, no third-party integrations or approvals needed. Quotes, job updates, invoices, and payment links all flow through natively.",
   },
   {
     icon: Globe,
@@ -197,9 +197,9 @@ const faqs = [
       "For most small teams — yes. Jobber starts around $49/mo and scales per user, which means a 5-technician team can easily pay $150+/mo. ServiceOS has a free tier for solo operators and paid plans that scale with usage, not headcount. We also publish pricing openly so you know what you will pay next year, not just this month.",
   },
   {
-    question: "Does ServiceOS have WhatsApp integration?",
+    question: "Does ServiceOS support Email and SMS messaging?",
     answer:
-      "Yes — WhatsApp is a first-class channel, not a bolt-on. You can send quotes, job updates, invoices, and payment links directly through WhatsApp, and customer replies automatically thread into the right conversation inside ServiceOS. This is the single biggest reason field service businesses in India, Latin America, and Southeast Asia switch from Jobber to ServiceOS.",
+      "Yes — Email and SMS are first-class channels in ServiceOS, included out-of-the-box with no third-party integrations or approvals required. You can send quotes, job updates, invoices, and payment links directly through Email and SMS, and customer replies automatically thread into the right conversation inside ServiceOS. This is the single biggest reason field service businesses in India, Latin America, and Southeast Asia switch from Jobber to ServiceOS.",
   },
   {
     question: "Can I migrate from Jobber to ServiceOS?",
@@ -209,17 +209,17 @@ const faqs = [
   {
     question: "Is there a free Jobber alternative?",
     answer:
-      "Yes — ServiceOS offers a free tier designed for solo operators and very small teams. You get scheduling, invoicing, customer CRM, and a limited number of WhatsApp messages per month. There are no time limits and no credit card required to start. When you grow, you upgrade on your terms.",
+      "Yes — ServiceOS offers a free tier designed for solo operators and very small teams. You get scheduling, invoicing, customer CRM, and a limited number of SMS messages per month. There are no time limits and no credit card required to start. When you grow, you upgrade on your terms.",
   },
   {
     question: "What's the best Jobber alternative for small businesses?",
     answer:
-      "For small service businesses (1–5 technicians), the two strongest Jobber alternatives are ServiceOS and Kickserv. ServiceOS is better if WhatsApp is a primary customer channel or you operate outside North America. Kickserv is a good budget pick for US-based solo operators who want simple scheduling and invoicing. Housecall Pro is also popular for US home services, but pricing ramps quickly.",
+      "For small service businesses (1–5 technicians), the two strongest Jobber alternatives are ServiceOS and Kickserv. ServiceOS is better if Email and SMS are primary customer channels or you operate outside North America. Kickserv is a good budget pick for US-based solo operators who want simple scheduling and invoicing. Housecall Pro is also popular for US home services, but pricing ramps quickly.",
   },
   {
     question: "What's the best Jobber alternative for India?",
     answer:
-      "ServiceOS is purpose-built for the Indian market. It supports UPI and rupee invoicing, WhatsApp business messaging (which is how most Indian customers communicate), multi-language workflows, and Indian GST tax handling. Jobber does not natively support WhatsApp or Indian payment rails, which is why most Indian service businesses find ServiceOS a better operational fit.",
+      "ServiceOS is purpose-built for the Indian market. It supports UPI and rupee invoicing, Email & SMS business messaging (which is how most Indian customers communicate), multi-language workflows, and Indian GST tax handling. Jobber does not natively support Indian payment rails or SMS workflows out of the box, which is why most Indian service businesses find ServiceOS a better operational fit.",
   },
 ];
 
@@ -227,7 +227,7 @@ export default function JobberAlternativesPage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "ServiceOS — Jobber Alternative",
     description:
-      "WhatsApp-native field service management software and Jobber alternative for India, LATAM, and SEA service businesses.",
+      "Email & SMS-native field service management software and Jobber alternative for India, LATAM, and SEA service businesses.",
     url: "https://serviceos.com/jobber-alternatives",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
@@ -259,7 +259,7 @@ export default function JobberAlternativesPage() {
       <CornerstoneHero
         eyebrow="Jobber Alternatives"
         title="Looking for a Jobber Alternative? Here Are the 10 Best Options in 2026"
-        subtitle="Whether Jobber is too expensive, too complex, or missing WhatsApp integration, we compare the top 10 Jobber alternatives for field service businesses — including ServiceOS."
+        subtitle="Whether Jobber is too expensive, too complex, or missing multi-channel messaging, we compare the top 10 Jobber alternatives for field service businesses — including ServiceOS."
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -340,12 +340,13 @@ export default function JobberAlternativesPage() {
           feature set is built around US workflows.
         </p>
         <p>
-          The second reason is <strong>WhatsApp</strong>. In most of the world, WhatsApp is how
-          customers communicate with businesses. Jobber does not have native WhatsApp support —
-          you need third-party integrations like Zapier, which are brittle and add cost. If 80% of
-          your customers prefer WhatsApp over email or SMS, that gap becomes a deal-breaker.
-          ServiceOS was built WhatsApp-first, so quotes, job updates, invoices, and payment links
-          all flow through WhatsApp natively.
+          The second reason is <strong>multi-channel messaging</strong>. In most of the world,
+          SMS and email are how customers communicate with businesses. Jobber does not include
+          native SMS and Email messaging out of the box — you need third-party integrations
+          like Zapier, which are brittle and add cost. If 80% of your customers prefer SMS
+          or email over phone calls, that gap becomes a deal-breaker. ServiceOS was built
+          Email & SMS-first, so quotes, job updates, invoices, and payment links all flow
+          through Email and SMS natively.
         </p>
         <p>
           The third reason is <strong>complexity and market fit</strong>. Jobber is feature-rich,

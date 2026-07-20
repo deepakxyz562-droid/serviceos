@@ -5,11 +5,11 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Data Deletion Policy — ServiceOS CRM",
   description:
-    "Learn how to request deletion of your personal data from ServiceOS CRM. Covers account holders, end customers, and Meta/WhatsApp users. Compliant with GDPR, CCPA, and Meta Platform Terms. Last updated March 5, 2026.",
+    "Learn how to request deletion of your personal data from ServiceOS CRM. Covers account holders, end customers, and Meta platform users. Compliant with GDPR, CCPA, and Meta Platform Terms. Last updated March 5, 2026.",
   openGraph: {
     title: "Data Deletion Policy — ServiceOS CRM",
     description:
-      "Learn how to request deletion of your personal data from ServiceOS CRM. Covers account holders, end customers, and Meta/WhatsApp users. Compliant with GDPR, CCPA, and Meta Platform Terms.",
+      "Learn how to request deletion of your personal data from ServiceOS CRM. Covers account holders, end customers, and Meta platform users. Compliant with GDPR, CCPA, and Meta Platform Terms.",
     url: "https://serviceos.com/data-deletion",
     siteName: "ServiceOS",
     type: "website",
@@ -180,10 +180,10 @@ export default function DataDeletionPage() {
                   </li>
                   <li>
                     <strong className="text-foreground">
-                      Meta/WhatsApp Users
+                      Meta Platform Users
                     </strong>{" "}
                     &mdash; individuals who interact with ServiceOS through
-                    WhatsApp or Facebook integrations.
+                    Facebook integrations.
                   </li>
                 </ul>
                 <p className="text-muted-foreground leading-relaxed">
@@ -248,7 +248,7 @@ export default function DataDeletionPage() {
                 </h3>
                 <p className="text-muted-foreground leading-relaxed">
                   If you interact with ServiceOS through Meta integrations
-                  (WhatsApp Business API, Facebook Login), you have the right to
+                  (Facebook Login), you have the right to
                   request deletion of the data we receive from Meta. We provide a
                   data deletion callback URL and honor all deletion requests
                   received through the Meta Platform in compliance with their
@@ -345,10 +345,10 @@ export default function DataDeletionPage() {
                 </p>
 
                 <h3 className="text-lg font-semibold text-foreground mt-8 mb-3">
-                  3.3 For Meta/WhatsApp Users
+                  3.3 For Meta Platform Users
                 </h3>
                 <p className="text-muted-foreground leading-relaxed mb-3">
-                  If you interact with ServiceOS through WhatsApp Business API or
+                  If you interact with ServiceOS through
                   Facebook integrations, you can request deletion through:
                 </p>
                 <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed mb-4">
@@ -371,7 +371,7 @@ export default function DataDeletionPage() {
                       privacy@serviceos.com
                     </a>{" "}
                     with the subject line &quot;Meta Data Deletion Request.&quot;
-                    Include your Facebook User ID or WhatsApp phone number so we
+                    Include your Facebook User ID so we
                     can locate and delete your data.
                   </li>
                 </ul>
@@ -433,7 +433,6 @@ export default function DataDeletionPage() {
                   4.3 Communication Data
                 </h3>
                 <ul className="list-disc pl-6 space-y-1 text-muted-foreground leading-relaxed mb-6">
-                  <li>WhatsApp messages and conversation history</li>
                   <li>Email logs and correspondence records</li>
                   <li>Chat transcripts and support ticket communications</li>
                   <li>Notification history and delivery records</li>
@@ -597,7 +596,7 @@ export default function DataDeletionPage() {
                       </tr>
                       <tr className="border-b">
                         <td className="p-4 text-muted-foreground">
-                          Meta/WhatsApp Data
+                          Meta Platform Data
                         </td>
                         <td className="p-4 text-muted-foreground">
                           Callback within 24 hours
@@ -637,8 +636,7 @@ export default function DataDeletionPage() {
                   7. Data Deletion for Meta Platform
                 </h2>
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  ServiceOS integrates with Meta platforms (Facebook and WhatsApp
-                  Business API) to provide communication and business management
+                  ServiceOS integrates with Meta platforms (Facebook Login) to provide authentication and business management
                   features. This section describes how we handle data deletion
                   requests originating from Meta in compliance with the Meta
                   Platform Terms.
@@ -684,12 +682,6 @@ export default function DataDeletionPage() {
                   <li>Facebook User ID</li>
                   <li>
                     Facebook profile name and email (if authorized)
-                  </li>
-                  <li>
-                    WhatsApp phone number and profile information
-                  </li>
-                  <li>
-                    WhatsApp message content exchanged through the Business API
                   </li>
                   <li>
                     Contact lists synced from Facebook (if authorized)
@@ -754,12 +746,12 @@ export default function DataDeletionPage() {
                 </p>
 
                 <h3 className="text-lg font-semibold text-foreground mt-8 mb-3">
-                  8.1 Meta/WhatsApp
+                  8.1 Meta (Facebook)
                 </h3>
                 <p className="text-muted-foreground leading-relaxed mb-6">
-                  We request deletion of your data from Meta/WhatsApp via their
-                  API. This includes removing WhatsApp Business API profile
-                  associations and requesting deletion of conversation metadata.
+                  We request deletion of your data from Meta via their API. This
+                  includes removing Facebook Login profile
+                  associations and requesting deletion of account metadata.
                   Please note that Meta may retain certain data in accordance
                   with their own data policies and legal obligations. We
                   encourage you to review Meta&apos;s data policy at{" "}
@@ -919,9 +911,9 @@ export default function DataDeletionPage() {
                   </li>
                   <li>
                     <strong className="text-foreground">
-                      WhatsApp Communications:
+                      SMS Communications:
                     </strong>{" "}
-                    Opt out of WhatsApp messages by replying &quot;STOP&quot; to
+                    Opt out of SMS messages by replying &quot;STOP&quot; to
                     any message, or contact us to update your communication
                     preferences.
                   </li>

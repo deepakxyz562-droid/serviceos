@@ -26,7 +26,7 @@ const subjectOptions = [
   "General Inquiry",
   "Sales & Pricing",
   "Technical Support",
-  "WhatsApp Integration",
+  "Integrations",
   "Billing",
   "Partnership",
   "Data & Privacy",

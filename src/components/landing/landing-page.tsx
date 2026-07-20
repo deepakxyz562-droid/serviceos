@@ -57,6 +57,7 @@ import {
   Inbox,
   Megaphone,
   Headphones,
+  Bell,
   type LucideIcon,
 } from 'lucide-react';
 import Image from 'next/image';
@@ -97,7 +98,7 @@ const stats = [
 const channelPills = [
   { icon: Mail, label: 'Email' },
   { icon: MessageSquareText, label: 'SMS' },
-  { icon: MessageCircle, label: 'WhatsApp', optional: true },
+  { icon: Bell, label: 'Push' },
 ];
 
 const targetIndustries: { icon: LucideIcon; label: string; tint: string }[] = [
@@ -118,7 +119,7 @@ const problemCards = [
   {
     icon: Inbox,
     title: 'Scattered leads everywhere',
-    description: 'Inquiries land in WhatsApp groups, missed calls, web forms, and walk-ins — with no single source of truth. Leads slip through the cracks daily.',
+    description: 'Inquiries land in scattered text messages, missed calls, web forms, and walk-ins — with no single source of truth. Leads slip through the cracks daily.',
     image: '/images/landing/problem-leads.png',
   },
   {
@@ -194,7 +195,7 @@ const featurePillars = [
     title: 'Omnichannel Communication',
     tagline: 'Reach customers where they are',
     image: '/images/landing/pillar-communication.png',
-    features: ['Unified inbox (Email + SMS)', 'Email campaigns', 'SMS broadcasts', 'Marketing templates', 'Omnichannel journeys', 'WhatsApp (optional add-on)'],
+    features: ['Unified inbox (Email + SMS)', 'Email campaigns', 'SMS broadcasts', 'Push notifications', 'Marketing templates', 'Omnichannel journeys'],
   },
   {
     icon: Wallet,
@@ -234,14 +235,14 @@ const primaryChannels = [
     primary: true,
   },
   {
-    icon: MessageCircle,
-    title: 'WhatsApp',
-    setup: '1–4 weeks',
-    approval: 'Meta Business Verification',
-    bestFor: 'High-engagement markets (IN, BR, ID)',
-    description: 'Add WhatsApp Business API when ready. We guide you through Meta approval step-by-step.',
-    image: '/images/landing/channel-whatsapp.png',
-    primary: false,
+    icon: Bell,
+    title: 'Push Notifications',
+    setup: 'Instant',
+    approval: 'None required',
+    bestFor: 'Job updates, owner alerts, real-time pings',
+    description: 'Keep owners and technicians instantly informed with web and mobile push notifications for every job lifecycle event.',
+    image: '/images/landing/channel-push.png',
+    primary: true,
   },
 ];
 
@@ -284,7 +285,7 @@ const testimonials = [
     name: 'Rajesh Kumar',
     business: 'Kumar Plumbing Co.',
     industry: 'Plumbing · Chennai',
-    quote: 'Before ServiceOS, I was losing leads in WhatsApp groups every week. Now every inquiry lands in one inbox, and I get paid the same day the job finishes. Email and SMS work right away — no approvals needed.',
+    quote: 'Before ServiceOS, I was losing leads in scattered text messages and spreadsheets every week. Now every inquiry lands in one inbox, and I get paid the same day the job finishes. Email and SMS work right away — no approvals needed.',
     avatar: '/images/landing/testimonial-1.png',
     metric: '+42% revenue in 3 months',
   },
@@ -292,7 +293,7 @@ const testimonials = [
     name: 'Sarah Mitchell',
     business: 'Sparkle Clean Services',
     industry: 'Cleaning · Manchester',
-    quote: 'Every lead from my website and SMS lands in one inbox now — no more missed inquiries. My customers love getting SMS reminders before appointments. I added WhatsApp last month and the team walked me through Meta approval in days.',
+    quote: 'Every lead from my website and SMS lands in one inbox now — no more missed inquiries. My customers love getting SMS reminders before appointments, and I get push notifications on my phone the moment a new lead comes in.',
     avatar: '/images/landing/testimonial-2.png',
     metric: '−35% no-show rate',
   },
@@ -333,7 +334,7 @@ const pricingPlans: PricingPlan[] = [
     yearlyPrice: 150,
     description: 'For growing teams',
     icon: Building2,
-    features: ['5 users', '1,000 jobs/month', 'Email + SMS included', 'Smart dispatch & routing', 'Advanced CRM & pipeline', 'AI Assistant', 'Priority support', 'WhatsApp add-on available'],
+    features: ['5 users', '1,000 jobs/month', 'Email + SMS included', 'Push notifications', 'Smart dispatch & routing', 'Advanced CRM & pipeline', 'AI Assistant', 'Priority support'],
     popular: true,
     cta: 'Start Free Trial',
   },
@@ -343,7 +344,7 @@ const pricingPlans: PricingPlan[] = [
     yearlyPrice: 300,
     description: 'For scaling businesses',
     icon: Shield,
-    features: ['Unlimited users', 'Unlimited jobs', 'Email + SMS included', 'n8n automation builder', 'Custom workflows', 'API access', 'Dedicated support', 'WhatsApp add-on available'],
+    features: ['Unlimited users', 'Unlimited jobs', 'Email + SMS included', 'Push notifications', 'n8n automation builder', 'Custom workflows', 'API access', 'Dedicated support'],
     cta: 'Start Free Trial',
   },
   {
@@ -359,12 +360,12 @@ const pricingPlans: PricingPlan[] = [
 
 const faqs = [
   {
-    question: 'Do I need WhatsApp to use ServiceOS?',
-    answer: 'No. ServiceOS works out of the box with Email and SMS — no approvals, no waiting. You can capture leads, send quotes, dispatch jobs, invoice customers, and collect payments entirely over Email and SMS. WhatsApp Business API is available as an optional add-on on Growth and Pro plans if you operate in high-engagement markets like India, Brazil, or Indonesia.',
+    question: 'Do I need any third-party approvals to get started?',
+    answer: 'No. ServiceOS works out of the box with Email, SMS, Push, and In-App notifications — no approvals, no waiting. You can capture leads, send quotes, dispatch jobs, invoice customers, and collect payments from day one. Everything you need to run your service business is included on every plan.',
   },
   {
     question: 'How long does it take to get set up?',
-    answer: 'Most businesses are up and running in under an hour. Sign up with your email, import your customer list (CSV upload), set up your services and pricing, and start capturing leads immediately. Email and SMS work from minute one. WhatsApp, if you choose to add it, takes 1–4 weeks for Meta Business Verification — we guide you through every step.',
+    answer: 'Most businesses are up and running in under an hour. Sign up with your email, import your customer list (CSV upload), set up your services and pricing, and start capturing leads immediately. Email, SMS, and Push notifications work from minute one — no setup or approvals required.',
   },
   {
     question: 'Can I import my existing customers?',
@@ -376,7 +377,7 @@ const faqs = [
   },
   {
     question: 'Do you charge per message or per call?',
-    answer: 'Email and SMS are included in every plan with generous monthly limits (1,000 emails + 1,000 SMS on Growth, unlimited on Pro). WhatsApp messages are billed at cost (Meta\'s rates) and only on plans where the add-on is enabled. No hidden fees, no per-seat charges, no surprises.'
+    answer: 'Email and SMS are included in every plan with generous monthly limits (1,000 emails + 1,000 SMS on Growth, unlimited on Pro). Push and in-app notifications are always unlimited. No hidden fees, no per-seat charges, no per-message surprises.'
   },
   {
     question: 'Is my data secure and backed up?',
@@ -415,7 +416,6 @@ const seoIndustries = [
 ];
 
 const seoCompare = [
-  { label: 'ServiceOS vs Jobber', href: '/serviceos-vs-jobber' },
   { label: 'Jobber Alternatives', href: '/jobber-alternatives' },
   { label: 'Housecall Pro Alternatives', href: '/housecall-pro-alternatives' },
   { label: 'ServiceTitan Alternatives', href: '/servicetitan-alternatives' },
@@ -560,7 +560,6 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
               <div className="pt-2">
                 <p className="text-xs uppercase tracking-wider text-muted-foreground/70 mb-1">Compare</p>
                 <a href="/jobber-alternatives" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileMenuOpen(false)}>Jobber Alternatives</a>
-                <a href="/serviceos-vs-jobber" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileMenuOpen(false)}>ServiceOS vs Jobber</a>
                 <a href="/best-field-service-software" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileMenuOpen(false)}>Best Field Service Software</a>
               </div>
               <Separator className="bg-border" />
@@ -608,7 +607,7 @@ function HeroSection({ onGetStarted, onTryDemo }: { onGetStarted: () => void; on
             </motion.h1>
 
             <motion.p variants={staggerItem} className="text-lg text-muted-foreground max-w-xl mb-8 leading-relaxed">
-              ServiceOS replaces WhatsApp groups, Excel trackers, and paper forms. Capture leads, dispatch jobs, invoice clients, and get paid — over Email & SMS by default, with WhatsApp as an optional channel.
+              ServiceOS replaces scattered texts, emails, and spreadsheets. Capture leads, dispatch jobs, invoice clients, and get paid — with Email, SMS, Push, and In-App notifications built in.
             </motion.p>
 
             <motion.div variants={staggerItem} className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-6">
@@ -821,7 +820,7 @@ function HowItWorksSection() {
               Three steps to <span className="text-primary">operational excellence</span>
             </h2>
             <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">
-              Get up and running in minutes. Our streamlined process replaces messy WhatsApp groups and spreadsheets.
+              Get up and running in minutes. Our streamlined process replaces messy text threads and spreadsheets.
             </p>
           </motion.div>
 
@@ -1017,7 +1016,7 @@ function ChannelsSection() {
               Reach customers <span className="text-primary">where they are</span>
             </h2>
             <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">
-              Email and SMS work out of the box — no approvals, no waiting. Connect WhatsApp when you&apos;re ready for high-engagement markets.
+              Email, SMS, and Push notifications work out of the box — no approvals, no waiting. Reach your customers and team instantly from day one.
             </p>
           </motion.div>
 
@@ -1075,21 +1074,6 @@ function ChannelsSection() {
             })}
           </div>
 
-          <motion.div variants={staggerItem}>
-            <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5 sm:p-6">
-              <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-lg bg-amber-100 border border-amber-200 flex items-center justify-center flex-shrink-0">
-                  <MessageCircle className="w-4 h-4 text-amber-600" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-semibold text-amber-900 mb-1">About WhatsApp Business API</h4>
-                  <p className="text-xs text-amber-800/80 leading-relaxed">
-                    WhatsApp is a powerful channel — but it requires <strong>Meta Business Verification</strong> (1–4 weeks), template message approval, and per-message fees billed at Meta&apos;s rates. If you operate in India, Brazil, Indonesia, or other high-WhatsApp markets, it&apos;s worth the setup. If not, Email + SMS cover 95% of customer communication needs from day one. We guide every customer through Meta approval when you&apos;re ready — no stress, no surprises.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </motion.div>
         </div>
       </AnimatedSection>
     </section>
@@ -1424,7 +1408,7 @@ function PricingSection({ onGetStarted }: { onGetStarted: () => void }) {
 
           <motion.div variants={staggerItem} className="mt-8 text-center">
             <p className="text-xs text-muted-foreground">
-              <strong className="text-foreground">All plans include</strong> Email & SMS notifications, lead capture, invoicing, and the Live Demo. WhatsApp Business API is available as an optional add-on on Growth and Pro plans.
+              <strong className="text-foreground">All plans include</strong> Email, SMS, Push, and In-App notifications, lead capture, invoicing, and the Live Demo.
             </p>
           </motion.div>
         </div>
@@ -1517,7 +1501,7 @@ function Footer() {
               <span className="text-xl font-bold text-background tracking-tight">ServiceOS</span>
             </div>
             <p className="text-background/70 text-sm max-w-xs leading-relaxed">
-              The operating system for service businesses. From leads to invoices, manage everything in one place — over Email, SMS, and optional WhatsApp.
+              The operating system for service businesses. From leads to invoices, manage everything in one place — with Email, SMS, Push, and In-App notifications.
             </p>
             <div className="flex items-center gap-3 mt-6">
               <a href="#" className="w-9 h-9 rounded-lg bg-background/10 border border-background/10 flex items-center justify-center hover:bg-emerald-600/30 hover:border-emerald-500/40 transition-colors" aria-label="Twitter">

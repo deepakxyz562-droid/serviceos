@@ -173,7 +173,7 @@ export type ViewType =
   // Automation
   | 'workflows' | 'canvas' | 'triggers' | 'variables' | 'executions' | 'formBuilder' | 'workflowAutomations'
   // Operations
-  | 'operations' | 'booking' | 'calendar' | 'jobs' | 'dispatch' | 'employees' | 'employeePerformance' | 'timesheet'
+  | 'operations' | 'booking' | 'calendar' | 'jobs' | 'dispatch' | 'realtimeStatus' | 'employees' | 'employeePerformance' | 'timesheet'
   // Finance
   | 'quotes' | 'invoices' | 'billing' | 'expenses'
   // System

@@ -46,7 +46,7 @@ const features: Feature[] = [
     icon: RefreshCw,
     title: "Recurring Quarterly Treatments & Auto-Renew",
     description:
-      "Set up quarterly treatment programs once and ServiceOS auto-schedules each visit, sends the customer a WhatsApp reminder, dispatches the technician, and charges the stored card — every quarter, on time, with auto-renewing subscriptions.",
+      "Set up quarterly treatment programs once and ServiceOS auto-schedules each visit, sends the customer an Email & SMS reminder, dispatches the technician, and charges the stored card — every quarter, on time, with auto-renewing subscriptions.",
   },
   {
     icon: ClipboardCheck,
@@ -76,7 +76,7 @@ const features: Feature[] = [
     icon: Bell,
     title: "Customer Pre-Treatment Prep Reminders",
     description:
-      "Some treatments require customer prep — vacate for 4 hours, cover fish tanks, remove food from counters. ServiceOS sends automated WhatsApp prep reminders 24 hours before the appointment, so the technician doesn't show up to an unprepared house.",
+      "Some treatments require customer prep — vacate for 4 hours, cover fish tanks, remove food from counters. ServiceOS sends automated Email & SMS prep reminders 24 hours before the appointment, so the technician doesn't show up to an unprepared house.",
   },
 ];
 
@@ -84,7 +84,7 @@ const faqs = [
   {
     question: "How does ServiceOS handle recurring quarterly pest control treatments?",
     answer:
-      "Quarterly treatment programs are the backbone of a profitable pest control business. You set up the customer's program once in ServiceOS — services included, frequency (quarterly, bi-monthly, monthly), price, and payment method — and it auto-schedules each visit, sends the customer a WhatsApp reminder the day before, dispatches the technician, generates the application record, and charges the customer's stored card after the visit. When the annual program is up for renewal, ServiceOS auto-renews it (with customer consent) and alerts you to any cancellations — so recurring revenue never silently lapses. Most pest control businesses cut their office admin time by 60% or more after switching.",
+      "Quarterly treatment programs are the backbone of a profitable pest control business. You set up the customer's program once in ServiceOS — services included, frequency (quarterly, bi-monthly, monthly), price, and payment method — and it auto-schedules each visit, sends the customer an Email & SMS reminder the day before, dispatches the technician, generates the application record, and charges the customer's stored card after the visit. When the annual program is up for renewal, ServiceOS auto-renews it (with customer consent) and alerts you to any cancellations — so recurring revenue never silently lapses. Most pest control businesses cut their office admin time by 60% or more after switching.",
   },
   {
     question: "How does ServiceOS handle chemical application records for state compliance?",
@@ -109,7 +109,7 @@ const faqs = [
   {
     question: "Can ServiceOS send pre-treatment prep reminders to customers?",
     answer:
-      "Yes. Some pest control treatments require customer preparation — vacate the house for 4 hours, cover fish tanks, remove food and dishes from counters, trim vegetation away from the foundation. When a technician shows up to an unprepared house, the visit is wasted and the customer is frustrated. ServiceOS sends automated WhatsApp prep reminders 24 hours (and again 2 hours) before the appointment, customized to the treatment type. Prep-related no-charges drop sharply, technicians show up to houses that are ready for them, and customers feel professionally managed instead of surprised at the door.",
+      "Yes. Some pest control treatments require customer preparation — vacate the house for 4 hours, cover fish tanks, remove food and dishes from counters, trim vegetation away from the foundation. When a technician shows up to an unprepared house, the visit is wasted and the customer is frustrated. ServiceOS sends automated Email & SMS prep reminders 24 hours (and again 2 hours) before the appointment, customized to the treatment type. Prep-related no-charges drop sharply, technicians show up to houses that are ready for them, and customers feel professionally managed instead of surprised at the door.",
   },
 ];
 

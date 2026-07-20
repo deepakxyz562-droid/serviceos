@@ -26,7 +26,7 @@ import {
 export const metadata: Metadata = {
   title: "Best Housecall Pro Alternatives in 2026 — Compared | ServiceOS",
   description:
-    "Comparing the 8 best Housecall Pro alternatives for field service businesses — pricing, WhatsApp integration, mobile apps, and which is right for your team. Includes ServiceOS.",
+    "Comparing the 8 best Housecall Pro alternatives for field service businesses — pricing, Email & SMS messaging, mobile apps, and which is right for your team. Includes ServiceOS.",
   keywords: [
     "housecall pro alternative",
     "housecall pro alternatives",
@@ -37,7 +37,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Best Housecall Pro Alternatives in 2026 | ServiceOS",
     description:
-      "Compare the top 8 Housecall Pro alternatives — features, pricing, WhatsApp integration, and which fits your field service business.",
+      "Compare the top 8 Housecall Pro alternatives — features, pricing, Email & SMS messaging, and which fits your field service business.",
     url: "https://serviceos.com/housecall-pro-alternatives",
     siteName: "ServiceOS",
     type: "article",
@@ -46,7 +46,7 @@ export const metadata: Metadata = {
 };
 
 const comparisonRows: { feature: string; serviceos: boolean; competitor: boolean }[] = [
-  { feature: "WhatsApp-native customer messaging", serviceos: true, competitor: false },
+  { feature: "Email & SMS customer messaging included", serviceos: true, competitor: false },
   { feature: "Public, transparent pricing", serviceos: true, competitor: false },
   { feature: "Free tier for solo operators", serviceos: true, competitor: false },
   { feature: "PWA technician app (no app store)", serviceos: true, competitor: false },
@@ -55,6 +55,7 @@ const comparisonRows: { feature: string; serviceos: boolean; competitor: boolean
   { feature: "Multi-currency invoicing", serviceos: true, competitor: true },
   { feature: "Customizable workflows & forms", serviceos: true, competitor: true },
   { feature: "Setup in under 30 minutes", serviceos: true, competitor: false },
+  { feature: "No-code automation builder (n8n)", serviceos: true, competitor: false },
   { feature: "Pay-as-you-go messaging credits", serviceos: true, competitor: false },
 ];
 
@@ -70,11 +71,11 @@ const alternatives: {
   {
     position: 1,
     name: "ServiceOS",
-    bestFor: "WhatsApp-first service businesses outside the US",
+    bestFor: "Service businesses outside the US",
     pricing: "Free tier → paid plans",
     url: "https://serviceos.com",
     description:
-      "A modern WhatsApp-native FSM built for India, LATAM, and SEA. Transparent pricing, free tier, PWA technician app, and multi-currency support without the per-seat pricing surprises.",
+      "A modern, multi-channel FSM built for India, LATAM, and SEA. Transparent pricing, free tier, PWA technician app, and multi-currency support without the per-seat pricing surprises.",
     highlight: true,
   },
   {
@@ -84,7 +85,7 @@ const alternatives: {
     pricing: "$49–$199/mo",
     url: "https://getjobber.com",
     description:
-      "The closest direct competitor to Housecall Pro. Strong scheduling, polished mobile app, and a large ecosystem. Like Housecall Pro, it is US-centric and lacks native WhatsApp.",
+      "The closest direct competitor to Housecall Pro. Strong scheduling, polished mobile app, and a large ecosystem. Like Housecall Pro, it is US-centric and lacks native Email & SMS messaging out of the box.",
   },
   {
     position: 3,
@@ -120,7 +121,7 @@ const alternatives: {
     pricing: "$25–$85/user/mo",
     url: "https://synchroteam.com",
     description:
-      "Lightweight FSM with excellent route optimization and a clean mobile app. Good international footprint, though WhatsApp support is limited.",
+      "Lightweight FSM with excellent route optimization and a clean mobile app. Good international footprint, though native multi-channel messaging is limited.",
   },
   {
     position: 7,
@@ -147,19 +148,19 @@ const switchReasons = [
     icon: BadgeDollarSign,
     title: "Pricing that doesn't creep up",
     description:
-      "Housecall Pro's plan tiers and add-ons can quietly escalate as you grow. ServiceOS publishes pricing openly, with a real free tier and predictable per-usage WhatsApp credits.",
+      "Housecall Pro's plan tiers and add-ons can quietly escalate as you grow. ServiceOS publishes pricing openly, with a real free tier and predictable per-usage SMS credits.",
   },
   {
     icon: MessageSquare,
-    title: "WhatsApp is the default channel",
+    title: "Email & SMS included out-of-the-box",
     description:
-      "If your customers prefer WhatsApp over email or phone — which is most of the world — ServiceOS treats WhatsApp as the primary channel. Housecall Pro does not.",
+      "If your customers prefer SMS or email over phone calls — which is most of the world — ServiceOS ships with Email and SMS messaging included, no third-party integrations or approvals needed. Housecall Pro does not include native SMS out of the box.",
   },
   {
     icon: Globe,
     title: "Built for non-US markets",
     description:
-      "Housecall Pro is purpose-built for American home services. ServiceOS is built for India, LATAM, SEA, and other WhatsApp-first markets with multi-currency, multi-language, and local payment rails.",
+      "Housecall Pro is purpose-built for American home services. ServiceOS is built for India, LATAM, SEA, and other multi-channel markets with multi-currency, multi-language, and local payment rails.",
   },
   {
     icon: SlidersHorizontal,
@@ -181,14 +182,14 @@ const faqs = [
       "Yes. Export your customer list, job history, and invoices from Housecall Pro as CSV files, then import them into ServiceOS. Most small businesses finish the migration in under an hour. Our onboarding team will help map custom fields and clean up data free of charge for paid plans.",
   },
   {
-    question: "Why is WhatsApp integration a big deal?",
+    question: "Why is multi-channel messaging a big deal?",
     answer:
-      "In most of the world — India, Latin America, Southeast Asia, Africa, the Middle East — WhatsApp is how customers communicate with businesses. If 80% of your customers prefer WhatsApp over email or phone, a tool that doesn't support it natively forces you to juggle two systems. ServiceOS treats WhatsApp as the primary channel for quotes, updates, invoices, and payment links.",
+      "In most of the world — India, Latin America, Southeast Asia, Africa, the Middle East — SMS and email are how customers communicate with businesses. If 80% of your customers prefer SMS or email over phone calls, a tool that doesn't include native messaging forces you to juggle two systems. ServiceOS ships with Email and SMS included for quotes, updates, invoices, and payment links.",
   },
   {
     question: "What's the best Housecall Pro alternative for small US businesses?",
     answer:
-      "For US-based small service businesses, Jobber and Workiz are the strongest Housecall Pro alternatives. Jobber has the closest feature parity and a polished mobile app. Workiz is a great pick if you want a built-in VoIP phone system. Kickserv is the most affordable option for solo operators. ServiceOS is the better choice if WhatsApp is your primary customer channel or you operate outside the US.",
+      "For US-based small service businesses, Jobber and Workiz are the strongest Housecall Pro alternatives. Jobber has the closest feature parity and a polished mobile app. Workiz is a great pick if you want a built-in VoIP phone system. Kickserv is the most affordable option for solo operators. ServiceOS is the better choice if Email and SMS are your primary customer channels or you operate outside the US.",
   },
   {
     question: "Does ServiceOS have a mobile app like Housecall Pro?",
@@ -198,7 +199,7 @@ const faqs = [
   {
     question: "Is Housecall Pro still a good choice in 2026?",
     answer:
-      "Absolutely. Housecall Pro remains one of the best FSM platforms for US-based home service businesses. It has a mature feature set, strong customer support, and a large ecosystem. The reasons to switch are usually market fit (you operate outside the US), pricing (you are bumping into plan limits), or WhatsApp (your customers live on WhatsApp). If none of those apply, Housecall Pro is genuinely a good product.",
+      "Absolutely. Housecall Pro remains one of the best FSM platforms for US-based home service businesses. It has a mature feature set, strong customer support, and a large ecosystem. The reasons to switch are usually market fit (you operate outside the US), pricing (you are bumping into plan limits), or multi-channel messaging (your customers prefer SMS or email). If none of those apply, Housecall Pro is genuinely a good product.",
   },
 ];
 
@@ -206,7 +207,7 @@ export default function HousecallProAlternativesPage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "ServiceOS — Housecall Pro Alternative",
     description:
-      "WhatsApp-native field service management software and Housecall Pro alternative for India, LATAM, and SEA service businesses.",
+      "Email & SMS-native field service management software and Housecall Pro alternative for India, LATAM, and SEA service businesses.",
     url: "https://serviceos.com/housecall-pro-alternatives",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
@@ -238,7 +239,7 @@ export default function HousecallProAlternativesPage() {
       <CornerstoneHero
         eyebrow="Housecall Pro Alternatives"
         title="The 8 Best Housecall Pro Alternatives for Field Service Businesses"
-        subtitle="Housecall Pro is popular, but it's not the right fit for every business. Compare the top alternatives — including a WhatsApp-first option built for non-US markets."
+        subtitle="Housecall Pro is popular, but it's not the right fit for every business. Compare the top alternatives — including an Email & SMS-native option built for non-US markets."
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link
@@ -321,12 +322,12 @@ export default function HousecallProAlternativesPage() {
           always know what you will pay next year.
         </p>
         <p>
-          The second is <strong>WhatsApp</strong>. Housecall Pro does not have native WhatsApp
-          support. If your customers are in India, Brazil, Mexico, Indonesia, or any of the
-          dozens of countries where WhatsApp is the dominant messaging channel, you end up
-          running Housecall Pro for operations and a separate WhatsApp workflow for customer
-          communication — which means data in two places and constant copy-paste. ServiceOS
-          treats WhatsApp as the primary channel.
+          The second is <strong>multi-channel messaging</strong>. Housecall Pro does not include
+          native SMS and Email messaging out of the box. If your customers are in India, Brazil,
+          Mexico, Indonesia, or any of the dozens of countries where SMS and email are the
+          dominant messaging channels, you end up running Housecall Pro for operations and a
+          separate text-message workflow for customer communication — which means data in two
+          places and constant copy-paste. ServiceOS ships with Email and SMS included.
         </p>
         <p>
           The third is <strong>market fit and customization</strong>. Housecall Pro is
@@ -348,7 +349,7 @@ export default function HousecallProAlternativesPage() {
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
               Four reasons ServiceOS is the fastest-growing Housecall Pro alternative for
-              WhatsApp-first service businesses.
+              service businesses outside North America.
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">

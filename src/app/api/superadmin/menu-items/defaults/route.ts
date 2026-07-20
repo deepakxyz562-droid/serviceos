@@ -21,7 +21,7 @@ const DEFAULT_MENU_ITEMS = [
   { key: 'marketing_templates', label: 'Templates', icon: 'FileText', section: 'marketing', sortOrder: 12 },
   { key: 'marketing_analytics', label: 'Analytics', icon: 'BarChart3', section: 'marketing', sortOrder: 13 },
   // Sales
-  { key: 'sales_pipeline', label: 'Pipeline', icon: 'ShoppingCart', section: 'sales', sortOrder: 14 },
+  { key: 'salesPipeline', label: 'Pipeline', icon: 'ShoppingCart', section: 'sales', sortOrder: 14 },
   { key: 'quotes', label: 'Quotes', icon: 'FileText', section: 'sales', sortOrder: 15 },
   { key: 'invoices', label: 'Invoices', icon: 'Receipt', section: 'sales', sortOrder: 16 },
   // WhatsApp CRM

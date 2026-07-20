@@ -12,11 +12,11 @@ import ContactForm from "./contact-form";
 export const metadata: Metadata = {
   title: "Contact Us — ServiceOS CRM",
   description:
-    "Get in touch with the ServiceOS CRM team. Reach out for sales inquiries, technical support, WhatsApp integration help, billing questions, or partnership opportunities. We're here to help.",
+    "Get in touch with the ServiceOS CRM team. Reach out for sales inquiries, technical support, integration help, billing questions, or partnership opportunities. We're here to help.",
   openGraph: {
     title: "Contact Us — ServiceOS CRM",
     description:
-      "Get in touch with the ServiceOS CRM team. Reach out for sales inquiries, technical support, WhatsApp integration help, billing questions, or partnership opportunities.",
+      "Get in touch with the ServiceOS CRM team. Reach out for sales inquiries, technical support, integration help, billing questions, or partnership opportunities.",
     url: "https://serviceos.com/contact-us",
     siteName: "ServiceOS",
     type: "website",
@@ -25,10 +25,10 @@ export const metadata: Metadata = {
 
 const faqs = [
   {
-    question: "How do I connect my WhatsApp Business account?",
+    question: "How do I set up email & SMS notifications?",
     answer:
-      "Follow our step-by-step WhatsApp setup guide to connect your Business account in minutes.",
-    link: { href: "/docs/whatsapp-setup", label: "View WhatsApp Setup Docs" },
+      "Follow our step-by-step notifications setup guide to configure email and SMS alerts for your team in minutes.",
+    link: { href: "/docs/notifications-setup", label: "View Notifications Setup Docs" },
   },
   {
     question: "Can I try ServiceOS for free?",

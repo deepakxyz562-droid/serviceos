@@ -52,7 +52,7 @@ const features: Feature[] = [
     icon: Zap,
     title: "Same-Day Repair Dispatch",
     description:
-      "When a homeowner calls with a broken spring, ServiceOS shows every tech's live location and which springs are stocked in their van. You dispatch the closest tech with the right part, the customer gets an ETA via WhatsApp, and the repair gets done the same day.",
+      "When a homeowner calls with a broken spring, ServiceOS shows every tech's live location and which springs are stocked in their van. You dispatch the closest tech with the right part, the customer gets an ETA via SMS, and the repair gets done the same day.",
   },
   {
     icon: Camera,
@@ -70,13 +70,13 @@ const features: Feature[] = [
     icon: Repeat,
     title: "Recurring Maintenance Tune-Ups",
     description:
-      "Sell annual tune-up contracts — lubrication, spring tension check, roller inspection, opener adjustment — and ServiceOS auto-schedules each visit, sends the customer a WhatsApp reminder, and queues the invoice. Recurring revenue that runs on autopilot.",
+      "Sell annual tune-up contracts — lubrication, spring tension check, roller inspection, opener adjustment — and ServiceOS auto-schedules each visit, sends the customer an SMS reminder, and queues the invoice. Recurring revenue that runs on autopilot.",
   },
   {
     icon: CreditCard,
     title: "Financing Options on Installs",
     description:
-      "Offer financing on new garage door installs through ServiceOS — the customer applies from a link in their WhatsApp quote, gets approved in minutes, and you close the install the same week instead of losing it to a competitor who offered payments.",
+      "Offer financing on new garage door installs through ServiceOS — the customer applies from a link in their Email or SMS quote, gets approved in minutes, and you close the install the same week instead of losing it to a competitor who offered payments.",
   },
 ];
 
@@ -84,7 +84,7 @@ const faqs = [
   {
     question: "How does ServiceOS help dispatch same-day garage door repairs?",
     answer:
-      "A broken torsion spring is one of the few home emergencies where a homeowner will call the first company that picks up the phone and can come out today. ServiceOS shows you a live map of every tech's location, what jobs they're currently on, and what springs and parts are stocked in their van. When the call comes in, you dispatch the closest tech who actually has the right spring on board, the customer gets an ETA through WhatsApp, and the tech receives full job details on their phone. Most garage door companies using ServiceOS win 30 to 50 percent more same-day repair calls simply because they can promise a real ETA instead of \"sometime this afternoon.\"",
+      "A broken torsion spring is one of the few home emergencies where a homeowner will call the first company that picks up the phone and can come out today. ServiceOS shows you a live map of every tech's location, what jobs they're currently on, and what springs and parts are stocked in their van. When the call comes in, you dispatch the closest tech who actually has the right spring on board, the customer gets an ETA through SMS, and the tech receives full job details on their phone. Most garage door companies using ServiceOS win 30 to 50 percent more same-day repair calls simply because they can promise a real ETA instead of \"sometime this afternoon.\"",
   },
   {
     question: "Can ServiceOS track which springs and parts are in each van?",
@@ -94,7 +94,7 @@ const faqs = [
   {
     question: "How does the safety inspection checklist work?",
     answer:
-      "Every garage door service call — whether it is a repair, a tune-up, or a new install — ends with a 10-point safety inspection. The tech works through the checklist in ServiceOS: torsion springs, extension springs, lift cables, rollers, hinges, track alignment, opener auto-reverse force, photo eye sensors, wall button function, and emergency release. Each item is logged as pass, fail, or recommend-replacement, with photos attached for any flagged items. The completed inspection gets bundled into a clean PDF sent to the customer through WhatsApp, which becomes your documented record if a safety issue ever comes up later. The inspection also surfaces upsell opportunities — worn rollers, frayed cables — that the customer can approve on the spot.",
+      "Every garage door service call — whether it is a repair, a tune-up, or a new install — ends with a 10-point safety inspection. The tech works through the checklist in ServiceOS: torsion springs, extension springs, lift cables, rollers, hinges, track alignment, opener auto-reverse force, photo eye sensors, wall button function, and emergency release. Each item is logged as pass, fail, or recommend-replacement, with photos attached for any flagged items. The completed inspection gets bundled into a clean PDF sent to the customer through Email, which becomes your documented record if a safety issue ever comes up later. The inspection also surfaces upsell opportunities — worn rollers, frayed cables — that the customer can approve on the spot.",
   },
   {
     question: "Can ServiceOS handle new garage door installs, not just repairs?",
@@ -104,12 +104,12 @@ const faqs = [
   {
     question: "How do recurring maintenance tune-up contracts work?",
     answer:
-      "Annual garage door tune-ups — lubricate springs and rollers, check spring tension, inspect cables, test opener auto-reverse — are some of the most profitable recurring work a garage door company can sell. In ServiceOS, you define each tune-up contract once with the customer, the annual price, and the scheduled month. ServiceOS auto-schedules the visit, sends the customer a WhatsApp reminder a week before, dispatches the tech, and queues the invoice after the job is marked complete. The contract also surfaces in the dashboard when it is up for renewal, so you can reach out before the customer lets it lapse. A book of 200 tune-up contracts at 150 dollars each is 30,000 dollars of recurring revenue that runs on autopilot.",
+      "Annual garage door tune-ups — lubricate springs and rollers, check spring tension, inspect cables, test opener auto-reverse — are some of the most profitable recurring work a garage door company can sell. In ServiceOS, you define each tune-up contract once with the customer, the annual price, and the scheduled month. ServiceOS auto-schedules the visit, sends the customer an SMS reminder a week before, dispatches the tech, and queues the invoice after the job is marked complete. The contract also surfaces in the dashboard when it is up for renewal, so you can reach out before the customer lets it lapse. A book of 200 tune-up contracts at 150 dollars each is 30,000 dollars of recurring revenue that runs on autopilot.",
   },
   {
     question: "Can I offer financing on garage door installs through ServiceOS?",
     answer:
-      "Yes, and financing is often the difference between closing a 3,500-dollar install and losing it to a competitor who offered payments. ServiceOS lets you attach a financing option to any install quote — the customer clicks a link in their WhatsApp quote, fills out a short application, and gets approved in minutes through a financing partner. Once approved, the install gets scheduled and you get paid by the lender, while the customer pays off the balance over 12 to 60 months. You close more installs, you close them faster, and you stop losing deals to competitors whose only advantage was offering monthly payments.",
+      "Yes, and financing is often the difference between closing a 3,500-dollar install and losing it to a competitor who offered payments. ServiceOS lets you attach a financing option to any install quote — the customer clicks a link in their Email or SMS quote, fills out a short application, and gets approved in minutes through a financing partner. Once approved, the install gets scheduled and you get paid by the lender, while the customer pays off the balance over 12 to 60 months. You close more installs, you close them faster, and you stop losing deals to competitors whose only advantage was offering monthly payments.",
   },
 ];
 
@@ -169,7 +169,7 @@ export default function GarageDoorSoftwarePage() {
               The chaos of running a garage door business without software
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Most garage door companies still juggle WhatsApp groups, paper work orders, and parts catalogs memorized by senior techs. Here&apos;s what that costs you — and what changes when you switch to ServiceOS.
+              Most garage door companies still juggle text messages and scattered apps, paper work orders, and parts catalogs memorized by senior techs. Here&apos;s what that costs you — and what changes when you switch to ServiceOS.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -204,7 +204,7 @@ export default function GarageDoorSoftwarePage() {
                   "Dispatch shows which springs are in which van — right tech, right part, same day",
                   "Worn parts photographed and quoted from the field — upsell captured every call",
                   "Photo proof on every replacement — disputes resolved in seconds",
-                  "10-point safety checklist documented and sent to the customer via WhatsApp",
+                  "10-point safety checklist documented and sent to the customer via Email",
                   "Annual tune-up contracts auto-scheduled — real recurring revenue on autopilot",
                   "Financing offered on every install quote — close deals you used to lose",
                 ].map((item) => (
@@ -224,13 +224,13 @@ export default function GarageDoorSoftwarePage() {
           Garage door contracting is a business of two halves. On one side you have same-day repairs — broken springs, snapped cables, dead openers — where the homeowner calls the first company that picks up the phone and can come out today. On the other side you have new installs — full door replacements, often financed — where the sales process, the project scheduling, and the financing options determine whether you close the deal. Garage door software that handles only one of these halves just shifts the chaos. ServiceOS is built to run both, on one dispatch board, in a single platform your techs and sales team actually use.
         </p>
         <p>
-          The same-day repair side of the business is where most garage door companies win or lose market share. A homeowner with a broken spring is not shopping around — they are calling the first three numbers on Google and going with whoever can be there fastest. ServiceOS shows you a live map of every tech's location, what jobs they are currently on, and what springs and parts are stocked in their van. You dispatch the closest tech who actually has the right spring on board, the customer gets a real ETA through WhatsApp, and the tech gets full job details on their phone. Most garage door companies using ServiceOS win 30 to 50 percent more same-day calls simply because they can promise a real arrival time instead of a vague window.
+          The same-day repair side of the business is where most garage door companies win or lose market share. A homeowner with a broken spring is not shopping around — they are calling the first three numbers on Google and going with whoever can be there fastest. ServiceOS shows you a live map of every tech's location, what jobs they are currently on, and what springs and parts are stocked in their van. You dispatch the closest tech who actually has the right spring on board, the customer gets a real ETA through SMS, and the tech gets full job details on their phone. Most garage door companies using ServiceOS win 30 to 50 percent more same-day calls simply because they can promise a real arrival time instead of a vague window.
         </p>
         <p>
-          The upsell side of the business is the silent revenue leak in every garage door company. A tech goes out on a broken spring call, notices that the rollers are worn, the cables are frayed, and the opener auto-reverse is failing — and mentions none of it, because there is no easy way to quote the additional work on the spot. ServiceOS fixes this by making the upsell part of the workflow. Every service call ends with a 10-point safety inspection. Findings get logged with photos, and any flagged item turns into a one-tap quote sent to the customer through WhatsApp. Whether the customer approves on the spot or three weeks later, the recommendation is on record — and the eventual repair revenue goes to you instead of the next company they call.
+          The upsell side of the business is the silent revenue leak in every garage door company. A tech goes out on a broken spring call, notices that the rollers are worn, the cables are frayed, and the opener auto-reverse is failing — and mentions none of it, because there is no easy way to quote the additional work on the spot. ServiceOS fixes this by making the upsell part of the workflow. Every service call ends with a 10-point safety inspection. Findings get logged with photos, and any flagged item turns into a one-tap quote sent to the customer through Email & SMS. Whether the customer approves on the spot or three weeks later, the recommendation is on record — and the eventual repair revenue goes to you instead of the next company they call.
         </p>
         <p>
-          Finally, there is the install side of the business, which is where the real revenue lives. A new garage door install runs 1,500 to 5,000 dollars, and increasingly homeowners expect to be offered financing — especially on the higher end of that range. ServiceOS lets you attach a financing option to every install quote. The customer applies from a link in their WhatsApp quote, gets approved in minutes, and you close the install the same week. The same platform that handles your same-day repair dispatch handles your install pipeline, so you see both revenue streams on one dashboard. Many garage door companies use ServiceOS specifically to grow their install book because the financing option closes deals they used to lose to competitors whose only advantage was offering monthly payments.
+          Finally, there is the install side of the business, which is where the real revenue lives. A new garage door install runs 1,500 to 5,000 dollars, and increasingly homeowners expect to be offered financing — especially on the higher end of that range. ServiceOS lets you attach a financing option to every install quote. The customer applies from a link in their Email or SMS quote, gets approved in minutes, and you close the install the same week. The same platform that handles your same-day repair dispatch handles your install pipeline, so you see both revenue streams on one dashboard. Many garage door companies use ServiceOS specifically to grow their install book because the financing option closes deals they used to lose to competitors whose only advantage was offering monthly payments.
         </p>
       </ContentSection>
 

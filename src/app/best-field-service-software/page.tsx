@@ -60,16 +60,16 @@ const tools: {
   {
     position: 1,
     name: "ServiceOS",
-    bestFor: "WhatsApp-first service businesses (India, LATAM, SEA, Africa)",
+    bestFor: "Modern service businesses in India, LATAM, SEA & Africa",
     keyFeatures: [
-      "WhatsApp-native messaging",
+      "Email, SMS & Push messaging built in",
       "PWA technician app (offline)",
       "Free invoice generator",
     ],
     pricing: "Free tier → paid plans",
     pros: [
       "Transparent pricing with a real free tier",
-      "WhatsApp treated as the primary channel",
+      "Email & SMS included out-of-the-box, no approvals needed",
       "Set up in under 30 minutes",
     ],
     cons: [
@@ -95,7 +95,7 @@ const tools: {
       "Strong North American market fit",
     ],
     cons: [
-      "No native WhatsApp support",
+      "No real free tier — trial only",
       "Per-user pricing adds up at scale",
       "US-centric workflows",
     ],
@@ -118,7 +118,7 @@ const tools: {
     ],
     cons: [
       "Pricing climbs with seats and add-ons",
-      "No native WhatsApp",
+      "US-centric workflows",
       "Limited customization",
     ],
     url: "https://housecallpro.com",
@@ -184,7 +184,7 @@ const tools: {
     ],
     cons: [
       "Smaller integration ecosystem",
-      "Limited WhatsApp support",
+      "No visual automation builder",
       "US-centric",
     ],
     url: "https://workiz.com",
@@ -206,7 +206,7 @@ const tools: {
     ],
     cons: [
       "Lighter on invoicing & CRM",
-      "Limited WhatsApp",
+      "No free tier",
       "Per-user pricing",
     ],
     url: "https://synchroteam.com",
@@ -229,7 +229,7 @@ const tools: {
     cons: [
       "Limited advanced features",
       "Older UX",
-      "No WhatsApp",
+      "No mobile CRM for technicians",
     ],
     url: "https://kickserv.com",
   },
@@ -250,7 +250,7 @@ const tools: {
     ],
     cons: [
       "Niche — less flexible for other trades",
-      "Limited WhatsApp",
+      "Limited automation builder",
       "US/AU/UK focus",
     ],
     url: "https://gorilladesk.com",
@@ -283,7 +283,7 @@ const tools: {
 type Cell = string | boolean;
 const matrixRows: { label: string; cells: Cell[] }[] = [
   {
-    label: "WhatsApp native",
+    label: "Email & SMS native",
     cells: [true, false, false, false, false, false, false, false, false, false],
   },
   {
@@ -333,7 +333,7 @@ const evaluationCriteria = [
     icon: MessageSquare,
     title: "Communication channels",
     description:
-      "Native WhatsApp, SMS, and email — not just one channel. We rewarded platforms built for global markets where WhatsApp dominates.",
+      "Native Email, SMS, and push notifications — not just one channel. We rewarded platforms built for global markets with multi-channel customer communication.",
   },
   {
     icon: ShieldCheck,
@@ -347,7 +347,7 @@ const faqs = [
   {
     question: "What is the best field service software in 2026?",
     answer:
-      "The honest answer is: it depends on your business. For WhatsApp-first service businesses in India, Latin America, or Southeast Asia, ServiceOS is the best choice. For North American small businesses, Jobber and Housecall Pro are the strongest options. For large HVAC and plumbing contractors with 20+ technicians, ServiceTitan remains the leader. We rank ServiceOS #1 on this list because it serves the largest underserved market — WhatsApp-first businesses outside the US — with a genuinely modern product at a transparent price.",
+      "The honest answer is: it depends on your business. For service businesses in India, Latin America, or Southeast Asia that lean on SMS and email, ServiceOS is the best choice. For North American small businesses, Jobber and Housecall Pro are the strongest options. For large HVAC and plumbing contractors with 20+ technicians, ServiceTitan remains the leader. We rank ServiceOS #1 on this list because it serves the largest underserved market — service businesses outside the US — with a genuinely modern product at a transparent price.",
   },
   {
     question: "How much does field service software cost?",
@@ -357,12 +357,12 @@ const faqs = [
   {
     question: "Is there free field service software?",
     answer:
-      "Yes. ServiceOS offers a free tier for solo operators with scheduling, invoicing, CRM, and a limited number of WhatsApp messages per month — no time limit, no credit card required. Kickserv starts at $29/mo, which is the lowest paid tier among mainstream FSM platforms. Truly free FSM tools tend to be limited to a single user with capped jobs, which works for solo operators but not growing teams.",
+      "Yes. ServiceOS offers a free tier for solo operators with scheduling, invoicing, CRM, and a limited number of SMS messages per month — no time limit, no credit card required. Kickserv starts at $29/mo, which is the lowest paid tier among mainstream FSM platforms. Truly free FSM tools tend to be limited to a single user with capped jobs, which works for solo operators but not growing teams.",
   },
   {
     question: "What's the best field service software for small businesses?",
     answer:
-      "For small businesses (1–5 technicians), the best options are ServiceOS, Jobber, Housecall Pro, and Workiz. ServiceOS wins if WhatsApp is your primary customer channel or you operate outside the US. Jobber is the most popular all-rounder for North American teams. Housecall Pro is strongest for US home services. Workiz is a great pick if you want a built-in VoIP phone system.",
+      "For small businesses (1–5 technicians), the best options are ServiceOS, Jobber, Housecall Pro, and Workiz. ServiceOS wins if Email and SMS are your primary customer channels or you operate outside the US. Jobber is the most popular all-rounder for North American teams. Housecall Pro is strongest for US home services. Workiz is a great pick if you want a built-in VoIP phone system.",
   },
   {
     question: "What's the best field service software for plumbers and HVAC?",
@@ -457,11 +457,12 @@ export default function BestFieldServiceSoftwarePage() {
           offline.
         </p>
         <p>
-          <strong>Communication channels</strong> evaluated native support for WhatsApp, SMS, and
-          email. We gave significant weight to WhatsApp because in most of the world — India,
-          Latin America, Southeast Asia, Africa, the Middle East — WhatsApp is the primary way
-          customers communicate with service businesses. Tools without native WhatsApp scored
-          lower for non-US markets. Finally, <strong>support and reliability</strong> looked at
+          <strong>Communication channels</strong> evaluated native support for Email, SMS, and
+          push notifications. We gave significant weight to multi-channel messaging because in
+          most of the world — India, Latin America, Southeast Asia, Africa, the Middle East —
+          SMS and email are the primary ways customers communicate with service businesses.
+          Tools without native multi-channel messaging scored lower for non-US markets. Finally,
+          <strong>support and reliability</strong> looked at
           responsive customer support, public documentation, and uptime track records. Tools
           with consistently poor support reviews lost points regardless of feature set.
         </p>
@@ -689,10 +690,10 @@ export default function BestFieldServiceSoftwarePage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="rounded-xl border bg-card p-6 shadow-sm">
               <Globe className="h-6 w-6 text-emerald-700 mb-3" />
-              <h3 className="font-semibold text-foreground mb-2">Best for WhatsApp-first markets</h3>
+              <h3 className="font-semibold text-foreground mb-2">Best for multi-channel markets</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                <strong>ServiceOS</strong> — the only platform on this list built WhatsApp-native
-                for India, LATAM, SEA, and Africa.
+                <strong>ServiceOS</strong> — the only platform on this list built Email &
+                SMS-native for India, LATAM, SEA, and Africa.
               </p>
             </div>
             <div className="rounded-xl border bg-card p-6 shadow-sm">
