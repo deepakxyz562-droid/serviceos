@@ -150,10 +150,10 @@ export async function POST(request: NextRequest) {
     // Determine plan defaults
     const selectedPlan = plan || 'starter';
     const planConfig: Record<string, { amount: number; maxUsers: number; maxJobs: number; maxWorkflows: number }> = {
-      starter: { amount: 29, maxUsers: 3, maxJobs: 100, maxWorkflows: 10 },
-      growth: { amount: 79, maxUsers: 10, maxJobs: 500, maxWorkflows: 50 },
-      pro: { amount: 199, maxUsers: 50, maxJobs: 2000, maxWorkflows: 200 },
-      enterprise: { amount: 499, maxUsers: -1, maxJobs: -1, maxWorkflows: -1 },
+      starter: { amount: 10, maxUsers: 3, maxJobs: 100, maxWorkflows: 10 },
+      growth: { amount: 25, maxUsers: 10, maxJobs: 500, maxWorkflows: 50 },
+      pro: { amount: 50, maxUsers: 50, maxJobs: 2000, maxWorkflows: 200 },
+      enterprise: { amount: 0, maxUsers: -1, maxJobs: -1, maxWorkflows: -1 },
     };
     const config = planConfig[selectedPlan] || planConfig.starter;
 
