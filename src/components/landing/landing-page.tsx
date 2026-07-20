@@ -16,6 +16,7 @@ import {
   Workflow,
   Check,
   ChevronRight,
+  ChevronDown,
   Play,
   ArrowRight,
   Zap,
@@ -391,6 +392,45 @@ const faqs = [
   },
 ];
 
+// SEO cornerstone industry pages — linked from navbar dropdown + footer.
+const seoIndustries = [
+  { label: 'Plumbing Software', href: '/plumbing-software' },
+  { label: 'HVAC Software', href: '/hvac-software' },
+  { label: 'Cleaning Business Software', href: '/cleaning-business-software' },
+  { label: 'Electrical Contractor Software', href: '/electrical-contractor-software' },
+  { label: 'Landscaping Software', href: '/landscaping-software' },
+  { label: 'Lawn Care Software', href: '/lawn-care-software' },
+  { label: 'Painting Software', href: '/painting-software' },
+  { label: 'Handyman Software', href: '/handyman-software' },
+  { label: 'Tree Care Software', href: '/tree-care-software' },
+  { label: 'Snow Removal Software', href: '/snow-removal-software' },
+  { label: 'Pest Control Software', href: '/pest-control-software' },
+  { label: 'Roofing Software', href: '/roofing-software' },
+  { label: 'Pool Service Software', href: '/pool-service-software' },
+  { label: 'Window Cleaning Software', href: '/window-cleaning-software' },
+  { label: 'Concrete Software', href: '/concrete-software' },
+  { label: 'Garage Door Software', href: '/garage-door-software' },
+  { label: 'Solar Software', href: '/solar-software' },
+  { label: 'Pet Services Software', href: '/pet-services-software' },
+];
+
+const seoCompare = [
+  { label: 'ServiceOS vs Jobber', href: '/serviceos-vs-jobber' },
+  { label: 'Jobber Alternatives', href: '/jobber-alternatives' },
+  { label: 'Housecall Pro Alternatives', href: '/housecall-pro-alternatives' },
+  { label: 'ServiceTitan Alternatives', href: '/servicetitan-alternatives' },
+  { label: 'Best Field Service Software', href: '/best-field-service-software' },
+];
+
+const seoFeatures = [
+  { label: 'Field Service Software', href: '/field-service-software' },
+  { label: 'Scheduling & Dispatch', href: '/scheduling-and-dispatch' },
+  { label: 'Invoicing & Payments', href: '/invoicing-and-payments' },
+  { label: 'Customer CRM', href: '/customer-crm' },
+  { label: 'Technician App', href: '/technician-app' },
+  { label: 'Automations', href: '/automations' },
+];
+
 const footerLinks = {
   product: [
     { label: 'Features', href: '#features' },
@@ -398,14 +438,12 @@ const footerLinks = {
     { label: 'Channels', href: '#channels' },
     { label: 'Live Demo', href: '#' },
   ],
-  channels: [
-    { label: 'Email', href: '#channels' },
-    { label: 'SMS', href: '#channels' },
-    { label: 'WhatsApp (Add-on)', href: '#channels' },
-    { label: 'Unified Inbox', href: '#features' },
-  ],
-  freeTools: [
+  industries: seoIndustries,
+  compare: seoCompare,
+  resources: [
     { label: 'Free Invoice Generator', href: '/invoice-generator' },
+    { label: 'Contact Us', href: '/contact-us' },
+    ...seoFeatures,
   ],
   legal: [
     { label: 'Privacy Policy', href: '/privacy-policy' },
@@ -447,15 +485,39 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center shadow-sm">
-              <Bolt className="w-5 h-5 text-primary-foreground" />
+            <div className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0 shadow-sm bg-emerald-600 shadow-emerald-500/20">
+              <Wrench className="w-5 h-5 text-white" />
             </div>
             <span className="text-xl font-bold text-foreground tracking-tight">ServiceOS</span>
           </div>
 
-          <div className="hidden md:flex items-center gap-8">
+          <div className="hidden md:flex items-center gap-7">
             <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Features</a>
-            <a href="#channels" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Channels</a>
+            <div className="relative group">
+              <button type="button" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">
+                Industries <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+              <div className="absolute left-0 top-full pt-3 invisible opacity-0 translate-y-1 group-hover:visible group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-150 z-50">
+                <div className="w-72 rounded-xl border border-border bg-white shadow-lg p-2 grid grid-cols-1 gap-0.5 max-h-[70vh] overflow-y-auto">
+                  {seoIndustries.map((i) => (
+                    <a key={i.href} href={i.href} className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors">{i.label}</a>
+                  ))}
+                  <a href="/field-service-software" className="px-3 py-1.5 text-sm font-medium text-emerald-700 hover:bg-accent rounded-md transition-colors mt-1 border-t border-border pt-2">All field service software →</a>
+                </div>
+              </div>
+            </div>
+            <div className="relative group">
+              <button type="button" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">
+                Compare <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+              <div className="absolute left-0 top-full pt-3 invisible opacity-0 translate-y-1 group-hover:visible group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-150 z-50">
+                <div className="w-60 rounded-xl border border-border bg-white shadow-lg p-2 grid grid-cols-1 gap-0.5">
+                  {seoCompare.map((i) => (
+                    <a key={i.href} href={i.href} className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors">{i.label}</a>
+                  ))}
+                </div>
+              </div>
+            </div>
             <a href="#pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Pricing</a>
             <a href="#faq" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">FAQ</a>
           </div>
@@ -483,9 +545,24 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
           >
             <div className="px-4 py-4 space-y-3">
               <a href="#features" className="block text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileMenuOpen(false)}>Features</a>
-              <a href="#channels" className="block text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileMenuOpen(false)}>Channels</a>
               <a href="#pricing" className="block text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileMenuOpen(false)}>Pricing</a>
               <a href="#faq" className="block text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileMenuOpen(false)}>FAQ</a>
+              <div className="pt-2">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground/70 mb-1">Industries</p>
+                <a href="/plumbing-software" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileMenuOpen(false)}>Plumbing</a>
+                <a href="/hvac-software" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileMenuOpen(false)}>HVAC</a>
+                <a href="/cleaning-business-software" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileMenuOpen(false)}>Cleaning</a>
+                <a href="/electrical-contractor-software" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileMenuOpen(false)}>Electrical</a>
+                <a href="/landscaping-software" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileMenuOpen(false)}>Landscaping</a>
+                <a href="/pest-control-software" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileMenuOpen(false)}>Pest Control</a>
+                <a href="/field-service-software" className="block text-sm text-emerald-700 hover:text-foreground py-1.5" onClick={() => setMobileMenuOpen(false)}>All industries →</a>
+              </div>
+              <div className="pt-2">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground/70 mb-1">Compare</p>
+                <a href="/jobber-alternatives" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileMenuOpen(false)}>Jobber Alternatives</a>
+                <a href="/serviceos-vs-jobber" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileMenuOpen(false)}>ServiceOS vs Jobber</a>
+                <a href="/best-field-service-software" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileMenuOpen(false)}>Best Field Service Software</a>
+              </div>
               <Separator className="bg-border" />
               <Button variant="ghost" size="sm" onClick={onSignIn} className="w-full text-muted-foreground hover:text-foreground justify-start">Sign In</Button>
               <Button size="sm" onClick={onGetStarted} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
@@ -1423,14 +1500,19 @@ function FinalCTASection({ onGetStarted }: { onGetStarted: () => void }) {
 }
 
 function Footer() {
+  // Split industries into two columns for the footer grid.
+  const half = Math.ceil(seoIndustries.length / 2);
+  const industriesColA = seoIndustries.slice(0, half);
+  const industriesColB = seoIndustries.slice(half);
+
   return (
     <footer className="bg-foreground text-background mt-auto pb-[env(safe-area-inset-bottom,0px)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="grid grid-cols-2 md:grid-cols-6 gap-8">
           <div className="col-span-2">
             <div className="flex items-center gap-2.5 mb-4">
-              <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
-                <Bolt className="w-5 h-5 text-primary-foreground" />
+              <div className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0 shadow-sm bg-emerald-600 shadow-emerald-500/20">
+                <Wrench className="w-5 h-5 text-white" />
               </div>
               <span className="text-xl font-bold text-background tracking-tight">ServiceOS</span>
             </div>
@@ -1438,19 +1520,44 @@ function Footer() {
               The operating system for service businesses. From leads to invoices, manage everything in one place — over Email, SMS, and optional WhatsApp.
             </p>
             <div className="flex items-center gap-3 mt-6">
-              <a href="#" className="w-9 h-9 rounded-lg bg-background/10 border border-background/10 flex items-center justify-center hover:bg-primary/20 hover:border-primary/40 transition-colors" aria-label="Twitter">
+              <a href="#" className="w-9 h-9 rounded-lg bg-background/10 border border-background/10 flex items-center justify-center hover:bg-emerald-600/30 hover:border-emerald-500/40 transition-colors" aria-label="Twitter">
                 <Globe className="w-4 h-4 text-background/80" />
               </a>
-              <a href="#" className="w-9 h-9 rounded-lg bg-background/10 border border-background/10 flex items-center justify-center hover:bg-primary/20 hover:border-primary/40 transition-colors" aria-label="LinkedIn">
+              <a href="#" className="w-9 h-9 rounded-lg bg-background/10 border border-background/10 flex items-center justify-center hover:bg-emerald-600/30 hover:border-emerald-500/40 transition-colors" aria-label="LinkedIn">
                 <Building2 className="w-4 h-4 text-background/80" />
               </a>
-              <a href="#" className="w-9 h-9 rounded-lg bg-background/10 border border-background/10 flex items-center justify-center hover:bg-primary/20 hover:border-primary/40 transition-colors" aria-label="Email">
+              <a href="#" className="w-9 h-9 rounded-lg bg-background/10 border border-background/10 flex items-center justify-center hover:bg-emerald-600/30 hover:border-emerald-500/40 transition-colors" aria-label="Email">
                 <Mail className="w-4 h-4 text-background/80" />
               </a>
-              <a href="#" className="w-9 h-9 rounded-lg bg-background/10 border border-background/10 flex items-center justify-center hover:bg-primary/20 hover:border-primary/40 transition-colors" aria-label="Phone">
+              <a href="#" className="w-9 h-9 rounded-lg bg-background/10 border border-background/10 flex items-center justify-center hover:bg-emerald-600/30 hover:border-emerald-500/40 transition-colors" aria-label="Phone">
                 <Phone className="w-4 h-4 text-background/80" />
               </a>
             </div>
+          </div>
+
+          <div className="md:col-span-2">
+            <h4 className="text-background font-semibold text-sm mb-4">Industries</h4>
+            <div className="grid grid-cols-2 gap-x-4">
+              <ul className="space-y-2.5">
+                {industriesColA.map((link) => (
+                  <li key={link.href}><a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a></li>
+                ))}
+              </ul>
+              <ul className="space-y-2.5">
+                {industriesColB.map((link) => (
+                  <li key={link.href}><a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a></li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-background font-semibold text-sm mb-4">Compare</h4>
+            <ul className="space-y-2.5">
+              {footerLinks.compare.map((link) => (
+                <li key={link.href}><a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a></li>
+              ))}
+            </ul>
           </div>
 
           <div>
@@ -1460,31 +1567,10 @@ function Footer() {
                 <li key={link.label}><a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a></li>
               ))}
             </ul>
-          </div>
-
-          <div>
-            <h4 className="text-background font-semibold text-sm mb-4">Channels</h4>
+            <h4 className="text-background font-semibold text-sm mb-4 mt-6">Resources</h4>
             <ul className="space-y-2.5">
-              {footerLinks.channels.map((link) => (
-                <li key={link.label}><a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a></li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="text-background font-semibold text-sm mb-4">Free Tools</h4>
-            <ul className="space-y-2.5">
-              {footerLinks.freeTools.map((link) => (
-                <li key={link.label}><a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a></li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="text-background font-semibold text-sm mb-4">Legal</h4>
-            <ul className="space-y-2.5">
-              {footerLinks.legal.map((link) => (
-                <li key={link.label}><a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a></li>
+              {footerLinks.resources.slice(0, 4).map((link) => (
+                <li key={link.href}><a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a></li>
               ))}
             </ul>
           </div>
@@ -1494,7 +1580,11 @@ function Footer() {
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-background/50 text-xs">&copy; {new Date().getFullYear()} ServiceOS. All rights reserved.</p>
-          <p className="text-background/50 text-xs">Built with care for service businesses worldwide</p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            {footerLinks.legal.map((link) => (
+              <a key={link.href} href={link.href} className="text-background/50 text-xs hover:text-background transition-colors">{link.label}</a>
+            ))}
+          </div>
         </div>
       </div>
     </footer>
