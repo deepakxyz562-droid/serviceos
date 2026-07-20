@@ -2,9 +2,26 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { cookies, headers } from 'next/headers';
 
-const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' ? '' : 'serviceos-saas-dev-secret-key');
-if (process.env.NODE_ENV === 'production' && !JWT_SECRET) {
-  throw new Error('JWT_SECRET environment variable is required in production. Set it in your .env file.');
+// JWT secret resolution.
+// NOTE: We intentionally do NOT throw at module-load time. During `next build`,
+// Next.js evaluates route modules (e.g. /api/activity-logs/[id]) to collect
+// page data, and a module-level throw would crash the build even though no
+// request is being served. Instead we resolve the secret lazily at sign/verify
+// time, so:
+//   - `next build` succeeds (modules can be imported without side effects)
+//   - Actual requests fail loudly if JWT_SECRET is missing in production
+//   - There is NEVER a hardcoded fallback in production — security preserved.
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (secret) return secret;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'JWT_SECRET environment variable is required in production. ' +
+      'Set it in your Vercel project Environment Variables (Project Settings → Environment Variables).'
+    );
+  }
+  // Dev-only fallback so local development works without manual setup.
+  return 'serviceos-saas-dev-secret-key';
 }
 const TOKEN_NAME = 'serviceos_session';
 const TOKEN_EXPIRY = '7d';
@@ -50,14 +67,14 @@ export function generateToken(user: AuthUser): string {
       // sessions this is undefined and gets omitted from the JWT.
       ...(user.phone ? { phone: user.phone } : {}),
     },
-    JWT_SECRET,
+    getJwtSecret(),
     { expiresIn: TOKEN_EXPIRY }
   );
 }
 
 export function verifyToken(token: string): AuthUser | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as AuthUser;
+    const decoded = jwt.verify(token, getJwtSecret()) as AuthUser;
     return decoded;
   } catch {
     return null;
