@@ -327,7 +327,7 @@ const FEATURE_MODULE_MAP: Record<string, string> = {
 };
 
 const PLAN_AMOUNTS: Record<string, number> = {
-  trial: 0, starter: 29, growth: 79, pro: 149, enterprise: 0,
+  trial: 0, starter: 10, growth: 25, pro: 50, enterprise: 0,
 };
 
 // ─── Navigation config (left sub-nav) ────────────────────────────────────────
