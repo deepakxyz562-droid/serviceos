@@ -50,8 +50,26 @@ export async function GET(request: NextRequest) {
       db.deal.count({ where }),
     ])
 
+    // ─── Manual Lead join (HubSpot model) ─────────────────────────────
+    // The Deal model stores `leadId` as a plain String (no Prisma @relation),
+    // so we can't use `include: { lead }`. Instead we fetch the linked Leads
+    // in a single round-trip and attach them so the Kanban deal cards and
+    // detail dialog can display the Lead's name, phone, and source.
+    const leadIds = data.map((d) => d.leadId).filter(Boolean) as string[]
+    const leads = leadIds.length > 0
+      ? await db.lead.findMany({
+          where: { id: { in: leadIds } },
+          select: { id: true, name: true, phone: true, email: true, source: true, status: true },
+        })
+      : []
+    const leadMap = new Map(leads.map((l) => [l.id, l]))
+    const dataWithLeads = data.map((d) => ({
+      ...d,
+      lead: d.leadId ? (leadMap.get(d.leadId) ?? null) : null,
+    }))
+
     return NextResponse.json({
-      data,
+      data: dataWithLeads,
       pagination: {
         page,
         limit,

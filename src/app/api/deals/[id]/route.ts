@@ -32,7 +32,18 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    return NextResponse.json({ data: { ...deal, stageHistory } })
+    // ─── Manual Lead join (HubSpot model) ─────────────────────────────
+    // The Deal model stores `leadId` as a plain String (no Prisma @relation),
+    // so we fetch the linked Lead separately and attach it for the detail dialog.
+    let lead = null
+    if (deal.leadId) {
+      lead = await db.lead.findUnique({
+        where: { id: deal.leadId },
+        select: { id: true, name: true, phone: true, email: true, source: true, status: true },
+      })
+    }
+
+    return NextResponse.json({ data: { ...deal, stageHistory, lead } })
   } catch (error) {
     console.error('Error fetching deal:', error)
     return NextResponse.json({ error: 'Failed to fetch deal' }, { status: 500 })

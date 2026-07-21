@@ -15,6 +15,18 @@ async function main() {
   const manager = users.find(u => u.role === 'manager') || users[1] || owner;
   const customers = await prisma.customer.findMany({ take: 5 });
 
+  // ─── Employee lookup ────────────────────────────────────────────────
+  // Lead.assignedToId has a FK to Employee.id (NOT User.id), so we must
+  // resolve real Employee IDs. Falls back to null if none exist.
+  // Employee is scoped by workspaceId (not tenantId).
+  const employees = await prisma.employee.findMany({
+    where: { workspaceId },
+    take: 5,
+    select: { id: true, name: true, userId: true },
+  });
+  const ownerEmp = employees[0] || null;
+  const managerEmp = employees[1] || employees[0] || null;
+
   let count = 0;
 
   // Chat Labels
@@ -48,19 +60,90 @@ async function main() {
   ]) { try { await prisma.segment.create({ data: sd }); count++; } catch {} }
   console.log(`Segments: ${count}`);
 
-  // Deals
+  // ─── Leads + Deals (HubSpot model: every Deal is linked to a Lead) ──────
+  // We seed Leads first, then create a Deal for each Lead with `leadId`
+  // pointing back to it. This ensures the Leads view and the Sales Pipeline
+  // (Kanban) show exactly the same records — no orphan Deals.
+  // NOTE: We deliberately do NOT set `customerId` here — the customers array
+  // comes from an unscoped findMany and may belong to a different tenant,
+  // which would violate the foreign-key constraint. We only borrow the
+  // customer's name/phone as denormalized strings (like the original seed).
   count = 0;
-  for (const dd of [
-    { title: 'Office Deep Cleaning', value: 450, stage: 'new_lead', probability: 10, customerName: customers[0]?.name, customerPhone: customers[0]?.phone, assigneeId: owner.id, assigneeName: owner.name, source: 'whatsapp', tenantId, workspaceId },
-    { title: 'Kitchen Plumbing', value: 280, stage: 'contacted', probability: 20, customerName: customers[1]?.name, customerPhone: customers[1]?.phone, assigneeId: manager.id, assigneeName: manager.name, source: 'whatsapp', tenantId, workspaceId },
-    { title: 'House Painting', value: 2500, stage: 'qualified', probability: 40, customerName: customers[2]?.name, customerPhone: customers[2]?.phone, assigneeId: owner.id, assigneeName: owner.name, source: 'whatsapp', tenantId, workspaceId },
-    { title: 'AC Installation', value: 650, stage: 'quote_sent', probability: 50, customerName: customers[3]?.name, customerPhone: customers[3]?.phone, assigneeId: owner.id, assigneeName: owner.name, source: 'whatsapp', tenantId, workspaceId },
-    { title: 'Bathroom Renovation', value: 3800, stage: 'negotiation', probability: 70, customerName: customers[4]?.name, customerPhone: customers[4]?.phone, assigneeId: manager.id, assigneeName: manager.name, source: 'whatsapp', tenantId, workspaceId },
-    { title: 'Moving Service', value: 850, stage: 'won', probability: 100, customerName: customers[0]?.name, customerPhone: customers[0]?.phone, assigneeId: owner.id, assigneeName: owner.name, source: 'whatsapp', closedAt: new Date(), tenantId, workspaceId },
-    { title: 'Carpet Cleaning', value: 320, stage: 'won', probability: 100, customerName: customers[1]?.name, customerPhone: customers[1]?.phone, assigneeId: manager.id, assigneeName: manager.name, source: 'whatsapp', closedAt: new Date(), tenantId, workspaceId },
-    { title: 'Pest Control - Lost', value: 200, stage: 'lost', probability: 0, customerName: customers[2]?.name, customerPhone: customers[2]?.phone, assigneeId: owner.id, assigneeName: owner.name, source: 'whatsapp', lossReason: 'Chose competitor', closedAt: new Date(), tenantId, workspaceId },
-  ]) { try { await prisma.deal.create({ data: dd }); count++; } catch {} }
-  console.log(`Deals: ${count}`);
+  const seedLeadData = [
+    { title: 'Office Deep Cleaning',  name: customers[0]?.name || 'Lead 1', phone: customers[0]?.phone || '555-0100', value: 450,  status: 'new_lead',    source: 'whatsapp', empKey: 'owner' as const },
+    { title: 'Kitchen Plumbing',      name: customers[1]?.name || 'Lead 2', phone: customers[1]?.phone || '555-0101', value: 280,  status: 'contacted',   source: 'whatsapp', empKey: 'manager' as const },
+    { title: 'House Painting',        name: customers[2]?.name || 'Lead 3', phone: customers[2]?.phone || '555-0102', value: 2500, status: 'qualified',   source: 'whatsapp', empKey: 'owner' as const },
+    { title: 'AC Installation',       name: customers[3]?.name || 'Lead 4', phone: customers[3]?.phone || '555-0103', value: 650,  status: 'quote_sent',  source: 'whatsapp', empKey: 'owner' as const },
+    { title: 'Bathroom Renovation',   name: customers[4]?.name || 'Lead 5', phone: customers[4]?.phone || '555-0104', value: 3800, status: 'negotiation', source: 'whatsapp', empKey: 'manager' as const },
+    { title: 'Moving Service',        name: customers[0]?.name || 'Lead 6', phone: customers[0]?.phone || '555-0105', value: 850,  status: 'won',         source: 'whatsapp', empKey: 'owner' as const },
+    { title: 'Carpet Cleaning',       name: customers[1]?.name || 'Lead 7', phone: customers[1]?.phone || '555-0106', value: 320,  status: 'won',         source: 'whatsapp', empKey: 'manager' as const },
+    { title: 'Pest Control - Lost',   name: customers[2]?.name || 'Lead 8', phone: customers[2]?.phone || '555-0107', value: 200,  status: 'lost',        source: 'whatsapp', empKey: 'owner' as const },
+  ];
+
+  const stageProbability: Record<string, number> = {
+    new_lead: 10, contacted: 20, qualified: 40, quote_sent: 50,
+    negotiation: 70, won: 100, lost: 0,
+  };
+
+  let leadCount = 0;
+  let dealCount = 0;
+  for (const ld of seedLeadData) {
+    const empId = ld.empKey === 'owner' ? ownerEmp?.id : managerEmp?.id;
+    const empName = ld.empKey === 'owner' ? ownerEmp?.name : managerEmp?.name;
+    let leadId: string | null = null;
+    try {
+      const lead = await prisma.lead.create({
+        data: {
+          title: ld.title,
+          name: ld.name,
+          phone: ld.phone,
+          source: ld.source,
+          status: ld.status,
+          priority: 'medium',
+          value: ld.value,
+          tenantId,
+          assignedToId: empId || null,     // FK → Employee.id
+          ...(ld.status === 'won' ? { convertedAt: new Date() } : {}),
+        },
+      });
+      leadId = lead.id;
+      leadCount++;
+    } catch (leadErr) {
+      console.error('Failed to seed lead:', ld.title, leadErr);
+    }
+
+    if (leadId) {
+      try {
+        await prisma.deal.create({
+          data: {
+            title: ld.title,
+            value: ld.value,
+            currency: 'USD',
+            stage: ld.status,
+            probability: stageProbability[ld.status] ?? 10,
+            customerName: ld.name,
+            customerPhone: ld.phone,
+            // Deal.assigneeId is a plain String (no FK), so a userId is fine.
+            assigneeId: (ld.empKey === 'owner' ? owner : manager)?.id || null,
+            assigneeName: empName || owner.name,
+            leadId,                         // ← linked to the Lead above
+            source: ld.source,
+            notesJson: '[]',
+            tenantId,
+            workspaceId,
+            ...(ld.status === 'won' || ld.status === 'lost'
+              ? { closedAt: new Date(), lossReason: ld.status === 'lost' ? 'Chose competitor' : null }
+              : {}),
+          },
+        });
+        dealCount++;
+      } catch (dealErr) {
+        console.error('Failed to seed deal for lead:', ld.title, dealErr);
+      }
+    }
+    count++;
+  }
+  console.log(`Leads+Deals: ${count} pairs (leads: ${leadCount}, deals: ${dealCount})`);
 
   // Chatbots
   count = 0;

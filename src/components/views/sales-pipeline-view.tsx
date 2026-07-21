@@ -77,6 +77,16 @@ interface Deal {
   createdAt: string;
   updatedAt: string;
   stageHistory?: StageHistoryEntry[];
+  // Linked Lead (HubSpot model) — populated by /api/deals GET & [id] GET
+  // via `include: { lead: { select: ... } }`.
+  lead?: {
+    id: string;
+    name: string;
+    phone: string;
+    email?: string | null;
+    source?: string;
+    status?: string;
+  } | null;
 }
 
 interface Assignee {
@@ -143,7 +153,7 @@ interface EditFormState extends CreateFormState {
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
-export function SalesPipelineView() {
+export function SalesPipelineView({ embedded = false }: { embedded?: boolean } = {}) {
   // ─── State ──────────────────────────────────────────────────────────────
   const [deals, setDeals] = useState<Deal[]>([]);
   const [assignees, setAssignees] = useState<Assignee[]>([]);
@@ -612,7 +622,7 @@ export function SalesPipelineView() {
           <Progress value={deal.probability} className="h-1" />
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground truncate">
-              {deal.customerName || '—'}
+              {deal.lead?.name || deal.customerName || '—'}
             </span>
             <Avatar className="size-5">
               <AvatarFallback className="text-[8px] bg-emerald-100 text-emerald-700">
@@ -620,6 +630,22 @@ export function SalesPipelineView() {
               </AvatarFallback>
             </Avatar>
           </div>
+          {/* Linked Lead info: source badge + phone */}
+          {(deal.lead?.source || deal.source || deal.lead?.phone || deal.customerPhone) && (
+            <div className="flex items-center justify-between gap-2 pt-0.5">
+              {(deal.lead?.source || deal.source) && (
+                <Badge variant="outline" className="text-[9px] h-4 px-1 capitalize shrink-0">
+                  {deal.lead?.source || deal.source}
+                </Badge>
+              )}
+              {(deal.lead?.phone || deal.customerPhone) && (
+                <span className="text-[10px] text-muted-foreground truncate flex items-center gap-0.5">
+                  <Phone className="size-2.5 shrink-0" />
+                  {deal.lead?.phone || deal.customerPhone}
+                </span>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
     );
@@ -663,72 +689,93 @@ export function SalesPipelineView() {
 
   return (
     <div className="space-y-6 w-full">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600">
-            <TrendingUp className="size-5 text-white" />
+      {/* Header — hidden in embedded mode (Leads > Pipeline tab provides its own) */}
+      {!embedded && (
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600">
+              <TrendingUp className="size-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold">Sales Pipeline</h2>
+              <p className="text-sm text-muted-foreground">Drag deals across stages to update</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-xl font-bold">Sales Pipeline</h2>
-            <p className="text-sm text-muted-foreground">Drag deals across stages to update</p>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={loadDeals} disabled={loading}>
+              <RefreshCw className={cn('size-4 mr-1.5', loading && 'animate-spin')} />
+              Refresh
+            </Button>
+            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowCreateDialog(true)}>
+              <Plus className="size-4 mr-1.5" /> New Lead
+            </Button>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+      )}
+
+      {/* Compact toolbar for embedded mode */}
+      {embedded && (
+        <div className="flex items-center justify-end gap-2">
           <Button variant="outline" size="sm" onClick={loadDeals} disabled={loading}>
             <RefreshCw className={cn('size-4 mr-1.5', loading && 'animate-spin')} />
             Refresh
           </Button>
-          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowCreateDialog(true)}>
+          <Button className="bg-emerald-600 hover:bg-emerald-700" size="sm" onClick={() => setShowCreateDialog(true)}>
             <Plus className="size-4 mr-1.5" /> New Lead
           </Button>
         </div>
-      </div>
+      )}
 
       {/* Help text: explains the Lead↔Deal link */}
-      <p className="text-xs text-muted-foreground">
-        Each card represents a lead moving through your sales pipeline. Drag cards between columns to update stages.
-      </p>
+      {!embedded && (
+        <p className="text-xs text-muted-foreground">
+          Each card represents a lead moving through your sales pipeline. Drag cards between columns to update stages.
+        </p>
+      )}
 
       {/* Stats */}
-      <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
-        {[
-          { label: 'Pipeline Value', value: formatMoney(totalPipelineValue), color: 'text-blue-600', icon: DollarSign },
-          { label: 'Weighted Value', value: formatMoney(weightedPipeline), color: 'text-purple-600', icon: TrendingUp },
-          { label: 'Won Revenue', value: formatMoney(wonValue), color: 'text-emerald-600', icon: BarChart3 },
-          { label: 'Active Deals', value: String(activeDealsCount), color: 'text-orange-600', icon: Briefcase },
-        ].map((stat) => (
-          <Card key={stat.label} className="p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">{stat.label}</p>
-              <stat.icon className={cn('size-4', stat.color)} />
-            </div>
-            <p className={cn('text-lg font-bold', stat.color)}>{stat.value}</p>
-          </Card>
-        ))}
-      </div>
+      {!embedded && (
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
+          {[
+            { label: 'Pipeline Value', value: formatMoney(totalPipelineValue), color: 'text-blue-600', icon: DollarSign },
+            { label: 'Weighted Value', value: formatMoney(weightedPipeline), color: 'text-purple-600', icon: TrendingUp },
+            { label: 'Won Revenue', value: formatMoney(wonValue), color: 'text-emerald-600', icon: BarChart3 },
+            { label: 'Active Deals', value: String(activeDealsCount), color: 'text-orange-600', icon: Briefcase },
+          ].map((stat) => (
+            <Card key={stat.label} className="p-4">
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">{stat.label}</p>
+                <stat.icon className={cn('size-4', stat.color)} />
+              </div>
+              <p className={cn('text-lg font-bold', stat.color)}>{stat.value}</p>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Revenue Forecast */}
-      <Card>
-        <CardContent className="p-4">
-          <h3 className="text-sm font-medium mb-3">Revenue Forecast</h3>
-          <div className="flex items-end gap-1 h-20">
-            {activeStages.map((stage) => {
-              const stageValue = deals.filter((d) => d.stage === stage.id).reduce((s, d) => s + d.value, 0);
-              return (
-                <div key={stage.id} className="flex-1 flex flex-col items-center gap-1">
-                  <div className="text-[9px] text-muted-foreground">{symbol}{stageValue.toLocaleString()}</div>
-                  <div
-                    className={cn('w-full rounded-t', stage.accent, 'opacity-70')}
-                    style={{ height: `${Math.max((stageValue / maxStageValue) * 60, 4)}px` }}
-                  />
-                  <div className="text-[9px] text-muted-foreground text-center truncate w-full">{stage.label}</div>
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
+      {!embedded && (
+        <Card>
+          <CardContent className="p-4">
+            <h3 className="text-sm font-medium mb-3">Revenue Forecast</h3>
+            <div className="flex items-end gap-1 h-20">
+              {activeStages.map((stage) => {
+                const stageValue = deals.filter((d) => d.stage === stage.id).reduce((s, d) => s + d.value, 0);
+                return (
+                  <div key={stage.id} className="flex-1 flex flex-col items-center gap-1">
+                    <div className="text-[9px] text-muted-foreground">{symbol}{stageValue.toLocaleString()}</div>
+                    <div
+                      className={cn('w-full rounded-t', stage.accent, 'opacity-70')}
+                      style={{ height: `${Math.max((stageValue / maxStageValue) * 60, 4)}px` }}
+                    />
+                    <div className="text-[9px] text-muted-foreground text-center truncate w-full">{stage.label}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Loading state */}
       {loading && (
@@ -839,40 +886,52 @@ export function SalesPipelineView() {
                   )}
                 </div>
 
-                {/* Contact section — linked Lead info */}
+                {/* Contact section — linked Lead info (prefers Lead record) */}
                 <Separator />
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Contact</Label>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">Contact</Label>
+                    {(selectedDeal.lead?.source || selectedDeal.source) && (
+                      <Badge variant="outline" className="text-[9px] h-4 px-1 capitalize">
+                        {selectedDeal.lead?.source || selectedDeal.source}
+                      </Badge>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 text-sm">
                     <User className="size-3.5 text-muted-foreground shrink-0" />
                     <span className="font-medium truncate">
-                      {selectedDeal.customerName || '—'}
+                      {selectedDeal.lead?.name || selectedDeal.customerName || '—'}
                     </span>
                   </div>
-                  {selectedDeal.customerPhone && (
+                  {(selectedDeal.lead?.phone || selectedDeal.customerPhone) && (
                     <div className="flex items-center gap-2 text-sm">
                       <Phone className="size-3.5 text-muted-foreground shrink-0" />
                       <a
-                        href={`tel:${selectedDeal.customerPhone}`}
+                        href={`tel:${selectedDeal.lead?.phone || selectedDeal.customerPhone}`}
                         className="font-medium text-emerald-600 hover:underline"
                       >
-                        {selectedDeal.customerPhone}
+                        {selectedDeal.lead?.phone || selectedDeal.customerPhone}
                       </a>
                     </div>
                   )}
-                  {selectedDeal.customerEmail && (
+                  {(selectedDeal.lead?.email || selectedDeal.customerEmail) && (
                     <div className="flex items-center gap-2 text-sm">
                       <Mail className="size-3.5 text-muted-foreground shrink-0" />
                       <a
-                        href={`mailto:${selectedDeal.customerEmail}`}
+                        href={`mailto:${selectedDeal.lead?.email || selectedDeal.customerEmail}`}
                         className="font-medium text-emerald-600 hover:underline truncate"
                       >
-                        {selectedDeal.customerEmail}
+                        {selectedDeal.lead?.email || selectedDeal.customerEmail}
                       </a>
                     </div>
                   )}
-                  {!selectedDeal.customerName && !selectedDeal.customerPhone && !selectedDeal.customerEmail && (
+                  {!selectedDeal.lead && !selectedDeal.customerName && !selectedDeal.customerPhone && !selectedDeal.customerEmail && (
                     <p className="text-xs text-muted-foreground">No contact info linked.</p>
+                  )}
+                  {selectedDeal.lead && (
+                    <p className="text-[10px] text-muted-foreground pt-0.5">
+                      Linked to Lead · status: {selectedDeal.lead.status || '—'}
+                    </p>
                   )}
                 </div>
 

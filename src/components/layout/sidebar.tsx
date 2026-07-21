@@ -124,7 +124,6 @@ const ownerNavSections: NavSection[] = [
     items: [
       { view: 'leads', label: 'Leads', icon: Target },
       { view: 'customers', label: 'Customers', icon: Users },
-      { view: 'salesPipeline', label: 'Sales Pipeline', icon: Kanban },
       { view: 'reviews', label: 'Reviews', icon: Star },
     ],
   },
@@ -241,7 +240,6 @@ const superadminNavSections: NavSection[] = [
     items: [
       { view: 'leads', label: 'Leads', icon: Target },
       { view: 'customers', label: 'Customers', icon: Users },
-      { view: 'salesPipeline', label: 'Sales Pipeline', icon: Kanban },
     ],
   },
   {

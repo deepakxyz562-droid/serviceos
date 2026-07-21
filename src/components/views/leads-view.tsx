@@ -11,6 +11,7 @@ import {
   CalendarDays, Briefcase, AlertCircle, User, UserPlus,
   Loader2, ArrowLeft, ImagePlus, Link2, Paperclip, Camera,
   FileText, ImageIcon, ClipboardList, Truck, Info,
+  Kanban,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -59,6 +60,7 @@ import {
 
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { FormSectionCard, FormPageHeader } from '@/components/shared/form-section-card';
+import { SalesPipelineView } from '@/components/views/sales-pipeline-view';
 
 // ============================================================
 // Types
@@ -1128,9 +1130,6 @@ export function LeadsView() {
   // user clicks "Convert" so the New Job form opens pre-filled.
   const setPendingJobPrefill = useAppStore((s) => s.setPendingJobPrefill);
   const setGlobalView = useAppStore((s) => s.setActiveView);
-  // Navigate to the Sales Pipeline sidebar item from inside the Lead detail
-  // dialog (the "View in Pipeline" shortcut).
-  const setCurrentView = useAppStore((s) => s.setCurrentView);
   // Cross-view "New X" create signal — when the sidebar's "+ Create" dropdown
   // or the dashboard's "Add Lead" quick action sets pendingCreate to 'lead',
   // we open the New Lead form and clear the signal so a refresh doesn't
@@ -1259,14 +1258,14 @@ export function LeadsView() {
   const [newNote, setNewNote] = useState('');
 
   // ============================================================
-  // Tab state — List | Analytics
+  // Tab state — List | Pipeline | Analytics
   // ============================================================
 
-  // Top-level tab switcher for the Leads page. The Pipeline tab has been
-  // removed — the Sales Pipeline is now its own sidebar item that shows the
-  // same Deals Kanban board. The Analytics tab shows derived stats from the
-  // lead list.
-  const [activeTab, setActiveTab] = useState<'list' | 'analytics'>('list');
+  // Top-level tab switcher for the Leads page. The Pipeline tab embeds the
+  // SalesPipelineView (Kanban board) inline so users can toggle between the
+  // list view and the drag-and-drop board without leaving the Leads page.
+  // The Analytics tab shows derived stats from the lead list.
+  const [activeTab, setActiveTab] = useState<'list' | 'pipeline' | 'analytics'>('list');
 
   // Larger lead set fetched on-demand for the Analytics tab so the
   // breakdowns reflect the whole tenant (not just the current page of 10).
@@ -2389,7 +2388,7 @@ export function LeadsView() {
           </DialogHeader>
 
           <div className="space-y-5">
-            {/* Top action row — jump to the Sales Pipeline to move the linked
+            {/* Top action row — switch to the Pipeline tab to move the linked
                 Deal's stage. Placed near the top so it's reachable without
                 scrolling past the rest of the detail body. */}
             <div className="flex justify-end">
@@ -2398,7 +2397,7 @@ export function LeadsView() {
                 size="sm"
                 onClick={() => {
                   setShowDetailDialog(false);
-                  setCurrentView('salesPipeline');
+                  setActiveTab('pipeline');
                 }}
                 className="gap-2"
               >
@@ -3698,7 +3697,7 @@ export function LeadsView() {
       {/* ─── Tabs (List | Analytics) ───────────────────────────── */}
       <Tabs
         value={activeTab}
-        onValueChange={(v) => setActiveTab(v as 'list' | 'analytics')}
+        onValueChange={(v) => setActiveTab(v as 'list' | 'pipeline' | 'analytics')}
       >
         <div className="border-b border-border">
           <TabsList className="bg-transparent h-11 gap-0.5 p-0 overflow-x-auto w-full sm:w-fit justify-start rounded-none">
@@ -3707,6 +3706,12 @@ export function LeadsView() {
               className="data-[state=active]:bg-accent data-[state=active]:text-emerald-600 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-sm gap-1.5 transition-all duration-200"
             >
               <List className="size-3.5" /> List
+            </TabsTrigger>
+            <TabsTrigger
+              value="pipeline"
+              className="data-[state=active]:bg-accent data-[state=active]:text-emerald-600 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-sm gap-1.5 transition-all duration-200"
+            >
+              <Kanban className="size-3.5" /> Pipeline
             </TabsTrigger>
             <TabsTrigger
               value="analytics"
@@ -3801,6 +3806,14 @@ export function LeadsView() {
 
           {/* View Content (Kanban board or Table) */}
           {activeView === 'kanban' ? renderKanbanBoard() : renderTableView()}
+        </TabsContent>
+
+        {/* ─── Pipeline Tab (drag-and-drop Kanban board) ──────────── */}
+        {/* Embeds the SalesPipelineView inline so users can toggle between
+            the lead list and the deal pipeline without leaving the page.
+            The board fetches /api/deals (which are 1:1 linked to Leads). */}
+        <TabsContent value="pipeline" className="mt-6 outline-none">
+          <SalesPipelineView embedded />
         </TabsContent>
 
         {/* ─── Analytics Tab (stat cards + charts) ──────────────── */}
