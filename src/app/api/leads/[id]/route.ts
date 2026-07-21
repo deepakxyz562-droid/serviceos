@@ -134,6 +134,16 @@ export async function PUT(
       }
     }
 
+    // ─── Sync linked Deal.stage with Lead.status (HubSpot model) ───────
+    // Mirror of the Deal→Lead sync in /api/deals/[id] PUT. When a Lead's
+    // status changes (via the Kanban board drag, the status dropdown, or the
+    // detail dialog), the linked Deal's stage is updated so the Sales
+    // Pipeline and Leads views always agree. We run this AFTER the lead
+    // update (below) so we can read the fresh lead if needed; the deal
+    // update itself is best-effort and never fails the lead update.
+    const shouldSyncDeal =
+      status !== undefined && status !== existingLead.status;
+
     // --- Propagate phone/name/email changes to linked Customer & Conversations ---
     // The phone number is stored in 3 places: Lead.phone, Customer.phone (read by
     // Customer 360), and Conversation.customerPhone (read by the Omni-channel inbox).
@@ -204,6 +214,51 @@ export async function PUT(
 
       return updated;
     });
+
+    // ─── Sync the linked Deal's stage with the new Lead status ──────────
+    // Runs outside the lead transaction (best-effort, non-fatal). We look up
+    // the Deal by `leadId` (1:1 link) and update its stage, probability, and
+    // closedAt to match the canonical pipeline stage values. This keeps the
+    // Leads Kanban and the Sales Pipeline in lock-step regardless of which
+    // view the user used to move the record.
+    if (shouldSyncDeal) {
+      try {
+        const linkedDeal = await db.deal.findFirst({
+          where: { leadId: lead.id },
+          select: { id: true, stage: true },
+        });
+        if (linkedDeal && linkedDeal.stage !== status) {
+          const stageProbability: Record<string, number> = {
+            new_lead: 10, contacted: 20, qualified: 40, quote_sent: 50,
+            negotiation: 70, won: 100, lost: 0,
+          };
+          await db.deal.update({
+            where: { id: linkedDeal.id },
+            data: {
+              stage: status as string,
+              probability: stageProbability[status as string] ?? 10,
+              // Stamp/clear closedAt alongside the stage
+              ...(status === 'won' || status === 'lost'
+                ? { closedAt: new Date() }
+                : { closedAt: null }),
+            },
+          });
+          // Record a stage-history entry so the Deal's audit trail matches.
+          await db.dealStageHistory.create({
+            data: {
+              dealId: linkedDeal.id,
+              fromStage: linkedDeal.stage,
+              toStage: status as string,
+              changedById: authUser?.id || null,
+              note: 'Synced from Lead status change',
+            },
+          });
+        }
+      } catch (dealSyncErr) {
+        console.error('[LeadsUpdate] Failed to sync linked Deal.stage:', dealSyncErr);
+        // Non-fatal — the Lead update already succeeded.
+      }
+    }
 
     // Emit lead.updated event via EventBus
     try {
