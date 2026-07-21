@@ -57,9 +57,6 @@ import {
   Cell,
 } from 'recharts';
 
-// Lazy-loaded peer view embedded in the Pipeline tab.
-import { SalesPipelineView } from '@/components/views/sales-pipeline-view';
-
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { FormSectionCard, FormPageHeader } from '@/components/shared/form-section-card';
 
@@ -147,12 +144,16 @@ interface LeadFormData {
 // Constants
 // ============================================================
 
-// 5 pipeline stages for Kanban view
-const KANBAN_STATUSES = ['new', 'contacted', 'quoted', 'won', 'lost'] as const;
+// 7 pipeline stages — mirrors the Deal stages used by the Sales Pipeline
+// (SalesPipelineView's STAGES array). These are the canonical status values
+// stored on new Lead rows. Legacy Lead rows may still hold the older values
+// `new` / `quoted` / `proposal`; those are mapped via the aliases below and
+// `mapToKanbanStatus` so existing data renders correctly without a migration.
+const KANBAN_STATUSES = ['new_lead', 'contacted', 'qualified', 'quote_sent', 'negotiation', 'won', 'lost'] as const;
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; borderColor: string; headerBg: string; headerText: string; dotColor: string }> = {
-  new: {
-    label: 'New',
+  new_lead: {
+    label: 'New Lead',
     color: 'text-blue-700',
     bgColor: 'bg-blue-50',
     borderColor: 'border-blue-200',
@@ -169,14 +170,32 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: str
     headerText: 'text-white',
     dotColor: 'bg-amber-500',
   },
-  quoted: {
-    label: 'Quoted',
+  qualified: {
+    label: 'Qualified',
     color: 'text-purple-700',
     bgColor: 'bg-purple-50',
     borderColor: 'border-purple-200',
     headerBg: 'bg-purple-600',
     headerText: 'text-white',
     dotColor: 'bg-purple-500',
+  },
+  quote_sent: {
+    label: 'Quote Sent',
+    color: 'text-orange-700',
+    bgColor: 'bg-orange-50',
+    borderColor: 'border-orange-200',
+    headerBg: 'bg-orange-500',
+    headerText: 'text-white',
+    dotColor: 'bg-orange-500',
+  },
+  negotiation: {
+    label: 'Negotiation',
+    color: 'text-pink-700',
+    bgColor: 'bg-pink-50',
+    borderColor: 'border-pink-200',
+    headerBg: 'bg-pink-500',
+    headerText: 'text-white',
+    dotColor: 'bg-pink-500',
   },
   won: {
     label: 'Won',
@@ -196,47 +215,43 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: str
     headerText: 'text-white',
     dotColor: 'bg-red-500',
   },
-  // Map legacy statuses for API compatibility
-  qualified: {
-    label: 'Qualified',
-    color: 'text-teal-700',
-    bgColor: 'bg-teal-50',
-    borderColor: 'border-teal-200',
-    headerBg: 'bg-teal-600',
-    headerText: 'text-white',
-    dotColor: 'bg-teal-500',
-  },
-  proposal: {
-    label: 'Proposal',
-    color: 'text-purple-700',
-    bgColor: 'bg-purple-50',
-    borderColor: 'border-purple-200',
-    headerBg: 'bg-purple-600',
-    headerText: 'text-white',
-    dotColor: 'bg-purple-500',
-  },
-  negotiation: {
-    label: 'Negotiation',
-    color: 'text-orange-700',
-    bgColor: 'bg-orange-50',
-    borderColor: 'border-orange-200',
-    headerBg: 'bg-orange-500',
-    headerText: 'text-white',
-    dotColor: 'bg-orange-500',
-  },
 };
 
-// All statuses available for filtering
-const ALL_STATUSES = ['new', 'contacted', 'quoted', 'won', 'lost'] as const;
+// Backwards-compatibility aliases for legacy Lead.status values. Older rows
+// may still carry `new` / `quoted` / `proposal`; map them onto the canonical
+// Deal-stage configs so badges, dropdowns and chart colours line up.
+STATUS_CONFIG.new = STATUS_CONFIG.new_lead;
+STATUS_CONFIG.quoted = STATUS_CONFIG.quote_sent;
+STATUS_CONFIG.proposal = STATUS_CONFIG.quote_sent;
+
+/**
+ * Resolve a Lead.status (which may be a legacy value like `new` / `quoted` /
+ * `proposal` or a canonical Deal stage like `new_lead` / `quote_sent`) to its
+ * STATUS_CONFIG entry. Falls back to `new_lead` for unknown values so the UI
+ * always renders a sensible badge.
+ */
+function getStatusConfig(status: string) {
+  return STATUS_CONFIG[status] || STATUS_CONFIG.new_lead;
+}
+
+// All statuses available for filtering (canonical Deal stages).
+const ALL_STATUSES = ['new_lead', 'contacted', 'qualified', 'quote_sent', 'negotiation', 'won', 'lost'] as const;
 
 // Bar chart colors used by the Analytics tab. Match the status dot palette
-// so chart bars line up with the kanban / table badges.
+// so chart bars line up with the kanban / table badges. Legacy aliases are
+// included so historical rows still get the right colour.
 const STATUS_BAR_COLORS: Record<string, string> = {
-  new: '#3b82f6',
+  new_lead: '#3b82f6',
   contacted: '#f59e0b',
-  quoted: '#a855f7',
+  qualified: '#a855f7',
+  quote_sent: '#f97316',
+  negotiation: '#ec4899',
   won: '#10b981',
   lost: '#ef4444',
+  // Legacy aliases
+  new: '#3b82f6',
+  quoted: '#f97316',
+  proposal: '#f97316',
 };
 
 const SOURCE_CONFIG: Record<string, { label: string; color: string; bgColor: string; borderColor: string }> = {
@@ -316,10 +331,14 @@ function getServiceTypeLabel(value: string | null | undefined): string {
   return found ? found.label : value;
 }
 
-/** Map API status to our 5 kanban stages */
+/**
+ * Map an API Lead.status to one of our 7 canonical Kanban stages. Legacy
+ * values (`new`, `quoted`, `proposal`) are folded onto their canonical
+ * counterparts so older rows still group correctly under the new columns.
+ */
 function mapToKanbanStatus(status: string): string {
-  if (status === 'qualified') return 'contacted';
-  if (status === 'proposal' || status === 'negotiation') return 'quoted';
+  if (status === 'new') return 'new_lead';
+  if (status === 'quoted' || status === 'proposal') return 'quote_sent';
   return status;
 }
 
@@ -1109,6 +1128,9 @@ export function LeadsView() {
   // user clicks "Convert" so the New Job form opens pre-filled.
   const setPendingJobPrefill = useAppStore((s) => s.setPendingJobPrefill);
   const setGlobalView = useAppStore((s) => s.setActiveView);
+  // Navigate to the Sales Pipeline sidebar item from inside the Lead detail
+  // dialog (the "View in Pipeline" shortcut).
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
   // Cross-view "New X" create signal — when the sidebar's "+ Create" dropdown
   // or the dashboard's "Add Lead" quick action sets pendingCreate to 'lead',
   // we open the New Lead form and clear the signal so a refresh doesn't
@@ -1237,13 +1259,14 @@ export function LeadsView() {
   const [newNote, setNewNote] = useState('');
 
   // ============================================================
-  // Tab state — List | Pipeline | Analytics
+  // Tab state — List | Analytics
   // ============================================================
 
-  // Top-level tab switcher for the Leads page. The Pipeline tab embeds the
-  // standalone SalesPipelineView component (which has its own internal
-  // state); the Analytics tab shows derived stats from the lead list.
-  const [activeTab, setActiveTab] = useState<'list' | 'pipeline' | 'analytics'>('list');
+  // Top-level tab switcher for the Leads page. The Pipeline tab has been
+  // removed — the Sales Pipeline is now its own sidebar item that shows the
+  // same Deals Kanban board. The Analytics tab shows derived stats from the
+  // lead list.
+  const [activeTab, setActiveTab] = useState<'list' | 'analytics'>('list');
 
   // Larger lead set fetched on-demand for the Analytics tab so the
   // breakdowns reflect the whole tenant (not just the current page of 10).
@@ -1733,8 +1756,9 @@ export function LeadsView() {
   };
 
   const renderStatusBadge = (status: string) => {
-    const config = STATUS_CONFIG[status];
-    if (!config) return <Badge variant="outline" className="text-xs">{status}</Badge>;
+    // Use the resolver so legacy statuses (`new`, `quoted`, `proposal`)
+    // render with their canonical Deal-stage label and palette.
+    const config = getStatusConfig(status);
     return (
       <Badge variant="outline" className={`text-[10px] h-5 ${config.bgColor} ${config.color} ${config.borderColor}`}>
         {config.label}
@@ -2365,6 +2389,24 @@ export function LeadsView() {
           </DialogHeader>
 
           <div className="space-y-5">
+            {/* Top action row — jump to the Sales Pipeline to move the linked
+                Deal's stage. Placed near the top so it's reachable without
+                scrolling past the rest of the detail body. */}
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowDetailDialog(false);
+                  setCurrentView('salesPipeline');
+                }}
+                className="gap-2"
+              >
+                <TrendingUp className="size-4" />
+                View in Pipeline
+              </Button>
+            </div>
+
             {/* Title + Name + status */}
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -2601,11 +2643,11 @@ export function LeadsView() {
             <Separator />
 
             {/* Status Actions */}
-            {!['won', 'lost'].includes(selectedLead.status) && (
+            {!['won', 'lost'].includes(kanbanStatus) && (
               <div>
                 <h4 className="text-sm font-semibold mb-2">Update Status</h4>
                 <div className="flex flex-wrap gap-2">
-                  {KANBAN_STATUSES.filter((s) => s !== selectedLead.status).map((status) => {
+                  {KANBAN_STATUSES.filter((s) => s !== kanbanStatus).map((status) => {
                     const config = STATUS_CONFIG[status];
                     const isStatusLoading = statusLoadingId === selectedLead.id;
                     return (
@@ -3494,7 +3536,7 @@ export function LeadsView() {
                   <div className="pt-3 border-t border-border/40">
                     <p className="text-xs font-semibold text-muted-foreground mb-2">Update Status</p>
                     <div className="flex flex-wrap gap-2">
-                      {KANBAN_STATUSES.filter((s) => s !== lead.status).map((status) => {
+                      {KANBAN_STATUSES.filter((s) => s !== kanbanStatus).map((status) => {
                         const config = STATUS_CONFIG[status];
                         const isStatusLoading = statusLoadingId === lead.id;
                         return (
@@ -3653,10 +3695,10 @@ export function LeadsView() {
         </div>
       </div>
 
-      {/* ─── Tabs (List | Pipeline | Analytics) ──────────────────── */}
+      {/* ─── Tabs (List | Analytics) ───────────────────────────── */}
       <Tabs
         value={activeTab}
-        onValueChange={(v) => setActiveTab(v as 'list' | 'pipeline' | 'analytics')}
+        onValueChange={(v) => setActiveTab(v as 'list' | 'analytics')}
       >
         <div className="border-b border-border">
           <TabsList className="bg-transparent h-11 gap-0.5 p-0 overflow-x-auto w-full sm:w-fit justify-start rounded-none">
@@ -3665,12 +3707,6 @@ export function LeadsView() {
               className="data-[state=active]:bg-accent data-[state=active]:text-emerald-600 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-sm gap-1.5 transition-all duration-200"
             >
               <List className="size-3.5" /> List
-            </TabsTrigger>
-            <TabsTrigger
-              value="pipeline"
-              className="data-[state=active]:bg-accent data-[state=active]:text-emerald-600 text-muted-foreground hover:text-foreground rounded-md px-3 h-9 text-sm gap-1.5 transition-all duration-200"
-            >
-              <TrendingUp className="size-3.5" /> Pipeline
             </TabsTrigger>
             <TabsTrigger
               value="analytics"
@@ -3765,11 +3801,6 @@ export function LeadsView() {
 
           {/* View Content (Kanban board or Table) */}
           {activeView === 'kanban' ? renderKanbanBoard() : renderTableView()}
-        </TabsContent>
-
-        {/* ─── Pipeline Tab (embedded SalesPipelineView) ────────── */}
-        <TabsContent value="pipeline" className="mt-6 outline-none">
-          <SalesPipelineView />
         </TabsContent>
 
         {/* ─── Analytics Tab (stat cards + charts) ──────────────── */}

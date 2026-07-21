@@ -82,6 +82,37 @@ export async function POST(request: NextRequest) {
     const tenantId = user.isSuperAdmin && body.tenantId ? body.tenantId : user.tenantId
     const workspaceId = user.isSuperAdmin && body.workspaceId ? body.workspaceId : user.workspaceId
 
+    let leadId = body.leadId || null
+
+    // ─── HubSpot model: every Deal is linked to a Lead ─────────
+    // If no leadId is provided, auto-create a Lead from the Deal data.
+    // This ensures the Sales Pipeline "Create" button creates a Lead+Deal pair.
+    if (!leadId) {
+      try {
+        const newLead = await db.lead.create({
+          data: {
+            title: body.title || null,
+            name: body.customerName || body.title || 'Unknown',
+            phone: body.customerPhone || '',
+            email: null,
+            source: body.source || 'manual',
+            status: body.stage || 'new_lead',
+            priority: 'medium',
+            value: body.value || 0,
+            description: null,
+            address: null,
+            tenantId: tenantId || null,
+            customerId: body.customerId || null,
+            assignedToId: body.assigneeId || null,
+          },
+        })
+        leadId = newLead.id
+      } catch (leadErr) {
+        console.error('[DealsCreate] Failed to auto-create Lead for deal:', leadErr)
+        // Non-fatal — continue with leadId = null (orphan deal, still works)
+      }
+    }
+
     const deal = await db.deal.create({
       data: {
         title: body.title,
@@ -94,7 +125,7 @@ export async function POST(request: NextRequest) {
         customerPhone: body.customerPhone,
         assigneeId: body.assigneeId,
         assigneeName: body.assigneeName,
-        leadId: body.leadId,
+        leadId,
         source: body.source || 'manual',
         notesJson: body.notesJson || '[]',
         expectedCloseDate: body.expectedCloseDate ? new Date(body.expectedCloseDate) : undefined,

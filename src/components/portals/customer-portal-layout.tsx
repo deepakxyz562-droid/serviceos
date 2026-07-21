@@ -35,7 +35,6 @@ import {
   Phone,
   Mail,
   Home,
-  Edit,
   Search,
   Filter,
   MoreVertical,
@@ -49,6 +48,7 @@ import {
 import { cn } from '@/lib/utils';
 import { authFetch } from '@/lib/client-auth';
 import { useAppStore } from '@/store/app-store';
+import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -130,8 +130,32 @@ const SIDEBAR_ITEMS: { key: CustomerView; label: string; icon: React.ElementType
 
 // ─── Helper Functions ───────────────────────────────────────────────────────
 
+// Module-level currency state. Defaults preserve the legacy INR/en-IN
+// behaviour until `CustomerPortalLayout` calls `setPortalCurrency()` on
+// mount with the tenant's actual base currency (resolved via the
+// `useCompanyCurrency` hook). Kept as a module-level setter rather than
+// converting every call site to the hook because `formatCurrency` is
+// invoked from ~20 sites across 5+ child views (Dashboard, Invoices,
+// Quotes, Orders, etc.) — a hook-based refactor would be far more invasive.
+let _portalCurrencyCode = 'INR';
+let _portalLocale = 'en-IN';
+
+/**
+ * Update the currency code + locale used by the top-level `formatCurrency`
+ * helper. Called once on mount from `CustomerPortalLayout` after the
+ * `useCompanyCurrency` hook resolves the tenant's base currency.
+ */
+function setPortalCurrency(code: string, locale: string) {
+  if (code) _portalCurrencyCode = code;
+  if (locale) _portalLocale = locale;
+}
+
 function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
+  return new Intl.NumberFormat(_portalLocale, {
+    style: 'currency',
+    currency: _portalCurrencyCode,
+    maximumFractionDigits: 0,
+  }).format(amount);
 }
 
 function apiUrl(path: string) {
@@ -1074,7 +1098,10 @@ function getFinancialStatusBadge(status: string | null) {
 }
 
 function formatINR(amount: number): string {
-  return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
+  // Delegate to the module-level `formatCurrency` so OrdersView respects
+  // the tenant's actual currency (set via `setPortalCurrency`) instead of
+  // always rendering INR. Kept as a thin wrapper to minimise call-site churn.
+  return formatCurrency(amount);
 }
 
 function OrdersView({ customerEmail }: { customerEmail: string }) {
@@ -2366,7 +2393,7 @@ function MessagesView() {
             </div>
             <h3 className="text-base font-semibold text-foreground mb-1">No messages yet</h3>
             <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-              When you message {companyName}, your conversation will appear here. Use the form below to start a conversation.
+              When {companyName} sends you messages, your conversation will appear here. Sending new messages is coming soon — please contact us via phone or email for now.
             </p>
           </div>
         )}
@@ -2405,45 +2432,38 @@ function MessagesView() {
           </ScrollArea>
         )}
 
-        {/* Input Area */}
+        {/* Input Area — disabled: messaging send is not yet available */}
         {!loading && !error && (
           <div className="p-3 border-t border-border bg-muted/30">
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" className="size-9 shrink-0 text-muted-foreground hover:text-foreground">
+              <Button variant="ghost" size="icon" className="size-9 shrink-0 text-muted-foreground" disabled aria-hidden tabIndex={-1}>
                 <Paperclip className="size-4" />
               </Button>
               <div className="flex-1 relative">
                 <Input
-                  placeholder="Type a message..."
+                  placeholder="Messaging is coming soon…"
                   value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
+                  onChange={() => { /* no-op: send is disabled */ }}
+                  disabled
                   className="pr-10 h-10 rounded-full bg-background border-border"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && newMessage.trim()) {
-                      // TODO: wire to POST /api/conversations/[id]/messages when available
-                      toast.info('Messaging is coming soon. Please contact us via phone or email.');
-                      setNewMessage('');
-                    }
-                  }}
                 />
-                <Button variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 size-7 text-muted-foreground hover:text-foreground">
+                <Button variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 size-7 text-muted-foreground" disabled aria-hidden tabIndex={-1}>
                   <Smile className="size-4" />
                 </Button>
               </div>
               <Button
                 size="icon"
                 className="size-10 rounded-full bg-teal-600 hover:bg-teal-700 text-white shrink-0"
-                disabled={!newMessage.trim()}
-                onClick={() => {
-                  if (newMessage.trim()) {
-                    toast.info('Messaging is coming soon. Please contact us via phone or email.');
-                    setNewMessage('');
-                  }
-                }}
+                disabled
+                aria-hidden
+                tabIndex={-1}
               >
                 <Send className="size-4" />
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground mt-2 text-center">
+              Messaging is coming soon. Please contact us via phone or email for now.
+            </p>
           </div>
         )}
       </Card>
@@ -2471,6 +2491,7 @@ function ReviewsView() {
   const [showWriteReview, setShowWriteReview] = useState(false);
   const [newRating, setNewRating] = useState(0);
   const [newReviewText, setNewReviewText] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   const fetchReviews = useCallback(async () => {
     setLoading(true);
@@ -2495,6 +2516,41 @@ function ReviewsView() {
   useEffect(() => {
     fetchReviews();
   }, [fetchReviews]);
+
+  const handleSubmitReview = async () => {
+    if (newRating === 0 || !newReviewText.trim() || submittingReview) return;
+    const customerId = getRealCustomerId(auth.user);
+    if (!customerId) {
+      toast.error('Unable to identify your account. Please reload the page and try again.');
+      return;
+    }
+    setSubmittingReview(true);
+    try {
+      const res = await authFetch(apiUrl('/api/reviews'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rating: newRating,
+          comment: newReviewText.trim(),
+          customerId,
+          source: 'portal',
+          status: 'published',
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to submit review');
+      // Reset form state and collapse the form
+      setNewRating(0);
+      setNewReviewText('');
+      setShowWriteReview(false);
+      toast.success('Review submitted! Thank you for your feedback.');
+      // Refresh the reviews list so the new entry appears
+      fetchReviews();
+    } catch (e) {
+      toast.error('Failed to submit review. Please try again.');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   const avgRating = reviews.length > 0
     ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1)
@@ -2539,10 +2595,19 @@ function ReviewsView() {
               />
             </div>
             <div className="flex items-center gap-2">
-              <Button className="bg-teal-600 hover:bg-teal-700 text-white" disabled={newRating === 0 || !newReviewText.trim()}>
-                Submit Review
+              <Button
+                className="bg-teal-600 hover:bg-teal-700 text-white"
+                disabled={newRating === 0 || !newReviewText.trim() || submittingReview}
+                onClick={handleSubmitReview}
+              >
+                {submittingReview ? (
+                  <>
+                    <Loader2 className="size-4 mr-2 animate-spin" />
+                    Submitting…
+                  </>
+                ) : 'Submit Review'}
               </Button>
-              <Button variant="outline" onClick={() => { setShowWriteReview(false); setNewRating(0); setNewReviewText(''); }}>Cancel</Button>
+              <Button variant="outline" onClick={() => { setShowWriteReview(false); setNewRating(0); setNewReviewText(''); }} disabled={submittingReview}>Cancel</Button>
             </div>
           </CardContent>
         </Card>
@@ -2629,6 +2694,55 @@ function ProfileView() {
   const customerPhone = auth.user?.phone || '';
   const companyName = auth.tenant?.name || '';
 
+  const customerId = getRealCustomerId(auth.user);
+
+  // Address is the only editable field — fetched from the customer record
+  // and saved via PUT /api/customers/[id] (which accepts `address`).
+  // Name/email/phone are displayed read-only: no customer-facing profile
+  // API for those exists yet, so editing them would be fake functionality.
+  const [address, setAddress] = useState('');
+  const [addressLoading, setAddressLoading] = useState(true);
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  useEffect(() => {
+    if (!customerId) {
+      setAddressLoading(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(apiUrl(`/api/customers/${customerId}`), { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setAddress(data?.address || '');
+      } catch {
+        // leave address empty — user can still type & save
+      } finally {
+        if (!cancelled) setAddressLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [customerId]);
+
+  const handleSaveProfile = async () => {
+    if (!customerId || savingProfile) return;
+    setSavingProfile(true);
+    try {
+      const res = await authFetch(apiUrl(`/api/customers/${customerId}`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address }),
+      });
+      if (!res.ok) throw new Error('Failed to save address');
+      toast.success('Address saved.');
+    } catch (e) {
+      toast.error('Failed to save address. Please try again.');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Profile Header */}
@@ -2650,10 +2764,6 @@ function ProfileView() {
                 </Badge>
               </div>
             </div>
-            <Button variant="outline" className="text-teal-600 border-teal-200 hover:bg-teal-50 dark:text-teal-400 dark:border-teal-800 dark:hover:bg-teal-950/30">
-              <Edit className="size-4 mr-2" />
-              Edit Profile
-            </Button>
           </div>
         </CardContent>
       </Card>
@@ -2662,7 +2772,7 @@ function ProfileView() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Personal Information</CardTitle>
-          <CardDescription>Update your personal details</CardDescription>
+          <CardDescription>Your account details. Only your address is editable right now — to update your name, email, or phone, please contact us.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -2670,28 +2780,28 @@ function ProfileView() {
               <Label htmlFor="profile-name">Full Name</Label>
               <div className="relative">
                 <UserCircle className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                <Input id="profile-name" defaultValue={customerName} className="pl-9" />
+                <Input id="profile-name" defaultValue={customerName} readOnly className="pl-9 bg-muted/40 cursor-not-allowed" />
               </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="profile-email">Email Address</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                <Input id="profile-email" type="email" defaultValue={customerEmail} className="pl-9" />
+                <Input id="profile-email" type="email" defaultValue={customerEmail} readOnly className="pl-9 bg-muted/40 cursor-not-allowed" />
               </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="profile-phone">Phone Number</Label>
               <div className="relative">
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                <Input id="profile-phone" type="tel" defaultValue={customerPhone} className="pl-9" />
+                <Input id="profile-phone" type="tel" defaultValue={customerPhone} readOnly className="pl-9 bg-muted/40 cursor-not-allowed" />
               </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="profile-company">Company (Optional)</Label>
               <div className="relative">
                 <Home className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                <Input id="profile-company" placeholder="Your company name" defaultValue={companyName} className="pl-9" />
+                <Input id="profile-company" placeholder="Your company name" defaultValue={companyName} readOnly className="pl-9 bg-muted/40 cursor-not-allowed" />
               </div>
             </div>
           </div>
@@ -2702,15 +2812,27 @@ function ProfileView() {
               <MapPin className="absolute left-3 top-3 size-4 text-muted-foreground" />
               <Textarea
                 id="profile-address"
-                placeholder="Enter your address"
+                placeholder={addressLoading ? 'Loading your address…' : 'Enter your address'}
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
                 className="pl-9 min-h-[80px]"
               />
             </div>
           </div>
 
           <div className="flex items-center gap-3 pt-2">
-            <Button className="bg-teal-600 hover:bg-teal-700 text-white">Save Changes</Button>
-            <Button variant="outline">Cancel</Button>
+            <Button
+              className="bg-teal-600 hover:bg-teal-700 text-white"
+              onClick={handleSaveProfile}
+              disabled={!customerId || savingProfile || addressLoading}
+            >
+              {savingProfile ? (
+                <>
+                  <Loader2 className="size-4 mr-2 animate-spin" />
+                  Saving…
+                </>
+              ) : 'Save Changes'}
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -2722,12 +2844,18 @@ function ProfileView() {
           <CardDescription>Manage your notification and account preferences</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* No backend API for updating notification preferences exists yet.
+              Showing static badges + a notice instead of fake toggle buttons
+              to avoid implying editability that isn't wired up. */}
+          <div className="rounded-md border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 p-3 text-xs text-amber-800 dark:text-amber-300">
+            Notification preferences editing is coming soon. The settings below reflect your current defaults.
+          </div>
           <div className="flex items-center justify-between py-2">
             <div>
               <p className="text-sm font-medium text-foreground">Email Notifications</p>
               <p className="text-xs text-muted-foreground">Receive booking updates via email</p>
             </div>
-            <Button variant="outline" size="sm">Enabled</Button>
+            <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800">Enabled</Badge>
           </div>
           <Separator />
           <div className="flex items-center justify-between py-2">
@@ -2735,7 +2863,7 @@ function ProfileView() {
               <p className="text-sm font-medium text-foreground">SMS Notifications</p>
               <p className="text-xs text-muted-foreground">Get text messages for important updates</p>
             </div>
-            <Button variant="outline" size="sm">Enabled</Button>
+            <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800">Enabled</Badge>
           </div>
           <Separator />
           <div className="flex items-center justify-between py-2">
@@ -2743,7 +2871,7 @@ function ProfileView() {
               <p className="text-sm font-medium text-foreground">WhatsApp Alerts</p>
               <p className="text-xs text-muted-foreground">Receive WhatsApp messages for bookings</p>
             </div>
-            <Button variant="outline" size="sm">Enabled</Button>
+            <Badge variant="outline" className="text-xs bg-muted text-muted-foreground border-border">Disabled</Badge>
           </div>
         </CardContent>
       </Card>
@@ -2757,6 +2885,34 @@ export function CustomerPortalLayout({ onLogout }: CustomerPortalLayoutProps) {
   const [activeView, setActiveView] = useState<CustomerView>('dashboard');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const auth = useAppStore((s) => s.auth);
+
+  // Sync the module-level `formatCurrency` helper with the tenant's base
+  // currency. `formatCurrency` is a top-level function used by ~20 sites
+  // across the child views (Dashboard, Invoices, Quotes, Orders) — rather
+  // than threading the hook through every component, we set the module-level
+  // code/locale once here on mount and whenever the resolved currency
+  // changes. Falls back to INR/en-IN (legacy default) until resolved.
+  const { currency: portalCurrency } = useCompanyCurrency();
+  useEffect(() => {
+    const LOCALE_BY_CODE: Record<string, string> = {
+      INR: 'en-IN',
+      USD: 'en-US',
+      GBP: 'en-GB',
+      EUR: 'en-IE',
+      AED: 'en-AE',
+      AUD: 'en-AU',
+      CAD: 'en-CA',
+      SGD: 'en-SG',
+      ZAR: 'en-ZA',
+      NGN: 'en-NG',
+      PKR: 'en-PK',
+      BDT: 'en-BD',
+      LKR: 'en-LK',
+      NPR: 'en-NP',
+    };
+    const locale = LOCALE_BY_CODE[portalCurrency] || 'en-US';
+    setPortalCurrency(portalCurrency, locale);
+  }, [portalCurrency]);
 
   // Deep-link targets — set once on mount when a customer magic-link redirect
   // is present in sessionStorage (consumed & cleared below). Each sub-view

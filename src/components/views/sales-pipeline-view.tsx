@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, type ReactNode, type CSSProp
 import {
   TrendingUp, Plus, DollarSign, BarChart3, Briefcase,
   Trash2, Pencil, RefreshCw, Loader2, Briefcase as JobIcon,
-  History, Calendar, User, Phone,
+  History, Calendar, User, Phone, Mail,
 } from 'lucide-react';
 import {
   DndContext, DragOverlay, PointerSensor, KeyboardSensor,
@@ -37,6 +37,7 @@ import {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { authFetch } from '@/lib/client-auth';
+import { useAppStore } from '@/store/app-store';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { format, parseISO } from 'date-fns';
 
@@ -62,6 +63,7 @@ interface Deal {
   customerId?: string | null;
   customerName?: string | null;
   customerPhone?: string | null;
+  customerEmail?: string | null;
   assigneeId?: string | null;
   assigneeName?: string | null;
   leadId?: string | null;
@@ -109,6 +111,13 @@ interface CreateFormState {
   probability: string;
   expectedCloseDate: string;
   notes: string;
+  // Lead-style fields used by the "New Lead" create dialog. Each Deal now
+  // represents a Lead, so we collect Lead info up-front and let the backend
+  // auto-create the linked Lead from these fields.
+  name: string;
+  phone: string;
+  email: string;
+  source: string;
 }
 
 const EMPTY_CREATE_FORM: CreateFormState = {
@@ -122,6 +131,10 @@ const EMPTY_CREATE_FORM: CreateFormState = {
   probability: '10',
   expectedCloseDate: '',
   notes: '',
+  name: '',
+  phone: '',
+  email: '',
+  source: 'manual',
 };
 
 interface EditFormState extends CreateFormState {
@@ -155,6 +168,9 @@ export function SalesPipelineView() {
 
   // ─── Currency ──────────────────────────────────────────────────────────
   const { currency: companyCurrency, symbol, format: formatCurrency } = useCompanyCurrency();
+
+  // ─── View navigation (used by "View Lead" button in deal detail) ───────
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
 
   // ─── DnD sensors ───────────────────────────────────────────────────────
   const sensors = useSensors(
@@ -248,30 +264,28 @@ export function SalesPipelineView() {
 
   // ─── Create ────────────────────────────────────────────────────────────
   const handleCreate = async () => {
-    if (!createForm.title.trim()) {
-      toast.error('Deal title required');
+    if (!createForm.name.trim()) {
+      toast.error('Name is required');
+      return;
+    }
+    if (!createForm.phone.trim()) {
+      toast.error('Phone is required');
       return;
     }
     setSaving(true);
     try {
+      // Each Deal now represents a Lead. We POST Lead-style fields to /api/deals
+      // and the backend auto-creates the linked Lead when no leadId is provided.
       const payload: Record<string, unknown> = {
-        title: createForm.title.trim(),
+        title: createForm.name.trim(),                 // Deal title = Lead name
+        customerName: createForm.name.trim(),
+        customerPhone: createForm.phone.trim(),
+        customerEmail: createForm.email.trim() || null,
         value: parseFloat(createForm.value) || 0,
         currency: createForm.currency || companyCurrency,
-        customerName: createForm.customerName.trim() || null,
-        customerPhone: createForm.customerPhone.trim() || null,
-        assigneeId: createForm.assigneeId || null,
-        assigneeName: assignees.find((a) => a.id === createForm.assigneeId)?.name || null,
-        stage: createForm.stage,
-        probability: parseInt(createForm.probability) || 0,
-        source: 'manual',
-        expectedCloseDate: createForm.expectedCloseDate || null,
+        source: createForm.source || 'manual',
+        stage: 'new_lead',
       };
-      if (createForm.notes.trim()) {
-        payload.notesJson = JSON.stringify([
-          { text: createForm.notes.trim(), createdAt: new Date().toISOString() },
-        ]);
-      }
 
       const res = await authFetch('/api/deals?XTransformPort=3000', {
         method: 'POST',
@@ -280,7 +294,7 @@ export function SalesPipelineView() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        toast.error(err.error || 'Failed to create deal');
+        toast.error(err.error || 'Failed to create lead');
         return;
       }
       const json = await res.json();
@@ -288,7 +302,7 @@ export function SalesPipelineView() {
       setDeals((prev) => [newDeal, ...prev]);
       setShowCreateDialog(false);
       setCreateForm(EMPTY_CREATE_FORM);
-      toast.success('Deal created');
+      toast.success('Lead created');
     } catch {
       toast.error('Network error');
     } finally {
@@ -397,6 +411,13 @@ export function SalesPipelineView() {
         : '',
       notes: '',
       lossReason: deal.lossReason || '',
+      // Lead-style fields (kept in sync for type compatibility with
+      // EditFormState, which extends CreateFormState; not used by the Edit
+      // dialog UI itself).
+      name: deal.customerName || deal.title || '',
+      phone: deal.customerPhone || '',
+      email: deal.customerEmail || '',
+      source: deal.source || 'manual',
     });
     setShowEditDialog(true);
   };
@@ -659,10 +680,15 @@ export function SalesPipelineView() {
             Refresh
           </Button>
           <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowCreateDialog(true)}>
-            <Plus className="size-4 mr-1.5" /> Add Deal
+            <Plus className="size-4 mr-1.5" /> New Lead
           </Button>
         </div>
       </div>
+
+      {/* Help text: explains the Lead↔Deal link */}
+      <p className="text-xs text-muted-foreground">
+        Each card represents a lead moving through your sales pipeline. Drag cards between columns to update stages.
+      </p>
 
       {/* Stats */}
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-4">
@@ -715,12 +741,12 @@ export function SalesPipelineView() {
       {!loading && deals.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <Briefcase className="h-12 w-12 text-muted-foreground/40 mb-4" />
-          <h3 className="text-lg font-semibold text-foreground mb-1">No deals yet</h3>
+          <h3 className="text-lg font-semibold text-foreground mb-1">No leads in your pipeline yet.</h3>
           <p className="text-sm text-muted-foreground max-w-md">
-            Start tracking your sales pipeline by adding your first deal. Deals move through stages from new lead to won or lost.
+            Click &quot;New Lead&quot; to add your first lead.
           </p>
           <Button className="mt-4 bg-emerald-600 hover:bg-emerald-700" onClick={() => setShowCreateDialog(true)}>
-            <Plus className="size-4 mr-1.5" /> Add Your First Deal
+            <Plus className="size-4 mr-1.5" /> New Lead
           </Button>
         </div>
       )}
@@ -783,16 +809,6 @@ export function SalesPipelineView() {
                     <span className="text-muted-foreground">Probability:</span>{' '}
                     <span className="font-medium">{selectedDeal.probability}%</span>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <User className="size-3 text-muted-foreground" />
-                    <span className="text-muted-foreground">Customer:</span>{' '}
-                    <span className="font-medium truncate">{selectedDeal.customerName || '—'}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Phone className="size-3 text-muted-foreground" />
-                    <span className="text-muted-foreground">Phone:</span>{' '}
-                    <span className="font-medium truncate">{selectedDeal.customerPhone || '—'}</span>
-                  </div>
                   <div className="col-span-2 flex items-center gap-1">
                     <User className="size-3 text-muted-foreground" />
                     <span className="text-muted-foreground">Assignee:</span>{' '}
@@ -820,6 +836,43 @@ export function SalesPipelineView() {
                       <span className="text-muted-foreground">Loss Reason:</span>{' '}
                       <span className="font-medium">{selectedDeal.lossReason}</span>
                     </div>
+                  )}
+                </div>
+
+                {/* Contact section — linked Lead info */}
+                <Separator />
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Contact</Label>
+                  <div className="flex items-center gap-2 text-sm">
+                    <User className="size-3.5 text-muted-foreground shrink-0" />
+                    <span className="font-medium truncate">
+                      {selectedDeal.customerName || '—'}
+                    </span>
+                  </div>
+                  {selectedDeal.customerPhone && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Phone className="size-3.5 text-muted-foreground shrink-0" />
+                      <a
+                        href={`tel:${selectedDeal.customerPhone}`}
+                        className="font-medium text-emerald-600 hover:underline"
+                      >
+                        {selectedDeal.customerPhone}
+                      </a>
+                    </div>
+                  )}
+                  {selectedDeal.customerEmail && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Mail className="size-3.5 text-muted-foreground shrink-0" />
+                      <a
+                        href={`mailto:${selectedDeal.customerEmail}`}
+                        className="font-medium text-emerald-600 hover:underline truncate"
+                      >
+                        {selectedDeal.customerEmail}
+                      </a>
+                    </div>
+                  )}
+                  {!selectedDeal.customerName && !selectedDeal.customerPhone && !selectedDeal.customerEmail && (
+                    <p className="text-xs text-muted-foreground">No contact info linked.</p>
                   )}
                 </div>
 
@@ -858,6 +911,17 @@ export function SalesPipelineView() {
                   <Button variant="outline" size="sm" onClick={() => openEditDialog(selectedDeal)}>
                     <Pencil className="size-3.5 mr-1" /> Edit
                   </Button>
+                  {selectedDeal.leadId && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentView('leads')}
+                      className="gap-2"
+                    >
+                      <User className="size-4" />
+                      View Lead
+                    </Button>
+                  )}
                   {(selectedDeal.stage === 'won' || selectedDeal.closedAt) && !isConverted(selectedDeal) && (
                     <Button
                       size="sm"
@@ -965,120 +1029,61 @@ export function SalesPipelineView() {
         </DialogContent>
       </Dialog>
 
-      {/* ─── Create Deal Dialog ─────────────────────────────────────────── */}
+      {/* ─── New Lead Dialog ─────────────────────────────────────────────── */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Add Deal</DialogTitle>
-            <DialogDescription>Create a new deal in the pipeline</DialogDescription>
+            <DialogTitle>New Lead</DialogTitle>
+            <DialogDescription>Create a new lead in your pipeline</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label>Deal Title *</Label>
+              <Label>Name *</Label>
               <Input
-                placeholder="e.g., Office Cleaning Contract"
-                value={createForm.title}
-                onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })}
+                placeholder="e.g., Jane Doe"
+                value={createForm.name}
+                onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
               />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Value ({symbol})</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={createForm.value}
-                  onChange={(e) => setCreateForm({ ...createForm, value: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Currency</Label>
-                <Select
-                  value={createForm.currency}
-                  onValueChange={(v) => setCreateForm({ ...createForm, currency: v })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {['USD', 'EUR', 'GBP', 'INR', 'AUD', 'CAD', 'AED'].map((c) => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Stage</Label>
-                <Select
-                  value={createForm.stage}
-                  onValueChange={(v) => setCreateForm({ ...createForm, stage: v })}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {STAGES.map((s) => <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Probability (%)</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  placeholder="10"
-                  value={createForm.probability}
-                  onChange={(e) => setCreateForm({ ...createForm, probability: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Customer Name</Label>
-                <Input
-                  placeholder="Customer name"
-                  value={createForm.customerName}
-                  onChange={(e) => setCreateForm({ ...createForm, customerName: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Customer Phone</Label>
-                <Input
-                  placeholder="+1 234 567 8900"
-                  value={createForm.customerPhone}
-                  onChange={(e) => setCreateForm({ ...createForm, customerPhone: e.target.value })}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Assignee</Label>
-                <Select
-                  value={createForm.assigneeId}
-                  onValueChange={(v) => setCreateForm({ ...createForm, assigneeId: v })}
-                >
-                  <SelectTrigger><SelectValue placeholder="Select assignee" /></SelectTrigger>
-                  <SelectContent>
-                    {assignees.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Expected Close</Label>
-                <Input
-                  type="date"
-                  value={createForm.expectedCloseDate}
-                  onChange={(e) => setCreateForm({ ...createForm, expectedCloseDate: e.target.value })}
-                />
-              </div>
             </div>
             <div className="space-y-2">
-              <Label>Notes</Label>
-              <Textarea
-                rows={2}
-                placeholder="Add a note…"
-                value={createForm.notes}
-                onChange={(e) => setCreateForm({ ...createForm, notes: e.target.value })}
+              <Label>Phone *</Label>
+              <Input
+                placeholder="+1 234 567 8900"
+                value={createForm.phone}
+                onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input
+                type="email"
+                placeholder="jane@example.com"
+                value={createForm.email}
+                onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Value ({symbol})</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={createForm.value}
+                onChange={(e) => setCreateForm({ ...createForm, value: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Source</Label>
+              <Select
+                value={createForm.source}
+                onValueChange={(v) => setCreateForm({ ...createForm, source: v })}
+              >
+                <SelectTrigger><SelectValue placeholder="Select source" /></SelectTrigger>
+                <SelectContent>
+                  {['manual', 'website', 'whatsapp', 'google', 'facebook', 'instagram', 'referral'].map((s) => (
+                    <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>
@@ -1086,10 +1091,10 @@ export function SalesPipelineView() {
             <Button
               className="bg-emerald-600 hover:bg-emerald-700"
               onClick={handleCreate}
-              disabled={!createForm.title.trim() || saving}
+              disabled={!createForm.name.trim() || !createForm.phone.trim() || saving}
             >
               {saving && <Loader2 className="size-4 mr-1 animate-spin" />}
-              Create Deal
+              Create Lead
             </Button>
           </DialogFooter>
         </DialogContent>

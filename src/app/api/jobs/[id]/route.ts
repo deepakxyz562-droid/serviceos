@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { EventBus } from '@/lib/event-bus';
 import { logActivity } from '@/lib/activity-log';
+import { getAuthUser } from '@/lib/auth';
 
 export async function GET(
   request: NextRequest,
@@ -56,6 +57,16 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    // Allow owner, admin, manager, employee, and super_admin to mutate jobs.
+    // Customers are NOT allowed to mutate jobs directly (reviews go through /api/reviews).
+    const allowedRoles = ['owner', 'admin', 'manager', 'employee', 'super_admin'];
+    if (!allowedRoles.includes(authUser.role)) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    }
     const { id } = await params;
     const body = await request.json();
 
@@ -307,6 +318,16 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    // Allow owner, admin, manager, employee, and super_admin to mutate jobs.
+    // Customers are NOT allowed to mutate jobs directly (reviews go through /api/reviews).
+    const allowedRoles = ['owner', 'admin', 'manager', 'employee', 'super_admin'];
+    if (!allowedRoles.includes(authUser.role)) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    }
     const { id } = await params;
 
     const existingJob = await db.job.findUnique({

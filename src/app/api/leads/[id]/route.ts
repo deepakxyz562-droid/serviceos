@@ -276,6 +276,19 @@ export async function DELETE(
       return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
     }
 
+    // ─── Delete linked Deal (HubSpot model) ───────────────────
+    // When a Lead is deleted, its linked Deal is also deleted.
+    try {
+      const linkedDeal = await db.deal.findFirst({ where: { leadId: id } });
+      if (linkedDeal) {
+        await db.dealStageHistory.deleteMany({ where: { dealId: linkedDeal.id } });
+        await db.deal.delete({ where: { id: linkedDeal.id } });
+      }
+    } catch (dealErr) {
+      console.error('[LeadsDelete] Failed to delete linked Deal:', dealErr);
+      // Non-fatal — the lead is still deleted.
+    }
+
     // Delete the lead
     await db.lead.delete({ where: { id } });
 

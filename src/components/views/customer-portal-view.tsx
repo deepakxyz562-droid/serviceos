@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Calendar, Clock, MapPin, Star, MessageCircle, Phone,
   CheckCircle2, ArrowRight, ExternalLink, FileText,
-  RefreshCw, Loader2, AlertCircle, ChevronRight,
+  RefreshCw, Loader2, ChevronRight,
   Building2, User, CreditCard, Zap, Send,
   Globe, Copy, Plus, Search, QrCode, Link2, Eye,
   Navigation, UserCheck, Wrench,
@@ -647,27 +647,22 @@ function PortalExperience({ portalData, onRefresh, portalToken }: {
     }
   }, [activeBookings, activeBookingId]);
 
-  const handleReschedule = (booking: Booking) => {
-    const message = `Hi, I'd like to reschedule my booking "${booking.title}" (scheduled for ${formatDate(booking.scheduledAt)}). Please let me know available times.`;
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
-    toast.success('Opening WhatsApp to request reschedule');
-  };
-
-  const handleWhatsAppContact = () => {
-    const message = `Hi, I have a question about my service.`;
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
-  };
-
   const handleSubmitReview = async () => {
     if (!reviewJob) return;
     setReviewSubmitting(true);
     try {
-      const res = await fetch(`/api/jobs/${reviewJob.id}?XTransformPort=3000`, {
-        method: 'PUT',
+      const res = await authFetch('/api/reviews?XTransformPort=3000', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: reviewJob.id, reviewRating, reviewComment }),
+        body: JSON.stringify({
+          rating: reviewRating,
+          comment: reviewComment,
+          jobId: reviewJob.id,
+          customerId: customer.id,
+          employeeId: reviewJob.assignee?.id || null,
+          source: 'portal',
+          status: 'published',
+        }),
       });
       if (res.ok) {
         toast.success('Review submitted! Thank you for your feedback.');
@@ -684,10 +679,6 @@ function PortalExperience({ portalData, onRefresh, portalToken }: {
     } finally {
       setReviewSubmitting(false);
     }
-  };
-
-  const handlePayInvoice = (invoice: Invoice) => {
-    toast.info(`Payment for invoice ${invoice.number || invoice.id} — ${format(invoice.total)}`);
   };
 
   return (
@@ -762,19 +753,9 @@ function PortalExperience({ portalData, onRefresh, portalToken }: {
                               </div>
                             )}
                           </div>
-                          <div className="flex flex-col items-end gap-1.5">
-                            <Badge variant="outline" className={`${getStatusColor(booking.status)} text-[10px]`}>
-                              {booking.status.replace('_', ' ')}
-                            </Badge>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-6 text-[10px] px-2"
-                              onClick={() => handleReschedule(booking)}
-                            >
-                              <RefreshCw className="size-2.5 mr-1" /> Reschedule
-                            </Button>
-                          </div>
+                          <Badge variant="outline" className={`${getStatusColor(booking.status)} text-[10px]`}>
+                            {booking.status.replace('_', ' ')}
+                          </Badge>
                         </div>
                       </CardContent>
                     </Card>
@@ -841,15 +822,6 @@ function PortalExperience({ portalData, onRefresh, portalToken }: {
                         <Badge variant="outline" className={`${getInvoiceStatusColor(invoice.status)} text-[10px]`}>
                           {invoice.status}
                         </Badge>
-                        {invoice.status !== 'paid' && invoice.status !== 'cancelled' && (
-                          <Button
-                            size="sm"
-                            className="h-6 text-[10px] px-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-                            onClick={() => handlePayInvoice(invoice)}
-                          >
-                            <CreditCard className="size-2.5 mr-1" /> Pay
-                          </Button>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -911,17 +883,26 @@ function PortalExperience({ portalData, onRefresh, portalToken }: {
                 <MessageCircle className="size-10 text-emerald-500 mx-auto mb-3" />
                 <h3 className="font-semibold text-gray-900">Need Help?</h3>
                 <p className="text-sm text-gray-500 mt-1">
-                  Reach out via WhatsApp for quick support
+                  Reach out by phone or email for support
                 </p>
               </div>
 
-              <Button
-                className="w-full h-12 text-sm bg-green-600 hover:bg-green-700 text-white shadow-md"
-                onClick={handleWhatsAppContact}
-              >
-                <MessageCircle className="size-5 mr-2" />
-                Message on WhatsApp
-              </Button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <a
+                  href="tel:1"
+                  className="flex items-center justify-center gap-2 h-12 rounded-lg border border-gray-200 hover:border-emerald-300 hover:bg-emerald-50/50 transition-colors text-sm font-medium text-gray-700"
+                >
+                  <Phone className="size-4 text-emerald-600" />
+                  Call Support
+                </a>
+                <a
+                  href="mailto:support@example.com"
+                  className="flex items-center justify-center gap-2 h-12 rounded-lg border border-gray-200 hover:border-emerald-300 hover:bg-emerald-50/50 transition-colors text-sm font-medium text-gray-700"
+                >
+                  <Send className="size-4 text-emerald-600" />
+                  Email Support
+                </a>
+              </div>
 
               <Separator />
 
@@ -929,22 +910,18 @@ function PortalExperience({ portalData, onRefresh, portalToken }: {
                 <h4 className="text-sm font-medium text-gray-700">Common Questions</h4>
                 <div className="space-y-1.5">
                   {[
-                    'How do I reschedule my appointment?',
-                    'What are your business hours?',
-                    'How can I get a quote for a new service?',
-                    'I have an issue with my recent service',
-                  ].map((question, i) => (
-                    <button
+                    { q: 'How do I reschedule my appointment?', a: 'Contact us by phone or email and we will help you find a new time slot.' },
+                    { q: 'What are your business hours?', a: 'Standard business hours are Monday to Friday, 9 AM to 5 PM. Emergency support may be available outside these hours.' },
+                    { q: 'How can I get a quote for a new service?', a: 'Email us with a brief description of the work you need and we will send a quote.' },
+                    { q: 'I have an issue with my recent service', a: 'Please call or email us with your booking details and we will resolve it promptly.' },
+                  ].map((item, i) => (
+                    <div
                       key={i}
-                      className="w-full text-left p-2.5 rounded-lg border border-gray-100 hover:border-emerald-200 hover:bg-emerald-50/50 transition-colors text-sm text-gray-600 flex items-center justify-between group"
-                      onClick={() => {
-                        const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(question)}`;
-                        window.open(whatsappUrl, '_blank');
-                      }}
+                      className="p-2.5 rounded-lg border border-gray-100 text-sm text-gray-600"
                     >
-                      <span>{question}</span>
-                      <ChevronRight className="size-3.5 text-gray-300 group-hover:text-emerald-500 transition-colors" />
-                    </button>
+                      <p className="font-medium text-gray-700">{item.q}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{item.a}</p>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -1035,6 +1012,7 @@ function PortalManagementView() {
   const [previewData, setPreviewData] = useState<PortalData | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewToken, setPreviewToken] = useState<string | null>(null);
+  const [previewPortalUrl, setPreviewPortalUrl] = useState<string | null>(null);
 
   // Active tab
   const [activeTab, setActiveTab] = useState('links');
@@ -1043,7 +1021,7 @@ function PortalManagementView() {
   const fetchCustomers = useCallback(async () => {
     setCustomersLoading(true);
     try {
-      const res = await fetch(`/api/customers${customerSearch ? `?search=${encodeURIComponent(customerSearch)}&XTransformPort=3000` : '?XTransformPort=3000'}`);
+      const res = await authFetch(`/api/customers${customerSearch ? `?search=${encodeURIComponent(customerSearch)}&XTransformPort=3000` : '?XTransformPort=3000'}`);
       if (res.ok) {
         const data = await res.json();
         setCustomers(Array.isArray(data) ? data : []);
@@ -1059,7 +1037,7 @@ function PortalManagementView() {
   const fetchSessions = useCallback(async () => {
     setSessionsLoading(true);
     try {
-      const res = await fetch(`/api/customer-portal?list=true&tenantId=${tenantId || ''}&XTransformPort=3000`);
+      const res = await authFetch(`/api/customer-portal?list=true&tenantId=${tenantId || ''}&XTransformPort=3000`);
       if (res.ok) {
         const data = await res.json();
         setSessions(Array.isArray(data) ? data : []);
@@ -1083,7 +1061,7 @@ function PortalManagementView() {
   const handleGenerateLink = async (customerId: string) => {
     setGeneratingFor(customerId);
     try {
-      const res = await fetch('/api/customer-portal?XTransformPort=3000', {
+      const res = await authFetch('/api/customer-portal?XTransformPort=3000', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1127,8 +1105,8 @@ function PortalManagementView() {
   };
 
   // ─── Open portal in new tab ───────────────────────────────────────────
-  const handleOpenPortal = (token: string) => {
-    window.open(`/portal/${token}`, '_blank');
+  const handleOpenPortal = (portalUrl: string) => {
+    if (portalUrl) window.open(portalUrl, '_blank');
   };
 
   // ─── Preview portal ──────────────────────────────────────────────────
@@ -1141,10 +1119,11 @@ function PortalManagementView() {
     setPreviewLoading(true);
     setPreviewData(null);
     setPreviewToken(null);
+    setPreviewPortalUrl(null);
 
     try {
       // Generate a temporary portal session
-      const genRes = await fetch('/api/customer-portal?XTransformPort=3000', {
+      const genRes = await authFetch('/api/customer-portal?XTransformPort=3000', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1163,7 +1142,9 @@ function PortalManagementView() {
 
       const genData = await genRes.json();
       const token = genData.session.token;
+      const portalUrl: string = genData.session.portalUrl || '';
       setPreviewToken(token);
+      setPreviewPortalUrl(portalUrl);
 
       // Fetch portal data using the token
       const dataRes = await fetch(`/api/customer-portal/${token}?XTransformPort=3000`);
@@ -1426,7 +1407,7 @@ function PortalManagementView() {
                                       variant="outline"
                                       size="sm"
                                       className="h-7 w-7 p-0"
-                                      onClick={() => handleOpenPortal(session.token)}
+                                      onClick={() => handleOpenPortal(session.portalUrl)}
                                       title="Open portal"
                                     >
                                       <ExternalLink className="size-3" />
@@ -1536,12 +1517,12 @@ function PortalManagementView() {
                     >
                       <RefreshCw className="size-3 mr-1" /> Refresh
                     </Button>
-                    {previewToken && (
+                    {previewToken && previewPortalUrl && (
                       <Button
                         variant="outline"
                         size="sm"
                         className="h-7 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-100"
-                        onClick={() => handleOpenPortal(previewToken)}
+                        onClick={() => handleOpenPortal(previewPortalUrl)}
                       >
                         <ExternalLink className="size-3 mr-1" /> Open in New Tab
                       </Button>
@@ -1606,149 +1587,23 @@ function PortalManagementView() {
   );
 }
 
-// ─── Direct Portal Access View (with token) ─────────────────────────────────
-
-function DirectPortalView({ token }: { token: string }) {
-  const [portalData, setPortalData] = useState<PortalData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  useCompanyCurrency();
-
-  const fetchPortalData = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/customer-portal/${token}?XTransformPort=3000`);
-      if (res.ok) {
-        const data = await res.json();
-        setPortalData(data);
-        setError(null);
-      } else if (res.status === 404) {
-        setError('Invalid portal link');
-      } else if (res.status === 410) {
-        setError('This portal link has expired');
-      } else {
-        setError('Failed to load portal data');
-      }
-    } catch {
-      setError('Unable to connect');
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    fetchPortalData();
-  }, [fetchPortalData]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-teal-50">
-        <div className="text-center">
-          <Loader2 className="size-8 animate-spin text-emerald-600 mx-auto" />
-          <p className="mt-3 text-sm text-emerald-700">Loading your portal...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !portalData) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 to-teal-50">
-        <Card className="w-full max-w-md mx-4 border-0 shadow-lg">
-          <CardContent className="p-8 text-center">
-            <AlertCircle className="size-12 text-red-400 mx-auto mb-3" />
-            <h2 className="text-lg font-semibold text-gray-900 mb-1">Unable to Access Portal</h2>
-            <p className="text-sm text-gray-500">{error || 'Unknown error'}</p>
-            <p className="text-xs text-gray-400 mt-3">Please contact the business for a new link.</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-br from-emerald-50 via-white to-teal-50">
-      {/* Header */}
-      <header className="bg-white/80 backdrop-blur-sm border-b border-emerald-100 sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-600 shadow-md shadow-emerald-600/20">
-              <Building2 className="size-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-base font-bold text-gray-900">ServiceOS</h1>
-              <p className="text-xs text-gray-500">Customer Portal</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">Hi, {portalData.customer?.name || 'there'}</span>
-          </div>
-        </div>
-      </header>
-
-      <main className="flex-1 max-w-4xl mx-auto px-4 py-6 w-full">
-        <PortalExperience portalData={portalData} onRefresh={fetchPortalData} portalToken={token} />
-      </main>
-
-      <footer className="mt-auto border-t border-emerald-100 bg-white/50">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between text-xs text-gray-400">
-          <span>Powered by ServiceOS</span>
-          {portalData.session?.expiresAt && (
-            <span>Session expires {formatDate(portalData.session.expiresAt)}</span>
-          )}
-        </div>
-      </footer>
-    </div>
-  );
-}
-
 // ─── Main Component ─────────────────────────────────────────────────────────
 
-export function CustomerPortalView({ token: tokenProp }: CustomerPortalProps) {
-  const { auth } = useAppStore();
-
-  // Get token from prop, URL params, or localStorage (for OTP-authenticated customers)
-  const getToken = (): string => {
-    if (tokenProp) return tokenProp;
-    if (typeof window !== 'undefined') {
-      // Check URL params first
-      const params = new URLSearchParams(window.location.search);
-      const urlToken = params.get('token');
-      if (urlToken) return urlToken;
-
-      // Check localStorage for OTP-authenticated customer token
-      try {
-        const stored = localStorage.getItem('serviceos_auth');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed.portalToken && (parsed.isCustomer || parsed.user?.role === 'customer')) {
-            return parsed.portalToken;
-          }
-        }
-      } catch {
-        // localStorage read failed
-      }
-    }
-    return '';
-  };
-
-  const token = getToken();
-  const isCustomer = auth.user?.role === 'customer' ||
-    (typeof window !== 'undefined' && (() => {
-      try {
-        const stored = localStorage.getItem('serviceos_auth');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          return parsed.isCustomer === true;
-        }
-      } catch { /* ignore */ }
-      return false;
-    })());
-
-  // If token is provided or user is a customer, show the direct portal access view
-  if (token || isCustomer) {
-    return <DirectPortalView token={token} />;
-  }
-
-  // Otherwise, show the management view (for business users)
+/**
+ * CustomerPortalView — ADMIN-ONLY management view.
+ *
+ * Per Option (b) of the INV-CP-1 investigation, this file has been
+ * consolidated to ONLY the admin management experience (PortalManagementView).
+ * The real customer-facing portal lives at
+ * `src/components/portals/customer-portal-layout.tsx` and is rendered by
+ * `src/app/page.tsx` when `auth.user.role === 'customer'` (set via magic-link
+ * exchange or password login) — NOT via this sidebar view.
+ *
+ * The `token` prop (and the legacy `DirectPortalView`/`PortalExperience`
+ * token-resolution branching) has been removed. Callers that previously
+ * passed a `token` (none in this codebase do) should instead link the
+ * customer to the magic-link URL returned by `POST /api/customer-portal`.
+ */
+export function CustomerPortalView(_props: CustomerPortalProps = {}) {
   return <PortalManagementView />;
 }

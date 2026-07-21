@@ -106,6 +106,25 @@ export async function PUT(
       })
     }
 
+    // ─── Sync Lead.status with Deal.stage (HubSpot model) ─────
+    // When a Deal's stage changes, update the linked Lead's status
+    // so both views show the same pipeline position.
+    if (body.stage && body.stage !== currentDeal.stage && currentDeal.leadId) {
+      try {
+        await db.lead.update({
+          where: { id: currentDeal.leadId },
+          data: {
+            status: body.stage,
+            // If Deal is won/lost, stamp convertedAt for won (matches /api/leads/convert behavior)
+            ...(body.stage === 'won' ? { convertedAt: new Date() } : {}),
+          },
+        })
+      } catch (leadErr) {
+        console.error('[DealsUpdate] Failed to sync Lead.status with Deal.stage:', leadErr)
+        // Non-fatal — the Deal update still succeeded.
+      }
+    }
+
     return NextResponse.json({ data: deal })
   } catch (error) {
     console.error('Error updating deal:', error)

@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
         customerId: customer.id,
         customerPhone: customer.phone,
         expiresAt,
-        tenantId: tenantId || null,
+        tenantId: authUser.tenantId || null,
       },
     })
 

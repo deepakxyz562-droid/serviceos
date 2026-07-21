@@ -147,6 +147,33 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // ─── Mark linked Deal as won (HubSpot model) ──────────────
+    try {
+      const linkedDeal = await db.deal.findFirst({ where: { leadId: leadId } });
+      if (linkedDeal) {
+        await db.deal.update({
+          where: { id: linkedDeal.id },
+          data: {
+            stage: 'won',
+            closedAt: new Date(),
+          },
+        });
+        // Log stage change in history
+        await db.dealStageHistory.create({
+          data: {
+            dealId: linkedDeal.id,
+            fromStage: linkedDeal.stage,
+            toStage: 'won',
+            changedById: authUser?.id || null,
+            note: 'Lead converted to Job',
+          },
+        });
+      }
+    } catch (dealErr) {
+      console.error('[LeadsConvert] Failed to mark linked Deal as won:', dealErr);
+      // Non-fatal — the lead conversion still succeeded.
+    }
+
     // Emit lead.converted + job.created events via EventBus (background —
     // don't block the response; these only write audit logs / fire webhooks)
     EventBus.emit('lead.converted', {

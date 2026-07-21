@@ -229,6 +229,33 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // ─── Auto-create a linked Deal (HubSpot model) ─────────────
+    // Every Lead now gets a matching Deal in the Sales Pipeline.
+    // The Deal's stage mirrors the Lead's status. Stage changes flow
+    // Deal → Lead via /api/deals/[id] PUT.
+    try {
+      await db.deal.create({
+        data: {
+          title: lead.title || lead.name,
+          value: lead.value || 0,
+          currency: 'USD',
+          stage: 'new_lead',
+          probability: 10,
+          customerId: lead.customerId || null,
+          customerName: lead.name,
+          customerPhone: lead.phone,
+          assigneeId: lead.assignedToId || null,
+          leadId: lead.id,
+          source: lead.source || 'manual',
+          notesJson: '[]',
+          tenantId: lead.tenantId || null,
+        },
+      });
+    } catch (dealErr) {
+      console.error('[LeadsCreate] Failed to auto-create Deal for lead:', dealErr);
+      // Non-fatal — the lead still exists; the Deal can be created later.
+    }
+
     // ─── Background side-effects (don't block the response) ──────
     // EventBus audit-log, owner email, and owner WhatsApp all run detached
     // so the lead appears in the list instantly. Errors are logged only.
