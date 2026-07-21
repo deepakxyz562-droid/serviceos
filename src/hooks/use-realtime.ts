@@ -8,20 +8,61 @@ import { authFetch } from '@/lib/client-auth';
 /**
  * Whether the realtime socket.io server is expected to be reachable.
  *
- * Historically this returned false on any non-localhost host because the
- * socket.io mini-service was dev-only. The Caddy gateway now proxies the
- * socket.io path through the same origin (using the `XTransformPort=3003`
- * query param), so we always attempt the connection. The hook still
- * degrades gracefully: if the server isn't reachable, `connected` stays
- * false and the emit helpers become no-ops.
+ * The socket.io mini-service (mini-services/realtime-service on port 3003)
+ * is a long-lived process that needs a persistent host. It works in:
+ *   - Local dev (this sandbox runs it via `bun run dev` on port 3003, and
+ *     the Caddy gateway proxies `/?XTransformPort=3003` to it).
+ *   - A VPS deployment (both Next.js and the mini-service run on one box).
+ *
+ * It does NOT work on Vercel — Vercel only runs Next.js serverless
+ * functions and cannot host a long-lived socket.io server. On Vercel we
+ * skip the connection attempt entirely so the browser console doesn't
+ * fill with `WebSocket connection failed` errors. Realtime features
+ * (presence, job updates) fall back to HTTP polling (see `usePresence`
+ * below, which polls `/api/employees` every 30s).
+ *
+ * Forward-compatible: if you later deploy the mini-service to a separate
+ * host (Railway / Render / Fly.io), set `NEXT_PUBLIC_REALTIME_URL` to its
+ * public URL (e.g. `https://realtime.serviceos.cc`) and the hook will
+ * connect there instead of skipping — no other code change needed.
  */
 function isRealtimeServerAvailable(): boolean {
   // SSR — no socket to connect to.
   if (typeof window === 'undefined') return false;
-  // Always attempt connection — the Caddy gateway proxies the socket.io
-  // path. If the gateway isn't configured, the socket simply fails to
-  // connect (handled silently in the connect_error handler below).
+
+  // If a dedicated realtime URL is configured, the mini-service is hosted
+  // elsewhere and we should connect to it (works on any platform).
+  if (process.env.NEXT_PUBLIC_REALTIME_URL) return true;
+
+  // On Vercel (production or preview deploys), the mini-service can't run.
+  // Skip the connection to avoid console errors. Realtime degrades to
+  // polling.
+  const vercelEnv = process.env.NEXT_PUBLIC_VERCEL_ENV;
+  if (vercelEnv === 'production' || vercelEnv === 'preview') {
+    return false;
+  }
+
+  // Local dev or a VPS with the Caddy gateway — attempt the connection.
+  // If the gateway isn't configured, the socket fails silently (handled
+  // in the connect_error handler below).
   return true;
+}
+
+/**
+ * Resolve the socket.io endpoint URL.
+ *
+ * - If `NEXT_PUBLIC_REALTIME_URL` is set (hosted mini-service), connect
+ *   directly to it with a clean path.
+ * - Otherwise connect same-origin with the Caddy gateway's
+ *   `XTransformPort=3003` query param (dev sandbox / VPS only).
+ */
+function getRealtimeEndpoint(): { url: string; path: string; query?: Record<string, string> } {
+  const hostedUrl = process.env.NEXT_PUBLIC_REALTIME_URL;
+  if (hostedUrl) {
+    return { url: hostedUrl, path: '/socket.io' };
+  }
+  // Caddy gateway path — same origin, query param routes to port 3003.
+  return { url: '/', path: '/', query: { XTransformPort: '3003' } };
 }
 
 interface UseRealtimeOptions {
@@ -88,10 +129,12 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
     let socket: Socket | null = null;
 
     try {
-      // Path MUST be '/' — the Caddy gateway uses the XTransformPort
-      // query param to route to port 3003.
-      socket = io('/?XTransformPort=3003', {
-        path: '/',
+      const endpoint = getRealtimeEndpoint();
+      // Same-origin (Caddy gateway) uses `/?XTransformPort=3003`; a hosted
+      // mini-service uses its own URL with a clean `/socket.io` path.
+      socket = io(endpoint.url, {
+        path: endpoint.path,
+        query: endpoint.query,
         transports: ['websocket', 'polling'],
         autoConnect: true,
         reconnection: true,
