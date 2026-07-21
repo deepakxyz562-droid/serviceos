@@ -47,6 +47,7 @@ const DEFAULT_MENU_ITEMS = [
   { key: 'settings', label: 'Settings', icon: 'Settings', section: 'platform', sortOrder: 32 },
   { key: 'credentials', label: 'Credentials', icon: 'Key', section: 'platform', sortOrder: 33 },
   { key: 'integrations', label: 'Integrations', icon: 'Puzzle', section: 'platform', sortOrder: 34 },
+  { key: 'channels', label: 'Channels & Credentials', icon: 'RadioTower', section: 'platform', sortOrder: 35 },
 ];
 
 export async function GET() {

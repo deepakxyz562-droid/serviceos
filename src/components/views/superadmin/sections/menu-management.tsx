@@ -99,6 +99,7 @@ const DEFAULT_CATALOG: { key: string; label: string; section: string }[] = [
   { key: 'invoices', label: 'Invoices', section: 'Finance' },
   { key: 'billing', label: 'Billing', section: 'Finance' },
   // System
+  { key: 'channels', label: 'Channels & Credentials', section: 'System' },
   { key: 'credentials', label: 'Credentials', section: 'System' },
   { key: 'integrations', label: 'Integrations', section: 'System' },
   { key: 'settings', label: 'Settings', section: 'System' },

@@ -53,6 +53,8 @@ import { Label } from '@/components/ui/label';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { WhatsAppCreditBanner } from '@/components/whatsapp-credit-banner';
 import { PayPalCheckoutDialog } from '@/components/billing/paypal-checkout-dialog';
+import { authFetch } from '@/lib/client-auth';
+import { formatCurrency } from '@/lib/currency';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -376,6 +378,7 @@ export function BillingView() {
   const [downgradeTarget, setDowngradeTarget] = useState<Plan | null>(null);
   const [isSchedulingDowngrade, setIsSchedulingDowngrade] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [prorationPreview, setProrationPreview] = useState<{
     direction: string;
     proratedAmount: number;
@@ -407,13 +410,31 @@ export function BillingView() {
 
   useEffect(() => {
     async function fetchSubscription() {
+      setIsLoading(true);
+      setFetchError(null);
       try {
-        const res = await fetch('/api/subscriptions');
-        if (!res.ok) throw new Error('Failed to fetch');
+        const res = await authFetch('/api/subscriptions');
+        if (res.status === 401) {
+          // Session expired — surface a clear error rather than silently
+          // showing fake "Starter · Trial · 14 days" fallback data.
+          setFetchError('Your session has expired. Please refresh the page and sign in again.');
+          setData(FALLBACK_DATA);
+          return;
+        }
+        if (!res.ok) {
+          setFetchError(`Failed to load subscription data (HTTP ${res.status}). Please try again.`);
+          setData(FALLBACK_DATA);
+          return;
+        }
         const json = await res.json();
         setData(mergeJson(json));
         setIsYearly((json.billingCycle || 'monthly') === 'yearly');
-      } catch {
+      } catch (err) {
+        // Network/abort error — show a clear message instead of silently
+        // falling back to FALLBACK_DATA (which previously made the page
+        // look "fine" while showing completely fake trial data).
+        const msg = err instanceof Error ? err.message : 'Network error';
+        setFetchError(`Unable to reach the server: ${msg}. Please check your connection and retry.`);
         setData(FALLBACK_DATA);
       } finally {
         setIsLoading(false);
@@ -523,7 +544,7 @@ export function BillingView() {
     // Upgrade / trial→paid conversion: fetch proration preview first, then
     // open PayPal checkout.
     try {
-      const res = await fetch(`/api/subscriptions/prorate?plan=${plan.id}`);
+      const res = await authFetch(`/api/subscriptions/prorate?plan=${plan.id}`);
       if (res.ok) {
         const prorate = await res.json();
         if (prorate.direction === 'upgrade' && prorate.proratedAmount > 0) {
@@ -547,7 +568,7 @@ export function BillingView() {
     if (!downgradeTarget) return;
     setIsSchedulingDowngrade(true);
     try {
-      const res = await fetch('/api/subscriptions/downgrade', {
+      const res = await authFetch('/api/subscriptions/downgrade', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -561,7 +582,7 @@ export function BillingView() {
         description: json.message || `Your plan will change to ${downgradeTarget.name} at your next renewal date.`,
       });
       // Refetch to update the pendingDowngrade banner
-      const subRes = await fetch('/api/subscriptions');
+      const subRes = await authFetch('/api/subscriptions');
       if (subRes.ok) {
         const subJson = await subRes.json();
         setData(mergeJson(subJson));
@@ -579,13 +600,13 @@ export function BillingView() {
   async function handleCancelDowngrade() {
     setIsSchedulingDowngrade(true);
     try {
-      const res = await fetch('/api/subscriptions/downgrade', { method: 'DELETE' });
+      const res = await authFetch('/api/subscriptions/downgrade', { method: 'DELETE' });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to cancel downgrade');
       toast.success('Downgrade cancelled', {
         description: json.message || 'You\'ll stay on your current plan.',
       });
-      const subRes = await fetch('/api/subscriptions');
+      const subRes = await authFetch('/api/subscriptions');
       if (subRes.ok) {
         const subJson = await subRes.json();
         setData(mergeJson(subJson));
@@ -602,7 +623,7 @@ export function BillingView() {
   function handlePaymentSuccess() {
     setPaypalCheckoutPlan(null);
     setProrationPreview(null);
-    fetch('/api/subscriptions')
+    authFetch('/api/subscriptions')
       .then((res) => res.json())
       .then((json) => {
         setData(mergeJson(json));
@@ -614,7 +635,7 @@ export function BillingView() {
   async function handleCancelSubscription() {
     setIsUpgrading(true);
     try {
-      const res = await fetch('/api/paypal/cancel-subscription', {
+      const res = await authFetch('/api/paypal/cancel-subscription', {
         method: 'POST',
       });
       const json = await res.json().catch(() => ({}));
@@ -625,7 +646,7 @@ export function BillingView() {
       setShowCancelConfirm(false);
       // Refresh data from the server so the UI reflects the new status
       try {
-        const freshRes = await fetch('/api/subscriptions');
+        const freshRes = await authFetch('/api/subscriptions');
         const freshJson = await freshRes.json();
         setData(mergeJson(freshJson));
         setIsYearly((freshJson.billingCycle || 'monthly') === 'yearly');
@@ -653,6 +674,38 @@ export function BillingView() {
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
           <p className="text-sm text-muted-foreground">Loading subscription details…</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If the initial fetch failed (401 session expired, 500, network error),
+  // surface a clear error banner with a retry button instead of silently
+  // rendering fake FALLBACK_DATA that looks like a real "Starter · Trial"
+  // subscription. This previously masked prod issues (cookie not forwarded
+  // → 401 → silent fallback → user thought they had a trial they didn't).
+  if (fetchError) {
+    return (
+      <div className="mx-auto max-w-2xl p-4 sm:p-6 lg:p-8">
+        <div className="flex flex-col items-start gap-4 rounded-lg border border-red-200 bg-red-50 p-6 dark:border-red-800 dark:bg-red-950/30">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+            <h2 className="text-lg font-semibold text-red-700 dark:text-red-400">
+              Couldn&apos;t load your subscription
+            </h2>
+          </div>
+          <p className="text-sm text-red-600 dark:text-red-500">{fetchError}</p>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setFetchError(null);
+              setIsLoading(true);
+              // Re-trigger the fetch effect by toggling state.
+              setTimeout(() => window.location.reload(), 100);
+            }}
+          >
+            Retry
+          </Button>
         </div>
       </div>
     );
@@ -693,7 +746,7 @@ export function BillingView() {
               </CardTitle>
               <CardDescription className="mt-1">
                 {currentPlanData?.name} · {data.billingCycle === 'yearly' ? 'Yearly' : 'Monthly'} billing
-                {currentPrice > 0 && <span className="font-semibold text-foreground"> · {format(currentPrice)}/{data.billingCycle === 'yearly' ? 'year' : 'month'}</span>}
+                {currentPrice > 0 && <span className="font-semibold text-foreground"> · {formatCurrency(currentPrice, 'USD')}/{data.billingCycle === 'yearly' ? 'year' : 'month'}</span>}
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
@@ -929,18 +982,18 @@ export function BillingView() {
                     <>
                       {isYearly && plan.monthlyPrice > 0 && (
                         <p className="text-sm text-muted-foreground line-through mb-0.5">
-                          {format(plan.monthlyPrice * 12)}<span className="text-xs">/yr</span>
+                          {formatCurrency(plan.monthlyPrice * 12, 'USD')}<span className="text-xs">/yr</span>
                         </p>
                       )}
                       <span className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
-                        {format(price)}
+                        {formatCurrency(price, 'USD')}
                       </span>
                       <span className="text-sm text-muted-foreground">
                         /{isYearly ? 'year' : 'month'}
                       </span>
                       {isYearly && plan.monthlyPrice > 0 && (
                         <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">
-                          {format(Math.round(plan.yearlyPrice / 12))}/mo · 50% off
+                          {formatCurrency(Math.round(plan.yearlyPrice / 12), 'USD')}/mo · 50% off
                         </p>
                       )}
                     </>
@@ -1164,7 +1217,7 @@ export function BillingView() {
                       {record.description}
                     </TableCell>
                     <TableCell className="text-right text-sm">
-                      {format(record.amount)}
+                      {formatCurrency(record.amount, 'USD')}
                     </TableCell>
                     <TableCell className="text-center">
                       <span
@@ -1309,7 +1362,7 @@ export function BillingView() {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">New price</span>
                 <span className="font-medium">
-                  {format(isYearly ? (downgradeTarget?.yearlyPrice ?? 0) : (downgradeTarget?.monthlyPrice ?? 0))}
+                  {formatCurrency(isYearly ? (downgradeTarget?.yearlyPrice ?? 0) : (downgradeTarget?.monthlyPrice ?? 0), 'USD')}
                   /{isYearly ? 'year' : 'month'}
                 </span>
               </div>

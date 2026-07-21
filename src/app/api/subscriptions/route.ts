@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import { seedPlans, getActivePlans } from '@/lib/billing-seed';
+import { seedPlans, getActivePlans, getPlanByCode } from '@/lib/billing-seed';
 import { cache } from '@/lib/cache';
 
 // 30s cache — this endpoint is polled every 60s. Caching cuts DB load in half
@@ -108,10 +108,30 @@ export async function GET() {
         })
       : 0;
 
-    // Limits come from the subscription record (defaults if none)
-    const maxUsers = subscription?.maxUsers ?? 1;
-    const maxJobs = subscription?.maxJobs ?? 100;
-    const maxWorkflows = subscription?.maxWorkflows ?? 10;
+    // Limits come from the subscription record if it exists. If not, we look
+    // up the Plan catalog by the tenant's current `plan` field so that a
+    // tenant on `growth` sees growth limits (5 users / 1000 jobs / 50 workflows)
+    // rather than the hard-coded starter defaults (1/100/10).
+    // Falls back to starter-equivalent defaults only if the catalog lookup fails.
+    let maxUsers = subscription?.maxUsers ?? null;
+    let maxJobs = subscription?.maxJobs ?? null;
+    let maxWorkflows = subscription?.maxWorkflows ?? null;
+    if (maxUsers === null || maxJobs === null || maxWorkflows === null) {
+      try {
+        const catalogPlan = await getPlanByCode(plan);
+        if (catalogPlan) {
+          if (maxUsers === null) maxUsers = catalogPlan.maxUsers;
+          if (maxJobs === null) maxJobs = catalogPlan.maxJobs;
+          if (maxWorkflows === null) maxWorkflows = catalogPlan.maxWorkflows;
+        }
+      } catch {
+        // non-fatal — fall through to defaults
+      }
+    }
+    // Final safety net: starter-equivalent defaults.
+    if (maxUsers === null) maxUsers = 1;
+    if (maxJobs === null) maxJobs = 100;
+    if (maxWorkflows === null) maxWorkflows = 10;
 
     // ─── Real billing history (SubscriptionPayment rows) ────────────────
     const payments = await db.subscriptionPayment.findMany({

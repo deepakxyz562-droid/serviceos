@@ -47,6 +47,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
+import { formatCurrency } from '@/lib/currency';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -93,12 +94,24 @@ export function PayPalCheckoutDialog({
   onSuccess,
   prorationPreview,
 }: PayPalCheckoutDialogProps) {
-  const { format } = useCompanyCurrency();
+  const { currency: companyCurrency } = useCompanyCurrency();
   const [paypalConfig, setPaypalConfig] = useState<PayPalConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const price = billingCycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
+
+  // PayPal ALWAYS charges in USD (the plan catalog prices are in USD and the
+  // PayPal order is created with currency: 'USD'). Previously we called
+  // `format(price)` which auto-converts USD→company currency — so a tenant
+  // whose company currency is INR would see "₹2,124" in the dialog but get
+  // charged $25 by PayPal. That mismatch caused user confusion and support
+  // tickets. Now we display the exact USD amount PayPal will charge.
+  // If the company currency differs from USD, we show a small note.
+  const displayPrice = (amount: number) => formatCurrency(amount, 'USD');
+  const priceMismatchNote = companyCurrency && companyCurrency !== 'USD'
+    ? `Charged in USD. Your bank may convert to ${companyCurrency} at their rate.`
+    : null;
 
   useEffect(() => {
     async function fetchConfig() {
@@ -154,7 +167,7 @@ export function PayPalCheckoutDialog({
         throw new Error(data.error || 'Failed to activate subscription');
       }
       toast.success(`Successfully subscribed to ${plan.name} plan!`, {
-        description: `Recurring payment of ${format(price)}/${billingCycle === 'yearly' ? 'yr' : 'mo'} activated via PayPal. You'll be auto-charged each cycle.`,
+        description: `Recurring payment of ${displayPrice(price)}/${billingCycle === 'yearly' ? 'yr' : 'mo'} activated via PayPal. You'll be auto-charged each cycle.`,
       });
       onSuccess();
     } catch (err) {
@@ -176,7 +189,7 @@ export function PayPalCheckoutDialog({
             Subscribe to {plan.name} Plan
           </DialogTitle>
           <DialogDescription>
-            Set up recurring billing via PayPal. You'll be automatically charged {format(price)}{' '}
+            Set up recurring billing via PayPal. You'll be automatically charged {displayPrice(price)}{' '}
             {billingCycle === 'yearly' ? 'per year' : 'per month'} until you cancel.
           </DialogDescription>
         </DialogHeader>
@@ -200,7 +213,7 @@ export function PayPalCheckoutDialog({
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Proration credit/debit</span>
                   <span className="font-medium text-amber-600">
-                    +{format(prorationPreview.proratedAmount)}
+                    +{displayPrice(prorationPreview.proratedAmount)}
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -212,7 +225,7 @@ export function PayPalCheckoutDialog({
             <div className="flex justify-between">
               <span className="font-semibold">Amount due today</span>
               <span className="text-lg font-bold text-emerald-600">
-                {format(prorationPreview && prorationPreview.proratedAmount > 0 ? price + prorationPreview.proratedAmount : price)}
+                {displayPrice(prorationPreview && prorationPreview.proratedAmount > 0 ? price + prorationPreview.proratedAmount : price)}
                 <span className="text-sm text-muted-foreground font-normal">/{billingCycle === 'yearly' ? 'year' : 'month'}</span>
               </span>
             </div>
@@ -220,6 +233,12 @@ export function PayPalCheckoutDialog({
               <Shield className="h-3.5 w-3.5 text-emerald-500" />
               Auto-renews {billingCycle === 'yearly' ? 'annually' : 'monthly'} · Cancel anytime from Settings → Subscription
             </p>
+            {priceMismatchNote && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                <Info className="h-3.5 w-3.5" />
+                {priceMismatchNote}
+              </p>
+            )}
           </div>
 
           {/* PayPal Info */}
