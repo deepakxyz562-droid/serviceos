@@ -66,6 +66,12 @@ const EmployeePortalView = lazy(() => import('@/components/views/employee-portal
 // AI & Extras
 const AIAssistantView = lazy(() => import('@/components/views/ai-assistant-view').then(m => ({ default: m.AiAssistantView })));
 const ChatbotBuilderView = lazy(() => import('@/components/views/chatbot-builder-view').then(m => ({ default: m.ChatbotBuilderView })));
+
+// AI Receptionist (Vapi.ai BYOK)
+const AiReceptionistView = lazy(() => import('@/components/views/ai-receptionist-view').then(m => ({ default: m.AiReceptionistView })));
+const AiAgentsView = lazy(() => import('@/components/views/ai-agents-view').then(m => ({ default: m.AiAgentsView })));
+const AiPhoneNumbersView = lazy(() => import('@/components/views/ai-phone-numbers-view').then(m => ({ default: m.AiPhoneNumbersView })));
+const AiCallHistoryView = lazy(() => import('@/components/views/ai-call-history-view').then(m => ({ default: m.AiCallHistoryView })));
 const RetargetingView = lazy(() => import('@/components/views/retargeting-view').then(m => ({ default: m.RetargetingView })));
 const SegmentsView = lazy(() => import('@/components/views/segments-view').then(m => ({ default: m.SegmentsView })));
 const MarketingAnalyticsView = lazy(() => import('@/components/views/marketing-analytics-view').then(m => ({ default: m.MarketingAnalyticsView })));
@@ -160,6 +166,11 @@ const lazyViews: Partial<Record<ViewType, ComponentType>> = {
   // AI & Extras
   aiAssistant: AIAssistantView,
   chatbotBuilder: ChatbotBuilderView,
+  // AI Receptionist (Vapi.ai BYOK)
+  aiReceptionist: AiReceptionistView,
+  aiAgents: AiAgentsView,
+  aiPhoneNumbers: AiPhoneNumbersView,
+  aiCallHistory: AiCallHistoryView,
   retargeting: RetargetingView,
   segments: SegmentsView,
   marketingAnalytics: MarketingAnalyticsView,

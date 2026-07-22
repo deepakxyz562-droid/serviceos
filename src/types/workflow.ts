@@ -182,13 +182,14 @@ export type ViewType =
   | 'customerPortal' | 'employeePortal'
   // Integrations
   | 'integrations'
-  // AI & Extras
   | 'aiAssistant' | 'chatbotBuilder' | 'retargeting' | 'segments' | 'marketingAnalytics'
   | 'serviceCatalog' | 'knowledgeBase' | 'communicationProviders'
   | 'leadDiscovery' | 'reviews' | 'journeyAutomation'
   | 'marketplace' | 'enterprise' | 'aiCampaignGenerator' | 'webviewEngine' | 'adsIntegration'
   | 'versionHistory' | 'documentCenter' | 'saasDashboard'
   | 'templateStudio'
+  // AI Receptionist (Vapi.ai BYOK)
+  | 'aiReceptionist' | 'aiAgents' | 'aiPhoneNumbers' | 'aiCallHistory'
   // Audience
   | 'groups' | 'tags' | 'contactImports' | 'contactExports' | 'audienceAnalytics' | 'emailCampaigns'
   // Communication Providers

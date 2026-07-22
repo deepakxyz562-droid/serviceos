@@ -93,6 +93,10 @@ model Tenant {
   googleAdsLeads    GoogleAdsLead[]
   // Public chat (visitor widget)
   publicChatSessions PublicChatSession[]
+  // AI Receptionist (Vapi.ai BYOK)
+  aiAgents           AiAgent[]
+  aiPhoneNumbers     AiPhoneNumber[]
+  aiCalls            AiCall[]
 
   @@index([slug])
   @@index([plan])
@@ -3884,4 +3888,98 @@ model PublicChatMessage {
 
   @@index([sessionId, createdAt])
   @@index([senderType, readAt])
+}
+
+// ==========================================
+// AI RECEPTIONIST (Vapi.ai BYOK)
+// ==========================================
+// Tenant brings their own Vapi.ai API key (BYOK). ServiceOS proxies
+// assistant/number/call management and ingests webhooks + function-call bridges.
+
+model AiAgent {
+  id              String   @id @default(cuid())
+  tenantId        String
+  vapiAssistantId String?  // ID returned by Vapi.ai
+  name            String
+  description     String?
+  // Configuration mirrors Vapi Assistant schema (subset we expose in UI)
+  configJson      String   @default("{}")
+  // { voice, model, systemPrompt, greeting, functions, language, ... }
+  status          String   @default("draft")  // draft | active | paused | error
+  active          Boolean  @default(false)
+  // Stats (denormalized, updated by webhook)
+  totalCalls      Int      @default(0)
+  totalSeconds    Int      @default(0)
+  lastCallAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  phoneNumbers    AiPhoneNumber[]
+  calls           AiCall[]
+
+  @@index([tenantId])
+  @@index([status])
+}
+
+model AiPhoneNumber {
+  id              String   @id @default(cuid())
+  tenantId        String
+  vapiNumberId    String?  // ID returned by Vapi.ai
+  phoneNumber     String   // E.164 e.g. +14155551234
+  friendlyName    String?
+  country         String   @default("US")
+  provider        String   @default("vapi")  // vapi | twilio (imported)
+  assistantId     String?  // local AiAgent.id this number is routed to
+  vapiAssistantId String?  // Vapi assistant ID (cached)
+  status          String   @default("available")  // available | in_use | error
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agent           AiAgent? @relation(fields: [assistantId], references: [id], onDelete: SetNull)
+  calls           AiCall[]
+
+  @@unique([tenantId, phoneNumber])
+  @@index([tenantId])
+}
+
+model AiCall {
+  id              String   @id @default(cuid())
+  tenantId        String
+  vapiCallId      String?  // Vapi call ID
+  callType        String   @default("inbound")  // inbound | outbound
+  status          String   @default("queued")   // queued | ringing | in_progress | ended | failed
+  // Parties
+  phoneNumberId   String?
+  assistantId     String?
+  fromNumber      String?
+  toNumber        String?
+  customerPhone   String?  // the other party (caller for inbound, callee for outbound)
+  // Metrics
+  startedAt       DateTime?
+  endedAt         DateTime?
+  durationSec     Int      @default(0)
+  costUsd         Float    @default(0)
+  // Content
+  transcriptJson  String   @default("[]")  // [{role, content, timestamp}]
+  summary         String?
+  analysisJson    String   @default("{}") // { sentiment, intent, outcome, ... }
+  // CRM linkage
+  customerId      String?
+  leadId          String?
+  // Function calls made during the call
+  functionCallsJson String @default("[]")
+  endedReason     String?  // customer_ended | assistant_ended | timeout | error
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agent           AiAgent? @relation(fields: [assistantId], references: [id], onDelete: SetNull)
+  number          AiPhoneNumber? @relation(fields: [phoneNumberId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([assistantId])
+  @@index([status])
+  @@index([customerPhone])
 }

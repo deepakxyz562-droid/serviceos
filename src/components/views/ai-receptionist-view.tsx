@@ -1,679 +1,476 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  Bot, MessageSquare, Phone, Clock, Calendar, CheckCircle2,
-  Zap, Sparkles, TrendingUp, Users, ArrowRight, ChevronRight,
-  Settings, Globe, BarChart3, Star, Shield, Target,
-  Lightbulb, Brain, ToggleLeft, ToggleRight,
+  PhoneCall,
+  PhoneIncoming,
+  PhoneOutgoing,
+  PhoneMissed,
+  Clock,
+  DollarSign,
+  TrendingUp,
+  Users,
+  Bot,
+  Plus,
+  Settings as SettingsIcon,
+  Activity,
+  Phone,
+  ArrowRight,
+  Loader2,
+  RefreshCw,
+  AlertCircle,
+  CheckCircle2,
+  Mic,
+  PhoneForwarded,
+  Sparkles,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useAppStore } from '@/store/app-store';
+import { toast } from 'sonner';
+import { formatDistanceToNow, format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
-// ─── Mock Data ──────────────────────────────────────────────────────
-
-const dashboardStats = [
-  { title: 'Conversations Today', value: '47', icon: MessageSquare, color: 'text-emerald-600', bg: 'bg-emerald-50', change: '+12%' },
-  { title: 'Bookings Created', value: '18', icon: Calendar, color: 'text-teal-600', bg: 'bg-teal-50', change: '+8%' },
-  { title: 'Avg Response Time', value: '1.2s', icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50', change: '-0.3s' },
-  { title: 'Customer Satisfaction', value: '94%', icon: Star, color: 'text-violet-600', bg: 'bg-violet-50', change: '+2%' },
-];
-
-interface ChatMessage {
+interface Agent {
   id: string;
-  sender: 'customer' | 'ai' | 'system';
-  text: string;
-  time: string;
-  entities?: { label: string; value: string }[];
+  name: string;
+  status: string;
+  active: boolean;
+  totalCalls: number;
+  totalSeconds: number;
+  lastCallAt: string | null;
+  vapiAssistantId: string | null;
+  phoneNumbers?: { id: string; phoneNumber: string; friendlyName: string | null }[];
 }
 
-const chatMessages: ChatMessage[] = [
-  { id: '1', sender: 'customer', text: 'Hi, I need window cleaning tomorrow morning', time: '10:32 AM' },
-  { id: '2', sender: 'ai', text: 'Hello! I\'d be happy to help you schedule a window cleaning. Let me confirm the details:', time: '10:32 AM', entities: [
-    { label: 'Service', value: 'Window Cleaning' },
-    { label: 'Date', value: 'Tomorrow (Mar 5)' },
-    { label: 'Time', value: 'Morning (9-12 PM)' },
-  ]},
-  { id: '3', sender: 'ai', text: 'I\'ve found available slots for Window Cleaning tomorrow morning:\n\n• 9:00 AM - 10:30 AM (Rajesh K.)\n• 10:00 AM - 11:30 AM (Sunil M.)\n• 11:00 AM - 12:30 PM (Amit P.)\n\nWhich slot works best for you?', time: '10:32 AM' },
-  { id: '4', sender: 'customer', text: '9 AM slot please', time: '10:33 AM' },
-  { id: '5', sender: 'ai', text: 'Perfect! I\'ve booked Window Cleaning for tomorrow at 9:00 AM with Rajesh K. 🎉\n\nBooking ID: SVC-2847\nAmount: ₹1,200\n\nYou\'ll receive a confirmation on WhatsApp shortly. Is there anything else I can help with?', time: '10:33 AM' },
-  { id: '6', sender: 'system', text: '✅ Booking created automatically — SVC-2847 assigned to Rajesh K.', time: '10:33 AM' },
-];
-
-const conversationFlowSteps = [
-  { id: '1', label: 'Greeting', description: 'Welcome message + intent detection', icon: MessageSquare, color: 'bg-emerald-500' },
-  { id: '2', label: 'Entity Extraction', description: 'Service, Date, Time, Location', icon: Brain, color: 'bg-teal-500' },
-  { id: '3', label: 'Availability Check', description: 'Find open slots & technicians', icon: Calendar, color: 'bg-amber-500' },
-  { id: '4', label: 'Confirm Booking', description: 'Auto-create job & assign', icon: CheckCircle2, color: 'bg-violet-500' },
-  { id: '5', label: 'Send Confirmation', description: 'WhatsApp + SMS + Email', icon: Phone, color: 'bg-pink-500' },
-];
-
-interface AIFeature {
+interface RecentCall {
   id: string;
-  title: string;
-  description: string;
-  icon: React.ElementType;
-  color: string;
-  bg: string;
-  enabled: boolean;
-  status: 'active' | 'beta' | 'coming_soon';
+  callType: string;
+  status: string;
+  customerPhone: string | null;
+  durationSec: number;
+  costUsd: number;
+  startedAt: string | null;
+  endedReason: string | null;
+  summary: string | null;
+  agent: { id: string; name: string } | null;
 }
 
-const initialAIFeatures: AIFeature[] = [
-  { id: '1', title: 'AI Quote Generator', description: 'Automatically generate accurate quotes based on service type, property size, and historical pricing data.', icon: Sparkles, color: 'text-emerald-600', bg: 'bg-emerald-50', enabled: true, status: 'active' },
-  { id: '2', title: 'AI Dispatcher', description: 'Intelligently assign jobs to the best available technician based on skills, location, and workload.', icon: Zap, color: 'text-teal-600', bg: 'bg-teal-50', enabled: true, status: 'active' },
-  { id: '3', title: 'AI Lead Scoring', description: 'Score and prioritize leads based on engagement, likelihood to convert, and estimated job value.', icon: Target, color: 'text-amber-600', bg: 'bg-amber-50', enabled: false, status: 'beta' },
-  { id: '4', title: 'AI Business Insights', description: 'Get predictive analytics on revenue trends, seasonal demand, and resource optimization opportunities.', icon: TrendingUp, color: 'text-violet-600', bg: 'bg-violet-50', enabled: false, status: 'coming_soon' },
-];
+interface DashboardData {
+  agents: Agent[];
+  recentCalls: RecentCall[];
+  stats: {
+    total: number;
+    totalDurationSec: number;
+    totalCost: number;
+    todayCount: number;
+  };
+  vapiConfigured: boolean;
+}
 
-const recentConversations = [
-  { id: '1', customer: 'Priya Sharma', query: 'Plumbing emergency - kitchen leak', status: 'Booked', time: '2 min ago' },
-  { id: '2', customer: 'Rahul Verma', query: 'AC service for next week', status: 'Quoted', time: '8 min ago' },
-  { id: '3', customer: 'Meena Patel', query: 'Deep cleaning 3BHK apartment', status: 'Booked', time: '15 min ago' },
-  { id: '4', customer: 'Vikram Singh', query: 'Pest control for termites', status: 'In Progress', time: '22 min ago' },
-  { id: '5', customer: 'Anita Desai', query: 'Electrical wiring inspection', status: 'Escalated', time: '30 min ago' },
-];
+export function AiReceptionistView() {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const setActiveView = useAppStore((s) => s.setActiveView);
 
-// ════════════════════════════════════════════════════════════════════
-// AI RECEPTIONIST VIEW
-// ════════════════════════════════════════════════════════════════════
+  const fetchData = async (silent = false) => {
+    try {
+      if (!silent) setLoading(true);
+      else setRefreshing(true);
+      const [agentsRes, callsRes] = await Promise.all([
+        fetch('/api/vapi/agents'),
+        fetch('/api/vapi/calls?limit=8'),
+      ]);
+      const agentsData = await agentsRes.json().catch(() => ({ agents: [], vapiConfigured: false }));
+      const callsData = await callsRes.json().catch(() => ({ calls: [], stats: { total: 0, totalDurationSec: 0, totalCost: 0, todayCount: 0 } }));
 
-export function AIReceptionistView() {
-  const [aiActive, setAiActive] = useState(true);
-  const [aiFeatures, setAiFeatures] = useState<AIFeature[]>(initialAIFeatures);
-  const [greetingMessage, setGreetingMessage] = useState('Hello! 👋 Welcome to ServicePro. How can I help you today?');
-  const [businessHours, setBusinessHours] = useState('9:00 AM - 7:00 PM');
-  const [servicesOffered, setServicesOffered] = useState('Plumbing, Window Cleaning, HVAC, Deep Cleaning, Pest Control, Electrical');
-  const [autoBooking, setAutoBooking] = useState(true);
-  const [activeTab, setActiveTab] = useState('dashboard');
+      setData({
+        agents: agentsData.agents || [],
+        recentCalls: callsData.calls || [],
+        stats: callsData.stats || { total: 0, totalDurationSec: 0, totalCost: 0, todayCount: 0 },
+        vapiConfigured: agentsData.vapiConfigured || false,
+      });
+    } catch {
+      toast.error('Failed to load AI Receptionist data');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
-  const toggleFeature = (featureId: string) => {
-    setAiFeatures(prev =>
-      prev.map(f => (f.id === featureId ? { ...f, enabled: !f.enabled } : f))
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fmtDuration = (sec: number) => {
+    if (sec < 60) return `${sec}s`;
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}m ${s}s`;
+  };
+
+  const fmtCost = (usd: number) => `$${usd.toFixed(2)}`;
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-28" />
+          ))}
+        </div>
+        <Skeleton className="h-64" />
+      </div>
     );
-  };
-
-  const getStatusBadge = (status: string) => {
-    const config: Record<string, { class: string; label: string }> = {
-      Booked: { class: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: 'Booked' },
-      Quoted: { class: 'bg-amber-50 text-amber-700 border-amber-200', label: 'Quoted' },
-      'In Progress': { class: 'bg-blue-50 text-blue-700 border-blue-200', label: 'In Progress' },
-      Escalated: { class: 'bg-red-50 text-red-700 border-red-200', label: 'Escalated' },
-    };
-    const c = config[status] || { class: 'bg-gray-50 text-gray-600 border-gray-200', label: status };
-    return <Badge variant="outline" className={cn('text-[10px]', c.class)}>{c.label}</Badge>;
-  };
-
-  const getFeatureStatusBadge = (status: AIFeature['status']) => {
-    const config: Record<string, { class: string; label: string }> = {
-      active: { class: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: 'Active' },
-      beta: { class: 'bg-amber-50 text-amber-700 border-amber-200', label: 'Beta' },
-      coming_soon: { class: 'bg-gray-50 text-gray-500 border-gray-200', label: 'Coming Soon' },
-    };
-    const c = config[status];
-    return <Badge variant="outline" className={cn('text-[10px]', c.class)}>{c.label}</Badge>;
-  };
+  }
 
   return (
-    <div className="space-y-6 w-full">
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center size-10 rounded-lg bg-emerald-600">
-            <Bot className="size-5 text-white" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold">AI Receptionist</h2>
-            <p className="text-sm text-muted-foreground">Your 24/7 automated customer handler</p>
-          </div>
+    <div className="space-y-6">
+      {/* ─── Header ──────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
+            <PhoneCall className="size-6 text-emerald-600" />
+            AI Receptionist
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Voice AI that answers calls, books appointments, and captures leads — 24/7.
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Badge variant="outline" className={cn(
-            'text-xs',
-            aiActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'
-          )}>
-            {aiActive ? '● Active' : '● Inactive'}
-          </Badge>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Active</span>
-            <Switch checked={aiActive} onCheckedChange={setAiActive} />
-          </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => fetchData(true)} disabled={refreshing} className="gap-1.5">
+            {refreshing ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+            Refresh
+          </Button>
+          <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 gap-1.5" onClick={() => setActiveView('aiAgents')}>
+            <Bot className="size-3.5" />
+            Manage Agents
+          </Button>
         </div>
       </div>
 
-      {/* ── Stats Cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {dashboardStats.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={stat.title} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-4 sm:p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-muted-foreground font-medium">{stat.title}</p>
-                    <p className="text-2xl font-bold mt-1">{stat.value}</p>
-                    <p className="text-[10px] text-emerald-600 font-medium mt-1">{stat.change} vs yesterday</p>
-                  </div>
-                  <div className={cn('p-2.5 rounded-xl', stat.bg)}>
-                    <Icon className={cn('size-5', stat.color)} />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+      {/* ─── BYOK status banner ─────────────────────────────────────── */}
+      {!data?.vapiConfigured && (
+        <Card className="border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/10">
+          <CardContent className="pt-6 flex items-start gap-3">
+            <AlertCircle className="size-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <div className="font-medium text-amber-700 dark:text-amber-400">Vapi API key not configured</div>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Add your Vapi.ai API key in Settings → AI Voice to start using AI Receptionist.
+                It only takes a minute (BYOK — you pay Vapi directly, ServiceOS pays $0).
+              </p>
+            </div>
+            <Button size="sm" variant="outline" className="shrink-0 gap-1.5" onClick={() => setActiveView('settings')}>
+              <SettingsIcon className="size-3.5" />
+              Configure
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ─── Stats grid ─────────────────────────────────────────────── */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Total Calls"
+          value={data?.stats.total ?? 0}
+          subtitle={`${data?.stats.todayCount ?? 0} today`}
+          icon={<PhoneCall className="size-5" />}
+          color="emerald"
+        />
+        <StatCard
+          title="Talk Time"
+          value={fmtDuration(data?.stats.totalDurationSec ?? 0)}
+          subtitle="all time"
+          icon={<Clock className="size-5" />}
+          color="blue"
+        />
+        <StatCard
+          title="Total Cost"
+          value={fmtCost(data?.stats.totalCost ?? 0)}
+          subtitle="paid to Vapi"
+          icon={<DollarSign className="size-5" />}
+          color="violet"
+        />
+        <StatCard
+          title="Active Agents"
+          value={data?.agents.filter((a) => a.active).length ?? 0}
+          subtitle={`${data?.agents.length ?? 0} total`}
+          icon={<Bot className="size-5" />}
+          color="amber"
+        />
       </div>
 
-      {/* ── Tabs ── */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="dashboard" className="gap-1.5">
-            <BarChart3 className="size-3.5" /> Dashboard
-          </TabsTrigger>
-          <TabsTrigger value="chat" className="gap-1.5">
-            <MessageSquare className="size-3.5" /> Live Chat
-          </TabsTrigger>
-          <TabsTrigger value="features" className="gap-1.5">
-            <Sparkles className="size-3.5" /> AI Features
-          </TabsTrigger>
-          <TabsTrigger value="settings" className="gap-1.5">
-            <Settings className="size-3.5" /> Settings
-          </TabsTrigger>
-        </TabsList>
+      {/* ─── Quick actions ──────────────────────────────────────────── */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <QuickAction
+          icon={<Bot className="size-5" />}
+          title="AI Agents"
+          description="Create & configure voice assistants"
+          onClick={() => setActiveView('aiAgents')}
+        />
+        <QuickAction
+          icon={<Phone className="size-5" />}
+          title="Phone Numbers"
+          description="Buy or import numbers"
+          onClick={() => setActiveView('aiPhoneNumbers')}
+        />
+        <QuickAction
+          icon={<PhoneIncoming className="size-5" />}
+          title="Call History"
+          description="Listen & review transcripts"
+          onClick={() => setActiveView('aiCallHistory')}
+        />
+        <QuickAction
+          icon={<SettingsIcon className="size-5" />}
+          title="Settings"
+          description="Vapi API key & webhook"
+          onClick={() => setActiveView('settings')}
+        />
+      </div>
 
-        {/* ── Dashboard Tab ── */}
-        <TabsContent value="dashboard" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Conversation Flow Preview */}
-            <Card className="lg:col-span-1">
-              <CardHeader>
-                <CardTitle className="text-base">AI Decision Tree</CardTitle>
-                <CardDescription>How the AI handles inquiries</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {conversationFlowSteps.map((step, idx) => {
-                  const StepIcon = step.icon;
-                  return (
-                    <div key={step.id}>
-                      <div className="flex items-start gap-3">
-                        <div className="flex flex-col items-center">
-                          <div className={cn('size-8 rounded-full flex items-center justify-center text-white shrink-0', step.color)}>
-                            <StepIcon className="size-4" />
-                          </div>
-                          {idx < conversationFlowSteps.length - 1 && (
-                            <div className="w-0.5 h-6 bg-muted mt-1" />
-                          )}
-                        </div>
-                        <div className="pt-1">
-                          <p className="text-sm font-medium">{step.label}</p>
-                          <p className="text-xs text-muted-foreground">{step.description}</p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
-
-            {/* Recent AI Conversations */}
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-base">Recent Conversations</CardTitle>
-                    <CardDescription>AI-handled customer inquiries</CardDescription>
-                  </div>
-                  <Button variant="ghost" size="sm" className="text-muted-foreground text-xs">
-                    View All <ArrowRight className="size-3 ml-1" />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0 overflow-hidden">
-                <ScrollArea className="h-[320px]">
-                  <div className="px-4 pb-4 space-y-2">
-                    {recentConversations.map((conv) => (
-                      <div key={conv.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="p-1.5 rounded-lg bg-emerald-50 shrink-0">
-                            <MessageSquare className="size-3.5 text-emerald-600" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium truncate">{conv.customer}</p>
-                            <p className="text-xs text-muted-foreground truncate">{conv.query}</p>
-                          </div>
-                        </div>
-                        <div className="text-right shrink-0 ml-3 flex flex-col items-end gap-1">
-                          {getStatusBadge(conv.status)}
-                          <span className="text-[10px] text-muted-foreground">{conv.time}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Performance Summary */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Today&apos;s AI Performance</CardTitle>
-              <CardDescription>Key metrics from your AI receptionist</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="p-3 rounded-lg bg-emerald-50">
-                  <p className="text-xs text-emerald-600 font-medium">Auto-Booked</p>
-                  <p className="text-xl font-bold text-emerald-700">14</p>
-                  <p className="text-[10px] text-emerald-500">No human intervention</p>
-                </div>
-                <div className="p-3 rounded-lg bg-amber-50">
-                  <p className="text-xs text-amber-600 font-medium">Quotes Sent</p>
-                  <p className="text-xl font-bold text-amber-700">9</p>
-                  <p className="text-[10px] text-amber-500">AI-generated quotes</p>
-                </div>
-                <div className="p-3 rounded-lg bg-red-50">
-                  <p className="text-xs text-red-600 font-medium">Escalated</p>
-                  <p className="text-xl font-bold text-red-700">3</p>
-                  <p className="text-[10px] text-red-500">Transferred to human</p>
-                </div>
-                <div className="p-3 rounded-lg bg-violet-50">
-                  <p className="text-xs text-violet-600 font-medium">After Hours</p>
-                  <p className="text-xl font-bold text-violet-700">7</p>
-                  <p className="text-[10px] text-violet-500">Handled outside biz hours</p>
-                </div>
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* ─── Agents overview (2 cols) ─────────────────────────────── */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Bot className="size-4" />
+                  Your AI Agents
+                </CardTitle>
+                <CardDescription>Active voice assistants handling your calls</CardDescription>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ── Live Chat Tab ── */}
-        <TabsContent value="chat" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Chat Preview */}
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="size-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <CardTitle className="text-base">Live Chat Simulation</CardTitle>
-                  </div>
-                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
-                    AI Handling
-                  </Badge>
+              <Button variant="ghost" size="sm" className="gap-1" onClick={() => setActiveView('aiAgents')}>
+                View all
+                <ArrowRight className="size-3.5" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3 max-h-96 overflow-y-auto">
+            {data?.agents.length === 0 ? (
+              <div className="text-center py-10">
+                <div className="mx-auto mb-3 flex items-center justify-center size-12 rounded-full bg-muted">
+                  <Bot className="size-6 text-muted-foreground" />
                 </div>
-              </CardHeader>
-              <CardContent className="p-0 overflow-hidden">
-                <ScrollArea className="h-[420px]">
-                  <div className="p-4 space-y-4">
-                    {chatMessages.map((msg) => (
-                      <div key={msg.id} className={cn(
-                        'flex',
-                        msg.sender === 'customer' ? 'justify-start' : msg.sender === 'ai' ? 'justify-start' : 'justify-center'
-                      )}>
-                        {msg.sender === 'system' ? (
-                          <div className="px-3 py-1.5 rounded-full bg-muted text-xs text-muted-foreground">
-                            {msg.text}
-                          </div>
-                        ) : (
-                          <div className={cn(
-                            'max-w-[80%] rounded-2xl px-4 py-2.5',
-                            msg.sender === 'customer'
-                              ? 'bg-gray-100 text-gray-900 rounded-bl-sm'
-                              : 'bg-emerald-600 text-white rounded-bl-sm'
-                          )}>
-                            <div className="flex items-center gap-1.5 mb-1">
-                              {msg.sender === 'ai' && <Bot className="size-3 opacity-80" />}
-                              <span className="text-[10px] opacity-70">{msg.sender === 'customer' ? 'Customer' : 'AI Receptionist'} • {msg.time}</span>
-                            </div>
-                            <p className="text-sm whitespace-pre-line">{msg.text}</p>
-                            {msg.entities && (
-                              <div className="mt-2 space-y-1">
-                                {msg.entities.map((entity) => (
-                                  <div key={entity.label} className="flex items-center gap-2 px-2 py-1 rounded-md bg-white/20 text-xs">
-                                    <span className="font-medium opacity-80">{entity.label}:</span>
-                                    <span className="font-bold">{entity.value}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
+                <p className="text-sm font-medium">No agents yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Create your first AI agent to start answering calls.</p>
+                <Button size="sm" className="mt-4 bg-emerald-600 hover:bg-emerald-700 gap-1.5" onClick={() => setActiveView('aiAgents')}>
+                  <Plus className="size-3.5" />
+                  Create Agent
+                </Button>
+              </div>
+            ) : (
+              data?.agents.map((agent) => (
+                <div
+                  key={agent.id}
+                  className="flex items-center justify-between gap-3 p-3 rounded-lg border bg-card hover:bg-muted/40 transition-colors"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className={cn(
+                        'flex items-center justify-center size-9 rounded-full shrink-0',
+                        agent.active ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-muted'
+                      )}
+                    >
+                      <Bot className={cn('size-4', agent.active ? 'text-emerald-600' : 'text-muted-foreground')} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm truncate">{agent.name}</div>
+                      <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+                        <span>{agent.totalCalls} calls</span>
+                        <span>•</span>
+                        <span>{fmtDuration(agent.totalSeconds)}</span>
+                        {agent.lastCallAt && (
+                          <>
+                            <span>•</span>
+                            <span>{formatDistanceToNow(new Date(agent.lastCallAt), { addSuffix: true })}</span>
+                          </>
                         )}
                       </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
-
-            {/* Extracted Entities & Booking Details */}
-            <div className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Extracted Entities</CardTitle>
-                  <CardDescription>AI identified information</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-50">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="size-3.5 text-emerald-600" />
-                      <span className="text-xs font-medium">Service</span>
-                    </div>
-                    <Badge className="bg-emerald-600 text-white text-[10px]">Window Cleaning</Badge>
-                  </div>
-                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-teal-50">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="size-3.5 text-teal-600" />
-                      <span className="text-xs font-medium">Date</span>
-                    </div>
-                    <Badge className="bg-teal-600 text-white text-[10px]">Tomorrow (Mar 5)</Badge>
-                  </div>
-                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-amber-50">
-                    <div className="flex items-center gap-2">
-                      <Clock className="size-3.5 text-amber-600" />
-                      <span className="text-xs font-medium">Time</span>
-                    </div>
-                    <Badge className="bg-amber-600 text-white text-[10px]">Morning (9 AM)</Badge>
-                  </div>
-                  <Separator />
-                  <div className="p-2.5 rounded-lg bg-green-50">
-                    <div className="flex items-center gap-2 mb-1">
-                      <CheckCircle2 className="size-3.5 text-green-600" />
-                      <span className="text-xs font-medium text-green-700">Booking Created</span>
-                    </div>
-                    <p className="text-[10px] text-green-600">SVC-2847 • Rajesh K. • ₹1,200</p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">AI Confidence</CardTitle>
-                  <CardDescription>Entity recognition accuracy</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs">Service Detection</span>
-                      <span className="text-xs font-bold text-emerald-600">98%</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full rounded-full bg-emerald-500" style={{ width: '98%' }} />
                     </div>
                   </div>
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs">Date Extraction</span>
-                      <span className="text-xs font-bold text-teal-600">95%</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full rounded-full bg-teal-500" style={{ width: '95%' }} />
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs">Time Parsing</span>
-                      <span className="text-xs font-bold text-amber-600">91%</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full rounded-full bg-amber-500" style={{ width: '91%' }} />
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs">Intent Classification</span>
-                      <span className="text-xs font-bold text-violet-600">96%</span>
-                    </div>
-                    <div className="h-2 rounded-full bg-muted overflow-hidden">
-                      <div className="h-full rounded-full bg-violet-500" style={{ width: '96%' }} />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        </TabsContent>
-
-        {/* ── AI Features Tab ── */}
-        <TabsContent value="features" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {aiFeatures.map((feature) => {
-              const FeatureIcon = feature.icon;
-              return (
-                <Card key={feature.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className={cn('p-2.5 rounded-xl', feature.bg)}>
-                        <FeatureIcon className={cn('size-5', feature.color)} />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {getFeatureStatusBadge(feature.status)}
-                        <Switch
-                          checked={feature.enabled}
-                          onCheckedChange={() => toggleFeature(feature.id)}
-                          disabled={feature.status === 'coming_soon'}
-                        />
-                      </div>
-                    </div>
-                    <h3 className="font-semibold text-sm mb-1">{feature.title}</h3>
-                    <p className="text-xs text-muted-foreground leading-relaxed">{feature.description}</p>
-                    <Separator className="my-3" />
-                    <div className="flex items-center justify-between">
-                      <Badge variant="outline" className={cn(
-                        'text-[10px]',
-                        feature.enabled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-gray-50 text-gray-500 border-gray-200'
-                      )}>
-                        {feature.enabled ? '● Enabled' : '● Disabled'}
-                      </Badge>
-                      <Button variant="ghost" size="sm" className="text-xs h-7">
-                        Configure <ChevronRight className="size-3 ml-1" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-
-          {/* Feature Comparison */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">AI Feature Usage This Week</CardTitle>
-              <CardDescription>How each feature is performing</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="p-4 rounded-lg border">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Sparkles className="size-4 text-emerald-600" />
-                    <span className="text-sm font-medium">Quote Generator</span>
-                  </div>
-                  <p className="text-2xl font-bold">142</p>
-                  <p className="text-xs text-muted-foreground">quotes generated</p>
-                  <p className="text-[10px] text-emerald-600 mt-1">89% accepted by customers</p>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      'shrink-0',
+                      agent.active
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400'
+                        : 'bg-muted text-muted-foreground'
+                    )}
+                  >
+                    {agent.active ? 'Active' : 'Paused'}
+                  </Badge>
                 </div>
-                <div className="p-4 rounded-lg border">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Zap className="size-4 text-teal-600" />
-                    <span className="text-sm font-medium">Dispatcher</span>
-                  </div>
-                  <p className="text-2xl font-bold">98</p>
-                  <p className="text-xs text-muted-foreground">jobs auto-dispatched</p>
-                  <p className="text-[10px] text-teal-600 mt-1">Avg 2.3 min assignment time</p>
-                </div>
-                <div className="p-4 rounded-lg border">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Target className="size-4 text-amber-600" />
-                    <span className="text-sm font-medium">Lead Scoring</span>
-                  </div>
-                  <p className="text-2xl font-bold">67</p>
-                  <p className="text-xs text-muted-foreground">leads scored</p>
-                  <p className="text-[10px] text-amber-600 mt-1">Top 20% convert at 4x rate</p>
-                </div>
-                <div className="p-4 rounded-lg border">
-                  <div className="flex items-center gap-2 mb-2">
-                    <TrendingUp className="size-4 text-violet-600" />
-                    <span className="text-sm font-medium">Business Insights</span>
-                  </div>
-                  <p className="text-2xl font-bold">12</p>
-                  <p className="text-xs text-muted-foreground">insights generated</p>
-                  <p className="text-[10px] text-violet-600 mt-1">3 actionable recommendations</p>
-                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ─── Recent calls (1 col) ─────────────────────────────────── */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Activity className="size-4" />
+                  Recent Calls
+                </CardTitle>
+                <CardDescription>Latest activity</CardDescription>
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+              <Button variant="ghost" size="sm" className="gap-1" onClick={() => setActiveView('aiCallHistory')}>
+                <ArrowRight className="size-3.5" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-2 max-h-96 overflow-y-auto">
+            {data?.recentCalls.length === 0 ? (
+              <div className="text-center py-10">
+                <div className="mx-auto mb-3 flex items-center justify-center size-12 rounded-full bg-muted">
+                  <PhoneMissed className="size-6 text-muted-foreground" />
+                </div>
+                <p className="text-sm font-medium">No calls yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Calls will appear here once your agents start receiving them.</p>
+              </div>
+            ) : (
+              data?.recentCalls.map((call) => (
+                <div key={call.id} className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-muted/40 transition-colors">
+                  <div
+                    className={cn(
+                      'flex items-center justify-center size-8 rounded-full shrink-0',
+                      call.callType === 'inbound'
+                        ? 'bg-emerald-100 dark:bg-emerald-900/30'
+                        : 'bg-blue-100 dark:bg-blue-900/30'
+                    )}
+                  >
+                    {call.callType === 'inbound' ? (
+                      <PhoneIncoming className="size-4 text-emerald-600" />
+                    ) : (
+                      <PhoneOutgoing className="size-4 text-blue-600" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium truncate">{call.customerPhone || 'Unknown'}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">{fmtDuration(call.durationSec)}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      {call.agent?.name || 'No agent'} •{' '}
+                      {call.startedAt ? format(new Date(call.startedAt), 'MMM d, h:mm a') : 'Pending'}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
-        {/* ── Settings Tab ── */}
-        <TabsContent value="settings" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Receptionist Settings</CardTitle>
-                <CardDescription>Configure your AI receptionist behavior</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Greeting Message</label>
-                  <Textarea
-                    value={greetingMessage}
-                    onChange={(e) => setGreetingMessage(e.target.value)}
-                    rows={3}
-                    className="text-sm"
-                  />
-                  <p className="text-[10px] text-muted-foreground">This message is sent when a new conversation starts</p>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Business Hours</label>
-                  <Input
-                    value={businessHours}
-                    onChange={(e) => setBusinessHours(e.target.value)}
-                    className="text-sm"
-                  />
-                  <p className="text-[10px] text-muted-foreground">AI handles after-hours inquiries automatically</p>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Services Offered</label>
-                  <Textarea
-                    value={servicesOffered}
-                    onChange={(e) => setServicesOffered(e.target.value)}
-                    rows={2}
-                    className="text-sm"
-                  />
-                  <p className="text-[10px] text-muted-foreground">Comma-separated list of services for AI to recognize</p>
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">Auto-Booking</p>
-                    <p className="text-xs text-muted-foreground">Allow AI to create bookings without confirmation</p>
-                  </div>
-                  <Switch checked={autoBooking} onCheckedChange={setAutoBooking} />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">Escalation on Low Confidence</p>
-                    <p className="text-xs text-muted-foreground">Transfer to human when confidence &lt; 70%</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">Multi-Language Support</p>
-                    <p className="text-xs text-muted-foreground">Auto-detect and respond in customer&apos;s language</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Supported Channels</CardTitle>
-                  <CardDescription>Where your AI receptionist is active</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-emerald-50">
-                    <div className="flex items-center gap-3">
-                      <MessageSquare className="size-4 text-emerald-600" />
-                      <div>
-                        <p className="text-sm font-medium">WhatsApp</p>
-                        <p className="text-xs text-muted-foreground">Primary channel</p>
-                      </div>
-                    </div>
-                    <Badge className="bg-emerald-600 text-white text-[10px]">Connected</Badge>
-                  </div>
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50">
-                    <div className="flex items-center gap-3">
-                      <Globe className="size-4 text-blue-600" />
-                      <div>
-                        <p className="text-sm font-medium">Website Chat</p>
-                        <p className="text-xs text-muted-foreground">Embedded widget</p>
-                      </div>
-                    </div>
-                    <Badge className="bg-blue-600 text-white text-[10px]">Connected</Badge>
-                  </div>
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-violet-50">
-                    <div className="flex items-center gap-3">
-                      <Phone className="size-4 text-violet-600" />
-                      <div>
-                        <p className="text-sm font-medium">Phone (IVR)</p>
-                        <p className="text-xs text-muted-foreground">Voice AI agent</p>
-                      </div>
-                    </div>
-                    <Badge variant="outline" className="text-[10px]">Setup Required</Badge>
-                  </div>
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-pink-50">
-                    <div className="flex items-center gap-3">
-                      <MessageSquare className="size-4 text-pink-600" />
-                      <div>
-                        <p className="text-sm font-medium">Facebook Messenger</p>
-                        <p className="text-xs text-muted-foreground">Social channel</p>
-                      </div>
-                    </div>
-                    <Badge variant="outline" className="text-[10px]">Setup Required</Badge>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Quick Replies</CardTitle>
-                  <CardDescription>Pre-configured AI responses</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {[
-                    { trigger: 'pricing inquiry', response: 'Share service catalog + quote' },
-                    { trigger: 'schedule request', response: 'Show available time slots' },
-                    { trigger: 'complaint', response: 'Empathize + escalate to manager' },
-                    { trigger: 'reschedule', response: 'Offer alternative slots' },
-                  ].map((item) => (
-                    <div key={item.trigger} className="p-2.5 rounded-lg border flex items-center justify-between">
-                      <div>
-                        <p className="text-xs font-medium">{item.trigger}</p>
-                        <p className="text-[10px] text-muted-foreground">{item.response}</p>
-                      </div>
-                      <ChevronRight className="size-3.5 text-muted-foreground" />
-                    </div>
-                  ))}
-                  <Button variant="outline" size="sm" className="w-full mt-2 text-xs">
-                    + Add Quick Reply
-                  </Button>
-                </CardContent>
-              </Card>
+      {/* ─── How it works ──────────────────────────────────────────── */}
+      <Card className="bg-gradient-to-br from-emerald-50/50 to-transparent dark:from-emerald-950/10">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Sparkles className="size-4 text-emerald-600" />
+            How AI Receptionist Works
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+            <div className="flex gap-3">
+              <div className="flex items-center justify-center size-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 font-semibold shrink-0">1</div>
+              <div>
+                <div className="font-medium">Add Vapi Key</div>
+                <p className="text-xs text-muted-foreground mt-0.5">Settings → AI Voice (BYOK)</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <div className="flex items-center justify-center size-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 font-semibold shrink-0">2</div>
+              <div>
+                <div className="font-medium">Create AI Agent</div>
+                <p className="text-xs text-muted-foreground mt-0.5">Configure voice, prompt, tools</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <div className="flex items-center justify-center size-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 font-semibold shrink-0">3</div>
+              <div>
+                <div className="font-medium">Get a Number</div>
+                <p className="text-xs text-muted-foreground mt-0.5">Buy via Vapi or import Twilio</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <div className="flex items-center justify-center size-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 font-semibold shrink-0">4</div>
+              <div>
+                <div className="font-medium">Receive Calls</div>
+                <p className="text-xs text-muted-foreground mt-0.5">AI answers, books, captures leads</p>
+              </div>
             </div>
           </div>
-        </TabsContent>
-      </Tabs>
+        </CardContent>
+      </Card>
     </div>
+  );
+}
+
+function StatCard({
+  title,
+  value,
+  subtitle,
+  icon,
+  color,
+}: {
+  title: string;
+  value: string | number;
+  subtitle: string;
+  icon: React.ReactNode;
+  color: 'emerald' | 'blue' | 'violet' | 'amber';
+}) {
+  const colorMap = {
+    emerald: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600',
+    blue: 'bg-blue-100 dark:bg-blue-900/30 text-blue-600',
+    violet: 'bg-violet-100 dark:bg-violet-900/30 text-violet-600',
+    amber: 'bg-amber-100 dark:bg-amber-900/30 text-amber-600',
+  };
+  return (
+    <Card>
+      <CardContent className="pt-5">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{title}</span>
+          <div className={cn('flex items-center justify-center size-8 rounded-lg', colorMap[color])}>{icon}</div>
+        </div>
+        <div className="mt-2 text-2xl font-bold tracking-tight">{value}</div>
+        <div className="text-xs text-muted-foreground mt-0.5">{subtitle}</div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function QuickAction({
+  icon,
+  title,
+  description,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-start gap-3 p-4 rounded-xl border bg-card text-left hover:bg-muted/40 hover:border-emerald-300 dark:hover:border-emerald-700 transition-all group"
+    >
+      <div className="flex items-center justify-center size-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 group-hover:scale-110 transition-transform shrink-0">
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <div className="font-medium text-sm">{title}</div>
+        <div className="text-xs text-muted-foreground truncate">{description}</div>
+      </div>
+    </button>
   );
 }

@@ -31,6 +31,8 @@ import {
   RefreshCw,
   Bot,
   Sparkles,
+  PhoneCall,
+  PhoneIncoming,
   ClipboardList,
   GitBranch,
   Kanban,
@@ -162,6 +164,15 @@ const ownerNavSections: NavSection[] = [
     ],
   },
   {
+    title: 'AI Receptionist',
+    items: [
+      { view: 'aiReceptionist', label: 'Dashboard', icon: PhoneCall, badge: 'Free' },
+      { view: 'aiAgents', label: 'AI Agents', icon: Bot },
+      { view: 'aiPhoneNumbers', label: 'Phone Numbers', icon: PhoneIncoming },
+      { view: 'aiCallHistory', label: 'Call History', icon: PhoneCall },
+    ],
+  },
+  {
     title: 'Finance',
     items: [
       { view: 'quotes', label: 'Quotes', icon: Receipt },
@@ -273,6 +284,15 @@ const superadminNavSections: NavSection[] = [
       { view: 'triggers', label: 'Triggers', icon: Zap },
       { view: 'formBuilder', label: 'Form Builder', icon: ClipboardList },
       { view: 'variables', label: 'Variables', icon: Variable },
+    ],
+  },
+  {
+    title: 'AI Receptionist',
+    items: [
+      { view: 'aiReceptionist', label: 'Dashboard', icon: PhoneCall, badge: 'Free' },
+      { view: 'aiAgents', label: 'AI Agents', icon: Bot },
+      { view: 'aiPhoneNumbers', label: 'Phone Numbers', icon: PhoneIncoming },
+      { view: 'aiCallHistory', label: 'Call History', icon: PhoneCall },
     ],
   },
   {

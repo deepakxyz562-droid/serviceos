@@ -6,6 +6,7 @@ import { isSuperAdminRequest } from '@/lib/admin-auth';
 const FEATURE_DEFINITIONS = [
   { key: 'whatsapp_crm', label: 'WhatsApp CRM', description: 'Manage WhatsApp conversations and customer relationships' },
   { key: 'ai_assistant', label: 'AI Assistant', description: 'AI-powered assistant for customer support and automation' },
+  { key: 'ai_receptionist', label: 'AI Receptionist (Voice)', description: 'AI voice receptionist powered by Vapi.ai (BYOK). Free for all users — toggle visibility for subscribers.' },
   { key: 'campaigns', label: 'Campaigns', description: 'Create and manage marketing campaigns' },
   { key: 'workflows', label: 'Workflows', description: 'Automate business processes with custom workflows' },
   { key: 'chatbot_builder', label: 'Chatbot Builder', description: 'Build and deploy custom chatbots' },
