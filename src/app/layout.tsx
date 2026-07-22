@@ -70,6 +70,11 @@ export const metadata: Metadata = {
   },
 };
 
+// Whether to register the SW with ?dev=1 (dev mode bypasses caching so
+// Next.js HMR works; production uses the plain /sw.js URL with full caching).
+const IS_DEV = process.env.NODE_ENV !== 'production';
+const SW_URL = IS_DEV ? '/sw.js?dev=1' : '/sw.js';
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -89,6 +94,34 @@ export default function RootLayout({
         <link rel="apple-touch-icon" sizes="167x167" href="/icon-167.png" />
         <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png" />
         <link rel="apple-touch-startup-image" href="/icon-512.png" />
+        {/*
+          Synchronous service worker registration.
+          ------------------------------------------
+          PWABuilder / Lighthouse / Android APK generators check whether a
+          service worker is registered within ~3 seconds of the first page
+          load. Registering inside a React useEffect (in PwaProvider) is
+          too late — by the time React hydrates and the effect runs, the
+          audit has already finished and reports "no service worker".
+
+          By putting the registration in an inline <script> in <head>, the
+          browser runs it synchronously during HTML parsing, BEFORE any
+          JS bundle is fetched. PWABuilder immediately detects the SW and
+          unblocks APK packaging.
+
+          The register() call itself is async (returns a Promise) but the
+          network request for /sw.js is fired synchronously, which is what
+          the audit looks for. The SW then installs + activates
+          (clients.claim() takes control of the page) on its own schedule.
+
+          Calling register() multiple times is safe — browsers dedupe by
+          URL. The PwaProvider component keeps its own register() call
+          (harmless duplicate) plus renders the install/update prompts.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('${SW_URL}',{scope:'/'}).catch(function(){})}`,
+          }}
+        />
       </head>
       <body
         className={`${poppins.variable} ${geistMono.variable} antialiased bg-background text-foreground font-sans`}
