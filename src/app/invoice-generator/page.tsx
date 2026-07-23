@@ -12,6 +12,7 @@ import {
   CreditCard,
 } from "lucide-react";
 import { InvoiceGeneratorClient } from "./invoice-generator-client";
+import { AiReceptionistSection } from "@/components/seo/ai-receptionist-section";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://serviceos.com"),
@@ -371,6 +372,10 @@ export default function InvoiceGeneratorPage() {
           </div>
         </section>
       </main>
+
+      {/* AI Receptionist showcase — surfaces the voice-agent feature on this
+          standalone (non-cornerstone) marketing page too. */}
+      <AiReceptionistSection />
 
       {/* ───── Footer ───── */}
       <footer className="mt-auto border-t bg-muted/30 no-print">

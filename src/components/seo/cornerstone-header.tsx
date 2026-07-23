@@ -10,6 +10,7 @@ export function CornerstoneHeader({ activePath }: { activePath?: string }) {
   const navLinks = [
     { href: "/field-service-software", label: "Software" },
     { href: "/scheduling-and-dispatch", label: "Features" },
+    { href: "/#ai-receptionist", label: "AI Receptionist" },
     { href: "/jobber-alternatives", label: "Compare" },
     { href: "/invoice-generator", label: "Free Tools" },
     { href: "/contact-us", label: "Contact" },

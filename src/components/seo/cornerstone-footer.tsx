@@ -13,6 +13,7 @@ export function CornerstoneFooter() {
     { href: "/customer-crm", label: "Customer CRM" },
     { href: "/technician-app", label: "Technician App" },
     { href: "/automations", label: "Automations" },
+    { href: "/#ai-receptionist", label: "AI Receptionist" },
   ];
 
   const industryLinks = [

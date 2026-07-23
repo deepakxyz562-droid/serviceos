@@ -58,6 +58,16 @@ import {
   Megaphone,
   Headphones,
   Bell,
+  PhoneCall,
+  PhoneIncoming,
+  PhoneOutgoing,
+  PhoneForwarded,
+  PhoneMissed,
+  Voicemail,
+  Mic,
+  Languages,
+  CalendarCheck,
+  AudioLines,
   type LucideIcon,
 } from 'lucide-react';
 import Image from 'next/image';
@@ -207,10 +217,72 @@ const featurePillars = [
 ];
 
 const aiHighlights = [
+  { icon: PhoneCall, title: 'AI Receptionist', description: 'Answers every call 24/7, books appointments, qualifies leads, and routes urgent calls — never miss a customer again.' },
   { icon: Bot, title: 'AI Assistant', description: 'Drafts replies, summarizes threads, suggests next-best-actions across your inbox.' },
   { icon: Megaphone, title: 'AI Campaign Generator', description: 'Generates email & SMS campaign copy, audience segments, and send-time suggestions.' },
   { icon: MessageSquare, title: 'Chatbot Builder', description: 'Build custom chatbots for your website and inbox to qualify leads and answer FAQs 24/7.' },
-  { icon: Route, title: 'Smart Routing', description: 'Auto-assigns jobs to the best technician by location, skills, and availability.' },
+];
+
+// AI Receptionist — flagship voice-agent feature.
+const aiReceptionistCapabilities = [
+  {
+    icon: PhoneCall,
+    title: 'Answers every call, 24/7',
+    description: 'No more missed leads after hours. Your AI agent picks up on the first ring — weekends, holidays, and 3 AM emergencies included.',
+  },
+  {
+    icon: CalendarCheck,
+    title: 'Books appointments live',
+    description: 'Checks your real-time calendar, quotes availability, and confirms bookings straight into your schedule — no callbacks needed.',
+  },
+  {
+    icon: UserCheck,
+    title: 'Qualifies & captures leads',
+    description: 'Asks the right qualifying questions, captures name, address, and job details, then drops a clean lead into your CRM.',
+  },
+  {
+    icon: PhoneForwarded,
+    title: 'Transfers urgent calls',
+    description: 'Recognises emergencies (no heat, burst pipe, gas leak) and warm-transfers to your on-call technician instantly.',
+  },
+  {
+    icon: Voicemail,
+    title: 'Takes detailed messages',
+    description: 'When a transfer isn\'t needed, the agent records a structured message with transcript, summary, and callback number.',
+  },
+  {
+    icon: Languages,
+    title: 'Speaks 30+ languages',
+    description: 'Greets callers in their preferred language and switches mid-call. Perfect for multilingual neighbourhoods.',
+  },
+];
+
+const aiReceptionistSteps = [
+  {
+    step: '01',
+    title: 'Connect your Vapi.ai key',
+    description: 'Bring your own Vapi account (BYOK). Paste your API key once in Settings → AI Voice. No Twilio contract, no phone-line setup.',
+  },
+  {
+    step: '02',
+    title: 'Pick a local number & train your agent',
+    description: 'Buy a local number in one click, choose a voice, and pick an industry preset. Your agent learns your services, hours, and pricing.',
+  },
+  {
+    step: '03',
+    title: 'Never miss a call again',
+    description: 'Forward your business line to your new AI number. Every call is answered, logged, transcribed, and synced to your CRM automatically.',
+  },
+];
+
+// Sample live-call transcript shown in the AI Receptionist showcase mockup.
+const aiReceptionistTranscript = [
+  { role: 'agent', text: 'Thanks for calling Brightwater Plumbing, this is Riley. How can I help you today?', time: '0:00' },
+  { role: 'caller', text: 'Hi, my kitchen sink is leaking pretty badly — water is everywhere.', time: '0:04' },
+  { role: 'agent', text: 'I\'m sorry to hear that. I can get a technician out to you today. What\'s your address?', time: '0:09' },
+  { role: 'caller', text: '412 Maple Street, Apartment 3B.', time: '0:14' },
+  { role: 'agent', text: 'Got it. I have an opening at 2:15 PM — shall I lock that in for you?', time: '0:19' },
+  { role: 'caller', text: 'Yes please, that works.', time: '0:23' },
 ];
 
 const primaryChannels = [
@@ -334,7 +406,7 @@ const pricingPlans: PricingPlan[] = [
     yearlyPrice: 150,
     description: 'For growing teams',
     icon: Building2,
-    features: ['5 users', '1,000 jobs/month', 'Email + SMS included', 'Push notifications', 'Smart dispatch & routing', 'Advanced CRM & pipeline', 'AI Assistant', 'Priority support'],
+    features: ['5 users', '1,000 jobs/month', 'Email + SMS included', 'Push notifications', 'Smart dispatch & routing', 'Advanced CRM & pipeline', 'AI Assistant', 'AI Receptionist (BYOK)', 'Priority support'],
     popular: true,
     cta: 'Start Free Trial',
   },
@@ -344,7 +416,7 @@ const pricingPlans: PricingPlan[] = [
     yearlyPrice: 300,
     description: 'For scaling businesses',
     icon: Shield,
-    features: ['Unlimited users', 'Unlimited jobs', 'Email + SMS included', 'Push notifications', 'n8n automation builder', 'Custom workflows', 'API access', 'Dedicated support'],
+    features: ['Unlimited users', 'Unlimited jobs', 'Email + SMS included', 'Push notifications', 'n8n automation builder', 'Custom workflows', 'AI Receptionist (BYOK)', 'API access', 'Dedicated support'],
     cta: 'Start Free Trial',
   },
   {
@@ -359,6 +431,14 @@ const pricingPlans: PricingPlan[] = [
 ];
 
 const faqs = [
+  {
+    question: 'How does the AI Receptionist work, and do I need a Twilio account?',
+    answer: 'The AI Receptionist is a voice agent that answers every call to your business number 24/7 — it greets callers, qualifies leads, books appointments into your calendar, takes messages, and transfers urgent calls to your on-call technician. It is powered by Vapi.ai using a bring-your-own-key (BYOK) model: you paste your Vapi API key once in Settings → AI Voice, buy a local number in one click, and forward your line. No separate Twilio account, no phone-line installation. Numbers cost ~$2/month and calls ~$0.05–0.15/min (which already includes speech-to-text, the LLM brain, and text-to-speech), billed directly by Vapi. Available on Growth and Pro plans.',
+  },
+  {
+    question: 'What can the AI Receptionist actually do on a call?',
+    answer: 'Quite a lot. Out of the box your agent can: answer in 30+ languages and switch mid-call, quote real-time availability from your calendar and confirm bookings, ask qualifying questions and capture name, address, and job details into your CRM, look up service prices and business hours, take structured voicemails with a full transcript and summary, and warm-transfer genuine emergencies (no heat, burst pipe, gas leak) to your on-call tech. Every call is logged with a transcript, sentiment analysis, and cost breakdown in your Call History. You can customise the voice, greeting, and knowledge base per agent.',
+  },
   {
     question: 'Do I need any third-party approvals to get started?',
     answer: 'No. ServiceOS works out of the box with Email, SMS, Push, and In-App notifications — no approvals, no waiting. You can capture leads, send quotes, dispatch jobs, invoice customers, and collect payments from day one. Everything you need to run your service business is included on every plan.',
@@ -434,6 +514,7 @@ const seoFeatures = [
 const footerLinks = {
   product: [
     { label: 'Features', href: '#features' },
+    { label: 'AI Receptionist', href: '#ai-receptionist' },
     { label: 'Pricing', href: '#pricing' },
     { label: 'Channels', href: '#channels' },
     { label: 'Live Demo', href: '#' },
@@ -493,6 +574,10 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
 
           <div className="hidden md:flex items-center gap-7">
             <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Features</a>
+            <a href="#ai-receptionist" className="flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700 transition-colors font-medium">
+              AI Receptionist
+              <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-semibold uppercase tracking-wide">New</span>
+            </a>
             <div className="relative group">
               <button type="button" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">
                 Industries <ChevronDown className="w-3.5 h-3.5" />
@@ -545,6 +630,10 @@ function Navbar({ onGetStarted, onSignIn }: LandingPageProps) {
           >
             <div className="px-4 py-4 space-y-3">
               <a href="#features" className="block text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileMenuOpen(false)}>Features</a>
+              <a href="#ai-receptionist" className="flex items-center gap-2 text-sm text-emerald-600 hover:text-emerald-700 py-2" onClick={() => setMobileMenuOpen(false)}>
+                AI Receptionist
+                <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-semibold uppercase tracking-wide">New</span>
+              </a>
               <a href="#pricing" className="block text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileMenuOpen(false)}>Pricing</a>
               <a href="#faq" className="block text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileMenuOpen(false)}>FAQ</a>
               <div className="pt-2">
@@ -607,7 +696,7 @@ function HeroSection({ onGetStarted, onTryDemo }: { onGetStarted: () => void; on
             </motion.h1>
 
             <motion.p variants={staggerItem} className="text-lg text-muted-foreground max-w-xl mb-8 leading-relaxed">
-              ServiceOS replaces scattered texts, emails, and spreadsheets. Capture leads, dispatch jobs, invoice clients, and get paid — with Email, SMS, Push, and In-App notifications built in.
+              ServiceOS replaces scattered texts, emails, and spreadsheets. Capture leads, dispatch jobs, invoice clients, and get paid — with Email, SMS, Push, and In-App notifications built in. Plus an <span className="text-foreground font-medium">AI receptionist that answers every call 24/7</span>, so you never lose a customer to voicemail again.
             </motion.p>
 
             <motion.div variants={staggerItem} className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-6">
@@ -715,6 +804,40 @@ function HeroSection({ onGetStarted, onTryDemo }: { onGetStarted: () => void; on
                   <div className="text-xs text-muted-foreground leading-tight">Paid today</div>
                   <div className="text-sm font-bold text-foreground leading-tight">$4,280</div>
                 </div>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 1.0 }}
+              className="absolute -bottom-6 -right-6 hidden lg:block"
+            >
+              <div className="rounded-xl border border-emerald-200 bg-white shadow-lg p-3 w-52">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <div className="w-7 h-7 rounded-full bg-emerald-100 border border-emerald-200 flex items-center justify-center relative">
+                    <PhoneCall className="w-3.5 h-3.5 text-emerald-600" />
+                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-semibold text-foreground leading-tight flex items-center gap-1">
+                      AI answered <span className="text-[9px] font-medium text-emerald-600 bg-emerald-50 px-1 rounded">24/7</span>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground leading-tight">Missed call · 9:47 PM</div>
+                  </div>
+                </div>
+                <div className="flex items-end gap-0.5 h-4 mb-1">
+                  {Array.from({ length: 22 }).map((_, i) => (
+                    <motion.span
+                      key={i}
+                      className="flex-1 rounded-full bg-emerald-400/70"
+                      animate={{ height: [3, 3 + ((i * 5) % 11), 4] }}
+                      transition={{ duration: 0.7 + (i % 3) * 0.1, repeat: Infinity, repeatType: 'reverse', delay: i * 0.04 }}
+                      style={{ minHeight: 3 }}
+                    />
+                  ))}
+                </div>
+                <div className="text-[10px] text-muted-foreground leading-tight truncate">"Booked for tomorrow 9 AM ✓"</div>
               </div>
             </motion.div>
           </motion.div>
@@ -998,6 +1121,176 @@ function FeaturesPillarSection() {
                 })}
               </div>
             </div>
+          </motion.div>
+        </div>
+      </AnimatedSection>
+    </section>
+  );
+}
+
+function AiReceptionistSection({ onGetStarted }: { onGetStarted: () => void }) {
+  return (
+    <section className="relative py-24 overflow-hidden bg-slate-950" id="ai-receptionist">
+      {/* Ambient glow + grid background */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.18),transparent_55%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(20,184,166,0.12),transparent_50%)]" />
+      <div
+        className="absolute inset-0 opacity-[0.15]"
+        style={{
+          backgroundImage: 'linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px)',
+          backgroundSize: '56px 56px',
+          maskImage: 'radial-gradient(ellipse at center, black 30%, transparent 75%)',
+          WebkitMaskImage: 'radial-gradient(ellipse at center, black 30%, transparent 75%)',
+        }}
+      />
+
+      <AnimatedSection>
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Header */}
+          <motion.div variants={staggerItem} className="text-center mb-16">
+            <Badge variant="outline" className="border-emerald-400/40 bg-emerald-500/10 text-emerald-300 mb-4 font-medium">
+              <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+              New · AI Voice Agent
+            </Badge>
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mt-4 tracking-tight leading-[1.1]">
+              Never miss another call.<br />
+              <span className="bg-gradient-to-r from-emerald-300 to-teal-300 bg-clip-text text-transparent">
+                Your AI receptionist answers 24/7.
+              </span>
+            </h2>
+            <p className="text-slate-300 mt-5 max-w-2xl mx-auto text-lg leading-relaxed">
+              Every missed call is a lost customer. Your AI voice agent picks up on the first ring, books the job, qualifies the lead, and routes emergencies — then logs the whole call to your CRM. Powered by Vapi.ai.
+            </p>
+          </motion.div>
+
+          {/* Two-column: live call mockup + capabilities */}
+          <div className="grid lg:grid-cols-2 gap-10 lg:gap-12 items-start mb-20">
+            {/* Left: live call mockup */}
+            <motion.div variants={staggerItem} className="order-2 lg:order-1">
+              <div className="relative rounded-2xl border border-white/10 bg-slate-900/80 backdrop-blur shadow-2xl overflow-hidden">
+                {/* Call header */}
+                <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-slate-900/60">
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center">
+                        <PhoneIncoming className="w-4 h-4 text-emerald-300" />
+                      </div>
+                      <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-slate-900 animate-pulse" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-white">Inbound call · Live</div>
+                      <div className="text-xs text-slate-400">+1 (415) 555-0142 → Brightwater Plumbing</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/20">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="text-[11px] font-medium text-emerald-300">00:23</span>
+                  </div>
+                </div>
+
+                {/* Waveform */}
+                <div className="px-5 py-3 border-b border-white/10 flex items-center gap-1 h-14">
+                  {Array.from({ length: 48 }).map((_, i) => (
+                    <motion.span
+                      key={i}
+                      className="flex-1 rounded-full bg-gradient-to-t from-emerald-500/40 to-emerald-300"
+                      animate={{ height: [4, 8 + ((i * 7) % 26), 6] }}
+                      transition={{ duration: 0.8 + (i % 5) * 0.12, repeat: Infinity, repeatType: 'reverse', delay: i * 0.03 }}
+                      style={{ minHeight: 4 }}
+                    />
+                  ))}
+                </div>
+
+                {/* Transcript */}
+                <div className="p-5 space-y-3 max-h-[340px] overflow-y-auto">
+                  {aiReceptionistTranscript.map((line, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, y: 8 }}
+                      whileInView={{ opacity: 1, y: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ delay: i * 0.15, duration: 0.4 }}
+                      className={`flex ${line.role === 'agent' ? 'justify-start' : 'justify-end'}`}
+                    >
+                      <div className={`max-w-[80%] ${line.role === 'agent' ? 'bg-emerald-500/15 border border-emerald-400/20' : 'bg-white/8 border border-white/10'} rounded-2xl px-3.5 py-2.5`}>
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          {line.role === 'agent' ? <Mic className="w-3 h-3 text-emerald-300" /> : <PhoneIncoming className="w-3 h-3 text-slate-400" />}
+                          <span className="text-[10px] uppercase tracking-wide font-medium text-slate-400">
+                            {line.role === 'agent' ? 'AI Agent · Riley' : 'Caller'} · {line.time}
+                          </span>
+                        </div>
+                        <p className="text-sm text-slate-100 leading-relaxed">{line.text}</p>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+
+                {/* Footer actions */}
+                <div className="flex items-center justify-between px-5 py-3.5 border-t border-white/10 bg-slate-900/60">
+                  <div className="flex items-center gap-2 text-xs text-slate-400">
+                    <CalendarCheck className="w-3.5 h-3.5 text-emerald-300" />
+                    <span>Booking created · Today 2:15 PM</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-400">
+                    <UserCheck className="w-3.5 h-3.5 text-emerald-300" />
+                    <span>Lead saved to CRM</span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Right: capabilities */}
+            <motion.div variants={staggerItem} className="order-1 lg:order-2">
+              <div className="grid sm:grid-cols-2 gap-4">
+                {aiReceptionistCapabilities.map((cap) => {
+                  const Icon = cap.icon;
+                  return (
+                    <div key={cap.title} className="rounded-xl border border-white/10 bg-white/[0.04] p-5 hover:border-emerald-400/30 hover:bg-emerald-500/[0.06] transition-colors">
+                      <div className="w-9 h-9 rounded-lg bg-emerald-500/15 border border-emerald-400/20 flex items-center justify-center mb-3">
+                        <Icon className="w-4.5 h-4.5 text-emerald-300" />
+                      </div>
+                      <div className="text-sm font-semibold text-white mb-1.5">{cap.title}</div>
+                      <p className="text-xs text-slate-400 leading-relaxed">{cap.description}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </div>
+
+          {/* How it works — 3 steps */}
+          <motion.div variants={staggerItem} className="mb-12">
+            <div className="text-center mb-10">
+              <h3 className="text-2xl font-bold text-white">Live in under 10 minutes</h3>
+              <p className="text-slate-400 mt-2">No phone company. No Twilio contract. No installation technician.</p>
+            </div>
+            <div className="grid md:grid-cols-3 gap-6">
+              {aiReceptionistSteps.map((s) => (
+                <div key={s.step} className="relative rounded-2xl border border-white/10 bg-white/[0.04] p-6">
+                  <div className="text-4xl font-bold bg-gradient-to-br from-emerald-300 to-teal-400 bg-clip-text text-transparent mb-3">{s.step}</div>
+                  <div className="text-base font-semibold text-white mb-2">{s.title}</div>
+                  <p className="text-sm text-slate-400 leading-relaxed">{s.description}</p>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+
+          {/* BYOK pricing note + CTA */}
+          <motion.div variants={staggerItem} className="rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.07] p-6 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center gap-6 justify-between">
+            <div className="flex items-start gap-4">
+              <div className="w-11 h-11 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center shrink-0">
+                <Wallet className="w-5 h-5 text-emerald-300" />
+              </div>
+              <div>
+                <div className="text-base font-semibold text-white mb-1">Bring your own Vapi.ai key — pay only for what you use</div>
+                <p className="text-sm text-slate-300 leading-relaxed">
+                  Numbers cost ~<span className="text-emerald-300 font-medium">$2/month</span> and calls ~<span className="text-emerald-300 font-medium">$0.05–0.15/min</span> (includes speech-to-text, the LLM brain, and text-to-speech). Billed by Vapi — no separate Twilio account. Available on Growth &amp; Pro plans.
+                </p>
+              </div>
+            </div>
+            <Button size="lg" onClick={onGetStarted} className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-7 h-12 shadow-lg shadow-emerald-500/20 shrink-0">
+              Start Free Trial<ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
           </motion.div>
         </div>
       </AnimatedSection>
@@ -1585,6 +1878,7 @@ export function LandingPage({ onGetStarted, onSignIn, onTryDemo }: LandingPagePr
       <HowItWorksSection />
       <CoreFlowSection />
       <FeaturesPillarSection />
+      <AiReceptionistSection onGetStarted={onGetStarted} />
       <ChannelsSection />
       <PersonasSection />
       <RoiSection />

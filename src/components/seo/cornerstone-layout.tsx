@@ -4,6 +4,7 @@ import { CornerstoneFooter } from "./cornerstone-footer";
 import { Breadcrumbs, type BreadcrumbItem } from "./breadcrumbs";
 import { StructuredData } from "./structured-data";
 import { getOrganizationSchema, getWebsiteSchema } from "@/lib/seo/schemas";
+import { AiReceptionistSection } from "./ai-receptionist-section";
 
 /**
  * Master layout for all SEO cornerstone pages.
@@ -53,6 +54,10 @@ export function CornerstoneLayout({
 
         {children}
       </main>
+
+      {/* Shared AI Receptionist showcase — surfaces the voice-agent feature on
+          every cornerstone marketing page and drives clicks to /#ai-receptionist. */}
+      <AiReceptionistSection />
 
       <CornerstoneFooter />
     </div>
