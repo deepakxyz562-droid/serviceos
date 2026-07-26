@@ -44,6 +44,27 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // ─── Security headers applied to ALL routes ────────────────────────────
+        // Strict CSP that still allows:
+        //  • PayPal checkout (https://www.paypal.com — frame-src + script-src)
+        //  • Stripe (https://js.stripe.com — script-src + frame-src)
+        //  • Google Fonts (https://fonts.googleapis.com style, https://fonts.gstatic.com font)
+        //  • Inline scripts/styles ('unsafe-inline' — required by Next.js runtime)
+        //  • 'unsafe-eval' in dev (Turbopack/HMR needs it; production builds drop it)
+        //  • WebSocket upgrades (ws: wss:) for socket.io realtime + Vapi streams
+        //  • Any https image / connect (WhatsApp, webhooks, analytics)
+        source: '/:path*',
+        headers: [
+          { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(self), geolocation=(self), interest-cohort=()' },
+          { key: 'X-DNS-Prefetch-Control', value: 'on' },
+          { key: 'Content-Security-Policy', value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.stripe.com https://www.paypal.com https://www.gstatic.com https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https: ws: wss:; frame-src 'self' https://js.stripe.com https://www.paypal.com https://www.youtube.com https://www.google.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'" },
+        ],
+      },
+      {
         // SVG icons — must be image/svg+xml (NOT text/xml or application/xml)
         source: '/:file(.*\\.svg)',
         headers: [

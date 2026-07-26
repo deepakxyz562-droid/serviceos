@@ -15,6 +15,8 @@ import {
   CircleDot, Paperclip, LinkIcon, Gauge,
   EyeOff, MoreVertical, TrendingUp, Target,
   MessageSquare, UserPlus, AlertCircle,
+  Camera, Video, MapPin, PenTool, Scan, Package,
+  Mic, Edit3, Calculator,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -42,10 +44,24 @@ import {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { authFetch } from '@/lib/api';
+import {
+  FIELD_TYPES as ENGINE_FIELD_TYPES,
+  type FormField as EngineFormField,
+  type FieldCondition,
+  type FieldCalculation,
+  type FieldScoring,
+  type FieldConfig,
+  createField as createEngineField,
+} from '@/lib/form-field-types';
+import { FieldRenderer } from '@/components/forms/field-renderer';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type FieldType = 'text' | 'email' | 'phone' | 'number' | 'select' | 'checkbox' | 'date' | 'textarea' | 'radio' | 'file' | 'url' | 'rating' | 'scale' | 'hidden';
+// Legacy field types (preserved for backwards-compat with existing forms)
+// PLUS the 15 new engine types from src/lib/form-field-types.ts.
+type LegacyFieldType = 'text' | 'email' | 'phone' | 'number' | 'select' | 'checkbox' | 'date' | 'textarea' | 'radio' | 'file' | 'url' | 'rating' | 'scale' | 'hidden';
+type EngineFieldType = (typeof ENGINE_FIELD_TYPES)[number]['value'];
+type FieldType = LegacyFieldType | EngineFieldType;
 
 interface FormField {
   id: string;
@@ -54,6 +70,12 @@ interface FormField {
   required: boolean;
   placeholder?: string;
   options?: string[];
+  // ─── New engine features (P5-forms) ──────────────────────────────────────
+  description?: string;
+  condition?: FieldCondition;
+  calculation?: FieldCalculation;
+  scoring?: FieldScoring;
+  config?: FieldConfig;
 }
 
 type FormType = 'lead_capture' | 'booking' | 'feedback' | 'survey' | 'quote_request' | 'job_request' | 'custom';
@@ -118,21 +140,38 @@ interface FormResponse {
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
-const FIELD_TYPES: { value: FieldType; label: string; icon: React.ElementType }[] = [
-  { value: 'text', label: 'Text', icon: Type },
-  { value: 'email', label: 'Email', icon: Mail },
-  { value: 'phone', label: 'Phone', icon: Phone },
-  { value: 'number', label: 'Number', icon: Hash },
-  { value: 'select', label: 'Select', icon: ChevronDown },
-  { value: 'checkbox', label: 'Checkbox', icon: CheckSquare },
-  { value: 'date', label: 'Date', icon: CalendarDays },
-  { value: 'textarea', label: 'Text Area', icon: AlignLeft },
-  { value: 'radio', label: 'Radio', icon: CircleDot },
-  { value: 'file', label: 'File Upload', icon: Paperclip },
-  { value: 'url', label: 'URL', icon: LinkIcon },
-  { value: 'rating', label: 'Rating', icon: Star },
-  { value: 'scale', label: 'Scale', icon: Gauge },
-  { value: 'hidden', label: 'Hidden', icon: EyeOff },
+const FIELD_TYPES: { value: FieldType; label: string; icon: React.ElementType; category: string }[] = [
+  // ─── Legacy types (preserved) ──────────────────────────────────────────
+  { value: 'text', label: 'Text', icon: Type, category: 'legacy' },
+  { value: 'email', label: 'Email', icon: Mail, category: 'legacy' },
+  { value: 'phone', label: 'Phone', icon: Phone, category: 'legacy' },
+  { value: 'number', label: 'Number', icon: Hash, category: 'legacy' },
+  { value: 'select', label: 'Select', icon: ChevronDown, category: 'legacy' },
+  { value: 'checkbox', label: 'Checkbox', icon: CheckSquare, category: 'legacy' },
+  { value: 'date', label: 'Date', icon: CalendarDays, category: 'legacy' },
+  { value: 'textarea', label: 'Text Area', icon: AlignLeft, category: 'legacy' },
+  { value: 'radio', label: 'Radio', icon: CircleDot, category: 'legacy' },
+  { value: 'file', label: 'File Upload', icon: Paperclip, category: 'legacy' },
+  { value: 'url', label: 'URL', icon: LinkIcon, category: 'legacy' },
+  { value: 'rating', label: 'Rating', icon: Star, category: 'legacy' },
+  { value: 'scale', label: 'Scale', icon: Gauge, category: 'legacy' },
+  { value: 'hidden', label: 'Hidden', icon: EyeOff, category: 'legacy' },
+  // ─── New engine types (P5-forms) — 'checkbox' already exists above so it's
+  //     intentionally omitted here to avoid duplicate Select entries. ────────
+  { value: 'short_answer', label: 'Short Answer', icon: Type, category: 'text' },
+  { value: 'long_answer', label: 'Long Answer', icon: AlignLeft, category: 'text' },
+  { value: 'dropdown', label: 'Dropdown', icon: ChevronDown, category: 'choice' },
+  { value: 'numerical', label: 'Number (Engine)', icon: Hash, category: 'text' },
+  { value: 'photo', label: 'Photo Upload', icon: Camera, category: 'media' },
+  { value: 'video', label: 'Video Upload', icon: Video, category: 'media' },
+  { value: 'gps', label: 'GPS Location', icon: MapPin, category: 'capture' },
+  { value: 'signature', label: 'Signature', icon: PenTool, category: 'capture' },
+  { value: 'barcode', label: 'Barcode Scan', icon: Scan, category: 'capture' },
+  { value: 'qr_scan', label: 'QR Code Scan', icon: QrCode, category: 'capture' },
+  { value: 'asset_selection', label: 'Asset Selection', icon: Package, category: 'reference' },
+  { value: 'ai_image_analysis', label: 'AI Image Analysis', icon: Sparkles, category: 'ai' },
+  { value: 'voice_note', label: 'Voice Note', icon: Mic, category: 'media' },
+  { value: 'drawing_markup', label: 'Drawing Markup', icon: Edit3, category: 'capture' },
 ];
 
 const FORM_TYPES: { value: FormType; label: string; color: string }[] = [
@@ -164,6 +203,13 @@ const CRM_FIELDS = [
 ];
 
 const VARIABLE_HINTS = '{{name}}, {{phone}}, {{service}}, {{message}}, {{email}}, {{date}}';
+
+// Set of the 15 engine field types from src/lib/form-field-types.ts.
+// Used to decide whether to delegate rendering to the new FieldRenderer.
+const ENGINE_TYPE_SET: ReadonlySet<string> = new Set(ENGINE_FIELD_TYPES.map(t => t.value));
+function isEngineFieldType(type: string): boolean {
+  return ENGINE_TYPE_SET.has(type);
+}
 
 // ─── Helper: Checkbox icon ──────────────────────────────────────────────────
 
@@ -466,6 +512,468 @@ function buildApiPayload(formData: {
   };
 }
 
+// ─── Engine Field Palette (P5-forms) ────────────────────────────────────────
+// Categorized palette of the 15 engine field types. Click to add to the form.
+
+const PALETTE_CATEGORIES: { id: string; label: string; types: EngineFieldType[] }[] = [
+  { id: 'text', label: 'Text & Numbers', types: ['short_answer', 'long_answer', 'numerical'] },
+  { id: 'choice', label: 'Choice', types: ['dropdown', 'checkbox'] },
+  { id: 'media', label: 'Media', types: ['photo', 'video', 'voice_note'] },
+  { id: 'capture', label: 'Capture', types: ['gps', 'signature', 'barcode', 'qr_scan', 'drawing_markup'] },
+  { id: 'reference', label: 'Reference', types: ['asset_selection'] },
+  { id: 'ai', label: 'AI', types: ['ai_image_analysis'] },
+];
+
+const PALETTE_ICON_MAP: Record<string, React.ElementType> = {
+  short_answer: Type,
+  long_answer: AlignLeft,
+  numerical: Hash,
+  dropdown: ChevronDown,
+  checkbox: CheckSquare,
+  photo: Camera,
+  video: Video,
+  voice_note: Mic,
+  gps: MapPin,
+  signature: PenTool,
+  barcode: Scan,
+  qr_scan: QrCode,
+  drawing_markup: Edit3,
+  asset_selection: Package,
+  ai_image_analysis: Sparkles,
+};
+
+function FieldPalette({ onAdd }: { onAdd: (type: EngineFieldType) => void }) {
+  return (
+    <div className="border rounded-lg p-3 bg-muted/30 space-y-2.5">
+      <div className="flex items-center gap-1.5">
+        <Sparkles className="size-3.5 text-emerald-600" />
+        <span className="text-xs font-semibold">Field Type Palette</span>
+        <span className="text-[10px] text-muted-foreground">— click to add</span>
+      </div>
+      <div className="space-y-2">
+        {PALETTE_CATEGORIES.map(cat => (
+          <div key={cat.id} className="space-y-1">
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{cat.label}</p>
+            <div className="flex flex-wrap gap-1.5">
+              {cat.types.map(type => {
+                const meta = ENGINE_FIELD_TYPES.find(t => t.value === type);
+                if (!meta) return null;
+                const Icon = PALETTE_ICON_MAP[type] || Type;
+                return (
+                  <Button
+                    key={type}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-[11px] gap-1"
+                    onClick={() => onAdd(type)}
+                    title={`Add ${meta.label} field`}
+                  >
+                    <Icon className="size-3" />
+                    {meta.label}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Field Editor Card ──────────────────────────────────────────────────────
+// One per field in the form. Renders the basic header (label, type, required,
+// remove) plus an expandable advanced-config section for description,
+// type-specific config, condition, calculation, and scoring.
+
+interface FieldEditorCardProps {
+  field: FormField;
+  index: number;
+  total: number;
+  allFields: FormField[];
+  onMove: (index: number, direction: 'up' | 'down') => void;
+  onChange: (key: keyof FormField, value: string | boolean | string[] | FieldCondition | FieldCalculation | FieldScoring | FieldConfig | undefined) => void;
+  onRemove: () => void;
+}
+
+function FieldEditorCard({ field, index, total, allFields, onMove, onChange, onRemove }: FieldEditorCardProps) {
+  const [expanded, setExpanded] = useState(false);
+
+  // Badges showing what's configured on this field.
+  const hasLogic = !!(field.condition || field.calculation || field.scoring);
+
+  return (
+    <div className="border rounded-lg bg-card overflow-hidden">
+      {/* ─── Header row ────────────────────────────────────────────────── */}
+      <div className="p-3 space-y-2">
+        <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-0.5">
+            <button className="p-0.5 hover:bg-muted rounded disabled:opacity-30" disabled={index === 0} onClick={() => onMove(index, 'up')}>
+              <ChevronUp className="size-3" />
+            </button>
+            <button className="p-0.5 hover:bg-muted rounded disabled:opacity-30" disabled={index === total - 1} onClick={() => onMove(index, 'down')}>
+              <ChevronDown className="size-3" />
+            </button>
+          </div>
+          <GripVertical className="size-4 text-muted-foreground shrink-0" />
+          <Input className="h-8 text-xs flex-1" placeholder="Field label" value={field.label} onChange={e => onChange('label', e.target.value)} />
+          <Select value={field.type} onValueChange={v => onChange('type', v as FieldType)}>
+            <SelectTrigger className="h-8 text-xs w-32"><SelectValue /></SelectTrigger>
+            <SelectContent className="max-h-72">
+              {FIELD_TYPES.map(t => <SelectItem key={`${t.value}-${t.label}`} value={t.value}>{t.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <div className="flex items-center gap-1 shrink-0">
+            <Switch checked={field.required} onCheckedChange={v => onChange('required', v)} />
+            <span className="text-[10px] text-muted-foreground">Req</span>
+          </div>
+          <Button variant="ghost" size="sm" className={cn('h-7 w-7 p-0 shrink-0', hasLogic ? 'text-emerald-600' : 'text-muted-foreground')} onClick={() => setExpanded(!expanded)} title="Configure advanced logic">
+            {expanded ? <ChevronUp className="size-3" /> : <SlidersHorizontal className="size-3" />}
+          </Button>
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0 text-red-500 hover:text-red-700" onClick={onRemove}>
+            <Trash2 className="size-3" />
+          </Button>
+        </div>
+        <div className="flex gap-2 pl-8">
+          <Input className="h-7 text-xs flex-1" placeholder="Placeholder text" value={field.placeholder || ''} onChange={e => onChange('placeholder', e.target.value)} />
+          {(field.type === 'select' || field.type === 'radio' || field.type === 'dropdown' || field.type === 'checkbox') && (
+            <Input
+              className="h-7 text-xs flex-1"
+              placeholder="Options (comma-separated)"
+              value={(field.options || field.config?.options || []).join(', ')}
+              onChange={e => {
+                const opts = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                onChange('options', opts);
+              }}
+            />
+          )}
+        </div>
+        {/* Quick logic badges */}
+        {hasLogic && (
+          <div className="flex flex-wrap gap-1 pl-8">
+            {field.condition && (
+              <Badge variant="outline" className="text-[9px] h-4 gap-0.5">
+                <EyeOff className="size-2.5" /> conditional
+              </Badge>
+            )}
+            {field.calculation && (
+              <Badge variant="outline" className="text-[9px] h-4 gap-0.5 bg-blue-50 text-blue-700 border-blue-200">
+                <Calculator className="size-2.5" /> calc
+              </Badge>
+            )}
+            {field.scoring && (
+              <Badge variant="outline" className="text-[9px] h-4 gap-0.5 bg-purple-50 text-purple-700 border-purple-200">
+                <Star className="size-2.5" /> scored (w={field.scoring.weight})
+              </Badge>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ─── Advanced config (collapsible) ─────────────────────────────── */}
+      {expanded && (
+        <div className="border-t bg-muted/20 p-3 space-y-3">
+          {/* Description */}
+          <div className="space-y-1">
+            <Label className="text-xs font-medium">Description / Helper Text</Label>
+            <Input
+              className="h-7 text-xs"
+              placeholder="Shown below the field label"
+              value={field.description || ''}
+              onChange={e => onChange('description', e.target.value)}
+            />
+          </div>
+
+          {/* Type-specific config */}
+          <FieldTypeConfig field={field} onChange={onChange} />
+
+          {/* Conditional logic */}
+          <FieldConditionConfig field={field} allFields={allFields} onChange={onChange} />
+
+          {/* Calculation */}
+          <FieldCalculationConfig field={field} allFields={allFields} onChange={onChange} />
+
+          {/* Scoring */}
+          <FieldScoringConfig field={field} onChange={onChange} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Type-specific config sub-component ─────────────────────────────────────
+
+function FieldTypeConfig({ field, onChange }: { field: FormField; onChange: FieldEditorCardProps['onChange'] }) {
+  const config = field.config || {};
+  const updateConfig = (patch: Partial<FieldConfig>) => {
+    onChange('config', { ...config, ...patch });
+  };
+
+  switch (field.type) {
+    case 'photo':
+      return (
+        <div className="space-y-2">
+          <Label className="text-xs font-medium">Photo Settings</Label>
+          <div className="flex items-center justify-between p-2 border rounded-md">
+            <div className="flex items-center gap-2">
+              <Switch id={`multi-${field.id}`} checked={config.multiple ?? false} onCheckedChange={v => updateConfig({ multiple: v })} />
+              <Label htmlFor={`multi-${field.id}`} className="text-xs cursor-pointer">Allow multiple photos</Label>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[10px] text-muted-foreground">Capture Mode</Label>
+            <Select value={config.captureMode || 'both'} onValueChange={v => updateConfig({ captureMode: v as 'camera' | 'upload' | 'both' })}>
+              <SelectTrigger className="h-7 text-xs w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="both">Camera + Upload</SelectItem>
+                <SelectItem value="camera">Camera Only</SelectItem>
+                <SelectItem value="upload">Upload Only</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      );
+    case 'video':
+      return (
+        <div className="space-y-1">
+          <Label className="text-xs font-medium">Video Settings</Label>
+          <Select value={config.captureMode || 'both'} onValueChange={v => updateConfig({ captureMode: v as 'camera' | 'upload' | 'both' })}>
+            <SelectTrigger className="h-7 text-xs w-full"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="both">Camera + Upload</SelectItem>
+              <SelectItem value="camera">Camera Only</SelectItem>
+              <SelectItem value="upload">Upload Only</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      );
+    case 'barcode':
+    case 'qr_scan':
+      return (
+        <div className="space-y-1">
+          <Label className="text-xs font-medium">Scan Formats</Label>
+          <Input
+            className="h-7 text-xs"
+            placeholder="qr, code128, ean13"
+            value={(config.scanFormats || []).join(', ')}
+            onChange={e => updateConfig({ scanFormats: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+          />
+          <p className="text-[10px] text-muted-foreground">Comma-separated list of supported barcode formats.</p>
+        </div>
+      );
+    case 'ai_image_analysis':
+      return (
+        <div className="space-y-1">
+          <Label className="text-xs font-medium">AI Analysis Prompt</Label>
+          <Textarea
+            className="text-xs"
+            rows={3}
+            placeholder="Custom instructions for the AI image analyzer..."
+            value={config.aiPrompt || ''}
+            onChange={e => updateConfig({ aiPrompt: e.target.value })}
+          />
+          <p className="text-[10px] text-muted-foreground">Sent to the VLM along with the uploaded image. Leave blank for the default field-service analysis prompt.</p>
+        </div>
+      );
+    case 'drawing_markup':
+      return (
+        <div className="space-y-2">
+          <Label className="text-xs font-medium">Drawing Markup Settings</Label>
+          <div className="flex items-center justify-between p-2 border rounded-md">
+            <div className="flex items-center gap-2">
+              <Switch
+                id={`draw-img-${field.id}`}
+                checked={config.drawOnImage ?? false}
+                onCheckedChange={v => updateConfig({ drawOnImage: v })}
+              />
+              <Label htmlFor={`draw-img-${field.id}`} className="text-xs cursor-pointer">Allow drawing on a base image</Label>
+            </div>
+          </div>
+          {config.drawOnImage && (
+            <Input
+              className="h-7 text-xs"
+              placeholder="Base image URL (https://...)"
+              value={config.baseImage || ''}
+              onChange={e => updateConfig({ baseImage: e.target.value })}
+            />
+          )}
+        </div>
+      );
+    case 'numerical':
+      return (
+        <div className="space-y-1">
+          <Label className="text-xs font-medium">Number Constraints</Label>
+          <div className="grid grid-cols-3 gap-2">
+            <Input className="h-7 text-xs" type="number" placeholder="Min" value={config.min ?? ''} onChange={e => updateConfig({ min: e.target.value === '' ? undefined : Number(e.target.value) })} />
+            <Input className="h-7 text-xs" type="number" placeholder="Max" value={config.max ?? ''} onChange={e => updateConfig({ max: e.target.value === '' ? undefined : Number(e.target.value) })} />
+            <Input className="h-7 text-xs" type="number" placeholder="Step" value={config.step ?? ''} onChange={e => updateConfig({ step: e.target.value === '' ? undefined : Number(e.target.value) })} />
+          </div>
+        </div>
+      );
+    default:
+      return null;
+  }
+}
+
+// ─── Condition config sub-component ─────────────────────────────────────────
+
+function FieldConditionConfig({ field, allFields, onChange }: { field: FormField; allFields: FormField[]; onChange: FieldEditorCardProps['onChange'] }) {
+  const cond = field.condition;
+  const enabled = !!cond;
+  const otherFields = allFields.filter(f => f.id !== field.id && f.label.trim());
+
+  const toggle = () => {
+    if (enabled) {
+      onChange('condition', undefined);
+    } else {
+      onChange('condition', { fieldId: otherFields[0]?.id || '', operator: 'equals', value: '' });
+    }
+  };
+
+  return (
+    <div className="space-y-2 border-t pt-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <EyeOff className="size-3.5 text-amber-600" />
+          <Label className="text-xs font-semibold">Conditional Display</Label>
+        </div>
+        <Switch checked={enabled} onCheckedChange={toggle} />
+      </div>
+      {enabled && cond && (
+        <div className="space-y-1.5">
+          <p className="text-[10px] text-muted-foreground">Show this field only when the following condition is true:</p>
+          <div className="grid grid-cols-12 gap-1.5">
+            <Select value={cond.fieldId} onValueChange={v => onChange('condition', { ...cond, fieldId: v })}>
+              <SelectTrigger className="h-7 text-xs col-span-5"><SelectValue placeholder="Select field" /></SelectTrigger>
+              <SelectContent>
+                {otherFields.map(f => <SelectItem key={f.id} value={f.id}>{f.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={cond.operator} onValueChange={v => onChange('condition', { ...cond, operator: v as FieldCondition['operator'] })}>
+              <SelectTrigger className="h-7 text-xs col-span-3"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="equals">equals</SelectItem>
+                <SelectItem value="not_equals">not equals</SelectItem>
+                <SelectItem value="contains">contains</SelectItem>
+                <SelectItem value="greater_than">&gt;</SelectItem>
+                <SelectItem value="less_than">&lt;</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input
+              className="h-7 text-xs col-span-4"
+              placeholder="Value"
+              value={String(cond.value)}
+              onChange={e => onChange('condition', { ...cond, value: e.target.value })}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Calculation config sub-component ───────────────────────────────────────
+
+function FieldCalculationConfig({ field, allFields, onChange }: { field: FormField; allFields: FormField[]; onChange: FieldEditorCardProps['onChange'] }) {
+  const calc = field.calculation;
+  const enabled = !!calc;
+  const otherFields = allFields.filter(f => f.id !== field.id && f.label.trim());
+
+  const toggle = () => {
+    if (enabled) {
+      onChange('calculation', undefined);
+    } else {
+      onChange('calculation', { formula: '', resultFieldId: field.id });
+    }
+  };
+
+  return (
+    <div className="space-y-2 border-t pt-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <Calculator className="size-3.5 text-blue-600" />
+          <Label className="text-xs font-semibold">Auto-Calculation</Label>
+        </div>
+        <Switch checked={enabled} onCheckedChange={toggle} />
+      </div>
+      {enabled && calc && (
+        <div className="space-y-1.5">
+          <p className="text-[10px] text-muted-foreground">
+            Use <code className="text-[10px] bg-muted px-1 rounded">{'{{field_id}}'}</code> tokens to reference other fields. Only basic arithmetic (+ − × ÷) is supported.
+          </p>
+          <Input
+            className="h-7 text-xs font-mono"
+            placeholder="{{field_a}} * {{field_b}}"
+            value={calc.formula}
+            onChange={e => onChange('calculation', { ...calc, formula: e.target.value })}
+          />
+          <div className="flex flex-wrap gap-1">
+            <span className="text-[10px] text-muted-foreground self-center">Insert:</span>
+            {otherFields.slice(0, 6).map(f => (
+              <button
+                key={f.id}
+                type="button"
+                className="text-[10px] px-1.5 py-0.5 rounded border bg-card hover:bg-muted font-mono"
+                onClick={() => onChange('calculation', { ...calc, formula: `${calc.formula}{{${f.id}}}`.trim() })}
+                title={f.label}
+              >
+                {f.label.slice(0, 14)}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Scoring config sub-component ───────────────────────────────────────────
+
+function FieldScoringConfig({ field, onChange }: { field: FormField; onChange: FieldEditorCardProps['onChange'] }) {
+  const sc = field.scoring;
+  const enabled = !!sc;
+
+  const toggle = () => {
+    if (enabled) {
+      onChange('scoring', undefined);
+    } else {
+      onChange('scoring', { maxScore: 5, weight: 1 });
+    }
+  };
+
+  return (
+    <div className="space-y-2 border-t pt-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <Star className="size-3.5 text-purple-600" />
+          <Label className="text-xs font-semibold">Auto-Scoring</Label>
+        </div>
+        <Switch checked={enabled} onCheckedChange={toggle} />
+      </div>
+      {enabled && sc && (
+        <div className="space-y-1.5">
+          <p className="text-[10px] text-muted-foreground">Configure how this field is scored after submission.</p>
+          <div className="grid grid-cols-3 gap-1.5">
+            <div className="space-y-0.5">
+              <Label className="text-[10px] text-muted-foreground">Max Score</Label>
+              <Input className="h-7 text-xs" type="number" min={1} value={sc.maxScore} onChange={e => onChange('scoring', { ...sc, maxScore: Number(e.target.value) || 1 })} />
+            </div>
+            <div className="space-y-0.5">
+              <Label className="text-[10px] text-muted-foreground">Weight</Label>
+              <Input className="h-7 text-xs" type="number" step="0.1" min={0} value={sc.weight} onChange={e => onChange('scoring', { ...sc, weight: Number(e.target.value) || 0 })} />
+            </div>
+            <div className="space-y-0.5">
+              <Label className="text-[10px] text-muted-foreground">Pass Threshold</Label>
+              <Input className="h-7 text-xs" type="number" min={0} placeholder="—" value={sc.passThreshold ?? ''} onChange={e => onChange('scoring', { ...sc, passThreshold: e.target.value === '' ? undefined : Number(e.target.value) })} />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function FormBuilderView() {
   const [forms, setForms] = useState<FormItem[]>([]);
   const [formsLoading, setFormsLoading] = useState(true);
@@ -666,11 +1174,31 @@ export function FormBuilderView() {
     }));
   };
 
-  const updateField = (id: string, key: keyof FormField, value: string | boolean | string[]) => {
+  const updateField = (id: string, key: keyof FormField, value: string | boolean | string[] | FieldCondition | FieldCalculation | FieldScoring | FieldConfig | undefined) => {
     setFormData(prev => ({
       ...prev,
       fields: prev.fields.map(f => f.id === id ? { ...f, [key]: value } : f),
     }));
+  };
+
+  /** Add a new field of any of the 15 engine types from the palette. */
+  const addEngineField = (type: EngineFieldType) => {
+    const tpl = createEngineField(type);
+    // Coerce to the local FormField shape (engine fields are a superset).
+    const newField: FormField = {
+      id: tpl.id,
+      type: tpl.type as FieldType,
+      label: tpl.label,
+      required: tpl.required ?? false,
+      placeholder: tpl.placeholder,
+      options: tpl.options,
+      description: tpl.description,
+      condition: tpl.condition,
+      calculation: tpl.calculation,
+      scoring: tpl.scoring,
+      config: tpl.config,
+    };
+    setFormData(prev => ({ ...prev, fields: [...prev.fields, newField] }));
   };
 
   const moveField = (index: number, direction: 'up' | 'down') => {
@@ -1080,57 +1608,35 @@ export function FormBuilderView() {
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-medium">Form Fields</Label>
                   <Button variant="outline" size="sm" className="h-7 text-xs" onClick={addField}>
-                    <Plus className="size-3 mr-1" /> Add Field
+                    <Plus className="size-3 mr-1" /> Add Blank Field
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">Add and configure the fields for your form. Drag the grip handle to reorder.</p>
+                <p className="text-xs text-muted-foreground">
+                  Add fields from the palette below, or click &ldquo;Add Blank Field&rdquo; for a legacy text field.
+                  Use the grip handle to reorder, the gear icon to configure advanced logic.
+                </p>
+
+                {/* ─── Engine field palette ───────────────────────────────── */}
+                <FieldPalette onAdd={addEngineField} />
 
                 {formData.fields.length === 0 && (
                   <div className="text-center py-8 border-2 border-dashed rounded-lg">
                     <FileInput className="size-8 mx-auto text-muted-foreground/50 mb-2" />
-                    <p className="text-sm text-muted-foreground">No fields yet. Click &quot;Add Field&quot; to get started.</p>
+                    <p className="text-sm text-muted-foreground">No fields yet. Pick a field type from the palette above.</p>
                   </div>
                 )}
 
                 {formData.fields.map((field, idx) => (
-                  <div key={field.id} className="border rounded-lg p-3 space-y-2 bg-card">
-                    <div className="flex items-center gap-2">
-                      <div className="flex flex-col gap-0.5">
-                        <button className="p-0.5 hover:bg-muted rounded disabled:opacity-30" disabled={idx === 0} onClick={() => moveField(idx, 'up')}>
-                          <ChevronUp className="size-3" />
-                        </button>
-                        <button className="p-0.5 hover:bg-muted rounded disabled:opacity-30" disabled={idx === formData.fields.length - 1} onClick={() => moveField(idx, 'down')}>
-                          <ChevronDown className="size-3" />
-                        </button>
-                      </div>
-                      <GripVertical className="size-4 text-muted-foreground shrink-0" />
-                      <Input className="h-8 text-xs flex-1" placeholder="Field label" value={field.label} onChange={e => updateField(field.id, 'label', e.target.value)} />
-                      <Select value={field.type} onValueChange={v => updateField(field.id, 'type', v as FieldType)}>
-                        <SelectTrigger className="h-8 text-xs w-28"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {FIELD_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Switch checked={field.required} onCheckedChange={v => updateField(field.id, 'required', v)} />
-                        <span className="text-[10px] text-muted-foreground">Req</span>
-                      </div>
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 shrink-0 text-red-500 hover:text-red-700" onClick={() => removeField(field.id)}>
-                        <Trash2 className="size-3" />
-                      </Button>
-                    </div>
-                    <div className="flex gap-2 pl-8">
-                      <Input className="h-7 text-xs flex-1" placeholder="Placeholder text" value={field.placeholder || ''} onChange={e => updateField(field.id, 'placeholder', e.target.value)} />
-                      {(field.type === 'select' || field.type === 'radio') && (
-                        <Input
-                          className="h-7 text-xs flex-1"
-                          placeholder="Options (comma-separated)"
-                          value={(field.options || []).join(', ')}
-                          onChange={e => updateField(field.id, 'options', e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
-                        />
-                      )}
-                    </div>
-                  </div>
+                  <FieldEditorCard
+                    key={field.id}
+                    field={field}
+                    index={idx}
+                    total={formData.fields.length}
+                    allFields={formData.fields}
+                    onMove={moveField}
+                    onChange={(key, value) => updateField(field.id, key, value)}
+                    onRemove={() => removeField(field.id)}
+                  />
                 ))}
               </TabsContent>
 
@@ -1782,51 +2288,68 @@ export function FormBuilderView() {
 
               {/* Fields */}
               <div className="space-y-3">
-                {selectedForm.fields.map(field => (
-                  <div key={field.id} className="space-y-1">
-                    <Label className="text-xs">
-                      {field.label} {field.required && <span className="text-red-500">*</span>}
-                    </Label>
-                    {field.type === 'select' ? (
-                      <Select>
-                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={`Select ${field.label}`} /></SelectTrigger>
-                        <SelectContent>
-                          {(field.options || []).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    ) : field.type === 'checkbox' ? (
-                      <div className="flex items-center gap-2"><Checkbox /><span className="text-xs">Yes</span></div>
-                    ) : field.type === 'textarea' ? (
-                      <Textarea className="text-xs" rows={2} placeholder={field.placeholder || field.label} />
-                    ) : field.type === 'radio' ? (
-                      <RadioGroup className="flex gap-2">
-                        {(field.options || ['Option 1', 'Option 2']).map(o => (
-                          <div key={o} className="flex items-center gap-1.5">
-                            <RadioGroupItem value={o} /><Label className="text-xs">{o}</Label>
-                          </div>
-                        ))}
-                      </RadioGroup>
-                    ) : field.type === 'rating' ? (
-                      <div className="flex gap-1">
-                        {[1, 2, 3, 4, 5].map(i => (
-                          <Star key={i} className="size-5 text-amber-400 cursor-pointer" />
-                        ))}
-                      </div>
-                    ) : field.type === 'scale' ? (
-                      <div className="flex items-center gap-2">
-                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => (
-                          <button key={i} className="size-7 rounded border text-xs hover:bg-emerald-50">{i}</button>
-                        ))}
-                      </div>
-                    ) : (
-                      <Input
-                        className="h-8 text-xs"
-                        type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : field.type === 'email' ? 'email' : field.type === 'phone' ? 'tel' : field.type === 'url' ? 'url' : 'text'}
-                        placeholder={field.placeholder || field.label}
+                {selectedForm.fields.map(field => {
+                  // For the new engine field types, delegate to the
+                  // FieldRenderer which knows how to render all 15 types.
+                  if (isEngineFieldType(field.type)) {
+                    return (
+                      <FieldRenderer
+                        key={field.id}
+                        field={field as EngineFormField}
+                        value={undefined}
+                        onChange={() => { /* preview-only */ }}
+                        compact
+                        readOnly
                       />
-                    )}
-                  </div>
-                ))}
+                    );
+                  }
+                  // Legacy field types — keep the original inline render.
+                  return (
+                    <div key={field.id} className="space-y-1">
+                      <Label className="text-xs">
+                        {field.label} {field.required && <span className="text-red-500">*</span>}
+                      </Label>
+                      {field.type === 'select' ? (
+                        <Select>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={`Select ${field.label}`} /></SelectTrigger>
+                          <SelectContent>
+                            {(field.options || []).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      ) : field.type === 'checkbox' ? (
+                        <div className="flex items-center gap-2"><Checkbox /><span className="text-xs">Yes</span></div>
+                      ) : field.type === 'textarea' ? (
+                        <Textarea className="text-xs" rows={2} placeholder={field.placeholder || field.label} />
+                      ) : field.type === 'radio' ? (
+                        <RadioGroup className="flex gap-2">
+                          {(field.options || ['Option 1', 'Option 2']).map(o => (
+                            <div key={o} className="flex items-center gap-1.5">
+                              <RadioGroupItem value={o} /><Label className="text-xs">{o}</Label>
+                            </div>
+                          ))}
+                        </RadioGroup>
+                      ) : field.type === 'rating' ? (
+                        <div className="flex gap-1">
+                          {[1, 2, 3, 4, 5].map(i => (
+                            <Star key={i} className="size-5 text-amber-400 cursor-pointer" />
+                          ))}
+                        </div>
+                      ) : field.type === 'scale' ? (
+                        <div className="flex items-center gap-2">
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => (
+                            <button key={i} className="size-7 rounded border text-xs hover:bg-emerald-50">{i}</button>
+                          ))}
+                        </div>
+                      ) : (
+                        <Input
+                          className="h-8 text-xs"
+                          type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : field.type === 'email' ? 'email' : field.type === 'phone' ? 'tel' : field.type === 'url' ? 'url' : 'text'}
+                          placeholder={field.placeholder || field.label}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="flex gap-2">

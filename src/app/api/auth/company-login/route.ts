@@ -5,6 +5,7 @@ import {
   generateToken,
   COOKIE_OPTIONS,
 } from '@/lib/auth';
+import { authLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 
 /**
  * POST /api/auth/company-login
@@ -29,6 +30,9 @@ import {
  * On success: sets the serviceos_session http-only cookie + returns { user, tenant }.
  */
 export async function POST(request: NextRequest) {
+  const rateLimited = applyRateLimit(authLimiter, request);
+  if (rateLimited) return rateLimitResponse(rateLimited.resetAtMs);
+
   try {
     const body = await request.json();
     const { slug, email, password, role } = body;

@@ -104,7 +104,7 @@ function expandRepeatDates(
  * GET /api/jobs/[id]/visits
  * List all visits for a job, ordered by scheduledDate asc.
  *
- * Query: status (optional filter)
+ * Query: status (optional filter), visitType (optional filter)
  */
 export async function GET(
   request: NextRequest,
@@ -122,9 +122,11 @@ export async function GET(
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
+    const visitType = searchParams.get('visitType');
 
     const where: Record<string, unknown> = { jobId };
     if (status && status !== 'all') where.status = status;
+    if (visitType && visitType !== 'all') where.visitType = visitType;
 
     const visits = await db.jobVisit.findMany({
       where,
@@ -149,7 +151,9 @@ export async function GET(
  * Body:
  *   title, instructions, scheduledDate, endDate?, scheduledTime?, endTime?,
  *   anytime, scheduleLater, repeats, repeatInterval, repeatWeekdays, repeatUntil,
- *   assigneeIds[], emailTeam, teamReminder, checklistIds[]
+ *   assigneeIds[], emailTeam, teamReminder, checklistIds[],
+ *   visitType (visit | inspection | installation | maintenance | repair |
+ *              emergency | warranty | follow_up | quality_inspection | training)
  *
  * Returns: { visits: JobVisit[], created: number }
  */
@@ -185,7 +189,26 @@ export async function POST(
       emailTeam = false,
       teamReminder = 'none',
       checklistIds = [],
+      visitType = 'visit',
     } = body;
+
+    // Validate visitType against the schema-allowed enum set.
+    const ALLOWED_VISIT_TYPES = [
+      'visit',
+      'inspection',
+      'installation',
+      'maintenance',
+      'repair',
+      'emergency',
+      'warranty',
+      'follow_up',
+      'quality_inspection',
+      'training',
+    ];
+    const resolvedVisitType =
+      typeof visitType === 'string' && ALLOWED_VISIT_TYPES.includes(visitType)
+        ? visitType
+        : 'visit';
 
     if (!scheduledDate && !scheduleLater) {
       return NextResponse.json({ error: 'scheduledDate is required (or set scheduleLater)' }, { status: 400 });
@@ -244,6 +267,7 @@ export async function POST(
       tenantId,
       jobId,
       title: String(title || '').trim() || `${job.customerName || job.title || 'Visit'} - Visit ${baseVisitNumber + idx}`,
+      visitType: resolvedVisitType,
       instructions: instructions ? String(instructions).trim() : null,
       scheduledDate: occDate,
       endDate: endDateParsed,

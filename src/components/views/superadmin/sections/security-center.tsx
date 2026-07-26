@@ -3,10 +3,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // Security Center — failed logins, IP blocking, sessions, API keys, webhook
 // logs, GDPR/SOC2 compliance. Datadog + Stripe security dashboard aesthetics.
-// All data is demo/mock — see DemoDataPill in the header.
+// Live data: failed-logins + blocked-IPs + KPIs #1/#2 are fetched from
+// /api/superadmin/security-events (SecurityEvent table). API keys / webhook
+// logs / compliance are still demo (no API yet). Falls back to DEMO_* on error.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useSyncExternalStore } from 'react';
+import { useState, useEffect, useSyncExternalStore } from 'react';
 import {
   ShieldCheck,
   AlertTriangle,
@@ -51,7 +53,7 @@ interface SecurityKpi {
   sub: string;
 }
 
-const SECURITY_KPIS: SecurityKpi[] = [
+const DEMO_SECURITY_KPIS: SecurityKpi[] = [
   { label: 'Failed Logins (24h)', value: '142', icon: AlertTriangle, trend: 18, color: 'red', sub: 'vs yesterday' },
   { label: 'Blocked IPs', value: '23', icon: Ban, trend: 5, color: 'amber', sub: 'active rules' },
   { label: 'Active Sessions', value: '543', icon: Monitor, trend: 12, color: 'sky', sub: 'across all tenants' },
@@ -66,7 +68,7 @@ interface FailedLogin {
   status: 'blocked' | 'throttled' | 'allowed';
 }
 
-const FAILED_LOGINS: FailedLogin[] = [
+const DEMO_FAILED_LOGINS: FailedLogin[] = [
   { email: 'admin@unknown.io', ip: '185.234.12.7', reason: 'Invalid password (×6)', minsAgo: 2, status: 'blocked' },
   { email: 'root@aquaflow.io', ip: '45.146.165.37', reason: 'Unknown device', minsAgo: 6, status: 'throttled' },
   { email: 'test@bloom.beauty', ip: '193.27.228.184', reason: 'Invalid 2FA code', minsAgo: 12, status: 'allowed' },
@@ -81,7 +83,7 @@ interface BlockedIp {
   blockedMinsAgo: number;
 }
 
-const BLOCKED_IPS: BlockedIp[] = [
+const DEMO_BLOCKED_IPS: BlockedIp[] = [
   { ip: '185.234.12.7', reason: 'Brute force', blockedMinsAgo: 8 },
   { ip: '94.232.46.214', reason: 'Brute force', blockedMinsAgo: 41 },
   { ip: '45.146.165.37', reason: 'Credential stuffing', blockedMinsAgo: 73 },
@@ -189,6 +191,86 @@ function complianceStatusMeta(status: ComplianceItem['status']): {
 
 export function SecurityCenterSection() {
   const mounted = useIsClient();
+  const [kpis, setKpis] = useState<SecurityKpi[]>(DEMO_SECURITY_KPIS);
+  const [failedLogins, setFailedLogins] = useState<FailedLogin[]>(DEMO_FAILED_LOGINS);
+  const [blockedIps, setBlockedIps] = useState<BlockedIp[]>(DEMO_BLOCKED_IPS);
+  const [isLiveData, setIsLiveData] = useState(false);
+
+  // Fetch real SecurityEvent rows from /api/superadmin/security-events.
+  // Superadmin-only — 401/403 silently falls back to DEMO_* so non-superadmin
+  // users still see a populated UI. Maps events → FailedLogin rows (when
+  // eventType matches /login|auth|password|2fa|otp/i) and → distinct BlockedIp
+  // rows (when severity is critical/high OR eventType matches a block-ish verb).
+  // KPIs #3 (Active Sessions) and #4 (API Keys Issued) stay as demo — no API yet.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/superadmin/security-events?limit=100', { credentials: 'include' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const events: any[] = Array.isArray(data) ? data : (data.events || []);
+        const now = Date.now();
+        const dayAgo = now - 24 * 60 * 60 * 1000;
+        const isLoginEvent = (et: string) => /login|auth|password|2fa|otp/i.test(et || '');
+        const isBlockEvent = (et: string, sev: string) =>
+          /block|suspend|ban|deny|throttle|rate/i.test(et || '') || ['critical', 'high'].includes((sev || '').toLowerCase());
+
+        // Map security events → FailedLogin rows
+        const realFailedLogins: FailedLogin[] = events
+          .filter((e: any) => isLoginEvent(String(e?.eventType || '')))
+          .map((e: any) => {
+            const meta = (e.metadata && typeof e.metadata === 'object') ? e.metadata : {};
+            const sev = String(e.severity || 'info').toLowerCase();
+            const minsAgo = e.createdAt ? Math.max(0, Math.floor((now - new Date(e.createdAt).getTime()) / 60_000)) : 0;
+            return {
+              email: String(meta.email || meta.userId || 'unknown'),
+              ip: String(e.ip || 'unknown'),
+              reason: String(e.eventType || 'Security event').replace(/[._-]+/g, ' '),
+              minsAgo,
+              status: sev === 'critical' ? 'blocked' : sev === 'high' || sev === 'warning' ? 'throttled' : 'allowed',
+            } satisfies FailedLogin;
+          });
+
+        // Map security events → distinct BlockedIp rows
+        const seenIps = new Set<string>();
+        const realBlockedIps: BlockedIp[] = [];
+        for (const e of events) {
+          const ip = String(e?.ip || '').trim();
+          if (!ip || ip === 'unknown' || seenIps.has(ip)) continue;
+          if (!isBlockEvent(String(e?.eventType || ''), String(e?.severity || ''))) continue;
+          seenIps.add(ip);
+          realBlockedIps.push({
+            ip,
+            reason: String(e?.eventType || 'security event').replace(/[._-]+/g, ' '),
+            blockedMinsAgo: e?.createdAt ? Math.max(0, Math.floor((now - new Date(e.createdAt).getTime()) / 60_000)) : 0,
+          });
+        }
+
+        // Recompute KPIs #1 (Failed Logins 24h) and #2 (Blocked IPs) from real data.
+        const failedLogin24h = events.filter((e: any) =>
+          isLoginEvent(String(e?.eventType || '')) && e?.createdAt && new Date(e.createdAt).getTime() >= dayAgo,
+        ).length;
+        const blockedIpCount = realBlockedIps.length;
+        const realKpis: SecurityKpi[] = DEMO_SECURITY_KPIS.map((k, i) =>
+          i === 0 ? { ...k, value: String(failedLogin24h), sub: 'last 24h (live)', trend: 0 }
+          : i === 1 ? { ...k, value: String(blockedIpCount), sub: 'from security events', trend: 0 }
+          : k,
+        );
+
+        if (!cancelled) {
+          setKpis(realKpis);
+          if (realFailedLogins.length > 0) setFailedLogins(realFailedLogins);
+          if (realBlockedIps.length > 0) setBlockedIps(realBlockedIps);
+          setIsLiveData(true);
+        }
+      } catch (err) {
+        // Silent fallback to DEMO_* — UI still works for non-superadmins.
+        console.warn('[security-center] Failed to load live data, using demo:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const handleUnblockIp = (ip: string) => {
     toast.success(`IP ${ip} unblocked`);
@@ -208,12 +290,12 @@ export function SecurityCenterSection() {
         title="Security Center"
         description="Failed logins, IP blocking, sessions, API keys, webhook logs, GDPR/SOC2 compliance."
         icon={ShieldCheck}
-        actions={<DemoDataPill />}
+        actions={<DemoDataPill live={isLiveData} />}
       />
 
       {/* ─── Row 1 — KPIs ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {SECURITY_KPIS.map((k) => (
+        {kpis.map((k) => (
           <KpiCard
             key={k.label}
             label={k.label}
@@ -247,7 +329,7 @@ export function SecurityCenterSection() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {FAILED_LOGINS.map((row) => (
+                  {failedLogins.map((row) => (
                     <TableRow key={`${row.email}-${row.minsAgo}`}>
                       <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                         {mounted ? timeAgo(isoMinutesAgo(row.minsAgo)) : '—'}
@@ -292,7 +374,7 @@ export function SecurityCenterSection() {
             </div>
           </CardHeader>
           <CardContent className="pt-2 space-y-2">
-            {BLOCKED_IPS.map((b) => (
+            {blockedIps.map((b) => (
               <div
                 key={b.ip}
                 className="flex items-center justify-between gap-2 rounded-lg border border-border p-3"

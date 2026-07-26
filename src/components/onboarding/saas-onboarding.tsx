@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -8,12 +8,28 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Progress } from '@/components/ui/progress';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -33,8 +49,27 @@ import {
   LayoutDashboard,
   Loader2,
   Check,
+  Briefcase,
+  MapPin,
+  Clock,
+  Wrench,
+  DollarSign,
+  Users,
+  ShieldCheck,
+  Languages,
+  Store,
+  Plus,
+  X,
+  ExternalLink,
+  RefreshCw,
 } from 'lucide-react';
 import { PayPalCheckoutDialog, type PaypalCheckoutPlan } from '@/components/billing/paypal-checkout-dialog';
+import {
+  INDUSTRY_CATALOG,
+  VERTICALS,
+  getIndustriesByVertical,
+  type Industry,
+} from '@/lib/industry-catalog';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -63,17 +98,74 @@ interface Step3Data {
   startMode: 'trial' | 'pay';
 }
 
+// ── Phase-3 Business Profile step ────────────────────────────────────────────
+// Captures all the marketplace-eligibility fields needed for a tenant to
+// receive public marketplace leads: categories, coverage area, hours, pricing,
+// insurance, credentials, languages, marketplace opt-in, Stripe Connect.
+type PricingType = 'fixed' | 'hourly' | 'starting_from' | 'custom_quote' | 'mixed';
+
+interface DayHours {
+  open: string;   // "09:00" — 24h HH:MM
+  close: string;  // "17:00"
+  byAppointment: boolean; // when true, open/close are ignored
+  closed: boolean;         // when true, not operating that day
+}
+
+interface Step2Data {
+  // Categories (multi-select from 25 industries grouped by 9 verticals)
+  businessCategories: string[]; // industry IDs from INDUSTRY_CATALOG
+  // Coverage area — postcodes or city names (free-form tag input)
+  coverageAreas: string[];
+  coverageAreaInput: string;
+  // Business hours — mon-sun, or "by appointment" globally
+  businessHours: Record<string, DayHours>;
+  byAppointmentOnly: boolean;
+  // Emergency service toggle
+  emergencyServiceAvailable: boolean;
+  // Pricing
+  pricingType: PricingType | '';
+  callOutFee: string;       // number-as-string for input control
+  travelFeePerKm: string;
+  emergencySurchargePct: string;
+  weekendSurchargePct: string;
+  // Operations
+  employeesCount: string;
+  // Insurance
+  insuranceProvider: string;
+  insurancePolicyNumber: string;
+  insuranceExpiryDate: string; // ISO date string (yyyy-mm-dd)
+  // Credentials
+  licenceNumber: string;
+  vatNumber: string;
+  // Languages spoken (multi-select from preset list)
+  languages: string[];
+  // Marketplace opt-in
+  marketplaceOptIn: boolean;
+  marketplaceTermsAccepted: boolean;
+  // Stripe Connect — tracked locally; source-of-truth is the backend
+  stripeConnected: boolean;
+  stripeStatusLoading: boolean;
+  // Profile completion — populated after PATCH save
+  profileCompletionPct: number;
+  // Validation errors keyed by field id
+  errors: Record<string, string>;
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-// WhatsApp onboarding step has been REMOVED. Users can configure WhatsApp
-// later from Settings → WhatsApp. The wizard is now 3 steps:
-//   1. Your Business  →  2. Choose Your Plan  →  3. All Set!
+// 4-step wizard (phase-3 adds the "Business Profile" step at #2, pushing the
+// existing plan + completion steps down):
+//   1. Your Business    → basic identity (name, industry, address)
+//   2. Business Profile → rich marketplace-eligibility data (this phase)
+//   3. Choose Your Plan → subscription / trial
+//   4. All Set!         → completion + quick actions
 const STEPS = [
   { id: 1, label: 'Your Business', icon: Building2 },
-  { id: 2, label: 'Choose Your Plan', icon: CreditCard },
-  { id: 3, label: 'All Set!', icon: CheckCircle2 },
+  { id: 2, label: 'Business Profile', icon: Briefcase },
+  { id: 3, label: 'Choose Your Plan', icon: CreditCard },
+  { id: 4, label: 'All Set!', icon: CheckCircle2 },
 ] as const;
 
 const INDUSTRIES = [
@@ -130,6 +222,61 @@ const PLANS = [
   },
 ] as const;
 
+// ── Phase-3 Business Profile: pricing + language + day presets ───────────────
+const PRICING_TYPE_OPTIONS: { value: PricingType; label: string; hint: string }[] = [
+  { value: 'fixed', label: 'Fixed Price', hint: 'Same price for every job' },
+  { value: 'hourly', label: 'Hourly Rate', hint: 'Billed by the hour' },
+  { value: 'starting_from', label: 'Starting From', hint: 'Base price — final quote varies' },
+  { value: 'custom_quote', label: 'Custom Quote', hint: 'Each job quoted individually' },
+  { value: 'mixed', label: 'Mixed', hint: 'Combination of the above' },
+];
+
+const LANGUAGE_OPTIONS: { code: string; label: string }[] = [
+  { code: 'en', label: 'English' },
+  { code: 'es', label: 'Spanish' },
+  { code: 'fr', label: 'French' },
+  { code: 'de', label: 'German' },
+  { code: 'hi', label: 'Hindi' },
+  { code: 'ar', label: 'Arabic' },
+  { code: 'zh', label: 'Chinese' },
+  { code: 'pt', label: 'Portuguese' },
+  { code: 'ru', label: 'Russian' },
+  { code: 'ja', label: 'Japanese' },
+  { code: 'it', label: 'Italian' },
+  { code: 'nl', label: 'Dutch' },
+  { code: 'ko', label: 'Korean' },
+  { code: 'tr', label: 'Turkish' },
+  { code: 'pl', label: 'Polish' },
+  { code: 'ur', label: 'Urdu' },
+  { code: 'bn', label: 'Bengali' },
+  { code: 'pa', label: 'Punjabi' },
+];
+
+const DAYS_OF_WEEK: { key: string; label: string }[] = [
+  { key: 'mon', label: 'Monday' },
+  { key: 'tue', label: 'Tuesday' },
+  { key: 'wed', label: 'Wednesday' },
+  { key: 'thu', label: 'Thursday' },
+  { key: 'fri', label: 'Friday' },
+  { key: 'sat', label: 'Saturday' },
+  { key: 'sun', label: 'Sunday' },
+];
+
+/** Default business hours: 9-5 Mon-Fri, closed Sat/Sun. */
+const DEFAULT_BUSINESS_HOURS: Record<string, DayHours> = DAYS_OF_WEEK.reduce(
+  (acc, day) => {
+    const isWeekend = day.key === 'sat' || day.key === 'sun';
+    acc[day.key] = {
+      open: '09:00',
+      close: '17:00',
+      byAppointment: false,
+      closed: isWeekend,
+    };
+    return acc;
+  },
+  {} as Record<string, DayHours>,
+);
+
 // ---------------------------------------------------------------------------
 // Animation variants
 // ---------------------------------------------------------------------------
@@ -153,6 +300,112 @@ const slideVariants = {
 // Component
 // ---------------------------------------------------------------------------
 
+/**
+ * Initialize step-2 state from an existing tenant object. Lets the user
+ * resume onboarding mid-flight without losing their previously-saved
+ * marketplace-eligibility data.
+ */
+function initializeStep2(tenant: any): Step2Data {
+  // Parse the JSON columns defensively — they may be missing/malformed on a
+  // fresh tenant that hasn't been through step 2 yet.
+  const parseArr = (raw: unknown): string[] => {
+    if (Array.isArray(raw)) return raw as string[];
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  };
+
+  const parseHours = (raw: unknown): Record<string, DayHours> => {
+    let obj: Record<string, unknown> = {};
+    if (typeof raw === 'string') {
+      try {
+        obj = JSON.parse(raw) || {};
+      } catch {
+        obj = {};
+      }
+    } else if (raw && typeof raw === 'object') {
+      obj = raw as Record<string, unknown>;
+    }
+    // If the tenant previously chose "by appointment only", the JSON is
+    // { byAppointmentOnly: true }. Detect that + fall back to defaults.
+    if (obj?.byAppointmentOnly === true) {
+      return { ...DEFAULT_BUSINESS_HOURS };
+    }
+    // Merge any saved per-day entries over the defaults so missing days
+    // still have sensible open/close values.
+    const merged: Record<string, DayHours> = { ...DEFAULT_BUSINESS_HOURS };
+    for (const day of DAYS_OF_WEEK) {
+      const saved = obj[day.key] as Partial<DayHours> | undefined;
+      if (saved && typeof saved === 'object') {
+        merged[day.key] = {
+          open: saved.open || '09:00',
+          close: saved.close || '17:00',
+          byAppointment: !!saved.byAppointment,
+          closed: !!saved.closed,
+        };
+      }
+    }
+    return merged;
+  };
+
+  const categories = parseArr(tenant?.businessCategoriesJson);
+  const languages = parseArr(tenant?.languagesJson);
+  const coverageAreas = parseArr(tenant?.serviceAreasJson);
+  const businessHours = parseHours(tenant?.businessHoursJson);
+  const byAppointmentOnly =
+    typeof tenant?.businessHoursJson === 'string' &&
+    tenant.businessHoursJson.includes('"byAppointmentOnly":true');
+
+  // Format the insurance expiry date as yyyy-mm-dd for <input type="date">.
+  let insuranceExpiryDate = '';
+  if (tenant?.insuranceExpiryDate) {
+    try {
+      const d = new Date(tenant.insuranceExpiryDate);
+      if (!isNaN(d.getTime())) {
+        insuranceExpiryDate = d.toISOString().slice(0, 10);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return {
+    businessCategories: categories,
+    coverageAreas,
+    coverageAreaInput: '',
+    businessHours,
+    byAppointmentOnly,
+    emergencyServiceAvailable: !!tenant?.emergencyServiceAvailable,
+    pricingType: (tenant?.pricingType as PricingType) || '',
+    callOutFee: tenant?.callOutFee != null ? String(tenant.callOutFee) : '',
+    travelFeePerKm: tenant?.travelFeePerKm != null ? String(tenant.travelFeePerKm) : '',
+    emergencySurchargePct:
+      tenant?.emergencySurchargePct != null ? String(tenant.emergencySurchargePct) : '',
+    weekendSurchargePct:
+      tenant?.weekendSurchargePct != null ? String(tenant.weekendSurchargePct) : '',
+    employeesCount:
+      tenant?.employeesCount != null ? String(tenant.employeesCount) : '',
+    insuranceProvider: tenant?.insuranceProvider || '',
+    insurancePolicyNumber: tenant?.insurancePolicyNumber || '',
+    insuranceExpiryDate,
+    licenceNumber: tenant?.licenceNumber || '',
+    vatNumber: tenant?.vatNumber || '',
+    languages,
+    marketplaceOptIn: !!tenant?.marketplaceOptIn,
+    marketplaceTermsAccepted: !!tenant?.marketplaceTermsAcceptedAt,
+    stripeConnected: !!tenant?.stripeConnected,
+    stripeStatusLoading: false,
+    profileCompletionPct: tenant?.profileCompletionPct ?? 0,
+    errors: {},
+  };
+}
+
 export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [direction, setDirection] = useState(1);
@@ -168,20 +421,31 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
     pincode: '',
   });
 
-  // Step 3 (now step 2 in the UI after WhatsApp removal)
-  const [step3, setStep3] = useState<Step3Data>({
+  // Step 2 — Business Profile (phase-3). Pre-populated from the tenant object
+  // when the user re-opens onboarding mid-flight (e.g. they saved step 1 but
+  // bounced before finishing step 2 — server returns the saved fields).
+  const [step2, setStep2] = useState<Step2Data>(() => initializeStep2(tenant));
+
+  // Step 4 (was step 3 — Choose Your Plan; now step 3 after the new
+  // Business Profile step was inserted at position 2).
+  const [step4, setStep4] = useState<Step3Data>({
     plan: 'growth',
     billing: 'monthly',
     startMode: 'trial',
   });
 
+  // Backwards-compat alias so the rest of the existing PayPal/plan code can
+  // keep reading `step3.*` without a giant rename.
+  const step3 = step4;
+  const setStep3 = setStep4;
+
   // PayPal inline checkout (opened when the user picks "Subscribe & Pay Now"
-  // in step 2). The dialog handles create-subscription + activate-
-  // subscription end-to-end; on success we advance to step 3, on close we
+  // in step 3). The dialog handles create-subscription + activate-
+  // subscription end-to-end; on success we advance to step 4, on close we
   // advance with the "payment pending" banner visible.
   const [payCheckoutPlan, setPayCheckoutPlan] = useState<PaypalCheckoutPlan | null>(null);
-  // Tracks whether the inline PayPal checkout (opened from Step 2) completed
-  // successfully. Used on Step 3 to decide whether to show the "payment
+  // Tracks whether the inline PayPal checkout (opened from Step 3) completed
+  // successfully. Used on Step 4 to decide whether to show the "payment
   // pending" banner (cancelled) or a "payment successful" banner (paid).
   const [paymentCompleted, setPaymentCompleted] = useState(false);
 
@@ -193,7 +457,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
 
   const goToStep = useCallback(
     (step: number) => {
-      if (step < 1 || step > 3) return;
+      if (step < 1 || step > STEPS.length) return;
       // Only allow jumping to completed steps or the next available step
       if (step > currentStep + 1) return;
       setDirection(step > currentStep ? 1 : -1);
@@ -203,7 +467,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   );
 
   const goNext = useCallback(() => {
-    if (currentStep < 3) {
+    if (currentStep < STEPS.length) {
       setDirection(1);
       setCurrentStep((s) => s + 1);
     }
@@ -238,6 +502,26 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
     [tenantId],
   );
 
+  // Phase-3: dedicated PATCH helper for the rich Business Profile fields.
+  // Hits the PATCH handler on /api/tenants/[id] (server-side computes
+  // profileCompletionPct + persists it back). Returns the parsed JSON body
+  // so the caller can read the freshly-computed completion %.
+  const patchBusinessProfile = useCallback(
+    async (payload: Record<string, any>) => {
+      const res = await fetch(`/api/tenants/${tenantId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody?.error || `Failed to save (HTTP ${res.status})`);
+      }
+      return res.json();
+    },
+    [tenantId],
+  );
+
   const createSubscription = useCallback(
     async (plan: string, billing: string, startMode: 'trial' | 'pay') => {
       try {
@@ -257,7 +541,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   );
 
   // -------------------------------------------------------------------------
-  // Step validators & handlers
+  // Step 1 validator & handler
   // -------------------------------------------------------------------------
 
   const isStep1Valid = step1.businessName.trim().length > 0 && step1.industry !== null;
@@ -278,6 +562,13 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
         state: step1.state,
         pincode: step1.pincode,
       });
+      // Pre-select the chosen industry as the first business category on
+      // step 2 so the user doesn't have to re-pick it.
+      setStep2((s) =>
+        s.businessCategories.includes(step1.industry as string)
+          ? s
+          : { ...s, businessCategories: [step1.industry as string, ...s.businessCategories] },
+      );
       toast.success('Business details saved!');
       goNext();
     } catch {
@@ -287,25 +578,223 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
     }
   }, [isStep1Valid, saveTenantProgress, step1, goNext]);
 
-  // (was handleStep3Next) Now the 2nd step — Choose Your Plan
+  // -------------------------------------------------------------------------
+  // Step 2 — Business Profile validator + handler
+  // -------------------------------------------------------------------------
+
+  const isStep2Valid = useCallback(() => {
+    const errors: Record<string, string> = {};
+    if (step2.businessCategories.length === 0) {
+      errors.businessCategories = 'Please select at least one business category.';
+    }
+    if (step2.coverageAreas.length === 0) {
+      errors.coverageAreas = 'Add at least one coverage area (postcode or city).';
+    }
+    if (!step2.pricingType) {
+      errors.pricingType = 'Please select a pricing type.';
+    }
+    if (step2.employeesCount && Number(step2.employeesCount) < 0) {
+      errors.employeesCount = 'Employee count cannot be negative.';
+    }
+    if (step2.callOutFee && Number(step2.callOutFee) < 0) {
+      errors.callOutFee = 'Call-out fee cannot be negative.';
+    }
+    if (step2.travelFeePerKm && Number(step2.travelFeePerKm) < 0) {
+      errors.travelFeePerKm = 'Travel fee cannot be negative.';
+    }
+    if (step2.emergencySurchargePct && Number(step2.emergencySurchargePct) < 0) {
+      errors.emergencySurchargePct = 'Surcharge cannot be negative.';
+    }
+    if (step2.weekendSurchargePct && Number(step2.weekendSurchargePct) < 0) {
+      errors.weekendSurchargePct = 'Surcharge cannot be negative.';
+    }
+    // Marketplace opt-in requires terms acceptance
+    if (step2.marketplaceOptIn && !step2.marketplaceTermsAccepted) {
+      errors.marketplaceTermsAccepted = 'Please accept the marketplace terms to opt in.';
+    }
+    return errors;
+  }, [step2]);
+
+  const handleStep2Next = useCallback(async () => {
+    const errors = isStep2Valid();
+    if (Object.keys(errors).length > 0) {
+      setStep2((s) => ({ ...s, errors }));
+      // Scroll the first error into view (best-effort).
+      const firstKey = Object.keys(errors)[0];
+      const el = document.getElementById(`step2-field-${firstKey}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      toast.error('Please fix the highlighted fields before continuing.');
+      return;
+    }
+
+    setSaving(true);
+    setStep2((s) => ({ ...s, errors: {} }));
+    try {
+      // Build the payload for the PATCH endpoint. Number fields are coerced
+      // from the string state used by <Input type="number">.
+      const payload: Record<string, any> = {
+        onboardingStep: 3,
+        // Categories + coverage area
+        businessCategoriesJson: step2.businessCategories,
+        serviceAreasJson: step2.coverageAreas,
+        // Business hours — when "by appointment only" is on, store a sentinel
+        // object so the marketplace-eligibility checker sees a non-empty
+        // businessHoursJson and credits the 10% completion weight.
+        businessHoursJson: step2.byAppointmentOnly
+          ? { byAppointmentOnly: true }
+          : step2.businessHours,
+        // Emergency service
+        emergencyServiceAvailable: step2.emergencyServiceAvailable,
+        // Pricing
+        pricingType: step2.pricingType || null,
+        callOutFee: Number(step2.callOutFee) || 0,
+        travelFeePerKm: Number(step2.travelFeePerKm) || 0,
+        emergencySurchargePct: Number(step2.emergencySurchargePct) || 0,
+        weekendSurchargePct: Number(step2.weekendSurchargePct) || 0,
+        // Operations
+        employeesCount: Number(step2.employeesCount) || 1,
+        languagesJson: step2.languages,
+        // Insurance
+        insuranceProvider: step2.insuranceProvider || null,
+        insurancePolicyNumber: step2.insurancePolicyNumber || null,
+        insuranceExpiryDate: step2.insuranceExpiryDate || null,
+        insuranceVerified:
+          !!step2.insuranceProvider && !!step2.insurancePolicyNumber,
+        // Credentials
+        licenceNumber: step2.licenceNumber || null,
+        vatNumber: step2.vatNumber || null,
+        // Marketplace opt-in
+        marketplaceOptIn: step2.marketplaceOptIn,
+        marketplaceTermsAcceptedAt: step2.marketplaceOptIn && step2.marketplaceTermsAccepted,
+        // Stripe flag (read-only from local state; the Stripe Connect button
+        // updates this directly via the status endpoint).
+        stripeConnected: step2.stripeConnected,
+      };
+
+      const data = await patchBusinessProfile(payload);
+      const pct = data?.tenant?.profileCompletionPct ?? 0;
+      setStep2((s) => ({ ...s, profileCompletionPct: pct }));
+
+      toast.success('Business profile saved!', {
+        description: `Profile ${pct}% complete${pct >= 80 ? ' — marketplace eligible!' : ` — ${80 - pct}% to go for marketplace access`}.`,
+      });
+      goNext();
+    } catch (err) {
+      console.error('Save business profile error:', err);
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to save business profile. Please try again.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }, [isStep2Valid, patchBusinessProfile, step2, goNext]);
+
+  // -------------------------------------------------------------------------
+  // Step 2 — Stripe Connect handler
+  // -------------------------------------------------------------------------
+
+  // On mount: if the user is returning from Stripe Connect (URL has
+  // ?stripe_connect=return), pull the latest status so the toggle reflects
+  // the freshly-completed onboarding. Runs once on mount — we intentionally
+  // don't depend on `refreshStripeStatus` because it's a stable useCallback.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const flag = url.searchParams.get('stripe_connect');
+    if (flag === 'return' || flag === 'refresh') {
+      // Best-effort: clear the query param so a refresh doesn't re-trigger.
+      url.searchParams.delete('stripe_connect');
+      window.history.replaceState({}, '', url.toString());
+      refreshStripeStatus();
+    }
+  }, []);
+
+  const refreshStripeStatus = useCallback(async () => {
+    setStep2((s) => ({ ...s, stripeStatusLoading: true }));
+    try {
+      const res = await fetch('/api/billing/stripe/connect/status');
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      const connected = !!data?.connected;
+      setStep2((s) => ({ ...s, stripeConnected: connected }));
+      if (connected) {
+        toast.success('Stripe account connected!', {
+          description: data?.payoutsEnabled
+            ? 'Payouts enabled — you can receive marketplace payments.'
+            : 'Account linked — finish any pending Stripe requirements to enable payouts.',
+        });
+      } else if (data?.requirements?.currently_due?.length) {
+        toast.warning('Stripe onboarding incomplete', {
+          description: `${data.requirements.currently_due.length} requirement(s) still pending.`,
+        });
+      }
+    } catch (err) {
+      console.error('Stripe status check failed:', err);
+      toast.error('Could not verify Stripe status. Try again later.');
+    } finally {
+      setStep2((s) => ({ ...s, stripeStatusLoading: false }));
+    }
+  }, []);
+
+  const handleConnectStripe = useCallback(async () => {
+    setStep2((s) => ({ ...s, stripeStatusLoading: true }));
+    try {
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const returnUrl = `${origin}/?stripe_connect=return`;
+      const refreshUrl = `${origin}/?stripe_connect=refresh`;
+      const res = await fetch(
+        `/api/billing/stripe/connect?returnUrl=${encodeURIComponent(returnUrl)}&refreshUrl=${encodeURIComponent(refreshUrl)}`,
+        { method: 'POST' },
+      );
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody?.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      if (data?.accountLinkUrl) {
+        // Open in a new tab so the onboarding wizard state survives the
+        // Stripe redirect roundtrip. The user closes the tab and clicks
+        // "Refresh Status" here when done.
+        window.open(data.accountLinkUrl, '_blank', 'noopener,noreferrer');
+        toast.info('Stripe onboarding opened in a new tab', {
+          description: 'Complete the Stripe flow, then come back and click "Refresh Status".',
+        });
+      }
+    } catch (err) {
+      console.error('Stripe connect failed:', err);
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to start Stripe Connect. Please try again.',
+      );
+    } finally {
+      setStep2((s) => ({ ...s, stripeStatusLoading: false }));
+    }
+  }, []);
+
+  // -------------------------------------------------------------------------
+  // Step 3 — Choose Your Plan (was Step 2 before phase-3)
+  // -------------------------------------------------------------------------
+
+  // (was handleStep3Next) Now the 3rd step — Choose Your Plan
   // Handles both start modes:
-  //   'trial' → creates a 14-day free-trial subscription, advances to step 3.
+  //   'trial' → creates a 14-day free-trial subscription, advances to step 4.
   //   'pay'   → saves the tenant's plan choice, then opens the PayPal
   //             checkout dialog INLINE (right here in onboarding). The dialog's
   //             create-subscription + activate-subscription APIs create the
   //             local Subscription record end-to-end, so we do NOT call
   //             createSubscription() here for 'pay' mode (that would create a
   //             duplicate pending_payment row). On dialog success → advance to
-  //             step 3. On dialog close → advance with the "payment pending"
+  //             step 4. On dialog close → advance with the "payment pending"
   //             banner visible as a fallback.
-  const handleStep2Next = useCallback(
+  const handleStep3Next = useCallback(
     async (mode: 'trial' | 'pay') => {
       setSaving(true);
       try {
         if (mode === 'trial') {
           await createSubscription(step3.plan, step3.billing, 'trial');
           await saveTenantProgress({
-            onboardingStep: 3,
+            onboardingStep: 4,
             plan: step3.plan,
           });
           toast.success('Plan selected! Your 14-day free trial has started.');
@@ -319,7 +808,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
             return;
           }
           await saveTenantProgress({
-            onboardingStep: 3,
+            onboardingStep: 4,
             plan: step3.plan,
           });
           setStep3((s) => ({ ...s, startMode: 'pay' }));
@@ -341,12 +830,12 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
     [createSubscription, saveTenantProgress, step3, goNext],
   );
 
-  // (was handleComplete) Now the 3rd step — All Set!
+  // (was handleComplete) Now the 4th step — All Set!
   const handleComplete = useCallback(async () => {
     setSaving(true);
     try {
       await saveTenantProgress({
-        onboardingStep: 3,
+        onboardingStep: 4,
         onboardingCompleted: true,
       });
       toast.success('Welcome to ServiceOS! 🎉');
@@ -360,11 +849,12 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
 
   const handleNext = useCallback(() => {
     if (currentStep === 1) handleStep1Next();
-    else if (currentStep === 3) handleComplete();
-    // Step 2 has no single "next" — the plan cards themselves carry the
+    else if (currentStep === 2) handleStep2Next();
+    else if (currentStep === 4) handleComplete();
+    // Step 3 has no single "next" — the plan cards themselves carry the
     // two CTAs (Start Free Trial / Subscribe & Pay Now), each calling
-    // handleStep2Next('trial' | 'pay') directly.
-  }, [currentStep, handleStep1Next, handleComplete]);
+    // handleStep3Next('trial' | 'pay') directly.
+  }, [currentStep, handleStep1Next, handleStep2Next, handleComplete]);
 
   // -------------------------------------------------------------------------
   // Format price
@@ -556,11 +1046,870 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   );
 
   // -------------------------------------------------------------------------
-  // Render: Step 2 – Choose Your Plan
-  // (WhatsApp step removed — users configure WhatsApp from Settings → WhatsApp)
+  // Render: Step 2 – Business Profile (phase-3)
+  // Collects all marketplace-eligibility fields: categories, coverage area,
+  // business hours, emergency service, pricing, fees, employee count,
+  // insurance, credentials, languages, marketplace opt-in, Stripe Connect.
   // -------------------------------------------------------------------------
 
-  const renderStep2 = () => (
+  const renderStep2 = () => {
+    // Toggle a business category on/off
+    const toggleCategory = (industryId: string) => {
+      setStep2((s) => ({
+        ...s,
+        businessCategories: s.businessCategories.includes(industryId)
+          ? s.businessCategories.filter((id) => id !== industryId)
+          : [...s.businessCategories, industryId],
+        errors: { ...s.errors, businessCategories: '' },
+      }));
+    };
+
+    // Toggle a language on/off
+    const toggleLanguage = (code: string) => {
+      setStep2((s) => ({
+        ...s,
+        languages: s.languages.includes(code)
+          ? s.languages.filter((c) => c !== code)
+          : [...s.languages, code],
+      }));
+    };
+
+    // Coverage-area tag input — add on Enter or comma, remove via X badge
+    const addCoverageArea = () => {
+      const val = step2.coverageAreaInput.trim().replace(/,$/, '');
+      if (!val) return;
+      if (step2.coverageAreas.includes(val)) {
+        setStep2((s) => ({ ...s, coverageAreaInput: '' }));
+        return;
+      }
+      setStep2((s) => ({
+        ...s,
+        coverageAreas: [...s.coverageAreas, val],
+        coverageAreaInput: '',
+        errors: { ...s.errors, coverageAreas: '' },
+      }));
+    };
+    const removeCoverageArea = (area: string) => {
+      setStep2((s) => ({
+        ...s,
+        coverageAreas: s.coverageAreas.filter((a) => a !== area),
+      }));
+    };
+
+    // Update a single day's hours
+    const updateDay = (dayKey: string, patch: Partial<DayHours>) => {
+      setStep2((s) => ({
+        ...s,
+        businessHours: {
+          ...s.businessHours,
+          [dayKey]: { ...s.businessHours[dayKey], ...patch },
+        },
+      }));
+    };
+
+    // Find an industry object by ID (for badge labels)
+    const findIndustry = (id: string): Industry | undefined =>
+      INDUSTRY_CATALOG.find((i) => i.id === id);
+
+    // Helper: render an inline error message under a field
+    const FieldError = ({ id }: { id: string }) => {
+      const msg = step2.errors[id];
+      if (!msg) return null;
+      return (
+        <p className="mt-1 text-xs text-red-500" role="alert">
+          {msg}
+        </p>
+      );
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-foreground">Business Profile</h2>
+          <p className="text-muted-foreground mt-1">
+            Tell us about your services, coverage, pricing, and credentials so customers can find you on the marketplace.
+          </p>
+        </div>
+
+        {/* Profile completion progress bar — populated after the first PATCH save */}
+        {step2.profileCompletionPct > 0 && (
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20 p-3">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                Profile completion
+              </span>
+              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                {step2.profileCompletionPct}%
+                {step2.profileCompletionPct >= 80
+                  ? ' — Marketplace eligible!'
+                  : ` — ${Math.max(0, 80 - step2.profileCompletionPct)}% to marketplace access`}
+              </span>
+            </div>
+            <Progress
+              value={step2.profileCompletionPct}
+              className="h-2 bg-emerald-100 dark:bg-emerald-900/40 [&>[data-slot=progress-indicator]]:bg-emerald-500"
+            />
+          </div>
+        )}
+
+        {/* ── Business Categories ─────────────────────────────────────────── */}
+        <Card id="step2-field-businessCategories">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Briefcase className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              Business Categories <span className="text-red-500">*</span>
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Select all the service categories your business covers. Grouped by 9 verticals.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {/* Selected categories as badges */}
+            {step2.businessCategories.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {step2.businessCategories.map((id) => {
+                  const ind = findIndustry(id);
+                  return (
+                    <Badge
+                      key={id}
+                      variant="secondary"
+                      className="gap-1 pl-2 pr-1 py-1 text-xs"
+                    >
+                      <span>{ind?.emoji || '•'}</span>
+                      {ind?.name || id}
+                      <button
+                        type="button"
+                        aria-label={`Remove ${ind?.name || id}`}
+                        onClick={() => toggleCategory(id)}
+                        className="ml-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 p-0.5"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Accordion: 9 verticals, each expands to show its industries */}
+            <Accordion type="multiple" className="w-full">
+              {VERTICALS.map((vertical) => {
+                const industries = getIndustriesByVertical(vertical.id);
+                const selectedInVertical = industries.filter((i) =>
+                  step2.businessCategories.includes(i.id),
+                ).length;
+                return (
+                  <AccordionItem key={vertical.id} value={vertical.id}>
+                    <AccordionTrigger className="hover:no-underline py-3">
+                      <div className="flex items-center gap-2 flex-1">
+                        <span className="text-lg">{vertical.icon}</span>
+                        <span className="text-sm font-semibold">{vertical.name}</span>
+                        {selectedInVertical > 0 && (
+                          <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-0 text-[10px] px-1.5 py-0">
+                            {selectedInVertical}
+                          </Badge>
+                        )}
+                        <span className="ml-auto text-xs text-muted-foreground pr-2">
+                          {industries.length} industries
+                        </span>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                        {industries.map((ind) => {
+                          const isSelected = step2.businessCategories.includes(ind.id);
+                          return (
+                            <button
+                              key={ind.id}
+                              type="button"
+                              onClick={() => toggleCategory(ind.id)}
+                              className={cn(
+                                'flex items-center gap-1.5 rounded-md border px-2.5 py-2 text-left text-xs font-medium transition-all',
+                                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500',
+                                isSelected
+                                  ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300'
+                                  : 'border-border bg-card hover:border-emerald-400/40 hover:bg-accent/50',
+                              )}
+                              title={ind.description}
+                            >
+                              <span className="text-base">{ind.emoji}</span>
+                              <span className="flex-1 truncate">{ind.name}</span>
+                              {isSelected && <Check className="h-3 w-3 shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                );
+              })}
+            </Accordion>
+            <FieldError id="businessCategories" />
+          </CardContent>
+        </Card>
+
+        {/* ── Coverage Area ───────────────────────────────────────────────── */}
+        <Card id="step2-field-coverageAreas">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <MapPin className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              Coverage Area <span className="text-red-500">*</span>
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Postcodes or city names where you accept jobs. Press Enter or comma to add.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div className="flex gap-2">
+              <Input
+                placeholder="e.g. 90210, Beverly Hills, Santa Monica"
+                value={step2.coverageAreaInput}
+                onChange={(e) =>
+                  setStep2((s) => ({ ...s, coverageAreaInput: e.target.value }))
+                }
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ',') {
+                    e.preventDefault();
+                    addCoverageArea();
+                  } else if (
+                    e.key === 'Backspace' &&
+                    step2.coverageAreaInput === '' &&
+                    step2.coverageAreas.length > 0
+                  ) {
+                    removeCoverageArea(step2.coverageAreas[step2.coverageAreas.length - 1]);
+                  }
+                }}
+                className="h-10"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addCoverageArea}
+                disabled={!step2.coverageAreaInput.trim()}
+                className="gap-1.5 shrink-0"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Add</span>
+              </Button>
+            </div>
+            {step2.coverageAreas.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {step2.coverageAreas.map((area) => (
+                  <Badge
+                    key={area}
+                    variant="secondary"
+                    className="gap-1 pl-2 pr-1 py-1 text-xs"
+                  >
+                    <MapPin className="h-3 w-3" />
+                    {area}
+                    <button
+                      type="button"
+                      aria-label={`Remove ${area}`}
+                      onClick={() => removeCoverageArea(area)}
+                      className="ml-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 p-0.5"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+            <FieldError id="coverageAreas" />
+          </CardContent>
+        </Card>
+
+        {/* ── Business Hours ─────────────────────────────────────────────── */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Clock className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              Business Hours
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Set your standard operating hours, or toggle &ldquo;by appointment only&rdquo;.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-3 py-2">
+              <div>
+                <Label htmlFor="byAppointment" className="text-sm font-medium">
+                  By appointment only
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Skip per-day hours — customers call to book.
+                </p>
+              </div>
+              <Switch
+                id="byAppointment"
+                checked={step2.byAppointmentOnly}
+                onCheckedChange={(checked) =>
+                  setStep2((s) => ({ ...s, byAppointmentOnly: !!checked }))
+                }
+              />
+            </div>
+
+            {!step2.byAppointmentOnly && (
+              <div className="space-y-1.5">
+                {/* Header row */}
+                <div className="hidden sm:grid grid-cols-[120px_1fr_1fr_auto_auto] gap-2 px-1 text-xs font-medium text-muted-foreground">
+                  <span>Day</span>
+                  <span>Open</span>
+                  <span>Close</span>
+                  <span className="text-center">Appt.</span>
+                  <span className="text-center">Closed</span>
+                </div>
+                {DAYS_OF_WEEK.map((day) => {
+                  const hrs = step2.businessHours[day.key];
+                  return (
+                    <div
+                      key={day.key}
+                      className="grid grid-cols-2 sm:grid-cols-[120px_1fr_1fr_auto_auto] gap-2 items-center"
+                    >
+                      <Label className="text-sm font-medium col-span-2 sm:col-span-1">
+                        {day.label}
+                      </Label>
+                      <Input
+                        type="time"
+                        value={hrs.open}
+                        disabled={hrs.closed}
+                        onChange={(e) => updateDay(day.key, { open: e.target.value })}
+                        className="h-9 text-xs"
+                      />
+                      <Input
+                        type="time"
+                        value={hrs.close}
+                        disabled={hrs.closed}
+                        onChange={(e) => updateDay(day.key, { close: e.target.value })}
+                        className="h-9 text-xs"
+                      />
+                      <div className="flex items-center justify-center">
+                        <Checkbox
+                          checked={hrs.byAppointment}
+                          disabled={hrs.closed}
+                          onCheckedChange={(v) =>
+                            updateDay(day.key, { byAppointment: !!v })
+                          }
+                          aria-label={`${day.label} by appointment`}
+                        />
+                      </div>
+                      <div className="flex items-center justify-center">
+                        <Checkbox
+                          checked={hrs.closed}
+                          onCheckedChange={(v) => updateDay(day.key, { closed: !!v })}
+                          aria-label={`${day.label} closed`}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ── Emergency Service + Pricing ────────────────────────────────── */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Wrench className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              Service &amp; Pricing
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Tell customers how you charge and whether you offer emergency service.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Emergency service toggle */}
+            <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-3 py-2">
+              <div className="flex-1 min-w-0">
+                <Label htmlFor="emergencyService" className="text-sm font-medium">
+                  Do you offer emergency / after-hours service?
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Customers searching for urgent jobs will see you first.
+                </p>
+              </div>
+              <Switch
+                id="emergencyService"
+                checked={step2.emergencyServiceAvailable}
+                onCheckedChange={(v) =>
+                  setStep2((s) => ({ ...s, emergencyServiceAvailable: !!v }))
+                }
+              />
+            </div>
+
+            <Separator />
+
+            {/* Pricing type */}
+            <div id="step2-field-pricingType" className="space-y-1.5">
+              <Label className="text-sm font-medium">
+                Pricing Type <span className="text-red-500">*</span>
+              </Label>
+              <Select
+                value={step2.pricingType || undefined}
+                onValueChange={(v) =>
+                  setStep2((s) => ({
+                    ...s,
+                    pricingType: v as PricingType,
+                    errors: { ...s.errors, pricingType: '' },
+                  }))
+                }
+              >
+                <SelectTrigger className="w-full h-10">
+                  <SelectValue placeholder="Select how you charge…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRICING_TYPE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{opt.label}</span>
+                        <span className="text-xs text-muted-foreground">{opt.hint}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FieldError id="pricingType" />
+            </div>
+
+            {/* Numeric pricing fields */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div id="step2-field-callOutFee" className="space-y-1.5">
+                <Label htmlFor="callOutFee" className="text-sm font-medium">
+                  Call-out Fee (USD)
+                </Label>
+                <div className="relative">
+                  <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="callOutFee"
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={step2.callOutFee}
+                    onChange={(e) =>
+                      setStep2((s) => ({ ...s, callOutFee: e.target.value }))
+                    }
+                    className="h-10 pl-8"
+                  />
+                </div>
+                <FieldError id="callOutFee" />
+              </div>
+
+              <div id="step2-field-travelFeePerKm" className="space-y-1.5">
+                <Label htmlFor="travelFeePerKm" className="text-sm font-medium">
+                  Travel Fee / km (USD)
+                </Label>
+                <div className="relative">
+                  <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="travelFeePerKm"
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={step2.travelFeePerKm}
+                    onChange={(e) =>
+                      setStep2((s) => ({ ...s, travelFeePerKm: e.target.value }))
+                    }
+                    className="h-10 pl-8"
+                  />
+                </div>
+                <FieldError id="travelFeePerKm" />
+              </div>
+
+              <div id="step2-field-emergencySurchargePct" className="space-y-1.5">
+                <Label htmlFor="emergencySurchargePct" className="text-sm font-medium">
+                  Emergency Surcharge (%)
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="emergencySurchargePct"
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="1"
+                    placeholder="e.g. 40 = +40%"
+                    value={step2.emergencySurchargePct}
+                    onChange={(e) =>
+                      setStep2((s) => ({ ...s, emergencySurchargePct: e.target.value }))
+                    }
+                    className="h-10 pr-8"
+                  />
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                    %
+                  </span>
+                </div>
+                <FieldError id="emergencySurchargePct" />
+              </div>
+
+              <div id="step2-field-weekendSurchargePct" className="space-y-1.5">
+                <Label htmlFor="weekendSurchargePct" className="text-sm font-medium">
+                  Weekend Surcharge (%)
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="weekendSurchargePct"
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="1"
+                    placeholder="e.g. 20 = +20%"
+                    value={step2.weekendSurchargePct}
+                    onChange={(e) =>
+                      setStep2((s) => ({ ...s, weekendSurchargePct: e.target.value }))
+                    }
+                    className="h-10 pr-8"
+                  />
+                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                    %
+                  </span>
+                </div>
+                <FieldError id="weekendSurchargePct" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ── Operations: Employees + Languages ─────────────────────────── */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Users className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              Operations
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div id="step2-field-employeesCount" className="space-y-1.5">
+              <Label htmlFor="employeesCount" className="text-sm font-medium">
+                Employee Count
+              </Label>
+              <Input
+                id="employeesCount"
+                type="number"
+                inputMode="numeric"
+                min="0"
+                step="1"
+                placeholder="e.g. 5"
+                value={step2.employeesCount}
+                onChange={(e) =>
+                  setStep2((s) => ({ ...s, employeesCount: e.target.value }))
+                }
+                className="h-10 max-w-[200px]"
+              />
+              <FieldError id="employeesCount" />
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5 text-sm font-medium">
+                <Languages className="h-4 w-4 text-muted-foreground" />
+                Languages Spoken
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Multi-lingual businesses reach more customers.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {LANGUAGE_OPTIONS.map((lang) => {
+                  const isSelected = step2.languages.includes(lang.code);
+                  return (
+                    <button
+                      key={lang.code}
+                      type="button"
+                      onClick={() => toggleLanguage(lang.code)}
+                      className={cn(
+                        'rounded-full border px-2.5 py-1 text-xs font-medium transition-all',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500',
+                        isSelected
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300'
+                          : 'border-border bg-card hover:border-emerald-400/40 hover:bg-accent/50',
+                      )}
+                    >
+                      {lang.label}
+                      {isSelected && <Check className="inline-block h-3 w-3 ml-1" />}
+                    </button>
+                  );
+                })}
+              </div>
+              {step2.languages.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {step2.languages.map((code) => {
+                    const lang = LANGUAGE_OPTIONS.find((l) => l.code === code);
+                    return (
+                      <Badge
+                        key={code}
+                        variant="secondary"
+                        className="gap-1 pl-2 pr-1 py-1 text-xs"
+                      >
+                        {lang?.label || code}
+                        <button
+                          type="button"
+                          aria-label={`Remove ${lang?.label || code}`}
+                          onClick={() => toggleLanguage(code)}
+                          className="ml-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 p-0.5"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ── Insurance + Credentials ───────────────────────────────────── */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              Insurance &amp; Credentials
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Building trust — verified businesses rank higher in the marketplace.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="insuranceProvider" className="text-sm font-medium">
+                  Insurance Provider
+                </Label>
+                <Input
+                  id="insuranceProvider"
+                  placeholder="e.g. Allstate, State Farm"
+                  value={step2.insuranceProvider}
+                  onChange={(e) =>
+                    setStep2((s) => ({ ...s, insuranceProvider: e.target.value }))
+                  }
+                  className="h-10"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="insurancePolicyNumber" className="text-sm font-medium">
+                  Insurance Policy #
+                </Label>
+                <Input
+                  id="insurancePolicyNumber"
+                  placeholder="Policy number"
+                  value={step2.insurancePolicyNumber}
+                  onChange={(e) =>
+                    setStep2((s) => ({ ...s, insurancePolicyNumber: e.target.value }))
+                  }
+                  className="h-10"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="insuranceExpiryDate" className="text-sm font-medium">
+                Insurance Expiry Date
+              </Label>
+              <Input
+                id="insuranceExpiryDate"
+                type="date"
+                value={step2.insuranceExpiryDate}
+                onChange={(e) =>
+                  setStep2((s) => ({ ...s, insuranceExpiryDate: e.target.value }))
+                }
+                className="h-10 max-w-[220px]"
+              />
+            </div>
+
+            <Separator />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="licenceNumber" className="text-sm font-medium">
+                  Licence Number
+                </Label>
+                <Input
+                  id="licenceNumber"
+                  placeholder="Business / trade licence #"
+                  value={step2.licenceNumber}
+                  onChange={(e) =>
+                    setStep2((s) => ({ ...s, licenceNumber: e.target.value }))
+                  }
+                  className="h-10"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="vatNumber" className="text-sm font-medium">
+                  VAT / Tax Number
+                </Label>
+                <Input
+                  id="vatNumber"
+                  placeholder="VAT or tax ID"
+                  value={step2.vatNumber}
+                  onChange={(e) =>
+                    setStep2((s) => ({ ...s, vatNumber: e.target.value }))
+                  }
+                  className="h-10"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ── Marketplace Opt-in ─────────────────────────────────────────── */}
+        <Card id="step2-field-marketplaceTermsAccepted">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Store className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              Marketplace Opt-in
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Opt in to receive customer bookings from the public marketplace.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-3 py-2">
+              <div className="flex-1 min-w-0">
+                <Label htmlFor="marketplaceOptIn" className="text-sm font-medium">
+                  List my business on the marketplace
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Eligibility checks still apply (subscription, KYC, insurance, Stripe).
+                </p>
+              </div>
+              <Switch
+                id="marketplaceOptIn"
+                checked={step2.marketplaceOptIn}
+                onCheckedChange={(v) =>
+                  setStep2((s) => ({
+                    ...s,
+                    marketplaceOptIn: !!v,
+                    // Auto-clear terms when opt-in is turned off
+                    marketplaceTermsAccepted: !!v && s.marketplaceTermsAccepted,
+                    errors: { ...s.errors, marketplaceTermsAccepted: '' },
+                  }))
+                }
+              />
+            </div>
+
+            {step2.marketplaceOptIn && (
+              <div className="flex items-start gap-2.5 rounded-md border border-border p-3">
+                <Checkbox
+                  id="marketplaceTerms"
+                  checked={step2.marketplaceTermsAccepted}
+                  onCheckedChange={(v) =>
+                    setStep2((s) => ({
+                      ...s,
+                      marketplaceTermsAccepted: !!v,
+                      errors: { ...s.errors, marketplaceTermsAccepted: '' },
+                    }))
+                  }
+                  className="mt-0.5"
+                />
+                <Label htmlFor="marketplaceTerms" className="text-xs leading-relaxed">
+                  I accept the{' '}
+                  <a
+                    href="/marketplace-terms"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-emerald-600 dark:text-emerald-400 underline hover:no-underline"
+                  >
+                    marketplace terms and conditions
+                  </a>{' '}
+                  and the service-level agreement for marketplace leads. I understand that marketplace commissions apply to bookings sourced through the marketplace.
+                </Label>
+              </div>
+            )}
+            <FieldError id="marketplaceTermsAccepted" />
+          </CardContent>
+        </Card>
+
+        {/* ── Stripe Connect ─────────────────────────────────────────────── */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <CreditCard className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              Stripe Connect
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Connect a Stripe account to receive marketplace payouts.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-md border border-border bg-muted/30 p-3">
+              <div className="flex items-center gap-2 flex-1">
+                <div
+                  className={cn(
+                    'flex h-9 w-9 items-center justify-center rounded-lg',
+                    step2.stripeConnected
+                      ? 'bg-emerald-100 dark:bg-emerald-900/40'
+                      : 'bg-muted',
+                  )}
+                >
+                  {step2.stripeConnected ? (
+                    <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                  ) : (
+                    <CreditCard className="h-5 w-5 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">
+                    {step2.stripeConnected ? 'Stripe account connected' : 'No Stripe account connected'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {step2.stripeConnected
+                      ? 'You can receive marketplace payments.'
+                      : 'Required to receive marketplace payouts.'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <Button
+                  type="button"
+                  variant={step2.stripeConnected ? 'outline' : 'default'}
+                  onClick={handleConnectStripe}
+                  disabled={step2.stripeStatusLoading}
+                  className={cn(
+                    'gap-1.5',
+                    !step2.stripeConnected &&
+                      'bg-emerald-600 hover:bg-emerald-700 text-white',
+                  )}
+                >
+                  {step2.stripeStatusLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ExternalLink className="h-4 w-4" />
+                  )}
+                  {step2.stripeConnected ? 'Re-connect' : 'Connect Stripe'}
+                </Button>
+                {step2.stripeConnected && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={refreshStripeStatus}
+                    disabled={step2.stripeStatusLoading}
+                    className="gap-1.5"
+                  >
+                    {step2.stripeStatusLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    <span className="hidden sm:inline">Refresh Status</span>
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
+
+  // -------------------------------------------------------------------------
+  // Render: Step 3 – Choose Your Plan
+  // (was Step 2 before phase-3 inserted the Business Profile step.)
+  // -------------------------------------------------------------------------
+
+  const renderStep3 = () => (
     <div className="space-y-6">
       <div className="text-center">
         <h2 className="text-2xl font-bold text-foreground">Choose Your Plan</h2>
@@ -735,7 +2084,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
                       disabled={saving}
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleStep2Next('trial');
+                        handleStep3Next('trial');
                       }}
                     >
                       {saving ? (
@@ -752,7 +2101,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
                       disabled={saving}
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleStep2Next('pay');
+                        handleStep3Next('pay');
                       }}
                     >
                       {saving ? (
@@ -789,10 +2138,10 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   );
 
   // -------------------------------------------------------------------------
-  // Render: Step 3 – All Set!
+  // Render: Step 4 – All Set!
   // -------------------------------------------------------------------------
 
-  const renderStep3 = () => {
+  const renderStep4 = () => {
     const quickActions = [
       {
         icon: UserPlus,
@@ -994,15 +2343,15 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   // -------------------------------------------------------------------------
 
   const renderNavigation = () => {
-    if (currentStep === 3) return null;
+    if (currentStep === 4) return null;
 
     const isValid =
       currentStep === 1 ? isStep1Valid : true;
 
-    // Step 2 (Choose Your Plan) has no footer "Next" button — each plan card
+    // Step 3 (Choose Your Plan) has no footer "Next" button — each plan card
     // carries its own dual CTA (Start Free Trial / Subscribe & Pay Now), so
     // a footer Next would be redundant and ambiguous. We only show Back.
-    if (currentStep === 2) {
+    if (currentStep === 3) {
       return (
         <div className="flex items-center justify-between pt-4 mt-2 border-t">
           <Button
@@ -1076,6 +2425,8 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
         return renderStep2();
       case 3:
         return renderStep3();
+      case 4:
+        return renderStep4();
       default:
         return null;
     }

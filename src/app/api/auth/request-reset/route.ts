@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAppUrl } from '@/lib/auth';
 import crypto from 'crypto';
+import { passwordResetLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 
 /**
  * POST /api/auth/request-reset
@@ -16,6 +17,9 @@ import crypto from 'crypto';
  * Security: always returns 200 even if email not found (prevents email enumeration).
  */
 export async function POST(request: NextRequest) {
+  const rateLimited = applyRateLimit(passwordResetLimiter, request);
+  if (rateLimited) return rateLimitResponse(rateLimited.resetAtMs);
+
   try {
     const body = await request.json();
     const { email, slug } = body;

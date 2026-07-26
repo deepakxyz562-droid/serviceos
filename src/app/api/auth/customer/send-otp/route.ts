@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { directPrisma } from '@/lib/direct-prisma';
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send';
+import { otpLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 
 // Rate limiting: track OTP requests per phone number
 const otpRateLimit = new Map<string, { count: number; lastRequest: number }>();
@@ -21,6 +22,9 @@ function formatPhoneForDisplay(phone: string): string {
 }
 
 export async function POST(request: NextRequest) {
+  const rateLimited = applyRateLimit(otpLimiter, request);
+  if (rateLimited) return rateLimitResponse(rateLimited.resetAtMs);
+
   try {
     const body = await request.json();
     const { phone } = body;

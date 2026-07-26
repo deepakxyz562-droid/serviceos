@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { verifyPassword, generateToken, COOKIE_OPTIONS } from '@/lib/auth';
 import { cookies } from 'next/headers';
+import { authLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 
 /**
  * POST /api/auth/customer/login
@@ -24,6 +25,9 @@ import { cookies } from 'next/headers';
  *   4. Create a CustomerPortalSession, set the auth cookie, return user + tenant.
  */
 export async function POST(request: NextRequest) {
+  const rateLimited = applyRateLimit(authLimiter, request);
+  if (rateLimited) return rateLimitResponse(rateLimited.resetAtMs);
+
   try {
     const body = await request.json();
     const { identifier, password, tenantId } = body;

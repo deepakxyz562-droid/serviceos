@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
 import { issueCustomerMagicLink } from '@/lib/customer-magic-link'
+import { authLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +19,9 @@ export const dynamic = 'force-dynamic'
  * Auth: staff roles only (owner / admin / manager / employee / super_admin)
  */
 export async function POST(request: Request) {
+  const rateLimited = applyRateLimit(authLimiter, request)
+  if (rateLimited) return rateLimitResponse(rateLimited.resetAtMs)
+
   try {
     const user = await getAuthUser()
     if (!user) {

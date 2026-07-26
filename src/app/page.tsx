@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 
 // Lazy load all major components with error handling
 const LandingPage = dynamic(
-  () => import('@/components/landing/landing-page').then(m => ({ default: m.LandingPage })),
+  () => import('@/components/marketplace/marketplace-landing').then(m => ({ default: m.MarketplaceLanding })),
   { ssr: false, loading: () => <ViewLoader /> }
 );
 const AuthPage = dynamic(

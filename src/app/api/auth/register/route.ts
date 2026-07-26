@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { hashPassword, generateToken, generateSlug, COOKIE_OPTIONS } from '@/lib/auth';
+import { authLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
+  const rateLimited = applyRateLimit(authLimiter, request);
+  if (rateLimited) return rateLimitResponse(rateLimited.resetAtMs);
+
   try {
     const body = await request.json();
     const { name, email, password, businessName, industry, phone } = body;

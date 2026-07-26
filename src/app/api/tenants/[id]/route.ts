@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
 import { applyHubDefaultsToTenant } from '@/lib/public-business';
+import { computeProfileCompletion } from '@/lib/marketplace-eligibility';
 
 // GET /api/tenants/[id] - Get tenant details
 export async function GET(
@@ -322,3 +323,244 @@ export async function PUT(
     );
   }
 }
+
+// PATCH /api/tenants/[id] - Update tenant (rich business profile fields)
+//
+// This handler is the dedicated endpoint for the phase-3 onboarding "Business
+// Profile" step. It accepts the full marketplace-eligibility field set:
+//   - Pricing: pricingType, callOutFee, travelFeePerKm, emergencySurchargePct,
+//              weekendSurchargePct, emergencyServiceAvailable
+//   - Credentials: vatNumber, licenceNumber
+//   - Insurance: insuranceProvider, insurancePolicyNumber, insuranceExpiryDate,
+//                insuranceVerified (boolean flag set when provider+policy are present)
+//   - Operations: employeesCount, languagesJson, businessCategoriesJson,
+//                 businessHoursJson, serviceAreasJson
+//   - Marketplace: marketplaceOptIn, marketplaceTermsAcceptedAt
+//   - Stripe: stripeConnected (synced by /api/billing/stripe/connect)
+//   - Misc: identityVerified, businessVerified
+//
+// After persisting, it live-recomputes `profileCompletionPct` via
+// `computeProfileCompletion` and stores it back so subsequent list views
+// don't have to recompute per row.
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    const { id } = await params;
+
+    // Verify the authenticated user belongs to this tenant
+    if (authUser.tenantId !== id) {
+      return NextResponse.json(
+        { error: 'You do not have access to this tenant' },
+        { status: 403 }
+      );
+    }
+
+    // Only owner or admin can update tenant
+    if (authUser.role !== 'owner' && authUser.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Only owners and admins can update tenant settings' },
+        { status: 403 }
+      );
+    }
+
+    const body = await request.json();
+    const {
+      // Pricing
+      pricingType,
+      callOutFee,
+      travelFeePerKm,
+      emergencySurchargePct,
+      weekendSurchargePct,
+      emergencyServiceAvailable,
+      // Credentials
+      vatNumber,
+      licenceNumber,
+      // Insurance
+      insuranceProvider,
+      insurancePolicyNumber,
+      insuranceExpiryDate,
+      insuranceVerified,
+      // Operations
+      employeesCount,
+      languagesJson,
+      businessCategoriesJson,
+      businessHoursJson,
+      serviceAreasJson,
+      // Marketplace
+      marketplaceOptIn,
+      marketplaceTermsAcceptedAt,
+      // Verification flags
+      identityVerified,
+      businessVerified,
+      stripeConnected,
+      // Misc — allow onboarding step + completion sync too
+      onboardingStep,
+      onboardingCompleted,
+    } = body;
+
+    // Build update data — only include provided fields. We intentionally use
+    // explicit field-by-field whitelisting rather than a spread of `body`
+    // because the Tenant model has many fields the onboarding form should
+    // never write to (slug, plan, planStatus, mrr, etc.).
+    const updateData: Record<string, unknown> = {};
+
+    // Pricing
+    if (pricingType !== undefined) {
+      const valid = ['fixed', 'hourly', 'starting_from', 'custom_quote', 'mixed'];
+      updateData.pricingType = valid.includes(pricingType) ? pricingType : null;
+    }
+    if (callOutFee !== undefined) updateData.callOutFee = Number(callOutFee) || 0;
+    if (travelFeePerKm !== undefined) updateData.travelFeePerKm = Number(travelFeePerKm) || 0;
+    if (emergencySurchargePct !== undefined) updateData.emergencySurchargePct = Number(emergencySurchargePct) || 0;
+    if (weekendSurchargePct !== undefined) updateData.weekendSurchargePct = Number(weekendSurchargePct) || 0;
+    if (emergencyServiceAvailable !== undefined) updateData.emergencyServiceAvailable = !!emergencyServiceAvailable;
+
+    // Credentials
+    if (vatNumber !== undefined) updateData.vatNumber = vatNumber?.trim() || null;
+    if (licenceNumber !== undefined) updateData.licenceNumber = licenceNumber?.trim() || null;
+
+    // Insurance — provider/policy/expiry are nullable strings/dates.
+    if (insuranceProvider !== undefined) updateData.insuranceProvider = insuranceProvider?.trim() || null;
+    if (insurancePolicyNumber !== undefined) updateData.insurancePolicyNumber = insurancePolicyNumber?.trim() || null;
+    if (insuranceExpiryDate !== undefined) {
+      // Accept ISO string or null. Invalid strings → null.
+      if (insuranceExpiryDate === null || insuranceExpiryDate === '') {
+        updateData.insuranceExpiryDate = null;
+      } else {
+        const parsed = new Date(insuranceExpiryDate);
+        updateData.insuranceExpiryDate = isNaN(parsed.getTime()) ? null : parsed;
+      }
+    }
+    if (insuranceVerified !== undefined) updateData.insuranceVerified = !!insuranceVerified;
+
+    // Operations
+    if (employeesCount !== undefined) {
+      const n = Number(employeesCount);
+      updateData.employeesCount = isNaN(n) || n < 0 ? 0 : Math.floor(n);
+    }
+    if (languagesJson !== undefined) {
+      updateData.languagesJson = typeof languagesJson === 'string'
+        ? languagesJson
+        : JSON.stringify(Array.isArray(languagesJson) ? languagesJson : []);
+    }
+    if (businessCategoriesJson !== undefined) {
+      updateData.businessCategoriesJson = typeof businessCategoriesJson === 'string'
+        ? businessCategoriesJson
+        : JSON.stringify(Array.isArray(businessCategoriesJson) ? businessCategoriesJson : []);
+    }
+    if (businessHoursJson !== undefined) {
+      updateData.businessHoursJson = typeof businessHoursJson === 'string'
+        ? businessHoursJson
+        : JSON.stringify(businessHoursJson || {});
+    }
+    if (serviceAreasJson !== undefined) {
+      updateData.serviceAreasJson = typeof serviceAreasJson === 'string'
+        ? serviceAreasJson
+        : JSON.stringify(Array.isArray(serviceAreasJson) ? serviceAreasJson : []);
+    }
+
+    // Marketplace opt-in + terms
+    if (marketplaceOptIn !== undefined) updateData.marketplaceOptIn = !!marketplaceOptIn;
+    if (marketplaceTermsAcceptedAt !== undefined) {
+      // Setting to true → timestamp now; setting to false/null → clear it.
+      if (marketplaceTermsAcceptedAt === true) {
+        updateData.marketplaceTermsAcceptedAt = new Date();
+      } else if (marketplaceTermsAcceptedAt === false || marketplaceTermsAcceptedAt === null) {
+        updateData.marketplaceTermsAcceptedAt = null;
+      } else {
+        const parsed = new Date(marketplaceTermsAcceptedAt);
+        updateData.marketplaceTermsAcceptedAt = isNaN(parsed.getTime()) ? new Date() : parsed;
+      }
+    }
+
+    // Verification flags
+    if (identityVerified !== undefined) updateData.identityVerified = !!identityVerified;
+    if (businessVerified !== undefined) updateData.businessVerified = !!businessVerified;
+    if (stripeConnected !== undefined) updateData.stripeConnected = !!stripeConnected;
+
+    // Onboarding meta
+    if (onboardingStep !== undefined) updateData.onboardingStep = Number(onboardingStep) || 1;
+    if (onboardingCompleted !== undefined) updateData.onboardingCompleted = !!onboardingCompleted;
+
+    // ── Persist ────────────────────────────────────────────────────────────
+    const tenant = await db.tenant.update({
+      where: { id },
+      data: updateData,
+    });
+
+    // ── Live-recompute profile completion % and persist back ────────────────
+    // The computeProfileCompletion() function reads from DB so it sees the
+    // fields we just wrote. Best-effort — non-fatal if it fails.
+    let profileCompletionPct = tenant.profileCompletionPct ?? 0;
+    try {
+      profileCompletionPct = await computeProfileCompletion(id);
+      await db.tenant.update({
+        where: { id },
+        data: { profileCompletionPct },
+      });
+    } catch (err) {
+      console.error('[tenants PATCH] computeProfileCompletion failed:', err);
+    }
+
+    // Revalidate the public Business Hub page (description/business hours may
+    // have changed — ISR should pick up the update immediately).
+    try {
+      const industrySeg = mapIndustryToUrlSlug(tenant.industry);
+      const citySeg = slugifyCity(tenant.city);
+      const slugSeg = tenant.publicSlug || tenant.slug;
+      if (industrySeg && citySeg && slugSeg) {
+        revalidatePath(`/${industrySeg}/${citySeg}/${slugSeg}`);
+      }
+    } catch {
+      // revalidatePath can throw in some edge runtime contexts — non-fatal
+    }
+
+    return NextResponse.json({
+      tenant: {
+        id: tenant.id,
+        // Echo back the marketplace-eligibility fields the onboarding form
+        // cares about (so the client can update its local state).
+        pricingType: tenant.pricingType,
+        callOutFee: tenant.callOutFee,
+        travelFeePerKm: tenant.travelFeePerKm,
+        emergencySurchargePct: tenant.emergencySurchargePct,
+        weekendSurchargePct: tenant.weekendSurchargePct,
+        emergencyServiceAvailable: tenant.emergencyServiceAvailable,
+        vatNumber: tenant.vatNumber,
+        licenceNumber: tenant.licenceNumber,
+        insuranceProvider: tenant.insuranceProvider,
+        insurancePolicyNumber: tenant.insurancePolicyNumber,
+        insuranceExpiryDate: tenant.insuranceExpiryDate,
+        insuranceVerified: tenant.insuranceVerified,
+        employeesCount: tenant.employeesCount,
+        languagesJson: tenant.languagesJson,
+        businessCategoriesJson: tenant.businessCategoriesJson,
+        businessHoursJson: tenant.businessHoursJson,
+        serviceAreasJson: tenant.serviceAreasJson,
+        marketplaceOptIn: tenant.marketplaceOptIn,
+        marketplaceTermsAcceptedAt: tenant.marketplaceTermsAcceptedAt,
+        identityVerified: tenant.identityVerified,
+        businessVerified: tenant.businessVerified,
+        stripeConnected: tenant.stripeConnected,
+        profileCompletionPct,
+        onboardingStep: tenant.onboardingStep,
+        onboardingCompleted: tenant.onboardingCompleted,
+        updatedAt: tenant.updatedAt,
+      },
+    });
+  } catch (error) {
+    console.error('PATCH tenant error:', error);
+    return NextResponse.json(
+      { error: 'Failed to update tenant' },
+      { status: 500 }
+    );
+  }
+}
+

@@ -224,6 +224,10 @@ interface PlanDef {
   maxJobs: number;
   maxWorkflows: number;
   features: Record<string, boolean>;
+  limits?: Record<string, number | string>;
+  isAddon?: boolean;
+  parentPlanCode?: string | null;
+  marketplaceAccess?: string; // none | browse_only | receive_bookings | priority
   popular?: boolean;
   sortOrder: number;
 }
@@ -232,30 +236,38 @@ const PLAN_DEFS: PlanDef[] = [
   {
     code: 'starter',
     name: 'Starter',
-    description: 'For solo entrepreneurs & freelancers',
-    monthlyPrice: 10,
-    yearlyPrice: 60,
+    description: 'Perfect for solo professionals. CRM, jobs, invoicing, scheduling.',
+    monthlyPrice: 5,
+    yearlyPrice: 50,
     maxUsers: 1,
     maxJobs: 100,
     maxWorkflows: 10,
     features: {
-      whatsappIntegration: true,
+      whatsappIntegration: false,
       customWorkflows: false,
       apiAccess: false,
       prioritySupport: false,
       leadPipeline: false,
       whiteLabel: false,
+      aiAssistant: false,
+      customerPortal: true,
+      estimates: true,
+      invoicing: true,
+      scheduling: true,
+      multiBranch: false,
     },
+    limits: { maxEmployees: 1, maxBranches: 1, maxServiceAreas: 3 },
+    marketplaceAccess: 'browse_only',
     sortOrder: 1,
   },
   {
     code: 'growth',
     name: 'Growth',
-    description: 'For growing service businesses',
-    monthlyPrice: 25,
-    yearlyPrice: 150,
+    description: 'Everything in Starter + AI Assistant, WhatsApp, unlimited jobs, marketplace bookings.',
+    monthlyPrice: 29,
+    yearlyPrice: 290,
     maxUsers: 5,
-    maxJobs: 1000,
+    maxJobs: 999999, // effectively unlimited
     maxWorkflows: 50,
     features: {
       whatsappIntegration: true,
@@ -264,18 +276,29 @@ const PLAN_DEFS: PlanDef[] = [
       prioritySupport: true,
       leadPipeline: true,
       whiteLabel: false,
+      aiAssistant: true,
+      customerPortal: true,
+      estimates: true,
+      invoicing: true,
+      scheduling: true,
+      multiBranch: false,
+      calendarSync: true,
+      reports: true,
+      automations: true,
     },
+    limits: { maxEmployees: 5, maxBranches: 1, maxServiceAreas: 10 },
+    marketplaceAccess: 'receive_bookings',
     popular: true,
     sortOrder: 2,
   },
   {
-    code: 'pro',
-    name: 'Pro',
-    description: 'For scaling organizations',
-    monthlyPrice: 50,
-    yearlyPrice: 300,
-    maxUsers: 999,
-    maxJobs: 99999,
+    code: 'business',
+    name: 'Business',
+    description: 'Everything in Growth + AI Dispatcher, AI Quote Generator, Marketing Automation, Inventory, Multi-Branch.',
+    monthlyPrice: 79,
+    yearlyPrice: 790,
+    maxUsers: 999999, // unlimited
+    maxJobs: 999999,
     maxWorkflows: 999,
     features: {
       whatsappIntegration: true,
@@ -284,18 +307,35 @@ const PLAN_DEFS: PlanDef[] = [
       prioritySupport: true,
       leadPipeline: true,
       whiteLabel: false,
+      aiAssistant: true,
+      aiDispatcher: true,
+      aiQuoteGenerator: true,
+      marketingAutomation: true,
+      customerPortal: true,
+      estimates: true,
+      invoicing: true,
+      scheduling: true,
+      multiBranch: true,
+      inventory: true,
+      assetManagement: true,
+      customerSegments: true,
+      calendarSync: true,
+      reports: true,
+      automations: true,
     },
+    limits: { maxEmployees: 999999, maxBranches: 10, maxServiceAreas: 50 },
+    marketplaceAccess: 'priority',
     sortOrder: 3,
   },
   {
     code: 'enterprise',
     name: 'Enterprise',
-    description: 'For large enterprises & franchises',
+    description: 'White-label, API, SSO, dedicated support, custom integrations. Contact us for pricing.',
     monthlyPrice: 0,
     yearlyPrice: 0,
-    maxUsers: 100,
-    maxJobs: 10000,
-    maxWorkflows: 1000,
+    maxUsers: 999999,
+    maxJobs: 999999,
+    maxWorkflows: 999,
     features: {
       whatsappIntegration: true,
       customWorkflows: true,
@@ -303,7 +343,27 @@ const PLAN_DEFS: PlanDef[] = [
       prioritySupport: true,
       leadPipeline: true,
       whiteLabel: true,
+      aiAssistant: true,
+      aiDispatcher: true,
+      aiQuoteGenerator: true,
+      marketingAutomation: true,
+      customerPortal: true,
+      estimates: true,
+      invoicing: true,
+      scheduling: true,
+      multiBranch: true,
+      inventory: true,
+      assetManagement: true,
+      customerSegments: true,
+      calendarSync: true,
+      reports: true,
+      automations: true,
+      sso: true,
+      customIntegrations: true,
+      dedicatedSupport: true,
     },
+    limits: { maxEmployees: 999999, maxBranches: 999999, maxServiceAreas: 999999 },
+    marketplaceAccess: 'priority',
     sortOrder: 4,
   },
 ];
@@ -335,6 +395,10 @@ export async function seedPlans(): Promise<{ seeded: number; skipped: number }> 
           maxJobs: p.maxJobs,
           maxWorkflows: p.maxWorkflows,
           featuresJson: JSON.stringify(p.features),
+          limitsJson: JSON.stringify(p.limits ?? {}),
+          isAddon: p.isAddon ?? false,
+          parentPlanCode: p.parentPlanCode ?? null,
+          marketplaceAccess: p.marketplaceAccess ?? 'none',
           popular: p.popular ?? false,
           sortOrder: p.sortOrder,
         },
@@ -348,6 +412,10 @@ export async function seedPlans(): Promise<{ seeded: number; skipped: number }> 
           maxJobs: p.maxJobs,
           maxWorkflows: p.maxWorkflows,
           featuresJson: JSON.stringify(p.features),
+          limitsJson: JSON.stringify(p.limits ?? {}),
+          isAddon: p.isAddon ?? false,
+          parentPlanCode: p.parentPlanCode ?? null,
+          marketplaceAccess: p.marketplaceAccess ?? 'none',
           popular: p.popular ?? false,
           sortOrder: p.sortOrder,
         },
@@ -362,6 +430,16 @@ export async function seedPlans(): Promise<{ seeded: number; skipped: number }> 
       console.error(`[billing-seed] seedPlans: failed to upsert plan "${p.code}" (non-fatal):`, err);
       skipped++;
     }
+  }
+  // Migrate any existing tenants from 'pro' → 'business'
+  try {
+    const proTenants = await db.tenant.findMany({ where: { plan: 'pro' } });
+    if (proTenants.length > 0) {
+      await db.tenant.updateMany({ where: { plan: 'pro' }, data: { plan: 'business' } });
+      console.log(`[billing-seed] Migrated ${proTenants.length} tenant(s) from 'pro' → 'business'`);
+    }
+  } catch (err) {
+    // Non-fatal — the 'pro' plan may have already been removed
   }
   return { seeded, skipped };
 }

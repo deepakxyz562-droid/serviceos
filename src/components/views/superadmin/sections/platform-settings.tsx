@@ -2,11 +2,14 @@
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Platform Settings — global platform configuration: branding defaults, limits,
-// feature policy, and default modules for new workspaces.
+// feature policy, default modules, and REVENUE STREAM toggles.
+//
+// Revenue Streams are backed by the RevenueFeatureToggle table. SuperAdmin can
+// enable/disable each revenue stream globally, and configure pricing.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState } from 'react';
-import { Settings, Save, Shield } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Settings, Save, Shield, DollarSign, Loader2, CheckCircle2 } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,14 +17,26 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 
-import { SectionHeader, DemoDataPill } from '@/components/views/superadmin/_shared';
+import { SectionHeader } from '@/components/views/superadmin/_shared';
 
-// ─── Demo data ───────────────────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface RevenueToggle {
+  featureKey: string;
+  displayName: string;
+  description: string | null;
+  enabled: boolean;
+  perTenantOverride: boolean;
+  defaultForNewTenants: boolean;
+  pricingJson: string;
+  configJson: string;
+}
 
 interface QuotaItem {
   label: string;
@@ -46,7 +61,7 @@ const POLICIES: PolicyItem[] = [
   { label: 'Allow workspaces to use own AI keys', description: 'Members can supply their own provider API keys for AI features.', enabled: true },
   { label: 'Allow workspaces to install marketplace packs', description: 'Owners can browse and install third-party packs from the marketplace.', enabled: true },
   { label: 'Allow custom domains on Growth plan+', description: 'Workspaces on Growth and above can map a custom domain to portals.', enabled: true },
-  { label: 'Allow API access on Starter plan+', description: 'Starter, Growth, and Pro plans get programmatic API access.', enabled: false },
+  { label: 'Allow API access on Starter plan+', description: 'Starter, Growth, and Business plans get programmatic API access.', enabled: false },
 ];
 
 interface ModuleItem {
@@ -81,6 +96,67 @@ export function PlatformSettingsSection() {
   const [policies, setPolicies] = useState(POLICIES);
   const [modules, setModules] = useState(DEFAULT_MODULES);
 
+  // Revenue toggles — fetched from /api/superadmin/revenue-toggles
+  const [revenueToggles, setRevenueToggles] = useState<RevenueToggle[]>([]);
+  const [loadingToggles, setLoadingToggles] = useState(true);
+  const [savingToggleKey, setSavingToggleKey] = useState<string | null>(null);
+
+  const fetchRevenueToggles = useCallback(async () => {
+    try {
+      const res = await fetch('/api/superadmin/revenue-toggles', { credentials: 'include' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setRevenueToggles(data.toggles || []);
+    } catch (err) {
+      console.error('[platform-settings] Failed to fetch revenue toggles:', err);
+      toast.error('Failed to load revenue toggles');
+    } finally {
+      setLoadingToggles(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRevenueToggles();
+  }, [fetchRevenueToggles]);
+
+  async function toggleRevenueStream(toggle: RevenueToggle, enabled: boolean) {
+    setSavingToggleKey(toggle.featureKey);
+    try {
+      const res = await fetch('/api/superadmin/revenue-toggles', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ featureKey: toggle.featureKey, enabled }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setRevenueToggles(prev =>
+        prev.map(t => t.featureKey === toggle.featureKey ? { ...t, enabled } : t)
+      );
+      toast.success(`${toggle.displayName} ${enabled ? 'enabled' : 'disabled'}`);
+    } catch (err) {
+      console.error('[platform-settings] Failed to update toggle:', err);
+      toast.error(`Failed to update ${toggle.displayName}`);
+    } finally {
+      setSavingToggleKey(null);
+    }
+  }
+
+  function parsePricing(pricingJson: string): string {
+    try {
+      const p = JSON.parse(pricingJson);
+      if (p.cost !== undefined && p.currency) {
+        const cycle = p.billingCycle ? `/${p.billingCycle}` : '';
+        return `${p.currency} ${p.cost}${cycle}`;
+      }
+      if (p.commissionPct !== undefined) return `${p.commissionPct}% commission`;
+      if (p.costPerSms !== undefined) return `${p.currency || '$'}${p.costPerSms}/SMS`;
+      if (p.costPerMsg !== undefined) return `${p.currency || '$'}${p.costPerMsg}/msg`;
+      return '—';
+    } catch {
+      return '—';
+    }
+  }
+
   function saveGeneral() { toast.success('Settings saved'); }
   function saveQuotas() { toast.success('Limits & quotas updated'); }
   function savePolicies() { toast.success('Feature policy updated'); }
@@ -90,10 +166,68 @@ export function PlatformSettingsSection() {
     <section className="space-y-6">
       <SectionHeader
         title="Platform Settings"
-        description="Global platform configuration — branding, defaults, limits, policies."
+        description="Global platform configuration — branding, defaults, limits, policies, and revenue streams."
         icon={Settings}
-        actions={<DemoDataPill />}
+        actions={
+          <Badge variant="outline" className="gap-1.5 text-emerald-600 border-emerald-200 bg-emerald-50">
+            <CheckCircle2 className="size-3" /> Live Data
+          </Badge>
+        }
       />
+
+      {/* Revenue Streams — the most important card (Phase 1) */}
+      <Card className="card-shadow border-primary/20">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <DollarSign className="size-4 text-emerald-600" />
+            Revenue Streams
+          </CardTitle>
+          <CardDescription>
+            Toggle non-subscription revenue streams on/off globally. Per-tenant overrides available in Feature Flags.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-1">
+          {loadingToggles ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : revenueToggles.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">No revenue toggles configured.</p>
+          ) : (
+            revenueToggles.map((toggle, idx) => (
+              <div key={toggle.featureKey} className="py-3">
+                {idx > 0 && <Separator className="mb-3" />}
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-foreground">{toggle.displayName}</p>
+                      <Badge variant="secondary" className="text-[10px] py-0 px-1.5">
+                        {parsePricing(toggle.pricingJson)}
+                      </Badge>
+                      {toggle.perTenantOverride && (
+                        <Badge variant="outline" className="text-[10px] py-0 px-1.5">
+                          per-tenant
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{toggle.description}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {savingToggleKey === toggle.featureKey && (
+                      <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+                    )}
+                    <Switch
+                      checked={toggle.enabled}
+                      onCheckedChange={(v) => toggleRevenueStream(toggle, v)}
+                      disabled={savingToggleKey === toggle.featureKey}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Card A — General */}

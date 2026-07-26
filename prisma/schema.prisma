@@ -41,6 +41,40 @@ model Tenant {
   arr               Float    @default(0)
   churnRate         Float    @default(0)
 
+  // ── Marketplace Eligibility (Phase 1: Revenue Architecture) ────────────
+  // A tenant must satisfy ALL gates to receive marketplace leads:
+  //   paid subscription + identity verified + business verified +
+  //   insurance verified + Stripe connected + profile ≥ 80% complete +
+  //   marketplace opt-in + terms accepted.
+  identityVerified         Boolean   @default(false)
+  businessVerified         Boolean   @default(false)
+  insuranceVerified        Boolean   @default(false)
+  stripeConnected          Boolean   @default(false)
+  stripeAccountId          String?   // Stripe Connect account ID (acct_...)
+  stripePayoutsEnabled     Boolean   @default(false)
+  profileCompletionPct     Int       @default(0)  // 0-100, computed from onboarding fields
+  marketplaceOptIn         Boolean   @default(false)
+  marketplaceTermsAcceptedAt DateTime?
+  // Pricing strategy fields (collected during onboarding)
+  pricingType              String?   // fixed | hourly | starting_from | custom_quote | mixed
+  callOutFee               Float     @default(0)
+  travelFeePerKm           Float     @default(0)
+  emergencySurchargePct    Float     @default(0)  // e.g. 40 = +40%
+  weekendSurchargePct      Float     @default(0)  // e.g. 20 = +20%
+  emergencyServiceAvailable Boolean  @default(false)
+  vatNumber                String?
+  licenceNumber            String?
+  insuranceProvider        String?
+  insurancePolicyNumber    String?
+  insuranceExpiryDate      DateTime?
+  languagesJson            String    @default("[]")  // ["en", "es", ...]
+  employeesCount           Int       @default(1)
+  // Multi-select industry categories (phase-3 onboarding) — array of industry IDs
+  // from INDUSTRY_CATALOG. The primary `industry` field above remains the
+  // canonical single industry for SEO routing; this array captures the
+  // business's full scope (e.g. a handyman who also does plumbing + electrical).
+  businessCategoriesJson   String    @default("[]")  // ["plumbing", "electrical", ...]
+
   // ── Public Business Hub (programmatic SEO) ──────────────────────────────
   // Powers the public-facing profile at /{industry}/{city}/{slug}.
   // A tenant is auto-indexed only when the profile is "rich enough":
@@ -97,6 +131,48 @@ model Tenant {
   aiAgents           AiAgent[]
   aiPhoneNumbers     AiPhoneNumber[]
   aiCalls            AiCall[]
+  // Marketplace & Revenue (Phase 1)
+  marketplaceTransactions MarketplaceTransaction[]
+  payouts           Payout[]
+  featuredListings  FeaturedListing[]
+  aiCredits         AICredit[]
+  usageCharges      UsageCharge[]
+  // Enterprise Schema (Phase 2)
+  branches          Branch[]
+  holidayCalendars  HolidayCalendar[]
+  serviceRegions    ServiceRegion[]
+  taxRules          TaxRule[]
+  numberSequences   NumberSequence[]
+  customFields      CustomField[]
+  approvalFlows     ApprovalFlow[]
+  commissionRules   CommissionRule[]
+  paymentGatewayConfigs PaymentGatewayConfig[]
+  // Job Lifecycle (Phase 4)
+  assessments       Assessment[]
+  jobStateTransitions JobStateTransition[]
+  qualityInspections QualityInspection[]
+  requestExtractions RequestExtraction[]
+  // Asset, Inventory, Warranty & Service Plans (Phase 7)
+  inventoryItems      InventoryItem[]
+  warehouses          Warehouse[]
+  suppliers           Supplier[]
+  purchaseOrders      PurchaseOrder[]
+  stockTransfers      StockTransfer[]
+  stockTransactions   StockTransaction[]
+  servicePlans        ServicePlan[]
+  servicePlanSubscriptions ServicePlanSubscription[]
+  warranties          Warranty[]
+  warrantyClaims      WarrantyClaim[]
+  // Marketplace Flows (Phase 10)
+  jobRequests         JobRequest[]
+  emergencyDispatches EmergencyDispatch[]
+  providerPortfolio   ProviderPortfolio?
+  providerCertifications ProviderCertification[]
+  memberships         Membership[]
+  promotions          Promotion[]
+  loyaltyPoints       LoyaltyPoint[]
+  referrals           Referral[]
+  pricingRules       PricingRule[]
 
   @@index([slug])
   @@index([plan])
@@ -249,7 +325,7 @@ model BillingEvent {
 // Seeded on first run by /api/plans/seed (idempotent).
 model Plan {
   id              String   @id @default(cuid())
-  code            String   @unique // starter | growth | pro | enterprise
+  code            String   @unique // starter | growth | business | enterprise | marketplace_addon
   name            String
   description     String?
   monthlyPrice    Float    @default(0)
@@ -263,7 +339,11 @@ model Plan {
   emailQuota      Int      @default(5000)
   smsQuota        Int      @default(500)
   storageQuotaMb  Int      @default(1024)
-  featuresJson    String   @default("{}") // { whatsappIntegration, customWorkflows, apiAccess, prioritySupport, ... }
+  featuresJson    String   @default("{}") // { whatsappIntegration, customWorkflows, apiAccess, prioritySupport, marketplace, ... }
+  limitsJson      String   @default("{}") // { maxBranches, maxEmployees, maxServiceAreas, ... }
+  isAddon         Boolean  @default(false) // true for marketplace_addon and other add-ons
+  parentPlanCode  String?  // if addon, which plan codes it can be added to (null = all)
+  marketplaceAccess String @default("none") // none | browse_only | receive_bookings | priority
   popular         Boolean  @default(false)
   isActive        Boolean  @default(true)
   sortOrder       Int      @default(0)
@@ -333,6 +413,8 @@ model Service {
   updatedAt       DateTime @updatedAt
 
   tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  pricingRules  PricingRule[]
 
   @@index([tenantId])
   @@index([category])
@@ -588,14 +670,16 @@ model Quote {
   tenantId      String?
   customerId    String?
   leadId        String?
+  jobRequestId String?  // -> JobRequest.id (if created from a quote request)
   validUntil    DateTime?
   whatsappSent  Boolean   @default(false)
   whatsappSentAt DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  tenant   Tenant?   @relation(fields: [tenantId], references: [id])
-  customer Customer? @relation(fields: [customerId], references: [id])
+  tenant     Tenant?     @relation(fields: [tenantId], references: [id])
+  customer   Customer?   @relation(fields: [customerId], references: [id])
+  jobRequest JobRequest? @relation("JobRequestQuotes", fields: [jobRequestId], references: [id])
 
   @@index([tenantId])
   @@index([status])
@@ -2816,6 +2900,7 @@ model Booking {
   id                String    @id @default(cuid())
   title             String
   description       String?
+  bookingType       String    @default("instant")  // instant | quote_request | emergency | ai_auto
   status            String    @default("pending")  // pending, confirmed, in_progress, completed, cancelled, no_show
   source            String    @default("manual")   // manual, whatsapp, website, form, api
   customerId        String?
@@ -3663,6 +3748,7 @@ model JobVisit {
   jobId           String   // -> Job.id
   // Visit content
   title           String   @default("")              // visit title (often auto "client - title")
+  visitType       String   @default("visit")          // visit | inspection | installation | maintenance | repair | emergency | warranty | follow_up | quality_inspection | training
   instructions    String?                             // visit instructions shown to assignee on-site
   // Schedule
   scheduledDate   DateTime @default(now())           // the day the visit starts
@@ -3982,4 +4068,1169 @@ model AiCall {
   @@index([assistantId])
   @@index([status])
   @@index([customerPhone])
+}
+
+// ==========================================
+// MARKETPLACE & REVENUE MODELS (Phase 1)
+// ==========================================
+// These models power all non-subscription revenue streams:
+// marketplace commission, payouts, featured listings, AI credits,
+// usage-based billing (SMS/WhatsApp/email), and global revenue toggles.
+
+model MarketplaceTransaction {
+  id              String   @id @default(cuid())
+  tenantId        String?  // service provider
+  customerId      String?  // marketplace customer (may not be in Customer table)
+  customerName    String?
+  customerPhone   String?
+  customerEmail   String?
+  jobId           String?  // linked Job
+  bookingId       String?  // linked Booking
+  bookingType     String   // instant | quote_request | emergency | ai_auto
+  serviceDescription String?
+  totalAmount     Float    @default(0)  // gross amount customer pays
+  commissionPct   Float    @default(5)  // platform commission %
+  commissionAmount Float   @default(0)  // calculated: totalAmount * commissionPct / 100
+  providerAmount  Float    @default(0)  // totalAmount - commissionAmount
+  currency        String   @default("USD")
+  status          String   @default("pending")  // pending | escrow | released | refunded | disputed
+  paymentIntentId String?  // Stripe PaymentIntent ID
+  transferId      String?  // Stripe Transfer ID (payout to provider)
+  payoutId        String?  // -> Payout.id
+  escrowReleasedAt DateTime?
+  refundedAt      DateTime?
+  refundAmount    Float    @default(0)
+  disputeReason   String?
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant  Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payout  Payout?  @relation("PayoutTransactions", fields: [payoutId], references: [id])
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([bookingType])
+  @@index([createdAt])
+}
+
+model Payout {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  stripeTransferId String? @unique  // Stripe Transfer ID (tr_...)
+  amount          Float    @default(0)
+  currency        String   @default("USD")
+  status          String   @default("pending")  // pending | paid | failed | cancelled
+  method          String   @default("stripe_connect")  // stripe_connect | manual
+  description     String?
+  transactionsJson String @default("[]")  // [MarketplaceTransaction.id, ...]
+  transactionCount Int    @default(0)
+  periodStart     DateTime?
+  periodEnd       DateTime?
+  paidAt          DateTime?
+  failReason      String?
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant        Tenant?                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactions  MarketplaceTransaction[] @relation("PayoutTransactions") // matches payoutId field
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([paidAt])
+}
+
+model FeaturedListing {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  type            String   @default("featured")  // featured | sponsored | verified_badge
+  priority        Int      @default(0)  // higher = more prominent
+  startDate       DateTime @default(now())
+  endDate         DateTime?
+  isActive        Boolean  @default(true)
+  amountCharged   Float    @default(0)
+  currency        String   @default("USD")
+  paymentRef      String?  // subscription payment ID or one-time charge ref
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([type])
+  @@index([isActive])
+  @@index([endDate])
+}
+
+model AICredit {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  balance         Int      @default(0)  // current credit balance
+  totalPurchased  Int      @default(0)  // lifetime purchased
+  totalUsed       Int      @default(0)  // lifetime consumed
+  planQuota       Int      @default(0)  // monthly quota from subscription plan
+  planQuotaUsed   Int      @default(0)  // used this billing cycle
+  planQuotaResetAt DateTime?
+  lastPurchaseAt  DateTime?
+  lastUsageAt     DateTime?
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model UsageCharge {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  channel         String   // sms | whatsapp | email | voice | storage
+  direction       String   @default("outbound")  // outbound | inbound
+  recipient       String?  // phone/email
+  contentLength   Int      @default(0)  // chars for SMS, seconds for voice, bytes for storage
+  unitCost        Float    @default(0)  // cost per unit in tenant currency
+  totalCost       Float    @default(0)  // contentLength * unitCost (or flat)
+  currency        String   @default("USD")
+  status          String   @default("charged")  // charged | waived | failed
+  providerRef     String?  // Twilio MSG ID, etc.
+  jobId           String?
+  campaignId      String?
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([channel])
+  @@index([createdAt])
+}
+
+model RevenueFeatureToggle {
+  id              String   @id @default(cuid())
+  featureKey      String   @unique  // marketplace_commission | featured_listing | ai_credits | sms_billing | whatsapp_billing | white_label_billing | premium_integrations
+  displayName     String
+  description     String?
+  enabled         Boolean  @default(true)  // global on/off (SuperAdmin control)
+  perTenantOverride Boolean @default(false)  // allow per-tenant override
+  defaultForNewTenants Boolean @default(true)  // auto-enable for new tenants
+  pricingJson     String   @default("{}")  // { cost, currency, billingCycle, ... }
+  configJson      String   @default("{}")  // feature-specific config
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([featureKey])
+  @@index([enabled])
+}
+
+// ==========================================
+// ENTERPRISE SCHEMA FOUNDATION (Phase 2)
+// ==========================================
+// These models unlock multi-branch operations, tax compliance, configurable
+// numbering, custom fields, multi-stage approvals, commission rules, and
+// multi-gateway payments — the enterprise gaps that Jobber/ServiceM8 lack.
+
+// ─── Branch / Multi-Location ─────────────────────────────────────────────────
+model Branch {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  name            String
+  code            String?  // short code, e.g. "LDN", "MAN"
+  address         String?
+  city            String?
+  state           String?
+  postalCode      String?
+  country         String   @default("US")
+  lat             Float?
+  lng             Float?
+  phone           String?
+  email           String?
+  managerId       String?  // -> User.id
+  businessHoursJson String @default("{}")  // {mon: {open: "09:00", close: "17:00"}, ...}
+  serviceAreasJson String  @default("[]")  // array of area names/postcodes
+  isActive        Boolean  @default(true)
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([isActive])
+}
+
+// ─── Holiday Calendar ───────────────────────────────────────────────────────
+model HolidayCalendar {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  branchId        String?  // null = applies to all branches
+  name            String   // e.g. "Christmas Day", "Bank Holiday"
+  date            DateTime
+  isRecurring     Boolean  @default(false)  // repeats every year
+  description     String?
+  createdAt       DateTime @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([date])
+  @@index([branchId])
+}
+
+// ─── Service Region (geo-aware, replaces serviceAreasJson for marketplace) ──
+model ServiceRegion {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  branchId        String?
+  name            String   // e.g. "North London", "M25 Radius"
+  type            String   @default("radius")  // radius | postcode | polygon
+  centerLat       Float?
+  centerLng       Float?
+  radiusKm        Float?   // for type=radius
+  postcodesJson   String   @default("[]")  // for type=postcode: ["SW1", "SW2", ...]
+  polygonJson     String   @default("[]")  // for type=polygon: [{lat,lng}, ...]
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([branchId])
+  @@index([isActive])
+}
+
+// ─── Tax Rules (multi-rate, reverse-charge, place-of-supply) ────────────────
+model TaxRule {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  name            String   // e.g. "UK Standard VAT", "Reduced Rate", "Zero Rated"
+  rate            Float    // percentage, e.g. 20 = 20%
+  type            String   @default("standard")  // standard | reduced | zero | reverse_charge
+  country         String?  // ISO country code, null = global
+  isDefault       Boolean  @default(false)
+  description     String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([country])
+  @@index([isActive])
+}
+
+// ─── Number Sequence (configurable invoice/quote/job/booking numbers) ───────
+model NumberSequence {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  entity          String   // invoice | quote | job | booking | purchase_order
+  prefix          String   @default("")  // e.g. "INV-", "JOB-", "Q-"
+  suffix          String   @default("")
+  padLength       Int      @default(5)  // zero-pad to this length: 00001
+  nextNumber      Int      @default(1)
+  resetYearly     Boolean  @default(false)
+  includeYear     Boolean  @default(true)
+  branchId        String?  // null = tenant-wide, or per-branch sequence
+  format          String   @default("{PREFIX}{YEAR}-{SEQ}")  // template
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, entity, branchId])
+  @@index([tenantId])
+}
+
+// ─── Custom Fields (attach to Customer/Job/Invoice/Booking) ─────────────────
+model CustomField {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  entityType      String   // customer | job | invoice | booking | lead | quote
+  fieldName       String   // machine name, e.g. "vat_number"
+  label           String   // display label, e.g. "VAT Number"
+  type            String   @default("text")  // text | number | date | select | multiselect | checkbox | textarea
+  optionsJson     String   @default("[]")  // for select/multiselect: ["Option 1", "Option 2"]
+  defaultValue    String?
+  isRequired      Boolean  @default(false)
+  isVisible       Boolean  @default(true)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([entityType])
+}
+
+// ─── Approval Flow (multi-stage: Estimator → Manager → Finance → Customer) ──
+model ApprovalFlow {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  name            String   // e.g. "Quote Approval (>£5000)", "Job Approval"
+  entityType      String   // quote | job | expense | booking
+  entityId        String?  // specific entity ID (null = template)
+  status          String   @default("pending")  // pending | approved | rejected | cancelled
+  currentStep     Int      @default(0)
+  totalSteps      Int      @default(1)
+  stepsJson       String   @default("[]")  // [{order, role, approverId, approvedAt, comment}]
+  initiatedById   String?
+  initiatedByName String?
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([entityType])
+  @@index([status])
+}
+
+// ─── Commission Rule (technician commission + marketplace commission) ───────
+model CommissionRule {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  scope           String   @default("technician")  // technician | marketplace
+  name            String   // e.g. "Standard 10% commission", "Marketplace 5%"
+  type            String   @default("percentage")  // percentage | fixed | tiered
+  rate            Float    @default(0)  // percentage (e.g. 10 = 10%) or fixed amount
+  minAmount       Float    @default(0)  // minimum job value for commission to apply
+  maxAmount       Float?   // cap (null = no cap)
+  tieredRatesJson String   @default("[]")  // [{min, max, rate}] for type=tiered
+  appliesTo       String   @default("all")  // all | marketplace | direct
+  employeeId      String?  // null = all employees, or specific
+  branchId        String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([scope])
+  @@index([isActive])
+}
+
+// ─── Payment Gateway Config (8 gateways, country-based defaults) ────────────
+model PaymentGatewayConfig {
+  id              String   @id @default(cuid())
+  tenantId        String?  // null = platform-wide default
+  gateway         String   // stripe | paypal | square | gocardless | razorpay | adyen | mollie | worldpay
+  displayName     String   // e.g. "Stripe (UK)", "PayPal"
+  isLive          Boolean  @default(false)  // false = sandbox/test mode
+  isActive        Boolean  @default(false)
+  isDefault       Boolean  @default(false)  // default gateway for this tenant
+  supportedCountries String @default("[]")  // JSON: ["US", "GB", "IN"]
+  supportedCurrencies String @default("[]")  // JSON: ["USD", "GBP", "INR"]
+  configJson      String   @default("{}")  // gateway-specific config (API keys stored in Credential vault)
+  credentialId    String?  // -> Credential.id (encrypted secrets)
+  featuresJson    String   @default("{}")  // {cards: true, applePay: true, googlePay: true, bankTransfer: false}
+  priority        Int      @default(0)  // higher = preferred
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, gateway])
+  @@index([tenantId])
+  @@index([gateway])
+  @@index([isActive])
+}
+
+// ==========================================
+// SMART PRICING
+// ==========================================
+
+model PricingRule {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  serviceId       String?  // null = applies to all services, specific = this service only
+  name            String   // e.g. "Standard Pricing", "Emergency Pricing"
+  basePrice       Float    @default(0)
+  pricingType     String   @default("fixed") // fixed | hourly | starting_from | custom_quote
+  callOutFee      Float    @default(0)
+  travelFeePerKm  Float    @default(0)
+  emergencySurchargePct Float @default(0)  // +40% = 40
+  weekendSurchargePct Float  @default(0)  // +20% = 20
+  eveningSurchargePct Float  @default(0)  // after 6pm
+  holidaySurchargePct Float  @default(0)
+  minimumCharge   Float    @default(0)
+  maximumCharge   Float?   // null = no cap
+  estimatedDurationMins Int @default(60)
+  isActive        Boolean  @default(true)
+  priority        Int      @default(0)  // higher = overrides lower
+  conditionsJson  String   @default("{}")  // {minDistance, maxDistance, timeWindow, etc.}
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant  Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  service Service? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([serviceId])
+  @@index([isActive])
+}
+
+// ==========================================
+// JOB LIFECYCLE ENGINE (Phase 4)
+// ==========================================
+// Assessment, Visit Types, Job State Machine, Quality Inspection —
+// the pipeline that makes ServiceOS better than Jobber:
+// Lead → Assessment → Quote → Approved → Scheduled → Assigned →
+// Travelling → OnSite → Paused → Completed → QC → Invoice → Paid →
+// Warranty → Closed
+
+// ─── Assessment (pre-quote inspection) ───────────────────────────────────────
+model Assessment {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  jobId           String?  // -> Job.id (if created from a job)
+  leadId          String?  // -> Lead.id (if created from a lead)
+  customerId      String?
+  customerName    String?
+  customerPhone   String?
+  customerEmail   String?
+  address         String?
+  // Assessment details
+  type            String   @default("inspection") // inspection | estimate | site_survey | damage_assessment | warranty_check
+  title           String
+  description     String?
+  status          String   @default("scheduled") // scheduled | in_progress | completed | cancelled
+  scheduledAt     DateTime?
+  completedAt     DateTime?
+  // Inspector
+  inspectorId     String?  // -> Employee.id
+  inspectorName   String?
+  // Assessment content
+  checklistId     String?  // -> Checklist.id
+  checklistResponsesJson String @default("{}")  // {sectionId: {questionId: answer}}
+  measurementsJson String  @default("{}")  // {area_sqm, height_m, distance_m, ...}
+  findingsJson    String   @default("[]")  // [{severity, description, recommendation}]
+  // Media
+  photosJson      String   @default("[]")  // [{url, type, caption}]
+  videosJson      String   @default("[]")
+  droneImagesJson String   @default("[]")
+  // Customer signature
+  signatureUrl    String?
+  signedAt        DateTime?
+  signedByName    String?
+  // AI-generated quote (optional)
+  generatedQuoteId String? // -> Quote.id (if AI generated a quote from this assessment)
+  aiSummary       String?  // AI-generated summary of findings
+  // Metadata
+  estimatedDurationMins Int?
+  estimatedCost   Float?
+  currency        String   @default("USD")
+  notes           String?
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant  Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([jobId])
+  @@index([leadId])
+  @@index([customerId])
+  @@index([status])
+}
+
+// ─── Job State Transition (15-state machine history) ────────────────────────
+model JobStateTransition {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  jobId           String
+  fromState       String   // lead | assessment | quoted | approved | scheduled | assigned | travelling | on_site | paused | completed | quality_check | invoiced | paid | warranty | closed
+  toState         String
+  transitionReason String?
+  transitionedById String?
+  transitionedByName String?
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([tenantId])
+  @@index([createdAt])
+}
+
+// ─── Quality Inspection (post-job supervisor QC) ────────────────────────────
+model QualityInspection {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  jobId           String
+  // Inspector
+  inspectorId     String?  // -> Employee.id (supervisor/manager)
+  inspectorName   String?
+  // Inspection
+  status          String   @default("pending") // pending | passed | failed | needs_rework
+  checklistId     String?  // -> Checklist.id
+  responsesJson   String   @default("{}")  // {sectionId: {questionId: {answer, passed}}}
+  score           Int?     // 0-100
+  // Findings
+  findingsJson    String   @default("[]")  // [{severity, description, action_required}]
+  reworkNotes     String?
+  // Photos
+  photosJson      String   @default("[]")
+  // Customer notification
+  customerNotifiedAt DateTime?
+  // Resolution
+  resolvedAt      DateTime?
+  resolvedById    String?
+  resolvedByName  String?
+  resolutionNotes String?
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([tenantId])
+  @@index([status])
+}
+
+// ─── AI Request Extraction (free-text → structured lead data) ───────────────
+model RequestExtraction {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  leadId          String?  // -> Lead.id (if a lead was created)
+  rawText         String   // customer's free-text problem description
+  source          String   @default("whatsapp") // whatsapp | phone | website | marketplace | form
+  // AI-extracted fields
+  extractedCategory String?
+  extractedIndustry String?
+  extractedService String?
+  extractedUrgency String?  // low | medium | high | emergency
+  extractedBudget  Float?
+  extractedBudgetCurrency String?
+  extractedLocation String?
+  extractedSkillsJson String @default("[]")  // required technician skills
+  extractedDurationMins Int?
+  estimatedCostLow Float?
+  estimatedCostHigh Float?
+  suggestedBookingMode String? // instant | quote_request | emergency | ai_auto
+  // AI confidence
+  confidenceScore Float?  // 0-1
+  aiModel         String?
+  // Status
+  status          String   @default("pending") // pending | approved | rejected | converted
+  approvedById    String?
+  approvedAt      DateTime?
+  rejectionReason String?
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([leadId])
+  @@index([status])
+}
+
+// ==========================================
+// ASSET, INVENTORY, WARRANTY & SERVICE PLANS (Phase 7)
+// ==========================================
+
+// ─── Inventory Module ────────────────────────────────────────────────────────
+model InventoryItem {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  branchId        String?  // -> Branch.id (which branch holds this)
+  sku             String?  @unique
+  name            String
+  description     String?
+  category        String   @default("general")
+  unit            String   @default("each")  // each, kg, litre, metre, box
+  costPrice       Float    @default(0)
+  salePrice       Float    @default(0)
+  currency        String   @default("USD")
+  // Stock levels
+  totalStock      Int      @default(0)
+  reservedStock   Int      @default(0)  // allocated to jobs
+  availableStock  Int      @default(0)  // total - reserved
+  reorderLevel    Int      @default(0)  // low stock alert threshold
+  reorderQty      Int      @default(0)
+  // Supplier
+  supplierId      String?  // -> Supplier.id
+  supplierSku     String?
+  // Metadata
+  barcode         String?
+  imageUrl        String?
+  isActive        Boolean  @default(true)
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant   Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier Supplier? @relation("SupplierItems", fields: [supplierId], references: [id], onDelete: SetNull)
+  stockTransactions StockTransaction[]
+
+  @@index([tenantId])
+  @@index([branchId])
+  @@index([category])
+  @@index([isActive])
+}
+
+model Warehouse {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  branchId        String?
+  name            String
+  address         String?
+  type            String   @default("main")  // main | secondary | vehicle | technician
+  capacity        Int?
+  isActive        Boolean  @default(true)
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([branchId])
+}
+
+model StockLocation {
+  id              String   @id @default(cuid())
+  inventoryItemId String
+  warehouseId     String?  // -> Warehouse.id
+  employeeId      String?  // -> Employee.id (for technician stock)
+  vehicleId       String?  // -> Resource.id (for vehicle stock)
+  quantity        Int      @default(0)
+  locationCode    String?  // shelf/bin code
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([inventoryItemId])
+  @@index([warehouseId])
+  @@index([employeeId])
+}
+
+model Supplier {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  name            String
+  contactName     String?
+  email           String?
+  phone           String?
+  address         String?
+  website         String?
+  paymentTerms    String?
+  currency        String   @default("USD")
+  isActive        Boolean  @default(true)
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant  Tenant?        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  items   InventoryItem[] @relation("SupplierItems")
+
+  @@index([tenantId])
+  @@index([isActive])
+}
+
+model PurchaseOrder {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  poNumber        String?
+  supplierId      String?  // -> Supplier.id
+  branchId        String?
+  status          String   @default("draft")  // draft | sent | partial | received | cancelled
+  orderDate       DateTime @default(now())
+  expectedDate    DateTime?
+  receivedDate    DateTime?
+  totalAmount     Float    @default(0)
+  currency        String   @default("USD")
+  itemsJson       String   @default("[]")  // [{inventoryItemId, name, sku, quantity, unitPrice, total}]
+  notes           String?
+  approvedById    String?
+  approvedAt      DateTime?
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([supplierId])
+  @@index([status])
+}
+
+model StockTransfer {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  fromWarehouseId String?
+  toWarehouseId   String?
+  fromEmployeeId  String?
+  toEmployeeId    String?
+  status          String   @default("pending")  // pending | in_transit | received | cancelled
+  transferDate    DateTime @default(now())
+  receivedDate    DateTime?
+  itemsJson       String   @default("[]")  // [{inventoryItemId, name, quantity}]
+  notes           String?
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+}
+
+model StockTransaction {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  inventoryItemId String
+  type            String   // purchase | sale | transfer | adjustment | consumption | return
+  direction       String   @default("in")  // in | out
+  quantity        Int
+  unitCost        Float    @default(0)
+  totalCost       Float    @default(0)
+  reference       String?  // PO number, job ID, transfer ID
+  referenceId     String?
+  notes           String?
+  performedById   String?
+  performedByName String?
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+
+  tenant   Tenant?       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  item     InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([inventoryItemId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model LowStockAlert {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  inventoryItemId String
+  currentStock    Int
+  reorderLevel    Int
+  status          String   @default("active")  // active | acknowledged | resolved
+  acknowledgedById String?
+  acknowledgedAt  DateTime?
+  resolvedAt      DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([inventoryItemId])
+  @@index([status])
+}
+
+// ─── Service Plans (recurring maintenance subscriptions) ────────────────────
+model ServicePlan {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  name            String   // e.g. "HVAC Annual Maintenance"
+  description     String?
+  industry        String?
+  // Pricing
+  price           Float    @default(0)
+  currency        String   @default("USD")
+  billingCycle    String   @default("monthly")  // monthly | quarterly | yearly
+  setupFee        Float    @default(0)
+  // Entitlements
+  inspectionsPerYear Int   @default(2)
+  prioritySupport  Boolean @default(true)
+  discountPct      Float   @default(10)  // 10% off regular services
+  emergencyVisits  Int     @default(0)  // included emergency visits per year
+  featuresJson     String  @default("[]")  // ["Free filter replacement", "Spring + Fall inspection"]
+  // Terms
+  contractLengthMonths Int?  // null = month-to-month
+  autoRenew       Boolean  @default(true)
+  cancellationNoticeDays Int @default(30)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant       Tenant?                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscriptions ServicePlanSubscription[]
+
+  @@index([tenantId])
+  @@index([isActive])
+}
+
+model ServicePlanSubscription {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  servicePlanId   String
+  customerId      String?
+  customerName    String?
+  customerPhone   String?
+  customerEmail   String?
+  status          String   @default("active")  // active | paused | cancelled | expired
+  startDate       DateTime @default(now())
+  endDate         DateTime?  // null = open-ended
+  nextBillingDate DateTime?
+  lastBilledDate  DateTime?
+  // Usage tracking
+  inspectionsUsed Int      @default(0)
+  emergencyVisitsUsed Int  @default(0)
+  // Pricing (snapshot at subscription time)
+  price           Float
+  currency        String   @default("USD")
+  billingCycle    String   @default("monthly")
+  // Linked recurring invoice
+  recurringInvoiceId String?
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant      Tenant?      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  servicePlan ServicePlan  @relation(fields: [servicePlanId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([status])
+}
+
+// ─── Warranty Module ────────────────────────────────────────────────────────
+model Warranty {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  jobId           String?  // job that triggered the warranty
+  customerId      String?
+  customerName    String?
+  customerPhone   String?
+  customerEmail   String?
+  // Warranty details
+  title           String
+  description     String?
+  type            String   @default("standard")  // standard | extended | manufacturer | service
+  coverage        String   @default("parts_and_labor")  // parts_only | labor_only | parts_and_labor
+  durationMonths  Int      @default(12)
+  startDate       DateTime @default(now())
+  endDate         DateTime?
+  isActive        Boolean  @default(true)
+  // Terms
+  termsJson       String   @default("{}")  // {exclusions, limitations, claimProcess}
+  maxClaims       Int      @default(1)
+  claimsUsed      Int      @default(0)
+  // Metadata
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  claims  WarrantyClaim[]
+
+  @@index([tenantId])
+  @@index([jobId])
+  @@index([customerId])
+  @@index([isActive])
+}
+
+model WarrantyClaim {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  warrantyId      String
+  jobId           String?  // job created for this claim
+  customerId      String?
+  customerName    String?
+  customerPhone   String?
+  // Claim details
+  title           String
+  description     String?
+  status          String   @default("submitted")  // submitted | under_review | approved | denied | resolved
+  severity        String   @default("medium")  // low | medium | high | critical
+  // Evidence
+  photosJson      String   @default("[]")
+  // Resolution
+  assignedToId    String?  // -> Employee.id
+  assignedToName  String?
+  resolutionNotes String?
+  resolutionType  String?  // repair | replace | refund | deny
+  resolvedAt      DateTime?
+  resolvedById    String?
+  resolvedByName  String?
+  // Metadata
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant   Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  warranty Warranty @relation(fields: [warrantyId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([warrantyId])
+  @@index([status])
+}
+
+// ==========================================
+// MARKETPLACE FLOWS (Phase 10)
+// ==========================================
+// 3 booking flows + 4 booking modes + provider profile enrichment
+
+// ─── JobRequest (Quote Request flow) ─────────────────────────────────────────
+model JobRequest {
+  id              String   @id @default(cuid())
+  tenantId        String?  // null = marketplace-wide (not assigned to a provider yet)
+  customerId      String?  // marketplace customer (may not be in Customer table)
+  customerName    String?
+  customerPhone   String?
+  customerEmail   String?
+  // Request details
+  title           String
+  description     String?
+  industry        String?
+  serviceId       String?
+  serviceName     String?
+  urgency         String   @default("medium")  // low | medium | high | emergency
+  budgetLow       Float?
+  budgetHigh      Float?
+  currency        String   @default("USD")
+  // Media
+  photosJson      String   @default("[]")  // customer-uploaded photos
+  videosJson      String   @default("[]")
+  // Location
+  address         String?
+  city            String?
+  postalCode      String?
+  lat             Float?
+  lng             Float?
+  // AI extraction
+  aiExtractionId  String?  // -> RequestExtraction.id
+  aiSummary       String?
+  // Status
+  status          String   @default("open")  // open | quoted | accepted | expired | cancelled | closed
+  expiresAt       DateTime?  // when the request expires if no quotes
+  acceptedQuoteId String?  // -> Quote.id (the winning quote)
+  acceptedAt      DateTime?
+  // Metadata
+  viewCount       Int      @default(0)  // how many providers viewed
+  quoteCount      Int      @default(0)  // how many quotes received
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant  Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  quotes  Quote[]  @relation("JobRequestQuotes")
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([industry])
+  @@index([createdAt])
+}
+
+// ─── EmergencyDispatch (Emergency flow — Uber-style) ────────────────────────
+model EmergencyDispatch {
+  id              String   @id @default(cuid())
+  tenantId        String?  // null until a provider accepts
+  customerId      String?
+  customerName    String?
+  customerPhone   String?
+  // Emergency details
+  title           String
+  description     String?
+  industry        String?  // plumbing, electrical, locksmith, hvac
+  urgency         String   @default("emergency")  // always emergency
+  // Location
+  address         String?
+  lat             Float?
+  lng             Float?
+  // Dispatch
+  status          String   @default("broadcasting")  // broadcasting | accepted | en_route | on_site | completed | cancelled | expired
+  broadcastToIds  String   @default("[]")  // JSON: [tenantId, ...] — who received the broadcast
+  acceptedById    String?  // tenantId of the accepting provider
+  acceptedAt      DateTime?
+  acceptedQuoteId String?
+  // Tracking
+  providerEnRouteAt DateTime?
+  providerOnSiteAt DateTime?
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  cancellationReason String?
+  // ETA
+  estimatedArrivalMins Int?
+  actualArrivalMins Int?
+  // Payment
+  estimatedCost   Float?
+  finalCost       Float?
+  currency        String   @default("USD")
+  paymentStatus   String   @default("pending")  // pending | escrow | paid | refunded
+  // Metadata
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([industry])
+  @@index([createdAt])
+}
+
+// ─── Provider Profile Enrichment ────────────────────────────────────────────
+model ProviderPortfolio {
+  id              String   @id @default(cuid())
+  tenantId        String?  @unique
+  // Portfolio items
+  itemsJson       String   @default("[]")  // [{title, description, imageUrl, beforeUrl, afterUrl, date, category}]
+  // Videos
+  videosJson      String   @default("[]")
+  // Awards
+  awardsJson      String   @default("[]")  // [{name, issuer, year, description}]
+  // Projects (completed jobs showcased)
+  projectsJson    String   @default("[]")  // [{title, description, images, date, value, duration}]
+  // Team showcase
+  teamJson        String   @default("[]")  // [{name, role, photo, bio, certifications}]
+  // Metadata
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model ProviderCertification {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  name            String   // e.g., "Gas Safe Registered", "NICEIC Approved", "City & Guilds"
+  issuer          String?  // issuing body
+  issueDate       DateTime?
+  expiryDate      DateTime?
+  certificateNumber String?
+  documentUrl     String?  // uploaded certificate document
+  isVerified      Boolean  @default(false)  // verified by platform
+  verifiedAt      DateTime?
+  verifiedById    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([isVerified])
+}
+
+// ─── Customer-side marketplace models ───────────────────────────────────────
+model Membership {
+  id              String   @id @default(cuid())
+  tenantId        String?  // provider offering the membership
+  customerId      String?
+  customerName    String?
+  customerPhone   String?
+  name            String   // e.g., "Gold Member", "Annual Care Plan"
+  tier            String   @default("standard")  // standard | silver | gold | platinum
+  price           Float    @default(0)
+  currency        String   @default("USD")
+  billingCycle    String   @default("monthly")
+  benefitsJson    String   @default("[]")  // ["10% off all services", "Priority booking", "Free annual inspection"]
+  status          String   @default("active")  // active | cancelled | expired
+  startDate       DateTime @default(now())
+  endDate         DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([status])
+}
+
+model Promotion {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  code            String?  @unique  // discount code, null = auto-applied
+  name            String
+  description     String?
+  type            String   @default("percentage")  // percentage | fixed | free_service
+  value           Float    @default(0)  // 20 = 20% off, or $20 off
+  currency        String   @default("USD")
+  minSpend        Float    @default(0)
+  maxDiscount     Float?   // cap
+  startDate       DateTime @default(now())
+  endDate         DateTime?
+  usageLimit      Int?     // null = unlimited
+  usedCount       Int      @default(0)
+  perCustomerLimit Int     @default(1)
+  applicableServicesJson String @default("[]")  // empty = all services
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([code])
+  @@index([isActive])
+}
+
+model Coupon {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  customerId      String?
+  promotionId     String?  // -> Promotion.id
+  code            String
+  discountType    String   @default("percentage")
+  discountValue   Float    @default(0)
+  status          String   @default("active")  // active | used | expired
+  usedAt          DateTime?
+  usedOnJobId     String?
+  expiresAt       DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([status])
+}
+
+model LoyaltyPoint {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  customerId      String?
+  points          Int      @default(0)
+  totalEarned     Int      @default(0)
+  totalRedeemed   Int      @default(0)
+  tier            String   @default("bronze")  // bronze | silver | gold | platinum
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, customerId])
+  @@index([tenantId])
+  @@index([customerId])
+}
+
+model Referral {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  referrerCustomerId String?
+  referrerName    String?
+  referrerPhone   String?
+  referredName    String?
+  referredPhone   String?
+  referredEmail   String?
+  status          String   @default("pending")  // pending | converted | rewarded | expired
+  rewardType      String?  // discount | credit | cashback
+  rewardValue     Float    @default(0)
+  currency        String   @default("USD")
+  convertedAt     DateTime?
+  rewardedAt      DateTime?
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { authLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 
@@ -69,6 +70,9 @@ function getRedirectUri(request: NextRequest, clientOrigin?: string): string {
 }
 
 export async function GET(request: NextRequest) {
+  const rateLimited = applyRateLimit(authLimiter, request);
+  if (rateLimited) return rateLimitResponse(rateLimited.resetAtMs);
+
   if (!GOOGLE_CLIENT_ID) {
     console.error('Google OAuth: GOOGLE_CLIENT_ID is not configured');
     const baseUrl = getRedirectUri(request).replace('/api/auth/google/callback', '');

@@ -20,6 +20,19 @@ const FEATURE_DEFINITIONS = [
   { key: 'api_access', label: 'API Access', description: 'Full REST API access for integrations' },
   { key: 'bulk_operations', label: 'Bulk Operations', description: 'Perform bulk import, export, and operations' },
   { key: 'advanced_analytics', label: 'Advanced Analytics', description: 'Detailed analytics with custom reports and dashboards' },
+  // Revenue-related feature toggles
+  { key: 'marketplace_commission', label: 'Marketplace Commission (5%)', description: 'Charge 5% commission on marketplace-generated jobs' },
+  { key: 'featured_listing', label: 'Featured Listing (£20/mo)', description: 'Allow tenants to pay for priority placement in marketplace' },
+  { key: 'ai_credits', label: 'AI Credits (£15/mo)', description: 'Pay-per-use AI features beyond plan quota' },
+  { key: 'sms_billing', label: 'SMS Usage Billing', description: 'Charge per SMS message sent' },
+  { key: 'whatsapp_billing', label: 'WhatsApp Usage Billing', description: 'Charge per WhatsApp message sent' },
+  { key: 'white_label_billing', label: 'White Label (£20/mo)', description: 'Custom branding and domain' },
+  { key: 'premium_integrations', label: 'Premium Integrations', description: 'QuickBooks, Xero, advanced API access' },
+  { key: 'marketplace_eligibility', label: 'Marketplace Eligibility Gates', description: 'Require identity/business/insurance verification + Stripe Connect for marketplace' },
+  { key: 'instant_booking', label: 'Instant Booking Flow', description: 'Allow customers to book standardized services instantly' },
+  { key: 'quote_request', label: 'Quote Request Flow', description: 'Allow customers to request quotes for custom projects' },
+  { key: 'emergency_dispatch', label: 'Emergency Dispatch Flow', description: 'Uber-style emergency dispatch to nearest technician' },
+  { key: 'ai_auto_assign', label: 'AI Auto-Assign', description: 'AI automatically selects best provider for customer' },
 ];
 
 export async function GET(request: NextRequest) {

@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { generateToken, COOKIE_OPTIONS } from '@/lib/auth';
+import { authLimiter, applyRateLimit, rateLimitResponse } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
+  const rateLimited = applyRateLimit(authLimiter, request);
+  if (rateLimited) return rateLimitResponse(rateLimited.resetAtMs);
+
   // Block in production — this endpoint allows passwordless login as any user
   // and must never be exposed outside development.
   if (process.env.NODE_ENV === 'production') {

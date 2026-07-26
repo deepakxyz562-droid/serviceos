@@ -2,10 +2,12 @@
 
 // ─────────────────────────────────────────────────────────────────────────────
 // System Logs — live tail of platform logs: API, database, workers, webhooks.
-// All data is demo/mock — see DemoDataPill in the header.
+// Live data: fetched from /api/activity-logs (ActivityLog table). Falls back
+// to DEMO_LOGS if the fetch fails (e.g. non-superadmin / network error) so the
+// UI never breaks.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Terminal, Pause, Play, Download, Search } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -17,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { SectionHeader, DemoDataPill } from '@/components/views/superadmin/_shared';
 import { toast } from 'sonner';
 
-// ─── Demo data constants ─────────────────────────────────────────────────────
+// ─── Demo data constants (kept as fallback) ──────────────────────────────────
 
 type LogLevel = 'INFO' | 'WARN' | 'ERROR';
 
@@ -28,7 +30,7 @@ interface LogLine {
   message: string;
 }
 
-const LOGS: LogLine[] = [
+const DEMO_LOGS: LogLine[] = [
   { level: 'INFO', time: '12:42:31', service: 'api', message: 'GET /api/tenants 200 12ms' },
   { level: 'INFO', time: '12:42:30', service: 'api', message: 'POST /api/jobs 201 48ms (workspace: aquaflow)' },
   { level: 'WARN', time: '12:42:28', service: 'db', message: 'Slow query 247ms — SELECT * FROM jobs WHERE status = ?' },
@@ -52,11 +54,49 @@ const LEVEL_CLASSES: Record<LogLevel, string> = {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function SystemLogsSection() {
+  const [logs, setLogs] = useState<LogLine[]>(DEMO_LOGS);
+  const [isLiveData, setIsLiveData] = useState(false);
   const [paused, setPaused] = useState(false);
   const [filter, setFilter] = useState<'all' | LogLevel>('all');
   const [search, setSearch] = useState('');
 
-  const filtered = LOGS.filter((l) => {
+  // Fetch real ActivityLog rows from /api/activity-logs. Falls back to
+  // DEMO_LOGS silently on any error (401/403/500/network) so the UI keeps
+  // working for non-superadmin users.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/activity-logs?limit=100', { credentials: 'include' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const raw: unknown[] = Array.isArray(data) ? data : (data.logs || data.activityLogs || []);
+        const realLogs: LogLine[] = raw.map((item: any) => {
+          const sev = String(item?.severity || 'info').toUpperCase();
+          const level: LogLevel = sev === 'ERROR' || sev === 'CRITICAL' ? 'ERROR'
+            : sev === 'WARNING' || sev === 'WARN' ? 'WARN'
+            : 'INFO';
+          let time = '—';
+          try {
+            time = new Date(item.createdAt).toLocaleTimeString('en-US', { hour12: false });
+          } catch { /* keep default */ }
+          const service = String(item?.actorType || item?.entityType || 'api');
+          const message = String(item?.description || `${item?.action || ''} ${item?.entityType || ''}`.trim() || '(no message)');
+          return { level, time, service, message };
+        });
+        if (!cancelled && realLogs.length > 0) {
+          setLogs(realLogs);
+          setIsLiveData(true);
+        }
+      } catch (err) {
+        // Silent fallback to DEMO_LOGS — UI still works for non-superadmins.
+        console.warn('[system-logs] Failed to load live data, using demo:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const filtered = logs.filter((l) => {
     if (filter !== 'all' && l.level !== filter) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -94,7 +134,7 @@ export function SystemLogsSection() {
               {paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
               <span className="hidden sm:inline">{paused ? 'Resume' : 'Pause'}</span>
             </Button>
-            <DemoDataPill />
+            <DemoDataPill live={isLiveData} />
           </>
         }
       />
