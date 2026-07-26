@@ -687,6 +687,12 @@ export function computeHubDefaults(input: HubDefaultsInput): HubDefaultsResult {
 
   return {
     publicProfileEnabled: true,  // always enable by default
+    // Also opt into the marketplace browse grid so backfilled tenants are
+    // actually visible at /marketplace. Without this, tenants that had
+    // applyHubDefaultsToTenant() run on them got a public hub page but
+    // stayed invisible on the marketplace (marketplaceOptIn stayed false).
+    marketplaceOptIn: true,
+    marketplaceTermsAcceptedAt: new Date(),
     publicSlug: input.publicSlug?.trim() || input.slug,
     city,
     state,
@@ -792,6 +798,15 @@ export async function applyHubDefaultsToTenant(tenantId: string): Promise<void> 
     where: { id: tenantId },
     data: {
       publicProfileEnabled: defaults.publicProfileEnabled,
+      // Opt into the marketplace browse grid ONLY if the tenant has never
+      // interacted with the marketplace opt-in (marketplaceTermsAcceptedAt
+      // IS null = never went through onboarding step 2's toggle). This fixes
+      // the "older users invisible on marketplace" issue without overriding
+      // an explicit opt-OUT from a user who completed onboarding and chose
+      // not to be listed.
+      ...(tenant.marketplaceTermsAcceptedAt
+        ? {}
+        : { marketplaceOptIn: true, marketplaceTermsAcceptedAt: new Date() }),
       publicSlug: defaults.publicSlug,
       city: defaults.city,
       state: defaults.state,

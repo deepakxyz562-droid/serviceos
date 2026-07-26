@@ -1,57 +1,45 @@
 import type { Metadata } from 'next';
 import { db } from '@/lib/db';
 import { VERTICALS, getIndustry } from '@/lib/industry-catalog';
-import { ProviderCard } from '@/components/marketplace/provider-card';
+import { MarketplaceBrowser } from '@/components/marketplace/marketplace-browser';
 import type { ProviderListItem } from '@/components/marketplace/types';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
 import {
   Sparkles,
   Wrench,
   Search,
-  MapPin,
   ShieldCheck,
-  ArrowRight,
   Building2,
+  Home as HomeIcon,
+  ChevronRight,
 } from 'lucide-react';
 
 export const revalidate = 300; // ISR — revalidate every 5 minutes
 
-export const metadata: Metadata = {
-  title: 'ServiceOS Marketplace — Find Trusted Local Service Professionals',
-  description:
-    'Browse 2,500+ verified local service professionals across 25 industries — HVAC, plumbing, electrical, cleaning, landscaping, pest control, roofing, painting, locksmiths, appliance repair, pool & spa, and automotive. Read real reviews, compare quotes, and book instantly or request emergency dispatch.',
-  alternates: { canonical: 'https://serviceos.com/marketplace' },
-  openGraph: {
-    title: 'ServiceOS Marketplace — Find Trusted Local Service Professionals',
-    description:
-      'Browse 2,500+ verified local service professionals across 25 industries. Read real reviews, compare quotes, book instantly.',
-    url: 'https://serviceos.com/marketplace',
-    type: 'website',
-  },
-};
-
 /**
  * Marketplace browse page — server-rendered for SEO.
  *
- * Fetches all marketplace-eligible providers (tenants who passed all 8
- * eligibility gates: paid + verified + Stripe + opt-in) and renders them
- * as a grid of provider cards. Each card links to /marketplace/[slug].
+ * Fetches all marketplace-opted-in, non-suspended providers (up to 120) and
+ * renders them as a grid of provider cards. The interactive layer (instant
+ * search, sort, load-more, filter chips) is handled by the MarketplaceBrowser
+ * client component. The sidebar (industry filter by vertical) stays
+ * server-rendered <a> links so the facet URLs are crawlable.
  *
- * Includes a 9-vertical filter sidebar (drives ?vertical= and ?industry=
- * query params for crawlable facet URLs) and a city search input.
- *
- * Works without JavaScript — the entire page is HTML.
+ * SEO:
+ *   • generateMetadata() builds a per-facet title + description
+ *   • JSON-LD ItemList schema with every visible provider
+ *   • BreadcrumbList JSON-LD + visible breadcrumb nav
+ *   • <noscript> GET search form fallback for non-JS users
  */
 
 async function fetchProviders() {
+  // ── 2-gate eligibility (relaxed from the original 8-gate) ───────────────
+  // Only hard-require marketplaceOptIn + not suspended. Verification status
+  // is SELECTed and rendered as badges on each card so users can see at a
+  // glance how verified a provider is, instead of the provider being hidden.
   const tenants = await db.tenant.findMany({
     where: {
       marketplaceOptIn: true,
-      identityVerified: true,
-      businessVerified: true,
-      insuranceVerified: true,
-      stripeConnected: true,
-      planStatus: 'active',
       suspendedAt: null,
     },
     select: {
@@ -74,13 +62,14 @@ async function fetchProviders() {
       emergencyServiceAvailable: true,
       businessCategoriesJson: true,
       serviceAreasJson: true,
-      // NOTE: services intentionally NOT loaded here — they're only needed on
-      // the provider detail page. Skipping them eliminates an N+1 query and
-      // keeps the browse page fast. ProviderCard handles services.length === 0
-      // gracefully (just hides the service badges).
+      identityVerified: true,
+      businessVerified: true,
+      insuranceVerified: true,
+      stripeConnected: true,
+      planStatus: true,
     },
     orderBy: [{ rating: 'desc' }, { reviewCount: 'desc' }],
-    take: 24,
+    take: 120,
   });
 
   // Fetch featured listing flags
@@ -100,7 +89,6 @@ async function fetchProviders() {
     if (!featuredMap.has(fl.tenantId!)) featuredMap.set(fl.tenantId!, fl.type);
   }
 
-  // Serialize to ProviderListItem shape (parse JSON columns safely)
   return tenants.map((t) => {
     let serviceAreas: string[] = [];
     try {
@@ -128,13 +116,86 @@ async function fetchProviders() {
       callOutFee: t.callOutFee,
       emergencyServiceAvailable: t.emergencyServiceAvailable,
       serviceAreas,
-      // services not loaded on browse page (perf optimization) — empty array
-      // keeps the ProviderListItem shape satisfied; ProviderCard hides the
-      // services section when this is empty.
       services: [],
       featured: featuredMap.get(t.id) ?? null,
+      identityVerified: t.identityVerified,
+      businessVerified: t.businessVerified,
+      insuranceVerified: t.insuranceVerified,
+      stripeConnected: t.stripeConnected,
+      planStatus: t.planStatus,
     } satisfies ProviderListItem;
   });
+}
+
+// ── Dynamic per-facet metadata ─────────────────────────────────────────────
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    vertical?: string;
+    industry?: string;
+    city?: string;
+    search?: string;
+  }>;
+}): Promise<Metadata> {
+  const params = await searchParams;
+  const verticalFilter = params.vertical ?? null;
+  const industryFilter = params.industry ?? null;
+  const cityFilter = params.city?.trim() ?? null;
+  const searchFilter = params.search?.trim() ?? null;
+
+  const verticalName = verticalFilter
+    ? VERTICALS.find((v) => v.id === verticalFilter)?.name
+    : null;
+  const industryName = industryFilter ? getIndustry(industryFilter)?.name : null;
+  const facetName = industryName || verticalName;
+
+  let title: string;
+  let description: string;
+  if (facetName && cityFilter) {
+    title = `${facetName} in ${cityFilter} — ServiceOS Marketplace`;
+    description = `Browse verified ${facetName.toLowerCase()} providers in ${cityFilter}. Read real reviews, compare quotes, and book instantly. Verified identity, business, insurance, and payments.`;
+  } else if (facetName) {
+    title = `${facetName} — ServiceOS Marketplace`;
+    description = `Browse verified ${facetName.toLowerCase()} providers on the ServiceOS Marketplace. Read real reviews, compare quotes, and book instantly.`;
+  } else if (cityFilter) {
+    title = `Local Service Providers in ${cityFilter} — ServiceOS Marketplace`;
+    description = `Find verified local service professionals in ${cityFilter}. HVAC, plumbing, electrical, cleaning, landscaping, and more. Read reviews and book instantly.`;
+  } else if (searchFilter) {
+    title = `Search: "${searchFilter}" — ServiceOS Marketplace`;
+    description = `Search results for "${searchFilter}" on the ServiceOS Marketplace. Browse verified local service professionals.`;
+  } else {
+    title = 'ServiceOS Marketplace — Find Trusted Local Service Professionals';
+    description =
+      'Browse 2,500+ verified local service professionals across 25 industries — HVAC, plumbing, electrical, cleaning, landscaping, pest control, roofing, painting, locksmiths, appliance repair, pool & spa, and automotive. Read real reviews, compare quotes, and book instantly or request emergency dispatch.';
+  }
+
+  const url = `https://serviceos.com/marketplace${
+    verticalFilter || industryFilter || cityFilter || searchFilter
+      ? '?' +
+        [
+          verticalFilter ? `vertical=${verticalFilter}` : '',
+          industryFilter ? `industry=${industryFilter}` : '',
+          cityFilter ? `city=${encodeURIComponent(cityFilter)}` : '',
+          searchFilter ? `search=${encodeURIComponent(searchFilter)}` : '',
+        ]
+          .filter(Boolean)
+          .join('&')
+      : ''
+  }`;
+
+  return {
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      title,
+      description,
+      url,
+      type: 'website',
+    },
+  };
 }
 
 export default async function MarketplaceBrowsePage({
@@ -150,14 +211,6 @@ export default async function MarketplaceBrowsePage({
   const params = await searchParams;
   const verticalFilter = params.vertical ?? null;
   const industryFilter = params.industry ?? null;
-  const cityFilter = params.city?.trim().toLowerCase() ?? null;
-  const searchFilter = params.search?.trim().toLowerCase() ?? null;
-  const hasActiveFilters = !!(
-    verticalFilter ||
-    industryFilter ||
-    cityFilter ||
-    searchFilter
-  );
 
   let providers: ProviderListItem[] = [];
   let dbError = false;
@@ -167,51 +220,6 @@ export default async function MarketplaceBrowsePage({
     console.error('[marketplace/page] failed to fetch providers:', err);
     dbError = true;
   }
-
-  // Apply in-app filters
-  const filtered = providers.filter((p) => {
-    if (industryFilter) {
-      const ind = (p.industry ?? '').toLowerCase().trim();
-      if (ind !== industryFilter) return false;
-    }
-    if (verticalFilter) {
-      // Map industry → vertical using INDUSTRY_CATALOG
-      const meta = p.industry ? getIndustry(p.industry) : undefined;
-      if (!meta || meta.vertical !== verticalFilter) return false;
-    }
-    if (cityFilter) {
-      const city = (p.city ?? '').toLowerCase();
-      const state = (p.state ?? '').toLowerCase();
-      const inAreas = p.serviceAreas.some((a) =>
-        String(a).toLowerCase().includes(cityFilter),
-      );
-      if (!city.includes(cityFilter) && !state.includes(cityFilter) && !inAreas) {
-        return false;
-      }
-    }
-    // Free-text search — matches against name, tagline, description, and
-    // (if services were loaded) service names. On the browse page services
-    // is an empty array (perf optimization), so service-name matching is a
-    // no-op here; name/tagline/description matching is the primary path and
-    // matches the behavior of /api/marketplace/providers?search=.
-    if (searchFilter) {
-      const name = (p.name ?? '').toLowerCase();
-      const tagline = (p.tagline ?? '').toLowerCase();
-      const description = (p.description ?? '').toLowerCase();
-      const serviceNameMatch = p.services.some((s) =>
-        (s.name ?? '').toLowerCase().includes(searchFilter),
-      );
-      if (
-        !name.includes(searchFilter) &&
-        !tagline.includes(searchFilter) &&
-        !description.includes(searchFilter) &&
-        !serviceNameMatch
-      ) {
-        return false;
-      }
-    }
-    return true;
-  });
 
   // Build industry groups for the sidebar — 9 verticals, each with its industries
   const verticalGroups = VERTICALS.map((v) => {
@@ -238,14 +246,100 @@ export default async function MarketplaceBrowsePage({
     new Set(providers.map((p) => p.city).filter(Boolean) as string[]),
   ).sort();
 
-  const title = verticalFilter
-    ? VERTICALS.find((v) => v.id === verticalFilter)?.name ?? 'All Providers'
-    : industryFilter
-      ? getIndustry(industryFilter)?.name ?? 'All Providers'
-      : 'All Providers';
+  // ── Build JSON-LD ItemList schema for SEO ───────────────────────────────
+  const itemListLd = {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: 'ServiceOS Marketplace Providers',
+    numberOfItems: providers.length,
+    itemListElement: providers.slice(0, 30).map((p, i) => {
+      const slug = p.slug || p.publicSlug;
+      const canonicalHref = slug
+        ? `/${mapIndustryToUrlSlug(p.industry)}/${slugifyCity(p.city)}/${slug}`
+        : '/marketplace';
+      return {
+        '@type': 'ListItem',
+        position: i + 1,
+        item: {
+          '@type': 'LocalBusiness',
+          name: p.name,
+          description: p.description || p.tagline || undefined,
+          url: `https://serviceos.com${canonicalHref}`,
+          image: p.coverImage || undefined,
+          address: {
+            '@type': 'PostalAddress',
+            addressLocality: p.city || undefined,
+            addressRegion: p.state || undefined,
+            addressCountry: p.country || undefined,
+          },
+          aggregateRating:
+            p.rating && p.reviewCount
+              ? {
+                  '@type': 'AggregateRating',
+                  ratingValue: p.rating,
+                  reviewCount: p.reviewCount,
+                }
+              : undefined,
+          knowsAbout: p.industry || undefined,
+        },
+      };
+    }),
+  };
+
+  // ── BreadcrumbList JSON-LD ──────────────────────────────────────────────
+  const breadcrumbItems: Array<{ name: string; url: string }> = [
+    { name: 'Home', url: 'https://serviceos.com' },
+    { name: 'Marketplace', url: 'https://serviceos.com/marketplace' },
+  ];
+  if (verticalFilter) {
+    const vName = VERTICALS.find((v) => v.id === verticalFilter)?.name ?? verticalFilter;
+    breadcrumbItems.push({
+      name: vName,
+      url: `https://serviceos.com/marketplace?vertical=${verticalFilter}`,
+    });
+  }
+  if (industryFilter) {
+    const iName = getIndustry(industryFilter)?.name ?? industryFilter;
+    breadcrumbItems.push({
+      name: iName,
+      url: `https://serviceos.com/marketplace?industry=${industryFilter}`,
+    });
+  }
+  if (params.city) {
+    breadcrumbItems.push({
+      name: params.city,
+      url: `https://serviceos.com/marketplace?city=${encodeURIComponent(params.city)}`,
+    });
+  }
+  const breadcrumbLd = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: breadcrumbItems.map((b, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: b.name,
+      item: b.url,
+    })),
+  };
+
+  // Visible breadcrumb labels
+  const bcVerticalName = verticalFilter
+    ? VERTICALS.find((v) => v.id === verticalFilter)?.name
+    : null;
+  const bcIndustryName = industryFilter ? getIndustry(industryFilter)?.name : null;
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
+      {/* JSON-LD structured data for SEO */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(itemListLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
+      />
+
       {/* Header */}
       <header className="sticky top-0 z-40 border-b bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70 pt-[env(safe-area-inset-top,0px)]">
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
@@ -286,59 +380,71 @@ export default async function MarketplaceBrowsePage({
             </Badge>
           </div>
           <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl md:text-5xl">
-            Find trusted <span className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent dark:from-emerald-400 dark:via-teal-400 dark:to-cyan-400">local service professionals</span>
+            Find trusted{' '}
+            <span className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent dark:from-emerald-400 dark:via-teal-400 dark:to-cyan-400">
+              local service professionals
+            </span>
           </h1>
           <p className="mx-auto mt-3 max-w-2xl text-base text-muted-foreground sm:text-lg">
-            {providers.length}+ verified providers across {VERTICALS.length} verticals. Read real reviews, compare quotes, and book instantly — or describe your problem and let our AI route you to the right pro.
+            {providers.length}+ providers across {VERTICALS.length} verticals. Read real reviews,
+            compare quotes, and book instantly — or describe your problem and let our AI route you to
+            the right pro.
           </p>
-
-          {/* Free-text search — plain HTML GET form, works without JavaScript */}
-          <div className="mx-auto mt-6 max-w-2xl">
-            <form
-              method="get"
-              action="/marketplace"
-              className="flex flex-col gap-2 rounded-2xl border bg-card p-2 shadow-xl sm:flex-row sm:items-center hover:border-emerald-300 focus-within:border-emerald-300 transition-colors"
-            >
-              {/* Preserve any active vertical/industry/city filter when the user
-                  submits a search query so context isn't lost. */}
-              {verticalFilter ? (
-                <input type="hidden" name="vertical" value={verticalFilter} />
-              ) : null}
-              {industryFilter ? (
-                <input type="hidden" name="industry" value={industryFilter} />
-              ) : null}
-              {params.city ? (
-                <input type="hidden" name="city" value={params.city} />
-              ) : null}
-              <div className="relative flex-1">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type="text"
-                  name="search"
-                  defaultValue={params.search ?? ''}
-                  placeholder="Search providers by name, service, or keyword — e.g. &quot;plumbing&quot;"
-                  aria-label="Search providers"
-                  className="h-12 w-full pl-11 pr-3 rounded-lg bg-transparent text-base text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-                />
-              </div>
-              <button
-                type="submit"
-                className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-6 text-base font-semibold text-white shadow-sm hover:bg-emerald-700 transition-colors"
-              >
-                <Search className="h-5 w-5" /> Search
-              </button>
-            </form>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Or use the city + industry filters below to browse manually.
-            </p>
-          </div>
         </div>
       </section>
+
+      {/* Breadcrumbs (visible) */}
+      <nav
+        aria-label="Breadcrumb"
+        className="border-b bg-muted/20"
+      >
+        <ol className="mx-auto flex max-w-7xl flex-wrap items-center gap-1 px-4 py-2.5 text-xs text-muted-foreground sm:px-6">
+          <li className="flex items-center gap-1">
+            <a href="/" className="inline-flex items-center gap-1 hover:text-foreground">
+              <HomeIcon className="h-3.5 w-3.5" /> Home
+            </a>
+            <ChevronRight className="h-3 w-3" />
+          </li>
+          <li className="flex items-center gap-1">
+            <a href="/marketplace" className="hover:text-foreground">Marketplace</a>
+            {bcVerticalName || bcIndustryName || params.city ? (
+              <ChevronRight className="h-3 w-3" />
+            ) : null}
+          </li>
+          {bcVerticalName ? (
+            <li className="flex items-center gap-1">
+              <a
+                href={`/marketplace?vertical=${verticalFilter}`}
+                className="hover:text-foreground"
+              >
+                {bcVerticalName}
+              </a>
+              {bcIndustryName || params.city ? <ChevronRight className="h-3 w-3" /> : null}
+            </li>
+          ) : null}
+          {bcIndustryName ? (
+            <li className="flex items-center gap-1">
+              <a
+                href={`/marketplace?industry=${industryFilter}`}
+                className="hover:text-foreground"
+              >
+                {bcIndustryName}
+              </a>
+              {params.city ? <ChevronRight className="h-3 w-3" /> : null}
+            </li>
+          ) : null}
+          {params.city ? (
+            <li className="flex items-center gap-1">
+              <span className="font-medium text-foreground">{params.city}</span>
+            </li>
+          ) : null}
+        </ol>
+      </nav>
 
       {/* Main grid: sidebar + provider cards */}
       <div className="mx-auto max-w-7xl w-full px-4 sm:px-6 py-8 flex-1">
         <div className="lg:grid lg:grid-cols-[260px_1fr] lg:gap-8">
-          {/* Sidebar — industry filter by vertical */}
+          {/* Sidebar — industry filter by vertical (server-rendered links for crawlability) */}
           <aside className="hidden lg:block">
             <div className="sticky top-20 space-y-4">
               <div>
@@ -410,53 +516,13 @@ export default async function MarketplaceBrowsePage({
                 </ul>
               </div>
 
-              <div>
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                  Filter by City
-                </h2>
-                <form method="get" className="space-y-2">
-                  {/* Preserve any active vertical/industry filter when the user searches by city */}
-                  {verticalFilter ? <input type="hidden" name="vertical" value={verticalFilter} /> : null}
-                  {industryFilter ? <input type="hidden" name="industry" value={industryFilter} /> : null}
-                  <div className="relative">
-                    <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      type="text"
-                      name="city"
-                      defaultValue={params.city ?? ''}
-                      placeholder="City or postal code"
-                      className="h-10 w-full rounded-md border border-border bg-background pl-9 pr-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="h-9 w-full rounded-md bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700"
-                  >
-                    Filter
-                  </button>
-                </form>
-                {cities.length > 0 ? (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {cities.slice(0, 12).map((c) => (
-                      <a
-                        key={c}
-                        href={`/marketplace?city=${encodeURIComponent(c)}`}
-                        className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground hover:border-emerald-300 hover:text-emerald-700"
-                      >
-                        {c}
-                      </a>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-
               <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
                 <div className="flex items-start gap-2">
                   <ShieldCheck className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-xs font-semibold text-foreground">All providers verified</p>
+                    <p className="text-xs font-semibold text-foreground">Trust badges on every card</p>
                     <p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5">
-                      Identity, business, insurance, and Stripe Connect — all 4 gates passed.
+                      Identity, business, insurance, and payments — each gate shows as a badge. Fully-verified providers get a gold &quot;Verified&quot; mark.
                     </p>
                   </div>
                 </div>
@@ -464,90 +530,68 @@ export default async function MarketplaceBrowsePage({
             </div>
           </aside>
 
-          {/* Main column */}
+          {/* Main column — client-side interactive browser */}
           <div>
-            <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h1 className="text-2xl font-bold text-foreground sm:text-3xl">{title}</h1>
-                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-                  {dbError ? (
-                    <span>Having trouble loading providers right now. Please try again in a moment.</span>
-                  ) : (
-                    <>
-                      <span>
-                        Showing {filtered.length} verified provider{filtered.length === 1 ? '' : 's'}
-                        {searchFilter ? (
-                          <>
-                            {' '}matching <span className="font-medium text-foreground">&ldquo;{params.search}&rdquo;</span>
-                          </>
-                        ) : null}
-                        .
-                      </span>
-                      {hasActiveFilters ? (
-                        <a
-                          href="/marketplace"
-                          className="inline-flex items-center gap-0.5 font-medium text-emerald-700 hover:text-emerald-800 dark:text-emerald-300"
-                          aria-label="Clear all filters"
-                        >
-                          Clear filters <span aria-hidden>&times;</span>
-                        </a>
-                      ) : null}
-                    </>
-                  )}
-                </div>
+            {/* <noscript> fallback — plain HTML GET form so non-JS users can still search.
+                The MarketplaceBrowser client component replaces this on hydration. */}
+            <noscript>
+              <div className="mx-auto mb-8 max-w-2xl">
+                <form
+                  method="get"
+                  action="/marketplace"
+                  className="flex flex-col gap-2 rounded-2xl border bg-card p-2 shadow-xl sm:flex-row sm:items-center"
+                >
+                  {verticalFilter ? (
+                    <input type="hidden" name="vertical" value={verticalFilter} />
+                  ) : null}
+                  {industryFilter ? (
+                    <input type="hidden" name="industry" value={industryFilter} />
+                  ) : null}
+                  {params.city ? (
+                    <input type="hidden" name="city" value={params.city} />
+                  ) : null}
+                  <div className="relative flex-1">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      type="text"
+                      name="search"
+                      defaultValue={params.search ?? ''}
+                      placeholder="Search providers by name, service, or keyword"
+                      aria-label="Search providers"
+                      className="h-12 w-full pl-11 pr-3 rounded-lg bg-transparent text-base text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-6 text-base font-semibold text-white shadow-sm hover:bg-emerald-700"
+                  >
+                    <Search className="h-5 w-5" /> Search
+                  </button>
+                </form>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Or use the city + industry filters to browse manually.
+                </p>
               </div>
-              <a
-                href="/#top"
-                className="hidden sm:inline-flex items-center gap-1 text-sm font-medium text-emerald-700 hover:text-emerald-800 dark:text-emerald-300"
-              >
-                Use AI search instead <ArrowRight className="h-4 w-4" />
-              </a>
-            </div>
+            </noscript>
 
             {dbError ? (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
                 <p className="font-semibold">Couldn&apos;t reach the database</p>
-                <p className="mt-1 text-xs">The marketplace is temporarily unavailable. Please try again in a moment.</p>
-              </div>
-            ) : filtered.length === 0 ? (
-              <div className="rounded-xl border border-border bg-card p-8 text-center">
-                <p className="text-sm text-muted-foreground">
-                  No providers match {hasActiveFilters ? 'these filters' : 'this filter'}
-                  {searchFilter ? (
-                    <>
-                      {' '}for <span className="font-medium text-foreground">&ldquo;{params.search}&rdquo;</span>
-                    </>
-                  ) : null}.
+                <p className="mt-1 text-xs">
+                  The marketplace is temporarily unavailable. Please try again in a moment.
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">Try a different search term or clear all filters.</p>
-                <a
-                  href="/marketplace"
-                  className="mt-4 inline-flex items-center gap-1 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700"
-                >
-                  Clear all filters <ArrowRight className="h-4 w-4" />
-                </a>
               </div>
             ) : (
-              <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-                {filtered.map((p) => {
-                  const slug = p.slug || p.publicSlug;
-                  // Build the canonical /{industry}/{city}/{slug} URL so cards
-                  // link directly to the unified public business hub (the old
-                  // /marketplace/[slug] route now 301-redirects there).
-                  const canonicalHref = slug
-                    ? `/${mapIndustryToUrlSlug(p.industry)}/${slugifyCity(p.city)}/${slug}`
-                    : undefined;
-                  return (
-                    <ProviderCard
-                      key={p.id}
-                      provider={p}
-                      featured={!!p.featured}
-                      compact
-                      href={canonicalHref}
-                    />
-                  );
-                })}
-              </div>
+              <MarketplaceBrowser
+                providers={providers}
+                initialFilters={{
+                  vertical: verticalFilter,
+                  industry: industryFilter,
+                  city: params.city ?? null,
+                  search: params.search ?? null,
+                }}
+                cities={cities}
+              />
             )}
 
             {/* SEO footer copy */}
@@ -556,7 +600,14 @@ export default async function MarketplaceBrowsePage({
                 About the ServiceOS Marketplace
               </h2>
               <p>
-                The ServiceOS Marketplace connects homeowners and businesses with verified local service professionals across {VERTICALS.length} verticals — from HVAC and plumbing to cleaning, landscaping, pest control, roofing, painting, locksmiths, appliance repair, pool services, and automotive. Every provider on ServiceOS has passed our 4-gate verification process: identity verified, business verified, insurance verified, and Stripe Connect payments set up. Browse by vertical or city, read real customer reviews, and book instantly — or describe your problem and let our AI route you to the right professional.
+                The ServiceOS Marketplace connects homeowners and businesses with local service
+                professionals across {VERTICALS.length} verticals — from HVAC and plumbing to
+                cleaning, landscaping, pest control, roofing, painting, locksmiths, appliance
+                repair, pool services, and automotive. Every provider on ServiceOS who has opted
+                into the marketplace appears here with their verification badges (identity,
+                business, insurance, and payments) so you can see at a glance how vetted they are.
+                Browse by vertical or city, read real customer reviews, and book instantly — or
+                describe your problem and let our AI route you to the right professional.
               </p>
             </div>
           </div>

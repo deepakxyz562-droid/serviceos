@@ -333,6 +333,14 @@ export async function seedPublicBusinessForTenant(
     where: { id: tenant.id },
     data: {
       publicProfileEnabled: true,
+      // Also opt the tenant into the marketplace browse grid so they're
+      // actually visible at /marketplace. Previously this only flipped
+      // publicProfileEnabled (which controls the public hub page at
+      // /{industry}/{city}/{slug}) but NOT marketplaceOptIn (which controls
+      // browse-grid eligibility) — so seeded tenants had a working public
+      // page but were invisible on the marketplace.
+      marketplaceOptIn: true,
+      marketplaceTermsAcceptedAt: tenant.marketplaceTermsAcceptedAt ?? new Date(),
       publicSlug: tenant.publicSlug || tenant.slug,
       tagline: dummy.tagline,
       description: dummy.description,

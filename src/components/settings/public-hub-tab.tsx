@@ -77,6 +77,7 @@ interface SocialLinks {
 
 interface HubForm {
   publicProfileEnabled: boolean;
+  marketplaceOptIn: boolean;
   publicSlug: string;
   city: string;
   state: string;
@@ -117,6 +118,7 @@ function defaultBusinessHours(): BusinessHours {
 function emptyForm(): HubForm {
   return {
     publicProfileEnabled: false,
+    marketplaceOptIn: false,
     publicSlug: '',
     city: '',
     state: '',
@@ -192,6 +194,7 @@ export function PublicHubTab({ tenantId, industry, slug }: Props) {
 
       setForm({
         publicProfileEnabled: t.publicProfileEnabled ?? false,
+        marketplaceOptIn: t.marketplaceOptIn ?? false,
         publicSlug: t.publicSlug || '',
         city: t.city || '',
         state: t.state || '',
@@ -232,6 +235,7 @@ export function PublicHubTab({ tenantId, industry, slug }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           publicProfileEnabled: form.publicProfileEnabled,
+          marketplaceOptIn: form.marketplaceOptIn,
           publicSlug: form.publicSlug,
           city: form.city,
           state: form.state,
@@ -324,6 +328,28 @@ export function PublicHubTab({ tenantId, industry, slug }: Props) {
               id="hub-enabled"
               checked={form.publicProfileEnabled}
               onCheckedChange={(v) => setForm({ ...form, publicProfileEnabled: v })}
+            />
+          </div>
+
+          {/* Marketplace listing toggle — independent from the public page
+              toggle. publicProfileEnabled controls the hub page at
+              /{industry}/{city}/{slug}; marketplaceOptIn controls whether
+              the provider shows up in the /marketplace browse grid. */}
+          <div className="flex items-start justify-between gap-4 p-4 rounded-lg border bg-muted/30">
+            <div className="space-y-1">
+              <Label htmlFor="marketplace-optin" className="text-sm font-medium">List on ServiceOS Marketplace</Label>
+              <p className="text-xs text-muted-foreground">
+                When ON, your business appears in the marketplace browse grid at{' '}
+                <a href="/marketplace" target="_blank" rel="noreferrer" className="font-medium text-emerald-700 underline underline-offset-2 hover:text-emerald-800 dark:text-emerald-400">
+                  /marketplace
+                </a>{' '}
+                so customers can find and book you. When OFF, your public page (above) still works, but you won&rsquo;t be listed in the marketplace. You can toggle this anytime.
+              </p>
+            </div>
+            <Switch
+              id="marketplace-optin"
+              checked={form.marketplaceOptIn}
+              onCheckedChange={(v) => setForm({ ...form, marketplaceOptIn: v })}
             />
           </div>
 

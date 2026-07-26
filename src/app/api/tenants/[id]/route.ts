@@ -89,6 +89,11 @@ export async function GET(
         },
         // ── Public Business Hub fields ────────────────────────────────────
         publicProfileEnabled: tenant.publicProfileEnabled,
+        // Marketplace browse-grid opt-in (controls visibility at /marketplace
+        // — independent from publicProfileEnabled which controls the public
+        // hub page). Surfaced in Settings → Public Hub so the user can toggle.
+        marketplaceOptIn: tenant.marketplaceOptIn,
+        marketplaceTermsAcceptedAt: tenant.marketplaceTermsAcceptedAt,
         publicSlug: tenant.publicSlug,
         city: tenant.city,
         state: tenant.state,
@@ -467,7 +472,17 @@ export async function PATCH(
     }
 
     // Marketplace opt-in + terms
-    if (marketplaceOptIn !== undefined) updateData.marketplaceOptIn = !!marketplaceOptIn;
+    if (marketplaceOptIn !== undefined) {
+      updateData.marketplaceOptIn = !!marketplaceOptIn;
+      // When a tenant turns ON marketplace opt-in via Settings, stamp the
+      // terms-accepted timestamp if it's not already set (so the backfill
+      // endpoint knows the user made an explicit choice and won't re-opt
+      // them in later). Turning OFF does NOT clear the timestamp — once a
+      // user has accepted terms, we keep that record.
+      if (marketplaceOptIn && marketplaceTermsAcceptedAt === undefined) {
+        updateData.marketplaceTermsAcceptedAt = new Date();
+      }
+    }
     if (marketplaceTermsAcceptedAt !== undefined) {
       // Setting to true → timestamp now; setting to false/null → clear it.
       if (marketplaceTermsAcceptedAt === true) {

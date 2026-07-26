@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useState, useEffect, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Cookie } from "lucide-react";
@@ -25,6 +25,11 @@ import { Card } from "@/components/ui/card";
  */
 
 const CONSENT_KEY = "serviceos_consent";
+// Session flag — once the user scrolls past the banner, we hide it for the
+// rest of the session so it doesn't keep popping back over content. Unlike
+// CONSENT_KEY (which is a permanent decision), this is just a "defer" so the
+// banner can reappear on a future visit and actually get a decision.
+const DEFERRED_KEY = "serviceos_consent_deferred";
 
 type ConsentPreferences = {
   necessary: boolean;
@@ -95,7 +100,11 @@ const getClientSnapshot = (): boolean => {
   if (typeof window === "undefined") return false;
   // Hide on the cookie policy page itself — the user is already reading it.
   if (window.location.pathname === "/cookie-policy") return false;
-  // Show the banner only when no valid consent decision exists yet.
+  // Show the banner only when no valid consent decision exists yet AND the
+  // user hasn't deferred it this session (scroll-to-dismiss sets the defer
+  // flag so the banner doesn't keep overlapping content after the user
+  // started exploring).
+  if (window.sessionStorage.getItem(DEFERRED_KEY) === "1") return false;
   return readConsent() === null;
 };
 
@@ -111,6 +120,35 @@ export function CookieConsentBanner() {
   const prefersReducedMotion = useReducedMotion();
 
   const visible = shouldShow && !dismissed;
+
+  // Scroll-to-dismiss: once the user scrolls past 10px, treat it as a
+  // "defer" — hide the banner for the rest of the session so it stops
+  // overlapping content. We do NOT record a consent decision (the banner
+  // will reappear on the next visit). The threshold is intentionally tiny
+  // (10px instead of 140px) so the banner gets out of the way the moment
+  // the user touches the scrollwheel/trackpad — this is critical on short
+  // mobile viewports where the banner can overlap hero CTAs.
+  useEffect(() => {
+    if (!visible) return;
+    let fired = false;
+    const onScroll = () => {
+      if (fired) return;
+      if (window.scrollY > 10) {
+        fired = true;
+        try {
+          window.sessionStorage.setItem(DEFERRED_KEY, "1");
+        } catch {
+          // sessionStorage may be disabled — fail silently.
+        }
+        setDismissed(true);
+        window.removeEventListener("scroll", onScroll, { passive: true } as EventListenerOptions);
+      }
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll, { passive: true } as EventListenerOptions);
+    };
+  }, [visible]);
 
   const handleAcceptAll = () => {
     writeConsent({ ...ACCEPT_ALL, timestamp: Date.now() });
@@ -143,16 +181,52 @@ export function CookieConsentBanner() {
           role="dialog"
           aria-live="polite"
           aria-label="Cookie consent"
-          className="fixed bottom-0 left-0 right-0 z-[60] px-4 pb-4 sm:bottom-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:max-w-2xl w-full sm:w-auto"
+          // pointer-events-none on the wrapper so the full-width fixed strip
+          // never blocks clicks to content ABOVE/AROUND the visible card.
+          // The inner Card re-enables pointer events on its own area.
+          className="pointer-events-none fixed bottom-0 left-0 right-0 z-[60] px-3 pb-3 sm:bottom-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:max-w-2xl w-full sm:w-auto sm:px-0 sm:pb-0"
           {...motionProps}
         >
-          <Card className="gap-0 rounded-xl border border-border bg-white p-5 shadow-lg sm:p-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <Card className="pointer-events-auto gap-0 rounded-none border-border bg-white p-0 shadow-lg sm:rounded-xl sm:p-6">
+            {/* ── Mobile: compact single-line bar (~52px tall) ──────────────
+                On short viewports the full card (~260px) overlaps hero CTAs.
+                The mobile bar keeps just the essentials: a one-line message
+                + two buttons. The full card with icon/title/paragraph is
+                shown on sm+ where there's room. */}
+            <div className="flex items-center gap-2 px-3 py-2 sm:hidden">
+              <Cookie className="h-4 w-4 shrink-0 text-emerald-700" aria-hidden="true" />
+              <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                We use cookies.{" "}
+                <Link href="/cookie-policy" className="font-medium text-emerald-700 underline underline-offset-2">
+                  Policy
+                </Link>
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                className="h-7 shrink-0 px-2.5 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                onClick={handleAcceptAll}
+              >
+                Accept
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 shrink-0 px-2.5 text-xs border-border bg-background text-foreground hover:bg-accent"
+                onClick={handleNecessaryOnly}
+              >
+                Necessary
+              </Button>
+            </div>
+
+            {/* ── Desktop: full card with icon + title + paragraph ─────────── */}
+            <div className="hidden sm:flex sm:flex-row sm:items-start sm:gap-4 sm:p-0">
               <div className="hidden sm:flex sm:h-10 sm:w-10 sm:shrink-0 sm:items-center sm:justify-center sm:rounded-lg sm:bg-emerald-50">
                 <Cookie className="h-5 w-5 text-emerald-700" aria-hidden="true" />
               </div>
               <div className="min-w-0 flex-1">
-                <h2 className="text-base font-semibold text-foreground sm:text-lg">
+                <h2 className="text-lg font-semibold text-foreground">
                   We value your privacy
                 </h2>
                 <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
@@ -171,7 +245,7 @@ export function CookieConsentBanner() {
                   .
                 </p>
 
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                <div className="mt-4 flex flex-row flex-wrap items-center gap-2">
                   <Button
                     type="button"
                     size="sm"
@@ -191,7 +265,7 @@ export function CookieConsentBanner() {
                   </Button>
                   <Link
                     href="/cookie-policy"
-                    className="inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline sm:px-0"
+                    className="inline-flex h-9 items-center justify-center rounded-md px-0 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
                   >
                     Cookie Policy
                   </Link>

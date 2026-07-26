@@ -1,8 +1,8 @@
 /*
- * ServiceOS Service Worker (v3)
+ * ServiceOS Service Worker (v4)
  * ------------------------------
  * Capabilities:
- *   1. App-shell pre-caching on install (/, /manifest.json, /logo.svg, /icon.svg, /offline.html)
+ *   1. App-shell pre-caching on install (/, /marketplace, /manifest.json, /logo.svg, /icon.svg, /offline.html)
  *      — SKIPPED in dev mode (?dev=1) to avoid caching Next.js dev renders.
  *   2. Cache cleanup + clients.claim() on activate
  *   3. Fetch strategies (ALL SKIPPED in dev mode — passthrough — so Next.js
@@ -26,7 +26,7 @@
  *   stale dev pages. The push + notificationclick handlers stay active.
  */
 
-const CACHE_NAME = 'serviceos-v3';
+const CACHE_NAME = 'serviceos-v4';
 const OFFLINE_URL = '/offline.html';
 
 // Detect dev mode from the SW's own URL. PwaProvider registers this script
@@ -44,6 +44,7 @@ const IS_DEV =
 // know we ship (SVG icons + the offline page + the app shell URL).
 const APP_SHELL = [
   '/',
+  '/marketplace',
   '/manifest.json',
   '/logo.svg',
   '/icon.svg',

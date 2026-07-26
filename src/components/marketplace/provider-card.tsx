@@ -93,9 +93,28 @@ export function ProviderCard({
   const industryEmoji = industryMeta?.emoji ?? '🛠️';
 
   const isFeat = featured ?? (!!(provider as ProviderListItem).featured);
-  const isVerified = isProfile(provider)
-    ? provider.identityVerified && provider.businessVerified
-    : true; // List endpoint already filters to verified tenants
+  // Verification badges — for ProviderProfile we read the real flags; for
+  // ProviderListItem we read the newly-added verification fields (the browse
+  // page + /api/marketplace/providers both return them now). The old behaviour
+  // (treat list items as fully verified) is kept as a fallback only when the
+  // flags are absent, which shouldn't happen for newly-fetched data.
+  const listFlags = provider as Partial<ProviderListItem>;
+  const identityVerified = isProfile(provider)
+    ? provider.identityVerified
+    : listFlags.identityVerified ?? true;
+  const businessVerified = isProfile(provider)
+    ? provider.businessVerified
+    : listFlags.businessVerified ?? true;
+  const insuranceVerified = isProfile(provider)
+    ? provider.insuranceVerified
+    : listFlags.insuranceVerified ?? true;
+  const stripeConnected = isProfile(provider)
+    ? provider.stripeConnected
+    : listFlags.stripeConnected ?? true;
+  const isVerified = identityVerified && businessVerified;
+  // Fully verified = all 4 gates passed. We surface this as a distinct badge
+  // so users can tell "fully vetted" providers from "public page only" ones.
+  const isFullyVerified = identityVerified && businessVerified && insuranceVerified && stripeConnected;
 
   const location = [provider.city, provider.state].filter(Boolean).join(', ');
   const cover = provider.coverImage;
@@ -150,8 +169,15 @@ export function ProviderCard({
 
         {isVerified ? (
           <div className="absolute right-3 top-3">
-            <Badge className="gap-1 bg-white/95 text-emerald-700 shadow hover:bg-white/95">
-              <BadgeCheck className="h-3.5 w-3.5" /> Verified
+            <Badge
+              className={
+                isFullyVerified
+                  ? 'gap-1 bg-white/95 text-emerald-700 shadow hover:bg-white/95'
+                  : 'gap-1 bg-white/90 text-amber-700 shadow hover:bg-white/90'
+              }
+            >
+              <BadgeCheck className="h-3.5 w-3.5" />
+              {isFullyVerified ? 'Verified' : 'Listed'}
             </Badge>
           </div>
         ) : null}
@@ -236,10 +262,31 @@ export function ProviderCard({
           </div>
         ) : null}
 
-        {!compact && isVerified ? (
-          <div className="mt-3 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-            <span>Identity & business verified by ServiceOS</span>
+        {!compact ? (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            {identityVerified ? (
+              <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50/60 text-[10px] text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+                <ShieldCheck className="h-3 w-3" /> Identity
+              </Badge>
+            ) : null}
+            {businessVerified ? (
+              <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50/60 text-[10px] text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+                <BadgeCheck className="h-3 w-3" /> Business
+              </Badge>
+            ) : null}
+            {insuranceVerified ? (
+              <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50/60 text-[10px] text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+                <ShieldCheck className="h-3 w-3" /> Insured
+              </Badge>
+            ) : null}
+            {stripeConnected ? (
+              <Badge variant="outline" className="gap-1 border-emerald-200 bg-emerald-50/60 text-[10px] text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+                <BadgeCheck className="h-3 w-3" /> Payments
+              </Badge>
+            ) : null}
+            {!isFullyVerified && isVerified ? (
+              <span className="text-[10px] text-muted-foreground">Verification in progress</span>
+            ) : null}
           </div>
         ) : null}
       </CardContent>

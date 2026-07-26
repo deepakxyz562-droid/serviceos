@@ -40,6 +40,18 @@ export interface ProviderListItem {
   serviceAreas: string[];
   services: ProviderService[];
   featured: string | null;
+  /**
+   * Verification flags — used to render trust badges on provider cards.
+   * The marketplace browse query no longer hard-requires all 4 gates
+   * (that excluded the long tail of providers who have a public page but
+   * never finished Stripe Connect). Instead we show each gate as a badge
+   * so users can see at a glance how verified a provider is.
+   */
+  identityVerified: boolean;
+  businessVerified: boolean;
+  insuranceVerified: boolean;
+  stripeConnected: boolean;
+  planStatus: string | null;
 }
 
 export interface ProviderListResponse {

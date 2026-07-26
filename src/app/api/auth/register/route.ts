@@ -41,6 +41,11 @@ export async function POST(request: NextRequest) {
     const passwordHash = await hashPassword(password);
 
     // Create tenant first
+    // marketplaceOptIn defaults to true so every new business is listed on
+    // the marketplace browse grid immediately (users can toggle it off from
+    // Settings → Public Hub → Marketplace listing). This fixes the issue
+    // where previously-registered users with a public Business Hub page were
+    // invisible on the marketplace because the flag was never set.
     const tenant = await db.tenant.create({
       data: {
         name: businessName,
@@ -51,6 +56,8 @@ export async function POST(request: NextRequest) {
         plan: 'starter',
         planStatus: 'trial',
         trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial
+        marketplaceOptIn: true,
+        marketplaceTermsAcceptedAt: new Date(),
       },
     });
 
