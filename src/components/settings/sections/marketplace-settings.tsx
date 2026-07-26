@@ -3,17 +3,23 @@
 /**
  * Marketplace section.
  *
- * Thin wrapper around the existing `PublicHubTab` component. The parent
- * settings shell fetches the tenant snapshot (tenantId / industry / slug)
- * and passes it down so the URL preview renders correctly without a
+ * Shows the existing `PublicHubTab` (profile basics — cover image, tagline,
+ * business hours, FAQs, etc.) AND a prominent banner at the top that links
+ * through to the full provider marketplace dashboard (eligibility checklist,
+ * portfolio, certifications, quote inbox, emergency feed).
+ *
+ * The parent settings shell fetches the tenant snapshot (tenantId / industry /
+ * slug) and passes it down so the URL preview renders correctly without a
  * duplicate fetch.
  *
  * Shows a loading skeleton while the tenant snapshot is still being
  * fetched by the parent.
  */
 
-import { Loader2, Store } from 'lucide-react';
+import { Loader2, Store, ArrowRight } from 'lucide-react';
 import { PublicHubTab } from '@/components/settings/public-hub-tab';
+import { useAppStore } from '@/store/app-store';
+import { Button } from '@/components/ui/button';
 
 interface MarketplaceSettingsProps {
   tenantId: string | null;
@@ -23,6 +29,8 @@ interface MarketplaceSettingsProps {
 }
 
 export function MarketplaceSettings({ tenantId, industry, slug, loading }: MarketplaceSettingsProps) {
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12 text-muted-foreground">
@@ -41,5 +49,32 @@ export function MarketplaceSettings({ tenantId, industry, slug, loading }: Marke
     );
   }
 
-  return <PublicHubTab tenantId={tenantId} industry={industry} slug={slug} />;
+  return (
+    <div className="space-y-6">
+      {/* Banner — bridge to the full marketplace dashboard */}
+      <div className="rounded-lg border border-emerald-300 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 dark:border-emerald-900/40 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="size-10 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
+          <Store className="size-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-emerald-900 dark:text-emerald-100">
+            Manage your marketplace dashboard
+          </p>
+          <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5">
+            Eligibility checklist, portfolio, certifications, incoming quote requests, and live emergency dispatches.
+          </p>
+        </div>
+        <Button
+          onClick={() => setCurrentView('marketplaceDashboard')}
+          className="bg-emerald-600 hover:bg-emerald-700 gap-1.5 shrink-0"
+        >
+          Open dashboard
+          <ArrowRight className="size-4" />
+        </Button>
+      </div>
+
+      {/* Existing public hub profile editor (cover image, tagline, hours, FAQs, SEO) */}
+      <PublicHubTab tenantId={tenantId} industry={industry} slug={slug} />
+    </div>
+  );
 }

@@ -275,15 +275,20 @@ export async function createPaymentIntent(
 }
 
 /**
- * Move funds from the platform balance to a provider's Connect balance.
- * `amount` is in the smallest currency unit (cents).
+ * Low-level primitive: move funds from the platform balance to a provider's
+ * Connect balance. `amount` is in the smallest currency unit (cents).
  *
  * `transferGroup` ties this transfer back to the customer PaymentIntent so
  * Stripe's dashboard shows the full money flow. We additionally set
  * `destination` to the provider's Connect account — that's what actually
  * moves the money out of the platform balance.
+ *
+ * Most callers should use the higher-level `transferToProvider(tenantId, ...)`
+ * wrapper below which handles the tenant lookup + payouts-enabled guard +
+ * demo-mode fallback. This primitive exists for the (rare) case where the
+ * caller already has the Stripe Connect accountId in hand.
  */
-export async function transferToProvider(
+export async function createStripeTransfer(
   accountId: string,
   amount: number,
   currency: string,
@@ -320,6 +325,135 @@ export async function transferToProvider(
     );
     throw err;
   }
+}
+
+/**
+ * Typed error thrown by `transferToProvider` when the tenant is missing a
+ * Connect account or payouts aren't enabled. Route handlers / the settlement
+ * cron can catch this and surface a meaningful status instead of crashing.
+ */
+export class StripePayoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'StripePayoutError';
+  }
+}
+
+export interface TransferToProviderResult {
+  transferId: string;
+  status: string;
+  /** True when we returned a mock transfer (no real Stripe call was made). */
+  mock: boolean;
+}
+
+/**
+ * High-level settlement primitive used by the marketplace settlement cron.
+ *
+ * Looks up the tenant's Stripe Connect accountId, verifies payouts are
+ * enabled, then issues a Stripe Transfer of `amountInCents` to the provider's
+ * Connect balance. The MarketplaceTransaction.id is used as the
+ * `transfer_group` so Stripe's dashboard shows the full money flow.
+ *
+ * Args:
+ *   - tenantId                   — the provider's Tenant.id
+ *   - amountInCents              — providerAmount in SMALLEST currency unit (cents)
+ *   - marketplaceTransactionId   — used as transfer_group + metadata key
+ *
+ * Returns `{ transferId, status, mock }` on success.
+ *
+ * Throws `StripePayoutError` (typed) if:
+ *   - the tenant doesn't exist
+ *   - the tenant has no `stripeAccountId`
+ *   - `stripePayoutsEnabled === false`
+ *
+ * Demo/dev mode: if `STRIPE_SECRET_KEY` is not set in env (or the tenant's
+ * `stripeAccountId` starts with the reserved `acct_demo_` prefix used by the
+ * seed data), this function returns a mock success result and logs a warning
+ * rather than crashing — the seeded marketplace providers all use
+ * `acct_demo_*` IDs which are not real Stripe accounts.
+ */
+export async function transferToProvider(
+  tenantId: string,
+  amountInCents: number,
+  marketplaceTransactionId: string,
+): Promise<TransferToProviderResult> {
+  if (!tenantId) throw new StripePayoutError('tenantId is required');
+  if (!marketplaceTransactionId) throw new StripePayoutError('marketplaceTransactionId is required');
+  if (!Number.isFinite(amountInCents) || amountInCents <= 0) {
+    throw new StripePayoutError('amountInCents must be a positive integer (cents)');
+  }
+
+  // Lazy import db so this lib stays import-safe from contexts that don't
+  // drag Prisma in (e.g. the Stripe SDK unit tests).
+  const { db } = await import('@/lib/db');
+
+  const tenant = await db.tenant.findUnique({
+    where: { id: tenantId },
+    select: {
+      id: true,
+      name: true,
+      stripeAccountId: true,
+      stripePayoutsEnabled: true,
+      stripeConnected: true,
+      currency: true,
+    },
+  });
+
+  if (!tenant) {
+    throw new StripePayoutError(`Tenant ${tenantId} not found`);
+  }
+
+  const stripeAccountId = tenant.stripeAccountId;
+  const isDemoAccount = !!stripeAccountId && stripeAccountId.startsWith('acct_demo_');
+  const stripeConfigured = isStripeConfigured();
+
+  // ── Demo / dev fallback ───────────────────────────────────────────────
+  // If Stripe isn't configured at all OR the tenant is using a seeded demo
+  // account (acct_demo_*), return a mock transfer so the settlement cron
+  // can still complete end-to-end in a dev environment. We must NOT call
+  // Stripe with a fake accountId — the API would 400.
+  if (!stripeConfigured || isDemoAccount) {
+    const mockTransferId = `tr_demo_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+    logger.warn(
+      {
+        tenantId,
+        tenantName: tenant.name,
+        stripeAccountId: stripeAccountId || null,
+        marketplaceTransactionId,
+        amountInCents,
+        mockTransferId,
+        reason: !stripeConfigured ? 'STRIPE_SECRET_KEY not set' : 'demo Connect account (acct_demo_*)',
+        component: 'stripe',
+      },
+      'transferToProvider: returning MOCK transfer (dev/demo mode)',
+    );
+    return { transferId: mockTransferId, status: 'succeeded', mock: true };
+  }
+
+  if (!stripeAccountId) {
+    throw new StripePayoutError(
+      `Tenant ${tenantId} (${tenant.name}) has no Stripe Connect account — cannot transfer`,
+    );
+  }
+  if (!tenant.stripePayoutsEnabled) {
+    throw new StripePayoutError(
+      `Tenant ${tenantId} (${tenant.name}) Stripe payouts are not enabled — complete Connect onboarding first`,
+    );
+  }
+
+  // ── Real Stripe call ──────────────────────────────────────────────────
+  // Use the tenant's currency (default USD); MarketplaceTransaction.amount
+  // is stored in major units so the cron converts to cents before calling.
+  const currency = (tenant.currency || 'USD').toUpperCase().slice(0, 3);
+
+  const transfer = await createStripeTransfer(
+    stripeAccountId,
+    amountInCents,
+    currency,
+    marketplaceTransactionId,
+  );
+
+  return { transferId: transfer.id, status: transfer.status ?? 'succeeded', mock: false };
 }
 
 /**
@@ -377,8 +511,13 @@ export async function createPayout(
  * Supported events:
  *   - account.updated             → sync stripeConnected + stripePayoutsEnabled on Tenant
  *   - payment.intent.succeeded    → mark MarketplaceTransaction as paid (escrow)
+ *                                    + set escrowedAt + store event metadata
  *   - transfer.created            → record transferId on MarketplaceTransaction
  *   - payout.paid                 → mark Payout as paid
+ *   - charge.refunded             → mark MarketplaceTransaction as 'refunded'
+ *                                    + set refundedAt + refundAmount
+ *   - charge.dispute.created      → mark MarketplaceTransaction as 'disputed'
+ *                                    + set disputedAt + store dispute metadata
  *
  * Every handler is idempotent — Stripe redelivers events, so we always
  * check the current DB state before updating.
@@ -411,6 +550,16 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<boolean> 
       case 'payout.paid': {
         const payout = event.data.object as Stripe.Payout;
         await handlePayoutPaid(db, payout);
+        return true;
+      }
+      case 'charge.refunded': {
+        const charge = event.data.object as Stripe.Charge;
+        await handleChargeRefunded(db, charge);
+        return true;
+      }
+      case 'charge.dispute.created': {
+        const dispute = event.data.object as Stripe.Dispute;
+        await handleChargeDisputeCreated(db, dispute);
         return true;
       }
       default:
@@ -473,27 +622,54 @@ async function handlePaymentIntentSucceeded(
     where: { paymentIntentId: intent.id },
   });
   if (!txn) {
-    // We may receive the webhook before our own DB insert commits (race
-    // between payment-intent creation + capture). Log + return; Stripe will
-    // not retry this event since we return 200.
+    // We may receive the webhook for subscription payments (not marketplace
+    // transactions) — these are ignored. Also covers the rare race where
+    // the webhook fires before our own DB insert commits. Log + return;
+    // Stripe will not retry this event since we return 200.
     logger.warn(
       { paymentIntentId: intent.id, component: 'stripe' },
-      'payment.intent.succeeded for unknown MarketplaceTransaction',
+      'payment_intent.succeeded for unknown MarketplaceTransaction (likely a subscription payment)',
     );
     return;
   }
 
-  // Idempotent: only transition out of pending/escrow-pending states.
-  if (txn.status === 'escrow' || txn.status === 'released') return;
+  // Idempotent: only transition out of pending (or null) state. If the
+  // transaction is already in escrow / released / refunded / disputed we
+  // leave it alone — Stripe redelivers events and we must not regress.
+  if (txn.status && txn.status !== 'pending') {
+    logger.debug(
+      { txnId: txn.id, paymentIntentId: intent.id, currentStatus: txn.status, component: 'stripe' },
+      'payment_intent.succeeded received for already-processed MarketplaceTransaction — skipping',
+    );
+    return;
+  }
+
+  // Merge the Stripe event metadata into the existing metadataJson so we
+  // keep an audit trail of when escrow started.
+  const priorMeta = safeParseJsonRecord(txn.metadataJson);
+  const updatedMetadata = {
+    ...priorMeta,
+    escrowEvent: {
+      paymentIntentId: intent.id,
+      amountReceived: intent.amount_received,
+      currency: intent.currency,
+      capturedAt: new Date().toISOString(),
+      stripeEventId: intent.id,
+    },
+  };
 
   await db.marketplaceTransaction.update({
     where: { id: txn.id },
-    data: { status: 'escrow' },
+    data: {
+      status: 'escrow',
+      escrowedAt: new Date(),
+      metadataJson: JSON.stringify(updatedMetadata),
+    },
   });
 
   logger.info(
     { txnId: txn.id, paymentIntentId: intent.id, amount: intent.amount_received, component: 'stripe' },
-    'MarketplaceTransaction → escrow (payment.intent.succeeded)',
+    'MarketplaceTransaction → escrow (payment_intent.succeeded)',
   );
 }
 
@@ -550,6 +726,202 @@ async function handlePayoutPaid(db: DbClient, payout: Stripe.Payout) {
     { payoutId: payout.id, stripeTransferId, amount: payout.amount, component: 'stripe' },
     'payout.paid → Payout.status = paid',
   );
+}
+
+/**
+ * charge.refunded — a previously captured charge has been refunded (fully or
+ * partially). We transition the MarketplaceTransaction to 'refunded' and
+ * record the refund amount + metadata.
+ *
+ * Reconciliation: the charge object's `payment_intent` field carries the
+ * PaymentIntent ID, which we persist on the MarketplaceTransaction row at
+ * payment-creation time.
+ *
+ * Edge case — refund AFTER release: if the settlement worker has already
+ * moved the funds to the provider's Connect balance (status='released'),
+ * we still flip the transaction to 'refunded' for accurate reporting, but
+ * we log a warning so an operator can manually claw back the transfer
+ * (Stripe requires `stripe.transfers.createReversal` for this — out of
+ * scope for the cron, but flagged here).
+ */
+async function handleChargeRefunded(db: DbClient, charge: Stripe.Charge) {
+  const paymentIntentId =
+    typeof charge.payment_intent === 'string'
+      ? charge.payment_intent
+      : charge.payment_intent?.id;
+
+  if (!paymentIntentId) {
+    logger.warn(
+      { chargeId: charge.id, component: 'stripe' },
+      'charge.refunded has no payment_intent — cannot reconcile to MarketplaceTransaction',
+    );
+    return;
+  }
+
+  const txn = await db.marketplaceTransaction.findFirst({
+    where: { paymentIntentId },
+  });
+
+  if (!txn) {
+    // Not a marketplace transaction (likely a subscription refund).
+    logger.debug(
+      { paymentIntentId, chargeId: charge.id, component: 'stripe' },
+      'charge.refunded for unknown MarketplaceTransaction — ignoring',
+    );
+    return;
+  }
+
+  // If the transaction was already released, the provider has the money —
+  // we need a manual clawback. Log loudly so an operator sees it.
+  if (txn.status === 'released') {
+    logger.warn(
+      {
+        txnId: txn.id,
+        paymentIntentId,
+        transferId: txn.transferId,
+        amountRefunded: charge.amount_refunded,
+        component: 'stripe',
+      },
+      'charge.refunded for RELEASED MarketplaceTransaction — manual transfer reversal required (clawback)',
+    );
+  }
+
+  // amount_refunded is in smallest currency unit (cents). Convert to major
+  // units to match our schema (refundAmount Float is in dollars).
+  const refundAmountMajor = charge.amount_refunded
+    ? Math.round(charge.amount_refunded) / 100
+    : txn.totalAmount;
+
+  // Idempotent: if already refunded, just refresh the metadata (Stripe
+  // redelivers events; partial refunds may fire multiple times).
+  const priorMeta = safeParseJsonRecord(txn.metadataJson);
+  const updatedMetadata = {
+    ...priorMeta,
+    refundEvent: {
+      chargeId: charge.id,
+      amountRefundedCents: charge.amount_refunded,
+      amountRefundedMajor: refundAmountMajor,
+      currency: charge.currency,
+      refundedAt: new Date().toISOString(),
+      reason: charge.reason || null,
+      priorStatus: txn.status,
+    },
+  };
+
+  await db.marketplaceTransaction.update({
+    where: { id: txn.id },
+    data: {
+      status: 'refunded',
+      refundedAt: new Date(),
+      refundAmount: refundAmountMajor,
+      metadataJson: JSON.stringify(updatedMetadata),
+    },
+  });
+
+  logger.info(
+    {
+      txnId: txn.id,
+      paymentIntentId,
+      chargeId: charge.id,
+      refundAmountMajor,
+      priorStatus: txn.status,
+      component: 'stripe',
+    },
+    'MarketplaceTransaction → refunded (charge.refunded)',
+  );
+}
+
+/**
+ * charge.dispute.created — a customer has disputed the charge with their
+ * bank. We transition the MarketplaceTransaction to 'disputed' and store
+ * the dispute metadata. The dispute lifecycle (won/lost/closed) is handled
+ * by separate `charge.dispute.*` events which we don't yet wire up — for
+ * now we just flag it.
+ */
+async function handleChargeDisputeCreated(db: DbClient, dispute: Stripe.Dispute) {
+  const paymentIntentId =
+    typeof dispute.payment_intent === 'string'
+      ? dispute.payment_intent
+      : dispute.payment_intent?.id;
+
+  if (!paymentIntentId) {
+    logger.warn(
+      { disputeId: dispute.id, component: 'stripe' },
+      'charge.dispute.created has no payment_intent — cannot reconcile to MarketplaceTransaction',
+    );
+    return;
+  }
+
+  const txn = await db.marketplaceTransaction.findFirst({
+    where: { paymentIntentId },
+  });
+
+  if (!txn) {
+    logger.debug(
+      { paymentIntentId, disputeId: dispute.id, component: 'stripe' },
+      'charge.dispute.created for unknown MarketplaceTransaction — ignoring',
+    );
+    return;
+  }
+
+  // Idempotent — if already disputed, just refresh the metadata.
+  const priorMeta = safeParseJsonRecord(txn.metadataJson);
+  const updatedMetadata = {
+    ...priorMeta,
+    disputeEvent: {
+      disputeId: dispute.id,
+      amountCents: dispute.amount,
+      currency: dispute.currency,
+      reason: dispute.reason || null,
+      status: dispute.status,
+      priorStatus: txn.status,
+      disputedAt: new Date().toISOString(),
+    },
+  };
+
+  await db.marketplaceTransaction.update({
+    where: { id: txn.id },
+    data: {
+      status: 'disputed',
+      disputedAt: new Date(),
+      disputeReason: dispute.reason || null,
+      metadataJson: JSON.stringify(updatedMetadata),
+    },
+  });
+
+  logger.warn(
+    {
+      txnId: txn.id,
+      paymentIntentId,
+      disputeId: dispute.id,
+      amountCents: dispute.amount,
+      reason: dispute.reason,
+      priorStatus: txn.status,
+      component: 'stripe',
+    },
+    'MarketplaceTransaction → disputed (charge.dispute.created)',
+  );
+}
+
+// ─── Internal helpers ───────────────────────────────────────────────────────
+
+/**
+ * Safely parse a metadataJson string into a Record. Returns `{}` if the
+ * string is invalid JSON, is null/empty, or isn't a plain object. Used by
+ * the webhook handlers so a corrupt metadataJson never crashes a Stripe
+ * event (Stripe would keep retrying if we returned 500).
+ */
+function safeParseJsonRecord(raw: string | null | undefined): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // fall through
+  }
+  return {};
 }
 
 // ─── URL helpers ───────────────────────────────────────────────────────────

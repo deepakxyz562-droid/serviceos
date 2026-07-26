@@ -20,9 +20,14 @@ import {
  * Events handled (delegated to `handleWebhookEvent`):
  *   - account.updated             → sync stripeConnected + stripePayoutsEnabled
  *   - payment.intent.succeeded    → MarketplaceTransaction.status = 'escrow'
+ *                                   + escrowedAt + metadata
  *   - transfer.created            → record transferId on MarketplaceTransaction
  *                                   + mark Payout as 'pending'
  *   - payout.paid                 → Payout.status = 'paid', paidAt = now
+ *   - charge.refunded             → MarketplaceTransaction.status = 'refunded'
+ *                                   + refundedAt + refundAmount
+ *   - charge.dispute.created      → MarketplaceTransaction.status = 'disputed'
+ *                                   + disputedAt + disputeReason
  *
  * Response strategy:
  *   - 200  → event processed (or unrecognised type — we ack so Stripe

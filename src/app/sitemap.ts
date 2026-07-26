@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { listIndexableBusinessUrls } from "@/lib/public-business";
+import { db } from "@/lib/db";
 
 /**
  * Dynamic sitemap for ServiceOS public pages.
@@ -7,6 +8,7 @@ import { listIndexableBusinessUrls } from "@/lib/public-business";
  * Lists every indexable public route so search engines can discover them all.
  * This includes:
  *   - Homepage
+ *   - Marketplace browse page (/marketplace) + provider profiles (/marketplace/[slug])
  *   - 15 SEO cornerstone pages (industry, comparison, feature)
  *   - Free tools (invoice generator)
  *   - Legal/contact pages
@@ -30,6 +32,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }[] = [
     // ─── Core ────────────────────────────────────────────────────────────
     { path: "", priority: 1.0, changeFreq: "weekly" },
+
+    // ─── Marketplace (Phase 13 — dual-audience landing + marketplace routes)
+    { path: "/marketplace", priority: 0.9, changeFreq: "weekly" },
 
     // ─── Cornerstone: Industry pages (high commercial intent) ────────────
     { path: "/field-service-software", priority: 0.9, changeFreq: "monthly" },
@@ -118,5 +123,34 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.error('[sitemap] failed to list indexable businesses:', err)
   }
 
-  return [...staticEntries, ...businessEntries];
+  // Dynamic: marketplace provider profiles (/marketplace/[slug]).
+  // Fetch every marketplace-opted-in tenant with a public profile enabled,
+  // and emit one URL per provider. Priority 0.8 (higher than business hubs
+  // because these are the canonical marketplace landing pages), weekly
+  // refresh because reviews/ratings update frequently.
+  let marketplaceProviderEntries: MetadataRoute.Sitemap = []
+  try {
+    const providers = await db.tenant.findMany({
+      where: {
+        marketplaceOptIn: true,
+        publicProfileEnabled: true,
+      },
+      select: {
+        publicSlug: true,
+        slug: true,
+        updatedAt: true,
+      },
+    })
+    marketplaceProviderEntries = providers.map((p) => ({
+      url: `${base}/marketplace/${p.publicSlug || p.slug}`,
+      lastModified: p.updatedAt.toISOString(),
+      changeFrequency: "weekly",
+      priority: 0.8,
+    }))
+  } catch (err) {
+    // Non-fatal — emit static + business entries only
+    console.error('[sitemap] failed to list marketplace providers:', err)
+  }
+
+  return [...staticEntries, ...businessEntries, ...marketplaceProviderEntries];
 }

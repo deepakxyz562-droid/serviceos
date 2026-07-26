@@ -27,6 +27,12 @@ interface ProviderCardProps {
   /** Compact layout for horizontal scrollers (no services list). */
   compact?: boolean;
   className?: string;
+  /**
+   * Optional URL. When provided, the whole card becomes a clickable anchor
+   * that navigates to this URL (used by SSR browse pages so they work without
+   * JS). When omitted, falls back to the onViewProfile click handler.
+   */
+  href?: string;
 }
 
 function isProfile(p: ProviderListItem | ProviderProfile): p is ProviderProfile {
@@ -36,10 +42,6 @@ function isProfile(p: ProviderListItem | ProviderProfile): p is ProviderProfile 
 function getServices(p: ProviderListItem | ProviderProfile) {
   if ('services' in p && Array.isArray(p.services)) return p.services;
   return [];
-}
-
-function getSlug(p: ProviderListItem | ProviderProfile): string | null {
-  return p.slug || (p as ProviderListItem).publicSlug || null;
 }
 
 function buildInitials(name: string): string {
@@ -80,8 +82,8 @@ export function ProviderCard({
   onViewProfile,
   compact,
   className,
+  href,
 }: ProviderCardProps) {
-  const slug = getSlug(provider);
   const services = getServices(provider);
   const rating = provider.rating ?? 0;
   const reviewCount = provider.reviewCount ?? 0;
@@ -104,11 +106,20 @@ export function ProviderCard({
     if (onViewProfile) onViewProfile(provider);
   };
 
+  // When href is provided (SSR browse page), wrap the entire card in an <a>
+  // so it works without JS. The inner buttons are replaced with anchors too.
+  const Wrapper: React.ElementType = href ? 'a' : 'div';
+  const wrapperProps = href
+    ? { href, 'aria-label': `View ${provider.name} profile` }
+    : {};
+
   return (
+    <Wrapper {...wrapperProps}>
     <Card
       className={cn(
         'group relative h-full overflow-hidden py-0 transition-all hover:shadow-md',
         isFeat && 'ring-2 ring-amber-300/70',
+        href && 'block',
         className,
       )}
     >
@@ -158,16 +169,23 @@ export function ProviderCard({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleView}
-          className="block w-full text-left"
-          aria-label={`View ${provider.name} profile`}
-        >
+        {/* Title: anchor when href provided (SSR), button otherwise */}
+        {href ? (
           <h3 className="line-clamp-1 text-base font-semibold text-foreground transition-colors group-hover:text-emerald-700">
             {provider.name}
           </h3>
-        </button>
+        ) : (
+          <button
+            type="button"
+            onClick={handleView}
+            className="block w-full text-left"
+            aria-label={`View ${provider.name} profile`}
+          >
+            <h3 className="line-clamp-1 text-base font-semibold text-foreground transition-colors group-hover:text-emerald-700">
+              {provider.name}
+            </h3>
+          </button>
+        )}
 
         {tagline ? (
           <p className="mt-0.5 line-clamp-1 text-xs font-medium text-muted-foreground">
@@ -227,16 +245,25 @@ export function ProviderCard({
       </CardContent>
 
       <CardFooter className="border-t bg-muted/30 px-4 py-2.5">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={handleView}
-          className="ml-auto gap-1 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950/50"
-        >
-          View Profile <ArrowRight className="h-3.5 w-3.5" />
-        </Button>
+        {href ? (
+          <span
+            className="ml-auto inline-flex items-center gap-1 text-sm font-medium text-emerald-700 dark:text-emerald-300"
+          >
+            View Profile <ArrowRight className="h-3.5 w-3.5" />
+          </span>
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={handleView}
+            className="ml-auto gap-1 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950/50"
+          >
+            View Profile <ArrowRight className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </CardFooter>
     </Card>
+    </Wrapper>
   );
 }

@@ -1,0 +1,1722 @@
+'use client';
+
+import * as React from 'react';
+import {
+  Wrench,
+  Sparkles,
+  ArrowRight,
+  ArrowLeft,
+  Zap,
+  Bot,
+  PhoneCall,
+  CalendarCheck,
+  UserCheck,
+  PhoneForwarded,
+  Voicemail,
+  Languages,
+  Target,
+  Calendar,
+  Inbox,
+  Wallet,
+  Mail,
+  Bell,
+  MessageSquareText,
+  Check,
+  Star,
+  Shield,
+  Building2,
+  Briefcase,
+  Headphones,
+  HardHat,
+  Globe,
+  Search,
+  Loader2,
+  MapPin,
+  ShieldCheck,
+  Siren,
+  FileText,
+  TrendingUp,
+  Clock,
+  Play,
+  ChevronRight,
+  Menu,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Separator } from '@/components/ui/separator';
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from '@/components/ui/accordion';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import { VERTICALS, getIndustry } from '@/lib/industry-catalog';
+import {
+  mpUrl,
+  type AiRouteResponse,
+  type ProviderListItem,
+  type ProviderListResponse,
+  type BookingMode,
+} from '@/components/marketplace/types';
+import { ProviderCard } from '@/components/marketplace/provider-card';
+
+// ─── Props ──────────────────────────────────────────────────────────────────
+
+interface DualAudienceLandingProps {
+  onGetStarted?: () => void;
+  onSignIn?: () => void;
+  onTryDemo?: () => void;
+}
+
+type Audience = 'crm' | 'marketplace';
+
+// ─── Pricing — uses seed plan prices from src/lib/billing-seed.ts ────────────
+//   Starter $5/mo (or $5 first-year promo) · Growth $29 · Business $79 · Enterprise Custom
+
+interface PricingPlan {
+  name: string;
+  monthlyPrice: number | null;
+  yearlyPrice: number | null;
+  description: string;
+  icon: LucideIcon;
+  features: string[];
+  popular?: boolean;
+  cta: string;
+  highlight?: boolean;
+}
+
+const pricingPlans: PricingPlan[] = [
+  {
+    name: 'Starter',
+    monthlyPrice: 5,
+    yearlyPrice: 50,
+    description: 'For solo pros & new businesses',
+    icon: Zap,
+    features: [
+      '1 user · 100 jobs/month',
+      'CRM, leads, jobs, scheduling',
+      'Email + SMS notifications',
+      'Invoicing & estimates',
+      'Customer portal',
+      'Marketplace browse-only',
+    ],
+    highlight: true,
+    cta: 'Start Free Trial',
+  },
+  {
+    name: 'Growth',
+    monthlyPrice: 29,
+    yearlyPrice: 290,
+    description: 'For growing teams',
+    icon: Building2,
+    features: [
+      '5 users · unlimited jobs',
+      'Everything in Starter',
+      'AI Assistant + AI Receptionist (BYOK)',
+      'WhatsApp integration',
+      'Smart dispatch & routing',
+      'Lead pipeline + segments',
+      'Marketplace bookings',
+    ],
+    popular: true,
+    cta: 'Start Free Trial',
+  },
+  {
+    name: 'Business',
+    monthlyPrice: 79,
+    yearlyPrice: 790,
+    description: 'For multi-branch operators',
+    icon: Shield,
+    features: [
+      'Unlimited users · jobs',
+      'Everything in Growth',
+      'AI Dispatcher + Quote Generator',
+      'Marketing automation',
+      'Inventory + asset management',
+      'Multi-branch + custom workflows',
+      'Marketplace priority placement',
+    ],
+    cta: 'Start Free Trial',
+  },
+  {
+    name: 'Enterprise',
+    monthlyPrice: null,
+    yearlyPrice: null,
+    description: 'For large organizations',
+    icon: Globe,
+    features: [
+      'Everything in Business',
+      'White-label branding',
+      'SSO + custom integrations',
+      'Dedicated account manager',
+      'SLA + onboarding training',
+      'API access & webhooks',
+    ],
+    cta: 'Contact Sales',
+  },
+];
+
+// ─── CRM marketing data ─────────────────────────────────────────────────────
+
+const stats = [
+  { value: '2,500+', label: 'Businesses' },
+  { value: '500K+', label: 'Jobs Completed' },
+  { value: '4.9/5', label: 'Customer Rating' },
+  { value: '99.9%', label: 'Uptime' },
+];
+
+const coreFlowSteps = [
+  { label: 'Lead', icon: Target },
+  { label: 'Booking', icon: Calendar },
+  { label: 'Dispatch', icon: Zap },
+  { label: 'Job', icon: HardHat },
+  { label: 'Invoice', icon: FileText },
+  { label: 'Payment', icon: Wallet },
+  { label: 'Review', icon: Star },
+  { label: 'Analytics', icon: TrendingUp },
+];
+
+const featurePillars = [
+  {
+    icon: Target,
+    title: 'CRM & Leads',
+    tagline: 'Never lose a lead again',
+    features: [
+      'Unified inbox — email, SMS, web forms, calls',
+      'Lead pipeline + kanban',
+      'Customer 360° view',
+      'Smart segments & tags',
+      'Lead discovery & scoring',
+      'Drag-and-drop form builder',
+    ],
+  },
+  {
+    icon: Calendar,
+    title: 'Operations & Dispatch',
+    tagline: 'Run jobs like clockwork',
+    features: [
+      'Bookings & calendar',
+      'Smart dispatch center',
+      'Route optimization',
+      'Employee timesheets',
+      'Service catalog & checklists',
+      'Real-time job tracking',
+    ],
+  },
+  {
+    icon: Inbox,
+    title: 'Omnichannel Comms',
+    tagline: 'Reach customers where they are',
+    features: [
+      'Email + SMS — works day one',
+      'WhatsApp (BYO number)',
+      'Push notifications',
+      'Email campaigns + broadcasts',
+      'Marketing templates',
+      'Customer journeys & automations',
+    ],
+  },
+  {
+    icon: Wallet,
+    title: 'Finance & Automation',
+    tagline: 'Get paid faster, work less',
+    features: [
+      'Quotes & estimates',
+      'Invoices + online payments',
+      'Expenses & cost tracking',
+      'n8n workflow builder',
+      'AI Assistant + automations',
+      'Custom workflow triggers',
+    ],
+  },
+];
+
+const aiHighlights = [
+  { icon: PhoneCall, title: 'AI Receptionist', description: 'Answers every call 24/7, books appointments, qualifies leads, routes urgent calls — never miss a customer again.' },
+  { icon: Bot, title: 'AI Assistant', description: 'Drafts replies, summarizes threads, suggests next-best-actions across your inbox.' },
+  { icon: Sparkles, title: 'AI Campaign Generator', description: 'Generates email & SMS campaign copy, audience segments, and send-time suggestions.' },
+  { icon: TrendingUp, title: 'AI Dispatcher', description: 'Auto-assigns jobs to the nearest available tech with route optimization.' },
+];
+
+const aiReceptionistCapabilities = [
+  { icon: PhoneCall, title: 'Answers every call, 24/7', description: 'No more missed leads after hours. Picks up on the first ring — weekends, holidays, 3 AM emergencies included.' },
+  { icon: CalendarCheck, title: 'Books appointments live', description: 'Checks your real-time calendar, quotes availability, and confirms bookings straight into your schedule.' },
+  { icon: UserCheck, title: 'Qualifies & captures leads', description: 'Asks the right questions, captures name, address, and job details, then drops a clean lead into your CRM.' },
+  { icon: PhoneForwarded, title: 'Transfers urgent calls', description: 'Recognises emergencies (no heat, burst pipe, gas leak) and warm-transfers to your on-call tech instantly.' },
+  { icon: Voicemail, title: 'Takes detailed messages', description: 'When a transfer isn\'t needed, records a structured message with transcript, summary, and callback number.' },
+  { icon: Languages, title: 'Speaks 30+ languages', description: 'Greets callers in their preferred language and switches mid-call. Perfect for multilingual neighbourhoods.' },
+];
+
+const personas = [
+  {
+    icon: Briefcase,
+    title: 'Business Owner',
+    points: ['Real-time revenue & KPI dashboards', 'Full visibility into operations', 'Automated reports in your inbox'],
+  },
+  {
+    icon: Headphones,
+    title: 'Dispatcher',
+    points: ['Smart dispatch board with map view', 'Drag-and-drop job assignment', 'Real-time technician tracking'],
+  },
+  {
+    icon: HardHat,
+    title: 'Field Technician',
+    points: ['Mobile app with job details & checklists', 'Photo capture & customer signatures', 'Turn-by-turn navigation'],
+  },
+  {
+    icon: UserCheck,
+    title: 'Customer',
+    points: ['Self-service booking portal', 'Email & SMS reminders', 'One-tap invoice payment'],
+  },
+];
+
+const testimonials = [
+  {
+    name: 'Rajesh Kumar',
+    business: 'Kumar Plumbing Co.',
+    industry: 'Plumbing · Chennai',
+    quote: 'Before ServiceOS, I was losing leads in scattered text messages every week. Now every inquiry lands in one inbox and I get paid the same day the job finishes.',
+    metric: '+42% revenue in 3 months',
+  },
+  {
+    name: 'Sarah Mitchell',
+    business: 'Sparkle Clean Services',
+    industry: 'Cleaning · Manchester',
+    quote: 'Every lead from my website and SMS lands in one inbox now — no more missed inquiries. My customers love getting SMS reminders before appointments.',
+    metric: '−35% no-show rate',
+  },
+  {
+    name: 'Daniel Okafor',
+    business: 'Okafor HVAC Solutions',
+    industry: 'HVAC · Lagos',
+    quote: 'Dispatching used to be a whiteboard and phone calls. Now my techs get jobs on their phones with route maps. Invoices go out automatically and payments hit my account in days.',
+    metric: '2× faster payments',
+  },
+];
+
+const howItWorksSteps = [
+  {
+    step: 1,
+    title: 'Capture Every Lead',
+    subtitle: 'Email · SMS · Web Forms · Calls',
+    description: 'Every inquiry auto-lands in one unified inbox. Nothing is missed, nothing is duplicated — including calls answered by your AI Receptionist.',
+    icon: Target,
+  },
+  {
+    step: 2,
+    title: 'Dispatch & Track Jobs',
+    subtitle: 'Smart Routing · Real-time',
+    description: 'Assign jobs to the nearest tech with route optimization, live status tracking, and automated customer notifications.',
+    icon: Zap,
+  },
+  {
+    step: 3,
+    title: 'Get Paid Faster',
+    subtitle: 'Invoicing · Payments · Reminders',
+    description: 'Auto-generate invoices the moment a job completes. Send reminders via Email & SMS, collect payments online, and reconcile instantly.',
+    icon: Wallet,
+  },
+];
+
+const faqs = [
+  {
+    question: 'How does the AI Receptionist work?',
+    answer: 'It is a voice agent that answers every call to your business number 24/7 — greets callers, qualifies leads, books appointments into your calendar, takes messages, and transfers urgent calls. Powered by Vapi.ai (BYOK — paste your API key once). Numbers cost ~$2/month and calls ~$0.05–0.15/min. Available on Growth and Business plans.',
+  },
+  {
+    question: 'Do I need any third-party approvals to get started?',
+    answer: 'No. ServiceOS works out of the box with Email, SMS, Push, and In-App notifications — no approvals, no waiting. Capture leads, send quotes, dispatch jobs, invoice customers, and collect payments from day one.',
+  },
+  {
+    question: 'How long does it take to get set up?',
+    answer: 'Most businesses are up and running in under an hour. Sign up with your email, import your customer list (CSV upload), set up your services and pricing, and start capturing leads immediately.',
+  },
+  {
+    question: 'Can I import my existing customers?',
+    answer: 'Absolutely. Use our CSV import tool to bring in customers, contacts, and job history from spreadsheets, your old CRM, or accounting software.',
+  },
+  {
+    question: 'Do you charge per message or per call?',
+    answer: 'Email and SMS are included in every plan with generous monthly limits. Push and in-app notifications are always unlimited. No hidden fees, no per-seat charges, no per-message surprises.',
+  },
+  {
+    question: 'Is my data secure and backed up?',
+    answer: 'Yes. We use enterprise-grade AES-256 encryption for all data at rest and in transit. Daily automated backups, 99.9% uptime SLA. You can export or delete your data anytime.',
+  },
+  {
+    question: 'Can I try ServiceOS before committing?',
+    answer: 'Of course. We offer a 14-day free trial with full access to all Growth plan features. No credit card required. You can also explore our Live Demo — a real plumbing business with 2,000 customers, 300 bookings, and 500 invoices.',
+  },
+];
+
+const footerLinks = {
+  product: [
+    { label: 'CRM Features', href: '#crm-features' },
+    { label: 'AI Receptionist', href: '#ai-receptionist' },
+    { label: 'Pricing', href: '#pricing' },
+    { label: 'Marketplace', href: '/marketplace' },
+    { label: 'For Providers', href: '#for-providers' },
+  ],
+  company: [
+    { label: 'About', href: '/contact-us' },
+    { label: 'Blog', href: '/contact-us' },
+    { label: 'Careers', href: '/contact-us' },
+    { label: 'Contact', href: '/contact-us' },
+  ],
+  resources: [
+    { label: 'Free Invoice Generator', href: '/invoice-generator' },
+    { label: 'Field Service Software', href: '/field-service-software' },
+    { label: 'Plumbing Software', href: '/plumbing-software' },
+    { label: 'HVAC Software', href: '/hvac-software' },
+    { label: 'Jobber Alternatives', href: '/jobber-alternatives' },
+  ],
+  legal: [
+    { label: 'Privacy Policy', href: '/privacy-policy' },
+    { label: 'Terms of Service', href: '/terms-of-service' },
+    { label: 'Cookie Policy', href: '/cookie-policy' },
+    { label: 'Data Deletion', href: '/data-deletion' },
+  ],
+};
+
+// ─── AI search booking-mode meta (mirror of marketplace-landing) ─────────────
+
+const BOOKING_MODE_META: Record<
+  BookingMode,
+  { label: string; description: string; tone: string; icon: typeof Zap }
+> = {
+  instant: {
+    label: 'Instant Booking',
+    description: 'Pick a time and get confirmed immediately — no waiting.',
+    tone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+    icon: Zap,
+  },
+  quote_request: {
+    label: 'Request Quotes',
+    description: 'Describe the job and compare quotes from multiple providers.',
+    tone: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+    icon: FileText,
+  },
+  emergency: {
+    label: 'Emergency Dispatch',
+    description: 'A verified technician is on the way within minutes.',
+    tone: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300',
+    icon: Siren,
+  },
+  ai_auto: {
+    label: 'AI Auto-Assign',
+    description: 'Let our AI dispatcher pick the best provider for you.',
+    tone: 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300',
+    icon: Bot,
+  },
+};
+
+// ─── Top navbar ─────────────────────────────────────────────────────────────
+
+function Navbar({ onGetStarted, onSignIn }: { onGetStarted?: () => void; onSignIn?: () => void }) {
+  const [mobileOpen, setMobileOpen] = React.useState(false);
+  return (
+    <header className="sticky top-0 z-50 border-b bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70 pt-[env(safe-area-inset-top,0px)]">
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
+        <a href="#top" className="flex items-center gap-2" aria-label="ServiceOS home">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
+            <Wrench className="h-4 w-4" />
+          </span>
+          <span className="text-lg font-bold text-foreground">ServiceOS</span>
+        </a>
+
+        <nav className="hidden md:flex items-center gap-6">
+          <a href="#crm-features" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Features</a>
+          <a href="#ai-receptionist" className="flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700 transition-colors font-medium">
+            AI Receptionist
+            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-semibold uppercase tracking-wide">New</span>
+          </a>
+          <a href="#pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Pricing</a>
+          <a href="/marketplace" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Marketplace</a>
+          <a href="#faq" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">FAQ</a>
+        </nav>
+
+        <div className="hidden md:flex items-center gap-2">
+          {onSignIn ? (
+            <Button variant="ghost" size="sm" onClick={onSignIn} className="text-muted-foreground hover:text-foreground">Sign In</Button>
+          ) : null}
+          {onGetStarted ? (
+            <Button size="sm" onClick={onGetStarted} className="gap-1 bg-emerald-600 text-white hover:bg-emerald-700 font-semibold">
+              Get Started <ArrowRight className="h-3.5 w-3.5" />
+            </Button>
+          ) : null}
+        </div>
+
+        <button onClick={() => setMobileOpen(!mobileOpen)} className="md:hidden text-foreground p-2" aria-label="Toggle menu">
+          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
+      </div>
+
+      {mobileOpen ? (
+        <div className="md:hidden border-t bg-background">
+          <div className="px-4 py-3 space-y-2">
+            <a href="#crm-features" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileOpen(false)}>Features</a>
+            <a href="#ai-receptionist" className="block text-sm text-emerald-600 py-1.5" onClick={() => setMobileOpen(false)}>AI Receptionist</a>
+            <a href="#pricing" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileOpen(false)}>Pricing</a>
+            <a href="/marketplace" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileOpen(false)}>Marketplace</a>
+            <a href="#faq" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileOpen(false)}>FAQ</a>
+            <Separator className="my-2" />
+            {onSignIn ? <Button variant="outline" size="sm" className="w-full" onClick={onSignIn}>Sign In</Button> : null}
+            {onGetStarted ? <Button size="sm" className="w-full bg-emerald-600 text-white hover:bg-emerald-700" onClick={onGetStarted}>Get Started</Button> : null}
+          </div>
+        </div>
+      ) : null}
+    </header>
+  );
+}
+
+// ─── Hero with audience fork ────────────────────────────────────────────────
+
+function HeroFork({
+  audience,
+  onPick,
+  onTryDemo,
+}: {
+  audience: Audience;
+  onPick: (a: Audience) => void;
+  onTryDemo?: () => void;
+}) {
+  return (
+    <section id="top" className="relative overflow-hidden">
+      {/* Gradient backdrop */}
+      <div className="absolute inset-0 -z-10 bg-gradient-to-br from-emerald-50 via-teal-50/40 to-cyan-50 dark:from-emerald-950/30 dark:via-teal-950/20 dark:to-cyan-950/20" />
+      <div className="absolute -left-32 -top-32 -z-10 h-96 w-96 rounded-full bg-emerald-300/20 blur-3xl dark:bg-emerald-700/20" />
+      <div className="absolute -right-32 top-20 -z-10 h-96 w-96 rounded-full bg-amber-300/15 blur-3xl dark:bg-amber-700/10" />
+
+      <div className="mx-auto max-w-5xl px-4 pb-12 pt-14 sm:px-6 sm:pb-16 sm:pt-20 text-center">
+        {/* Eyebrow */}
+        <div className="mb-4 flex justify-center">
+          <Badge className="gap-1.5 border-emerald-200 bg-white/70 px-3 py-1 text-emerald-700 backdrop-blur hover:bg-white/70 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+            <Sparkles className="h-3.5 w-3.5" />
+            The AI Operating System for Local Services
+          </Badge>
+        </div>
+
+        <h1 className="text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl md:text-6xl">
+          ServiceOS —{' '}
+          <span className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent dark:from-emerald-400 dark:via-teal-400 dark:to-cyan-400">
+            The AI Operating System
+          </span>{' '}
+          for Local Services
+        </h1>
+        <p className="mx-auto mt-4 max-w-2xl text-base text-muted-foreground sm:text-lg">
+          Run your business. Get more customers. Automate everything.
+        </p>
+
+        {/* Fork — two big CTAs */}
+        <div className="mx-auto mt-10 max-w-3xl">
+          <p className="mb-3 text-xs uppercase tracking-widest text-muted-foreground font-semibold">Who are you?</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => onPick('crm')}
+              className={cn(
+                'group relative overflow-hidden rounded-2xl border-2 p-5 text-left transition-all',
+                audience === 'crm'
+                  ? 'border-emerald-500 bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-200 dark:shadow-emerald-900/40'
+                  : 'border-border bg-card hover:border-emerald-400 hover:shadow-md',
+              )}
+            >
+              <div className="flex items-start gap-3">
+                <span className={cn(
+                  'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl',
+                  audience === 'crm' ? 'bg-white/20' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300',
+                )}>
+                  <Briefcase className="h-5 w-5" />
+                </span>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base font-bold">I run a service business</span>
+                    {audience === 'crm' ? <Check className="h-4 w-4 text-white" /> : null}
+                  </div>
+                  <p className={cn('mt-0.5 text-xs', audience === 'crm' ? 'text-emerald-50' : 'text-muted-foreground')}>
+                    CRM, dispatch, invoicing, AI Receptionist. Get more customers with the marketplace.
+                  </p>
+                </div>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onPick('marketplace')}
+              className={cn(
+                'group relative overflow-hidden rounded-2xl border-2 p-5 text-left transition-all',
+                audience === 'marketplace'
+                  ? 'border-amber-500 bg-gradient-to-br from-amber-500 to-rose-500 text-white shadow-lg shadow-amber-200 dark:shadow-amber-900/40'
+                  : 'border-border bg-card hover:border-amber-400 hover:shadow-md',
+              )}
+            >
+              <div className="flex items-start gap-3">
+                <span className={cn(
+                  'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl',
+                  audience === 'marketplace' ? 'bg-white/20' : 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
+                )}>
+                  <Search className="h-5 w-5" />
+                </span>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base font-bold">I need a service</span>
+                    {audience === 'marketplace' ? <Check className="h-4 w-4 text-white" /> : null}
+                  </div>
+                  <p className={cn('mt-0.5 text-xs', audience === 'marketplace' ? 'text-amber-50' : 'text-muted-foreground')}>
+                    Describe your problem. AI routes you to verified local pros. Book instantly or compare quotes.
+                  </p>
+                </div>
+              </div>
+            </button>
+          </div>
+
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm">
+            {onTryDemo ? (
+              <button
+                type="button"
+                onClick={onTryDemo}
+                className="inline-flex items-center gap-1.5 text-emerald-700 hover:text-emerald-800 dark:text-emerald-300 font-medium"
+              >
+                <Play className="h-3.5 w-3.5" /> Try the live demo
+              </button>
+            ) : null}
+            <span className="text-muted-foreground">·</span>
+            <a href="/marketplace" className="inline-flex items-center gap-1.5 text-amber-700 hover:text-amber-800 dark:text-amber-300 font-medium">
+              Browse the marketplace <ArrowRight className="h-3.5 w-3.5" />
+            </a>
+          </div>
+        </div>
+
+        {/* Trust stats */}
+        <div className="mt-12 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          {stats.map((stat) => (
+            <div key={stat.label} className="text-center">
+              <p className="text-2xl font-bold text-foreground sm:text-3xl">{stat.value}</p>
+              <p className="mt-1 text-xs text-muted-foreground sm:text-sm">{stat.label}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── CRM: How it works ──────────────────────────────────────────────────────
+
+function CrmHowItWorks() {
+  return (
+    <section className="border-t bg-muted/30 py-14 sm:py-20">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mb-10 text-center">
+          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 mb-3 font-medium">The Solution</Badge>
+          <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
+            Three steps to <span className="text-emerald-600">operational excellence</span>
+          </h2>
+          <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">
+            Get up and running in minutes. Our streamlined process replaces messy text threads and spreadsheets.
+          </p>
+        </div>
+        <div className="grid md:grid-cols-3 gap-6">
+          {howItWorksSteps.map((step) => {
+            const Icon = step.icon;
+            return (
+              <Card key={step.step} className="bg-white border-border h-full hover:shadow-md hover:border-emerald-300 transition-all">
+                <CardHeader>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-9 h-9 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+                      <Icon className="w-4.5 h-4.5 text-emerald-600" />
+                    </div>
+                    <span className="text-xs text-emerald-600 font-medium">{step.subtitle}</span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-bold text-emerald-600">{step.step}</span>
+                    <CardTitle className="text-foreground text-lg">{step.title}</CardTitle>
+                  </div>
+                  <CardDescription className="text-muted-foreground leading-relaxed mt-2">{step.description}</CardDescription>
+                </CardHeader>
+              </Card>
+            );
+          })}
+        </div>
+
+        {/* Core flow strip */}
+        <div className="mt-10">
+          <p className="text-center text-xs uppercase tracking-wider text-muted-foreground mb-4 font-medium">Every job flows through one pipeline</p>
+          <div className="hidden lg:flex items-center justify-center gap-2">
+            {coreFlowSteps.map((step, i) => {
+              const Icon = step.icon;
+              return (
+                <div key={step.label} className="flex items-center">
+                  <div className="group flex flex-col items-center">
+                    <div className="w-14 h-14 rounded-xl bg-white border border-border shadow-sm flex items-center justify-center mb-1.5 group-hover:border-emerald-400 group-hover:shadow-md transition-all">
+                      <Icon className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <span className="text-xs text-muted-foreground font-medium">{step.label}</span>
+                  </div>
+                  {i < coreFlowSteps.length - 1 ? <ArrowRight className="w-3.5 h-3.5 text-emerald-400 mx-1 flex-shrink-0" /> : null}
+                </div>
+              );
+            })}
+          </div>
+          <div className="lg:hidden flex gap-2 overflow-x-auto pb-3 px-1 snap-x" style={{ scrollbarWidth: 'none' }}>
+            {coreFlowSteps.map((step, i) => {
+              const Icon = step.icon;
+              return (
+                <div key={step.label} className="flex items-center flex-shrink-0 snap-start">
+                  <div className="flex flex-col items-center">
+                    <div className="w-12 h-12 rounded-xl bg-white border border-border shadow-sm flex items-center justify-center mb-1.5">
+                      <Icon className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <span className="text-xs text-muted-foreground font-medium">{step.label}</span>
+                  </div>
+                  {i < coreFlowSteps.length - 1 ? <ArrowRight className="w-3 h-3 text-emerald-400 ml-1 flex-shrink-0" /> : null}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── CRM: Features grid (4 pillars + AI highlights) ─────────────────────────
+
+function CrmFeatures() {
+  return (
+    <section id="crm-features" className="border-t bg-background py-14 sm:py-20">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mb-10 text-center">
+          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 mb-3 font-medium">Features</Badge>
+          <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
+            Everything you need to <span className="text-emerald-600">run your business</span>
+          </h2>
+          <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">
+            Four powerful pillars covering 60+ features. Built specifically for field service businesses — no bloat, just what matters.
+          </p>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-5">
+          {featurePillars.map((pillar) => {
+            const Icon = pillar.icon;
+            return (
+              <Card key={pillar.title} className="bg-white border-border hover:border-emerald-300 transition-all h-full">
+                <CardHeader>
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+                      <Icon className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-foreground text-lg leading-tight">{pillar.title}</CardTitle>
+                      <p className="text-xs text-emerald-600 font-medium">{pillar.tagline}</p>
+                    </div>
+                  </div>
+                  <ul className="space-y-2 mt-2">
+                    {pillar.features.map((f) => (
+                      <li key={f} className="flex items-start gap-2 text-sm text-foreground/80">
+                        <Check className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardHeader>
+              </Card>
+            );
+          })}
+        </div>
+
+        {/* AI highlights strip */}
+        <div className="mt-8 rounded-2xl bg-white border border-border p-6 sm:p-8">
+          <div className="flex items-center gap-2 mb-5">
+            <Sparkles className="w-5 h-5 text-emerald-600" />
+            <h3 className="text-lg font-semibold text-foreground">AI-powered, built in</h3>
+            <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs">New</Badge>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {aiHighlights.map((ai) => {
+              const Icon = ai.icon;
+              return (
+                <div key={ai.title} className="rounded-xl bg-muted/40 border border-border p-4 hover:border-emerald-300 hover:bg-muted/60 transition-colors">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center mb-2">
+                    <Icon className="w-4 h-4 text-emerald-600" />
+                  </div>
+                  <div className="text-sm font-semibold text-foreground mb-1">{ai.title}</div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{ai.description}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── CRM: AI Receptionist showcase ──────────────────────────────────────────
+
+function CrmAiReceptionist({ onGetStarted }: { onGetStarted?: () => void }) {
+  return (
+    <section id="ai-receptionist" className="relative py-14 sm:py-20 overflow-hidden bg-slate-950">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(16,185,129,0.18),transparent_55%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(20,184,166,0.12),transparent_50%)]" />
+
+      <div className="relative z-10 mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="text-center mb-12">
+          <Badge variant="outline" className="border-emerald-400/40 bg-emerald-500/10 text-emerald-300 mb-3 font-medium">
+            <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+            New · AI Voice Agent
+          </Badge>
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white tracking-tight leading-[1.1]">
+            Never miss another call.<br />
+            <span className="bg-gradient-to-r from-emerald-300 to-teal-300 bg-clip-text text-transparent">
+              Your AI receptionist answers 24/7.
+            </span>
+          </h2>
+          <p className="text-slate-300 mt-5 max-w-2xl mx-auto text-lg leading-relaxed">
+            Every missed call is a lost customer. Your AI voice agent picks up on the first ring, books the job, qualifies the lead, and routes emergencies — then logs the whole call to your CRM. Powered by Vapi.ai.
+          </p>
+        </div>
+
+        <div className="grid lg:grid-cols-2 gap-8 items-start mb-10">
+          {/* Left: live call mockup */}
+          <div className="relative rounded-2xl border border-white/10 bg-slate-900/80 backdrop-blur shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-slate-900/60">
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center">
+                    <PhoneCall className="w-4 h-4 text-emerald-300" />
+                  </div>
+                  <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-slate-900 animate-pulse" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-white">Inbound call · Live</div>
+                  <div className="text-xs text-slate-400">+1 (415) 555-0142 → Brightwater Plumbing</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/20">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-[11px] font-medium text-emerald-300">00:23</span>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-3">
+              {[
+                { role: 'agent', text: 'Thanks for calling Brightwater Plumbing, this is Riley. How can I help you today?', time: '0:00' },
+                { role: 'caller', text: 'Hi, my kitchen sink is leaking pretty badly — water is everywhere.', time: '0:04' },
+                { role: 'agent', text: 'I\'m sorry to hear that. I can get a technician out to you today. What\'s your address?', time: '0:09' },
+                { role: 'caller', text: '412 Maple Street, Apartment 3B.', time: '0:14' },
+                { role: 'agent', text: 'Got it. I have an opening at 2:15 PM — shall I lock that in for you?', time: '0:19' },
+              ].map((line, i) => (
+                <div key={i} className={cn('flex', line.role === 'agent' ? 'justify-start' : 'justify-end')}>
+                  <div className={cn('max-w-[80%] rounded-2xl px-3.5 py-2.5',
+                    line.role === 'agent' ? 'bg-emerald-500/15 border border-emerald-400/20' : 'bg-white/8 border border-white/10')}>
+                    <div className="text-[10px] uppercase tracking-wide font-medium text-slate-400 mb-0.5">
+                      {line.role === 'agent' ? 'AI Agent · Riley' : 'Caller'} · {line.time}
+                    </div>
+                    <p className="text-sm text-slate-100 leading-relaxed">{line.text}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between px-5 py-3 border-t border-white/10 bg-slate-900/60">
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                <CalendarCheck className="w-3.5 h-3.5 text-emerald-300" />
+                <span>Booking created · Today 2:15 PM</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                <UserCheck className="w-3.5 h-3.5 text-emerald-300" />
+                <span>Lead saved to CRM</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right: capabilities grid */}
+          <div className="grid sm:grid-cols-2 gap-4">
+            {aiReceptionistCapabilities.map((cap) => {
+              const Icon = cap.icon;
+              return (
+                <div key={cap.title} className="rounded-xl border border-white/10 bg-white/[0.04] p-4 hover:border-emerald-400/30 hover:bg-emerald-500/[0.06] transition-colors">
+                  <div className="w-9 h-9 rounded-lg bg-emerald-500/15 border border-emerald-400/20 flex items-center justify-center mb-3">
+                    <Icon className="w-4 h-4 text-emerald-300" />
+                  </div>
+                  <div className="text-sm font-semibold text-white mb-1.5">{cap.title}</div>
+                  <p className="text-xs text-slate-400 leading-relaxed">{cap.description}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* BYOK pricing note + CTA */}
+        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.07] p-6 sm:p-7 flex flex-col sm:flex-row items-start sm:items-center gap-5 justify-between">
+          <div className="flex items-start gap-4">
+            <div className="w-11 h-11 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center shrink-0">
+              <Wallet className="w-5 h-5 text-emerald-300" />
+            </div>
+            <div>
+              <div className="text-base font-semibold text-white mb-1">Bring your own Vapi.ai key — pay only for what you use</div>
+              <p className="text-sm text-slate-300 leading-relaxed">
+                Numbers cost ~<span className="text-emerald-300 font-medium">$2/month</span> and calls ~<span className="text-emerald-300 font-medium">$0.05–0.15/min</span> (includes speech-to-text, the LLM brain, and text-to-speech). Billed by Vapi — no separate Twilio account. Available on Growth &amp; Business plans.
+              </p>
+            </div>
+          </div>
+          {onGetStarted ? (
+            <Button size="lg" onClick={onGetStarted} className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-6 h-12 shadow-lg shadow-emerald-500/20 shrink-0">
+              Start Free Trial <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── CRM: Personas ──────────────────────────────────────────────────────────
+
+function CrmPersonas() {
+  return (
+    <section className="border-t bg-muted/30 py-14 sm:py-20">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mb-10 text-center">
+          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 mb-3 font-medium">Who It&apos;s For</Badge>
+          <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
+            Built for <span className="text-emerald-600">every role</span> in your business
+          </h2>
+          <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">
+            From the owner tracking revenue to the technician on the road — everyone gets exactly what they need.
+          </p>
+        </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {personas.map((persona) => {
+            const Icon = persona.icon;
+            return (
+              <Card key={persona.title} className="bg-white border-border hover:border-emerald-300 transition-all h-full">
+                <CardHeader>
+                  <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center mb-3">
+                    <Icon className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <CardTitle className="text-foreground text-base">{persona.title}</CardTitle>
+                  <ul className="space-y-1.5 mt-2">
+                    {persona.points.map((p) => (
+                      <li key={p} className="flex items-start gap-2 text-xs text-foreground/80">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
+                        <span>{p}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardHeader>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── CRM: Testimonials ──────────────────────────────────────────────────────
+
+function CrmTestimonials() {
+  return (
+    <section className="border-t bg-background py-14 sm:py-20">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mb-10 text-center">
+          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 mb-3 font-medium">Testimonials</Badge>
+          <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
+            Loved by <span className="text-emerald-600">service businesses</span>
+          </h2>
+          <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">
+            Real stories from owners who replaced chaos with clarity.
+          </p>
+        </div>
+        <div className="grid md:grid-cols-3 gap-5">
+          {testimonials.map((t) => (
+            <Card key={t.name} className="bg-white border-border hover:border-emerald-300 hover:shadow-lg transition-all h-full flex flex-col">
+              <CardHeader>
+                <div className="flex items-center gap-1 mb-3">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Star key={s} className="w-4 h-4 fill-amber-400 text-amber-400" />
+                  ))}
+                </div>
+                <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold w-fit mb-2">{t.metric}</Badge>
+                <p className="text-sm text-foreground/80 leading-relaxed italic">&ldquo;{t.quote}&rdquo;</p>
+              </CardHeader>
+              <CardContent className="mt-auto pt-4">
+                <div>
+                  <div className="text-sm font-semibold text-foreground">{t.name}</div>
+                  <div className="text-xs text-muted-foreground">{t.business}</div>
+                  <div className="text-xs text-emerald-600 font-medium">{t.industry}</div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── CRM: Pricing ───────────────────────────────────────────────────────────
+
+function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
+  const [yearly, setYearly] = React.useState(false);
+  return (
+    <section id="pricing" className="border-t bg-muted/30 py-14 sm:py-20">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mb-10 text-center">
+          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 mb-3 font-medium">Pricing</Badge>
+          <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
+            Simple, <span className="text-emerald-600">Transparent Pricing</span>
+          </h2>
+          <p className="text-muted-foreground mt-3">Start free for 14 days. No credit card required. Email & SMS included on every plan.</p>
+
+          <div className="flex items-center justify-center gap-3 mt-6">
+            <span className={cn('text-sm font-medium', !yearly ? 'text-foreground' : 'text-muted-foreground')}>Monthly</span>
+            <button
+              type="button"
+              onClick={() => setYearly(!yearly)}
+              className="relative w-14 h-7 rounded-full bg-muted border border-border transition-colors"
+              aria-label="Toggle yearly pricing"
+            >
+              <span className={cn('absolute top-0.5 h-6 w-6 rounded-full bg-emerald-600 shadow-sm transition-transform',
+                yearly ? 'translate-x-7' : 'translate-x-0.5')} />
+            </button>
+            <span className={cn('text-sm font-medium flex items-center gap-1', yearly ? 'text-foreground' : 'text-muted-foreground')}>
+              Yearly
+              <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs">Save 17%</Badge>
+            </span>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+          {pricingPlans.map((plan) => {
+            const Icon = plan.icon;
+            return (
+              <Card
+                key={plan.name}
+                className={cn(
+                  'relative bg-white border h-full flex flex-col transition-all',
+                  plan.popular
+                    ? 'border-emerald-500 shadow-lg shadow-emerald-100 ring-1 ring-emerald-500/20'
+                    : 'border-border hover:border-emerald-300 hover:shadow-md',
+                )}
+              >
+                {plan.popular ? (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                    <Badge className="bg-emerald-600 text-white font-semibold border-0 px-3 shadow-md">Popular</Badge>
+                  </div>
+                ) : null}
+                {plan.highlight ? (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                    <Badge className="bg-amber-500 text-white font-semibold border-0 px-3 shadow-md whitespace-nowrap">$5 starter</Badge>
+                  </div>
+                ) : null}
+                <CardHeader className="pb-2">
+                  <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center mb-3',
+                    plan.popular ? 'bg-emerald-50 border border-emerald-100' : 'bg-muted border border-border')}>
+                    <Icon className={cn('w-5 h-5', plan.popular ? 'text-emerald-600' : 'text-muted-foreground')} />
+                  </div>
+                  <CardTitle className="text-foreground text-lg">{plan.name}</CardTitle>
+                  <CardDescription className="text-muted-foreground">{plan.description}</CardDescription>
+                </CardHeader>
+                <CardContent className="flex-1">
+                  <div className="mb-5">
+                    {plan.monthlyPrice !== null ? (
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-4xl font-extrabold text-foreground">
+                          ${yearly ? Math.round(plan.yearlyPrice! / 12) : plan.monthlyPrice}
+                        </span>
+                        <span className="text-muted-foreground text-sm">/mo</span>
+                      </div>
+                    ) : (
+                      <div className="text-4xl font-bold text-foreground">Custom</div>
+                    )}
+                    {plan.monthlyPrice !== null && yearly ? (
+                      <p className="text-xs text-muted-foreground mt-1">${plan.yearlyPrice}/year billed annually</p>
+                    ) : null}
+                  </div>
+                  <ul className="space-y-2.5">
+                    {plan.features.map((feature) => (
+                      <li key={feature} className="flex items-start gap-2.5 text-sm">
+                        <Check className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                        <span className="text-foreground/80">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+                <CardFooter>
+                  <Button
+                    onClick={onGetStarted}
+                    className={cn('w-full',
+                      plan.popular
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm'
+                        : 'bg-white hover:bg-muted text-foreground border border-border')}
+                  >
+                    {plan.cta} <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </CardFooter>
+              </Card>
+            );
+          })}
+        </div>
+
+        <p className="text-center text-xs text-muted-foreground mt-6">
+          <strong className="text-foreground">All plans include</strong> Email, SMS, Push & In-App notifications, lead capture, invoicing, and the Live Demo.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+// ─── CRM: FAQ ───────────────────────────────────────────────────────────────
+
+function CrmFaq() {
+  return (
+    <section id="faq" className="border-t bg-background py-14 sm:py-20">
+      <div className="mx-auto max-w-3xl px-4 sm:px-6">
+        <div className="mb-10 text-center">
+          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 mb-3 font-medium">FAQ</Badge>
+          <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
+            Frequently Asked <span className="text-emerald-600">Questions</span>
+          </h2>
+        </div>
+        <Card className="bg-white border-border">
+          <CardContent className="p-0">
+            <Accordion type="single" collapsible className="w-full">
+              {faqs.map((faq, i) => (
+                <AccordionItem key={i} value={`item-${i}`} className="border-border px-6">
+                  <AccordionTrigger className="text-foreground hover:text-emerald-600 hover:no-underline text-left">{faq.question}</AccordionTrigger>
+                  <AccordionContent className="text-muted-foreground leading-relaxed">{faq.answer}</AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          </CardContent>
+        </Card>
+      </div>
+    </section>
+  );
+}
+
+// ─── CRM: Final CTA banner ──────────────────────────────────────────────────
+
+function CrmFinalCta({ onGetStarted, onTryDemo }: { onGetStarted?: () => void; onTryDemo?: () => void }) {
+  return (
+    <section id="for-providers" className="border-t bg-background py-14 sm:py-20 overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(16,185,129,0.10),transparent_60%)]" />
+      <div className="mx-auto max-w-4xl px-4 sm:px-6 text-center relative z-10">
+        <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground mb-4">
+          Ready to transform <span className="text-emerald-600">your business?</span>
+        </h2>
+        <p className="text-muted-foreground text-lg mb-7">
+          Join 2,500+ service businesses already running on ServiceOS. Email & SMS work from day one — no approvals, no waiting.
+        </p>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          {onGetStarted ? (
+            <Button size="lg" onClick={onGetStarted} className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-8 h-12 text-base shadow-lg shadow-emerald-200">
+              Start Free Trial <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          ) : null}
+          {onTryDemo ? (
+            <Button size="lg" variant="outline" onClick={onTryDemo} className="bg-white border-border text-foreground hover:bg-muted px-7 h-12 text-base">
+              <Play className="w-4 h-4 mr-2" /> Try Live Demo
+            </Button>
+          ) : null}
+        </div>
+        <p className="text-muted-foreground text-sm mt-4">
+          No credit card required &bull; 14-day free trial &bull; Cancel anytime
+        </p>
+      </div>
+    </section>
+  );
+}
+
+// ─── Marketplace: AI search + featured providers ────────────────────────────
+
+function MarketplaceCompact({
+  onGetStarted,
+  onSignIn,
+}: {
+  onGetStarted?: () => void;
+  onSignIn?: () => void;
+}) {
+  const [aiText, setAiText] = React.useState('');
+  const [aiLoading, setAiLoading] = React.useState(false);
+  const [aiResult, setAiResult] = React.useState<AiRouteResponse | null>(null);
+  const [aiError, setAiError] = React.useState<string | null>(null);
+
+  const [featured, setFeatured] = React.useState<ProviderListItem[]>([]);
+  const [featuredLoading, setFeaturedLoading] = React.useState(true);
+
+  // Featured providers
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setFeaturedLoading(true);
+      try {
+        const res = await fetch(mpUrl('/api/marketplace/providers', { limit: 12 }));
+        const data = (await res.json()) as ProviderListResponse;
+        if (cancelled) return;
+        const sorted = [...data.items].sort((a, b) => {
+          if (!!a.featured !== !!b.featured) return a.featured ? -1 : 1;
+          return (b.rating ?? 0) - (a.rating ?? 0);
+        });
+        setFeatured(sorted.slice(0, 8));
+      } catch {
+        if (!cancelled) setFeatured([]);
+      } finally {
+        if (!cancelled) setFeaturedLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  async function handleAiSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const text = aiText.trim();
+    if (text.length < 5) {
+      toast.warning('Tell us a bit more about your problem');
+      return;
+    }
+    setAiLoading(true);
+    setAiError(null);
+    setAiResult(null);
+    try {
+      const res = await fetch(mpUrl('/api/marketplace/ai-route'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || 'Failed to analyze your request');
+      setAiResult(data as AiRouteResponse);
+      setTimeout(() => {
+        document.getElementById('mp-ai-result')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 50);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to analyze';
+      setAiError(msg);
+      toast.error('AI routing failed', { description: msg });
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  function handleProviderClick(p: ProviderListItem) {
+    const slug = p.slug || p.publicSlug;
+    if (slug && typeof window !== 'undefined') {
+      window.location.href = `/marketplace/${slug}`;
+    }
+  }
+
+  return (
+    <section className="border-t bg-background py-12 sm:py-16">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        {/* Section header */}
+        <div className="mb-8 text-center">
+          <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700 mb-3 font-medium">
+            <Search className="w-3.5 h-3.5 mr-1.5" />
+            AI-Powered Marketplace
+          </Badge>
+          <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
+            Describe your problem — <span className="text-amber-600">we'll find the pro</span>
+          </h2>
+          <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">
+            Our AI reads your request, identifies the right trade, estimates the cost, and routes you to verified local providers. Three ways to book: instant, quote request, or emergency dispatch.
+          </p>
+        </div>
+
+        {/* AI search bar */}
+        <form onSubmit={handleAiSearch} className="mx-auto max-w-2xl">
+          <div className="relative">
+            <div className="pointer-events-none absolute -inset-1 -z-10 rounded-2xl bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400 opacity-25 blur-lg" />
+            <div className="flex flex-col gap-2 rounded-2xl border bg-card p-2 shadow-xl sm:flex-row sm:items-center">
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  type="text"
+                  value={aiText}
+                  onChange={(e) => setAiText(e.target.value)}
+                  placeholder="Describe your problem — e.g. “My boiler isn't producing hot water”"
+                  className="h-12 border-0 bg-transparent pl-11 text-base shadow-none focus-visible:ring-0"
+                  aria-label="Describe your problem"
+                />
+              </div>
+              <Button
+                type="submit"
+                disabled={aiLoading || aiText.trim().length < 5}
+                className="h-12 gap-2 bg-amber-600 px-6 text-base text-white hover:bg-amber-700"
+              >
+                {aiLoading ? (
+                  <><Loader2 className="h-5 w-5 animate-spin" /> Analyzing…</>
+                ) : (
+                  <><Sparkles className="h-5 w-5" /> Get Help</>
+                )}
+              </Button>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap justify-center gap-2">
+            {[
+              'AC stopped cooling',
+              'Burst pipe under sink',
+              'Locked out of apartment',
+              'Lawn overgrown',
+              'Need house painters',
+            ].map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setAiText(s)}
+                className="rounded-full border bg-white/60 px-3 py-1 text-xs text-muted-foreground backdrop-blur transition-colors hover:border-amber-300 hover:bg-white hover:text-amber-700 dark:bg-amber-950/30 dark:hover:bg-amber-950/60"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </form>
+
+        {/* AI Result */}
+        {aiError ? (
+          <div className="mx-auto mt-6 max-w-2xl rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
+            {aiError}
+          </div>
+        ) : null}
+
+        {aiResult ? (
+          <div id="mp-ai-result" className="mx-auto mt-6 max-w-2xl overflow-hidden rounded-2xl border bg-card shadow-xl">
+            <div className="flex items-center gap-2 border-b bg-muted/40 px-4 py-2.5">
+              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                <Bot className="h-3.5 w-3.5" />
+              </span>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                AI Routing Result
+                {aiResult.fallback ? <Badge variant="outline" className="ml-2 text-[10px]">fallback</Badge> : null}
+              </p>
+            </div>
+            <div className="space-y-4 p-4 sm:p-5">
+              <div>
+                <p className="text-sm leading-relaxed text-foreground">
+                  <span className="text-muted-foreground">Summary: </span>
+                  {aiResult.extraction.summary}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs">
+                {aiResult.extraction.category ? (
+                  <Chip label="Category" value={getIndustry(aiResult.extraction.category)?.name ?? aiResult.extraction.category} />
+                ) : null}
+                {aiResult.extraction.service ? <Chip label="Service" value={aiResult.extraction.service} /> : null}
+                <Chip label="Urgency" value={aiResult.extraction.urgency} />
+              </div>
+              <div className="flex items-center justify-between rounded-lg border bg-amber-50/50 p-3 dark:bg-amber-950/20">
+                <div className="flex items-center gap-2 text-sm">
+                  <TrendingUp className="h-4 w-4 text-amber-600" />
+                  <span className="font-medium">Estimated cost</span>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-bold text-amber-700 dark:text-amber-300">
+                    {aiResult.estimatedCost.currency} {aiResult.estimatedCost.low}–{aiResult.estimatedCost.high}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">{aiResult.estimatedCost.basis}</p>
+                </div>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recommended next step</p>
+                {(() => {
+                  const meta = BOOKING_MODE_META[aiResult.bookingMode];
+                  const Icon = meta.icon;
+                  return (
+                    <div className="flex items-start gap-3">
+                      <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg', meta.tone)}>
+                        <Icon className="h-5 w-5" />
+                      </span>
+                      <div className="flex-1">
+                        <p className="font-semibold">{meta.label}</p>
+                        <p className="text-xs text-muted-foreground">{meta.description}</p>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <a
+                  href="/marketplace"
+                  className="inline-flex items-center gap-2 rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700"
+                >
+                  Browse providers <ArrowRight className="h-4 w-4" />
+                </a>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Featured providers */}
+        <div className="mt-12">
+          <div className="mb-5 flex items-end justify-between gap-3">
+            <div>
+              <h3 className="text-2xl font-bold text-foreground sm:text-3xl">Featured Providers</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Top-rated, verified businesses ready to take your booking right now.
+              </p>
+            </div>
+            <a
+              href="/marketplace"
+              className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-amber-700 hover:text-amber-800 dark:text-amber-300"
+            >
+              Browse all <ArrowRight className="h-4 w-4" />
+            </a>
+          </div>
+
+          {featuredLoading ? (
+            <div className="flex gap-4 overflow-hidden">
+              {[0, 1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-72 w-72 shrink-0 rounded-xl" />
+              ))}
+            </div>
+          ) : featured.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
+                <p className="text-sm text-muted-foreground">No marketplace-eligible providers yet.</p>
+                {onGetStarted ? (
+                  <Button className="mt-2 gap-2 bg-amber-600 text-white hover:bg-amber-700" onClick={onGetStarted}>
+                    List your business <ArrowRight className="h-4 w-4" />
+                  </Button>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-4 sm:mx-0 sm:px-0">
+              {featured.map((p) => {
+                const slug = p.slug || p.publicSlug;
+                return (
+                  <div key={p.id} className="w-72 shrink-0">
+                    <ProviderCard
+                      provider={p}
+                      featured={!!p.featured}
+                      onViewProfile={handleProviderClick}
+                      compact
+                      className="h-full"
+                      href={slug ? `/marketplace/${slug}` : undefined}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Three ways to get service */}
+        <div className="mt-12">
+          <div className="mb-5 text-center">
+            <h3 className="text-2xl font-bold text-foreground sm:text-3xl">Three Ways to Get Service</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Pick the flow that matches your urgency and project size.</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            <FlowCard
+              icon={Zap}
+              tone="from-emerald-500 to-teal-600"
+              title="Instant Booking"
+              tagline="Pick a slot, done."
+              description="Browse verified providers, choose a service + time, and confirm in seconds. Ideal for cleaning, lawn care, pest control — any routine job."
+              steps={['Pick a provider', 'Choose service + time', 'Get confirmed instantly']}
+            />
+            <FlowCard
+              icon={FileText}
+              tone="from-amber-500 to-orange-600"
+              title="Request Quotes"
+              tagline="Compare, then decide."
+              description="Describe your project and we'll broadcast it to multiple nearby providers. Compare quotes, reviews, and timelines — then accept the one you like."
+              steps={['Describe your project', 'Receive N quotes', 'Pick the best fit']}
+            />
+            <FlowCard
+              icon={Siren}
+              tone="from-rose-500 to-red-600"
+              title="Emergency Dispatch"
+              tagline="Help, fast."
+              description="Burst pipe, no power, locked out, gas leak — describe the emergency and we'll dispatch the nearest verified technician, usually en route in under 35 minutes."
+              steps={['Describe the emergency', 'We broadcast instantly', 'Tech en route < 35 min']}
+            />
+          </div>
+        </div>
+
+        {/* CTA banner */}
+        <div className="mt-12">
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-600 via-orange-600 to-rose-600 p-7 text-white shadow-xl sm:p-9">
+            <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
+            <div className="absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-emerald-300/20 blur-3xl" />
+            <div className="relative flex flex-col items-start gap-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="max-w-xl">
+                <Badge className="mb-3 bg-white/20 text-white hover:bg-white/20">
+                  <ShieldCheck className="mr-1 h-3.5 w-3.5" /> For service businesses
+                </Badge>
+                <h3 className="text-2xl font-bold sm:text-3xl">Run your business on ServiceOS.</h3>
+                <p className="mt-2 text-sm text-amber-50">
+                  Get discovered by thousands of customers in your area. Manage bookings, dispatch, invoicing, and AI automation — all in one platform.
+                </p>
+              </div>
+              {onGetStarted ? (
+                <Button
+                  size="lg"
+                  className="shrink-0 gap-2 bg-white text-amber-700 hover:bg-amber-50"
+                  onClick={onGetStarted}
+                >
+                  List your business <ArrowRight className="h-4 w-4" />
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Chip({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md border bg-muted/40 px-2 py-1">
+      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="font-medium text-foreground">{value}</span>
+    </span>
+  );
+}
+
+function FlowCard({
+  icon: Icon,
+  tone,
+  title,
+  tagline,
+  description,
+  steps,
+}: {
+  icon: typeof Zap;
+  tone: string;
+  title: string;
+  tagline: string;
+  description: string;
+  steps: string[];
+}) {
+  return (
+    <Card className="flex h-full flex-col overflow-hidden">
+      <div className={cn('flex items-center gap-3 bg-gradient-to-r p-4 text-white', tone)}>
+        <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/20">
+          <Icon className="h-5 w-5" />
+        </span>
+        <div>
+          <p className="text-base font-bold">{title}</p>
+          <p className="text-xs text-white/80">{tagline}</p>
+        </div>
+      </div>
+      <CardContent className="flex flex-1 flex-col gap-3 pt-4">
+        <p className="text-sm text-muted-foreground">{description}</p>
+        <div className="mt-auto space-y-1.5 pt-2">
+          {steps.map((s, i) => (
+            <div key={s} className="flex items-center gap-2 text-xs">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-100 text-[10px] font-bold text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                {i + 1}
+              </span>
+              <span className="text-foreground">{s}</span>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Footer ─────────────────────────────────────────────────────────────────
+
+function Footer() {
+  return (
+    <footer className="bg-foreground text-background mt-auto pb-[env(safe-area-inset-bottom,0px)]">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-14">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
+          <div className="col-span-2">
+            <div className="flex items-center gap-2.5 mb-4">
+              <div className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0 shadow-sm bg-emerald-600 shadow-emerald-500/20">
+                <Wrench className="w-5 h-5 text-white" />
+              </div>
+              <span className="text-xl font-bold text-background tracking-tight">ServiceOS</span>
+            </div>
+            <p className="text-background/70 text-sm max-w-xs leading-relaxed">
+              The AI Operating System for Local Services. Run your business with the CRM. Find trusted pros on the marketplace. Automate everything.
+            </p>
+            <div className="flex flex-wrap gap-2 mt-4">
+              <Badge variant="outline" className="border-background/20 text-background/80">25 industries</Badge>
+              <Badge variant="outline" className="border-background/20 text-background/80">9 verticals</Badge>
+              <Badge variant="outline" className="border-background/20 text-background/80">150+ services</Badge>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-background font-semibold text-sm mb-4">Product</h4>
+            <ul className="space-y-2.5">
+              {footerLinks.product.map((link) => (
+                <li key={link.label}>
+                  <a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="text-background font-semibold text-sm mb-4">Company</h4>
+            <ul className="space-y-2.5">
+              {footerLinks.company.map((link) => (
+                <li key={link.label}>
+                  <a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a>
+                </li>
+              ))}
+            </ul>
+            <h4 className="text-background font-semibold text-sm mb-4 mt-6">Resources</h4>
+            <ul className="space-y-2.5">
+              {footerLinks.resources.slice(0, 4).map((link) => (
+                <li key={link.href}>
+                  <a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="text-background font-semibold text-sm mb-4">Legal</h4>
+            <ul className="space-y-2.5">
+              {footerLinks.legal.map((link) => (
+                <li key={link.href}>
+                  <a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        <Separator className="bg-background/10 my-8" />
+
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+          <p className="text-background/50 text-xs">© {new Date().getFullYear()} ServiceOS. All rights reserved.</p>
+          <p className="text-background/50 text-xs">AI Operating System for Local Service Businesses</p>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+// ─── Sticky bottom CTA bar (mobile-friendly) ────────────────────────────────
+
+function StickyCta({
+  audience,
+  onPick,
+  onGetStarted,
+}: {
+  audience: Audience;
+  onPick: (a: Audience) => void;
+  onGetStarted?: () => void;
+}) {
+  const [hidden, setHidden] = React.useState(false);
+  if (hidden) return null;
+  return (
+    <div className="sticky bottom-0 z-40 border-t bg-background/95 backdrop-blur px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom,0px))] sm:px-6">
+      <div className="mx-auto max-w-6xl flex items-center gap-2 sm:gap-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-xs text-muted-foreground truncate">
+            {audience === 'crm'
+              ? 'ServiceOS CRM — run your business from lead to invoice'
+              : 'ServiceOS Marketplace — find verified local pros'}
+          </p>
+        </div>
+        {audience === 'crm' ? (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPick('marketplace')}
+              className="gap-1 border-amber-300 text-amber-700 hover:bg-amber-50 hidden sm:inline-flex"
+            >
+              <Search className="h-3.5 w-3.5" /> I need a service
+            </Button>
+            {onGetStarted ? (
+              <Button size="sm" onClick={onGetStarted} className="gap-1 bg-emerald-600 text-white hover:bg-emerald-700">
+                Start free <ArrowRight className="h-3.5 w-3.5" />
+              </Button>
+            ) : null}
+          </>
+        ) : (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onPick('crm')}
+              className="gap-1 border-emerald-300 text-emerald-700 hover:bg-emerald-50 hidden sm:inline-flex"
+            >
+              <Briefcase className="h-3.5 w-3.5" /> I run a business
+            </Button>
+            <a
+              href="/marketplace"
+              className="inline-flex items-center gap-1 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
+            >
+              Browse all <ArrowRight className="h-3.5 w-3.5" />
+            </a>
+          </>
+        )}
+        <button
+          type="button"
+          onClick={() => setHidden(true)}
+          aria-label="Dismiss"
+          className="ml-1 p-1 rounded text-muted-foreground hover:bg-muted"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main component ─────────────────────────────────────────────────────────
+
+export function DualAudienceLanding({
+  onGetStarted,
+  onSignIn,
+  onTryDemo,
+}: DualAudienceLandingProps) {
+  const [audience, setAudience] = React.useState<Audience>('crm');
+
+  // Smooth-scroll to top when audience switches
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    // Don't scroll on first mount
+    return;
+  }, [audience]);
+
+  return (
+    <div className="min-h-screen flex flex-col bg-background">
+      <Navbar onGetStarted={onGetStarted} onSignIn={onSignIn} />
+
+      <main className="flex-1">
+        <HeroFork audience={audience} onPick={setAudience} onTryDemo={onTryDemo} />
+
+        {audience === 'crm' ? (
+          <>
+            <CrmHowItWorks />
+            <CrmFeatures />
+            <CrmAiReceptionist onGetStarted={onGetStarted} />
+            <CrmPersonas />
+            <CrmTestimonials />
+            <CrmPricing onGetStarted={onGetStarted} />
+            <CrmFaq />
+            <CrmFinalCta onGetStarted={onGetStarted} onTryDemo={onTryDemo} />
+          </>
+        ) : (
+          <MarketplaceCompact onGetStarted={onGetStarted} onSignIn={onSignIn} />
+        )}
+      </main>
+
+      <Footer />
+      <StickyCta audience={audience} onPick={setAudience} onGetStarted={onGetStarted} />
+    </div>
+  );
+}

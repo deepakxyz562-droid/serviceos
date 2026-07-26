@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { getAuthUser } from '@/lib/auth';
 import { logger, withRequestId } from '@/lib/logger';
 import { applyRateLimit, apiLimiter, rateLimitResponse } from '@/lib/rate-limit';
 import { getIndustry } from '@/lib/industry-catalog';
@@ -7,7 +8,8 @@ import { getIndustry } from '@/lib/industry-catalog';
 /**
  * Flow 3: Emergency Dispatch — create (ServiceOS V1.5 — P10-flows)
  * ------------------------------------------------------------
- * POST /api/marketplace/emergency
+ * GET  /api/marketplace/emergency       — list broadcasting emergencies (provider-auth'd)
+ * POST /api/marketplace/emergency       — customer creates a new emergency dispatch
  *
  * A marketplace customer has an emergency (burst pipe, no electricity,
  * lockout, etc.) and needs immediate dispatch. The EmergencyDispatch is
@@ -260,3 +262,160 @@ export async function POST(request: NextRequest) {
     { status: 201 },
   );
 }
+
+/**
+ * GET /api/marketplace/emergency
+ *
+ * Provider-side feed of broadcasting emergencies.
+ *
+ * Returns EmergencyDispatches that:
+ *   - status === 'broadcasting'  (not yet accepted)
+ *   - the calling provider's tenantId is in the dispatch's broadcastToIds
+ *     (i.e. the dispatcher pre-selected them when the customer submitted)
+ *   - OR the dispatch has no industry filter AND the provider's tenant has
+ *     emergencyServiceAvailable=true (best-effort fallback so dispatches
+ *     without a pre-baked broadcast list still surface).
+ *
+ * Also includes dispatches the provider has already accepted (status in
+ * accepted|en_route|on_site) — these appear in the "active tracker" UI.
+ *
+ * Auth required (provider). Caller must have a tenantId.
+ *
+ * Query params:
+ *   ?status=open | active | all    (default: all — returns both broadcasting + active)
+ *   ?limit=20                      (max 100)
+ *
+ * Returns: { items, total }
+ */
+export async function GET(request: NextRequest) {
+  const log = withRequestId(request);
+
+  // Auth required — this is the provider-side feed.
+  const authUser = await getAuthUser();
+  if (!authUser) {
+    return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+  }
+  if (!authUser.tenantId) {
+    return NextResponse.json(
+      { error: 'No tenant associated with this account' },
+      { status: 403 },
+    );
+  }
+
+  const { searchParams } = new URL(request.url);
+  const statusFilter = (searchParams.get('status') || 'all').toLowerCase();
+  const limit = Math.min(
+    parseInt(searchParams.get('limit') || '40', 10) || 40,
+    100,
+  );
+
+  try {
+    // Resolve the provider tenant's primary industry + business categories
+    // + emergencyServiceAvailable flag.
+    const tenant = await db.tenant.findUnique({
+      where: { id: authUser.tenantId },
+      select: {
+        id: true,
+        industry: true,
+        emergencyServiceAvailable: true,
+        businessCategoriesJson: true,
+      },
+    });
+    if (!tenant) {
+      return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
+    }
+
+    // Build the where-clause.
+    // - "open"   → status='broadcasting'
+    // - "active" → status in [accepted, en_route, on_site] AND acceptedById = this tenant
+    // - "all"    → broadcasting (where tenant is in broadcastToIds) OR
+    //              active (acceptedById = this tenant)
+    const orClauses: Record<string, unknown>[] = [];
+
+    if (statusFilter === 'open' || statusFilter === 'all') {
+      // Broadcasting dispatches that include this tenant in broadcastToIds.
+      // broadcastToIds is stored as a JSON array string — Postgres `like`
+      // substring match on the tenant id is sufficient (CUIDs are unambiguous).
+      orClauses.push({
+        status: 'broadcasting',
+        broadcastToIds: { contains: authUser.tenantId },
+      });
+      // Fallback: broadcasting dispatches with no broadcast list at all
+      // (defensive — shouldn't happen but covers the empty-`[]` case).
+      orClauses.push({
+        status: 'broadcasting',
+        broadcastToIds: '[]',
+      });
+    }
+
+    if (statusFilter === 'active' || statusFilter === 'all') {
+      orClauses.push({
+        status: { in: ['accepted', 'en_route', 'on_site'] },
+        acceptedById: authUser.tenantId,
+      });
+    }
+
+    const where = orClauses.length === 1 ? orClauses[0] : { OR: orClauses };
+
+    const [items, total] = await Promise.all([
+      db.emergencyDispatch.findMany({
+        where,
+        orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+        take: limit,
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          industry: true,
+          urgency: true,
+          customerName: true,
+          customerPhone: true,
+          address: true,
+          lat: true,
+          lng: true,
+          status: true,
+          acceptedById: true,
+          acceptedAt: true,
+          providerEnRouteAt: true,
+          providerOnSiteAt: true,
+          completedAt: true,
+          cancelledAt: true,
+          estimatedArrivalMins: true,
+          estimatedCost: true,
+          finalCost: true,
+          currency: true,
+          paymentStatus: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+      db.emergencyDispatch.count({ where }),
+    ]);
+
+    log.info(
+      {
+        tenantId: authUser.tenantId,
+        returned: items.length,
+        total,
+        statusFilter,
+        industry: tenant.industry,
+      },
+      'marketplace/emergency: list (provider)',
+    );
+
+    return NextResponse.json({
+      items,
+      total,
+      providerTenantId: authUser.tenantId,
+      providerIndustry: tenant.industry ?? null,
+      providerEmergencyCapable: !!tenant.emergencyServiceAvailable,
+    });
+  } catch (err) {
+    log.error({ err, tenantId: authUser.tenantId }, 'marketplace/emergency: list failed');
+    return NextResponse.json(
+      { error: 'Failed to list emergencies' },
+      { status: 500 },
+    );
+  }
+}
+

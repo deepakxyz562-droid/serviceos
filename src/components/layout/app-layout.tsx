@@ -86,6 +86,7 @@ const ReviewsView = lazy(() => import('@/components/views/reviews-view').then(m 
 const LeadDiscoveryView = lazy(() => import('@/components/views/lead-discovery-view').then(m => ({ default: m.LeadDiscoveryView })));
 const JourneyAutomationView = lazy(() => import('@/components/views/journey-automation-view').then(m => ({ default: m.JourneyAutomationView })));
 const MarketplaceView = lazy(() => import('@/components/views/marketplace-view').then(m => ({ default: m.MarketplaceView })));
+const ProviderMarketplaceDashboard = lazy(() => import('@/components/marketplace/provider-marketplace-dashboard').then(m => ({ default: m.ProviderMarketplaceDashboard })));
 const EnterpriseView = lazy(() => import('@/components/views/enterprise-view').then(m => ({ default: m.EnterpriseView })));
 const AiCampaignGeneratorView = lazy(() => import('@/components/views/ai-campaign-generator-view').then(m => ({ default: m.AiCampaignGeneratorView })));
 const WebviewEngineView = lazy(() => import('@/components/views/webview-engine-view').then(m => ({ default: m.WebviewEngineView })));
@@ -187,6 +188,7 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   leadDiscovery: LeadDiscoveryView,
   journeyAutomation: JourneyAutomationView,
   marketplace: MarketplaceView,
+  marketplaceDashboard: ProviderMarketplaceDashboard,
   enterprise: EnterpriseView,
   aiCampaignGenerator: AiCampaignGeneratorView,
   webviewEngine: WebviewEngineView,

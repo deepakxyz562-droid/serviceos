@@ -185,7 +185,7 @@ export type ViewType =
   | 'aiAssistant' | 'chatbotBuilder' | 'retargeting' | 'segments' | 'marketingAnalytics'
   | 'serviceCatalog' | 'knowledgeBase' | 'communicationProviders'
   | 'leadDiscovery' | 'reviews' | 'journeyAutomation'
-  | 'marketplace' | 'enterprise' | 'aiCampaignGenerator' | 'webviewEngine' | 'adsIntegration'
+  | 'marketplace' | 'marketplaceDashboard' | 'enterprise' | 'aiCampaignGenerator' | 'webviewEngine' | 'adsIntegration'
   | 'versionHistory' | 'documentCenter' | 'saasDashboard'
   | 'templateStudio'
   // AI Receptionist (Vapi.ai BYOK)

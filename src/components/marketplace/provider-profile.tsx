@@ -39,7 +39,26 @@ import { QuoteRequestDialog } from './quote-request-dialog';
 interface ProviderProfileProps {
   /** Either tenant id or slug */
   slug: string;
-  onBack: () => void;
+  /**
+   * Click handler for the back button. Required when used as a client-side
+   * component (e.g. inside the marketplace landing's "profile" view). Omit
+   * when rendering from the SSR /marketplace/[slug] route — the SSR page
+   * renders its own header with a back link, and `backHref` is used instead.
+   */
+  onBack?: () => void;
+  /**
+   * Optional URL for the back link. Used by the SSR route so the back
+   * button is a real anchor (works without JS). When provided, takes
+   * precedence over onBack.
+   */
+  backHref?: string;
+  /**
+   * Optional pre-fetched data. When provided, the component skips the
+   * client-side fetch and renders the server-fetched data immediately.
+   * Used by the SSR route at /marketplace/[slug] so the page works
+   * without JavaScript and is indexable by Google.
+   */
+  initialData?: ProviderProfileResponse;
 }
 
 function RatingStars({ rating, size = 16 }: { rating: number; size?: number }) {
@@ -92,14 +111,20 @@ function formatBusinessHours(
   });
 }
 
-export function ProviderProfile({ slug, onBack }: ProviderProfileProps) {
-  const [data, setData] = React.useState<ProviderProfileResponse | null>(null);
-  const [loading, setLoading] = React.useState(true);
+export function ProviderProfile({ slug, onBack, backHref, initialData }: ProviderProfileProps) {
+  const [data, setData] = React.useState<ProviderProfileResponse | null>(initialData ?? null);
+  const [loading, setLoading] = React.useState(!initialData);
   const [error, setError] = React.useState<string | null>(null);
   const [instantOpen, setInstantOpen] = React.useState(false);
   const [quoteOpen, setQuoteOpen] = React.useState(false);
 
   React.useEffect(() => {
+    // If server-rendered with initialData, no need to refetch on mount.
+    if (initialData) {
+      setData(initialData);
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -124,14 +149,20 @@ export function ProviderProfile({ slug, onBack }: ProviderProfileProps) {
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [slug, initialData]);
 
   if (loading) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
-        <Button variant="ghost" size="sm" className="mb-4" onClick={onBack}>
-          <ArrowLeft className="h-4 w-4" /> Back
-        </Button>
+        {backHref ? (
+          <a href={backHref} className="inline-flex items-center gap-1 mb-4 text-sm font-medium text-muted-foreground hover:text-foreground">
+            <ArrowLeft className="h-4 w-4" /> Back to marketplace
+          </a>
+        ) : (
+          <Button variant="ghost" size="sm" className="mb-4" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4" /> Back
+          </Button>
+        )}
         <Skeleton className="mb-4 h-48 w-full rounded-xl" />
         <Skeleton className="mb-3 h-8 w-1/2 rounded" />
         <Skeleton className="mb-6 h-4 w-1/3 rounded" />
@@ -151,9 +182,15 @@ export function ProviderProfile({ slug, onBack }: ProviderProfileProps) {
         <p className="mt-2 text-sm text-muted-foreground">
           {error ?? 'Unknown error.'}
         </p>
-        <Button variant="outline" className="mt-4" onClick={onBack}>
-          <ArrowLeft className="h-4 w-4" /> Back to marketplace
-        </Button>
+        {backHref ? (
+          <a href={backHref} className="inline-flex items-center gap-1 mt-4 text-sm font-medium text-emerald-700 hover:text-emerald-800">
+            <ArrowLeft className="h-4 w-4" /> Back to marketplace
+          </a>
+        ) : (
+          <Button variant="outline" className="mt-4" onClick={onBack}>
+            <ArrowLeft className="h-4 w-4" /> Back to marketplace
+          </Button>
+        )}
       </div>
     );
   }
@@ -174,9 +211,15 @@ export function ProviderProfile({ slug, onBack }: ProviderProfileProps) {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
-      <Button variant="ghost" size="sm" className="mb-4" onClick={onBack}>
-        <ArrowLeft className="h-4 w-4" /> Back to marketplace
-      </Button>
+      {backHref ? (
+        <a href={backHref} className="inline-flex items-center gap-1 mb-4 text-sm font-medium text-muted-foreground hover:text-foreground">
+          <ArrowLeft className="h-4 w-4" /> Back to marketplace
+        </a>
+      ) : (
+        <Button variant="ghost" size="sm" className="mb-4" onClick={onBack}>
+          <ArrowLeft className="h-4 w-4" /> Back to marketplace
+        </Button>
+      )}
 
       {/* Hero */}
       <div className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-600">
