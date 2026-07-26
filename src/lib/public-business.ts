@@ -44,8 +44,37 @@ export interface PublicBusinessData {
   seoTitle: string | null
   seoDescription: string | null
   publicProfileEnabled: boolean
+  /**
+   * Whether this tenant has opted into the marketplace (paid + verified +
+   * Stripe connected). When true, the public hub page renders the
+   * marketplace booking panel (Instant Booking + Quote Request dialogs)
+   * and the trust-badges / certifications sections — merging the old
+   * /marketplace/[slug] storefront into the canonical public hub URL.
+   */
+  marketplaceOptIn: boolean
+  // ── Verification flags (public-safe — already exposed via marketplace) ──
+  identityVerified: boolean
+  businessVerified: boolean
+  insuranceVerified: boolean
+  licenceNumber: string | null
+  insuranceProvider: string | null
+  emergencyServiceAvailable: boolean
   isIndexable: boolean  // computed: rich-enough check passed
   canonicalUrl: string
+}
+
+/**
+ * Public-facing certification row (mirrors ProviderCertification, minus
+ * the tenantId / documentUrl which are provider-internal).
+ */
+export interface PublicCertificationData {
+  id: string
+  name: string
+  issuer: string | null
+  issueDate: string | null
+  expiryDate: string | null
+  isVerified: boolean
+  certificateNumber: string | null
 }
 
 export interface PublicServiceData {
@@ -217,8 +246,57 @@ async function buildPublicBusinessData(
     seoTitle: tenant.seoTitle,
     seoDescription: tenant.seoDescription,
     publicProfileEnabled: tenant.publicProfileEnabled,
+    marketplaceOptIn: tenant.marketplaceOptIn,
+    identityVerified: tenant.identityVerified,
+    businessVerified: tenant.businessVerified,
+    insuranceVerified: tenant.insuranceVerified,
+    licenceNumber: tenant.licenceNumber,
+    insuranceProvider: tenant.insuranceProvider,
+    emergencyServiceAvailable: tenant.emergencyServiceAvailable,
     isIndexable,
     canonicalUrl,
+  }
+}
+
+/**
+ * Fetch the marketplace-only extras (certifications) for a tenant.
+ *
+ * Only called when `tenant.marketplaceOptIn === true` so we don't hit the
+ * ProviderCertification table for non-marketplace businesses. Returns an
+ * empty array on any error (the page renders without the certifications
+ * section — never crashes the whole page).
+ *
+ * Dates are returned as ISO strings so they survive the server → client
+ * component boundary without serialization issues.
+ */
+export async function getMarketplaceCertifications(
+  tenantId: string,
+): Promise<PublicCertificationData[]> {
+  try {
+    const rows = await db.providerCertification.findMany({
+      where: { tenantId },
+      select: {
+        id: true,
+        name: true,
+        issuer: true,
+        issueDate: true,
+        expiryDate: true,
+        isVerified: true,
+        certificateNumber: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      issuer: r.issuer,
+      issueDate: r.issueDate ? r.issueDate.toISOString() : null,
+      expiryDate: r.expiryDate ? r.expiryDate.toISOString() : null,
+      isVerified: r.isVerified,
+      certificateNumber: r.certificateNumber,
+    }))
+  } catch {
+    return []
   }
 }
 

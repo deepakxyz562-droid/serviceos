@@ -42,7 +42,6 @@ export function CornerstoneFooter() {
     { href: "/housecall-pro-alternatives", label: "Housecall Pro Alternatives" },
     { href: "/servicetitan-alternatives", label: "ServiceTitan Alternatives" },
     { href: "/best-field-service-software", label: "Best Field Service Software" },
-    { href: "/serviceos-vs-jobber", label: "ServiceOS vs Jobber" },
   ];
 
   const resourceLinks = [

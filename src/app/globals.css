@@ -481,3 +481,10 @@ html {
     page-break-inside: avoid;
   }
 }
+
+
+/* ── Landing page: industry marquee animation ─────────────────────────────── */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}

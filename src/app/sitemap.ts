@@ -1,6 +1,5 @@
 import type { MetadataRoute } from "next";
 import { listIndexableBusinessUrls } from "@/lib/public-business";
-import { db } from "@/lib/db";
 
 /**
  * Dynamic sitemap for ServiceOS public pages.
@@ -8,14 +7,16 @@ import { db } from "@/lib/db";
  * Lists every indexable public route so search engines can discover them all.
  * This includes:
  *   - Homepage
- *   - Marketplace browse page (/marketplace) + provider profiles (/marketplace/[slug])
+ *   - Marketplace browse page (/marketplace) — provider cards link to the
+ *     canonical /{industry}/{city}/{slug} public hub URL (the legacy
+ *     /marketplace/[slug] route now 301-redirects there).
  *   - 15 SEO cornerstone pages (industry, comparison, feature)
  *   - Free tools (invoice generator)
  *   - Legal/contact pages
- *   - Public Business Hub pages (/{industry}/{city}/{slug}) — auto-indexed
- *     only when the business profile is "rich enough":
- *     description ≥100 chars, ≥3 active public services, ≥1 image,
- *     publicProfileEnabled=true. See listIndexableBusinessUrls().
+ *   - Public Business Hub pages (/{industry}/{city}/{slug}) — the single
+ *     canonical URL for every business. Auto-indexed only when the profile
+ *     is "rich enough": description ≥100 chars, ≥3 active public services,
+ *     ≥1 image, publicProfileEnabled=true. See listIndexableBusinessUrls().
  *
  * Authenticated app routes and API routes are intentionally omitted —
  * they should not be indexed.
@@ -104,10 +105,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: r.priority,
   }));
 
-  // Dynamic: public business hub pages (only "rich enough" profiles).
-  // Lower priority (0.7) since they're newer / less authoritative than the
-  // cornerstone pages. Change freq = weekly because reviews & profile edits
-  // update them.
+  // Dynamic: public business hub pages (/{industry}/{city}/{slug}).
+  //
+  // These are the SINGLE canonical URL for every business — the old
+  // /marketplace/[slug] route now 301-redirects here, so we no longer emit
+  // a separate marketplace-provider sitemap section (it would either
+  // duplicate these URLs or emit noindex pages).
+  //
+  // Only "rich enough" profiles are listed (description ≥100 chars, ≥3
+  // active public services, ≥1 image, publicProfileEnabled=true) — see
+  // listIndexableBusinessUrls(). Thin profiles render with robots:noindex
+  // and are intentionally omitted from the sitemap.
+  //
+  // Priority 0.8 (raised from 0.7) because these are now the canonical
+  // marketplace landing pages too, not just SEO hub pages. Change freq =
+  // weekly because reviews & profile edits update them.
   let businessEntries: MetadataRoute.Sitemap = []
   try {
     const businessUrls = await listIndexableBusinessUrls()
@@ -115,7 +127,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       url,
       lastModified: now,
       changeFrequency: "weekly",
-      priority: 0.7,
+      priority: 0.8,
     }))
   } catch (err) {
     // If the DB query fails, still emit the static routes — don't 500 the
@@ -123,34 +135,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.error('[sitemap] failed to list indexable businesses:', err)
   }
 
-  // Dynamic: marketplace provider profiles (/marketplace/[slug]).
-  // Fetch every marketplace-opted-in tenant with a public profile enabled,
-  // and emit one URL per provider. Priority 0.8 (higher than business hubs
-  // because these are the canonical marketplace landing pages), weekly
-  // refresh because reviews/ratings update frequently.
-  let marketplaceProviderEntries: MetadataRoute.Sitemap = []
-  try {
-    const providers = await db.tenant.findMany({
-      where: {
-        marketplaceOptIn: true,
-        publicProfileEnabled: true,
-      },
-      select: {
-        publicSlug: true,
-        slug: true,
-        updatedAt: true,
-      },
-    })
-    marketplaceProviderEntries = providers.map((p) => ({
-      url: `${base}/marketplace/${p.publicSlug || p.slug}`,
-      lastModified: p.updatedAt.toISOString(),
-      changeFrequency: "weekly",
-      priority: 0.8,
-    }))
-  } catch (err) {
-    // Non-fatal — emit static + business entries only
-    console.error('[sitemap] failed to list marketplace providers:', err)
-  }
-
-  return [...staticEntries, ...businessEntries, ...marketplaceProviderEntries];
+  return [...staticEntries, ...businessEntries];
 }

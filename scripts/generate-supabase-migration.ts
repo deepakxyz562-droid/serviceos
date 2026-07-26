@@ -43,7 +43,11 @@ const schemaContent = readFileSync(schemaPath, 'utf8')
 const models: PrismaModel[] = []
 
 // Split into model blocks
-const modelRegex = /^model\s+(\w+)\s+\{([^}]*)\}/gm
+// NOTE: [^}]* would stop at the first '}' — but Prisma defaults like
+// @default("{}") and @default("[]") contain '}' inside string literals.
+// Instead we use [\s\S]*? (non-greedy any-char incl. newlines) terminated
+// by ^\} (a '}' at the start of a line = the model's closing brace).
+const modelRegex = /^model\s+(\w+)\s+\{([\s\S]*?)^\}/gm
 let match: RegExpExecArray | null
 while ((match = modelRegex.exec(schemaContent)) !== null) {
   const modelName = match[1]
@@ -98,8 +102,12 @@ while ((match = modelRegex.exec(schemaContent)) !== null) {
     const isUnique = attrs.includes('@unique')
 
     // Extract default
+    // NOTE: [^)]* would truncate function-call defaults like now(), cuid(),
+    // uuid(), autoincrement() to just the name. We use a pattern that allows
+    // one level of nested parens so now() / cuid() / gen_random_uuid() etc.
+    // are captured in full.
     let defaultRaw: string | undefined
-    const defMatch = attrs.match(/@default\(([^)]*)\)/)
+    const defMatch = attrs.match(/@default\(((?:[^()]|\([^()]*\))*)\)/)
     if (defMatch) defaultRaw = defMatch[1].trim()
 
     // Extract map name
@@ -353,7 +361,8 @@ interface FKDef {
 const fks: FKDef[] = []
 
 const modelBodyMap = new Map<string, string>()
-const modelRegex2 = /^model\s+(\w+)\s+\{([^}]*)\}/gm
+// Same fix as modelRegex above — avoid truncating at '}' inside string defaults
+const modelRegex2 = /^model\s+(\w+)\s+\{([\s\S]*?)^\}/gm
 let m2: RegExpExecArray | null
 while ((m2 = modelRegex2.exec(schemaContent)) !== null) {
   modelBodyMap.set(m2[1], m2[2])

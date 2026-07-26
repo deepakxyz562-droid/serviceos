@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { VERTICALS, getIndustry } from '@/lib/industry-catalog';
 import { ProviderCard } from '@/components/marketplace/provider-card';
 import type { ProviderListItem } from '@/components/marketplace/types';
+import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
 import {
   Sparkles,
   Wrench,
@@ -42,18 +43,6 @@ export const metadata: Metadata = {
  * Works without JavaScript — the entire page is HTML.
  */
 
-interface SerializedService {
-  id: string;
-  name: string;
-  slug: string | null;
-  basePrice: number | null;
-  duration: number | null;
-  image: string | null;
-  description?: string | null;
-  longDescription?: string | null;
-  category?: string | null;
-}
-
 async function fetchProviders() {
   const tenants = await db.tenant.findMany({
     where: {
@@ -85,24 +74,13 @@ async function fetchProviders() {
       emergencyServiceAvailable: true,
       businessCategoriesJson: true,
       serviceAreasJson: true,
-      services: {
-        where: { isActive: true, isPublic: true },
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          basePrice: true,
-          duration: true,
-          image: true,
-          description: true,
-          longDescription: true,
-          category: true,
-        },
-        take: 10,
-      },
+      // NOTE: services intentionally NOT loaded here — they're only needed on
+      // the provider detail page. Skipping them eliminates an N+1 query and
+      // keeps the browse page fast. ProviderCard handles services.length === 0
+      // gracefully (just hides the service badges).
     },
     orderBy: [{ rating: 'desc' }, { reviewCount: 'desc' }],
-    take: 100,
+    take: 24,
   });
 
   // Fetch featured listing flags
@@ -150,7 +128,10 @@ async function fetchProviders() {
       callOutFee: t.callOutFee,
       emergencyServiceAvailable: t.emergencyServiceAvailable,
       serviceAreas,
-      services: t.services as unknown as SerializedService[],
+      // services not loaded on browse page (perf optimization) — empty array
+      // keeps the ProviderListItem shape satisfied; ProviderCard hides the
+      // services section when this is empty.
+      services: [],
       featured: featuredMap.get(t.id) ?? null,
     } satisfies ProviderListItem;
   });
@@ -159,12 +140,24 @@ async function fetchProviders() {
 export default async function MarketplaceBrowsePage({
   searchParams,
 }: {
-  searchParams: Promise<{ vertical?: string; industry?: string; city?: string }>;
+  searchParams: Promise<{
+    vertical?: string;
+    industry?: string;
+    city?: string;
+    search?: string;
+  }>;
 }) {
   const params = await searchParams;
   const verticalFilter = params.vertical ?? null;
   const industryFilter = params.industry ?? null;
   const cityFilter = params.city?.trim().toLowerCase() ?? null;
+  const searchFilter = params.search?.trim().toLowerCase() ?? null;
+  const hasActiveFilters = !!(
+    verticalFilter ||
+    industryFilter ||
+    cityFilter ||
+    searchFilter
+  );
 
   let providers: ProviderListItem[] = [];
   let dbError = false;
@@ -193,6 +186,27 @@ export default async function MarketplaceBrowsePage({
         String(a).toLowerCase().includes(cityFilter),
       );
       if (!city.includes(cityFilter) && !state.includes(cityFilter) && !inAreas) {
+        return false;
+      }
+    }
+    // Free-text search — matches against name, tagline, description, and
+    // (if services were loaded) service names. On the browse page services
+    // is an empty array (perf optimization), so service-name matching is a
+    // no-op here; name/tagline/description matching is the primary path and
+    // matches the behavior of /api/marketplace/providers?search=.
+    if (searchFilter) {
+      const name = (p.name ?? '').toLowerCase();
+      const tagline = (p.tagline ?? '').toLowerCase();
+      const description = (p.description ?? '').toLowerCase();
+      const serviceNameMatch = p.services.some((s) =>
+        (s.name ?? '').toLowerCase().includes(searchFilter),
+      );
+      if (
+        !name.includes(searchFilter) &&
+        !tagline.includes(searchFilter) &&
+        !description.includes(searchFilter) &&
+        !serviceNameMatch
+      ) {
         return false;
       }
     }
@@ -278,22 +292,42 @@ export default async function MarketplaceBrowsePage({
             {providers.length}+ verified providers across {VERTICALS.length} verticals. Read real reviews, compare quotes, and book instantly — or describe your problem and let our AI route you to the right pro.
           </p>
 
-          {/* AI describe-problem search (links to homepage where the actual AI lives) */}
+          {/* Free-text search — plain HTML GET form, works without JavaScript */}
           <div className="mx-auto mt-6 max-w-2xl">
-            <a
-              href="/#top"
-              className="flex flex-col gap-2 rounded-2xl border bg-card p-2 shadow-xl sm:flex-row sm:items-center hover:border-emerald-300 transition-colors"
+            <form
+              method="get"
+              action="/marketplace"
+              className="flex flex-col gap-2 rounded-2xl border bg-card p-2 shadow-xl sm:flex-row sm:items-center hover:border-emerald-300 focus-within:border-emerald-300 transition-colors"
             >
+              {/* Preserve any active vertical/industry/city filter when the user
+                  submits a search query so context isn't lost. */}
+              {verticalFilter ? (
+                <input type="hidden" name="vertical" value={verticalFilter} />
+              ) : null}
+              {industryFilter ? (
+                <input type="hidden" name="industry" value={industryFilter} />
+              ) : null}
+              {params.city ? (
+                <input type="hidden" name="city" value={params.city} />
+              ) : null}
               <div className="relative flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                <div className="h-12 pl-11 pr-3 flex items-center text-muted-foreground text-base">
-                  Describe your problem — e.g. &ldquo;My AC stopped cooling&rdquo;
-                </div>
+                <input
+                  type="text"
+                  name="search"
+                  defaultValue={params.search ?? ''}
+                  placeholder="Search providers by name, service, or keyword — e.g. &quot;plumbing&quot;"
+                  aria-label="Search providers"
+                  className="h-12 w-full pl-11 pr-3 rounded-lg bg-transparent text-base text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                />
               </div>
-              <div className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-6 text-base font-semibold text-white">
-                <Sparkles className="h-5 w-5" /> Try AI Search
-              </div>
-            </a>
+              <button
+                type="submit"
+                className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-6 text-base font-semibold text-white shadow-sm hover:bg-emerald-700 transition-colors"
+              >
+                <Search className="h-5 w-5" /> Search
+              </button>
+            </form>
             <p className="mt-2 text-xs text-muted-foreground">
               Or use the city + industry filters below to browse manually.
             </p>
@@ -435,11 +469,32 @@ export default async function MarketplaceBrowsePage({
             <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-foreground sm:text-3xl">{title}</h1>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {dbError
-                    ? 'Having trouble loading providers right now. Please try again in a moment.'
-                    : `Showing ${filtered.length} verified provider${filtered.length === 1 ? '' : 's'}.`}
-                </p>
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                  {dbError ? (
+                    <span>Having trouble loading providers right now. Please try again in a moment.</span>
+                  ) : (
+                    <>
+                      <span>
+                        Showing {filtered.length} verified provider{filtered.length === 1 ? '' : 's'}
+                        {searchFilter ? (
+                          <>
+                            {' '}matching <span className="font-medium text-foreground">&ldquo;{params.search}&rdquo;</span>
+                          </>
+                        ) : null}
+                        .
+                      </span>
+                      {hasActiveFilters ? (
+                        <a
+                          href="/marketplace"
+                          className="inline-flex items-center gap-0.5 font-medium text-emerald-700 hover:text-emerald-800 dark:text-emerald-300"
+                          aria-label="Clear all filters"
+                        >
+                          Clear filters <span aria-hidden>&times;</span>
+                        </a>
+                      ) : null}
+                    </>
+                  )}
+                </div>
               </div>
               <a
                 href="/#top"
@@ -456,26 +511,39 @@ export default async function MarketplaceBrowsePage({
               </div>
             ) : filtered.length === 0 ? (
               <div className="rounded-xl border border-border bg-card p-8 text-center">
-                <p className="text-sm text-muted-foreground">No providers match this filter.</p>
-                <p className="mt-1 text-xs text-muted-foreground">Try clearing filters or browse all providers.</p>
+                <p className="text-sm text-muted-foreground">
+                  No providers match {hasActiveFilters ? 'these filters' : 'this filter'}
+                  {searchFilter ? (
+                    <>
+                      {' '}for <span className="font-medium text-foreground">&ldquo;{params.search}&rdquo;</span>
+                    </>
+                  ) : null}.
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">Try a different search term or clear all filters.</p>
                 <a
                   href="/marketplace"
-                  className="mt-4 inline-flex items-center gap-1 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+                  className="mt-4 inline-flex items-center gap-1 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700"
                 >
-                  Browse all providers <ArrowRight className="h-4 w-4" />
+                  Clear all filters <ArrowRight className="h-4 w-4" />
                 </a>
               </div>
             ) : (
               <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
                 {filtered.map((p) => {
                   const slug = p.slug || p.publicSlug;
+                  // Build the canonical /{industry}/{city}/{slug} URL so cards
+                  // link directly to the unified public business hub (the old
+                  // /marketplace/[slug] route now 301-redirects there).
+                  const canonicalHref = slug
+                    ? `/${mapIndustryToUrlSlug(p.industry)}/${slugifyCity(p.city)}/${slug}`
+                    : undefined;
                   return (
                     <ProviderCard
                       key={p.id}
                       provider={p}
                       featured={!!p.featured}
                       compact
-                      href={slug ? `/marketplace/${slug}` : undefined}
+                      href={canonicalHref}
                     />
                   );
                 })}

@@ -19,7 +19,6 @@ import {
   Inbox,
   Wallet,
   Mail,
-  Bell,
   MessageSquareText,
   Check,
   Star,
@@ -37,12 +36,15 @@ import {
   FileText,
   TrendingUp,
   Clock,
+  ClipboardList,
   Play,
   ChevronRight,
   Menu,
   X,
+  MessageCircle,
   type LucideIcon,
 } from 'lucide-react';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -58,6 +60,7 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { VERTICALS, getIndustry } from '@/lib/industry-catalog';
+import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
 import {
   mpUrl,
   type AiRouteResponse,
@@ -66,6 +69,7 @@ import {
   type BookingMode,
 } from '@/components/marketplace/types';
 import { ProviderCard } from '@/components/marketplace/provider-card';
+import { solutionsLinks, SolutionsMegaMenu, LandingFooter } from '@/components/landing/landing-solutions';
 
 // ─── Props ──────────────────────────────────────────────────────────────────
 
@@ -172,6 +176,108 @@ const stats = [
   { value: '99.9%', label: 'Uptime' },
 ];
 
+// Industries for the scrolling marquee — instantly signals "this is for service businesses"
+const industryChips = [
+  'Plumbing', 'HVAC', 'Cleaning', 'Electrical', 'Landscaping', 'Pest Control',
+  'Roofing', 'Painting', 'Locksmith', 'Appliance Repair', 'Pool Service',
+  'Automotive', 'Packing & Moving', 'Window Cleaning', 'Home Repair',
+  'Salon & Beauty', 'Courier', 'Solar', 'Garage Door', 'Concrete',
+  'Tree Care', 'Snow Removal', 'Pet Services',
+];
+
+// Hero trust badges — conversion confidence
+const heroTrustBadges = [
+  { icon: Clock, label: 'Live in under 10 minutes' },
+  { icon: Wallet, label: 'Get started for $5' },
+  { icon: ShieldCheck, label: 'No credit card required' },
+  { icon: Mail, label: 'Email & SMS work day one' },
+];
+
+// "The Problem" section — 3 pain points every service business owner recognizes
+const problemPains = [
+  {
+    icon: PhoneCall,
+    title: 'Missed calls = lost revenue',
+    description: 'Every missed call after hours is a customer who calls your competitor. Most owners lose 3-5 jobs a week this way.',
+    stat: '62% of calls go unanswered after hours',
+    image: '/images/landing/problem-leads.png',
+  },
+  {
+    icon: ClipboardList,
+    title: 'Chaos in spreadsheets & texts',
+    description: 'Leads scattered across text messages, WhatsApp, voicemails, and sticky notes. Jobs fall through the cracks every single week.',
+    stat: '4+ hours/day wasted on admin',
+    image: '/images/landing/problem-paperwork.png',
+  },
+  {
+    icon: Wallet,
+    title: 'Late invoices, late payments',
+    description: 'You finish the job, then wait weeks for payment. Chasing customers for money is the worst part of running a service business.',
+    stat: 'Avg invoice paid 18 days late',
+    image: '/images/landing/problem-invoices.png',
+  },
+];
+
+// ROI metrics with animated counters
+const roiMetrics = [
+  { target: 8, suffix: '+ hrs', label: 'Saved per week', description: 'Less admin, more time on the tools' },
+  { target: 2, suffix: '×', label: 'Faster payment collection', description: 'Invoices paid in days, not weeks' },
+  { target: 35, suffix: '%', label: 'Fewer no-shows', description: 'SMS reminders actually work' },
+  { target: 28, suffix: '%', label: 'More repeat business', description: 'Stay top-of-mind automatically' },
+];
+
+// Channels section — "works out of the box"
+const channels = [
+  {
+    icon: Mail,
+    title: 'Email',
+    description: 'Send branded emails from day one. Built-in templates for quotes, invoices, receipts, and campaigns. No approvals, no waiting.',
+    badge: 'Works instantly',
+    features: ['Quote & invoice templates', 'Payment links', 'Campaign broadcasts', 'Automated reminders'],
+    image: '/images/landing/channel-email.png',
+  },
+  {
+    icon: MessageSquareText,
+    title: 'SMS',
+    description: 'Reach customers instantly with SMS reminders, booking confirmations, and payment links. SMS works from day one — no carrier approvals.',
+    badge: 'Works instantly',
+    features: ['Booking confirmations', 'Day-of reminders', 'Payment links', 'Two-way chat'],
+    image: '/images/landing/channel-sms.png',
+  },
+  {
+    icon: MessageCircle,
+    title: 'WhatsApp',
+    description: 'Bring your own WhatsApp number (BYOK). Chat with customers, share job photos, send quotes and reminders — all from one unified inbox.',
+    badge: 'BYO number',
+    features: ['Two-way WhatsApp chat', 'Quote & photo sharing', 'Booking reminders', 'Unified inbox with Email + SMS'],
+    image: '/images/landing/channel-whatsapp.png',
+  },
+];
+
+// "For Providers" section — explains the marketplace provider side
+const providerBenefits = [
+  {
+    icon: Search,
+    title: 'Get found by local customers',
+    description: 'Your business appears in the ServiceOS Marketplace where customers search for verified local pros. AI-powered matching sends you jobs that fit your skills and service area.',
+  },
+  {
+    icon: Calendar,
+    title: 'Fill your calendar automatically',
+    description: 'Accept instant bookings, respond to quote requests, or get dispatched to emergencies — all from one inbox. No more cold leads, no more tire-kickers.',
+  },
+  {
+    icon: Wallet,
+    title: 'Get paid faster, with escrow',
+    description: 'Customer payments are held in escrow and released to your Stripe Connect account the moment the job is marked complete. No more chasing invoices.',
+  },
+  {
+    icon: TrendingUp,
+    title: 'Grow with reviews & reputation',
+    description: 'Every completed job builds your public profile with verified reviews, portfolio photos, and certifications. Climb the rankings and win more business.',
+  },
+];
+
 const coreFlowSteps = [
   { label: 'Lead', icon: Target },
   { label: 'Booking', icon: Calendar },
@@ -188,6 +294,7 @@ const featurePillars = [
     icon: Target,
     title: 'CRM & Leads',
     tagline: 'Never lose a lead again',
+    image: '/images/landing/pillar-crm.png',
     features: [
       'Unified inbox — email, SMS, web forms, calls',
       'Lead pipeline + kanban',
@@ -201,6 +308,7 @@ const featurePillars = [
     icon: Calendar,
     title: 'Operations & Dispatch',
     tagline: 'Run jobs like clockwork',
+    image: '/images/landing/pillar-operations.png',
     features: [
       'Bookings & calendar',
       'Smart dispatch center',
@@ -214,6 +322,7 @@ const featurePillars = [
     icon: Inbox,
     title: 'Omnichannel Comms',
     tagline: 'Reach customers where they are',
+    image: '/images/landing/pillar-communication.png',
     features: [
       'Email + SMS — works day one',
       'WhatsApp (BYO number)',
@@ -227,6 +336,7 @@ const featurePillars = [
     icon: Wallet,
     title: 'Finance & Automation',
     tagline: 'Get paid faster, work less',
+    image: '/images/landing/pillar-finance.png',
     features: [
       'Quotes & estimates',
       'Invoices + online payments',
@@ -258,21 +368,25 @@ const personas = [
   {
     icon: Briefcase,
     title: 'Business Owner',
+    image: '/images/landing/persona-owner.png',
     points: ['Real-time revenue & KPI dashboards', 'Full visibility into operations', 'Automated reports in your inbox'],
   },
   {
     icon: Headphones,
     title: 'Dispatcher',
+    image: '/images/landing/persona-dispatcher.png',
     points: ['Smart dispatch board with map view', 'Drag-and-drop job assignment', 'Real-time technician tracking'],
   },
   {
     icon: HardHat,
     title: 'Field Technician',
+    image: '/images/landing/persona-technician.png',
     points: ['Mobile app with job details & checklists', 'Photo capture & customer signatures', 'Turn-by-turn navigation'],
   },
   {
     icon: UserCheck,
     title: 'Customer',
+    image: '/images/landing/persona-customer.png',
     points: ['Self-service booking portal', 'Email & SMS reminders', 'One-tap invoice payment'],
   },
 ];
@@ -284,6 +398,7 @@ const testimonials = [
     industry: 'Plumbing · Chennai',
     quote: 'Before ServiceOS, I was losing leads in scattered text messages every week. Now every inquiry lands in one inbox and I get paid the same day the job finishes.',
     metric: '+42% revenue in 3 months',
+    avatar: '/images/landing/testimonial-1.png',
   },
   {
     name: 'Sarah Mitchell',
@@ -291,6 +406,7 @@ const testimonials = [
     industry: 'Cleaning · Manchester',
     quote: 'Every lead from my website and SMS lands in one inbox now — no more missed inquiries. My customers love getting SMS reminders before appointments.',
     metric: '−35% no-show rate',
+    avatar: '/images/landing/testimonial-2.png',
   },
   {
     name: 'Daniel Okafor',
@@ -298,6 +414,7 @@ const testimonials = [
     industry: 'HVAC · Lagos',
     quote: 'Dispatching used to be a whiteboard and phone calls. Now my techs get jobs on their phones with route maps. Invoices go out automatically and payments hit my account in days.',
     metric: '2× faster payments',
+    avatar: '/images/landing/testimonial-3.png',
   },
 ];
 
@@ -308,6 +425,7 @@ const howItWorksSteps = [
     subtitle: 'Email · SMS · Web Forms · Calls',
     description: 'Every inquiry auto-lands in one unified inbox. Nothing is missed, nothing is duplicated — including calls answered by your AI Receptionist.',
     icon: Target,
+    image: '/images/landing/step-capture.png',
   },
   {
     step: 2,
@@ -315,6 +433,7 @@ const howItWorksSteps = [
     subtitle: 'Smart Routing · Real-time',
     description: 'Assign jobs to the nearest tech with route optimization, live status tracking, and automated customer notifications.',
     icon: Zap,
+    image: '/images/landing/step-dispatch.png',
   },
   {
     step: 3,
@@ -322,6 +441,7 @@ const howItWorksSteps = [
     subtitle: 'Invoicing · Payments · Reminders',
     description: 'Auto-generate invoices the moment a job completes. Send reminders via Email & SMS, collect payments online, and reconcile instantly.',
     icon: Wallet,
+    image: '/images/landing/step-invoice.png',
   },
 ];
 
@@ -356,34 +476,9 @@ const faqs = [
   },
 ];
 
-const footerLinks = {
-  product: [
-    { label: 'CRM Features', href: '#crm-features' },
-    { label: 'AI Receptionist', href: '#ai-receptionist' },
-    { label: 'Pricing', href: '#pricing' },
-    { label: 'Marketplace', href: '/marketplace' },
-    { label: 'For Providers', href: '#for-providers' },
-  ],
-  company: [
-    { label: 'About', href: '/contact-us' },
-    { label: 'Blog', href: '/contact-us' },
-    { label: 'Careers', href: '/contact-us' },
-    { label: 'Contact', href: '/contact-us' },
-  ],
-  resources: [
-    { label: 'Free Invoice Generator', href: '/invoice-generator' },
-    { label: 'Field Service Software', href: '/field-service-software' },
-    { label: 'Plumbing Software', href: '/plumbing-software' },
-    { label: 'HVAC Software', href: '/hvac-software' },
-    { label: 'Jobber Alternatives', href: '/jobber-alternatives' },
-  ],
-  legal: [
-    { label: 'Privacy Policy', href: '/privacy-policy' },
-    { label: 'Terms of Service', href: '/terms-of-service' },
-    { label: 'Cookie Policy', href: '/cookie-policy' },
-    { label: 'Data Deletion', href: '/data-deletion' },
-  ],
-};
+// NOTE: solutionsLinks, footerLinks, SolutionsMegaMenu, and LandingFooter live
+// in @/components/landing/landing-solutions.tsx — extracted to keep this file
+// under turbopack's compile-memory ceiling on 4 GB dev machines.
 
 // ─── AI search booking-mode meta (mirror of marketplace-landing) ─────────────
 
@@ -419,12 +514,29 @@ const BOOKING_MODE_META: Record<
 
 // ─── Top navbar ─────────────────────────────────────────────────────────────
 
-function Navbar({ onGetStarted, onSignIn }: { onGetStarted?: () => void; onSignIn?: () => void }) {
+function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: () => void; onSignIn?: () => void; audience: Audience; onPick: (a: Audience) => void }) {
   const [mobileOpen, setMobileOpen] = React.useState(false);
+
+  // Audience-aware anchor link: if user is on marketplace fork, switch to CRM
+  // fork first, THEN smooth-scroll to the anchor (after the CRM sections render).
+  function crmAnchorClick(href: string, e?: React.MouseEvent) {
+    if (e) e.preventDefault();
+    setMobileOpen(false);
+    if (audience !== 'crm') {
+      onPick('crm');
+      // Wait for CRM sections to render, then scroll
+      setTimeout(() => {
+        document.querySelector(href)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 120);
+    } else {
+      document.querySelector(href)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
   return (
     <header className="sticky top-0 z-50 border-b bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70 pt-[env(safe-area-inset-top,0px)]">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
-        <a href="#top" className="flex items-center gap-2" aria-label="ServiceOS home">
+        <a href="#top" className="flex items-center gap-2" aria-label="ServiceOS home" onClick={(e) => { e.preventDefault(); setMobileOpen(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
             <Wrench className="h-4 w-4" />
           </span>
@@ -432,14 +544,15 @@ function Navbar({ onGetStarted, onSignIn }: { onGetStarted?: () => void; onSignI
         </a>
 
         <nav className="hidden md:flex items-center gap-6">
-          <a href="#crm-features" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Features</a>
-          <a href="#ai-receptionist" className="flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700 transition-colors font-medium">
+          <SolutionsMegaMenu />
+          <a href="#crm-features" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium" onClick={(e) => crmAnchorClick('#crm-features', e)}>Features</a>
+          <a href="#ai-receptionist" className="flex items-center gap-1.5 text-sm text-emerald-600 hover:text-emerald-700 transition-colors font-medium" onClick={(e) => crmAnchorClick('#ai-receptionist', e)}>
             AI Receptionist
             <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-semibold uppercase tracking-wide">New</span>
           </a>
-          <a href="#pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Pricing</a>
+          <a href="#pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium" onClick={(e) => crmAnchorClick('#pricing', e)}>Pricing</a>
           <a href="/marketplace" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Marketplace</a>
-          <a href="#faq" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">FAQ</a>
+          <a href="#faq" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium" onClick={(e) => crmAnchorClick('#faq', e)}>FAQ</a>
         </nav>
 
         <div className="hidden md:flex items-center gap-2">
@@ -459,13 +572,55 @@ function Navbar({ onGetStarted, onSignIn }: { onGetStarted?: () => void; onSignI
       </div>
 
       {mobileOpen ? (
-        <div className="md:hidden border-t bg-background">
-          <div className="px-4 py-3 space-y-2">
-            <a href="#crm-features" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileOpen(false)}>Features</a>
-            <a href="#ai-receptionist" className="block text-sm text-emerald-600 py-1.5" onClick={() => setMobileOpen(false)}>AI Receptionist</a>
-            <a href="#pricing" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileOpen(false)}>Pricing</a>
+        <div className="md:hidden border-t bg-background max-h-[calc(100dvh-3.5rem)] overflow-y-auto">
+          <div className="px-4 py-3 space-y-1">
+            {/* Solutions — collapsible accordion with all marketing pages */}
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="solutions" className="border-0">
+                <AccordionTrigger className="text-sm text-muted-foreground hover:text-foreground py-2 hover:no-underline">
+                  Solutions
+                </AccordionTrigger>
+                <AccordionContent className="pb-2 space-y-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 px-1 mb-1">Industries</p>
+                    <div className="space-y-0.5">
+                      {solutionsLinks.industries.map((link) => (
+                        <a key={link.href} href={link.href} className="block text-sm text-muted-foreground hover:text-foreground py-1 px-1 rounded hover:bg-muted/60" onClick={() => setMobileOpen(false)}>{link.label}</a>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 px-1 mb-1">Features</p>
+                    <div className="space-y-0.5">
+                      {solutionsLinks.features.map((link) => (
+                        <a key={link.href} href={link.href} className="block text-sm text-muted-foreground hover:text-foreground py-1 px-1 rounded hover:bg-muted/60" onClick={() => setMobileOpen(false)}>{link.label}</a>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 px-1 mb-1">Compare</p>
+                    <div className="space-y-0.5">
+                      {solutionsLinks.compare.map((link) => (
+                        <a key={link.href} href={link.href} className="block text-sm text-muted-foreground hover:text-foreground py-1 px-1 rounded hover:bg-muted/60" onClick={() => setMobileOpen(false)}>{link.label}</a>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70 px-1 mb-1">Free Tools</p>
+                    <div className="space-y-0.5">
+                      {solutionsLinks.freeTools.map((link) => (
+                        <a key={link.href} href={link.href} className="block text-sm text-muted-foreground hover:text-foreground py-1 px-1 rounded hover:bg-muted/60" onClick={() => setMobileOpen(false)}>{link.label}</a>
+                      ))}
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+            <a href="#crm-features" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={(e) => crmAnchorClick('#crm-features', e)}>Features</a>
+            <a href="#ai-receptionist" className="block text-sm text-emerald-600 py-1.5" onClick={(e) => crmAnchorClick('#ai-receptionist', e)}>AI Receptionist</a>
+            <a href="#pricing" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={(e) => crmAnchorClick('#pricing', e)}>Pricing</a>
             <a href="/marketplace" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileOpen(false)}>Marketplace</a>
-            <a href="#faq" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileOpen(false)}>FAQ</a>
+            <a href="#faq" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={(e) => crmAnchorClick('#faq', e)}>FAQ</a>
             <Separator className="my-2" />
             {onSignIn ? <Button variant="outline" size="sm" className="w-full" onClick={onSignIn}>Sign In</Button> : null}
             {onGetStarted ? <Button size="sm" className="w-full bg-emerald-600 text-white hover:bg-emerald-700" onClick={onGetStarted}>Get Started</Button> : null}
@@ -594,6 +749,42 @@ function HeroFork({
           </div>
         </div>
 
+        {/* Trust badges row */}
+        <div className="mt-7 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+          {heroTrustBadges.map((badge) => {
+            const Icon = badge.icon;
+            return (
+              <div key={badge.label} className="flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground">
+                <Icon className="h-3.5 w-3.5 text-emerald-600" />
+                <span className="font-medium">{badge.label}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Industry marquee — instantly signals "this is for service businesses" */}
+        <div className="mt-10">
+          <p className="text-center text-xs uppercase tracking-widest text-muted-foreground font-semibold mb-3">
+            Trusted by service businesses across 23+ industries
+          </p>
+          <div className="relative overflow-hidden">
+            {/* Gradient fade edges */}
+            <div className="absolute left-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-r from-background to-transparent pointer-events-none" />
+            <div className="absolute right-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-l from-background to-transparent pointer-events-none" />
+            <div className="flex gap-2 animate-[marquee_40s_linear_infinite] hover:[animation-play-state:paused]">
+              {[...industryChips, ...industryChips].map((chip, i) => (
+                <span
+                  key={`${chip}-${i}`}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white dark:bg-card px-3 py-1.5 text-xs font-medium text-foreground/80 whitespace-nowrap shadow-sm"
+                >
+                  <Wrench className="h-3 w-3 text-emerald-500" />
+                  {chip}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* Trust stats */}
         <div className="mt-12 grid grid-cols-2 gap-4 sm:grid-cols-4">
           {stats.map((stat) => (
@@ -601,6 +792,170 @@ function HeroFork({
               <p className="text-2xl font-bold text-foreground sm:text-3xl">{stat.value}</p>
               <p className="mt-1 text-xs text-muted-foreground sm:text-sm">{stat.label}</p>
             </div>
+          ))}
+        </div>
+
+        {/* Dashboard preview — only when CRM fork is active */}
+        {audience === 'crm' ? (
+          <div className="mt-14 relative max-w-4xl mx-auto">
+            <div className="absolute -inset-4 bg-gradient-to-r from-emerald-200/40 via-teal-200/30 to-emerald-200/40 rounded-3xl blur-3xl -z-10 dark:from-emerald-700/20 dark:via-teal-700/15 dark:to-emerald-700/20" />
+            <div className="relative rounded-2xl border border-border bg-white shadow-2xl shadow-slate-300/40 overflow-hidden dark:bg-card">
+              <div className="aspect-[1344/768] relative">
+                <Image
+                  src="/images/landing/hero-dashboard.png"
+                  alt="ServiceOS CRM dashboard showing unified inbox, jobs, and dispatch"
+                  fill
+                  priority
+                  sizes="(max-width: 1024px) 100vw, 80vw"
+                  className="object-cover object-top"
+                />
+              </div>
+            </div>
+
+            {/* Floating worker badge — small "tech en route" card */}
+            <div className="absolute -bottom-5 -left-3 sm:-left-6 hidden sm:block">
+              <div className="rounded-xl border border-border bg-white shadow-lg p-3 w-44 dark:bg-card">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-8 h-8 rounded-full bg-emerald-100 border border-emerald-200 overflow-hidden relative shrink-0">
+                    <Image
+                      src="/images/landing/hero-worker.png"
+                      alt="Field technician en route to customer"
+                      fill
+                      sizes="32px"
+                      className="object-cover"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold text-foreground leading-tight">Tech en route</div>
+                    <div className="text-[10px] text-muted-foreground leading-tight">ETA 12 min</div>
+                  </div>
+                </div>
+                <div className="h-1 rounded-full bg-muted overflow-hidden">
+                  <div className="h-full bg-emerald-500" style={{ width: '65%' }} />
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+// ─── CRM: The Problem (3 pain points) ───────────────────────────────────────
+
+function CrmProblem() {
+  return (
+    <section className="border-t bg-background py-14 sm:py-20">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6">
+        <div className="mb-10 text-center">
+          <Badge variant="outline" className="border-rose-200 bg-rose-50 text-rose-700 mb-3 font-medium">The Problem</Badge>
+          <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
+            Running a service business is <span className="text-rose-600">chaos</span>
+          </h2>
+          <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">
+            You didn&apos;t start a plumbing or cleaning business to chase paperwork. Yet most owners spend hours every day fighting these three fires.
+          </p>
+        </div>
+        <div className="grid md:grid-cols-3 gap-5">
+          {problemPains.map((pain) => {
+            const Icon = pain.icon;
+            return (
+              <Card key={pain.title} className="bg-white border-border h-full overflow-hidden hover:border-rose-300 hover:shadow-md transition-all">
+                <div className="relative h-40 sm:h-44 overflow-hidden bg-muted border-b border-border">
+                  <Image
+                    src={pain.image}
+                    alt={pain.title}
+                    fill
+                    sizes="(max-width: 768px) 100vw, 33vw"
+                    className="object-cover"
+                  />
+                </div>
+                <CardHeader>
+                  <div className="w-11 h-11 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center mb-3 -mt-8 relative z-10 shadow-sm">
+                    <Icon className="w-5 h-5 text-rose-600" />
+                  </div>
+                  <CardTitle className="text-foreground text-lg leading-tight mb-2">{pain.title}</CardTitle>
+                  <CardDescription className="text-muted-foreground leading-relaxed">{pain.description}</CardDescription>
+                  <div className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">
+                    <TrendingUp className="w-3 h-3" />
+                    {pain.stat}
+                  </div>
+                </CardHeader>
+              </Card>
+            );
+          })}
+        </div>
+        <p className="text-center text-sm text-muted-foreground mt-8">
+          <span className="font-semibold text-emerald-600">ServiceOS fixes all three — day one, no Meta approvals required.</span>
+        </p>
+      </div>
+    </section>
+  );
+}
+
+// ─── CRM: ROI metrics with animated counters ─────────────────────────────────
+
+function CountUp({ target, suffix }: { target: number; suffix: string }) {
+  const [count, setCount] = React.useState(0);
+  const ref = React.useRef<HTMLSpanElement>(null);
+  const started = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!ref.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && !started.current) {
+          started.current = true;
+          const duration = 1500;
+          const start = performance.now();
+          const tick = (now: number) => {
+            const progress = Math.min((now - start) / duration, 1);
+            // ease-out cubic
+            const eased = 1 - Math.pow(1 - progress, 3);
+            setCount(Math.round(target * eased));
+            if (progress < 1) requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        }
+      },
+      { threshold: 0.3 },
+    );
+    observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, [target]);
+
+  return (
+    <span ref={ref}>
+      {count}{suffix}
+    </span>
+  );
+}
+
+function CrmRoiMetrics() {
+  return (
+    <section className="border-t bg-gradient-to-br from-emerald-50 via-teal-50/40 to-cyan-50 dark:from-emerald-950/30 dark:via-teal-950/20 dark:to-cyan-950/20 py-14 sm:py-20">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6">
+        <div className="mb-10 text-center">
+          <Badge variant="outline" className="border-emerald-200 bg-white/70 text-emerald-700 mb-3 font-medium">Real Results</Badge>
+          <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
+            Real results, <span className="text-emerald-600">measurable impact</span>
+          </h2>
+          <p className="text-muted-foreground mt-3 max-w-2xl mx-auto text-sm">
+            Aggregated averages from ServiceOS customers in their first 90 days. Individual results vary by industry and adoption.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+          {roiMetrics.map((metric) => (
+            <Card key={metric.label} className="bg-white border-border text-center hover:shadow-md transition-shadow">
+              <CardContent className="pt-6 pb-5">
+                <p className="text-4xl font-extrabold text-emerald-600 tracking-tight">
+                  <CountUp target={metric.target} suffix={metric.suffix} />
+                </p>
+                <p className="mt-2 text-sm font-semibold text-foreground">{metric.label}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{metric.description}</p>
+              </CardContent>
+            </Card>
           ))}
         </div>
       </div>
@@ -627,7 +982,19 @@ function CrmHowItWorks() {
           {howItWorksSteps.map((step) => {
             const Icon = step.icon;
             return (
-              <Card key={step.step} className="bg-white border-border h-full hover:shadow-md hover:border-emerald-300 transition-all">
+              <Card key={step.step} className="bg-white border-border h-full overflow-hidden hover:shadow-md hover:border-emerald-300 transition-all">
+                <div className="relative h-40 sm:h-44 overflow-hidden bg-muted border-b border-border">
+                  <Image
+                    src={step.image}
+                    alt={step.title}
+                    fill
+                    sizes="(max-width: 768px) 100vw, 33vw"
+                    className="object-cover object-top"
+                  />
+                  <div className="absolute top-3 left-3 w-8 h-8 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center shadow-md ring-2 ring-white">
+                    {step.step}
+                  </div>
+                </div>
                 <CardHeader>
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-9 h-9 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center">
@@ -707,7 +1074,16 @@ function CrmFeatures() {
           {featurePillars.map((pillar) => {
             const Icon = pillar.icon;
             return (
-              <Card key={pillar.title} className="bg-white border-border hover:border-emerald-300 transition-all h-full">
+              <Card key={pillar.title} className="bg-white border-border hover:border-emerald-300 transition-all h-full overflow-hidden hover:shadow-md">
+                <div className="relative h-40 sm:h-44 overflow-hidden bg-muted border-b border-border">
+                  <Image
+                    src={pillar.image}
+                    alt={pillar.title}
+                    fill
+                    sizes="(max-width: 768px) 100vw, 50vw"
+                    className="object-cover object-top"
+                  />
+                </div>
                 <CardHeader>
                   <div className="flex items-center gap-3 mb-2">
                     <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center">
@@ -753,6 +1129,64 @@ function CrmFeatures() {
               );
             })}
           </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── CRM: Channels (Email / SMS / Push — works out of the box) ────────────────
+
+function CrmChannels() {
+  return (
+    <section className="border-t bg-muted/30 py-14 sm:py-20">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="mb-10 text-center">
+          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700 mb-3 font-medium">Channels</Badge>
+          <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
+            Reach customers <span className="text-emerald-600">where they are</span>
+          </h2>
+          <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">
+            Email, SMS, and WhatsApp work out of the box — no Meta approvals, no waiting. Reach your customers and team instantly from day one.
+          </p>
+        </div>
+        <div className="grid md:grid-cols-3 gap-5">
+          {channels.map((ch) => {
+            const Icon = ch.icon;
+            return (
+              <Card key={ch.title} className="bg-white border-border h-full overflow-hidden hover:border-emerald-300 hover:shadow-md transition-all">
+                <div className="relative h-28 sm:h-32 overflow-hidden bg-muted border-b border-border">
+                  <Image
+                    src={ch.image}
+                    alt={`${ch.title} channel preview`}
+                    fill
+                    sizes="(max-width: 768px) 100vw, 33vw"
+                    className="object-cover"
+                  />
+                  <div className="absolute top-2 right-2">
+                    <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs">{ch.badge}</Badge>
+                  </div>
+                </div>
+                <CardHeader>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-9 h-9 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center">
+                      <Icon className="w-4.5 h-4.5 text-emerald-600" />
+                    </div>
+                    <CardTitle className="text-foreground text-lg">{ch.title}</CardTitle>
+                  </div>
+                  <CardDescription className="text-muted-foreground leading-relaxed mt-1">{ch.description}</CardDescription>
+                  <ul className="space-y-1.5 mt-4">
+                    {ch.features.map((f) => (
+                      <li key={f} className="flex items-start gap-2 text-sm text-foreground/80">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardHeader>
+              </Card>
+            );
+          })}
         </div>
       </div>
     </section>
@@ -899,12 +1333,23 @@ function CrmPersonas() {
             const Icon = persona.icon;
             return (
               <Card key={persona.title} className="bg-white border-border hover:border-emerald-300 transition-all h-full">
-                <CardHeader>
-                  <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center mb-3">
-                    <Icon className="w-5 h-5 text-emerald-600" />
+                <CardHeader className="text-center pt-6">
+                  <div className="mx-auto mb-3 relative w-20 h-20">
+                    <div className="relative w-20 h-20 rounded-full overflow-hidden bg-muted border-2 border-emerald-100 shadow-sm">
+                      <Image
+                        src={persona.image}
+                        alt={persona.title}
+                        fill
+                        sizes="80px"
+                        className="object-cover"
+                      />
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-emerald-600 border-2 border-white flex items-center justify-center shadow-sm">
+                      <Icon className="w-4 h-4 text-white" />
+                    </div>
                   </div>
                   <CardTitle className="text-foreground text-base">{persona.title}</CardTitle>
-                  <ul className="space-y-1.5 mt-2">
+                  <ul className="space-y-1.5 mt-3 text-left">
                     {persona.points.map((p) => (
                       <li key={p} className="flex items-start gap-2 text-xs text-foreground/80">
                         <Check className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
@@ -950,10 +1395,21 @@ function CrmTestimonials() {
                 <p className="text-sm text-foreground/80 leading-relaxed italic">&ldquo;{t.quote}&rdquo;</p>
               </CardHeader>
               <CardContent className="mt-auto pt-4">
-                <div>
-                  <div className="text-sm font-semibold text-foreground">{t.name}</div>
-                  <div className="text-xs text-muted-foreground">{t.business}</div>
-                  <div className="text-xs text-emerald-600 font-medium">{t.industry}</div>
+                <div className="flex items-center gap-3">
+                  <div className="relative w-12 h-12 rounded-full overflow-hidden border border-border bg-muted flex-shrink-0">
+                    <Image
+                      src={t.avatar}
+                      alt={t.name}
+                      fill
+                      sizes="48px"
+                      className="object-cover"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-foreground">{t.name}</div>
+                    <div className="text-xs text-muted-foreground">{t.business}</div>
+                    <div className="text-xs text-emerald-600 font-medium">{t.industry}</div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -1105,34 +1561,67 @@ function CrmFaq() {
   );
 }
 
-// ─── CRM: Final CTA banner ──────────────────────────────────────────────────
+// ─── CRM: For Providers (marketplace provider benefits) ──────────────────────
 
-function CrmFinalCta({ onGetStarted, onTryDemo }: { onGetStarted?: () => void; onTryDemo?: () => void }) {
+function CrmForProviders({ onGetStarted }: { onGetStarted?: () => void }) {
   return (
     <section id="for-providers" className="border-t bg-background py-14 sm:py-20 overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(16,185,129,0.10),transparent_60%)]" />
-      <div className="mx-auto max-w-4xl px-4 sm:px-6 text-center relative z-10">
-        <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground mb-4">
-          Ready to transform <span className="text-emerald-600">your business?</span>
-        </h2>
-        <p className="text-muted-foreground text-lg mb-7">
-          Join 2,500+ service businesses already running on ServiceOS. Email & SMS work from day one — no approvals, no waiting.
-        </p>
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          {onGetStarted ? (
-            <Button size="lg" onClick={onGetStarted} className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-8 h-12 text-base shadow-lg shadow-emerald-200">
-              Start Free Trial <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
-          ) : null}
-          {onTryDemo ? (
-            <Button size="lg" variant="outline" onClick={onTryDemo} className="bg-white border-border text-foreground hover:bg-muted px-7 h-12 text-base">
-              <Play className="w-4 h-4 mr-2" /> Try Live Demo
-            </Button>
-          ) : null}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(245,158,11,0.08),transparent_55%)]" />
+      <div className="mx-auto max-w-6xl px-4 sm:px-6 relative z-10">
+        <div className="mb-10 text-center">
+          <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700 mb-3 font-medium">For Providers</Badge>
+          <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
+            Get more customers with the <span className="text-amber-600">ServiceOS Marketplace</span>
+          </h2>
+          <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">
+            List your business for free. Get matched with local customers searching for your services. Get paid faster with built-in escrow.
+          </p>
         </div>
-        <p className="text-muted-foreground text-sm mt-4">
-          No credit card required &bull; 14-day free trial &bull; Cancel anytime
-        </p>
+        <div className="grid sm:grid-cols-2 gap-5 mb-10">
+          {providerBenefits.map((benefit) => {
+            const Icon = benefit.icon;
+            return (
+              <Card key={benefit.title} className="bg-white border-border h-full hover:border-amber-300 hover:shadow-md transition-all">
+                <CardHeader>
+                  <div className="flex items-start gap-3">
+                    <div className="w-11 h-11 shrink-0 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center">
+                      <Icon className="w-5 h-5 text-amber-600" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-foreground text-lg leading-tight mb-1.5">{benefit.title}</CardTitle>
+                      <CardDescription className="text-muted-foreground leading-relaxed">{benefit.description}</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+              </Card>
+            );
+          })}
+        </div>
+
+        {/* Final CTA banner */}
+        <div className="rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 dark:from-emerald-700 dark:to-teal-800 p-8 sm:p-12 text-center text-white shadow-xl">
+          <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-3">
+            Ready to transform your business?
+          </h3>
+          <p className="text-emerald-50 text-lg mb-6 max-w-2xl mx-auto">
+            Join 2,500+ service businesses already running on ServiceOS. Email &amp; SMS work from day one — no approvals, no waiting.
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            {onGetStarted ? (
+              <Button size="lg" onClick={onGetStarted} className="bg-white text-emerald-700 hover:bg-emerald-50 font-semibold px-8 h-12 text-base shadow-lg">
+                Start Free Trial <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            ) : null}
+            <a href="/marketplace">
+              <Button size="lg" variant="outline" className="bg-transparent border-white/40 text-white hover:bg-white/10 hover:text-white px-7 h-12 text-base">
+                Browse Marketplace <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </a>
+          </div>
+          <p className="text-emerald-100/80 text-sm mt-4">
+            No credit card required &bull; 14-day free trial &bull; Cancel anytime
+          </p>
+        </div>
       </div>
     </section>
   );
@@ -1212,7 +1701,9 @@ function MarketplaceCompact({
   function handleProviderClick(p: ProviderListItem) {
     const slug = p.slug || p.publicSlug;
     if (slug && typeof window !== 'undefined') {
-      window.location.href = `/marketplace/${slug}`;
+      // Navigate to the canonical /{industry}/{city}/{slug} public hub URL
+      // (the old /marketplace/[slug] route now 301-redirects there).
+      window.location.href = `/${mapIndustryToUrlSlug(p.industry)}/${slugifyCity(p.city)}/${slug}`;
     }
   }
 
@@ -1394,6 +1885,11 @@ function MarketplaceCompact({
             <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-4 sm:mx-0 sm:px-0">
               {featured.map((p) => {
                 const slug = p.slug || p.publicSlug;
+                // Canonical /{industry}/{city}/{slug} URL — links directly to
+                // the unified public business hub.
+                const canonicalHref = slug
+                  ? `/${mapIndustryToUrlSlug(p.industry)}/${slugifyCity(p.city)}/${slug}`
+                  : undefined;
                 return (
                   <div key={p.id} className="w-72 shrink-0">
                     <ProviderCard
@@ -1402,7 +1898,7 @@ function MarketplaceCompact({
                       onViewProfile={handleProviderClick}
                       compact
                       className="h-full"
-                      href={slug ? `/marketplace/${slug}` : undefined}
+                      href={canonicalHref}
                     />
                   </div>
                 );
@@ -1529,83 +2025,6 @@ function FlowCard({
   );
 }
 
-// ─── Footer ─────────────────────────────────────────────────────────────────
-
-function Footer() {
-  return (
-    <footer className="bg-foreground text-background mt-auto pb-[env(safe-area-inset-bottom,0px)]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-14">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-8">
-          <div className="col-span-2">
-            <div className="flex items-center gap-2.5 mb-4">
-              <div className="flex items-center justify-center w-8 h-8 rounded-lg shrink-0 shadow-sm bg-emerald-600 shadow-emerald-500/20">
-                <Wrench className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-xl font-bold text-background tracking-tight">ServiceOS</span>
-            </div>
-            <p className="text-background/70 text-sm max-w-xs leading-relaxed">
-              The AI Operating System for Local Services. Run your business with the CRM. Find trusted pros on the marketplace. Automate everything.
-            </p>
-            <div className="flex flex-wrap gap-2 mt-4">
-              <Badge variant="outline" className="border-background/20 text-background/80">25 industries</Badge>
-              <Badge variant="outline" className="border-background/20 text-background/80">9 verticals</Badge>
-              <Badge variant="outline" className="border-background/20 text-background/80">150+ services</Badge>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-background font-semibold text-sm mb-4">Product</h4>
-            <ul className="space-y-2.5">
-              {footerLinks.product.map((link) => (
-                <li key={link.label}>
-                  <a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="text-background font-semibold text-sm mb-4">Company</h4>
-            <ul className="space-y-2.5">
-              {footerLinks.company.map((link) => (
-                <li key={link.label}>
-                  <a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a>
-                </li>
-              ))}
-            </ul>
-            <h4 className="text-background font-semibold text-sm mb-4 mt-6">Resources</h4>
-            <ul className="space-y-2.5">
-              {footerLinks.resources.slice(0, 4).map((link) => (
-                <li key={link.href}>
-                  <a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="text-background font-semibold text-sm mb-4">Legal</h4>
-            <ul className="space-y-2.5">
-              {footerLinks.legal.map((link) => (
-                <li key={link.href}>
-                  <a href={link.href} className="text-background/60 text-sm hover:text-background transition-colors">{link.label}</a>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-
-        <Separator className="bg-background/10 my-8" />
-
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-background/50 text-xs">© {new Date().getFullYear()} ServiceOS. All rights reserved.</p>
-          <p className="text-background/50 text-xs">AI Operating System for Local Service Businesses</p>
-        </div>
-      </div>
-    </footer>
-  );
-}
-
 // ─── Sticky bottom CTA bar (mobile-friendly) ────────────────────────────────
 
 function StickyCta({
@@ -1694,28 +2113,31 @@ export function DualAudienceLanding({
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <Navbar onGetStarted={onGetStarted} onSignIn={onSignIn} />
+      <Navbar onGetStarted={onGetStarted} onSignIn={onSignIn} audience={audience} onPick={setAudience} />
 
       <main className="flex-1">
         <HeroFork audience={audience} onPick={setAudience} onTryDemo={onTryDemo} />
 
         {audience === 'crm' ? (
           <>
+            <CrmProblem />
             <CrmHowItWorks />
             <CrmFeatures />
+            <CrmChannels />
             <CrmAiReceptionist onGetStarted={onGetStarted} />
+            <CrmRoiMetrics />
             <CrmPersonas />
             <CrmTestimonials />
             <CrmPricing onGetStarted={onGetStarted} />
             <CrmFaq />
-            <CrmFinalCta onGetStarted={onGetStarted} onTryDemo={onTryDemo} />
+            <CrmForProviders onGetStarted={onGetStarted} />
           </>
         ) : (
           <MarketplaceCompact onGetStarted={onGetStarted} onSignIn={onSignIn} />
         )}
       </main>
 
-      <Footer />
+      <LandingFooter />
       <StickyCta audience={audience} onPick={setAudience} onGetStarted={onGetStarted} />
     </div>
   );
