@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import {
   Star,
   MapPin,
@@ -9,34 +10,53 @@ import {
   Sparkles,
   ArrowRight,
   Zap,
+  MessageSquareQuote,
   type LucideIcon,
 } from 'lucide-react';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { getIndustry } from '@/lib/industry-catalog';
 import type { ProviderListItem, ProviderProfile } from './types';
+
+/**
+ * ProviderCard (redesigned — TaskRabbit/Urban Company inspired)
+ * --------------------------------------------------------------
+ * Portrait card with:
+ *   • Bigger cover banner (h-36) with featured/emergency badges
+ *   • Avatar overlap
+ *   • Rating row prominent (★ 4.9 · 124 reviews)
+ *   • Name + tagline
+ *   • Location with icon
+ *   • Pricing: "From $X" (lowest service basePrice) or "Get a quote"
+ *   • Compact verification badge row
+ *   • Two-button footer: "View Profile" (outline) + "Get Quote" (primary)
+ *
+ * The whole card is NOT wrapped in an <a> — that created invalid HTML when
+ * the footer buttons were also anchors (<a><button> nesting). Instead, each
+ * CTA is its own Link. The cover image + name are also a Link so users can
+ * click anywhere on the card body to view the profile.
+ */
 
 interface ProviderCardProps {
   provider: ProviderListItem | ProviderProfile;
   /** Whether this provider is featured (gets a gold badge). */
   featured?: boolean;
-  /** Click handler — opens the provider profile view. */
+  /** Click handler — opens the provider profile view (legacy, used when no href). */
   onViewProfile?: (provider: ProviderListItem | ProviderProfile) => void;
   /** Compact layout for horizontal scrollers (no services list). */
   compact?: boolean;
   className?: string;
   /**
-   * Optional URL. When provided, the whole card becomes a clickable anchor
-   * that navigates to this URL (used by SSR browse pages so they work without
-   * JS). When omitted, falls back to the onViewProfile click handler.
+   * Optional URL. When provided, "View Profile" and the card body link here.
+   * "Get Quote" links to the same URL with ?action=quote appended so the
+   * profile page can auto-open the quote dialog.
    */
   href?: string;
 }
 
 function isProfile(p: ProviderListItem | ProviderProfile): p is ProviderProfile {
-  return 'identityVerified' in p;
+  return 'identityVerified' in p && 'gallery' in p;
 }
 
 function getServices(p: ProviderListItem | ProviderProfile) {
@@ -76,6 +96,34 @@ function RatingStars({ rating, size = 14 }: { rating: number; size?: number }) {
   );
 }
 
+/**
+ * Compute the pricing label for the card.
+ *   • If any service has a basePrice > 0 → "From $X" (lowest)
+ *   • Else → "Get a quote"
+ */
+function getPricingLabel(
+  provider: ProviderListItem | ProviderProfile,
+): { label: string; subLabel?: string } {
+  const services = getServices(provider);
+  const prices = services
+    .map((s) => s.basePrice)
+    .filter((p): p is number => typeof p === 'number' && p > 0);
+  if (prices.length > 0) {
+    const lowest = Math.min(...prices);
+    const currency = (provider as ProviderListItem).currency || '$';
+    const symbol = currency === 'USD' || currency === 'CAD' ? '$' : currency + ' ';
+    return { label: `From ${symbol}${lowest}`, subLabel: 'est. starting price' };
+  }
+  // Fallback: call-out fee if set
+  const callOut = (provider as ProviderListItem).callOutFee;
+  if (typeof callOut === 'number' && callOut > 0) {
+    const currency = (provider as ProviderListItem).currency || '$';
+    const symbol = currency === 'USD' || currency === 'CAD' ? '$' : currency + ' ';
+    return { label: `Call-out ${symbol}${callOut}`, subLabel: 'service fee' };
+  }
+  return { label: 'Get a quote', subLabel: 'custom pricing' };
+}
+
 export function ProviderCard({
   provider,
   featured,
@@ -84,7 +132,6 @@ export function ProviderCard({
   className,
   href,
 }: ProviderCardProps) {
-  const services = getServices(provider);
   const rating = provider.rating ?? 0;
   const reviewCount = provider.reviewCount ?? 0;
   const industry = provider.industry;
@@ -93,11 +140,6 @@ export function ProviderCard({
   const industryEmoji = industryMeta?.emoji ?? '🛠️';
 
   const isFeat = featured ?? (!!(provider as ProviderListItem).featured);
-  // Verification badges — for ProviderProfile we read the real flags; for
-  // ProviderListItem we read the newly-added verification fields (the browse
-  // page + /api/marketplace/providers both return them now). The old behaviour
-  // (treat list items as fully verified) is kept as a fallback only when the
-  // flags are absent, which shouldn't happen for newly-fetched data.
   const listFlags = provider as Partial<ProviderListItem>;
   const identityVerified = isProfile(provider)
     ? provider.identityVerified
@@ -112,38 +154,32 @@ export function ProviderCard({
     ? provider.stripeConnected
     : listFlags.stripeConnected ?? true;
   const isVerified = identityVerified && businessVerified;
-  // Fully verified = all 4 gates passed. We surface this as a distinct badge
-  // so users can tell "fully vetted" providers from "public page only" ones.
   const isFullyVerified = identityVerified && businessVerified && insuranceVerified && stripeConnected;
 
   const location = [provider.city, provider.state].filter(Boolean).join(', ');
   const cover = provider.coverImage;
   const tagline = (provider as ProviderListItem).tagline ?? '';
   const description = provider.description ?? tagline;
+  const pricing = getPricingLabel(provider);
+
+  // Build URLs
+  const profileHref = href ?? '#';
+  const quoteHref = href ? `${href}?action=quote` : '#';
 
   const handleView = () => {
     if (onViewProfile) onViewProfile(provider);
   };
 
-  // When href is provided (SSR browse page), wrap the entire card in an <a>
-  // so it works without JS. The inner buttons are replaced with anchors too.
-  const Wrapper: React.ElementType = href ? 'a' : 'div';
-  const wrapperProps = href
-    ? { href, 'aria-label': `View ${provider.name} profile` }
-    : {};
-
   return (
-    <Wrapper {...wrapperProps}>
     <Card
       className={cn(
-        'group relative h-full overflow-hidden py-0 transition-all hover:shadow-md',
+        'group relative flex h-full flex-col overflow-hidden py-0 transition-all hover:shadow-lg',
         isFeat && 'ring-2 ring-amber-300/70',
-        href && 'block',
         className,
       )}
     >
-      {/* Cover / gradient banner */}
-      <div className="relative h-28 w-full overflow-hidden bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-600">
+      {/* Cover banner */}
+      <div className="relative h-32 w-full overflow-hidden bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-600 sm:h-36">
         {cover ? (
           <img
             src={cover}
@@ -151,9 +187,9 @@ export function ProviderCard({
             className="h-full w-full object-cover opacity-90 transition-transform duration-500 group-hover:scale-105"
           />
         ) : null}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
 
-        {/* Badges */}
+        {/* Top-left badges */}
         <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
           {isFeat ? (
             <Badge className="gap-1 bg-amber-400 text-amber-950 shadow hover:bg-amber-400">
@@ -167,6 +203,7 @@ export function ProviderCard({
           ) : null}
         </div>
 
+        {/* Top-right verification badge */}
         {isVerified ? (
           <div className="absolute right-3 top-3">
             <Badge
@@ -183,23 +220,38 @@ export function ProviderCard({
         ) : null}
       </div>
 
-      <CardContent className="-mt-10 px-4 pb-3 pt-0">
-        {/* Avatar */}
+      <CardContent className="flex flex-1 flex-col px-4 pb-3 pt-0">
+        {/* Avatar + industry chip */}
         <div className="mb-3 flex items-end justify-between">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl border-4 border-background bg-card text-xl font-bold text-emerald-700 shadow-sm">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl border-4 border-background bg-card text-lg font-bold text-emerald-700 shadow-sm -mt-8">
             {buildInitials(provider.name)}
           </div>
           <div className="mb-1 flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
             <span aria-hidden>{industryEmoji}</span>
-            <span className="max-w-[120px] truncate">{industryLabel}</span>
+            <span className="max-w-[110px] truncate">{industryLabel}</span>
           </div>
         </div>
 
-        {/* Title: anchor when href provided (SSR), button otherwise */}
+        {/* Rating row — prominent (TaskRabbit style) */}
+        <div className="mb-1.5 flex items-center gap-1.5">
+          <RatingStars rating={rating} size={15} />
+          <span className="text-sm font-bold text-foreground">{rating.toFixed(1)}</span>
+          <span className="text-xs text-muted-foreground">
+            ({reviewCount.toLocaleString()} review{reviewCount === 1 ? '' : 's'})
+          </span>
+        </div>
+
+        {/* Name — clickable link to profile */}
         {href ? (
-          <h3 className="line-clamp-1 text-base font-semibold text-foreground transition-colors group-hover:text-emerald-700">
-            {provider.name}
-          </h3>
+          <Link
+            href={profileHref}
+            aria-label={`View ${provider.name} profile`}
+            className="block"
+          >
+            <h3 className="line-clamp-1 text-base font-semibold text-foreground transition-colors group-hover:text-emerald-700">
+              {provider.name}
+            </h3>
+          </Link>
         ) : (
           <button
             type="button"
@@ -219,49 +271,28 @@ export function ProviderCard({
           </p>
         ) : null}
 
-        <div className="mt-2 flex items-center gap-2">
-          <RatingStars rating={rating} />
-          <span className="text-xs font-semibold text-foreground">
-            {rating.toFixed(1)}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            ({reviewCount.toLocaleString()} reviews)
-          </span>
-        </div>
-
         {location ? (
           <div className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground">
-            <MapPin className="h-3.5 w-3.5" />
+            <MapPin className="h-3.5 w-3.5 shrink-0" />
             <span className="truncate">{location}</span>
           </div>
         ) : null}
+
+        {/* Pricing — "From $X" or "Get a quote" */}
+        <div className="mt-2.5 flex items-baseline gap-1.5">
+          <span className="text-sm font-bold text-emerald-700 dark:text-emerald-300">
+            {pricing.label}
+          </span>
+          {pricing.subLabel ? (
+            <span className="text-[11px] text-muted-foreground">{pricing.subLabel}</span>
+          ) : null}
+        </div>
 
         {description && !compact ? (
           <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{description}</p>
         ) : null}
 
-        {!compact && services.length > 0 ? (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {services.slice(0, 4).map((s) => (
-              <Badge
-                key={s.id}
-                variant="secondary"
-                className="bg-emerald-50 text-emerald-700 hover:bg-emerald-50 dark:bg-emerald-950/50 dark:text-emerald-300"
-              >
-                {s.name}
-                {s.basePrice != null ? (
-                  <span className="ml-1 opacity-70">· ${s.basePrice}</span>
-                ) : null}
-              </Badge>
-            ))}
-            {services.length > 4 ? (
-              <Badge variant="outline" className="text-muted-foreground">
-                +{services.length - 4}
-              </Badge>
-            ) : null}
-          </div>
-        ) : null}
-
+        {/* Verification badges — compact row */}
         {!compact ? (
           <div className="mt-3 flex flex-wrap items-center gap-1.5">
             {identityVerified ? (
@@ -291,26 +322,43 @@ export function ProviderCard({
         ) : null}
       </CardContent>
 
-      <CardFooter className="border-t bg-muted/30 px-4 py-2.5">
+      {/* Footer — two buttons: View Profile + Get Quote */}
+      <CardFooter className="mt-auto gap-2 border-t bg-muted/30 px-4 py-2.5">
         {href ? (
-          <span
-            className="ml-auto inline-flex items-center gap-1 text-sm font-medium text-emerald-700 dark:text-emerald-300"
+          <Link
+            href={profileHref}
+            className="inline-flex h-9 flex-1 items-center justify-center gap-1 rounded-md border border-border bg-background text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
             View Profile <ArrowRight className="h-3.5 w-3.5" />
-          </span>
+          </Link>
         ) : (
-          <Button
+          <button
             type="button"
-            variant="ghost"
-            size="sm"
             onClick={handleView}
-            className="ml-auto gap-1 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950/50"
+            className="inline-flex h-9 flex-1 items-center justify-center gap-1 rounded-md border border-border bg-background text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
             View Profile <ArrowRight className="h-3.5 w-3.5" />
-          </Button>
+          </button>
+        )}
+        {href ? (
+          <Link
+            href={quoteHref}
+            className="inline-flex h-9 flex-1 items-center justify-center gap-1 rounded-md bg-emerald-600 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
+          >
+            <MessageSquareQuote className="h-3.5 w-3.5" />
+            Get Quote
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={handleView}
+            className="inline-flex h-9 flex-1 items-center justify-center gap-1 rounded-md bg-emerald-600 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
+          >
+            <MessageSquareQuote className="h-3.5 w-3.5" />
+            Get Quote
+          </button>
         )}
       </CardFooter>
     </Card>
-    </Wrapper>
   );
 }

@@ -485,7 +485,6 @@ export function MarketplaceBrowser({
                 key={p.id}
                 provider={p}
                 featured={!!p.featured}
-                compact
                 href={canonicalHref}
               />
             );

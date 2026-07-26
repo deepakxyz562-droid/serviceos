@@ -12,6 +12,9 @@ import {
   Building2,
   Home as HomeIcon,
   ChevronRight,
+  Wallet,
+  Star,
+  Zap,
 } from 'lucide-react';
 
 export const revalidate = 300; // ISR — revalidate every 5 minutes
@@ -33,13 +36,17 @@ export const revalidate = 300; // ISR — revalidate every 5 minutes
  */
 
 async function fetchProviders() {
-  // ── 2-gate eligibility (relaxed from the original 8-gate) ───────────────
-  // Only hard-require marketplaceOptIn + not suspended. Verification status
-  // is SELECTed and rendered as badges on each card so users can see at a
-  // glance how verified a provider is, instead of the provider being hidden.
+  // ── 2-gate eligibility (marketplaceOptIn dropped) ───────────────────────
+  // Any tenant with a public Business Hub page (publicProfileEnabled=true)
+  // who is not suspended is visible on the marketplace browse grid. This
+  // fixes the issue where previously-registered providers with a public page
+  // were invisible because the separate `marketplaceOptIn` flag was never set
+  // (it defaulted to false and only onboarding step 2 set it to true).
+  // Verification status is SELECTed and rendered as badges on each card so
+  // users can see at a glance how verified a provider is.
   const tenants = await db.tenant.findMany({
     where: {
-      marketplaceOptIn: true,
+      publicProfileEnabled: true,
       suspendedAt: null,
     },
     select: {
@@ -393,6 +400,72 @@ export default async function MarketplaceBrowsePage({
         </div>
       </section>
 
+      {/* Trust bar — thin row of trust signals (TaskRabbit/Urban Company style) */}
+      <section className="border-b bg-white/60 dark:bg-card/40">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-8 gap-y-2 px-4 py-3 text-sm sm:px-6">
+          <span className="flex items-center gap-1.5 text-muted-foreground">
+            <ShieldCheck className="h-4 w-4 text-emerald-600" />
+            <span className="font-medium text-foreground">Verified professionals</span>
+          </span>
+          <span className="flex items-center gap-1.5 text-muted-foreground">
+            <Wallet className="h-4 w-4 text-emerald-600" />
+            <span className="font-medium text-foreground">Escrow-protected payments</span>
+          </span>
+          <span className="flex items-center gap-1.5 text-muted-foreground">
+            <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+            <span className="font-medium text-foreground">Real customer reviews</span>
+          </span>
+          <span className="flex items-center gap-1.5 text-muted-foreground">
+            <Zap className="h-4 w-4 text-rose-500" />
+            <span className="font-medium text-foreground">24/7 emergency dispatch</span>
+          </span>
+        </div>
+      </section>
+
+      {/* Category tiles — visual entry point (Urban Company / TaskRabbit style) */}
+      {!verticalFilter && !industryFilter ? (
+        <section className="border-b bg-muted/10">
+          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                Browse by category
+              </h2>
+              <a
+                href="#all-providers"
+                className="text-xs font-medium text-emerald-700 hover:text-emerald-800 dark:text-emerald-300"
+              >
+                View all providers →
+              </a>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-9">
+              {VERTICALS.map((v) => {
+                const count = providers.filter((p) => {
+                  const meta = p.industry ? getIndustry(p.industry) : undefined;
+                  return meta?.vertical === v.id;
+                }).length;
+                return (
+                  <a
+                    key={v.id}
+                    href={`/marketplace?vertical=${v.id}`}
+                    className="group flex flex-col items-center gap-2 rounded-xl border border-border bg-card p-4 text-center transition-all hover:border-emerald-300 hover:shadow-md"
+                  >
+                    <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-2xl transition-transform group-hover:scale-110 dark:bg-emerald-950/40" aria-hidden>
+                      {v.icon}
+                    </span>
+                    <span className="line-clamp-2 text-xs font-medium text-foreground leading-tight">
+                      {v.name}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {count} pro{count === 1 ? '' : 's'}
+                    </span>
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       {/* Breadcrumbs (visible) */}
       <nav
         aria-label="Breadcrumb"
@@ -442,7 +515,7 @@ export default async function MarketplaceBrowsePage({
       </nav>
 
       {/* Main grid: sidebar + provider cards */}
-      <div className="mx-auto max-w-7xl w-full px-4 sm:px-6 py-8 flex-1">
+      <div id="all-providers" className="mx-auto max-w-7xl w-full px-4 sm:px-6 py-8 flex-1 scroll-mt-20">
         <div className="lg:grid lg:grid-cols-[260px_1fr] lg:gap-8">
           {/* Sidebar — industry filter by vertical (server-rendered links for crawlability) */}
           <aside className="hidden lg:block">

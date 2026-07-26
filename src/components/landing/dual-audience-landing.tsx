@@ -45,6 +45,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -1612,11 +1613,11 @@ function CrmForProviders({ onGetStarted }: { onGetStarted?: () => void }) {
                 Start Free Trial <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             ) : null}
-            <a href="/marketplace">
-              <Button size="lg" variant="outline" className="bg-transparent border-white/40 text-white hover:bg-white/10 hover:text-white px-7 h-12 text-base">
+            <Button asChild size="lg" variant="outline" className="bg-transparent border-white/40 text-white hover:bg-white/10 hover:text-white px-7 h-12 text-base">
+              <Link href="/marketplace">
                 Browse Marketplace <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </a>
+              </Link>
+            </Button>
           </div>
           <p className="text-emerald-100/80 text-sm mt-4">
             No credit card required &bull; 14-day free trial &bull; Cancel anytime
