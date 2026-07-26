@@ -11,7 +11,11 @@ import { transferToProvider, StripePayoutError } from '@/lib/stripe';
  * Connect balance once the linked Job reaches a completed-ish state.
  *
  * Trigger:
- *   - Vercel Cron:  every 15 minutes (schedule "star-slash-15 star star star star")  — see vercel.json
+ *   - Vercel Cron:  once daily at 02:00 UTC (schedule "0 2 * * *") — see vercel.json
+ *                   (Vercel Hobby plan is limited to daily crons; upgrade to Pro for
+ *                   more frequent settlement runs, e.g. every 15 minutes)
+ *   - On-demand:    call this route from app flows when a Job is marked complete
+ *                   for near-real-time payout (the daily cron is a safety net)
  *   - External:     `curl -H "Authorization: Bearer $CRON_SECRET" \
  *                          https://your-app/api/cron/marketplace-settlement`
  *

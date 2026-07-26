@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
     const expectedSecret = process.env.CRON_SECRET || 'serviceos-cron-dev';
     const providedSecret =
       request.headers.get('x-cron-secret') ||
+      request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ||
       new URL(request.url).searchParams.get('secret') ||
       '';
     if (providedSecret !== expectedSecret) {

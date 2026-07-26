@@ -3,7 +3,27 @@
   "crons": [
     {
       "path": "/api/cron/marketplace-settlement",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/trial-expire",
+      "schedule": "30 0 * * *"
+    },
+    {
+      "path": "/api/cron/trial-reminders",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/renewal",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/pre-charge-reminder",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/recurring-invoices",
+      "schedule": "0 1 * * *"
     }
   ]
 }

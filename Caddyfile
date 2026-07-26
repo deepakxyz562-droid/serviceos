@@ -1,0 +1,148 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# ServiceOS — production reverse proxy config (Caddy v2)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# What this file does:
+#   1. Terminates TLS on :443 with an auto-provisioned Let's Encrypt cert.
+#   2. Redirects all :80 traffic to :443 (no plaintext serving).
+#   3. Reverse-proxies to the Next.js app on localhost:3000.
+#   4. Routes the `?XTransformPort=<n>` query-param to per-tenant mini-services
+#      (realtime socket.io, AI voice, future sidecars) running on localhost:<n>.
+#   5. Adds a defense-in-depth set of security headers (Next.js also sets these,
+#      but applying them at the edge means they're present even on /static,
+#      misconfigured upstreams, and the health endpoint).
+#
+# How to run:
+#   caddy run --config Caddyfile            # foreground
+#   caddy start --config Caddyfile          # daemonized
+#   caddy validate --config Caddyfile       # syntax check
+#   caddy reload --config Caddyfile         # zero-downtime reload
+#
+# Domain:
+#   The site is `serviceos.cc`. To deploy on a different domain, search-and-
+#   replace `serviceos.cc` below (or set `{$SERVICEOS_DOMAIN}` and use that
+#   env-var placeholder). Wildcard certs for *.serviceos.cc are issued
+#   automatically when tenant subdomains are routed through this same block.
+#
+# Auto-HTTPS:
+#   Caddy provisions and rotates Let's Encrypt certificates with no extra
+#   config. The :80 block issues the redirect; the :443 block issues the cert.
+#   Make sure ports 80 + 443 are open inbound and that DNS A/AAAA records for
+#   serviceos.cc (and *.serviceos.cc if used) point at this host.
+#
+# XTransformPort routing pattern:
+#   The realtime layer runs as a separate Node process (socket.io) on :3003.
+#   The Next.js client opens its socket connection by appending
+#   `?XTransformPort=3003` to the URL — Caddy rewrites the upstream target to
+#   `localhost:3003` for any request carrying that query param, before the
+#   default Next.js proxy gets a chance. This lets a single public hostname
+#   serve BOTH the HTTP app AND the WebSocket realtime layer without exposing
+#   extra ports. Add new mini-services by copy-pasting the matcher block.
+#
+# WebSocket support:
+#   Caddy's `reverse_proxy` upgrades HTTP/1.1 → WebSocket automatically. No
+#   special directive needed — but you MUST NOT set `flush_interval -1` on
+#   streamed responses unless you understand the buffering trade-offs.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── HTTP → HTTPS redirect (also used by Let's Encrypt for HTTP-01 challenges) ──
+:80 {
+	# ACME challenge passthrough — Caddy handles this implicitly, but be explicit.
+	respond /healthz "ok" 200
+
+	# Redirect everything else to HTTPS. `permanent` → 301.
+	redir https://{host}{uri} permanent
+}
+
+# ── Primary HTTPS site ────────────────────────────────────────────────────────
+serviceos.cc {
+	# (Optional) issue a wildcard cert for tenant subdomains. Uncomment if you
+	# serve *.serviceos.cc from this same Caddy instance.
+	# tls {
+	#   dns cloudflare {$CLOUDFLARE_API_TOKEN}
+	# }
+
+	# ── Defense-in-depth security headers (mirror next.config.ts) ────────────
+	header {
+		# HSTS: 2 years, include subdomains, opt into browser preload list.
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		X-Frame-Options "SAMEORIGIN"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(self), geolocation=(self), interest-cohort=()"
+		# CSP is intentionally NOT set here — Next.js owns the canonical CSP in
+		# next.config.ts (it includes nonce-aware inline-script handling). Setting
+		# it here too would double the maintenance burden and risk drift.
+		# Remove the `X-Powered-By` banner (Caddy adds its own — keep this off).
+		-X-Powered-By
+	}
+
+	# ── XTransformPort routing — route to per-tenant mini-services ───────────
+	# Realtime socket.io service (chat, presence, live updates).
+	@realtime query XTransformPort=3003
+	reverse_proxy @realtime localhost:3003 {
+		# WebSocket upgrade is automatic. flush_interval -1 disables buffering
+		# for low-latency streaming (socket.io needs this).
+		flush_interval -1
+	}
+
+	# Future mini-services — uncomment when they exist.
+	# @ai_voice query XTransformPort=3004
+	# reverse_proxy @ai_voice localhost:3004 {
+	#   flush_interval -1
+	# }
+	#
+	# @webhooks query XTransformPort=3005
+	# reverse_proxy @webhooks localhost:3005
+
+	# ── Default: reverse-proxy everything else to Next.js ────────────────────
+	reverse_proxy localhost:3000 {
+		# Pass the original host + client IP through to Next.js so it can build
+		# correct absolute URLs and audit-log the real requester.
+		header_up Host {host}
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	# ── Health-check fast-path (don't spam Next.js with LB probes) ───────────
+	# Optional: terminate /api/health at Caddy for sub-10ms LB checks. Comment
+	# out if you want the DB-aware health check from Next.js to be authoritative.
+	# handle /api/health {
+	#   respond `{"status":"ok","service":"serviceos","runtime":"caddy"}` 200
+	#   header Content-Type application/json
+	# }
+
+	# Access + error logs (rotate with logrotate or Caddy's built-in rolling).
+	log {
+		output file /var/log/caddy/serviceos.cc.access.log {
+			roll_size 100mb
+			roll_keep 10
+			roll_keep_for 30d
+		}
+		format json
+	}
+}
+
+# ── Wildcard tenant subdomains (optional) ─────────────────────────────────────
+# Uncomment to serve `*.serviceos.cc` from the same Caddy instance. Requires a
+# DNS-01 challenge provider (Cloudflare, Route53, etc.) for the wildcard cert.
+#
+# *.serviceos.cc {
+#   header {
+#     Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+#     X-Frame-Options "SAMEORIGIN"
+#     X-Content-Type-Options "nosniff"
+#     Referrer-Policy "strict-origin-when-cross-origin"
+#   }
+#   @realtime query XTransformPort=3003
+#   reverse_proxy @realtime localhost:3003 {
+#     flush_interval -1
+#   }
+#   reverse_proxy localhost:3000 {
+#     header_up Host {host}
+#     header_up X-Real-IP {remote_host}
+#     header_up X-Forwarded-For {remote_host}
+#     header_up X-Forwarded-Proto {scheme}
+#   }
+# }
