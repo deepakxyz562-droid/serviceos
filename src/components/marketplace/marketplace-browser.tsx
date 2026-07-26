@@ -30,16 +30,15 @@
 
 import * as React from 'react';
 import {
-  Search,
   MapPin,
   X,
   SlidersHorizontal,
-  Loader2,
   ArrowDown,
   Star,
   ShieldCheck,
 } from 'lucide-react';
 import { ProviderCard } from './provider-card';
+import { useMarketplaceSearch } from './use-marketplace-search';
 import type { ProviderListItem } from './types';
 import { getIndustry } from '@/lib/industry-catalog';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
@@ -75,9 +74,17 @@ export function MarketplaceBrowser({
   cities,
 }: MarketplaceBrowserProps) {
   // ── Filter state (hydrated from URL on first render) ───────────────────
-  const [searchInput, setSearchInput] = React.useState(initialFilters.search ?? '');
+  // searchInput / cityInput live in a shared Zustand store so the hero
+  // search bar (MarketplaceHeroSearch) and this component stay in sync
+  // across the server/client boundary. Typing in the hero instantly
+  // filters the grid below.
+  const searchInput = useMarketplaceSearch((s) => s.searchInput);
+  const setSearchInput = useMarketplaceSearch((s) => s.setSearchInput);
+  const cityInput = useMarketplaceSearch((s) => s.cityInput);
+  const setCityInput = useMarketplaceSearch((s) => s.setCityInput);
+
+  // Debounced filter values (local) — derived from the shared store inputs.
   const [searchQuery, setSearchQuery] = React.useState(initialFilters.search ?? '');
-  const [cityInput, setCityInput] = React.useState(initialFilters.city ?? '');
   const [cityFilter, setCityFilter] = React.useState(initialFilters.city ?? '');
   const [verticalFilter, setVerticalFilter] = React.useState(initialFilters.vertical ?? null);
   const [industryFilter, setIndustryFilter] = React.useState(initialFilters.industry ?? null);
@@ -100,6 +107,20 @@ export function MarketplaceBrowser({
     }, 250);
     return () => clearTimeout(handle);
   }, [cityInput]);
+
+  // Seed the shared store from URL params on first mount so a deep-link
+  // like /marketplace?search=plumbing pre-fills the hero search box. Runs
+  // after hydration to avoid a server/client value mismatch.
+  React.useEffect(() => {
+    if (initialFilters.search && !searchInput) {
+      setSearchInput(initialFilters.search);
+    }
+    if (initialFilters.city && !cityInput) {
+      setCityInput(initialFilters.city);
+    }
+    // Intentionally run once on mount — we only want to seed from the URL
+    // the first time this component mounts, not on every store change.
+  }, []);
 
   // ── Flash skeleton on filter change ────────────────────────────────────
   React.useEffect(() => {
@@ -262,64 +283,11 @@ export function MarketplaceBrowser({
 
   return (
     <div>
-      {/* ── Search bar (client-side, debounced) ────────────────────────────
-          A <noscript> sibling in the server page still renders the plain
-          GET form so non-JS users can search. */}
-      <div className="mx-auto max-w-2xl">
-        <div className="flex flex-col gap-2 rounded-2xl border bg-card p-2 shadow-xl sm:flex-row sm:items-center hover:border-emerald-300 focus-within:border-emerald-300 transition-colors">
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search providers by name, service, or keyword — e.g. &quot;plumbing&quot;"
-              aria-label="Search providers"
-              className="h-12 w-full pl-11 pr-9 rounded-lg bg-transparent text-base text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-            />
-            {searchInput ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchInput('');
-                  setSearchQuery('');
-                }}
-                aria-label="Clear search"
-                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            ) : null}
-          </div>
-          <div className="relative flex-1 sm:max-w-[220px]">
-            <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="text"
-              value={cityInput}
-              onChange={(e) => setCityInput(e.target.value)}
-              placeholder="City or postal code"
-              aria-label="Filter by city"
-              className="h-12 w-full pl-9 pr-9 rounded-lg bg-transparent text-base text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-            />
-            {cityInput ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setCityInput('');
-                  setCityFilter('');
-                }}
-                aria-label="Clear city filter"
-                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            ) : null}
-          </div>
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Instant search — no need to press Enter. Or use the industry + city filters in the sidebar.
-        </p>
-      </div>
+      {/* The search bar now lives in the hero (MarketplaceHeroSearch) and
+          shares its input state via the useMarketplaceSearch Zustand store.
+          Typing in the hero instantly filters the grid below — no reload,
+          no Enter required. A <noscript> GET form in the server page still
+          serves non-JS users. */}
 
       {/* ── Results header: count + sort ─────────────────────────────────── */}
       <div className="mb-5 mt-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">

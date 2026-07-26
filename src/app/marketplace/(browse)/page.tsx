@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { db } from '@/lib/db';
 import { VERTICALS, getIndustry } from '@/lib/industry-catalog';
 import { MarketplaceBrowser } from '@/components/marketplace/marketplace-browser';
+import { MarketplaceHeroSearch } from '@/components/marketplace/marketplace-hero-search';
 import type { ProviderListItem } from '@/components/marketplace/types';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
 import {
@@ -36,17 +37,20 @@ export const revalidate = 300; // ISR — revalidate every 5 minutes
  */
 
 async function fetchProviders() {
-  // ── 2-gate eligibility (marketplaceOptIn dropped) ───────────────────────
-  // Any tenant with a public Business Hub page (publicProfileEnabled=true)
-  // who is not suspended is visible on the marketplace browse grid. This
-  // fixes the issue where previously-registered providers with a public page
-  // were invisible because the separate `marketplaceOptIn` flag was never set
-  // (it defaulted to false and only onboarding step 2 set it to true).
-  // Verification status is SELECTed and rendered as badges on each card so
-  // users can see at a glance how verified a provider is.
+  // ── 3-gate eligibility ──────────────────────────────────────────────────
+  // A provider appears on the marketplace browse grid when ALL three are true:
+  //   1. publicProfileEnabled  — has a public Business Hub page
+  //   2. marketplaceOptIn      — explicitly opted into marketplace listing
+  //                              (toggle in Settings → Public Hub tab)
+  //   3. suspendedAt IS null   — not suspended
+  // marketplaceOptIn is the toggle providers control from their settings. New
+  // registrations default it to true (see api/auth/register), so providers are
+  // visible by default but can opt out anytime. Verification status is SELECTed
+  // and rendered as badges on each card so users can see how verified a pro is.
   const tenants = await db.tenant.findMany({
     where: {
       publicProfileEnabled: true,
+      marketplaceOptIn: true,
       suspendedAt: null,
     },
     select: {
@@ -397,6 +401,10 @@ export default async function MarketplaceBrowsePage({
             compare quotes, and book instantly — or describe your problem and let our AI route you to
             the right pro.
           </p>
+
+          {/* Centered search bar (client island) — drives the MarketplaceBrowser
+              below via a shared Zustand store. Instant search, no reload. */}
+          <MarketplaceHeroSearch />
         </div>
       </section>
 

@@ -46,14 +46,16 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
   const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10) || 20, 100);
   const offset = Math.max(parseInt(searchParams.get('offset') || '0', 10) || 0, 0);
 
-  // ── Base where: 2-gate eligibility (marketplaceOptIn dropped) ──────────
-  // Any tenant with a public Business Hub page (publicProfileEnabled=true)
-  // who is not suspended is listed. Verification status is returned as flags
-  // on each item so the client can render badges. This matches the marketplace
-  // browse page (src/app/marketplace/(browse)/page.tsx) so the API and the
-  // SSR page show the same set of providers.
+  // ── Base where: 3-gate eligibility ─────────────────────────────────────
+  // A provider is listed when ALL three are true:
+  //   1. publicProfileEnabled  — has a public Business Hub page
+  //   2. marketplaceOptIn      — explicitly opted into marketplace listing
+  //   3. suspendedAt IS null   — not suspended
+  // This matches the marketplace browse page (src/app/marketplace/(browse)/page.tsx)
+  // so the API and the SSR page show the same set of providers.
   const where: Record<string, unknown> = {
     publicProfileEnabled: true,
+    marketplaceOptIn: true,
     suspendedAt: null,
   };
 

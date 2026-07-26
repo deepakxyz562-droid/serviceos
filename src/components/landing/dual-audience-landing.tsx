@@ -29,7 +29,6 @@ import {
   HardHat,
   Globe,
   Search,
-  Loader2,
   MapPin,
   ShieldCheck,
   Siren,
@@ -49,7 +48,6 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -59,15 +57,11 @@ import {
   AccordionContent,
 } from '@/components/ui/accordion';
 import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
-import { VERTICALS, getIndustry } from '@/lib/industry-catalog';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
 import {
   mpUrl,
-  type AiRouteResponse,
   type ProviderListItem,
   type ProviderListResponse,
-  type BookingMode,
 } from '@/components/marketplace/types';
 import { ProviderCard } from '@/components/marketplace/provider-card';
 import { solutionsLinks, SolutionsMegaMenu, LandingFooter } from '@/components/landing/landing-solutions';
@@ -480,38 +474,6 @@ const faqs = [
 // NOTE: solutionsLinks, footerLinks, SolutionsMegaMenu, and LandingFooter live
 // in @/components/landing/landing-solutions.tsx — extracted to keep this file
 // under turbopack's compile-memory ceiling on 4 GB dev machines.
-
-// ─── AI search booking-mode meta (mirror of marketplace-landing) ─────────────
-
-const BOOKING_MODE_META: Record<
-  BookingMode,
-  { label: string; description: string; tone: string; icon: typeof Zap }
-> = {
-  instant: {
-    label: 'Instant Booking',
-    description: 'Pick a time and get confirmed immediately — no waiting.',
-    tone: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
-    icon: Zap,
-  },
-  quote_request: {
-    label: 'Request Quotes',
-    description: 'Describe the job and compare quotes from multiple providers.',
-    tone: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
-    icon: FileText,
-  },
-  emergency: {
-    label: 'Emergency Dispatch',
-    description: 'A verified technician is on the way within minutes.',
-    tone: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300',
-    icon: Siren,
-  },
-  ai_auto: {
-    label: 'AI Auto-Assign',
-    description: 'Let our AI dispatcher pick the best provider for you.',
-    tone: 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300',
-    icon: Bot,
-  },
-};
 
 // ─── Top navbar ─────────────────────────────────────────────────────────────
 
@@ -1566,7 +1528,7 @@ function CrmFaq() {
 
 function CrmForProviders({ onGetStarted }: { onGetStarted?: () => void }) {
   return (
-    <section id="for-providers" className="border-t bg-background py-14 sm:py-20 overflow-hidden">
+    <section id="for-providers" className="relative border-t bg-background py-14 sm:py-20 overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(245,158,11,0.08),transparent_55%)]" />
       <div className="mx-auto max-w-6xl px-4 sm:px-6 relative z-10">
         <div className="mb-10 text-center">
@@ -1637,11 +1599,6 @@ function MarketplaceCompact({
   onGetStarted?: () => void;
   onSignIn?: () => void;
 }) {
-  const [aiText, setAiText] = React.useState('');
-  const [aiLoading, setAiLoading] = React.useState(false);
-  const [aiResult, setAiResult] = React.useState<AiRouteResponse | null>(null);
-  const [aiError, setAiError] = React.useState<string | null>(null);
-
   const [featured, setFeatured] = React.useState<ProviderListItem[]>([]);
   const [featuredLoading, setFeaturedLoading] = React.useState(true);
 
@@ -1668,37 +1625,6 @@ function MarketplaceCompact({
     return () => { cancelled = true; };
   }, []);
 
-  async function handleAiSearch(e: React.FormEvent) {
-    e.preventDefault();
-    const text = aiText.trim();
-    if (text.length < 5) {
-      toast.warning('Tell us a bit more about your problem');
-      return;
-    }
-    setAiLoading(true);
-    setAiError(null);
-    setAiResult(null);
-    try {
-      const res = await fetch(mpUrl('/api/marketplace/ai-route'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'Failed to analyze your request');
-      setAiResult(data as AiRouteResponse);
-      setTimeout(() => {
-        document.getElementById('mp-ai-result')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 50);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to analyze';
-      setAiError(msg);
-      toast.error('AI routing failed', { description: msg });
-    } finally {
-      setAiLoading(false);
-    }
-  }
-
   function handleProviderClick(p: ProviderListItem) {
     const slug = p.slug || p.publicSlug;
     if (slug && typeof window !== 'undefined') {
@@ -1711,142 +1637,30 @@ function MarketplaceCompact({
   return (
     <section className="border-t bg-background py-12 sm:py-16">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        {/* Section header */}
+        {/* Section header — clean marketplace intro.
+            (The AI "describe your problem" feature was removed: it analyzed
+            the request but hit a dead-end with 0 nearby providers when no
+            location was given. Users now go straight to browsing / requesting
+            quotes — clearer, faster, no false promise.) */}
         <div className="mb-8 text-center">
           <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700 mb-3 font-medium">
-            <Search className="w-3.5 h-3.5 mr-1.5" />
-            AI-Powered Marketplace
+            <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
+            ServiceOS Marketplace
           </Badge>
           <h2 className="text-3xl sm:text-4xl font-bold text-foreground">
-            Describe your problem — <span className="text-amber-600">we'll find the pro</span>
+            Find trusted <span className="text-amber-600">local pros</span>
           </h2>
           <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">
-            Our AI reads your request, identifies the right trade, estimates the cost, and routes you to verified local providers. Three ways to book: instant, quote request, or emergency dispatch.
+            Browse verified businesses, compare quotes, and book instantly — or request a quote and let pros come to you.
           </p>
+          <div className="mt-5">
+            <Button asChild size="lg" className="gap-2 bg-amber-600 px-6 text-base text-white hover:bg-amber-700">
+              <Link href="/marketplace">
+                Browse all providers <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
         </div>
-
-        {/* AI search bar */}
-        <form onSubmit={handleAiSearch} className="mx-auto max-w-2xl">
-          <div className="relative">
-            <div className="pointer-events-none absolute -inset-1 -z-10 rounded-2xl bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400 opacity-25 blur-lg" />
-            <div className="flex flex-col gap-2 rounded-2xl border bg-card p-2 shadow-xl sm:flex-row sm:items-center">
-              <div className="relative flex-1">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  type="text"
-                  value={aiText}
-                  onChange={(e) => setAiText(e.target.value)}
-                  placeholder="Describe your problem — e.g. “My boiler isn't producing hot water”"
-                  className="h-12 border-0 bg-transparent pl-11 text-base shadow-none focus-visible:ring-0"
-                  aria-label="Describe your problem"
-                />
-              </div>
-              <Button
-                type="submit"
-                disabled={aiLoading || aiText.trim().length < 5}
-                className="h-12 gap-2 bg-amber-600 px-6 text-base text-white hover:bg-amber-700"
-              >
-                {aiLoading ? (
-                  <><Loader2 className="h-5 w-5 animate-spin" /> Analyzing…</>
-                ) : (
-                  <><Sparkles className="h-5 w-5" /> Get Help</>
-                )}
-              </Button>
-            </div>
-          </div>
-          <div className="mt-3 flex flex-wrap justify-center gap-2">
-            {[
-              'AC stopped cooling',
-              'Burst pipe under sink',
-              'Locked out of apartment',
-              'Lawn overgrown',
-              'Need house painters',
-            ].map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setAiText(s)}
-                className="rounded-full border bg-white/60 px-3 py-1 text-xs text-muted-foreground backdrop-blur transition-colors hover:border-amber-300 hover:bg-white hover:text-amber-700 dark:bg-amber-950/30 dark:hover:bg-amber-950/60"
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        </form>
-
-        {/* AI Result */}
-        {aiError ? (
-          <div className="mx-auto mt-6 max-w-2xl rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-300">
-            {aiError}
-          </div>
-        ) : null}
-
-        {aiResult ? (
-          <div id="mp-ai-result" className="mx-auto mt-6 max-w-2xl overflow-hidden rounded-2xl border bg-card shadow-xl">
-            <div className="flex items-center gap-2 border-b bg-muted/40 px-4 py-2.5">
-              <span className="flex h-6 w-6 items-center justify-center rounded-md bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                <Bot className="h-3.5 w-3.5" />
-              </span>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                AI Routing Result
-                {aiResult.fallback ? <Badge variant="outline" className="ml-2 text-[10px]">fallback</Badge> : null}
-              </p>
-            </div>
-            <div className="space-y-4 p-4 sm:p-5">
-              <div>
-                <p className="text-sm leading-relaxed text-foreground">
-                  <span className="text-muted-foreground">Summary: </span>
-                  {aiResult.extraction.summary}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2 text-xs">
-                {aiResult.extraction.category ? (
-                  <Chip label="Category" value={getIndustry(aiResult.extraction.category)?.name ?? aiResult.extraction.category} />
-                ) : null}
-                {aiResult.extraction.service ? <Chip label="Service" value={aiResult.extraction.service} /> : null}
-                <Chip label="Urgency" value={aiResult.extraction.urgency} />
-              </div>
-              <div className="flex items-center justify-between rounded-lg border bg-amber-50/50 p-3 dark:bg-amber-950/20">
-                <div className="flex items-center gap-2 text-sm">
-                  <TrendingUp className="h-4 w-4 text-amber-600" />
-                  <span className="font-medium">Estimated cost</span>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-bold text-amber-700 dark:text-amber-300">
-                    {aiResult.estimatedCost.currency} {aiResult.estimatedCost.low}–{aiResult.estimatedCost.high}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">{aiResult.estimatedCost.basis}</p>
-                </div>
-              </div>
-              <div className="rounded-lg border p-3">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recommended next step</p>
-                {(() => {
-                  const meta = BOOKING_MODE_META[aiResult.bookingMode];
-                  const Icon = meta.icon;
-                  return (
-                    <div className="flex items-start gap-3">
-                      <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg', meta.tone)}>
-                        <Icon className="h-5 w-5" />
-                      </span>
-                      <div className="flex-1">
-                        <p className="font-semibold">{meta.label}</p>
-                        <p className="text-xs text-muted-foreground">{meta.description}</p>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                <a
-                  href="/marketplace"
-                  className="inline-flex items-center gap-2 rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700"
-                >
-                  Browse providers <ArrowRight className="h-4 w-4" />
-                </a>
-              </div>
-            </div>
-          </div>
-        ) : null}
 
         {/* Featured providers */}
         <div className="mt-12">
@@ -1971,15 +1785,6 @@ function MarketplaceCompact({
         </div>
       </div>
     </section>
-  );
-}
-
-function Chip({ label, value }: { label: string; value: string }) {
-  return (
-    <span className="inline-flex items-center gap-1 rounded-md border bg-muted/40 px-2 py-1">
-      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span>
-      <span className="font-medium text-foreground">{value}</span>
-    </span>
   );
 }
 
