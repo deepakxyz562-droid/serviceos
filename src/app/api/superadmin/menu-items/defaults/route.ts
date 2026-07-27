@@ -45,15 +45,20 @@ const DEFAULT_MENU_ITEMS = [
   // Portals
   { key: 'customerPortal', label: 'Customer Portal', icon: 'Globe', section: 'Portals', sortOrder: 30 },
   { key: 'employeePortal', label: 'Employee Portal', icon: 'HardHat', section: 'Portals', sortOrder: 31 },
+  // AI Receptionist (must match the section in src/components/layout/sidebar.tsx ownerNavSections)
+  { key: 'aiReceptionist', label: 'AI Receptionist Dashboard', icon: 'PhoneCall', section: 'AI Receptionist', sortOrder: 32 },
+  { key: 'aiAgents', label: 'AI Agents', icon: 'Bot', section: 'AI Receptionist', sortOrder: 33 },
+  { key: 'aiPhoneNumbers', label: 'Phone Numbers', icon: 'PhoneIncoming', section: 'AI Receptionist', sortOrder: 34 },
+  { key: 'aiCallHistory', label: 'Call History', icon: 'PhoneCall', section: 'AI Receptionist', sortOrder: 35 },
   // AI & More
-  { key: 'aiAssistant', label: 'AI Assistant', icon: 'Sparkles', section: 'AI & More', sortOrder: 32 },
-  { key: 'chatbotBuilder', label: 'Chatbot Builder', icon: 'Bot', section: 'AI & More', sortOrder: 33 },
-  { key: 'retargeting', label: 'Retargeting', icon: 'RefreshCw', section: 'AI & More', sortOrder: 34 },
-  { key: 'segments', label: 'Segments', icon: 'Filter', section: 'AI & More', sortOrder: 35 },
-  { key: 'marketingAnalytics', label: 'Analytics', icon: 'BarChart3', section: 'AI & More', sortOrder: 36 },
-  { key: 'serviceCatalog', label: 'Service Catalog', icon: 'BookOpen', section: 'AI & More', sortOrder: 37 },
-  { key: 'communicationProviders', label: 'Providers', icon: 'KeyRound', section: 'AI & More', sortOrder: 38 },
-  { key: 'reviews', label: 'Reviews', icon: 'Star', section: 'AI & More', sortOrder: 39 },
+  { key: 'aiAssistant', label: 'AI Assistant', icon: 'Sparkles', section: 'AI & More', sortOrder: 36 },
+  { key: 'chatbotBuilder', label: 'Chatbot Builder', icon: 'Bot', section: 'AI & More', sortOrder: 37 },
+  { key: 'retargeting', label: 'Retargeting', icon: 'RefreshCw', section: 'AI & More', sortOrder: 38 },
+  { key: 'segments', label: 'Segments', icon: 'Filter', section: 'AI & More', sortOrder: 39 },
+  { key: 'marketingAnalytics', label: 'Analytics', icon: 'BarChart3', section: 'AI & More', sortOrder: 40 },
+  { key: 'serviceCatalog', label: 'Service Catalog', icon: 'BookOpen', section: 'AI & More', sortOrder: 41 },
+  { key: 'communicationProviders', label: 'Providers', icon: 'KeyRound', section: 'AI & More', sortOrder: 42 },
+  { key: 'reviews', label: 'Reviews', icon: 'Star', section: 'AI & More', sortOrder: 43 },
 ];
 
 export async function GET() {

@@ -48,10 +48,20 @@ type UnauthView = 'landing' | 'auth';
  * PLATFORM itself, not a single tenant. Such users must NEVER see the
  * tenant onboarding wizard.
  *
+ * IMPORTANT: This mirrors the CANONICAL superadmin check in
+ * `src/lib/admin-auth.ts` (`isSuperAdminUser`). The backend uses that
+ * function across ~15 API routes (support tickets, announcements, etc.),
+ * so the frontend MUST agree on who a superadmin is — otherwise a user
+ * recognized as superadmin by the backend could still see tenant-only
+ * UI like the onboarding wizard.
+ *
  * A user is a platform admin when ANY of these is true:
  *  - `isSuperAdmin` flag is explicitly true, OR
- *  - their `role` is 'admin'/'superadmin' AND they have no `tenantId`
- *    (tenant-less admins are platform-level by definition).
+ *  - `role` is 'superadmin' or 'super_admin' (role ALONE is enough —
+ *    the `isSuperAdmin` boolean flag may not be set for legacy users,
+ *    and `tenantId` may be non-null for some superadmin records), OR
+ *  - `role` is 'admin' AND `tenantId` is null/empty (legacy fallback
+ *    for tenant-less admins created before the 'superadmin' role existed).
  *
  * Customers and employees live in separate tables and are never platform
  * admins, so they are excluded up-front by the caller.
@@ -60,7 +70,8 @@ function isPlatformAdmin(user: any): boolean {
   if (!user) return false;
   if (user.isSuperAdmin === true) return true;
   const role = user.role;
-  if ((role === 'admin' || role === 'superadmin') && !user.tenantId) return true;
+  if (role === 'superadmin' || role === 'super_admin') return true;
+  if (role === 'admin' && !user.tenantId) return true;
   return false;
 }
 

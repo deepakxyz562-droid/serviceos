@@ -7,10 +7,11 @@
  * Self-contained: fetches its own webhooks + WordPress endpoints +
  * WhatsApp notification settings, manages all CRUD and test handlers.
  *
- * Three cards:
+ * Four cards:
  *   1. WordPress / CRM Integration  — generate creds, test, manage endpoints
- *   2. WhatsApp Notifications       — owner + customer templates with AI gen
- *   3. Event Webhooks               — n8n/Zapier-style webhook registration
+ *   2. Website Form Integration     — universal embed script + API for any site
+ *   3. WhatsApp Notifications       — owner + customer templates with AI gen
+ *   4. Event Webhooks               — n8n/Zapier-style webhook registration
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -38,6 +39,7 @@ import {
   KeyRound,
   Sparkles,
   Pencil,
+  Code2,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -50,6 +52,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -95,6 +98,22 @@ interface WpEndpointConfig {
   apiUrl: string;
   createdAt: string;
   _count?: { logs: number };
+}
+
+interface WebformEndpointConfig {
+  id: string;
+  name: string;
+  endpointId: string;
+  apiKeyPrefix: string;
+  apiKey?: string; // only present on freshly-generated
+  source: string;
+  active: boolean;
+  totalReceived: number;
+  lastReceived: string | null;
+  sendWhatsApp: boolean;
+  apiUrl: string;
+  embedScriptUrl: string;
+  createdAt: string;
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────
@@ -152,6 +171,20 @@ export function IntegrationsSettings() {
   const [wpTesting, setWpTesting] = useState(false);
   const [wpShowApiKey, setWpShowApiKey] = useState(false);
 
+  // ─── Website Form Integration State ───────────────────────────────────
+  const [wfEndpoints, setWfEndpoints] = useState<WebformEndpointConfig[]>([]);
+  const [wfLoading, setWfLoading] = useState(true);
+  const [wfGenerating, setWfGenerating] = useState(false);
+  const [wfNewConfig, setWfNewConfig] = useState<{
+    apiKey: string;
+    apiUrl: string;
+    embedScriptUrl: string;
+    snippet: string;
+  } | null>(null);
+  const [wfTesting, setWfTesting] = useState(false);
+  const [wfShowApiKey, setWfShowApiKey] = useState(false);
+  const [wfCopied, setWfCopied] = useState(false);
+
   // ─── WhatsApp Business Phone State ────────────────────────────────────
   const [whatsappPhone, setWhatsappPhone] = useState('');
   const [notifyOwner, setNotifyOwner] = useState(true);
@@ -192,6 +225,21 @@ export function IntegrationsSettings() {
     }
   }, []);
 
+  const fetchWfEndpoints = useCallback(async () => {
+    setWfLoading(true);
+    try {
+      const res = await fetch('/api/webform/config');
+      if (res.ok) {
+        const data = await res.json();
+        setWfEndpoints(data.endpoints || []);
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setWfLoading(false);
+    }
+  }, []);
+
   const fetchTenantForWhatsapp = useCallback(async () => {
     try {
       const authRes = await fetch('/api/auth/me?XTransformPort=3000');
@@ -219,8 +267,9 @@ export function IntegrationsSettings() {
   useEffect(() => {
     fetchWebhooks();
     fetchWpEndpoints();
+    fetchWfEndpoints();
     fetchTenantForWhatsapp();
-  }, [fetchWebhooks, fetchWpEndpoints, fetchTenantForWhatsapp]);
+  }, [fetchWebhooks, fetchWpEndpoints, fetchWfEndpoints, fetchTenantForWhatsapp]);
 
   // ─── Handlers: WhatsApp Settings ──────────────────────────────────────
   const handleSaveWhatsappSettings = async () => {
@@ -340,6 +389,82 @@ export function IntegrationsSettings() {
     } catch {
       toast.error('Failed to delete');
     }
+  };
+
+  // ─── Handlers: Website Form Integration ───────────────────────────────
+  const handleGenerateWfConfig = async () => {
+    setWfGenerating(true);
+    try {
+      const res = await fetch('/api/webform/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Website Form Capture' }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        const ep = data.endpoint;
+        const snippet = `<script src="${ep.embedScriptUrl}" data-key="${ep.apiKey}" async></script>`;
+        setWfNewConfig({
+          apiKey: ep.apiKey,
+          apiUrl: ep.apiUrl,
+          embedScriptUrl: ep.embedScriptUrl,
+          snippet,
+        });
+        toast.success('Website form integration created! Copy the snippet below.');
+        fetchWfEndpoints();
+      } else {
+        toast.error(data.error || 'Failed to create integration');
+      }
+    } catch {
+      toast.error('Something went wrong');
+    } finally {
+      setWfGenerating(false);
+    }
+  };
+
+  const handleTestWfConnection = async () => {
+    if (!wfNewConfig?.apiKey) return;
+    setWfTesting(true);
+    try {
+      const res = await fetch('/api/forms/leads', {
+        headers: { 'X-API-Key': wfNewConfig.apiKey },
+      });
+      const data = await res.json();
+      if (res.ok && data.status === 'connected') {
+        toast.success('Connection successful! Your form integration is working.');
+      } else if (res.ok && data.status === 'ok') {
+        toast.success('Endpoint reachable. API key is required for full test.');
+      } else {
+        toast.error(data.error || 'Connection failed');
+      }
+    } catch {
+      toast.error('Network error during test');
+    } finally {
+      setWfTesting(false);
+    }
+  };
+
+  const handleDeleteWfEndpoint = async (id: string) => {
+    try {
+      const res = await fetch(`/api/webform/config?id=${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        toast.success('Website form endpoint deleted');
+        fetchWfEndpoints();
+        if (wfNewConfig && wfEndpoints.find((e) => e.id === id)) {
+          setWfNewConfig(null);
+        }
+      }
+    } catch {
+      toast.error('Failed to delete');
+    }
+  };
+
+  const handleCopySnippet = () => {
+    if (!wfNewConfig?.snippet) return;
+    navigator.clipboard.writeText(wfNewConfig.snippet);
+    setWfCopied(true);
+    toast.success('Embed snippet copied to clipboard');
+    setTimeout(() => setWfCopied(false), 2000);
   };
 
   const copyToClipboard = (text: string, label?: string) => {
@@ -651,7 +776,332 @@ export function IntegrationsSettings() {
         </CardContent>
       </Card>
 
-      {/* ─── Card 2: WhatsApp Notifications ──────────────────────────────── */}
+      {/* ─── Card 2: Website Form Integration ────────────────────────────── */}
+      <Card className="border-sky-200 dark:border-sky-800">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center size-9 rounded-lg bg-sky-100 dark:bg-sky-900/30">
+                <Globe className="size-4 text-sky-600" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Website Form Integration</CardTitle>
+                <CardDescription>Capture leads from any website — HTML, React, Next.js, PHP, JotForm, Typeform &amp; more</CardDescription>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              className="bg-sky-600 hover:bg-sky-700 gap-1.5"
+              onClick={handleGenerateWfConfig}
+              disabled={wfGenerating}
+            >
+              {wfGenerating ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Zap className="size-3.5" />
+              )}
+              Generate
+            </Button>
+          </div>
+
+          {/* Lead Capture Flow diagram */}
+          <div className="mt-3 p-3 rounded-lg bg-muted/50 border text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5 font-medium text-foreground mb-1.5">
+              <ArrowRight className="size-3" /> Universal Lead Capture Flow
+            </div>
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="px-1.5 py-0.5 bg-background rounded border text-[10px] font-medium">Any Website Form</span>
+              <ArrowRight className="size-3" />
+              <span className="px-1.5 py-0.5 bg-background rounded border text-[10px] font-medium">embed.js</span>
+              <ArrowRight className="size-3" />
+              <span className="px-1.5 py-0.5 bg-background rounded border text-[10px] font-medium">/api/forms/leads</span>
+              <ArrowRight className="size-3" />
+              <span className="px-1.5 py-0.5 bg-sky-50 text-sky-700 border border-sky-200 rounded text-[10px] font-medium">Lead Created</span>
+              <ArrowRight className="size-3" />
+              <span className="px-1.5 py-0.5 bg-background rounded border text-[10px] font-medium">WhatsApp Sent</span>
+            </div>
+          </div>
+
+          {/* Supported platforms */}
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {[
+              'HTML', 'React', 'Next.js', 'Vue', 'PHP', 'JotForm', 'Typeform', 'Google Forms', 'Webflow', 'Custom',
+            ].map((platform) => (
+              <Badge key={platform} variant="outline" className="text-[10px] bg-background">
+                {platform}
+              </Badge>
+            ))}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {/* Newly generated config display */}
+          {wfNewConfig && (
+            <div className="p-4 rounded-lg border-2 border-sky-300 dark:border-sky-700 bg-sky-50/50 dark:bg-sky-950/20 space-y-4">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="size-5 text-sky-600" />
+                <span className="font-semibold text-sky-700 dark:text-sky-400 text-sm">Integration Ready!</span>
+                <Badge className="bg-sky-100 text-sky-700 border-sky-200 text-[10px]" variant="outline">New</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Paste the embed script into your website&apos;s <code className="text-[11px] bg-background px-1 rounded">&lt;head&gt;</code> or before
+                <code className="text-[11px] bg-background px-1 rounded">&lt;/body&gt;</code>. The API Key is shown only once.
+              </p>
+
+              <Tabs defaultValue="embed" className="w-full">
+                <TabsList className="grid w-full grid-cols-2 h-8">
+                  <TabsTrigger value="embed" className="text-xs gap-1.5">
+                    <Code2 className="size-3" /> Embed Script
+                  </TabsTrigger>
+                  <TabsTrigger value="api" className="text-xs gap-1.5">
+                    <FileCode className="size-3" /> API Reference
+                  </TabsTrigger>
+                </TabsList>
+
+                {/* ─── Embed Script tab ─── */}
+                <TabsContent value="embed" className="space-y-3 mt-3">
+                  {/* Embed snippet */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium flex items-center gap-1.5">
+                      <Code2 className="size-3" /> Embed Snippet
+                      <Badge variant="outline" className="text-[9px] bg-emerald-50 text-emerald-700 border-emerald-200">Paste in &lt;head&gt;</Badge>
+                    </Label>
+                    <div className="relative">
+                      <pre className="text-[11px] font-mono bg-gray-950 text-gray-100 px-3 py-2.5 rounded-md border overflow-x-auto whitespace-pre-wrap break-all">
+                        {wfNewConfig.snippet}
+                      </pre>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="absolute top-1.5 right-1.5 h-6 gap-1 text-[11px]"
+                        onClick={handleCopySnippet}
+                      >
+                        {wfCopied ? <CheckCircle2 className="size-3" /> : <Copy className="size-3" />}
+                        {wfCopied ? 'Copied' : 'Copy'}
+                      </Button>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      The script auto-detects all <code className="text-[10px]">&lt;form&gt;</code> submissions. Add
+                      <code className="text-[10px] bg-muted px-1 rounded">data-serviceos=&quot;false&quot;</code> to any form to opt out.
+                    </p>
+                  </div>
+
+                  {/* API Key */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium flex items-center gap-1.5">
+                      <KeyRound className="size-3" /> API Key
+                      <Badge variant="outline" className="text-[9px] bg-amber-50 text-amber-700 border-amber-200">Show once</Badge>
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs font-mono bg-white dark:bg-gray-900 px-3 py-1.5 rounded border flex-1 truncate">
+                        {wfShowApiKey ? wfNewConfig.apiKey : wfNewConfig.apiKey.slice(0, 16) + '••••••••••••••••'}
+                      </code>
+                      <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8" onClick={() => setWfShowApiKey(!wfShowApiKey)}>
+                        {wfShowApiKey ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                      </Button>
+                      <Button variant="outline" size="sm" className="shrink-0 gap-1" onClick={() => copyToClipboard(wfNewConfig.apiKey, 'API Key')}>
+                        <Copy className="size-3" /> Copy
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* API URL */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium flex items-center gap-1.5">
+                      <Link2 className="size-3" /> API Endpoint
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs font-mono bg-white dark:bg-gray-900 px-3 py-1.5 rounded border flex-1 truncate">
+                        {wfNewConfig.apiUrl}
+                      </code>
+                      <Button variant="outline" size="sm" className="shrink-0 gap-1" onClick={() => copyToClipboard(wfNewConfig.apiUrl, 'API URL')}>
+                        <Copy className="size-3" /> Copy
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      onClick={handleTestWfConnection}
+                      disabled={wfTesting}
+                    >
+                      {wfTesting ? <Loader2 className="size-3 animate-spin" /> : <TestTube2 className="size-3" />}
+                      Test Connection
+                    </Button>
+                    <a
+                      href={wfNewConfig.embedScriptUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-medium rounded-md border bg-background hover:bg-accent hover:text-accent-foreground transition-colors"
+                    >
+                      <Globe className="size-3" /> View embed.js
+                    </a>
+                  </div>
+                </TabsContent>
+
+                {/* ─── API Reference tab ─── */}
+                <TabsContent value="api" className="space-y-3 mt-3">
+                  <p className="text-xs text-muted-foreground">
+                    For server-to-server integration (PHP, Node, Python, etc.), POST form data directly to the API endpoint.
+                  </p>
+
+                  {/* cURL */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">cURL</Label>
+                    <pre className="text-[11px] font-mono bg-gray-950 text-gray-100 px-3 py-2.5 rounded-md border overflow-x-auto whitespace-pre-wrap break-all">
+{`curl -X POST ${wfNewConfig.apiUrl} \\
+  -H "Authorization: Bearer ${wfNewConfig.apiKey.slice(0, 8)}••••" \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"John Doe","phone":"+61412345678","email":"john@example.com","message":"I need a plumber"}'`}
+                    </pre>
+                  </div>
+
+                  {/* PHP */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">PHP</Label>
+                    <pre className="text-[11px] font-mono bg-gray-950 text-gray-100 px-3 py-2.5 rounded-md border overflow-x-auto whitespace-pre-wrap break-all">
+{`<?php
+$ch = curl_init("${wfNewConfig.apiUrl}");
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+  "Authorization: Bearer ${wfNewConfig.apiKey.slice(0, 8)}••••",
+  "Content-Type: application/json",
+]);
+curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($_POST));
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+$response = curl_exec($ch);
+curl_close($ch);`}
+                    </pre>
+                  </div>
+
+                  {/* Node.js */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Node.js (fetch)</Label>
+                    <pre className="text-[11px] font-mono bg-gray-950 text-gray-100 px-3 py-2.5 rounded-md border overflow-x-auto whitespace-pre-wrap break-all">
+{`await fetch("${wfNewConfig.apiUrl}", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer ${wfNewConfig.apiKey.slice(0, 8)}••••",
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({ name, phone, email, message }),
+});`}
+                    </pre>
+                  </div>
+
+                  {/* JotForm webhook note */}
+                  <div className="p-3 rounded-md bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+                    <div className="flex items-start gap-2">
+                      <Sparkles className="size-3.5 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="text-[11px] text-amber-800 dark:text-amber-300 space-y-1">
+                        <p className="font-medium">JotForm / Typeform / Google Forms users:</p>
+                        <p>
+                          Add <code className="text-[10px] bg-background px-1 rounded">{wfNewConfig.apiUrl}</code> as a webhook URL in your form
+                          builder&apos;s notification settings. Use the API key in the <code className="text-[10px] bg-background px-1 rounded">Authorization: Bearer</code> header.
+                          Field mapping is automatic.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </div>
+          )}
+
+          {/* Getting started guide */}
+          {!wfNewConfig && (
+            <div className="p-3 rounded-lg border border-dashed bg-muted/30 space-y-2">
+              <div className="flex items-center gap-2">
+                <Globe className="size-4 text-muted-foreground shrink-0" />
+                <p className="text-sm font-medium">How it works</p>
+              </div>
+              <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside ml-1">
+                <li>Click <span className="font-medium text-foreground">Generate</span> to create a publishable API key.</li>
+                <li>Copy the <span className="font-medium text-foreground">embed snippet</span> and paste it into your website&apos;s <code className="text-[10px] bg-background px-1 rounded">&lt;head&gt;</code>.</li>
+                <li>The script auto-detects all form submissions and sends leads to ServiceOS.</li>
+                <li>Leads appear instantly in your CRM with WhatsApp notifications.</li>
+              </ol>
+            </div>
+          )}
+
+          {/* Active Endpoints */}
+          {wfLoading ? (
+            <div className="flex items-center justify-center py-6 text-muted-foreground">
+              <Loader2 className="size-4 animate-spin mr-2" /> Loading endpoints...
+            </div>
+          ) : wfEndpoints.length > 0 ? (
+            <div className="space-y-2">
+              <Separator />
+              <p className="text-xs font-medium text-muted-foreground">Active Endpoints</p>
+              {wfEndpoints.map((ep) => (
+                <div key={ep.id} className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/30 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-medium text-sm truncate">{ep.name}</span>
+                      <Badge className={ep.active ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'} variant="outline">
+                        <span className="text-[10px]">{ep.active ? 'Active' : 'Inactive'}</span>
+                      </Badge>
+                      {ep.totalReceived > 0 && (
+                        <Badge variant="outline" className="text-[10px] bg-sky-50 text-sky-700 border-sky-200">
+                          {ep.totalReceived} leads
+                        </Badge>
+                      )}
+                    </div>
+                    <span className="text-xs text-muted-foreground font-mono truncate block">
+                      {ep.apiKeyPrefix} · {ep.apiUrl}
+                    </span>
+                    {ep.lastReceived && (
+                      <span className="text-[10px] text-muted-foreground block mt-0.5">
+                        Last lead: {new Date(ep.lastReceived).toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-red-400 hover:text-red-600 shrink-0"
+                    onClick={() => handleDeleteWfEndpoint(ep.id)}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {/* Auto-Mapped Form Fields */}
+          <div>
+            <Separator className="mb-3" />
+            <p className="text-xs font-medium text-muted-foreground mb-2">Auto-Mapped Form Fields</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              {[
+                { field: 'name', source: 'name, full_name, your-name, first_name' },
+                { field: 'phone', source: 'phone, mobile, tel, your-phone, whatsapp' },
+                { field: 'email', source: 'email, your-email, contact_email' },
+                { field: 'serviceType', source: 'service, subject, inquiry_type, topic' },
+                { field: 'description', source: 'message, description, notes, comments' },
+                { field: 'address', source: 'address, street, city, location' },
+              ].map((fm) => (
+                <div key={fm.field} className="flex items-center gap-2 p-2 rounded-md border text-xs">
+                  <Badge variant="outline" className="text-[9px] bg-sky-50 text-sky-700 border-sky-200 shrink-0">
+                    {fm.field}
+                  </Badge>
+                  <span className="text-muted-foreground">←</span>
+                  <span className="text-muted-foreground truncate">{fm.source}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-2">
+              Fields are auto-detected by name, id, label, placeholder, and autocomplete attributes. Custom mapping available via API.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ─── Card 3: WhatsApp Notifications ──────────────────────────────── */}
       <Card className="border-emerald-200 dark:border-emerald-800">
         <CardHeader>
           <div className="flex items-center gap-3">
