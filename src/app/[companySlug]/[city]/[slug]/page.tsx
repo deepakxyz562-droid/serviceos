@@ -46,6 +46,11 @@ import {
 import { PublicBookingForm } from './booking-form'
 import { MarketplaceBookingPanel } from './marketplace-booking-panel'
 import { ChatWidget } from '@/components/public/chat-widget'
+import {
+  computeCardType,
+  fetchFeaturedListingsMap,
+  type MarketplaceCardType,
+} from '@/lib/marketplace-featured'
 
 // ── Route config ────────────────────────────────────────────────────────────
 // ISR: revalidate every 60 minutes so reviews / profile edits propagate
@@ -144,6 +149,44 @@ export default async function PublicBusinessHubPage({
     getPublicReviews(business.id, 10),
     certificationsPromise,
   ])
+
+  // ── Compute the marketplace card type for this business ──────────────────
+  // Determines whether the detail page renders the full booking panel
+  // (Book Now + Request Quote) or a minimal "Call Now" CTA.
+  //   • 'featured' / 'normal-full' → full MarketplaceBookingPanel
+  //   • 'normal-minimal'           → Call Now CTA only (no booking, no quote)
+  //
+  // Seed data (claimed=false), expired trials, and unsubscribed providers
+  // all render as 'normal-minimal' — matching the marketplace browse grid
+  // treatment. This keeps the detail page consistent with the browse card.
+  let cardType: MarketplaceCardType = 'normal-minimal'
+  if (business.marketplaceOptIn) {
+    try {
+      const featuredMap = await fetchFeaturedListingsMap([business.id])
+      cardType = computeCardType(
+        {
+          claimed: business.claimed,
+          plan: business.plan,
+          planStatus: business.planStatus,
+          trialEndsAt: business.trialEndsAt,
+        },
+        featuredMap.has(business.id),
+      )
+    } catch {
+      // If the FeaturedListing lookup fails, fall back to a plan-only check
+      // (claimed + valid subscription → normal-full, else normal-minimal).
+      cardType = computeCardType(
+        {
+          claimed: business.claimed,
+          plan: business.plan,
+          planStatus: business.planStatus,
+          trialEndsAt: business.trialEndsAt,
+        },
+        false,
+      )
+    }
+  }
+  const isMinimalListing = cardType === 'normal-minimal'
 
   // Parse JSON fields safely.
   const gallery: Array<{ url?: string; caption?: string }> = safeJson(business.galleryJson, [])
@@ -314,8 +357,10 @@ export default async function PublicBusinessHubPage({
                 </section>
               )}
 
-              {/* Services */}
-              {services.length > 0 && (
+              {/* Services — hidden for minimal listings (seed data / expired
+                  trials) to keep the detail page consistent with the browse
+                  grid's "normal-minimal" card, which shows no services. */}
+              {services.length > 0 && !isMinimalListing && (
                 <section id="services" aria-labelledby="services-heading">
                   <h2 id="services-heading" className="text-2xl font-bold tracking-tight mb-4">
                     Services Offered
@@ -472,16 +517,21 @@ export default async function PublicBusinessHubPage({
             {/* Right: sticky CTA card + contact info */}
             <div className="lg:col-span-1">
               <div className="lg:sticky lg:top-20 space-y-4">
-                {/* Booking CTA — marketplace providers get the full marketplace
-                    booking panel (Instant Booking + Quote Request dialogs that
-                    create Bookings/Jobs with escrow). Non-marketplace
-                    businesses fall back to the lightweight PublicBookingForm
-                    (creates a Lead). This is the bridge that lets the single
-                    canonical /{industry}/{city}/{slug} URL serve both
-                    audiences after the /marketplace/[slug] route was
-                    301-redirected here. */}
+                {/* Booking CTA — three rendering modes, kept consistent with
+                    the marketplace browse grid's computeCardType() output:
+                      • 'featured' / 'normal-full' (marketplaceOptIn && !isMinimalListing)
+                        → full MarketplaceBookingPanel (Book Now + Request Quote)
+                      • 'normal-minimal' (marketplaceOptIn && isMinimalListing)
+                        → minimal "Call Now" CTA only — no booking, no quote.
+                        Used for seed data (claimed=false), expired trials,
+                        and unsubscribed providers.
+                      • Non-marketplace businesses (marketplaceOptIn=false)
+                        → lightweight PublicBookingForm (creates a Lead).
+                    This keeps the detail page treatment consistent with the
+                    browse card so users don't see a "Book Now" button on a
+                    listing whose browse card only shows "Call Now". */}
                 <div className="rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden">
-                  {business.marketplaceOptIn ? (
+                  {business.marketplaceOptIn && !isMinimalListing ? (
                     <MarketplaceBookingPanel
                       providerTenantId={business.id}
                       providerName={business.name}
@@ -501,6 +551,38 @@ export default async function PublicBusinessHubPage({
                       city={business.city}
                       emergencyServiceAvailable={business.emergencyServiceAvailable}
                     />
+                  ) : business.marketplaceOptIn && isMinimalListing ? (
+                    /* Minimal CTA for seed data / expired trials — Call Now
+                       only, no booking, no quote. Matches the browse grid's
+                       "normal-minimal" card treatment. */
+                    <>
+                      <div className="bg-gradient-to-br from-slate-600 to-slate-700 p-5 text-white">
+                        <div className="mb-1 flex items-center gap-2">
+                          <Phone className="h-4 w-4" />
+                          <h3 className="text-lg font-bold">Call to Book</h3>
+                        </div>
+                        <p className="text-sm text-slate-100">
+                          {business.claimed
+                            ? 'This business is not currently accepting online bookings. Please call to schedule a visit.'
+                            : 'This listing is unclaimed. Call the business directly to inquire about services.'}
+                        </p>
+                      </div>
+                      <div className="p-5">
+                        {business.phone ? (
+                          <a
+                            href={`tel:${business.phone.replace(/[^+\d]/g, '')}`}
+                            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-3 text-base font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
+                          >
+                            <Phone className="h-5 w-5" />
+                            Call {business.phone}
+                          </a>
+                        ) : (
+                          <p className="text-center text-sm text-muted-foreground">
+                            No phone number available for this listing.
+                          </p>
+                        )}
+                      </div>
+                    </>
                   ) : (
                     <>
                       <div className="bg-gradient-to-br from-emerald-700 to-teal-700 p-5 text-white">

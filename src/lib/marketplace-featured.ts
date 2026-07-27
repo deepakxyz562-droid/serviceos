@@ -28,7 +28,9 @@ export interface TenantFeaturedSignals {
   claimed: boolean;
   plan: string | null;
   planStatus: string | null;
-  trialEndsAt: Date | null;
+  // Date OR ISO string — the Supabase REST adapter returns ISO strings,
+  // while direct Prisma returns Date objects. Consumers normalize via toDate().
+  trialEndsAt: Date | string | null;
 }
 
 export interface FeaturedListingRow {
@@ -36,19 +38,48 @@ export interface FeaturedListingRow {
   type: string;
   priority: number;
   isActive: boolean;
-  endDate: Date | null;
+  // Date OR ISO string — see TenantFeaturedSignals.trialEndsAt note above.
+  endDate: Date | string | null;
+}
+
+/**
+ * Normalize a Date-or-ISO-string value to a Date.
+ *
+ * The Supabase REST adapter (src/lib/supabase-db.ts) does NOT deserialize
+ * date columns — it returns raw JSON from PostgREST, so `trialEndsAt` and
+ * `endDate` come back as ISO strings like "2026-08-10T06:35:02.027Z" instead
+ * of JavaScript Date objects. Comparing such a string against a Date object
+ * with `>` triggers string coercion of the Date (via Date.prototype.toString),
+ * producing a lexicographic comparison in incompatible formats that returns
+ * incorrect results — which silently downgrades every provider to
+ * "normal-minimal". This helper centralizes the fix so callers can safely
+ * compare dates regardless of which DB backend is in use.
+ */
+function toDate(value: Date | string | null | undefined): Date | null {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value === 'string' || typeof value === 'number') {
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return null;
 }
 
 /**
  * Returns true if the tenant currently has a valid (non-expired) subscription
  * OR a valid trial. Used to decide between "normal-full" and "normal-minimal"
  * card rendering.
+ *
+ * Defensive: `trialEndsAt` may arrive as a Date OR an ISO string (Supabase
+ * REST adapter). Normalize before comparing.
  */
 export function hasValidSubscription(t: TenantFeaturedSignals, now: Date = new Date()): boolean {
   if (t.planStatus === 'active') return true;
   if (t.planStatus === 'trial') {
-    if (t.trialEndsAt === null) return true;
-    return t.trialEndsAt > now;
+    if (t.trialEndsAt === null || t.trialEndsAt === undefined) return true;
+    const endsAt = toDate(t.trialEndsAt);
+    if (!endsAt) return true; // unparseable → treat as no expiry
+    return endsAt > now;
   }
   return false;
 }
@@ -79,7 +110,10 @@ export function isFeaturedProvider(
 ): boolean {
   if (!isEligibleForFeatured(t, now)) return false;
   const fl = t.plan ? featuredMap.get(t.plan) : undefined; // placeholder; caller keys by tenantId
-  return Boolean(fl && fl.isActive && (!fl.endDate || fl.endDate > now));
+  if (!fl || !fl.isActive) return false;
+  // Normalize endDate (Supabase REST returns ISO strings, not Date objects)
+  const endAt = toDate(fl.endDate);
+  return !endAt || endAt > now;
 }
 
 /**

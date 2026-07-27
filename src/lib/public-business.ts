@@ -52,6 +52,24 @@ export interface PublicBusinessData {
    * /marketplace/[slug] storefront into the canonical public hub URL.
    */
   marketplaceOptIn: boolean
+  /**
+   * Whether this tenant has been claimed by a real registered business
+   * owner (vs. OSM/demo seed data which has claimed=false). Used by the
+   * detail page to decide between the full MarketplaceBookingPanel
+   * (Book Now + Request Quote) and a minimal "Call Now" CTA.
+   */
+  claimed: boolean
+  /** Subscription plan tier — 'starter' | 'growth' | 'pro' | 'business' | 'enterprise'. */
+  plan: string | null
+  /** Subscription status — 'active' | 'trial' | 'expired' | 'cancelled' | 'suspended'. */
+  planStatus: string | null
+  /**
+   * When the current trial expires. ISO string (Supabase REST adapter
+   * returns strings; direct Prisma returns Date — normalized to ISO
+   * string here so it serializes cleanly across the server/client
+   * boundary).
+   */
+  trialEndsAt: string | null
   // ── Verification flags (public-safe — already exposed via marketplace) ──
   identityVerified: boolean
   businessVerified: boolean
@@ -247,6 +265,20 @@ async function buildPublicBusinessData(
     seoDescription: tenant.seoDescription,
     publicProfileEnabled: tenant.publicProfileEnabled,
     marketplaceOptIn: tenant.marketplaceOptIn,
+    // ── Subscription signals (used to gate the booking panel) ──
+    // `claimed` distinguishes real registered businesses from OSM/demo seed
+    // data. `planStatus` + `trialEndsAt` determine whether the subscription
+    // is currently valid. Together these feed computeCardType() on the detail
+    // page to decide between the full MarketplaceBookingPanel and a minimal
+    // "Call Now" CTA. trialEndsAt is normalized to an ISO string so it
+    // survives server→client serialization cleanly (Supabase REST may return
+    // a string OR Date — both .toISOString() safely).
+    claimed: tenant.claimed,
+    plan: tenant.plan,
+    planStatus: tenant.planStatus,
+    trialEndsAt: tenant.trialEndsAt instanceof Date
+      ? tenant.trialEndsAt.toISOString()
+      : (tenant.trialEndsAt ?? null),
     identityVerified: tenant.identityVerified,
     businessVerified: tenant.businessVerified,
     insuranceVerified: tenant.insuranceVerified,
