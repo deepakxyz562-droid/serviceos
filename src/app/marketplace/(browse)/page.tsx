@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { VERTICALS, getIndustry } from '@/lib/industry-catalog';
 import { MarketplaceBrowser } from '@/components/marketplace/marketplace-browser';
 import { MarketplaceHeroSearch } from '@/components/marketplace/marketplace-hero-search';
+import { MarketplaceSortControl } from '@/components/marketplace/marketplace-sort-control';
 import type { ProviderListItem } from '@/components/marketplace/types';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
 import {
@@ -272,11 +273,6 @@ export default async function MarketplaceBrowsePage({
     return { vertical: v, industries };
   });
 
-  // Compute all distinct cities for the city filter
-  const cities = Array.from(
-    new Set(providers.map((p) => p.city).filter(Boolean) as string[]),
-  ).sort();
-
   // ── Build JSON-LD ItemList schema for SEO ───────────────────────────────
   const itemListLd = {
     '@context': 'https://schema.org',
@@ -422,52 +418,60 @@ export default async function MarketplaceBrowsePage({
         </div>
       </section>
 
-      {/* Breadcrumbs (visible) */}
+      {/* Breadcrumbs (visible) — left side breadcrumb items, right side Sort dropdown.
+          The Sort control is a client component that shares its state with
+          MarketplaceBrowser via the useMarketplaceSearch Zustand store, so
+          picking a sort here instantly re-sorts the grid below. */}
       <nav
         aria-label="Breadcrumb"
         className="border-b bg-muted/20"
       >
-        <ol className="mx-auto flex max-w-7xl flex-wrap items-center gap-1 px-4 py-2.5 text-xs text-muted-foreground sm:px-6">
-          <li className="flex items-center gap-1">
-            <a href="/" className="inline-flex items-center gap-1 hover:text-foreground">
-              <HomeIcon className="h-3.5 w-3.5" /> Home
-            </a>
-            <ChevronRight className="h-3 w-3" />
-          </li>
-          <li className="flex items-center gap-1">
-            <a href="/marketplace" className="hover:text-foreground">Marketplace</a>
-            {bcVerticalName || bcIndustryName || params.city ? (
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-xs text-muted-foreground sm:px-6">
+          <ol className="flex flex-wrap items-center gap-1 min-w-0">
+            <li className="flex items-center gap-1">
+              <a href="/" className="inline-flex items-center gap-1 hover:text-foreground">
+                <HomeIcon className="h-3.5 w-3.5" /> Home
+              </a>
               <ChevronRight className="h-3 w-3" />
+            </li>
+            <li className="flex items-center gap-1">
+              <a href="/marketplace" className="hover:text-foreground">Marketplace</a>
+              {bcVerticalName || bcIndustryName || params.city ? (
+                <ChevronRight className="h-3 w-3" />
+              ) : null}
+            </li>
+            {bcVerticalName ? (
+              <li className="flex items-center gap-1">
+                <a
+                  href={`/marketplace?vertical=${verticalFilter}`}
+                  className="hover:text-foreground"
+                >
+                  {bcVerticalName}
+                </a>
+                {bcIndustryName || params.city ? <ChevronRight className="h-3 w-3" /> : null}
+              </li>
             ) : null}
-          </li>
-          {bcVerticalName ? (
-            <li className="flex items-center gap-1">
-              <a
-                href={`/marketplace?vertical=${verticalFilter}`}
-                className="hover:text-foreground"
-              >
-                {bcVerticalName}
-              </a>
-              {bcIndustryName || params.city ? <ChevronRight className="h-3 w-3" /> : null}
-            </li>
-          ) : null}
-          {bcIndustryName ? (
-            <li className="flex items-center gap-1">
-              <a
-                href={`/marketplace?industry=${industryFilter}`}
-                className="hover:text-foreground"
-              >
-                {bcIndustryName}
-              </a>
-              {params.city ? <ChevronRight className="h-3 w-3" /> : null}
-            </li>
-          ) : null}
-          {params.city ? (
-            <li className="flex items-center gap-1">
-              <span className="font-medium text-foreground">{params.city}</span>
-            </li>
-          ) : null}
-        </ol>
+            {bcIndustryName ? (
+              <li className="flex items-center gap-1">
+                <a
+                  href={`/marketplace?industry=${industryFilter}`}
+                  className="hover:text-foreground"
+                >
+                  {bcIndustryName}
+                </a>
+                {params.city ? <ChevronRight className="h-3 w-3" /> : null}
+              </li>
+            ) : null}
+            {params.city ? (
+              <li className="flex items-center gap-1">
+                <span className="font-medium text-foreground">{params.city}</span>
+              </li>
+            ) : null}
+          </ol>
+          {/* Sort dropdown — desktop only (hidden on mobile where the
+              breadcrumb wraps). State is shared with the grid via Zustand. */}
+          <MarketplaceSortControl />
+        </div>
       </nav>
 
       {/* Main grid: sidebar + provider cards.
@@ -480,9 +484,6 @@ export default async function MarketplaceBrowsePage({
           <aside className="hidden lg:block">
             <div className="sticky top-20 space-y-4">
               <div>
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                  Browse by Vertical
-                </h2>
                 <ul className="space-y-1">
                   <li>
                     <a
@@ -622,7 +623,6 @@ export default async function MarketplaceBrowsePage({
                   city: params.city ?? null,
                   search: params.search ?? null,
                 }}
-                cities={cities}
               />
             )}
 

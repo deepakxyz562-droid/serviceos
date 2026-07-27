@@ -106,9 +106,17 @@ export async function GET(request: NextRequest) {
     ]);
 
     // ── Fetch featured-listing flags in a single query ───────────────────
+    // Isolated in its own try/catch because the Supabase REST adapter has a
+    // date-serialization quirk (dates come back as strings, not Date objects)
+    // that can make this OR clause throw. If it does, we must NOT let it kill
+    // the entire listing response — just fall back to "no featured flags" and
+    // still return the tenant rows. The featured column will show as "not
+    // featured" for everyone, which is safe + recoverable.
     const tenantIds = rows.map((r) => r.id);
-    const featuredRows = tenantIds.length
-      ? await db.featuredListing.findMany({
+    let featuredRows: { tenantId: string; priority: number; endDate: Date | null }[] = [];
+    if (tenantIds.length) {
+      try {
+        featuredRows = await db.featuredListing.findMany({
           where: {
             tenantId: { in: tenantIds },
             isActive: true,
@@ -116,8 +124,17 @@ export async function GET(request: NextRequest) {
           },
           select: { tenantId: true, priority: true, endDate: true },
           orderBy: { priority: 'desc' },
-        })
-      : [];
+        });
+      } catch (featuredErr) {
+        // Log + continue — the directory listing must still render even if
+        // the FeaturedListing sub-query fails. The featured column will just
+        // show "not featured" for all rows on this page.
+        console.error(
+          '[/api/superadmin/marketplace/listings] FeaturedListing sub-query failed (continuing with isFeatured=false for all rows):',
+          featuredErr,
+        );
+      }
+    }
     const featuredMap = new Map<string, { priority: number; endDate: Date | null }>();
     for (const fl of featuredRows) {
       if (fl.tenantId && !featuredMap.has(fl.tenantId)) {
@@ -171,7 +188,16 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ items, total, page, limit });
   } catch (error) {
+    // Surface real errors as HTTP 500 with a message. The previous version
+    // swallowed ALL errors and returned HTTP 200 + { items: [], total: 0 },
+    // which made the SuperAdmin Directory Listings table render an empty grid
+    // with NO indication anything had failed — making the bug invisible. Now
+    // the frontend's fetchListings() will hit res.ok = false and show a toast.
     console.error('[/api/superadmin/marketplace/listings] Error:', error);
-    return NextResponse.json({ items: [], total: 0, page: 1, limit: 20 });
+    const msg = error instanceof Error ? error.message : 'Unknown server error';
+    return NextResponse.json(
+      { error: 'Failed to load marketplace listings', detail: msg },
+      { status: 500 },
+    );
   }
 }

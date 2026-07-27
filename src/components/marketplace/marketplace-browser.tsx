@@ -15,7 +15,8 @@
  *   • Vertical / industry filter (instant, driven by the sidebar which stays
  *     server-rendered links for crawlability)
  *   • Sort dropdown (rating, reviews, name, verified-first)
- *   • Load-more pagination (12 → 24 → 36 …) instead of a hard 24-item cap
+ *   • Infinite scroll (auto-loads 12 more as the user nears the bottom —
+ *     no manual button click)
  *   • Active filter chips (removable)
  *   • Skeleton shimmer during the brief filter-applied window
  *
@@ -24,21 +25,19 @@
  * navigation/reload.
  *
  * Accessibility: the search input has aria-label, the sort select has a
- * visible label, the load-more button announces remaining count, and the
- * "no results" state has role="status".
+ * visible label, the infinite-scroll sentinel announces loading state via
+ * aria-live, and the "no results" state has role="status".
  */
 
 import * as React from 'react';
 import {
-  MapPin,
   X,
-  SlidersHorizontal,
-  ArrowDown,
   Star,
   ShieldCheck,
+  Loader2,
 } from 'lucide-react';
 import { ProviderCard } from './provider-card';
-import { useMarketplaceSearch } from './use-marketplace-search';
+import { useMarketplaceSearch, type MarketplaceSortKey } from './use-marketplace-search';
 import type { ProviderListItem } from './types';
 import { getIndustry } from '@/lib/industry-catalog';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
@@ -53,25 +52,19 @@ interface MarketplaceBrowserProps {
     city: string | null;
     search: string | null;
   };
-  /** All distinct cities (for the city chip row). */
-  cities: string[];
 }
 
-type SortKey = 'rating' | 'reviews' | 'name' | 'verified';
-
-const SORTS: Array<{ key: SortKey; label: string }> = [
-  { key: 'rating', label: 'Top rated' },
-  { key: 'reviews', label: 'Most reviewed' },
-  { key: 'verified', label: 'Most verified' },
-  { key: 'name', label: 'Name (A–Z)' },
-];
+// SortKey is now shared with the breadcrumb Sort dropdown via the
+// useMarketplaceSearch Zustand store. The SORTS label array lives in
+// MarketplaceSortControl (the dropdown component) — this file just reads
+// the active key from the store.
+type SortKey = MarketplaceSortKey;
 
 const PAGE_SIZE = 12;
 
 export function MarketplaceBrowser({
   providers,
   initialFilters,
-  cities,
 }: MarketplaceBrowserProps) {
   // ── Filter state (hydrated from URL on first render) ───────────────────
   // searchInput / cityInput live in a shared Zustand store so the hero
@@ -88,7 +81,9 @@ export function MarketplaceBrowser({
   const [cityFilter, setCityFilter] = React.useState(initialFilters.city ?? '');
   const [verticalFilter, setVerticalFilter] = React.useState(initialFilters.vertical ?? null);
   const [industryFilter, setIndustryFilter] = React.useState(initialFilters.industry ?? null);
-  const [sort, setSort] = React.useState<SortKey>('rating');
+  // Sort now lives in the shared Zustand store so the breadcrumb Sort
+  // dropdown (rendered by the server page) and this grid stay in sync.
+  const sort = useMarketplaceSearch((s) => s.sort);
   const [visibleCount, setVisibleCount] = React.useState(PAGE_SIZE);
   // Brief skeleton flash when filters change so the user sees the grid react.
   const [filtering, setFiltering] = React.useState(false);
@@ -242,6 +237,41 @@ export function MarketplaceBrowser({
   const visible = filtered.slice(0, visibleCount);
   const hasMore = visibleCount < filtered.length;
 
+  // ── Infinite scroll via IntersectionObserver ───────────────────────────
+  // A sentinel <div> sits at the bottom of the grid. When it scrolls into
+  // view (and there are more items, and we're not mid-filter-flash) we bump
+  // visibleCount by PAGE_SIZE — so the next batch of 12 cards renders and
+  // the grid grows. This continues until all filtered providers are shown.
+  // rootMargin: 400px starts the load slightly *before* the sentinel is
+  // visible so the next batch is usually ready by the time the user
+  // actually reaches the bottom — feels instant.
+  const sentinelRef = React.useRef<HTMLDivElement | null>(null);
+  const [loadingMore, setLoadingMore] = React.useState(false);
+
+  React.useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !hasMore || filtering) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry.isIntersecting) {
+          setLoadingMore(true);
+          // Small delay so the spinner is perceptible even when the next
+          // batch renders in a single frame; also lets React flush before
+          // we bump the count.
+          window.setTimeout(() => {
+            setVisibleCount((c) => c + PAGE_SIZE);
+            setLoadingMore(false);
+          }, 180);
+        }
+      },
+      { rootMargin: '400px 0px' },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, filtering, filtered.length]);
+
   // ── Active filter chips ────────────────────────────────────────────────
   const activeChips: Array<{ label: string; onClear: () => void }> = [];
   if (searchQuery)
@@ -292,63 +322,35 @@ export function MarketplaceBrowser({
           no Enter required. A <noscript> GET form in the server page still
           serves non-JS users. */}
 
-      {/* ── Results header: count + sort ─────────────────────────────────── */}
-      <div className="mb-5 mt-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-foreground sm:text-3xl">
-            {verticalFilter || industryFilter
-              ? (verticalFilter
-                  ? verticalFilter
-                      .split('-')
-                      .map((w) => w[0].toUpperCase() + w.slice(1))
-                      .join(' ')
-                  : getIndustry(industryFilter ?? '')?.name ?? 'Providers')
-              : 'All Providers'}
-          </h2>
+      {/* ── Results header ──────────────────────────────────────────────── */}
+      {/* The Sort dropdown used to live here; it has moved to the breadcrumb
+          bar above (see MarketplaceSortControl rendered by the page server
+          component). State is shared via the useMarketplaceSearch Zustand
+          store, so picking a sort in the breadcrumb instantly re-sorts this
+          grid — no prop drilling, no reload. */}
+      <div className="mb-5 mt-8">
+        <h2 className="text-2xl font-bold text-foreground sm:text-3xl">
+          {verticalFilter || industryFilter
+            ? (verticalFilter
+                ? verticalFilter
+                    .split('-')
+                    .map((w) => w[0].toUpperCase() + w.slice(1))
+                    .join(' ')
+                : getIndustry(industryFilter ?? '')?.name ?? 'Providers')
+            : 'All Providers'}
+        </h2>
+        {activeChips.length > 0 ? (
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-            <span>
-              Showing{' '}
-              <span className="font-medium text-foreground">{visible.length}</span>{' '}
-              of{' '}
-              <span className="font-medium text-foreground">{filtered.length}</span>{' '}
-              provider{filtered.length === 1 ? '' : 's'}
-              {searchQuery ? (
-                <>
-                  {' '}matching <span className="font-medium text-foreground">&ldquo;{searchQuery}&rdquo;</span>
-                </>
-              ) : null}
-            </span>
-            {activeChips.length > 0 ? (
-              <button
-                type="button"
-                onClick={clearAll}
-                className="inline-flex items-center gap-0.5 font-medium text-emerald-700 hover:text-emerald-800 dark:text-emerald-300"
-                aria-label="Clear all filters"
-              >
-                Clear all <span aria-hidden>&times;</span>
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={clearAll}
+              className="inline-flex items-center gap-0.5 font-medium text-emerald-700 hover:text-emerald-800 dark:text-emerald-300"
+              aria-label="Clear all filters"
+            >
+              Clear all <span aria-hidden>&times;</span>
+            </button>
           </div>
-        </div>
-
-        {/* Sort dropdown */}
-        <div className="flex items-center gap-2">
-          <label htmlFor="marketplace-sort" className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-            <SlidersHorizontal className="h-3.5 w-3.5" /> Sort
-          </label>
-          <select
-            id="marketplace-sort"
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortKey)}
-            className="h-9 rounded-md border border-border bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-          >
-            {SORTS.map((s) => (
-              <option key={s.key} value={s.key}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        ) : null}
       </div>
 
       {/* ── Active filter chips ──────────────────────────────────────────── */}
@@ -370,30 +372,6 @@ export function MarketplaceBrowser({
               </button>
             </span>
           ))}
-        </div>
-      ) : null}
-
-      {/* ── City quick-chips (only when no city filter is active) ────────── */}
-      {!cityFilter && cities.length > 0 ? (
-        <div className="mb-5 hidden lg:block">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Popular cities
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {cities.slice(0, 12).map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => {
-                  setCityInput(c);
-                  setCityFilter(c);
-                }}
-                className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground hover:border-emerald-300 hover:text-emerald-700"
-              >
-                <MapPin className="h-3 w-3" /> {c}
-              </button>
-            ))}
-          </div>
         </div>
       ) : null}
 
@@ -463,20 +441,25 @@ export function MarketplaceBrowser({
         </div>
       )}
 
-      {/* ── Load more ────────────────────────────────────────────────────── */}
+      {/* ── Infinite scroll sentinel ─────────────────────────────────────── */}
+      {/* A zero-height sentinel observed by IntersectionObserver. When it
+          enters the viewport we load the next PAGE_SIZE providers. The
+          spinner shows while that batch is being added. Once everything is
+          loaded (hasMore === false) the sentinel is unmounted entirely. */}
       {hasMore && !filtering ? (
-        <div className="mt-8 flex flex-col items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-            className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50/60 px-6 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-950/60"
-          >
-            <ArrowDown className="h-4 w-4" />
-            Show {Math.min(PAGE_SIZE, filtered.length - visibleCount)} more
-            <span className="text-xs font-normal text-emerald-600/70 dark:text-emerald-400/70">
-              ({filtered.length - visibleCount} remaining)
-            </span>
-          </button>
+        <div
+          ref={sentinelRef}
+          className="mt-8 flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground"
+          aria-live="polite"
+        >
+          {loadingMore ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+              Loading more providers…
+            </>
+          ) : (
+            <span className="sr-only">Scroll to load more providers</span>
+          )}
         </div>
       ) : null}
 
