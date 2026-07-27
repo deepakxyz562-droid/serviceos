@@ -430,50 +430,6 @@ export default async function MarketplaceBrowsePage({
         </div>
       </section>
 
-      {/* Category tiles — visual entry point (Urban Company / TaskRabbit style) */}
-      {!verticalFilter && !industryFilter ? (
-        <section className="border-b bg-muted/10">
-          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                Browse by category
-              </h2>
-              <a
-                href="#all-providers"
-                className="text-xs font-medium text-emerald-700 hover:text-emerald-800 dark:text-emerald-300"
-              >
-                View all providers →
-              </a>
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-9">
-              {VERTICALS.map((v) => {
-                const count = providers.filter((p) => {
-                  const meta = p.industry ? getIndustry(p.industry) : undefined;
-                  return meta?.vertical === v.id;
-                }).length;
-                return (
-                  <a
-                    key={v.id}
-                    href={`/marketplace?vertical=${v.id}`}
-                    className="group flex flex-col items-center gap-2 rounded-xl border border-border bg-card p-4 text-center transition-all hover:border-emerald-300 hover:shadow-md"
-                  >
-                    <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-2xl transition-transform group-hover:scale-110 dark:bg-emerald-950/40" aria-hidden>
-                      {v.icon}
-                    </span>
-                    <span className="line-clamp-2 text-xs font-medium text-foreground leading-tight">
-                      {v.name}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {count} pro{count === 1 ? '' : 's'}
-                    </span>
-                  </a>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-      ) : null}
-
       {/* Breadcrumbs (visible) */}
       <nav
         aria-label="Breadcrumb"

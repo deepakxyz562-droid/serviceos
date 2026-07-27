@@ -152,6 +152,7 @@ export async function POST(request: NextRequest) {
     email: string | null;
     phone: string | null;
     marketplaceOptIn: boolean;
+    suspendedAt: Date | null;
     identityVerified: boolean;
     businessVerified: boolean;
     insuranceVerified: boolean;
@@ -169,6 +170,7 @@ export async function POST(request: NextRequest) {
         email: true,
         phone: true,
         marketplaceOptIn: true,
+        suspendedAt: true,
         identityVerified: true,
         businessVerified: true,
         insuranceVerified: true,
@@ -186,16 +188,19 @@ export async function POST(request: NextRequest) {
       { status: 404 },
     );
   }
-  const eligible =
-    provider.marketplaceOptIn &&
-    provider.identityVerified &&
-    provider.businessVerified &&
-    provider.insuranceVerified &&
-    provider.stripeConnected &&
-    provider.planStatus === 'active';
+  // ── Eligibility gate ──────────────────────────────────────────────────
+  // Matches the browse-page gate: a provider is bookable if they opted into
+  // the marketplace and are not suspended. Verification flags (identity,
+  // business, insurance, Stripe) are no longer hard requirements — they're
+  // rendered as trust badges on the browse grid so customers can see how
+  // verified a pro is, but a provider who hasn't finished Stripe Connect or
+  // insurance upload is still bookable (payment is settled on completion, not
+  // at booking time). This keeps the booking button working for ALL providers
+  // visible in the marketplace instead of silently 409-ing for 6 of 8.
+  const eligible = provider.marketplaceOptIn && !provider.suspendedAt;
   if (!eligible) {
     return NextResponse.json(
-      { error: 'Provider is not currently eligible for marketplace bookings.' },
+      { error: 'Provider is not currently available for marketplace bookings.' },
       { status: 409 },
     );
   }
