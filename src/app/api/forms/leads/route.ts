@@ -104,6 +104,9 @@ interface ParsedLead {
   scheduledTime?: string | null;
   value?: number;
   company?: string | null;
+  // All unmapped raw form fields (preserved for completeness — stored into
+  // notesJson + a readable summary appended to `description`).
+  rawFields?: Record<string, string>;
 }
 
 async function hashApiKey(key: string): Promise<string> {
@@ -114,10 +117,37 @@ async function hashApiKey(key: string): Promise<string> {
   return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+// Keys that are purely metadata/internal (not real form fields submitted by
+// the user). These are excluded from the raw-fields capture so the notesJson
+// "extra fields" section stays focused on actual user input.
+const META_KEYS = new Set([
+  'requestid', 'submissionid', 'formid', 'form_id', 'pretty',
+  '_source_url', '_page_url', '_page_title', '_user_agent',
+  '_form_title', '_form_name', '_form_plugin', 'form_name', 'form_plugin',
+  'page_url', 'page_title', 'referrer', 'googleformid',
+  '_source', 'source', 'ip', 'useragent', 'user_agent',
+]);
+
+// JotForm wraps form fields in a `rawRequest` object and uses numbered keys
+// like `q1_name`, `q2_email4`, `q3_phone`. We strip the `qN_` / `qN` prefix
+// before matching so the alias table can find them.
+function stripJotformPrefix(key: string): string {
+  // q1_name → name, q2_email4 → email4, q3_phone → phone
+  return key.replace(/^q\d+[\s_-]*/i, '');
+}
+
 function mapFields(payload: Record<string, any>): ParsedLead {
   const mapped: ParsedLead = {};
+  const rawFields: Record<string, string> = {};
+  // Track every ORIGINAL key (and its stripped+normalized form) that was
+  // consumed by the alias matcher, so the raw-fields collector doesn't
+  // re-capture them. This set is shared across recursion so a field consumed
+  // inside `rawRequest` is not re-added at the outer level.
+  const consumedOriginalKeys = new Set<string>();
 
-  // Build a normalized lookup: lowercase key with - _ spaces stripped
+  // Build a normalized lookup: lowercase key with - _ spaces stripped.
+  // For JotForm keys like `q1_name`, we ALSO register the stripped form
+  // (`name`) so the alias table can match it directly.
   const normalized: Record<string, any> = {};
   const normalizedKeys: string[] = [];
   for (const [k, v] of Object.entries(payload)) {
@@ -125,6 +155,12 @@ function mapFields(payload: Record<string, any>): ParsedLead {
     if (normalized[nk] === undefined) {
       normalized[nk] = v;
       normalizedKeys.push(nk);
+    }
+    // JotForm prefix-stripped form: q1_name → name
+    const stripped = stripJotformPrefix(k).toLowerCase().replace(/[-_\s]/g, '');
+    if (stripped && stripped !== nk && normalized[stripped] === undefined) {
+      normalized[stripped] = v;
+      normalizedKeys.push(stripped);
     }
     // Keep original too for exact matching
     if (payload[k] !== undefined && normalized[k] === undefined) normalized[k] = v;
@@ -143,6 +179,13 @@ function mapFields(payload: Record<string, any>): ParsedLead {
       if (normalized[nk] !== undefined && normalized[nk] !== '' && !consumed.has(nk)) {
         (mapped as any)[leadField] = normalized[nk];
         consumed.add(nk);
+        // Also mark every original key whose normalized/stripped form matches
+        // this alias, so they're not re-captured as raw fields.
+        for (const ok of Object.keys(payload)) {
+          const onk = ok.toLowerCase().replace(/[-_\s]/g, '');
+          const osk = stripJotformPrefix(ok).toLowerCase().replace(/[-_\s]/g, '');
+          if (onk === nk || osk === nk) consumedOriginalKeys.add(ok);
+        }
         break;
       }
       if (payload[alias] !== undefined && payload[alias] !== '') {
@@ -150,16 +193,18 @@ function mapFields(payload: Record<string, any>): ParsedLead {
         // Also mark the normalized form as consumed
         const aliasNorm = alias.toLowerCase().replace(/[-_\s]/g, '');
         consumed.add(aliasNorm);
+        consumedOriginalKeys.add(alias);
         break;
       }
     }
   }
 
   // Pass 2: substring fallback for prefixed field names.
-  // Handles JotForm (q1_name), Typeform (field_123456789), Google Forms, and
-  // other builders that prepend IDs to field names. Only runs for fields that
-  // weren't matched in pass 1. Uses "ends with" matching to avoid false
-  // positives. Skips keys already consumed in pass 1.
+  // Handles JotForm (q1_name, q2_email4), Typeform (field_123456789), Google
+  // Forms, and other builders that prepend IDs to field names. Only runs for
+  // fields that weren't matched in pass 1. Uses both "ends with" and
+  // "alias + trailing digits" matching (e.g., `email4` matches alias `email`).
+  // Skips keys already consumed in pass 1.
   for (const [leadField, aliases] of Object.entries(FIELD_MAP)) {
     if ((mapped as any)[leadField] !== undefined) continue;
     for (const alias of aliases) {
@@ -168,12 +213,24 @@ function mapFields(payload: Record<string, any>): ParsedLead {
       if (aliasNorm.length <= 2) continue;
       for (const nk of normalizedKeys) {
         if (consumed.has(nk)) continue;
-        // Match if payload key ENDS with the alias (e.g., "q1name" ends with "name")
-        if (nk.endsWith(aliasNorm) && nk.length > aliasNorm.length) {
+        if (nk.length <= aliasNorm.length) continue;
+        // Match A: payload key ENDS with the alias (e.g., "q1name" ends with "name")
+        const endsMatch = nk.endsWith(aliasNorm);
+        // Match B: payload key is alias + trailing digits (e.g., "email4" matches "email")
+        // This is JotForm's pattern: q2_email4 → stripped "email4" → alias "email" + "4"
+        const aliasDigitsMatch = new RegExp('^' + aliasNorm + '\\d+$', 'i').test(nk);
+        if (endsMatch || aliasDigitsMatch) {
           const val = normalized[nk];
           if (val !== undefined && val !== '') {
             (mapped as any)[leadField] = val;
             consumed.add(nk);
+            // Mark every original key whose normalized/stripped form is `nk`,
+            // so the raw collector skips them.
+            for (const ok of Object.keys(payload)) {
+              const onk = ok.toLowerCase().replace(/[-_\s]/g, '');
+              const osk = stripJotformPrefix(ok).toLowerCase().replace(/[-_\s]/g, '');
+              if (onk === nk || osk === nk) consumedOriginalKeys.add(ok);
+            }
             break;
           }
         }
@@ -182,25 +239,117 @@ function mapFields(payload: Record<string, any>): ParsedLead {
     }
   }
 
-  // Recurse into nested `data` object (JotForm / Typeform wrap payloads)
+  // Recurse into nested `data` object (Typeform / generic wrappers)
   if (payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)) {
     const nested = mapFields(payload.data);
     for (const [k, v] of Object.entries(nested)) {
+      if (k === 'rawFields') continue;
       if (v !== undefined && (mapped as any)[k] === undefined) {
         (mapped as any)[k] = v;
+      }
+    }
+    if (nested.rawFields) {
+      for (const [k, v] of Object.entries(nested.rawFields)) {
+        if (rawFields[k] === undefined) rawFields[k] = v;
       }
     }
   }
 
-  // JotForm-specific: fields are like q1_name, q2_email, q3_phone
-  // Extract from the `request` payload shape JotForm uses
-  if (payload.request && typeof payload.request === 'object') {
-    const nested = mapFields(payload.request);
+  // ─── JotForm `rawRequest` (the actual form-field container) ───────────────
+  // JotForm wraps ALL submitted form fields inside `rawRequest`. Without this
+  // recursion, those fields are invisible to the mapper and the lead is
+  // created with empty name/email/phone.
+  if (payload.rawRequest && typeof payload.rawRequest === 'object' && !Array.isArray(payload.rawRequest)) {
+    const nested = mapFields(payload.rawRequest);
     for (const [k, v] of Object.entries(nested)) {
+      if (k === 'rawFields') continue;
       if (v !== undefined && (mapped as any)[k] === undefined) {
         (mapped as any)[k] = v;
       }
     }
+    if (nested.rawFields) {
+      for (const [k, v] of Object.entries(nested.rawFields)) {
+        if (rawFields[k] === undefined) rawFields[k] = v;
+      }
+    }
+    // Mark rawRequest's original keys that were consumed inside the recursion
+    // so the outer collectRaw() below does NOT re-add them. We detect
+    // consumption by checking that the nested mapFields call already mapped
+    // them (i.e., they're absent from nested.rawFields).
+    for (const ok of Object.keys(payload.rawRequest)) {
+      const osk = stripJotformPrefix(ok).toLowerCase().replace(/[-_\s]/g, '');
+      // If the stripped key matches a known alias AND the nested call mapped
+      // it, mark it as consumed at the outer level. Uses the same Match A
+      // (endsWith) + Match B (alias + trailing digits) logic as pass 2.
+      const matchedAlias = Object.values(FIELD_MAP).flat().some((alias) => {
+        const aliasNorm = alias.toLowerCase().replace(/[-_\s]/g, '');
+        if (aliasNorm.length <= 2) return false;
+        if (aliasNorm === osk) return true;
+        if (osk.endsWith(aliasNorm) && osk.length > aliasNorm.length) return true;
+        if (new RegExp('^' + aliasNorm + '\\d+$', 'i').test(osk)) return true;
+        return false;
+      });
+      if (matchedAlias) {
+        // Was it consumed (not in nested.rawFields)?
+        const displayKey = stripJotformPrefix(ok);
+        const wasConsumed = !nested.rawFields || nested.rawFields[displayKey] === undefined;
+        if (wasConsumed) {
+          consumedOriginalKeys.add(ok);
+        }
+      }
+    }
+  }
+
+  // Legacy JotForm `request` shape (older integrations)
+  if (payload.request && typeof payload.request === 'object' && !Array.isArray(payload.request)) {
+    const nested = mapFields(payload.request);
+    for (const [k, v] of Object.entries(nested)) {
+      if (k === 'rawFields') continue;
+      if (v !== undefined && (mapped as any)[k] === undefined) {
+        (mapped as any)[k] = v;
+      }
+    }
+    if (nested.rawFields) {
+      for (const [k, v] of Object.entries(nested.rawFields)) {
+        if (rawFields[k] === undefined) rawFields[k] = v;
+      }
+    }
+  }
+
+  // ─── Capture ALL unmapped raw fields ─────────────────────────────────────
+  // Walk every top-level + rawRequest key. Anything that (a) is not metadata,
+  // (b) is a primitive value, and (c) was NOT consumed by the alias mapper
+  // gets preserved in `rawFields`. This is what gets stored into notesJson
+  // and appended (as a readable summary) to the lead's `description`.
+  const collectRaw = (obj: Record<string, any>, keyPrefix = '') => {
+    for (const [k, v] of Object.entries(obj)) {
+      const nk = k.toLowerCase().replace(/[-_\s]/g, '');
+      if (consumed.has(nk)) continue;
+      if (consumedOriginalKeys.has(k)) continue;
+      if (META_KEYS.has(nk) || META_KEYS.has(k.toLowerCase())) continue;
+      // Skip structural wrappers (we've already recursed into them above)
+      if (k === 'data' || k === 'request' || k === 'rawRequest') continue;
+      // Skip nested objects/arrays — only capture primitives
+      if (v === null || v === undefined) continue;
+      if (typeof v === 'object') continue;
+      const strVal = String(v).trim();
+      if (!strVal) continue;
+      // Strip the qN_ prefix for readability: "q5_howdidyouhear" → "howdidyouhear"
+      const displayKey = keyPrefix
+        ? `${keyPrefix}.${stripJotformPrefix(k)}`
+        : stripJotformPrefix(k);
+      if (rawFields[displayKey] === undefined) {
+        rawFields[displayKey] = strVal;
+      }
+    }
+  };
+  collectRaw(payload);
+  if (payload.rawRequest && typeof payload.rawRequest === 'object' && !Array.isArray(payload.rawRequest)) {
+    collectRaw(payload.rawRequest);
+  }
+
+  if (Object.keys(rawFields).length > 0) {
+    mapped.rawFields = rawFields;
   }
 
   return mapped;
@@ -445,6 +594,23 @@ export async function POST(request: NextRequest) {
       // ignore bad JSON in fieldMapping
     }
 
+    // ─── 3a. Build a readable summary of raw/unmapped fields ─────────────
+    // Appended to `description` so users see them immediately in the lead
+    // detail view; also stored structured in notesJson below.
+    //
+    // Also includes mapped fields that don't have a dedicated Lead column
+    // (scheduledAt, scheduledTime, company) — these are extracted by the
+    // alias matcher but never stored on the Lead record, so we surface them
+    // here to avoid silent data loss.
+    const rawFields: Record<string, string> = { ...(mapped.rawFields || {}) };
+    if (mapped.scheduledAt && !rawFields.scheduledAt) rawFields.scheduledAt = String(mapped.scheduledAt);
+    if (mapped.scheduledTime && !rawFields.scheduledTime) rawFields.scheduledTime = String(mapped.scheduledTime);
+    if (mapped.company && !rawFields.company) rawFields.company = String(mapped.company);
+    const rawFieldEntries = Object.entries(rawFields);
+    const rawFieldsSummary = rawFieldEntries.length > 0
+      ? rawFieldEntries.map(([k, v]) => `${k}: ${String(v).slice(0, 200)}`).join('; ')
+      : '';
+
     // ─── 4. Validate ────────────────────────────────────────────────────
     if (!mapped.name && !mapped.phone) {
       return NextResponse.json(
@@ -470,7 +636,29 @@ export async function POST(request: NextRequest) {
       pageUrl ? `Page: ${pageUrl}` : '',
       pageTitle ? `Page Title: ${pageTitle}` : '',
       `Source: ${source}`,
+      // Append a readable summary of all raw/unmapped form fields so users
+      // see them immediately in the lead detail view.
+      rawFieldsSummary ? `Extra Fields: ${rawFieldsSummary}` : '',
     ].filter(Boolean);
+
+    const leadNotes: any[] = [
+      {
+        text: `Lead captured from ${source}${formName ? ` (${formName})` : ''}${pageUrl ? ` on ${pageUrl}` : ''}`,
+        timestamp: new Date().toISOString(),
+        auto: true,
+      },
+    ];
+    // Store the structured raw payload so it's machine-readable for future
+    // UI work (e.g., a dedicated "Raw Form Fields" panel in the lead detail).
+    if (rawFieldEntries.length > 0) {
+      leadNotes.push({
+        text: 'Raw form fields submitted',
+        timestamp: new Date().toISOString(),
+        auto: true,
+        type: 'raw_fields',
+        data: rawFields,
+      });
+    }
 
     const lead = await db.lead.create({
       data: {
@@ -490,13 +678,7 @@ export async function POST(request: NextRequest) {
           `score:${leadScore}`,
           ...(mapped.company ? [`company:${mapped.company}`] : []),
         ]),
-        notesJson: JSON.stringify([
-          {
-            text: `Lead captured from ${source}${formName ? ` (${formName})` : ''}${pageUrl ? ` on ${pageUrl}` : ''}`,
-            timestamp: new Date().toISOString(),
-            auto: true,
-          },
-        ]),
+        notesJson: JSON.stringify(leadNotes),
       },
     });
 

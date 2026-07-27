@@ -21,6 +21,15 @@ const WP_FIELD_MAP: Record<string, string[]> = {
   value: ['budget', 'value', 'amount', 'quote_amount'],
 };
 
+// Keys that are purely metadata/internal (not real form fields submitted by
+// the user). Excluded from the raw-fields capture so the notesJson "extra
+// fields" section stays focused on actual user input.
+const WP_META_KEYS = new Set([
+  '_form_plugin', 'form_plugin', '_form_name', 'form_name',
+  '_page_url', 'page_url', '_source_url', '_page_title', 'page_title',
+  '_user_agent', 'user_agent', 'referrer',
+]);
+
 async function hashApiKey(key: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(key);
@@ -41,16 +50,25 @@ function mapWpFields(payload: Record<string, any>): Record<string, any> {
     normalizedPayload[k] = v;
   }
 
+  // Track which keys have been consumed by the alias matcher
+  const consumed = new Set<string>();
+
   for (const [leadField, aliases] of Object.entries(WP_FIELD_MAP)) {
     for (const alias of aliases) {
       const normalizedAlias = alias.toLowerCase().replace(/[-_\s]/g, '');
       // Try normalized match first, then exact match
       if (normalizedPayload[normalizedAlias] !== undefined && normalizedPayload[normalizedAlias] !== '') {
         mapped[leadField] = normalizedPayload[normalizedAlias];
+        consumed.add(normalizedAlias);
+        // Also mark the original alias key as consumed
+        if (normalizedPayload[alias] !== undefined) consumed.add(alias);
         break;
       }
       if (payload[alias] !== undefined && payload[alias] !== '') {
         mapped[leadField] = payload[alias];
+        consumed.add(alias);
+        const aliasNorm = alias.toLowerCase().replace(/[-_\s]/g, '');
+        consumed.add(aliasNorm);
         break;
       }
     }
@@ -62,6 +80,32 @@ function mapWpFields(payload: Record<string, any>): Record<string, any> {
     for (const [k, v] of Object.entries(nestedMapped)) {
       if (!mapped[k]) mapped[k] = v;
     }
+  }
+
+  // ─── Capture ALL unmapped raw fields ─────────────────────────────────────
+  // Walk every top-level key. Anything that (a) is not metadata, (b) is a
+  // primitive value, and (c) was NOT consumed by the alias mapper gets
+  // preserved in `rawFields`. Stored into notesJson + appended as a readable
+  // summary to the lead's `description`.
+  const rawFields: Record<string, string> = {};
+  for (const [k, v] of Object.entries(payload)) {
+    if (WP_META_KEYS.has(k) || WP_META_KEYS.has(k.toLowerCase())) continue;
+    if (k === 'data') continue; // already recursed above
+    if (consumed.has(k)) continue;
+    const nk = k.toLowerCase().replace(/[-_\s]/g, '');
+    if (consumed.has(nk)) continue;
+    if (v === null || v === undefined) continue;
+    if (typeof v === 'object') continue; // skip nested objects/arrays
+    const strVal = String(v).trim();
+    if (!strVal) continue;
+    // Skip keys that start with underscore (internal metadata convention)
+    if (k.startsWith('_')) continue;
+    if (rawFields[k] === undefined) {
+      rawFields[k] = strVal;
+    }
+  }
+  if (Object.keys(rawFields).length > 0) {
+    mapped.rawFields = rawFields;
   }
 
   return mapped;
@@ -159,6 +203,48 @@ export async function POST(request: NextRequest) {
     const formName = payload._form_name || payload.form_name || '';
     const pageUrl = payload._page_url || payload.page_url || '';
 
+    // Build a readable summary of raw/unmapped form fields (Option A) and
+    // store the structured raw payload in notesJson (Option B).
+    //
+    // Also includes mapped fields that don't have a dedicated Lead column
+    // (scheduledAt, scheduledTime) — these are extracted by the alias matcher
+    // but never stored on the Lead record, so we surface them here to avoid
+    // silent data loss.
+    const rawFields: Record<string, string> = { ...(mapped.rawFields || {}) };
+    if (mapped.scheduledAt && !rawFields.scheduledAt) rawFields.scheduledAt = String(mapped.scheduledAt);
+    if (mapped.scheduledTime && !rawFields.scheduledTime) rawFields.scheduledTime = String(mapped.scheduledTime);
+    const rawFieldEntries = Object.entries(rawFields);
+    const rawFieldsSummary = rawFieldEntries.length > 0
+      ? rawFieldEntries.map(([k, v]) => `${k}: ${String(v).slice(0, 200)}`).join('; ')
+      : '';
+
+    const descriptionParts = [
+      mapped.description ? String(mapped.description) : '',
+      formName ? `Form: ${formName}` : '',
+      pageUrl ? `Page: ${pageUrl}` : '',
+      formPlugin ? `Plugin: ${formPlugin}` : '',
+      // Append a readable summary of all raw/unmapped form fields so users
+      // see them immediately in the lead detail view.
+      rawFieldsSummary ? `Extra Fields: ${rawFieldsSummary}` : '',
+    ].filter(Boolean);
+
+    const leadNotes: any[] = [{
+      text: `Lead captured from WordPress${formName ? ` (${formName})` : ''}${pageUrl ? ` on ${pageUrl}` : ''}`,
+      timestamp: new Date().toISOString(),
+      auto: true,
+    }];
+    // Store the structured raw payload so it's machine-readable for future
+    // UI work (e.g., a dedicated "Raw Form Fields" panel in the lead detail).
+    if (rawFieldEntries.length > 0) {
+      leadNotes.push({
+        text: 'Raw form fields submitted',
+        timestamp: new Date().toISOString(),
+        auto: true,
+        type: 'raw_fields',
+        data: rawFields,
+      });
+    }
+
     const lead = await db.lead.create({
       data: {
         name: String(mapped.name || 'Unknown'),
@@ -168,12 +254,7 @@ export async function POST(request: NextRequest) {
         status: 'new',
         priority: leadScore > 70 ? 'high' : leadScore > 40 ? 'medium' : 'low',
         value: mapped.value ? Number(mapped.value) : 0,
-        description: [
-          mapped.description ? String(mapped.description) : '',
-          formName ? `Form: ${formName}` : '',
-          pageUrl ? `Page: ${pageUrl}` : '',
-          formPlugin ? `Plugin: ${formPlugin}` : '',
-        ].filter(Boolean).join(' | '),
+        description: descriptionParts.join(' | '),
         address: mapped.address ? String(mapped.address) : null,
         serviceType: mapped.serviceType ? String(mapped.serviceType) : null,
         tenantId: endpoint.tenantId,
@@ -182,11 +263,7 @@ export async function POST(request: NextRequest) {
           `plugin:${formPlugin}`,
           `score:${leadScore}`,
         ]),
-        notesJson: JSON.stringify([{
-          text: `Lead captured from WordPress${formName ? ` (${formName})` : ''}${pageUrl ? ` on ${pageUrl}` : ''}`,
-          timestamp: new Date().toISOString(),
-          auto: true,
-        }]),
+        notesJson: JSON.stringify(leadNotes),
       },
     });
 
