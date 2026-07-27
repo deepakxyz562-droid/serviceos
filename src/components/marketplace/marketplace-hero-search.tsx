@@ -25,7 +25,7 @@ export function MarketplaceHeroSearch() {
   return (
     <div className="w-full">
       {/* Search container — keyword + city side-by-side on sm+, stacked on mobile */}
-      <div className="group flex flex-col gap-1.5 rounded-full border border-border/80 bg-card p-1.5 shadow-sm ring-1 ring-black/[0.02] transition-all focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-500/25 sm:flex-row sm:items-center sm:gap-0 dark:bg-card/80 dark:shadow-black/20">
+      <div className="group flex flex-col gap-1.5 rounded-[5px] border border-border/80 bg-card p-1.5 transition-all focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-500/25 sm:flex-row sm:items-center sm:gap-0 dark:bg-card/80">
         {/* Keyword field */}
         <div className="relative flex-1 min-w-0">
           <Search
@@ -38,7 +38,7 @@ export function MarketplaceHeroSearch() {
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search providers, services, or keywords — e.g. &quot;plumbing&quot;"
             aria-label="Search providers"
-            className="h-10 w-full rounded-full bg-transparent pl-10 pr-9 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none"
+            className="h-10 w-full rounded-[5px] bg-transparent pl-10 pr-9 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none"
           />
           {searchInput ? (
             <button
@@ -70,7 +70,7 @@ export function MarketplaceHeroSearch() {
             onChange={(e) => setCityInput(e.target.value)}
             placeholder="City or postcode"
             aria-label="Filter by city"
-            className="h-10 w-full rounded-full bg-transparent pl-9 pr-9 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none"
+            className="h-10 w-full rounded-[5px] bg-transparent pl-9 pr-9 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none"
           />
           {cityInput ? (
             <button
