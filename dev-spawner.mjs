@@ -20,7 +20,7 @@ function startServer() {
 
   const child = spawn('node', ['node_modules/.bin/next', 'dev', '-p', '3000', '--webpack'], {
     cwd: '/home/z/my-project',
-    env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=640' },
+    env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=2048' },
     stdio: ['ignore', 'pipe', 'pipe']
   });
 

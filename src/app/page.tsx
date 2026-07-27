@@ -43,6 +43,27 @@ import { useAppStore } from '@/store/app-store';
 
 type UnauthView = 'landing' | 'auth';
 
+/**
+ * Detect a platform-level admin (SuperAdmin) — a user who manages the
+ * PLATFORM itself, not a single tenant. Such users must NEVER see the
+ * tenant onboarding wizard.
+ *
+ * A user is a platform admin when ANY of these is true:
+ *  - `isSuperAdmin` flag is explicitly true, OR
+ *  - their `role` is 'admin'/'superadmin' AND they have no `tenantId`
+ *    (tenant-less admins are platform-level by definition).
+ *
+ * Customers and employees live in separate tables and are never platform
+ * admins, so they are excluded up-front by the caller.
+ */
+function isPlatformAdmin(user: any): boolean {
+  if (!user) return false;
+  if (user.isSuperAdmin === true) return true;
+  const role = user.role;
+  if ((role === 'admin' || role === 'superadmin') && !user.tenantId) return true;
+  return false;
+}
+
 function ViewLoader() {
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center gap-4 bg-background">
@@ -191,7 +212,7 @@ export default function HomePage() {
           // Auto-redirect based on role (for admin/superadmin in AppLayout)
           if (data.user.role === 'customer') {
             // Customer portal layout handled by page.tsx based on role
-          } else if (data.user.isSuperAdmin || (data.user.role === 'admin' && !data.user.tenantId)) {
+          } else if (isPlatformAdmin(data.user)) {
             useAppStore.getState().setCurrentView('superadmin');
           }
           // Trigger SaaS onboarding wizard if the tenant hasn't completed it.
@@ -203,11 +224,15 @@ export default function HomePage() {
           if (
             data.tenant &&
             !data.tenant.onboardingCompleted &&
-            !data.user.isSuperAdmin &&
+            !isPlatformAdmin(data.user) &&
             data.user.role !== 'customer' &&
             data.user.role !== 'employee'
           ) {
             setShowOnboarding(true);
+          } else if (isPlatformAdmin(data.user)) {
+            // Defensive: ensure no stale onboarding flag survives a session
+            // restore for platform admins.
+            setShowOnboarding(false);
           }
           if (typeof window !== 'undefined') {
             // Preserve existing token if available, or update with new one
@@ -246,7 +271,7 @@ export default function HomePage() {
             // Auto-redirect based on role (for admin/superadmin in AppLayout)
             if (parsed.user.role === 'customer' || parsed.isCustomer) {
               // Customer portal layout handled by page.tsx based on role
-            } else if (parsed.user.isSuperAdmin || (parsed.user.role === 'admin' && !parsed.user.tenantId)) {
+            } else if (isPlatformAdmin(parsed.user)) {
               useAppStore.getState().setCurrentView('superadmin');
             }
             // Trigger SaaS onboarding wizard if tenant hasn't completed it
@@ -255,11 +280,14 @@ export default function HomePage() {
             if (
               parsed.tenant &&
               !parsed.tenant.onboardingCompleted &&
-              !parsed.user.isSuperAdmin &&
+              !isPlatformAdmin(parsed.user) &&
               parsed.user.role !== 'customer' &&
               parsed.user.role !== 'employee'
             ) {
               setShowOnboarding(true);
+            } else if (isPlatformAdmin(parsed.user)) {
+              // Defensive: clear any stale onboarding flag for platform admins.
+              setShowOnboarding(false);
             }
             return;
           }
@@ -448,12 +476,17 @@ export default function HomePage() {
 
       if (user?.role === 'customer') {
         // Customer logged in via WhatsApp OTP — layout is handled by page.tsx
+        setShowOnboarding(false);
         toast.success('Welcome to your customer portal!');
       } else if (user?.role === 'employee') {
         // Employee logged in — layout is handled by page.tsx
+        setShowOnboarding(false);
         toast.success('Welcome to your portal!');
-      } else if (user?.isSuperAdmin || (user?.role === 'admin' && !user?.tenantId)) {
-        // SuperAdmin user — redirect to superadmin dashboard
+      } else if (isPlatformAdmin(user)) {
+        // SuperAdmin / platform admin — redirect to superadmin dashboard.
+        // Explicitly clear any stale onboarding flag so the wizard can never
+        // appear for a platform admin (it is a tenant-only flow).
+        setShowOnboarding(false);
         useAppStore.getState().setCurrentView('superadmin');
         toast.success('Welcome, Super Admin!');
       } else if (!tenant || !tenant.onboardingCompleted) {
@@ -464,6 +497,7 @@ export default function HomePage() {
         setShowOnboarding(true);
         toast.success('Welcome to ServiceOS! Let\'s set up your workspace.');
       } else {
+        setShowOnboarding(false);
         toast.success('Welcome to ServiceOS!');
       }
     },
@@ -497,7 +531,22 @@ export default function HomePage() {
     );
   }
 
-  if (showOnboarding && auth.isAuthenticated) {
+  // The SaaS onboarding wizard is a TENANT-only flow. Platform admins
+  // (SuperAdmin), customers, and employees must never see it — even if the
+  // `showOnboarding` flag is somehow true (stale state, race condition, or a
+  // previous non-admin session in the same tab). This role check is the
+  // final safety net on top of the explicit setShowOnboarding(false) calls.
+  const isPlatformAdminUser = isPlatformAdmin(auth.user);
+  const isPortalRoleUser =
+    auth.user?.role === 'customer' ||
+    (auth.user as any)?.isCustomer ||
+    auth.user?.role === 'employee';
+  if (
+    showOnboarding &&
+    auth.isAuthenticated &&
+    !isPlatformAdminUser &&
+    !isPortalRoleUser
+  ) {
     return (
       <>
         <SaaSOnboarding
