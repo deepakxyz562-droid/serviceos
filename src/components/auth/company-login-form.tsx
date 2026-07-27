@@ -444,14 +444,15 @@ function RoleSwitchLinks({
   slug: string;
   currentRole: CompanyAuthRole;
 }) {
+  // Customers no longer have a dedicated login page (they use magic links
+  // issued from the CRM/booking flow). Only admin/employee logins are linked.
   const others: Array<{ role: CompanyAuthRole; href: string; label: string }> = [
     { role: 'admin', href: `/${slug}/login`, label: 'Admin' },
     { role: 'employee', href: `/${slug}/employee`, label: 'Employee' },
-    { role: 'customer', href: `/${slug}/customer`, label: 'Customer' },
   ].filter((o) => o.role !== currentRole) as typeof others;
 
   return (
-    <div className="grid grid-cols-2 gap-2">
+    <div className="grid grid-cols-1 gap-2">
       {others.map((o) => {
         const cfg = ROLE_CONFIG[o.role];
         return (

@@ -18,9 +18,9 @@ function startServer() {
 
   log(`Starting Next.js dev server (attempt ${restartCount + 1})...`);
 
-  const child = spawn('node', ['node_modules/.bin/next', 'dev', '-p', '3000'], {
+  const child = spawn('node', ['node_modules/.bin/next', 'dev', '-p', '3000', '--webpack'], {
     cwd: '/home/z/my-project',
-    env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=2048' },
+    env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=640' },
     stdio: ['ignore', 'pipe', 'pipe']
   });
 

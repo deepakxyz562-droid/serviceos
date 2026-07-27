@@ -18,13 +18,6 @@ import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
   Accordion,
   AccordionContent,
   AccordionItem,
@@ -52,11 +45,6 @@ import {
   Briefcase,
   MapPin,
   Clock,
-  Wrench,
-  DollarSign,
-  Users,
-  ShieldCheck,
-  Languages,
   Store,
   Plus,
   X,
@@ -70,6 +58,7 @@ import {
   getIndustriesByVertical,
   type Industry,
 } from '@/lib/industry-catalog';
+import { AddressAutocomplete, type AddressValue } from '@/components/onboarding/address-autocomplete';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -83,11 +72,12 @@ interface SaaSOnboardingProps {
 
 interface Step1Data {
   businessName: string;
-  industry: string | null;
   address: string;
   city: string;
   state: string;
   pincode: string;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 interface Step3Data {
@@ -99,11 +89,9 @@ interface Step3Data {
 }
 
 // ── Phase-3 Business Profile step ────────────────────────────────────────────
-// Captures all the marketplace-eligibility fields needed for a tenant to
-// receive public marketplace leads: categories, coverage area, hours, pricing,
-// insurance, credentials, languages, marketplace opt-in, Stripe Connect.
-type PricingType = 'fixed' | 'hourly' | 'starting_from' | 'custom_quote' | 'mixed';
-
+// Captures the marketplace-eligibility fields needed for a tenant to receive
+// public marketplace leads: categories, coverage area, hours, marketplace
+// opt-in, Stripe Connect.
 interface DayHours {
   open: string;   // "09:00" — 24h HH:MM
   close: string;  // "17:00"
@@ -112,33 +100,18 @@ interface DayHours {
 }
 
 interface Step2Data {
-  // Categories (multi-select from 25 industries grouped by 9 verticals)
+  // Categories (multi-select from 29 industries grouped by 11 verticals) —
+  // this is the SINGLE source of truth for industry on the tenant.
   businessCategories: string[]; // industry IDs from INDUSTRY_CATALOG
+  // Free-text description shown when the user selects the "others" industry.
+  // Persisted into settingsJson.otherCategoryDescription (no schema change).
+  otherCategoryDescription: string;
   // Coverage area — postcodes or city names (free-form tag input)
   coverageAreas: string[];
   coverageAreaInput: string;
   // Business hours — mon-sun, or "by appointment" globally
   businessHours: Record<string, DayHours>;
   byAppointmentOnly: boolean;
-  // Emergency service toggle
-  emergencyServiceAvailable: boolean;
-  // Pricing
-  pricingType: PricingType | '';
-  callOutFee: string;       // number-as-string for input control
-  travelFeePerKm: string;
-  emergencySurchargePct: string;
-  weekendSurchargePct: string;
-  // Operations
-  employeesCount: string;
-  // Insurance
-  insuranceProvider: string;
-  insurancePolicyNumber: string;
-  insuranceExpiryDate: string; // ISO date string (yyyy-mm-dd)
-  // Credentials
-  licenceNumber: string;
-  vatNumber: string;
-  // Languages spoken (multi-select from preset list)
-  languages: string[];
   // Marketplace opt-in
   marketplaceOptIn: boolean;
   marketplaceTermsAccepted: boolean;
@@ -157,8 +130,9 @@ interface Step2Data {
 
 // 4-step wizard (phase-3 adds the "Business Profile" step at #2, pushing the
 // existing plan + completion steps down):
-//   1. Your Business    → basic identity (name, industry, address)
-//   2. Business Profile → rich marketplace-eligibility data (this phase)
+//   1. Your Business    → basic identity (name + address — industry is now
+//                         chosen on Step 2 via the Business Categories picker)
+//   2. Business Profile → marketplace-eligibility data (this phase)
 //   3. Choose Your Plan → subscription / trial
 //   4. All Set!         → completion + quick actions
 const STEPS = [
@@ -166,20 +140,6 @@ const STEPS = [
   { id: 2, label: 'Business Profile', icon: Briefcase },
   { id: 3, label: 'Choose Your Plan', icon: CreditCard },
   { id: 4, label: 'All Set!', icon: CheckCircle2 },
-] as const;
-
-const INDUSTRIES = [
-  { id: 'plumbing', label: 'Plumbing', icon: '🔧' },
-  { id: 'cleaning', label: 'Cleaning', icon: '🧹' },
-  { id: 'packers-movers', label: 'Packers & Movers', icon: '📦' },
-  { id: 'window-cleaning', label: 'Window Cleaning', icon: '🪟' },
-  { id: 'pest-control', label: 'Pest Control', icon: '🐛' },
-  { id: 'hvac', label: 'HVAC', icon: '❄️' },
-  { id: 'electrical', label: 'Electrical', icon: '⚡' },
-  { id: 'landscaping', label: 'Landscaping', icon: '🌿' },
-  { id: 'courier', label: 'Courier', icon: '🚚' },
-  { id: 'home-repair', label: 'Home Repair', icon: '🏠' },
-  { id: 'salon-beauty', label: 'Salon & Beauty', icon: '💇' },
 ] as const;
 
 const PLANS = [
@@ -222,36 +182,7 @@ const PLANS = [
   },
 ] as const;
 
-// ── Phase-3 Business Profile: pricing + language + day presets ───────────────
-const PRICING_TYPE_OPTIONS: { value: PricingType; label: string; hint: string }[] = [
-  { value: 'fixed', label: 'Fixed Price', hint: 'Same price for every job' },
-  { value: 'hourly', label: 'Hourly Rate', hint: 'Billed by the hour' },
-  { value: 'starting_from', label: 'Starting From', hint: 'Base price — final quote varies' },
-  { value: 'custom_quote', label: 'Custom Quote', hint: 'Each job quoted individually' },
-  { value: 'mixed', label: 'Mixed', hint: 'Combination of the above' },
-];
-
-const LANGUAGE_OPTIONS: { code: string; label: string }[] = [
-  { code: 'en', label: 'English' },
-  { code: 'es', label: 'Spanish' },
-  { code: 'fr', label: 'French' },
-  { code: 'de', label: 'German' },
-  { code: 'hi', label: 'Hindi' },
-  { code: 'ar', label: 'Arabic' },
-  { code: 'zh', label: 'Chinese' },
-  { code: 'pt', label: 'Portuguese' },
-  { code: 'ru', label: 'Russian' },
-  { code: 'ja', label: 'Japanese' },
-  { code: 'it', label: 'Italian' },
-  { code: 'nl', label: 'Dutch' },
-  { code: 'ko', label: 'Korean' },
-  { code: 'tr', label: 'Turkish' },
-  { code: 'pl', label: 'Polish' },
-  { code: 'ur', label: 'Urdu' },
-  { code: 'bn', label: 'Bengali' },
-  { code: 'pa', label: 'Punjabi' },
-];
-
+// ── Phase-3 Business Profile: day presets ───────────────────────────────────
 const DAYS_OF_WEEK: { key: string; label: string }[] = [
   { key: 'mon', label: 'Monday' },
   { key: 'tue', label: 'Tuesday' },
@@ -321,6 +252,20 @@ function initializeStep2(tenant: any): Step2Data {
     return [];
   };
 
+  // Parse the free-form settingsJson object defensively.
+  const parseSettings = (raw: unknown): Record<string, unknown> => {
+    if (raw && typeof raw === 'object') return raw as Record<string, unknown>;
+    if (typeof raw === 'string') {
+      try {
+        const parsed = JSON.parse(raw);
+        return (parsed && typeof parsed === 'object') ? parsed : {};
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  };
+
   const parseHours = (raw: unknown): Record<string, DayHours> => {
     let obj: Record<string, unknown> = {};
     if (typeof raw === 'string') {
@@ -355,48 +300,24 @@ function initializeStep2(tenant: any): Step2Data {
   };
 
   const categories = parseArr(tenant?.businessCategoriesJson);
-  const languages = parseArr(tenant?.languagesJson);
   const coverageAreas = parseArr(tenant?.serviceAreasJson);
   const businessHours = parseHours(tenant?.businessHoursJson);
   const byAppointmentOnly =
     typeof tenant?.businessHoursJson === 'string' &&
     tenant.businessHoursJson.includes('"byAppointmentOnly":true');
-
-  // Format the insurance expiry date as yyyy-mm-dd for <input type="date">.
-  let insuranceExpiryDate = '';
-  if (tenant?.insuranceExpiryDate) {
-    try {
-      const d = new Date(tenant.insuranceExpiryDate);
-      if (!isNaN(d.getTime())) {
-        insuranceExpiryDate = d.toISOString().slice(0, 10);
-      }
-    } catch {
-      // ignore
-    }
-  }
+  const settings = parseSettings(tenant?.settingsJson);
+  const otherCategoryDescription =
+    typeof settings?.otherCategoryDescription === 'string'
+      ? settings.otherCategoryDescription
+      : '';
 
   return {
     businessCategories: categories,
+    otherCategoryDescription,
     coverageAreas,
     coverageAreaInput: '',
     businessHours,
     byAppointmentOnly,
-    emergencyServiceAvailable: !!tenant?.emergencyServiceAvailable,
-    pricingType: (tenant?.pricingType as PricingType) || '',
-    callOutFee: tenant?.callOutFee != null ? String(tenant.callOutFee) : '',
-    travelFeePerKm: tenant?.travelFeePerKm != null ? String(tenant.travelFeePerKm) : '',
-    emergencySurchargePct:
-      tenant?.emergencySurchargePct != null ? String(tenant.emergencySurchargePct) : '',
-    weekendSurchargePct:
-      tenant?.weekendSurchargePct != null ? String(tenant.weekendSurchargePct) : '',
-    employeesCount:
-      tenant?.employeesCount != null ? String(tenant.employeesCount) : '',
-    insuranceProvider: tenant?.insuranceProvider || '',
-    insurancePolicyNumber: tenant?.insurancePolicyNumber || '',
-    insuranceExpiryDate,
-    licenceNumber: tenant?.licenceNumber || '',
-    vatNumber: tenant?.vatNumber || '',
-    languages,
     marketplaceOptIn: !!tenant?.marketplaceOptIn,
     marketplaceTermsAccepted: !!tenant?.marketplaceTermsAcceptedAt,
     stripeConnected: !!tenant?.stripeConnected,
@@ -414,11 +335,12 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   // Step 1
   const [step1, setStep1] = useState<Step1Data>({
     businessName: tenant?.name || user?.name || '',
-    industry: null,
-    address: '',
-    city: '',
-    state: '',
-    pincode: '',
+    address: tenant?.address || '',
+    city: tenant?.city || '',
+    state: tenant?.state || '',
+    pincode: tenant?.postalCode || '',
+    latitude: tenant?.latitude ?? null,
+    longitude: tenant?.longitude ?? null,
   });
 
   // Step 2 — Business Profile (phase-3). Pre-populated from the tenant object
@@ -544,31 +466,28 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   // Step 1 validator & handler
   // -------------------------------------------------------------------------
 
-  const isStep1Valid = step1.businessName.trim().length > 0 && step1.industry !== null;
+  // Step 1 only requires the business name — address is optional (the user
+  // can pick from autocomplete or enter manually). Industry is now chosen on
+  // Step 2 via the Business Categories multi-select.
+  const isStep1Valid = step1.businessName.trim().length > 0;
 
   const handleStep1Next = useCallback(async () => {
     if (!isStep1Valid) {
-      toast.error('Please fill in all required fields');
+      toast.error('Please enter your business name');
       return;
     }
     setSaving(true);
     try {
       await saveTenantProgress({
         onboardingStep: 2,
-        industry: step1.industry,
         name: step1.businessName,
         address: step1.address,
         city: step1.city,
         state: step1.state,
         pincode: step1.pincode,
+        latitude: step1.latitude,
+        longitude: step1.longitude,
       });
-      // Pre-select the chosen industry as the first business category on
-      // step 2 so the user doesn't have to re-pick it.
-      setStep2((s) =>
-        s.businessCategories.includes(step1.industry as string)
-          ? s
-          : { ...s, businessCategories: [step1.industry as string, ...s.businessCategories] },
-      );
       toast.success('Business details saved!');
       goNext();
     } catch {
@@ -586,27 +505,6 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
     const errors: Record<string, string> = {};
     if (step2.businessCategories.length === 0) {
       errors.businessCategories = 'Please select at least one business category.';
-    }
-    if (step2.coverageAreas.length === 0) {
-      errors.coverageAreas = 'Add at least one coverage area (postcode or city).';
-    }
-    if (!step2.pricingType) {
-      errors.pricingType = 'Please select a pricing type.';
-    }
-    if (step2.employeesCount && Number(step2.employeesCount) < 0) {
-      errors.employeesCount = 'Employee count cannot be negative.';
-    }
-    if (step2.callOutFee && Number(step2.callOutFee) < 0) {
-      errors.callOutFee = 'Call-out fee cannot be negative.';
-    }
-    if (step2.travelFeePerKm && Number(step2.travelFeePerKm) < 0) {
-      errors.travelFeePerKm = 'Travel fee cannot be negative.';
-    }
-    if (step2.emergencySurchargePct && Number(step2.emergencySurchargePct) < 0) {
-      errors.emergencySurchargePct = 'Surcharge cannot be negative.';
-    }
-    if (step2.weekendSurchargePct && Number(step2.weekendSurchargePct) < 0) {
-      errors.weekendSurchargePct = 'Surcharge cannot be negative.';
     }
     // Marketplace opt-in requires terms acceptance
     if (step2.marketplaceOptIn && !step2.marketplaceTermsAccepted) {
@@ -630,10 +528,39 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
     setSaving(true);
     setStep2((s) => ({ ...s, errors: {} }));
     try {
-      // Build the payload for the PATCH endpoint. Number fields are coerced
-      // from the string state used by <Input type="number">.
+      // Build the payload for the PATCH endpoint. The 3 removed UI cards
+      // (Service & Pricing, Operations, Insurance & Credentials) are
+      // intentionally NOT set here — the underlying schema fields keep their
+      // defaults (0 / false / null / "[]") and can be edited later from
+      // the in-app Settings pages.
+      //
+      // Merge `otherCategoryDescription` into the existing settingsJson so we
+      // don't wipe keys other features depend on (invoice-automation,
+      // integrations, vapi, etc.).
+      let existingSettings: Record<string, unknown> = {};
+      const raw = tenant?.settingsJson;
+      if (raw && typeof raw === 'object') {
+        existingSettings = raw as Record<string, unknown>;
+      } else if (typeof raw === 'string') {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') {
+            existingSettings = parsed as Record<string, unknown>;
+          }
+        } catch {
+          // ignore — start with empty object
+        }
+      }
+      const mergedSettings: Record<string, unknown> = {
+        ...existingSettings,
+        otherCategoryDescription: step2.otherCategoryDescription || '',
+      };
+
       const payload: Record<string, any> = {
         onboardingStep: 3,
+        // Industry — derive from businessCategories[0] to preserve the
+        // canonical single-select field used by SEO routing + marketplace.
+        industry: step2.businessCategories[0] || null,
         // Categories + coverage area
         businessCategoriesJson: step2.businessCategories,
         serviceAreasJson: step2.coverageAreas,
@@ -643,32 +570,14 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
         businessHoursJson: step2.byAppointmentOnly
           ? { byAppointmentOnly: true }
           : step2.businessHours,
-        // Emergency service
-        emergencyServiceAvailable: step2.emergencyServiceAvailable,
-        // Pricing
-        pricingType: step2.pricingType || null,
-        callOutFee: Number(step2.callOutFee) || 0,
-        travelFeePerKm: Number(step2.travelFeePerKm) || 0,
-        emergencySurchargePct: Number(step2.emergencySurchargePct) || 0,
-        weekendSurchargePct: Number(step2.weekendSurchargePct) || 0,
-        // Operations
-        employeesCount: Number(step2.employeesCount) || 1,
-        languagesJson: step2.languages,
-        // Insurance
-        insuranceProvider: step2.insuranceProvider || null,
-        insurancePolicyNumber: step2.insurancePolicyNumber || null,
-        insuranceExpiryDate: step2.insuranceExpiryDate || null,
-        insuranceVerified:
-          !!step2.insuranceProvider && !!step2.insurancePolicyNumber,
-        // Credentials
-        licenceNumber: step2.licenceNumber || null,
-        vatNumber: step2.vatNumber || null,
         // Marketplace opt-in
         marketplaceOptIn: step2.marketplaceOptIn,
         marketplaceTermsAcceptedAt: step2.marketplaceOptIn && step2.marketplaceTermsAccepted,
         // Stripe flag (read-only from local state; the Stripe Connect button
         // updates this directly via the status endpoint).
         stripeConnected: step2.stripeConnected,
+        // Free-form settings — merged with existing keys on the client.
+        settingsJson: mergedSettings,
       };
 
       const data = await patchBusinessProfile(payload);
@@ -687,7 +596,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
     } finally {
       setSaving(false);
     }
-  }, [isStep2Valid, patchBusinessProfile, step2, goNext]);
+  }, [isStep2Valid, patchBusinessProfile, step2, goNext, tenant]);
 
   // -------------------------------------------------------------------------
   // Step 2 — Stripe Connect handler
@@ -960,118 +869,62 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
         />
       </div>
 
-      {/* Industry Selection */}
-      <div className="space-y-3">
-        <Label className="text-sm font-medium">
-          Industry <span className="text-red-500">*</span>
-        </Label>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-          {INDUSTRIES.map((ind) => {
-            const isSelected = step1.industry === ind.id;
-            return (
-              <button
-                key={ind.id}
-                type="button"
-                onClick={() => setStep1((s) => ({ ...s, industry: ind.id }))}
-                className={cn(
-                  'group relative flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-center transition-all duration-200',
-                  'hover:border-emerald-400/50 hover:shadow-md hover:shadow-emerald-500/5',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2',
-                  isSelected
-                    ? 'border-emerald-500 bg-emerald-50 shadow-md shadow-emerald-500/10 dark:bg-emerald-950/20'
-                    : 'border-border bg-card hover:bg-accent/50',
-                )}
-              >
-                <span className="text-3xl" role="img" aria-label={ind.label}>
-                  {ind.icon}
-                </span>
-                <span
-                  className={cn(
-                    'text-xs font-semibold leading-tight',
-                    isSelected
-                      ? 'text-emerald-700 dark:text-emerald-300'
-                      : 'text-foreground',
-                  )}
-                >
-                  {ind.label}
-                </span>
-                {isSelected && (
-                  <motion.div
-                    layoutId="industry-check"
-                    className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white"
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                  >
-                    <Check className="h-3 w-3" />
-                  </motion.div>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Business Address */}
-      <div className="space-y-3">
+      {/* Business Address — OSM Nominatim autocomplete with manual fallback */}
+      <div className="space-y-2">
         <Label className="text-sm font-medium">Business Address</Label>
-        <Input
-          placeholder="Street address"
-          value={step1.address}
-          onChange={(e) => setStep1((s) => ({ ...s, address: e.target.value }))}
-          className="h-11"
+        <AddressAutocomplete
+          value={{
+            address: step1.address,
+            city: step1.city,
+            state: step1.state,
+            pincode: step1.pincode,
+            latitude: step1.latitude,
+            longitude: step1.longitude,
+          }}
+          onChange={(v: AddressValue) =>
+            setStep1((s) => ({
+              ...s,
+              address: v.address,
+              city: v.city,
+              state: v.state,
+              pincode: v.pincode,
+              latitude: v.latitude,
+              longitude: v.longitude,
+            }))
+          }
         />
-        <div className="grid grid-cols-3 gap-3">
-          <Input
-            placeholder="City"
-            value={step1.city}
-            onChange={(e) => setStep1((s) => ({ ...s, city: e.target.value }))}
-            className="h-11"
-          />
-          <Input
-            placeholder="State"
-            value={step1.state}
-            onChange={(e) => setStep1((s) => ({ ...s, state: e.target.value }))}
-            className="h-11"
-          />
-          <Input
-            placeholder="Pincode"
-            value={step1.pincode}
-            onChange={(e) => setStep1((s) => ({ ...s, pincode: e.target.value }))}
-            className="h-11"
-          />
-        </div>
       </div>
     </div>
   );
 
   // -------------------------------------------------------------------------
   // Render: Step 2 – Business Profile (phase-3)
-  // Collects all marketplace-eligibility fields: categories, coverage area,
-  // business hours, emergency service, pricing, fees, employee count,
-  // insurance, credentials, languages, marketplace opt-in, Stripe Connect.
+  // Collects marketplace-eligibility fields: categories, coverage area,
+  // business hours, marketplace opt-in, Stripe Connect.
   // -------------------------------------------------------------------------
 
   const renderStep2 = () => {
-    // Toggle a business category on/off
+    // Toggle a business category on/off. When deselecting "others", clear
+    // the free-text description too so we don't persist stale text.
     const toggleCategory = (industryId: string) => {
-      setStep2((s) => ({
-        ...s,
-        businessCategories: s.businessCategories.includes(industryId)
+      setStep2((s) => {
+        const isSelected = s.businessCategories.includes(industryId);
+        const nextCategories = isSelected
           ? s.businessCategories.filter((id) => id !== industryId)
-          : [...s.businessCategories, industryId],
-        errors: { ...s.errors, businessCategories: '' },
-      }));
-    };
-
-    // Toggle a language on/off
-    const toggleLanguage = (code: string) => {
-      setStep2((s) => ({
-        ...s,
-        languages: s.languages.includes(code)
-          ? s.languages.filter((c) => c !== code)
-          : [...s.languages, code],
-      }));
+          : [...s.businessCategories, industryId];
+        const nextDesc =
+          industryId === 'others' && !isSelected
+            ? s.otherCategoryDescription // selecting "others" — keep existing text
+            : industryId === 'others' && isSelected
+              ? '' // deselecting "others" — wipe description
+              : s.otherCategoryDescription;
+        return {
+          ...s,
+          businessCategories: nextCategories,
+          otherCategoryDescription: nextDesc,
+          errors: { ...s.errors, businessCategories: '' },
+        };
+      });
     };
 
     // Coverage-area tag input — add on Enter or comma, remove via X badge
@@ -1160,7 +1013,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
               Business Categories <span className="text-red-500">*</span>
             </CardTitle>
             <p className="text-xs text-muted-foreground">
-              Select all the service categories your business covers. Grouped by 9 verticals.
+              Select all the service categories your business covers. Grouped by 11 verticals.
             </p>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -1244,6 +1097,30 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
                 );
               })}
             </Accordion>
+
+            {/* "Other (specify)" free-text — shown only when the user has
+                selected the "others" industry. The description is stored in
+                settingsJson.otherCategoryDescription on the tenant (no schema
+                migration needed). */}
+            {step2.businessCategories.includes('others') && (
+              <div className="space-y-1.5 pt-1">
+                <Label htmlFor="otherCategoryDescription" className="text-sm font-medium">
+                  Please describe your business
+                </Label>
+                <Input
+                  id="otherCategoryDescription"
+                  placeholder="e.g. Mobile pet grooming, Drone photography, …"
+                  value={step2.otherCategoryDescription}
+                  onChange={(e) =>
+                    setStep2((s) => ({ ...s, otherCategoryDescription: e.target.value }))
+                  }
+                  className="h-10"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Helps us route the right leads to you and improve future category coverage.
+                </p>
+              </div>
+            )}
             <FieldError id="businessCategories" />
           </CardContent>
         </Card>
@@ -1253,7 +1130,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <MapPin className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              Coverage Area <span className="text-red-500">*</span>
+              Coverage Area
             </CardTitle>
             <p className="text-xs text-muted-foreground">
               Postcodes or city names where you accept jobs. Press Enter or comma to add.
@@ -1404,353 +1281,6 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
                 })}
               </div>
             )}
-          </CardContent>
-        </Card>
-
-        {/* ── Emergency Service + Pricing ────────────────────────────────── */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Wrench className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              Service &amp; Pricing
-            </CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Tell customers how you charge and whether you offer emergency service.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Emergency service toggle */}
-            <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-3 py-2">
-              <div className="flex-1 min-w-0">
-                <Label htmlFor="emergencyService" className="text-sm font-medium">
-                  Do you offer emergency / after-hours service?
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Customers searching for urgent jobs will see you first.
-                </p>
-              </div>
-              <Switch
-                id="emergencyService"
-                checked={step2.emergencyServiceAvailable}
-                onCheckedChange={(v) =>
-                  setStep2((s) => ({ ...s, emergencyServiceAvailable: !!v }))
-                }
-              />
-            </div>
-
-            <Separator />
-
-            {/* Pricing type */}
-            <div id="step2-field-pricingType" className="space-y-1.5">
-              <Label className="text-sm font-medium">
-                Pricing Type <span className="text-red-500">*</span>
-              </Label>
-              <Select
-                value={step2.pricingType || undefined}
-                onValueChange={(v) =>
-                  setStep2((s) => ({
-                    ...s,
-                    pricingType: v as PricingType,
-                    errors: { ...s.errors, pricingType: '' },
-                  }))
-                }
-              >
-                <SelectTrigger className="w-full h-10">
-                  <SelectValue placeholder="Select how you charge…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {PRICING_TYPE_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{opt.label}</span>
-                        <span className="text-xs text-muted-foreground">{opt.hint}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FieldError id="pricingType" />
-            </div>
-
-            {/* Numeric pricing fields */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div id="step2-field-callOutFee" className="space-y-1.5">
-                <Label htmlFor="callOutFee" className="text-sm font-medium">
-                  Call-out Fee (USD)
-                </Label>
-                <div className="relative">
-                  <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="callOutFee"
-                    type="number"
-                    inputMode="decimal"
-                    min="0"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={step2.callOutFee}
-                    onChange={(e) =>
-                      setStep2((s) => ({ ...s, callOutFee: e.target.value }))
-                    }
-                    className="h-10 pl-8"
-                  />
-                </div>
-                <FieldError id="callOutFee" />
-              </div>
-
-              <div id="step2-field-travelFeePerKm" className="space-y-1.5">
-                <Label htmlFor="travelFeePerKm" className="text-sm font-medium">
-                  Travel Fee / km (USD)
-                </Label>
-                <div className="relative">
-                  <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="travelFeePerKm"
-                    type="number"
-                    inputMode="decimal"
-                    min="0"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={step2.travelFeePerKm}
-                    onChange={(e) =>
-                      setStep2((s) => ({ ...s, travelFeePerKm: e.target.value }))
-                    }
-                    className="h-10 pl-8"
-                  />
-                </div>
-                <FieldError id="travelFeePerKm" />
-              </div>
-
-              <div id="step2-field-emergencySurchargePct" className="space-y-1.5">
-                <Label htmlFor="emergencySurchargePct" className="text-sm font-medium">
-                  Emergency Surcharge (%)
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="emergencySurchargePct"
-                    type="number"
-                    inputMode="decimal"
-                    min="0"
-                    step="1"
-                    placeholder="e.g. 40 = +40%"
-                    value={step2.emergencySurchargePct}
-                    onChange={(e) =>
-                      setStep2((s) => ({ ...s, emergencySurchargePct: e.target.value }))
-                    }
-                    className="h-10 pr-8"
-                  />
-                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                    %
-                  </span>
-                </div>
-                <FieldError id="emergencySurchargePct" />
-              </div>
-
-              <div id="step2-field-weekendSurchargePct" className="space-y-1.5">
-                <Label htmlFor="weekendSurchargePct" className="text-sm font-medium">
-                  Weekend Surcharge (%)
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="weekendSurchargePct"
-                    type="number"
-                    inputMode="decimal"
-                    min="0"
-                    step="1"
-                    placeholder="e.g. 20 = +20%"
-                    value={step2.weekendSurchargePct}
-                    onChange={(e) =>
-                      setStep2((s) => ({ ...s, weekendSurchargePct: e.target.value }))
-                    }
-                    className="h-10 pr-8"
-                  />
-                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                    %
-                  </span>
-                </div>
-                <FieldError id="weekendSurchargePct" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* ── Operations: Employees + Languages ─────────────────────────── */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Users className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              Operations
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div id="step2-field-employeesCount" className="space-y-1.5">
-              <Label htmlFor="employeesCount" className="text-sm font-medium">
-                Employee Count
-              </Label>
-              <Input
-                id="employeesCount"
-                type="number"
-                inputMode="numeric"
-                min="0"
-                step="1"
-                placeholder="e.g. 5"
-                value={step2.employeesCount}
-                onChange={(e) =>
-                  setStep2((s) => ({ ...s, employeesCount: e.target.value }))
-                }
-                className="h-10 max-w-[200px]"
-              />
-              <FieldError id="employeesCount" />
-            </div>
-
-            <Separator />
-
-            <div className="space-y-2">
-              <Label className="flex items-center gap-1.5 text-sm font-medium">
-                <Languages className="h-4 w-4 text-muted-foreground" />
-                Languages Spoken
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Multi-lingual businesses reach more customers.
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {LANGUAGE_OPTIONS.map((lang) => {
-                  const isSelected = step2.languages.includes(lang.code);
-                  return (
-                    <button
-                      key={lang.code}
-                      type="button"
-                      onClick={() => toggleLanguage(lang.code)}
-                      className={cn(
-                        'rounded-full border px-2.5 py-1 text-xs font-medium transition-all',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500',
-                        isSelected
-                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300'
-                          : 'border-border bg-card hover:border-emerald-400/40 hover:bg-accent/50',
-                      )}
-                    >
-                      {lang.label}
-                      {isSelected && <Check className="inline-block h-3 w-3 ml-1" />}
-                    </button>
-                  );
-                })}
-              </div>
-              {step2.languages.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {step2.languages.map((code) => {
-                    const lang = LANGUAGE_OPTIONS.find((l) => l.code === code);
-                    return (
-                      <Badge
-                        key={code}
-                        variant="secondary"
-                        className="gap-1 pl-2 pr-1 py-1 text-xs"
-                      >
-                        {lang?.label || code}
-                        <button
-                          type="button"
-                          aria-label={`Remove ${lang?.label || code}`}
-                          onClick={() => toggleLanguage(code)}
-                          className="ml-0.5 rounded-full hover:bg-black/10 dark:hover:bg-white/10 p-0.5"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </Badge>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* ── Insurance + Credentials ───────────────────────────────────── */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              Insurance &amp; Credentials
-            </CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Building trust — verified businesses rank higher in the marketplace.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="insuranceProvider" className="text-sm font-medium">
-                  Insurance Provider
-                </Label>
-                <Input
-                  id="insuranceProvider"
-                  placeholder="e.g. Allstate, State Farm"
-                  value={step2.insuranceProvider}
-                  onChange={(e) =>
-                    setStep2((s) => ({ ...s, insuranceProvider: e.target.value }))
-                  }
-                  className="h-10"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="insurancePolicyNumber" className="text-sm font-medium">
-                  Insurance Policy #
-                </Label>
-                <Input
-                  id="insurancePolicyNumber"
-                  placeholder="Policy number"
-                  value={step2.insurancePolicyNumber}
-                  onChange={(e) =>
-                    setStep2((s) => ({ ...s, insurancePolicyNumber: e.target.value }))
-                  }
-                  className="h-10"
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="insuranceExpiryDate" className="text-sm font-medium">
-                Insurance Expiry Date
-              </Label>
-              <Input
-                id="insuranceExpiryDate"
-                type="date"
-                value={step2.insuranceExpiryDate}
-                onChange={(e) =>
-                  setStep2((s) => ({ ...s, insuranceExpiryDate: e.target.value }))
-                }
-                className="h-10 max-w-[220px]"
-              />
-            </div>
-
-            <Separator />
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="licenceNumber" className="text-sm font-medium">
-                  Licence Number
-                </Label>
-                <Input
-                  id="licenceNumber"
-                  placeholder="Business / trade licence #"
-                  value={step2.licenceNumber}
-                  onChange={(e) =>
-                    setStep2((s) => ({ ...s, licenceNumber: e.target.value }))
-                  }
-                  className="h-10"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="vatNumber" className="text-sm font-medium">
-                  VAT / Tax Number
-                </Label>
-                <Input
-                  id="vatNumber"
-                  placeholder="VAT or tax ID"
-                  value={step2.vatNumber}
-                  onChange={(e) =>
-                    setStep2((s) => ({ ...s, vatNumber: e.target.value }))
-                  }
-                  className="h-10"
-                />
-              </div>
-            </div>
           </CardContent>
         </Card>
 

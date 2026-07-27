@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
@@ -24,11 +23,8 @@ import {
   Droplets,
   Hammer,
   Leaf,
-  MessageSquare,
-  Search,
 } from 'lucide-react';
 
-import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -40,7 +36,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { CompanyFinder } from './company-finder';
 
 interface AuthPageProps {
   onAuthSuccess: (user: any, tenant: any) => void;
@@ -48,8 +43,7 @@ interface AuthPageProps {
   initialTab?: string;
 }
 
-// Tab state
-type LoginTab = 'business' | 'customer';
+// Business auth tab state
 type BusinessTab = 'login' | 'register';
 
 const INDUSTRIES = [
@@ -104,17 +98,7 @@ const formVariants = {
   exit: { opacity: 0, x: -20, transition: { duration: 0.2 } },
 };
 
-const tabContentVariants = {
-  enter: { opacity: 0, y: 8 },
-  center: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' as const } },
-  exit: { opacity: 0, y: -8, transition: { duration: 0.2 } },
-};
-
 export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
-  const router = useRouter();
-
-  // Top-level tab
-  const [loginTab, setLoginTab] = useState<LoginTab>('business');
   const [isLoading, setIsLoading] = useState(false);
 
   // Business Login state
@@ -129,12 +113,6 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
   const [regBusinessName, setRegBusinessName] = useState('');
   const [regIndustry, setRegIndustry] = useState('');
   const [regPhone, setRegPhone] = useState('');
-
-  // ─── Tab Switch Handler ───
-  const handleTabSwitch = (tab: LoginTab) => {
-    if (tab === loginTab) return;
-    setLoginTab(tab);
-  };
 
   // ─── Business Login Handler ───
   const handleBusinessLogin = async (e: React.FormEvent) => {
@@ -442,68 +420,6 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
     </div>
   );
 
-  // ─── Render: Customer Tab Content (Company Finder) ───
-  const renderCustomerCompanyFinder = () => (
-    <motion.div
-      key="customer-finder"
-      variants={tabContentVariants}
-      initial="enter"
-      animate="center"
-      exit="exit"
-      className="w-full"
-    >
-      {/* Search icon */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.1, duration: 0.4 }}
-        className="flex justify-center mb-6"
-      >
-        <div className="w-16 h-16 rounded-2xl bg-teal-50 border-2 border-teal-200 flex items-center justify-center">
-          <Search className="w-8 h-8 text-teal-600" />
-        </div>
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2, duration: 0.4 }}
-        className="space-y-4"
-      >
-        <div className="space-y-1.5 text-center">
-          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Find your company
-          </h2>
-          <p className="text-sm text-slate-500">
-            Search for your service provider to access your customer portal.
-          </p>
-        </div>
-
-        <CompanyFinder
-          onSelect={(slug) => router.push(`/${slug}/customer`)}
-          autoFocus
-          placeholder="Search by company name…"
-        />
-
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3.5 flex items-start gap-2.5">
-          <Building2 className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-          <div className="text-xs text-slate-500 space-y-1">
-            <p className="font-medium text-slate-700">How it works</p>
-            <p>
-              Type your service provider&apos;s name, pick your company, then
-              sign in with the email and password your provider set up for you.
-            </p>
-          </div>
-        </div>
-
-        <p className="text-center text-xs text-slate-400">
-          Don&apos;t know your company link? Ask your service provider to send
-          you an invitation.
-        </p>
-      </motion.div>
-    </motion.div>
-  );
-
   // ─── Main Render ───
   return (
     <div className="min-h-screen flex flex-col lg:flex-row">
@@ -660,59 +576,14 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
             </span>
           </motion.div>
 
-          {/* ─── Prominent Login Tabs ─── */}
+          {/* Business auth content (sign in / create account) */}
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1, duration: 0.4 }}
-            className="mb-6"
+            transition={{ duration: 0.3, ease: 'easeOut' }}
           >
-            <div className="flex rounded-xl bg-slate-100 p-1.5 gap-1.5">
-              {/* Business Login Tab */}
-              <button
-                type="button"
-                onClick={() => handleTabSwitch('business')}
-                className={`flex-1 flex items-center justify-center gap-2.5 py-3 px-4 rounded-lg text-sm font-semibold transition-all duration-200 cursor-pointer ${
-                  loginTab === 'business'
-                    ? 'bg-white text-emerald-700 shadow-sm border border-emerald-200'
-                    : 'text-slate-500 hover:text-slate-700 hover:bg-white/50 border border-transparent'
-                }`}
-              >
-                <Building2 className={`w-4.5 h-4.5 ${loginTab === 'business' ? 'text-emerald-600' : 'text-slate-400'}`} />
-                <span>Business Login</span>
-              </button>
-
-              {/* Customer Login Tab */}
-              <button
-                type="button"
-                onClick={() => handleTabSwitch('customer')}
-                className={`flex-1 flex items-center justify-center gap-2.5 py-3 px-4 rounded-lg text-sm font-semibold transition-all duration-200 cursor-pointer ${
-                  loginTab === 'customer'
-                    ? 'bg-white text-teal-700 shadow-sm border border-teal-200'
-                    : 'text-slate-500 hover:text-slate-700 hover:bg-white/50 border border-transparent'
-                }`}
-              >
-                <MessageSquare className={`w-4.5 h-4.5 ${loginTab === 'customer' ? 'text-teal-600' : 'text-slate-400'}`} />
-                <span>Customer Login</span>
-              </button>
-            </div>
+            {renderBusinessContent()}
           </motion.div>
-
-          {/* Dynamic Content based on active tab */}
-          <AnimatePresence mode="wait">
-            {loginTab === 'business' && (
-              <motion.div
-                key="business-tab"
-                variants={tabContentVariants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-              >
-                {renderBusinessContent()}
-              </motion.div>
-            )}
-            {loginTab === 'customer' && renderCustomerCompanyFinder()}
-          </AnimatePresence>
 
           {/* Footer */}
           <motion.p

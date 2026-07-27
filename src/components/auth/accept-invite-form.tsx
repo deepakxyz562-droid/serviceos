@@ -105,8 +105,11 @@ export function AcceptInviteForm({
   const isEmployee = invitation.role === 'employee';
 
   // Resolve which login page to send the user to after success.
+  // Customers no longer have a dedicated login page — after activating their
+  // account they're already authenticated, so we send them straight to `/`
+  // where the CustomerPortalLayout takes over (no login page needed).
   const postAcceptHref = isCustomer
-    ? `/${slug}/customer`
+    ? '/'
     : isEmployee
       ? `/${slug}/employee`
       : `/${slug}/login`;
@@ -232,7 +235,9 @@ export function AcceptInviteForm({
 
         <div className="space-y-2">
           <Button asChild className="w-full h-10 bg-emerald-600 hover:bg-emerald-700 text-white">
-            <Link href={postAcceptHref}>Continue to login</Link>
+            <Link href={postAcceptHref}>
+              {isCustomer ? 'Continue to portal' : 'Continue to login'}
+            </Link>
           </Button>
           <Button asChild variant="outline" className="w-full h-10">
             <Link href="/">Go to home</Link>

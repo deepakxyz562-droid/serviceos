@@ -84,6 +84,18 @@ model Tenant {
   city                  String?
   state                 String?
   postalCode            String?
+  // Geo-coordinates from address autocomplete (OSM Nominatim) — powers
+  // marketplace proximity search and map views.
+  latitude              Float?
+  longitude             Float?
+  // Marketplace listing tier — drives what's shown on the public marketplace:
+  //   none     → not listed (default for businesses that haven't opted in)
+  //   free     → unclaimed seed listing (name, address, phone, rating, "Call Now" only — no booking)
+  //   claimed  → business owner claimed their listing and manages the profile
+  //   pro      → paid subscriber — "Book Now" + top placement + rich profile
+  listingTier           String   @default("none")
+  claimed               Boolean  @default(false)
+  claimedAt             DateTime?
   tagline               String?  // short one-liner under business name
   description           String?  // long-form About text (min 100 chars for indexing)
   coverImage            String?  // hero/cover image URL

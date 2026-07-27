@@ -174,6 +174,9 @@ export async function PUT(
       city,
       state,
       postalCode,
+      pincode, // legacy alias for postalCode (older onboarding sends this)
+      latitude,
+      longitude,
       tagline,
       description,
       coverImage,
@@ -225,7 +228,19 @@ export async function PUT(
     }
     if (city !== undefined) updateData.city = city?.trim() || null;
     if (state !== undefined) updateData.state = state?.trim() || null;
-    if (postalCode !== undefined) updateData.postalCode = postalCode?.trim() || null;
+    // Accept either postalCode (canonical) or pincode (legacy onboarding alias).
+    const postal = postalCode !== undefined ? postalCode : (pincode !== undefined ? pincode : undefined);
+    if (postal !== undefined) updateData.postalCode = postal?.trim() || null;
+    // Geo-coordinates from OSM Nominatim autocomplete (powers marketplace
+    // proximity search + map views). Null is allowed to clear stale values.
+    if (latitude !== undefined) {
+      const n = Number(latitude);
+      updateData.latitude = !isNaN(n) ? n : null;
+    }
+    if (longitude !== undefined) {
+      const n = Number(longitude);
+      updateData.longitude = !isNaN(n) ? n : null;
+    }
     if (tagline !== undefined) updateData.tagline = tagline?.trim() || null;
     if (description !== undefined) updateData.description = description?.trim() || null;
     if (coverImage !== undefined) updateData.coverImage = coverImage?.trim() || null;
@@ -408,6 +423,14 @@ export async function PATCH(
       // Misc — allow onboarding step + completion sync too
       onboardingStep,
       onboardingCompleted,
+      // Geo-coordinates (set by the OSM Nominatim address autocomplete in step 1)
+      latitude,
+      longitude,
+      // Canonical industry (single-select derived from businessCategories[0])
+      industry,
+      // Free-form JSON settings object. The client is expected to send a
+      // merged object (existing settings + new keys) — we persist it as-is.
+      settingsJson,
     } = body;
 
     // Build update data — only include provided fields. We intentionally use
@@ -503,6 +526,30 @@ export async function PATCH(
     // Onboarding meta
     if (onboardingStep !== undefined) updateData.onboardingStep = Number(onboardingStep) || 1;
     if (onboardingCompleted !== undefined) updateData.onboardingCompleted = !!onboardingCompleted;
+
+    // Geo-coordinates from OSM Nominatim autocomplete (set in step 1).
+    // Null is allowed to clear stale values.
+    if (latitude !== undefined) {
+      const n = Number(latitude);
+      updateData.latitude = !isNaN(n) ? n : null;
+    }
+    if (longitude !== undefined) {
+      const n = Number(longitude);
+      updateData.longitude = !isNaN(n) ? n : null;
+    }
+
+    // Canonical industry — derived on the client from businessCategories[0].
+    // Preserves the legacy single-select `industry` field for SEO routing.
+    if (industry !== undefined) {
+      updateData.industry = industry?.trim() || null;
+    }
+
+    // Free-form settings object (merge is the client's responsibility).
+    if (settingsJson !== undefined) {
+      updateData.settingsJson = typeof settingsJson === 'string'
+        ? settingsJson
+        : JSON.stringify(settingsJson || {});
+    }
 
     // ── Persist ────────────────────────────────────────────────────────────
     const tenant = await db.tenant.update({

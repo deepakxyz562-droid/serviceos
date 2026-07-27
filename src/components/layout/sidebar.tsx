@@ -68,7 +68,6 @@ import {
   TrendingUp,
   Wallet,
   Clock,
-  Store,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -128,12 +127,6 @@ const ownerNavSections: NavSection[] = [
       { view: 'leads', label: 'Leads', icon: Target },
       { view: 'customers', label: 'Customers', icon: Users },
       { view: 'reviews', label: 'Reviews', icon: Star },
-    ],
-  },
-  {
-    title: 'Marketplace',
-    items: [
-      { view: 'marketplaceDashboard', label: 'Marketplace', icon: Store },
     ],
   },
   {

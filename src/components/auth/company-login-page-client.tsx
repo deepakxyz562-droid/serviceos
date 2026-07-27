@@ -168,7 +168,13 @@ export function CompanyLoginPageClient({ role }: CompanyLoginPageClientProps) {
                 </p>
                 <CompanyFinder
                   onSelect={(s) => {
-                    router.push(`/${s}/${role === 'admin' ? 'login' : role}`);
+                    // Customers no longer have a dedicated login page — if
+                    // role='customer' somehow reaches this fallback, send
+                    // them home (the magic-link flow is the only customer
+                    // entry point).
+                    const path =
+                      role === 'admin' ? 'login' : role === 'employee' ? 'employee' : '';
+                    router.push(path ? `/${s}/${path}` : '/');
                   }}
                 />
               </div>
