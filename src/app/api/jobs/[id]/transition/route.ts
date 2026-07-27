@@ -7,6 +7,7 @@ import {
   getAllowedNextStates,
   JOB_STATES,
 } from '@/lib/job-state-machine';
+import { validateJobCompletionProof } from '@/lib/job-completion-validation';
 
 /**
  * POST /api/jobs/[id]/transition
@@ -108,6 +109,23 @@ export async function POST(
         },
         { status: 400 },
       );
+    }
+
+    // ── Validation: require before/after photos + customer signature (and a
+    // completed checklist if linked/expected) before a job can be transitioned
+    // to 'completed'. Mirrors the JobCompletionScreen UI gating. ──
+    if (toState === 'completed') {
+      const proof = await validateJobCompletionProof(jobId);
+      if (!proof.ok) {
+        return NextResponse.json(
+          {
+            error: proof.error,
+            missing: proof.missing,
+            allowedNextStates: getAllowedNextStates(job.status ?? ''),
+          },
+          { status: 400 },
+        );
+      }
     }
 
     const result = await transitionJob(jobId, toState, {

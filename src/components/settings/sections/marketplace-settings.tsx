@@ -16,7 +16,7 @@
  * fetched by the parent.
  */
 
-import { Loader2, Store, ArrowRight } from 'lucide-react';
+import { Loader2, Store, ArrowRight, ShieldCheck } from 'lucide-react';
 import { PublicHubTab } from '@/components/settings/public-hub-tab';
 import { useAppStore } from '@/store/app-store';
 import { Button } from '@/components/ui/button';
@@ -26,9 +26,10 @@ interface MarketplaceSettingsProps {
   industry: string;
   slug: string;
   loading?: boolean;
+  isPlatformAdmin?: boolean;
 }
 
-export function MarketplaceSettings({ tenantId, industry, slug, loading }: MarketplaceSettingsProps) {
+export function MarketplaceSettings({ tenantId, industry, slug, loading, isPlatformAdmin }: MarketplaceSettingsProps) {
   const setCurrentView = useAppStore((s) => s.setCurrentView);
 
   if (loading) {
@@ -40,6 +41,34 @@ export function MarketplaceSettings({ tenantId, industry, slug, loading }: Marke
   }
 
   if (!tenantId) {
+    // Platform admins (superadmins / admins without a tenant) are intentionally
+    // tenant-less — they manage the platform itself, not a single business.
+    // Show a calm, informative message instead of the misleading "Complete
+    // onboarding" copy (onboarding is suppressed for platform admins).
+    if (isPlatformAdmin) {
+      return (
+        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-3 max-w-md mx-auto text-center">
+          <ShieldCheck className="size-10 opacity-40 text-emerald-600" />
+          <p className="text-sm font-medium text-foreground">Platform Admin Account</p>
+          <p className="text-xs leading-relaxed">
+            You&apos;re signed in as a platform administrator. Marketplace profile
+            management is for tenant-scoped businesses. Use the SuperAdmin
+            Directory Listings to manage all marketplace businesses.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-2 gap-1.5"
+            onClick={() => setCurrentView('superadminDirectoryListings')}
+          >
+            <Store className="size-4" />
+            Open Directory Listings
+          </Button>
+        </div>
+      );
+    }
+    // Non-platform-admin user with no tenant — this is a genuine data-integrity
+    // issue. The "Complete onboarding" message is correct here.
     return (
       <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
         <Store className="size-8 opacity-30" />

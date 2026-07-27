@@ -11,6 +11,12 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
+  experimental: {
+    // Raise the clonable-body limit (default 10MB) to 15MB so large photo
+    // uploads (up to 10MB raw → ~13.3MB as base64 JSON) don't get silently
+    // truncated mid-string, which causes "Unterminated string in JSON" errors.
+    proxyClientMaxBodySize: 15 * 1024 * 1024,
+  },
   allowedDevOrigins: [
     "21.0.11.123",
     "21.0.19.13",

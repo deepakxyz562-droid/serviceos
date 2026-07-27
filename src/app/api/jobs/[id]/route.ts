@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { EventBus } from '@/lib/event-bus';
 import { logActivity } from '@/lib/activity-log';
 import { getAuthUser } from '@/lib/auth';
+import { validateJobCompletionProof } from '@/lib/job-completion-validation';
 
 export async function GET(
   request: NextRequest,
@@ -151,7 +152,19 @@ export async function PUT(
       });
     }
 
-    // If status is being changed to 'completed', set actualEndTime and free up assignee
+    // If status is being changed to 'completed', set actualEndTime and free up assignee.
+    // Validation: require before/after photos + customer signature (and a
+    // completed checklist if linked/expected) before a job can be marked
+    // completed. Skip when the job is already completed (no-op).
+    if (body.status === 'completed' && existingJob.status !== 'completed') {
+      const proof = await validateJobCompletionProof(id);
+      if (!proof.ok) {
+        return NextResponse.json(
+          { error: proof.error, missing: proof.missing },
+          { status: 400 },
+        );
+      }
+    }
     if (body.status === 'completed') {
       updateData.actualEndTime = new Date();
       if (existingJob.assigneeId) {

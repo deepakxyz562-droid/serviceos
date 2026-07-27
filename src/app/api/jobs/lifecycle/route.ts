@@ -10,6 +10,7 @@ import {
 import { EventBus } from '@/lib/event-bus'
 import { notifyOwner } from '@/lib/owner-notifications'
 import { autoCreateInvoiceFromJob } from '@/lib/invoice-automation'
+import { validateJobCompletionProof } from '@/lib/job-completion-validation'
 
 function safeParseJson(str: string): unknown[] {
   try {
@@ -319,6 +320,17 @@ export async function POST(request: NextRequest) {
         if (job.status === 'completed') {
           updatedJob = job
           break
+        }
+
+        // ── Validation: require before/after photos + customer signature
+        // (and a completed checklist if linked/expected) before a job can be
+        // marked completed. Mirrors the JobCompletionScreen UI gating. ──
+        const proof = await validateJobCompletionProof(jobId)
+        if (!proof.ok) {
+          return NextResponse.json(
+            { error: proof.error, missing: proof.missing },
+            { status: 400 },
+          )
         }
 
         const logEntry = { action: 'completed', resourceId: job.resourceId, assigneeId: job.assigneeId, reason }

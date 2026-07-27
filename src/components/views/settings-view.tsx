@@ -87,6 +87,10 @@ export function SettingsView() {
     slug: string;
   }>({ id: null, industry: '', slug: '' });
   const [tenantLoading, setTenantLoading] = useState(true);
+  // Track whether the current user is a platform admin (superadmin or admin
+  // without a tenant). MarketplaceSettings uses this to show a different
+  // message instead of the misleading "Complete onboarding" copy.
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
 
   const refreshTenant = useCallback(async () => {
     setTenantLoading(true);
@@ -101,6 +105,17 @@ export function SettingsView() {
             industry: normalizeIndustry(t.industry || ''),
             slug: t.slug || '',
           });
+        }
+        // Detect platform admin: superadmin flag, superadmin role, or admin
+        // role without a tenantId (the legacy platform-admin pattern).
+        const u = data.user;
+        if (u) {
+          const platformAdmin =
+            u.isSuperAdmin === true ||
+            u.role === 'superadmin' ||
+            u.role === 'super_admin' ||
+            (u.role === 'admin' && !u.tenantId);
+          setIsPlatformAdmin(platformAdmin);
         }
       }
     } catch {
@@ -128,6 +143,7 @@ export function SettingsView() {
             industry={tenant.industry}
             slug={tenant.slug}
             loading={tenantLoading}
+            isPlatformAdmin={isPlatformAdmin}
           />
         );
       case 'crm':

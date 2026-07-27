@@ -20,6 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { useRealtime } from '@/hooks/use-realtime';
 import { authFetch } from '@/lib/client-auth';
+import { compressImage } from '@/components/job/photo-capture';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -698,11 +699,24 @@ export function EmployeePortalView() {
   const onFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setPhotoDataUrl(ev.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+    // Reject files larger than 10MB before compression (same limit as PhotoCapture)
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error(`${file.name} is too large`, {
+        description: 'Maximum file size is 10MB.',
+        duration: 6000,
+      });
+      e.target.value = '';
+      return;
+    }
+    try {
+      // Compress + resize the image before uploading (same helper as PhotoCapture).
+      // Without this, raw phone photos (5-12MB) would exceed the server's body
+      // limit and fail with a cryptic JSON parse error.
+      const dataUrl = await compressImage(file, 1280, 0.8);
+      setPhotoDataUrl(dataUrl);
+    } catch {
+      toast.error('Failed to process image. Try a different file.');
+    }
     // Reset input value so the same file can be re-selected
     e.target.value = '';
   };

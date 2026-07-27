@@ -10,6 +10,9 @@ import { logActivity } from '@/lib/activity-log';
 export async function GET(request: NextRequest) {
   try {
     const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
@@ -19,10 +22,23 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50');
     const search = searchParams.get('search');
 
-    // Build where clause - use tenantId if authenticated, otherwise show all
+    // ─── Tenant scoping (mirrors /api/deals pattern) ──────────────────
+    // The caller's tenantId is the source of truth — NEVER show all leads.
+    // Super-admins may pass ?tenantId= to scope to a specific tenant.
+    // Authenticated users without a tenant get an empty list (not everyone's data).
     const where: Record<string, unknown> = {};
-    if (authUser?.tenantId) {
+    if (authUser.isSuperAdmin) {
+      const queryTenantId = searchParams.get('tenantId');
+      if (queryTenantId) where.tenantId = queryTenantId;
+    } else if (authUser.tenantId) {
       where.tenantId = authUser.tenantId;
+    } else {
+      // Authenticated user without a tenant — return empty rather than
+      // accidentally leaking unscoped leads.
+      return NextResponse.json({
+        leads: [],
+        pagination: { page, limit, total: 0, totalPages: 0 },
+      });
     }
 
     if (status) {

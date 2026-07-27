@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { EventBus } from '@/lib/event-bus';
 import { autoCreateInvoiceFromJob } from '@/lib/invoice-automation';
+import { validateJobCompletionProof } from '@/lib/job-completion-validation';
 
 /**
  * POST /api/jobs/[id]/complete-proof
@@ -68,6 +69,21 @@ export async function POST(
           { status: 400 }
         );
       }
+    }
+
+    // ─── Validate completion proof (before/after photos + customer signature) ───
+    // The JobCompletionScreen UI requires these before enabling the Complete
+    // button. The dedicated JobPhoto / JobSignature endpoints upload them as
+    // proper rows (queried by validateJobCompletionProof). The
+    // completionPhotos / signatureData in this request body are a legacy
+    // denormalized copy stored on the Job row itself and are NOT considered
+    // proof on their own.
+    const proof = await validateJobCompletionProof(jobId);
+    if (!proof.ok) {
+      return NextResponse.json(
+        { error: proof.error, missing: proof.missing },
+        { status: 400 },
+      );
     }
 
     // ─── Build update data ───

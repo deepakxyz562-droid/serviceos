@@ -6,12 +6,16 @@ import { EventBus } from '@/lib/event-bus';
 // POST /api/leads/convert - Convert lead to job
 export async function POST(request: NextRequest) {
   try {
+    // ─── Auth ────────────────────────────────────────────────────
     const authUser = await getAuthUser();
-    const tenantId = authUser?.tenantId || null;
-    const workspaceId = authUser?.workspaceId || null;
+    if (!authUser) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+    const workspaceId = authUser.workspaceId || null;
 
     const body = await request.json();
     const { leadId } = body;
+    const { searchParams } = new URL(request.url);
 
     if (!leadId) {
       return NextResponse.json(
@@ -20,10 +24,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Fetch the lead
+    // ─── Tenant scoping (mirrors /api/leads pattern) ───────────────
+    // The caller's tenantId is the source of truth — never convert a
+    // lead outside the caller's tenant. Super-admins may pass ?tenantId=
+    // to scope to a specific tenant. Authenticated users without a tenant
+    // get a 404 (single-item endpoint — never leak existence).
     const where: Record<string, unknown> = { id: leadId };
-    if (tenantId) {
-      where.tenantId = tenantId;
+    let resolvedTenantId: string | null = null;
+    if (authUser.isSuperAdmin) {
+      const queryTenantId = searchParams.get('tenantId');
+      if (queryTenantId) {
+        where.tenantId = queryTenantId;
+        resolvedTenantId = queryTenantId;
+      }
+      // else: superadmin can convert any lead; tenantId resolved from lead below
+    } else if (authUser.tenantId) {
+      where.tenantId = authUser.tenantId;
+      resolvedTenantId = authUser.tenantId;
+    } else {
+      return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
     }
 
     const lead = await db.lead.findFirst({ where });
@@ -31,6 +50,10 @@ export async function POST(request: NextRequest) {
     if (!lead) {
       return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
     }
+
+    // For a superadmin without ?tenantId=, fall back to the lead's own
+    // tenantId for any downstream writes (workspace, etc.).
+    const tenantId = resolvedTenantId || lead.tenantId || null;
 
     // Check if lead is already converted
     if (lead.status === 'won' && lead.jobId) {

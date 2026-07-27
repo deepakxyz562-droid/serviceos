@@ -253,6 +253,16 @@ export async function POST(
     return NextResponse.json({ photo, storage: isS3Configured() ? 's3' : 'local' }, { status: 201 });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to upload photo';
+    // Detect body-truncation errors (Next.js clonable-body limit exceeded).
+    // These happen when the JSON body is silently truncated mid-string,
+    // producing a SyntaxError from JSON.parse. Return a clear 413 instead
+    // of a cryptic 500 with a JSON parser position number.
+    if (message.includes('Unterminated string') || message.includes('Unexpected token') || message.includes('Unexpected end')) {
+      return NextResponse.json(
+        { error: 'Photo too large — request body was truncated in transit. Use a smaller image (max 10MB).' },
+        { status: 413 }
+      );
+    }
     console.error('[PhotosAPI] POST error:', error);
     return NextResponse.json({ error: message }, { status: 500 });
   }

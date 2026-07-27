@@ -5,11 +5,28 @@ import { getAuthUser } from '@/lib/auth'
 // GET /api/omnichannel/stats - Return aggregated omnichannel stats in the format the frontend expects
 export async function GET(request: NextRequest) {
   try {
+    // ─── Auth ────────────────────────────────────────────────────
     const authUser = await getAuthUser()
-    const tenantId = authUser?.tenantId || null
+    if (!authUser) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
 
-    // Build tenant scope for queries
-    const tenantFilter = tenantId ? { tenantId } : {}
+    // ─── Tenant scoping (mirrors /api/deals pattern) ──────────────
+    // The caller's tenantId is the source of truth — never show cross-
+    // tenant stats. Super-admins may pass ?tenantId= to scope to a
+    // specific tenant. Authenticated users without a tenant get a
+    // never-match filter so every aggregate returns zero (preserves the
+    // response shape without leaking other tenants' data).
+    const { searchParams } = new URL(request.url)
+    let tenantFilter: Record<string, unknown>
+    if (authUser.isSuperAdmin) {
+      const queryTenantId = searchParams.get('tenantId')
+      tenantFilter = queryTenantId ? { tenantId: queryTenantId } : {}
+    } else if (authUser.tenantId) {
+      tenantFilter = { tenantId: authUser.tenantId }
+    } else {
+      tenantFilter = { tenantId: '__NO_TENANT__' }
+    }
 
     const ALL_OMNI_CHANNELS = ['whatsapp', 'website', 'facebook', 'instagram', 'google_ads', 'justdial'] as const
     type ChannelType = typeof ALL_OMNI_CHANNELS[number]

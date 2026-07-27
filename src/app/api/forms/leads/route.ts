@@ -69,11 +69,15 @@ const FIELD_MAP: Record<string, string[]> = {
     'your-subject', 'your_subject', 'subject', 'service', 'service_type',
     'inquiry_type', 'inquiry-type', 'service_requested', 'request_type',
     'topic', 'category', 'department', 'interest', 'what_service',
+    'requestinginformation', 'requesting_information', 'requesting',
+    'information_request', 'informationrequested', 'service_request',
   ],
   description: [
     'your-message', 'your_message', 'message', 'description', 'notes',
     'comments', 'body', 'details', 'msg', 'enquiry', 'inquiry', 'question',
     'comment', 'feedback', 'body_text', 'text',
+    'additionalinstructions', 'additional_instructions', 'instructions',
+    'special_instructions', 'specialinstructions', 'extra_notes',
   ],
   scheduledAt: [
     'preferred-date', 'preferred_date', 'date', 'booking_date', 'appointment_date',
@@ -136,6 +140,54 @@ function stripJotformPrefix(key: string): string {
   return key.replace(/^q\d+[\s_-]*/i, '');
 }
 
+// ─── Flatten JotForm compound field values ─────────────────────────────────
+// JotForm sends structured fields as nested objects:
+//   q1_name4:     { first: "John", last: "Doe" }      → "John Doe"
+//   q3_phone4:    { area: "447", phone: "860015382" }  → "447860015382"
+//   q3_phone4:    { full: "+447860015382" }            → "+447860015382"
+//   q5_address:   { street: "...", city: "..." }       → "..., ..."
+// Without flattening, String(value) produces "[object Object]" which is
+// useless. This helper extracts a clean string from any value shape.
+function flattenCompoundValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) {
+    return value.map((v) => flattenCompoundValue(v)).filter(Boolean).join(', ');
+  }
+  if (typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    // Pattern 1: { first, last } → "First Last" (JotForm name field)
+    if (obj.first !== undefined || obj.last !== undefined) {
+      return [obj.first, obj.last].filter((v) => v !== undefined && v !== '').map((v) => String(v).trim()).join(' ').trim();
+    }
+    // Pattern 2: { full } → just the full value (JotForm phone with country code)
+    if (obj.full !== undefined) {
+      return String(obj.full).trim();
+    }
+    // Pattern 3: { area, phone } or { area, number } → concatenate (JotForm US phone)
+    if (obj.area !== undefined && (obj.phone !== undefined || obj.number !== undefined)) {
+      const area = String(obj.area).trim();
+      const num = String(obj.phone ?? obj.number).trim();
+      return area ? `${area}${num}` : num;
+    }
+    // Pattern 4: { country, number } or { country, phone }
+    if (obj.country !== undefined && (obj.phone !== undefined || obj.number !== undefined)) {
+      const country = String(obj.country).trim();
+      const num = String(obj.phone ?? obj.number).trim();
+      return country ? `${country}${num}` : num;
+    }
+    // Pattern 5: generic — join all primitive leaf values with space
+    const parts: string[] = [];
+    for (const v of Object.values(obj)) {
+      const flat = flattenCompoundValue(v);
+      if (flat) parts.push(flat);
+    }
+    return parts.join(' ').trim();
+  }
+  return '';
+}
+
 function mapFields(payload: Record<string, any>): ParsedLead {
   const mapped: ParsedLead = {};
   const rawFields: Record<string, string> = {};
@@ -148,22 +200,56 @@ function mapFields(payload: Record<string, any>): ParsedLead {
   // Build a normalized lookup: lowercase key with - _ spaces stripped.
   // For JotForm keys like `q1_name`, we ALSO register the stripped form
   // (`name`) so the alias table can match it directly.
+  // ─── Pre-normalize: parse `rawRequest` if it's a JSON string ─────────────
+  // JotForm's production webhook sends `rawRequest` as a STRINGIFIED JSON
+  // string (not a parsed object). Without this parse, the typeof === 'object'
+  // check below fails and ALL JotForm form fields are invisible.
+  if (typeof payload.rawRequest === 'string' && payload.rawRequest.trim()) {
+    try {
+      payload.rawRequest = JSON.parse(payload.rawRequest);
+    } catch {
+      // Not valid JSON — leave as a string; collectRaw will capture it as-is.
+    }
+  }
+  // Same treatment for legacy `request` field (some integrations stringify it)
+  if (typeof payload.request === 'string' && payload.request.trim()) {
+    try {
+      payload.request = JSON.parse(payload.request);
+    } catch {
+      // leave as-is
+    }
+  }
+  // Same for `data` field (Typeform / generic wrappers sometimes stringify)
+  if (typeof payload.data === 'string' && payload.data.trim()) {
+    try {
+      payload.data = JSON.parse(payload.data);
+    } catch {
+      // leave as-is
+    }
+  }
+
   const normalized: Record<string, any> = {};
   const normalizedKeys: string[] = [];
   for (const [k, v] of Object.entries(payload)) {
     const nk = k.toLowerCase().replace(/[-_\s]/g, '');
+    // Flatten compound objects (JotForm {first,last}, {area,phone}, etc.) to
+    // primitive strings BEFORE storing in the lookup table. Without this,
+    // String(mapped.name) produces "[object Object]".
+    const flatVal = (typeof v === 'object' && v !== null && !Array.isArray(v))
+      ? flattenCompoundValue(v) || v  // keep original if flatten returns empty
+      : v;
     if (normalized[nk] === undefined) {
-      normalized[nk] = v;
+      normalized[nk] = flatVal;
       normalizedKeys.push(nk);
     }
     // JotForm prefix-stripped form: q1_name → name
     const stripped = stripJotformPrefix(k).toLowerCase().replace(/[-_\s]/g, '');
     if (stripped && stripped !== nk && normalized[stripped] === undefined) {
-      normalized[stripped] = v;
+      normalized[stripped] = flatVal;
       normalizedKeys.push(stripped);
     }
     // Keep original too for exact matching
-    if (payload[k] !== undefined && normalized[k] === undefined) normalized[k] = v;
+    if (payload[k] !== undefined && normalized[k] === undefined) normalized[k] = flatVal;
   }
 
   // Track which normalized keys have been consumed so a single source field
@@ -189,7 +275,12 @@ function mapFields(payload: Record<string, any>): ParsedLead {
         break;
       }
       if (payload[alias] !== undefined && payload[alias] !== '') {
-        (mapped as any)[leadField] = payload[alias];
+        // Flatten compound objects (JotForm {first,last}, etc.) before storing
+        const rawVal = payload[alias];
+        const flatVal = (typeof rawVal === 'object' && rawVal !== null && !Array.isArray(rawVal))
+          ? flattenCompoundValue(rawVal) || rawVal
+          : rawVal;
+        (mapped as any)[leadField] = flatVal;
         // Also mark the normalized form as consumed
         const aliasNorm = alias.toLowerCase().replace(/[-_\s]/g, '');
         consumed.add(aliasNorm);
@@ -329,10 +420,13 @@ function mapFields(payload: Record<string, any>): ParsedLead {
       if (META_KEYS.has(nk) || META_KEYS.has(k.toLowerCase())) continue;
       // Skip structural wrappers (we've already recursed into them above)
       if (k === 'data' || k === 'request' || k === 'rawRequest') continue;
-      // Skip nested objects/arrays — only capture primitives
+      // Flatten nested objects/arrays to a string (JotForm compound fields like
+      // {first,last}, {area,phone}) so they're captured in rawFields as readable
+      // text instead of being silently dropped.
       if (v === null || v === undefined) continue;
-      if (typeof v === 'object') continue;
-      const strVal = String(v).trim();
+      const strVal = (typeof v === 'object')
+        ? flattenCompoundValue(v)
+        : String(v).trim();
       if (!strVal) continue;
       // Strip the qN_ prefix for readability: "q5_howdidyouhear" → "howdidyouhear"
       const displayKey = keyPrefix

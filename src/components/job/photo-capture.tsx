@@ -77,9 +77,15 @@ const PHOTO_TYPE_TABS: { value: PhotoType; label: string; color: string }[] = [
 const MAX_DIMENSION = 1280;
 const JPEG_QUALITY = 0.8;
 const PENDING_STORAGE_KEY = 'serviceos_pending_photos';
-// Reject files larger than 15MB before compression (protects against
-// memory blow-ups in the canvas resize step + avoids huge base64 payloads).
-const MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024;
+// Reject files larger than 10MB before compression (protects against
+// memory blow-ups in the canvas resize step + avoids huge base64 payloads
+// that would exceed the server's 15MB body-size limit after base64 encoding).
+const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+// After compression, if the base64 data URL is still larger than this, reject
+// the upload — the server body limit (15MB) would truncate it and cause a
+// cryptic "Unterminated string in JSON" 500 error. base64 adds ~33% overhead
+// over the raw buffer, so 9MB of data URL ≈ 12MB JSON body (safely under 15MB).
+const MAX_DATA_URL_BYTES = 9 * 1024 * 1024;
 
 /**
  * Compress and resize an image File to a JPEG data URL.
@@ -334,6 +340,18 @@ export function PhotoCapture({
           }
           const dataUrl = await compressImage(file, MAX_DIMENSION, JPEG_QUALITY);
           const capturedAt = new Date().toISOString();
+
+          // Post-compression guard: if the data URL is still too large (e.g.,
+          // compression fell back to the original for HEIC/unreadable files),
+          // reject it BEFORE uploading — the server's 15MB body limit would
+          // silently truncate the request and cause a cryptic JSON parse error.
+          if (dataUrl.length > MAX_DATA_URL_BYTES) {
+            toast.error(`${file.name} is too large to upload`, {
+              description: `Even after compression, the image is ${Math.round(dataUrl.length / 1024 / 1024)}MB (base64). Maximum is ${Math.round(MAX_DATA_URL_BYTES / 1024 / 1024)}MB. Try a smaller image or different format.`,
+              duration: 8000,
+            });
+            continue;
+          }
 
           // Offline path — queue to localStorage
           if (typeof navigator !== 'undefined' && !navigator.onLine) {

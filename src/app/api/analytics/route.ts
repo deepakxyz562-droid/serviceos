@@ -5,7 +5,11 @@ import { getAuthUser } from '@/lib/auth'
 // GET /api/analytics - Get analytics data
 export async function GET(request: NextRequest) {
   try {
+    // ─── Auth ────────────────────────────────────────────────────
     const authUser = await getAuthUser()
+    if (!authUser) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
     const { searchParams } = new URL(request.url)
     const metric = searchParams.get('metric') || 'overview'
     const startDate = searchParams.get('startDate')
@@ -27,9 +31,21 @@ export async function GET(request: NextRequest) {
       dateFilter.lte = new Date(endDate)
     }
 
-    const tenantFilter = authUser?.tenantId
-      ? { tenantId: authUser.tenantId }
-      : {}
+    // ─── Tenant scoping (mirrors /api/deals pattern) ──────────────
+    // The caller's tenantId is the source of truth — never show cross-
+    // tenant analytics. Super-admins may pass ?tenantId= to scope to a
+    // specific tenant. Authenticated users without a tenant get a
+    // never-match filter so every aggregate returns zero (preserves the
+    // response shape per metric without leaking other tenants' data).
+    let tenantFilter: Record<string, unknown>
+    if (authUser.isSuperAdmin) {
+      const queryTenantId = searchParams.get('tenantId')
+      tenantFilter = queryTenantId ? { tenantId: queryTenantId } : {}
+    } else if (authUser.tenantId) {
+      tenantFilter = { tenantId: authUser.tenantId }
+    } else {
+      tenantFilter = { tenantId: '__NO_TENANT__' }
+    }
 
     // Route to different metric handlers
     switch (metric) {

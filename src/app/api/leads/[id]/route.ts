@@ -9,12 +9,27 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // ─── Auth ────────────────────────────────────────────────────
     const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
     const { id } = await params;
+    const { searchParams } = new URL(request.url);
 
+    // ─── Tenant scoping (mirrors /api/leads pattern) ───────────────
+    // The caller's tenantId is the source of truth — never show a lead
+    // outside the caller's tenant. Super-admins may pass ?tenantId= to
+    // scope to a specific tenant. Authenticated users without a tenant
+    // get a 404 (single-item endpoint — never leak existence).
     const where: Record<string, unknown> = { id };
-    if (authUser?.tenantId) {
+    if (authUser.isSuperAdmin) {
+      const queryTenantId = searchParams.get('tenantId');
+      if (queryTenantId) where.tenantId = queryTenantId;
+    } else if (authUser.tenantId) {
       where.tenantId = authUser.tenantId;
+    } else {
+      return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
     }
 
     const lead = await db.lead.findFirst({
@@ -52,14 +67,27 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // ─── Auth ────────────────────────────────────────────────────
     const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
     const { id } = await params;
     const body = await request.json();
+    const { searchParams } = new URL(request.url);
 
-    // Verify lead exists
+    // ─── Tenant scoping ──────────────────────────────────────────
+    // findFirst with the tenant filter verifies the lead belongs to the
+    // caller's tenant BEFORE we update it. The subsequent update({ where: { id } })
+    // uses the verified id and is therefore safe.
     const where: Record<string, unknown> = { id };
-    if (authUser?.tenantId) {
+    if (authUser.isSuperAdmin) {
+      const queryTenantId = searchParams.get('tenantId');
+      if (queryTenantId) where.tenantId = queryTenantId;
+    } else if (authUser.tenantId) {
       where.tenantId = authUser.tenantId;
+    } else {
+      return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
     }
 
     const existingLead = await db.lead.findFirst({ where });
@@ -316,13 +344,26 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // ─── Auth ────────────────────────────────────────────────────
     const authUser = await getAuthUser();
+    if (!authUser) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
     const { id } = await params;
+    const { searchParams } = new URL(request.url);
 
-    // Verify lead exists
+    // ─── Tenant scoping ──────────────────────────────────────────
+    // findFirst with the tenant filter verifies the lead belongs to the
+    // caller's tenant BEFORE we delete it. The subsequent delete({ where: { id } })
+    // uses the verified id and is therefore safe.
     const where: Record<string, unknown> = { id };
-    if (authUser?.tenantId) {
+    if (authUser.isSuperAdmin) {
+      const queryTenantId = searchParams.get('tenantId');
+      if (queryTenantId) where.tenantId = queryTenantId;
+    } else if (authUser.tenantId) {
       where.tenantId = authUser.tenantId;
+    } else {
+      return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
     }
 
     const existingLead = await db.lead.findFirst({ where });

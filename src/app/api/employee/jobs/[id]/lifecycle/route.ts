@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveEmployee } from '@/app/api/employee/shift/route';
+import { validateJobCompletionProof } from '@/lib/job-completion-validation';
 
 /**
  * POST /api/employee/jobs/[id]/lifecycle
@@ -333,39 +334,14 @@ export async function POST(
       case 'complete': {
         // ── Validation: require before/after photos + customer signature.
         // Checklist is only required if the job has linked checklists
-        // (job.linkedChecklistsJson is a non-empty array). This mirrors the
-        // JobCompletionScreen UI which treats checklist as "warn" (non-blocking)
-        // when no checklists are linked. ──
-        const [photos, signatures, checklists] = await Promise.all([
-          db.jobPhoto.findMany({ where: { jobId: job.id }, select: { photoType: true } }),
-          db.jobSignature.findMany({ where: { jobId: job.id } }),
-          db.jobChecklist.findMany({ where: { jobId: job.id } }),
-        ]);
-        const hasBefore = photos.some((p) => p.photoType === 'before');
-        const hasAfter = photos.some((p) => p.photoType === 'after');
-        const hasCustomerSig = signatures.some((s) => s.signatoryType === 'customer');
-
-        // Parse linked checklist IDs from the job. Only enforce "completed
-        // checklist" when there are linked checklists AND at least one
-        // JobChecklist row exists (i.e. the employee was expected to fill one).
-        let linkedChecklistIds: string[] = [];
-        try {
-          const parsed = JSON.parse(job.linkedChecklistsJson || '[]');
-          if (Array.isArray(parsed)) linkedChecklistIds = parsed.filter((x) => typeof x === 'string');
-        } catch {
-          // ignore
-        }
-        const checklistRequired = linkedChecklistIds.length > 0 || checklists.length > 0;
-        const hasCompletedChecklist = checklists.some((c) => c.status === 'completed');
-
-        const missing: string[] = [];
-        if (!hasBefore) missing.push('Before photo');
-        if (!hasAfter) missing.push('After photo');
-        if (!hasCustomerSig) missing.push('Customer signature');
-        if (checklistRequired && !hasCompletedChecklist) missing.push('Completed checklist');
-        if (missing.length > 0) {
+        // (job.linkedChecklistsJson is a non-empty array) or existing
+        // JobChecklist rows. This mirrors the JobCompletionScreen UI which
+        // treats checklist as "warn" (non-blocking) when no checklists are
+        // linked. ──
+        const proof = await validateJobCompletionProof(job.id);
+        if (!proof.ok) {
           return NextResponse.json(
-            { error: 'Cannot complete job — missing: ' + missing.join(', '), missing },
+            { error: proof.error, missing: proof.missing },
             { status: 400 },
           );
         }

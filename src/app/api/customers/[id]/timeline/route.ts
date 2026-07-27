@@ -29,17 +29,51 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const { id: customerId } = await params;
+    const { searchParams } = new URL(request.url);
 
-    // Verify the customer exists and resolve tenant
-    const customer = await db.customer.findUnique({
-      where: { id: customerId },
+    // ─── Tenant scoping (mirrors /api/leads pattern) ───────────────
+    // The caller's tenantId is the source of truth — never show a
+    // customer from another tenant. Super-admins may pass ?tenantId= to
+    // scope to a specific tenant, or omit it to look up any customer.
+    // Authenticated users without a tenant get a 403 (no tenant context).
+    // NOTE: Customer has no direct tenantId — it's linked via workspace.tenantId.
+    let callerTenantId: string | null = null;
+    let unrestricted = false;
+    if (authUser.isSuperAdmin) {
+      const queryTenantId = searchParams.get('tenantId');
+      if (queryTenantId) {
+        callerTenantId = queryTenantId;
+      } else {
+        unrestricted = true;
+      }
+    } else if (authUser.tenantId) {
+      callerTenantId = authUser.tenantId;
+    } else {
+      return NextResponse.json(
+        { error: 'No tenant context for this customer' },
+        { status: 403 },
+      );
+    }
+
+    // Verify the customer exists AND belongs to the caller's tenant.
+    // (For superadmins without ?tenantId=, skip the tenant filter entirely.)
+    const customer = await db.customer.findFirst({
+      where: unrestricted
+        ? { id: customerId }
+        : {
+            id: customerId,
+            workspace: { tenantId: callerTenantId as string },
+          },
       select: { id: true, name: true, workspaceId: true },
     });
     if (!customer) {
       return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
     }
 
-    let tenantId: string | null = authUser.tenantId;
+    // Effective tenantId for downstream queries (timeline entries, leads, etc.).
+    // For a superadmin without ?tenantId=, fall back to the customer's
+    // workspace tenantId (which we just verified exists).
+    let tenantId: string | null = callerTenantId;
     if (!tenantId && customer.workspaceId) {
       try {
         const ws = await db.workspace.findUnique({
@@ -51,19 +85,7 @@ export async function GET(
         // ignore
       }
     }
-    if (!tenantId && !authUser.isSuperAdmin) {
-      try {
-        const firstTenant = await db.tenant.findFirst({
-          orderBy: { createdAt: 'asc' },
-          select: { id: true },
-        });
-        tenantId = firstTenant?.id ?? null;
-      } catch {
-        // ignore
-      }
-    }
 
-    const { searchParams } = new URL(request.url);
     const entryTypeFilter = searchParams.get('entryType');
     const isInternalParam = searchParams.get('isInternal');
     const includeInternal =
@@ -144,7 +166,7 @@ export async function GET(
     let leadCount = 0;
     try {
       const leads = await db.lead.findMany({
-        where: { customerId },
+        where: { customerId, ...(tenantId ? { tenantId } : {}) },
         orderBy: { createdAt: 'desc' },
         take: 50,
         select: {

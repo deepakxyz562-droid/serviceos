@@ -9,6 +9,7 @@ import {
   type LifecycleTimestamps,
 } from '@/lib/job-lifecycle';
 import { sendWebPushToUser } from '@/lib/web-push-send';
+import { validateJobCompletionProof } from '@/lib/job-completion-validation';
 
 /**
  * Job Lifecycle API — V1.5
@@ -401,6 +402,19 @@ export async function POST(
         { error: `Cannot resolve new status for action '${effectiveAction}'` },
         { status: 400 },
       );
+    }
+
+    // ── Validation: require before/after photos + customer signature
+    // (and a completed checklist if linked/expected) before a job can be
+    // marked completed. Mirrors the JobCompletionScreen UI gating. ──
+    if (newStatus === 'completed') {
+      const proof = await validateJobCompletionProof(job.id);
+      if (!proof.ok) {
+        return NextResponse.json(
+          { error: proof.error, missing: proof.missing },
+          { status: 400 },
+        );
+      }
     }
 
     const now = new Date();
