@@ -50,13 +50,21 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  overlayClassName,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
+  /**
+   * Optional className applied to the DialogOverlay (the dimmed backdrop
+   * behind the dialog). Useful for adding e.g. `backdrop-blur-sm` for
+   * modals that need stronger visual separation. Backward-compatible —
+   * if omitted, the default `bg-black/50` overlay is used unchanged.
+   */
+  overlayClassName?: string
 }) {
   return (
     <DialogPortal data-slot="dialog-portal">
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(

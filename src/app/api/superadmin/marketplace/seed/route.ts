@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { getAuthUser } from '@/lib/auth';
 import { isSuperAdminRequest } from '@/lib/admin-auth';
 import { db } from '@/lib/db';
@@ -392,6 +393,17 @@ export async function POST(request: NextRequest) {
     }
 
     failed += insertFailed;
+
+    // ── Invalidate the ISR cache for the public marketplace browse page so
+    //    newly-seeded providers appear immediately. The home page also links
+    //    to the marketplace, so we purge it too. Wrapped in try/catch so a
+    //    revalidation failure never breaks the seed response.
+    try {
+      revalidatePath('/marketplace', 'page');
+      revalidatePath('/', 'page');
+    } catch (revalErr) {
+      console.error('[/api/superadmin/marketplace/seed] revalidatePath failed:', revalErr);
+    }
 
     return NextResponse.json({
       success: true,

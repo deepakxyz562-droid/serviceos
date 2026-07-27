@@ -3,10 +3,10 @@ import { db } from '@/lib/db';
 import { VERTICALS, getIndustry } from '@/lib/industry-catalog';
 import { MarketplaceBrowser } from '@/components/marketplace/marketplace-browser';
 import { MarketplaceHeroSearch } from '@/components/marketplace/marketplace-hero-search';
+import { MarketplaceFeaturedCarousel } from '@/components/marketplace/marketplace-featured-carousel';
 import type { ProviderListItem } from '@/components/marketplace/types';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
 import {
-  Sparkles,
   Wrench,
   Search,
   ShieldCheck,
@@ -16,9 +16,11 @@ import {
   Wallet,
   Star,
   Zap,
+  Crown,
 } from 'lucide-react';
 
-export const revalidate = 300; // ISR — revalidate every 5 minutes
+export const revalidate = 60; // ISR — revalidate every 60s (safety net; seed
+                              // endpoint also calls revalidatePath on insert)
 
 /**
  * Marketplace browse page — server-rendered for SEO.
@@ -78,6 +80,7 @@ async function fetchProviders() {
       insuranceVerified: true,
       stripeConnected: true,
       planStatus: true,
+      plan: true,
     },
     orderBy: [{ rating: 'desc' }, { reviewCount: 'desc' }],
     take: 120,
@@ -134,6 +137,7 @@ async function fetchProviders() {
       insuranceVerified: t.insuranceVerified,
       stripeConnected: t.stripeConnected,
       planStatus: t.planStatus,
+      plan: t.plan,
     } satisfies ProviderListItem;
   });
 }
@@ -231,6 +235,17 @@ export default async function MarketplaceBrowsePage({
     console.error('[marketplace/page] failed to fetch providers:', err);
     dbError = true;
   }
+
+  // ── Split into featured (paid/active subscribers) vs regular ────────────
+  // Featured = planStatus 'active' AND plan in (pro, business, enterprise).
+  // Everyone else (trial, starter, no plan, etc.) goes in the regular grid.
+  // Both groups keep their existing rating-desc ordering from the DB query.
+  const PAID_PLANS = new Set(['pro', 'business', 'enterprise']);
+  const featuredProviders = providers.filter(
+    (p) => p.planStatus === 'active' && p.plan != null && PAID_PLANS.has(p.plan),
+  );
+  const featuredIds = new Set(featuredProviders.map((p) => p.id));
+  const regularProviders = providers.filter((p) => !featuredIds.has(p.id));
 
   // Build industry groups for the sidebar — 9 verticals, each with its industries
   const verticalGroups = VERTICALS.map((v) => {
@@ -351,62 +366,47 @@ export default async function MarketplaceBrowsePage({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
       />
 
-      {/* Header */}
+      {/* Header — sticky, two rows on desktop (logo+nav / search bar) */}
       <header className="sticky top-0 z-40 border-b bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70 pt-[env(safe-area-inset-top,0px)]">
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
-          <a href="/" className="flex items-center gap-2" aria-label="Back to ServiceOS">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
-              <Wrench className="h-4 w-4" />
-            </span>
-            <span className="text-lg font-bold text-foreground">ServiceOS</span>
-          </a>
-          <nav className="flex items-center gap-3">
-            <a
-              href="/"
-              className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
-            >
-              ← Back to ServiceOS
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          {/* Row 1: logo + nav links */}
+          <div className="flex h-14 items-center justify-between">
+            <a href="/" className="flex items-center gap-2" aria-label="Back to ServiceOS">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
+                <Wrench className="h-4 w-4" />
+              </span>
+              <span className="text-lg font-bold text-foreground">ServiceOS</span>
             </a>
-            <a
-              href="/#pricing"
-              className="hidden sm:inline-flex items-center gap-1 text-sm font-medium text-emerald-700 hover:text-emerald-800 dark:text-emerald-300"
-            >
-              For businesses
-            </a>
-          </nav>
+            <nav className="flex items-center gap-3">
+              <a
+                href="/"
+                className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
+              >
+                ← Back to ServiceOS
+              </a>
+              <a
+                href="/#pricing"
+                className="hidden sm:inline-flex items-center gap-1 text-sm font-medium text-emerald-700 hover:text-emerald-800 dark:text-emerald-300"
+              >
+                For businesses
+              </a>
+            </nav>
+          </div>
+
+          {/* Row 2: search bar (client island) — drives the MarketplaceBrowser
+              below via a shared Zustand store. Instant search, no reload.
+              Stacks below the logo on mobile (max-w-3xl centered on desktop). */}
+          <div className="pb-2">
+            <MarketplaceHeroSearch />
+          </div>
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="relative overflow-hidden border-b">
-        <div className="absolute inset-0 -z-10 bg-gradient-to-br from-emerald-50 via-teal-50/40 to-cyan-50 dark:from-emerald-950/30 dark:via-teal-950/20 dark:to-cyan-950/20" />
-        <div className="absolute -left-32 -top-32 -z-10 h-96 w-96 rounded-full bg-emerald-300/20 blur-3xl dark:bg-emerald-700/20" />
-        <div className="absolute -right-32 top-20 -z-10 h-96 w-96 rounded-full bg-amber-300/15 blur-3xl dark:bg-amber-700/10" />
-
-        <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6 sm:py-16 text-center">
-          <div className="mb-4 flex justify-center">
-            <Badge className="gap-1.5 border-emerald-200 bg-white/70 px-3 py-1 text-emerald-700 backdrop-blur hover:bg-white/70 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
-              <Sparkles className="h-3.5 w-3.5" />
-              The AI Marketplace for Local Services
-            </Badge>
-          </div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl md:text-5xl">
-            Find trusted{' '}
-            <span className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 bg-clip-text text-transparent dark:from-emerald-400 dark:via-teal-400 dark:to-cyan-400">
-              local service professionals
-            </span>
-          </h1>
-          <p className="mx-auto mt-3 max-w-2xl text-base text-muted-foreground sm:text-lg">
-            {providers.length}+ providers across {VERTICALS.length} verticals. Read real reviews,
-            compare quotes, and book instantly — or describe your problem and let our AI route you to
-            the right pro.
-          </p>
-
-          {/* Centered search bar (client island) — drives the MarketplaceBrowser
-              below via a shared Zustand store. Instant search, no reload. */}
-          <MarketplaceHeroSearch />
-        </div>
-      </section>
+      {/* Visually-hidden h1 for SEO/accessibility (hero section was removed
+          per design decision, but the page still needs a single h1). */}
+      <h1 className="sr-only">
+        ServiceOS Marketplace — Find Trusted Local Service Professionals
+      </h1>
 
       {/* Trust bar — thin row of trust signals (TaskRabbit/Urban Company style) */}
       <section className="border-b bg-white/60 dark:bg-card/40">
@@ -477,6 +477,26 @@ export default async function MarketplaceBrowsePage({
           ) : null}
         </ol>
       </nav>
+
+      {/* Featured providers — OLX-style horizontal carousel of paid/active
+          subscribers. Renders only when there's at least one featured provider.
+          Sits above the main grid so premium listings get top-of-fold visibility. */}
+      {featuredProviders.length > 0 ? (
+        <section className="border-b bg-gradient-to-r from-amber-50/50 to-emerald-50/30 dark:from-amber-950/10 dark:to-emerald-950/10">
+          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Crown className="h-5 w-5 text-amber-500" aria-hidden />
+                <h2 className="text-lg font-semibold text-foreground">Featured Providers</h2>
+                <Badge variant="outline" className="text-xs">
+                  {featuredProviders.length}
+                </Badge>
+              </div>
+            </div>
+            <MarketplaceFeaturedCarousel providers={featuredProviders} />
+          </div>
+        </section>
+      ) : null}
 
       {/* Main grid: sidebar + provider cards */}
       <div id="all-providers" className="mx-auto max-w-7xl w-full px-4 sm:px-6 py-8 flex-1 scroll-mt-20">
@@ -620,7 +640,7 @@ export default async function MarketplaceBrowsePage({
               </div>
             ) : (
               <MarketplaceBrowser
-                providers={providers}
+                providers={regularProviders}
                 initialFilters={{
                   vertical: verticalFilter,
                   industry: industryFilter,
@@ -683,9 +703,14 @@ export default async function MarketplaceBrowsePage({
 function Badge({
   children,
   className,
+  variant: _variant,
 }: {
   children: React.ReactNode;
   className?: string;
+  // Accept variant for shadcn API compatibility; visually we always render
+  // the outline style here (a single, consistent look is enough for the
+  // few places this server-side Badge is used).
+  variant?: 'default' | 'outline' | 'secondary' | 'destructive';
 }) {
   return (
     <span

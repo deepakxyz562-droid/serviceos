@@ -92,6 +92,7 @@ const StorageSection = lazy(() => import('@/components/views/superadmin/sections
 const InfrastructureSection = lazy(() => import('@/components/views/superadmin/sections/infrastructure').then(m => ({ default: m.InfrastructureSection })));
 const SystemHealthSection = lazy(() => import('@/components/views/superadmin/sections/system-health').then(m => ({ default: m.SystemHealthSection })));
 const MenuManagementSection = lazy(() => import('@/components/views/superadmin/sections/menu-management').then(m => ({ default: m.MenuManagementSection })));
+const CreemBillingSection = lazy(() => import('@/components/views/superadmin/sections/creem-billing').then(m => ({ default: m.CreemBillingSection })));
 
 // Lightweight Suspense fallback for lazy-loaded sections.
 function SectionLoader() {
@@ -344,7 +345,7 @@ type TabKey =
   // Overview
   | 'dashboard'
   // BUSINESS
-  | 'tenants' | 'subscriptions' | 'users' | 'credits' | 'industry-templates' | 'directory-listings'
+  | 'tenants' | 'subscriptions' | 'users' | 'credits' | 'industry-templates' | 'directory-listings' | 'creem-billing'
   // PLATFORM
   | 'platform-settings' | 'theme-branding' | 'marketplace' | 'integrations' | 'ai-center' | 'menu-management'
   // COMMUNICATION
@@ -379,6 +380,7 @@ const NAV_GROUPS: NavGroup[] = [
       { key: 'credits', label: 'Credits', icon: Wallet },
       { key: 'industry-templates', label: 'Industry Templates', icon: LayoutGrid },
       { key: 'directory-listings', label: 'Directory Listings', icon: Store },
+      { key: 'creem-billing', label: 'Creem Billing', icon: CreditCard },
     ],
   },
   {
@@ -2645,6 +2647,7 @@ export function SuperAdminView() {
         {activeTab === 'dashboard' && <CommandCenterSection />}
         {activeTab === 'industry-templates' && <IndustryTemplatesSection />}
         {activeTab === 'directory-listings' && <DirectoryListingsSection />}
+        {activeTab === 'creem-billing' && <CreemBillingSection />}
         {activeTab === 'platform-settings' && <PlatformSettingsSection />}
         {activeTab === 'theme-branding' && <ThemeBrandingSection />}
         {activeTab === 'marketplace' && <MarketplaceSection />}

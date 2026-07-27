@@ -2,8 +2,8 @@
 /**
  * Plugin Name: ServiceOS CRM Connector
  * Plugin URI: https://serviceos.com/wordpress
- * Description: Connect WordPress forms to ServiceOS CRM. Auto-captures leads from Contact Form 7, WPForms, Gravity Forms, Fluent Forms, and Elementor Forms with WhatsApp notifications.
- * Version: 2.0.0
+ * Description: Injects a universal JavaScript form capture script on every page. Works with Contact Form 7, WPForms, Gravity Forms, Ninja Forms, Fluent Forms, Elementor Forms, Formidable, MetForm, Everest Forms, HTML forms, and custom forms — automatically.
+ * Version: 2.1.0
  * Author: ServiceOS
  * Author URI: https://serviceos.com
  * License: GPL v2 or later
@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-define('SERVICEOS_VERSION', '2.0.0');
+define('SERVICEOS_VERSION', '2.1.0');
 define('SERVICEOS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SERVICEOS_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('SERVICEOS_OPTION_KEY', 'serviceos_crm_settings');
@@ -39,19 +39,14 @@ function serviceos_activate() {
         'tenant_id'           => '',
         'enabled'             => true,
         'debug_mode'          => false,
+        'intercept_ajax'      => false,
         'webhook_secret'      => '',
-        // Form plugin toggles
-        'cf7_enabled'         => true,
-        'wpforms_enabled'     => false,
-        'gravity_enabled'     => false,
-        'fluent_enabled'      => false,
-        'elementor_enabled'   => false,
-        // WhatsApp settings
+        // WhatsApp settings (still sent to API as optional metadata)
         'whatsapp_notify'     => false,
         'whatsapp_number'     => '',
         'whatsapp_auto_reply' => false,
         'whatsapp_template'   => '',
-        // Lead settings
+        // Lead settings (sent as optional metadata)
         'default_service'     => '',
         'default_tags'        => '',
         'assign_to_id'        => '',
@@ -109,30 +104,45 @@ function serviceos_settings_init() {
 
 function serviceos_sanitize_settings($input) {
     $sanitized = array();
-    $sanitized['api_url']             = esc_url_raw(trim($input['api_url']));
-    $sanitized['api_key']             = sanitize_text_field(trim($input['api_key']));
-    $sanitized['tenant_id']           = sanitize_text_field(trim($input['tenant_id']));
-    $sanitized['webhook_secret']      = sanitize_text_field(trim($input['webhook_secret']));
+    $sanitized['api_url']             = esc_url_raw(trim(isset($input['api_url']) ? $input['api_url'] : ''));
+    $sanitized['api_key']             = sanitize_text_field(trim(isset($input['api_key']) ? $input['api_key'] : ''));
+    $sanitized['tenant_id']           = sanitize_text_field(trim(isset($input['tenant_id']) ? $input['tenant_id'] : ''));
+    $sanitized['webhook_secret']      = sanitize_text_field(trim(isset($input['webhook_secret']) ? $input['webhook_secret'] : ''));
     $sanitized['enabled']             = !empty($input['enabled']);
     $sanitized['debug_mode']          = !empty($input['debug_mode']);
-    $sanitized['cf7_enabled']         = !empty($input['cf7_enabled']);
-    $sanitized['wpforms_enabled']     = !empty($input['wpforms_enabled']);
-    $sanitized['gravity_enabled']     = !empty($input['gravity_enabled']);
-    $sanitized['fluent_enabled']      = !empty($input['fluent_enabled']);
-    $sanitized['elementor_enabled']   = !empty($input['elementor_enabled']);
+    $sanitized['intercept_ajax']      = !empty($input['intercept_ajax']);
     $sanitized['whatsapp_notify']     = !empty($input['whatsapp_notify']);
-    $sanitized['whatsapp_number']     = sanitize_text_field(trim($input['whatsapp_number']));
+    $sanitized['whatsapp_number']     = sanitize_text_field(trim(isset($input['whatsapp_number']) ? $input['whatsapp_number'] : ''));
     $sanitized['whatsapp_auto_reply'] = !empty($input['whatsapp_auto_reply']);
-    $sanitized['whatsapp_template']   = sanitize_textarea_field(trim($input['whatsapp_template']));
-    $sanitized['default_service']     = sanitize_text_field(trim($input['default_service']));
-    $sanitized['default_tags']        = sanitize_text_field(trim($input['default_tags']));
-    $sanitized['assign_to_id']        = sanitize_text_field(trim($input['assign_to_id']));
-    $sanitized['assign_to_name']      = sanitize_text_field(trim($input['assign_to_name']));
+    $sanitized['whatsapp_template']   = sanitize_textarea_field(trim(isset($input['whatsapp_template']) ? $input['whatsapp_template'] : ''));
+    $sanitized['default_service']     = sanitize_text_field(trim(isset($input['default_service']) ? $input['default_service'] : ''));
+    $sanitized['default_tags']        = sanitize_text_field(trim(isset($input['default_tags']) ? $input['default_tags'] : ''));
+    $sanitized['assign_to_id']        = sanitize_text_field(trim(isset($input['assign_to_id']) ? $input['assign_to_id'] : ''));
+    $sanitized['assign_to_name']      = sanitize_text_field(trim(isset($input['assign_to_name']) ? $input['assign_to_name'] : ''));
     return $sanitized;
 }
 
 function serviceos_get_settings() {
-    return get_option(SERVICEOS_OPTION_KEY, array());
+    $defaults = array(
+        'api_url'             => '',
+        'api_key'             => '',
+        'tenant_id'           => '',
+        'enabled'             => true,
+        'debug_mode'          => false,
+        'intercept_ajax'      => false,
+        'webhook_secret'      => '',
+        'whatsapp_notify'     => false,
+        'whatsapp_number'     => '',
+        'whatsapp_auto_reply' => false,
+        'whatsapp_template'   => '',
+        'default_service'     => '',
+        'default_tags'        => '',
+        'assign_to_id'        => '',
+        'assign_to_name'      => '',
+    );
+    $stored = get_option(SERVICEOS_OPTION_KEY, array());
+    if (!is_array($stored)) $stored = array();
+    return array_merge($defaults, $stored);
 }
 
 // ─── Logging ──────────────────────────────────────────────────────────────────
@@ -154,6 +164,14 @@ function serviceos_log($status, $message) {
 }
 
 // ─── Core: Send Lead to ServiceOS ─────────────────────────────────────────────
+//
+// NOTE: This function is only used by the "Send Test Lead" admin button.
+// Real form submissions are captured client-side by the universal embed.js
+// script (enqueued via wp_enqueue_scripts below). The PHP per-form hooks
+// (wpcf7_mail_sent, wpforms_process_complete, gform_after_submission,
+// fluentform/submission_inserted, elementor_pro/forms/new_record) have been
+// REMOVED — the universal JS captures submissions for ALL form plugins
+// automatically without per-plugin PHP integration.
 
 function serviceos_send_lead($data, $form_source = 'unknown') {
     $settings = serviceos_get_settings();
@@ -168,6 +186,13 @@ function serviceos_send_lead($data, $form_source = 'unknown') {
         return false;
     }
 
+    // Normalize base URL — strip trailing /api/forms/leads if user pasted full endpoint.
+    $api_base = rtrim($settings['api_url'], '/');
+    if (substr($api_base, -16) === '/api/forms/leads') {
+        $api_base = substr($api_base, 0, -16);
+    }
+    $api_url = $api_base . '/api/forms/leads';
+
     // Add tenant_id
     if (!empty($settings['tenant_id'])) {
         $data['tenantId'] = $settings['tenant_id'];
@@ -176,19 +201,14 @@ function serviceos_send_lead($data, $form_source = 'unknown') {
     // Add form source
     $data['_form_source'] = $form_source;
 
-    // Add WhatsApp control fields
+    // Add WhatsApp control fields (optional; the endpoint decides what to do with them)
     if (!empty($settings['whatsapp_notify']) && !empty($settings['whatsapp_number'])) {
         $data['_notifyWhatsApp'] = true;
         $data['_whatsappNumber'] = $settings['whatsapp_number'];
-        if (!empty($settings['whatsapp_message'])) {
-            $data['_whatsappMessage'] = $settings['whatsapp_message'];
-        }
     }
-    if (!empty($settings['whatsapp_auto_reply'])) {
+    if (!empty($settings['whatsapp_auto_reply']) && !empty($settings['whatsapp_template'])) {
         $data['_autoReplyWhatsApp'] = true;
-        if (!empty($settings['whatsapp_template'])) {
-            $data['_autoReplyTemplate'] = $settings['whatsapp_template'];
-        }
+        $data['_autoReplyTemplate'] = $settings['whatsapp_template'];
     }
 
     // Add lead settings
@@ -202,8 +222,6 @@ function serviceos_send_lead($data, $form_source = 'unknown') {
         $data['_assignToId'] = $settings['assign_to_id'];
         $data['_assignToName'] = $settings['assign_to_name'];
     }
-
-    $api_url = trailingslashit($settings['api_url']) . 'webhooks/ingest';
 
     serviceos_log('debug', "Sending to: {$api_url} (source: {$form_source})");
 
@@ -236,11 +254,9 @@ function serviceos_send_lead($data, $form_source = 'unknown') {
     $result = json_decode($result_body, true);
 
     if (($code === 200 || $code === 201) && !empty($result['success'])) {
-        $lead_name = isset($result['lead']['name']) ? $result['lead']['name'] : 'Unknown';
-        $lead_id = isset($result['lead']['id']) ? $result['lead']['id'] : 'N/A';
-        $lead_score = isset($result['lead']['score']) ? $result['lead']['score'] : 'N/A';
-        $processing_time = isset($result['meta']['processingTimeMs']) ? $result['meta']['processingTimeMs'] . 'ms' : 'N/A';
-        serviceos_log('success', "Lead created: {$lead_name} (ID: {$lead_id}, Score: {$lead_score}, Time: {$processing_time})");
+        $lead_name = isset($result['leadName']) ? $result['leadName'] : (isset($result['lead']['name']) ? $result['lead']['name'] : 'Unknown');
+        $lead_id = isset($result['leadId']) ? $result['leadId'] : (isset($result['lead']['id']) ? $result['lead']['id'] : 'N/A');
+        serviceos_log('success', "Lead created: {$lead_name} (ID: {$lead_id})");
         return $result;
     } else {
         $error = isset($result['message']) ? $result['message'] : (isset($result['error']) ? $result['error'] : "HTTP {$code}");
@@ -249,131 +265,50 @@ function serviceos_send_lead($data, $form_source = 'unknown') {
     }
 }
 
-// ─── Hook: Contact Form 7 ─────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════════════
+// UNIVERSAL EMBED SCRIPT LOADER (replaces per-form-plugin PHP hooks)
+// ════════════════════════════════════════════════════════════════════════════
 
-add_action('wpcf7_mail_sent', 'serviceos_cf7_handler');
+add_action('wp_enqueue_scripts', 'serviceos_enqueue_embed_script');
 
-function serviceos_cf7_handler($contact_form) {
+function serviceos_enqueue_embed_script() {
     $settings = serviceos_get_settings();
-    if (empty($settings['cf7_enabled'])) return;
 
-    $submission = WPCF7_Submission::get_instance();
-    if (!$submission) {
-        serviceos_log('error', 'CF7: No submission instance found.');
-        return;
+    // Skip in wp-admin and on AJAX endpoints
+    if (is_admin() || wp_doing_ajax()) return;
+
+    // Skip if disabled
+    if (empty($settings['enabled'])) return;
+
+    // Skip if not configured
+    if (empty($settings['api_url']) || empty($settings['api_key'])) return;
+
+    // Normalize the API URL: strip any trailing /api/forms/leads so we can
+    // use it as a base for /embed.js. The embed.js will append the path itself.
+    $api_base = rtrim($settings['api_url'], '/');
+    if (substr($api_base, -16) === '/api/forms/leads') {
+        $api_base = substr($api_base, 0, -16);
     }
 
-    $data = $submission->get_posted_data();
-    $form_id = $contact_form->id();
-    $form_title = $contact_form->title();
+    $embed_url = $api_base . '/embed.js';
 
-    // Remove CF7 internal fields
-    foreach (array_keys($data) as $key) {
-        if (strpos($key, '_wpcf7') === 0) unset($data[$key]);
+    // Register + enqueue the script
+    wp_register_script('serviceos-embed', $embed_url, array(), SERVICEOS_VERSION, true);
+    wp_enqueue_script('serviceos-embed');
+
+    // Pass config to the script via wp_localize_script. embed.js reads
+    // window.SERVICEOS_CONFIG before init.
+    $config = array(
+        'apiKey'        => $settings['api_key'],
+        'apiUrl'        => $api_base,
+        'interceptAjax' => !empty($settings['intercept_ajax']),
+        'showToast'     => false,
+    );
+    wp_localize_script('serviceos-embed', 'SERVICEOS_CONFIG', $config);
+
+    if (!empty($settings['debug_mode'])) {
+        serviceos_log('debug', 'Enqueued serviceos-embed script from: ' . $embed_url);
     }
-
-    $data['_form_title'] = $form_title;
-    $data['_source_url'] = $submission->get_meta('url');
-    $data['_ip_address'] = $submission->get_meta('remote_ip');
-    $data['_user_agent'] = $submission->get_meta('user_agent');
-
-    serviceos_log('debug', "CF7: Form #{$form_id} - {$form_title}");
-    serviceos_send_lead($data, 'contact-form-7');
-}
-
-// ─── Hook: WPForms ────────────────────────────────────────────────────────────
-
-add_action('wpforms_process_complete', 'serviceos_wpforms_handler', 10, 4);
-
-function serviceos_wpforms_handler($fields, $entry, $form_data, $entry_id) {
-    $settings = serviceos_get_settings();
-    if (empty($settings['wpforms_enabled'])) return;
-
-    $data = array();
-    foreach ($fields as $field) {
-        $key = sanitize_key($field['name']);
-        if (empty($key)) $key = 'field_' . $field['id'];
-        $data[$key] = $field['value'];
-    }
-
-    $data['_form_title'] = $form_data['settings']['form_title'];
-    $data['_source_url'] = wp_get_referer();
-
-    serviceos_log('debug', "WPForms: Form #{$form_data['id']} - {$form_data['settings']['form_title']}");
-    serviceos_send_lead($data, 'wpforms');
-}
-
-// ─── Hook: Gravity Forms ──────────────────────────────────────────────────────
-
-add_action('gform_after_submission', 'serviceos_gravity_handler', 10, 2);
-
-function serviceos_gravity_handler($entry, $form) {
-    $settings = serviceos_get_settings();
-    if (empty($settings['gravity_enabled'])) return;
-
-    $data = array();
-    foreach ($form['fields'] as $field) {
-        $value = rgars($entry, $field->id);
-        if (!empty($value)) {
-            $key = sanitize_key($field->label);
-            if (empty($key)) $key = 'field_' . $field->id;
-            $data[$key] = $value;
-        }
-    }
-
-    $data['_form_title'] = $form['title'];
-    $data['_source_url'] = rgars($entry, 'source_url');
-    $data['_ip_address'] = rgars($entry, 'ip');
-
-    serviceos_log('debug', "Gravity Forms: Form #{$form['id']} - {$form['title']}");
-    serviceos_send_lead($data, 'gravity-forms');
-}
-
-// ─── Hook: Fluent Forms ───────────────────────────────────────────────────────
-
-add_action('fluentform/submission_inserted', 'serviceos_fluent_handler', 10, 3);
-
-function serviceos_fluent_handler($entry_id, $form_data, $form) {
-    $settings = serviceos_get_settings();
-    if (empty($settings['fluent_enabled'])) return;
-
-    $data = array();
-    $inputs = $form_data['inputs'] ?? array();
-    foreach ($inputs as $key => $value) {
-        if (is_string($value)) {
-            $data[$key] = sanitize_text_field($value);
-        }
-    }
-
-    $data['_form_title'] = $form->title;
-    $data['_source_url'] = wp_get_referer();
-
-    serviceos_log('debug', "Fluent Forms: Form #{$form->id} - {$form->title}");
-    serviceos_send_lead($data, 'fluent-forms');
-}
-
-// ─── Hook: Elementor Forms ────────────────────────────────────────────────────
-
-add_action('elementor_pro/forms/new_record', 'serviceos_elementor_handler', 10, 2);
-
-function serviceos_elementor_handler($record, $ajax_handler) {
-    $settings = serviceos_get_settings();
-    if (empty($settings['elementor_enabled'])) return;
-
-    $data = array();
-    $fields = $record->get('fields');
-    foreach ($fields as $field_key => $field) {
-        $key = sanitize_key($field['title'] ?? $field_key);
-        if (empty($key)) $key = $field_key;
-        $data[$key] = $field['value'] ?? '';
-    }
-
-    $data['_form_title'] = $record->get_form_settings('form_name');
-    $data['_source_url'] = $record->get('url') ?? wp_get_referer();
-    $data['_ip_address'] = \ElementorPro\Core\Utils::get_client_ip();
-
-    serviceos_log('debug', "Elementor Forms: {$data['_form_title']}");
-    serviceos_send_lead($data, 'elementor-forms');
 }
 
 // ─── AJAX: Test Connection ────────────────────────────────────────────────────
@@ -383,13 +318,17 @@ add_action('wp_ajax_serviceos_test_connection', 'serviceos_ajax_test_connection'
 function serviceos_ajax_test_connection() {
     check_ajax_referer('serviceos_admin', 'nonce');
     $settings = serviceos_get_settings();
-    $api_url = trailingslashit($settings['api_url']) . 'webhooks/ingest';
-    $api_key = $settings['api_key'];
+
+    // Test the universal /api/forms/leads endpoint with ?key= query param.
+    $api_base = rtrim($settings['api_url'], '/');
+    if (substr($api_base, -16) === '/api/forms/leads') {
+        $api_base = substr($api_base, 0, -16);
+    }
+    $api_url = $api_base . '/api/forms/leads?key=' . rawurlencode($settings['api_key']);
 
     $response = wp_remote_get($api_url, array(
         'headers' => array(
-            'Authorization' => 'Bearer ' . $api_key,
-            'Content-Type'  => 'application/json',
+            'Content-Type' => 'application/json',
         ),
         'timeout' => 15,
     ));
@@ -400,17 +339,18 @@ function serviceos_ajax_test_connection() {
     }
 
     $code = wp_remote_retrieve_response_code($response);
-    if ($code === 200) {
+    $body = json_decode(wp_remote_retrieve_body($response), true);
+
+    if ($code === 200 && isset($body['status']) && $body['status'] === 'connected') {
         set_transient('serviceos_connection_test', 'ok', HOUR_IN_SECONDS);
-        $body = json_decode(wp_remote_retrieve_body($response), true);
         wp_send_json_success(array(
             'message' => 'Connected!',
-            'stats'   => isset($body['stats']) ? $body['stats'] : array(),
+            'stats'   => isset($body['endpoint']) ? $body['endpoint'] : array(),
         ));
     } else {
         set_transient('serviceos_connection_test', 'fail', HOUR_IN_SECONDS);
-        $body = json_decode(wp_remote_retrieve_body($response), true);
-        wp_send_json_error(isset($body['message']) ? $body['message'] : "HTTP {$code}");
+        $msg = isset($body['error']) ? $body['error'] : (isset($body['message']) ? $body['message'] : "HTTP {$code}");
+        wp_send_json_error($msg);
     }
 }
 
@@ -425,7 +365,7 @@ function serviceos_ajax_test_lead() {
         'phone'   => '9999999999',
         'email'   => 'test@wordpress.local',
         'company' => 'Test Company',
-        'message' => 'This is a test lead from the ServiceOS WordPress plugin.',
+        'message' => 'This is a test lead from the ServiceOS WordPress plugin (universal endpoint).',
     );
     $result = serviceos_send_lead($data, 'test');
     if ($result) {
@@ -450,6 +390,7 @@ function serviceos_ajax_clear_logs() {
 add_action('admin_bar_menu', 'serviceos_admin_bar', 100);
 
 function serviceos_admin_bar($wp_admin_bar) {
+    if (is_admin()) return;
     $settings = serviceos_get_settings();
     if (empty($settings['enabled'])) return;
 
@@ -457,8 +398,8 @@ function serviceos_admin_bar($wp_admin_bar) {
     $wp_admin_bar->add_node(array(
         'id'     => 'serviceos-status',
         'title'  => $is_connected
-            ? '<span style="color:#22c55e;">●</span> ServiceOS Connected'
-            : '<span style="color:#ef4444;">●</span> ServiceOS Disconnected',
+            ? '<span style="color:#22c55e;">●</span> ServiceOS Capturing'
+            : '<span style="color:#ef4444;">●</span> ServiceOS Not Connected',
         'href'   => admin_url('admin.php?page=serviceos-crm'),
         'parent' => 'top-secondary',
     ));
@@ -481,15 +422,6 @@ function serviceos_plugin_row_meta($links, $file) {
 function serviceos_settings_page() {
     $settings = serviceos_get_settings();
     $active_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'connect';
-
-    // Detect which form plugins are active
-    $cf7_active       = class_exists('WPCF7_ContactForm');
-    $wpforms_active   = function_exists('wpforms');
-    $gravity_active   = class_exists('GFForms');
-    $fluent_active    = class_exists('FluentForm\App');
-    $elementor_active = class_exists('\ElementorPro\Plugin');
-
-    $any_form_active = $cf7_active || $wpforms_active || $gravity_active || $fluent_active || $elementor_active;
 
     $is_configured = !empty($settings['api_url']) && !empty($settings['api_key']);
     $is_connected = get_transient('serviceos_connection_test') === 'ok';
@@ -526,17 +458,17 @@ function serviceos_settings_page() {
             </span>
             <div>
                 <h1 style="margin:0;font-size:22px;">ServiceOS CRM Connector</h1>
-                <p style="margin:0;color:#64748b;font-size:13px;">Capture form submissions as CRM leads with WhatsApp notifications</p>
+                <p style="margin:0;color:#64748b;font-size:13px;">Universal JavaScript form capture — works with every form plugin automatically</p>
             </div>
         </div>
 
         <nav class="nav-tab-wrapper">
             <a href="?page=serviceos-crm&tab=setup" class="nav-tab <?php echo $active_tab === 'setup' ? 'nav-tab-active' : ''; ?>">⚡ Setup</a>
             <a href="?page=serviceos-crm&tab=connect" class="nav-tab <?php echo $active_tab === 'connect' ? 'nav-tab-active' : ''; ?>">🔗 Connect</a>
-            <a href="?page=serviceos-crm&tab=forms" class="nav-tab <?php echo $active_tab === 'forms' ? 'nav-tab-active' : ''; ?>">📋 Forms</a>
+            <a href="?page=serviceos-crm&tab=forms" class="nav-tab <?php echo $active_tab === 'forms' ? 'nav-tab-active' : ''; ?>">📋 Supported Forms</a>
             <a href="?page=serviceos-crm&tab=whatsapp" class="nav-tab <?php echo $active_tab === 'whatsapp' ? 'nav-tab-active' : ''; ?>">💬 WhatsApp</a>
             <a href="?page=serviceos-crm&tab=field-mapping" class="nav-tab <?php echo $active_tab === 'field-mapping' ? 'nav-tab-active' : ''; ?>">🗺️ Field Map</a>
-            <a href="?page=serviceos-crm&tab=logs" class="nav-tab <?php echo $active_tab === 'logs' ? 'nav-tab-active' : ''; ''; ?>">📊 Logs</a>
+            <a href="?page=serviceos-crm&tab=logs" class="nav-tab <?php echo $active_tab === 'logs' ? 'nav-tab-active' : ''; ?>">📊 Logs</a>
         </nav>
 
         <?php if ($active_tab === 'setup'): ?>
@@ -549,17 +481,34 @@ function serviceos_settings_page() {
                     <span class="sos-flow-arrow">→</span>
                     <div class="sos-flow-item" style="background:#e0e7ff;color:#3730a3;">2. Connect CRM</div>
                     <span class="sos-flow-arrow">→</span>
-                    <div class="sos-flow-item" style="background:#fce7f3;color:#9d174d;">3. Enable Forms</div>
+                    <div class="sos-flow-item" style="background:#fce7f3;color:#9d174d;">3. Universal JS Loaded</div>
                     <span class="sos-flow-arrow">→</span>
                     <div class="sos-flow-item" style="background:#fef3c7;color:#92400e;">4. Done!</div>
                 </div>
 
                 <ol style="line-height:2;">
-                    <li><strong>In ServiceOS</strong>, go to <code>Settings → API Keys</code> → click <strong>Generate New Key</strong></li>
+                    <li><strong>In ServiceOS</strong>, go to <code>Settings → Integrations → Website Form Integration</code> → click <strong>Generate</strong></li>
                     <li><strong>Copy</strong> the API URL and API Key, paste them in the <a href="?page=serviceos-crm&tab=connect">Connect tab</a></li>
-                    <li><strong>Enable</strong> your form plugin(s) in the <a href="?page=serviceos-crm&tab=forms">Forms tab</a></li>
-                    <li><strong>Test</strong> by submitting a form — the lead will appear in your CRM instantly!</li>
+                    <li><strong>Save</strong> — the plugin will start loading <code>/embed.js</code> on every frontend page automatically</li>
+                    <li><strong>Test</strong> by submitting any form on your site — the lead will appear in your CRM instantly! Works with Contact Form 7, WPForms, Gravity Forms, Elementor, Fluent Forms, and more.</li>
                 </ol>
+
+                <div style="background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:16px;margin-top:20px;">
+                    <h4 style="margin:0 0 8px 0;font-size:13px;color:#374151;">📋 Supported Form Plugins (all auto-captured):</h4>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:6px;font-size:12px;">
+                        <div>✓ Contact Form 7</div>
+                        <div>✓ WPForms</div>
+                        <div>✓ Gravity Forms</div>
+                        <div>✓ Ninja Forms</div>
+                        <div>✓ Fluent Forms</div>
+                        <div>✓ Elementor Forms</div>
+                        <div>✓ Formidable Forms</div>
+                        <div>✓ MetForm</div>
+                        <div>✓ Everest Forms</div>
+                        <div>✓ HTML Forms</div>
+                        <div>✓ Custom React/Vue/PHP</div>
+                    </div>
+                </div>
             </div>
 
             <!-- Status Dashboard -->
@@ -571,10 +520,10 @@ function serviceos_settings_page() {
                     <div style="font-size:12px;color:#64748b;">CRM Connection</div>
                 </div>
                 <div class="sos-card" style="text-align:center;padding:16px;">
-                    <div style="font-size:24px;font-weight:700;color:<?php echo $any_form_active ? '#22c55e' : '#f59e0b'; ?>">
-                        <?php echo $any_form_active ? count(array_filter([$cf7_active, $wpforms_active, $gravity_active, $fluent_active, $elementor_active])) : '0'; ?>
+                    <div style="font-size:24px;font-weight:700;color:<?php echo !empty($settings['enabled']) ? '#22c55e' : '#94a3b8'; ?>">
+                        <?php echo !empty($settings['enabled']) ? 'ON' : 'OFF'; ?>
                     </div>
-                    <div style="font-size:12px;color:#64748b;">Form Plugins Active</div>
+                    <div style="font-size:12px;color:#64748b;">Universal Capture</div>
                 </div>
                 <div class="sos-card" style="text-align:center;padding:16px;">
                     <div style="font-size:24px;font-weight:700;color:<?php echo !empty($settings['whatsapp_notify']) ? '#22c55e' : '#94a3b8'; ?>">
@@ -609,19 +558,19 @@ function serviceos_settings_page() {
                     <?php endif; ?>
 
                     <div class="sos-field">
-                        <label for="api_url">API URL</label>
+                        <label for="api_url">ServiceOS URL</label>
                         <input type="url" name="<?php echo SERVICEOS_OPTION_KEY; ?>[api_url]" id="api_url"
                                value="<?php echo esc_attr($settings['api_url']); ?>"
-                               placeholder="https://app.yourcrm.com/api" />
-                        <p class="description">Your ServiceOS API base URL</p>
+                               placeholder="https://app.yourcrm.com" />
+                        <p class="description">Your ServiceOS base URL. The plugin loads /embed.js from this domain.</p>
                     </div>
 
                     <div class="sos-field">
                         <label for="api_key">API Key</label>
                         <input type="password" name="<?php echo SERVICEOS_OPTION_KEY; ?>[api_key]" id="api_key"
                                value="<?php echo esc_attr($settings['api_key']); ?>"
-                               placeholder="sos_prod_xxxxxxxxxxxx" />
-                        <p class="description">From ServiceOS Settings → API Keys</p>
+                               placeholder="ff_prod_xxxxxxxxxxxx" />
+                        <p class="description">From ServiceOS Settings → Integrations → Website Form Integration</p>
                     </div>
 
                     <div class="sos-field">
@@ -637,22 +586,31 @@ function serviceos_settings_page() {
                         <input type="text" name="<?php echo SERVICEOS_OPTION_KEY; ?>[webhook_secret]" id="webhook_secret"
                                value="<?php echo esc_attr($settings['webhook_secret']); ?>"
                                placeholder="whsec_xxxxxxxxxxxx" />
-                        <p class="description">For HMAC-SHA256 signature verification. Set this in ServiceOS credential settings too.</p>
+                        <p class="description">For HMAC-SHA256 signature verification on server-to-server test leads.</p>
                     </div>
 
                     <div class="sos-field">
                         <label>
                             <input type="checkbox" name="<?php echo SERVICEOS_OPTION_KEY; ?>[enabled]" value="1"
                                    <?php checked(!empty($settings['enabled'])); ?> />
-                            Enable lead capture
+                            Inject universal capture script on every frontend page
                         </label>
+                    </div>
+
+                    <div class="sos-field">
+                        <label>
+                            <input type="checkbox" name="<?php echo SERVICEOS_OPTION_KEY; ?>[intercept_ajax]" value="1"
+                                   <?php checked(!empty($settings['intercept_ajax'])); ?> />
+                            Also intercept AJAX form POSTs (fetch + XHR)
+                        </label>
+                        <p class="description">Enable for forms that submit via AJAX without a page reload (Contact Form 7 REST mode, Elementor, custom React forms). Disabled by default.</p>
                     </div>
 
                     <div class="sos-field">
                         <label>
                             <input type="checkbox" name="<?php echo SERVICEOS_OPTION_KEY; ?>[debug_mode]" value="1"
                                    <?php checked(!empty($settings['debug_mode'])); ?> />
-                            Debug mode (log all requests)
+                            Debug mode (log script load events)
                         </label>
                     </div>
 
@@ -706,101 +664,63 @@ function serviceos_settings_page() {
             </script>
 
         <?php elseif ($active_tab === 'forms'): ?>
-            <!-- ════════════════════ FORMS TAB ════════════════════ -->
-            <form method="post" action="options.php">
-                <?php settings_fields('serviceos_crm'); ?>
+            <!-- ════════════════════ SUPPORTED FORMS TAB ════════════════════ -->
+            <div class="sos-card">
+                <h3>📋 Supported Form Plugins</h3>
+                <p style="color:#64748b;font-size:13px;margin-bottom:16px;">
+                    The universal capture script works with <strong>every</strong> form plugin below. No per-plugin configuration is required — the script listens to all <code>&lt;form&gt;</code> submit events on every page.
+                </p>
 
-                <div class="sos-card">
-                    <h3>📋 Form Plugin Integration</h3>
-                    <p style="color:#64748b;font-size:13px;margin-bottom:16px;">Enable the form plugins you want to capture leads from. Only installed/active plugins are available.</p>
+                <table style="max-width:700px;">
+                    <thead>
+                        <tr>
+                            <th>Form Plugin</th>
+                            <th>Supported</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php
+                        $supported = array(
+                            array('Contact Form 7', 'Listens for native submit; enable AJAX interception if CF7 is in REST/AJAX mode.'),
+                            array('WPForms', 'Native submit captured automatically. AJAX mode supported.'),
+                            array('Gravity Forms', 'Native submit captured automatically. AJAX mode supported.'),
+                            array('Ninja Forms', 'Native submit captured automatically. AJAX mode supported.'),
+                            array('Fluent Forms', 'Native submit captured automatically. AJAX mode supported.'),
+                            array('Elementor Forms', 'Enable AJAX interception — Elementor submits via fetch/XHR.'),
+                            array('Formidable Forms', 'Native submit captured automatically.'),
+                            array('MetForm', 'Enable AJAX interception — MetForm submits via XHR.'),
+                            array('Everest Forms', 'Native submit captured automatically.'),
+                            array('HTML Forms', 'Captured automatically — plain <form> elements.'),
+                            array('Custom React / Vue / PHP Forms', 'Captured automatically. Use AJAX interception for SPA-style form POSTs.'),
+                            array('JotForm (iframe)', 'Use ServiceOS Webhook integration in JotForm settings — iframe forms cannot be captured via JS due to cross-origin restrictions.'),
+                        );
+                        foreach ($supported as $row):
+                        ?>
+                        <tr>
+                            <td><strong><?php echo esc_html($row[0]); ?></strong></td>
+                            <td><span class="sos-badge sos-badge-green">✓ Yes</span></td>
+                            <td style="color:#64748b;font-size:12px;"><?php echo esc_html($row[1]); ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
 
-                    <table style="max-width:600px;">
-                        <thead>
-                            <tr>
-                                <th>Form Plugin</th>
-                                <th>Status</th>
-                                <th>Capture</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td><strong>Contact Form 7</strong></td>
-                                <td>
-                                    <?php if ($cf7_active): ?>
-                                        <span class="sos-badge sos-badge-green">✓ Active</span>
-                                    <?php else: ?>
-                                        <span class="sos-badge sos-badge-gray">Not installed</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <input type="checkbox" name="<?php echo SERVICEOS_OPTION_KEY; ?>[cf7_enabled]" value="1"
-                                           <?php checked(!empty($settings['cf7_enabled'])); ?> <?php if (!$cf7_active) echo 'disabled'; ?> />
-                                </td>
-                            </tr>
-                            <tr>
-                                <td><strong>WPForms</strong></td>
-                                <td>
-                                    <?php if ($wpforms_active): ?>
-                                        <span class="sos-badge sos-badge-green">✓ Active</span>
-                                    <?php else: ?>
-                                        <span class="sos-badge sos-badge-gray">Not installed</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <input type="checkbox" name="<?php echo SERVICEOS_OPTION_KEY; ?>[wpforms_enabled]" value="1"
-                                           <?php checked(!empty($settings['wpforms_enabled'])); ?> <?php if (!$wpforms_active) echo 'disabled'; ?> />
-                                </td>
-                            </tr>
-                            <tr>
-                                <td><strong>Gravity Forms</strong></td>
-                                <td>
-                                    <?php if ($gravity_active): ?>
-                                        <span class="sos-badge sos-badge-green">✓ Active</span>
-                                    <?php else: ?>
-                                        <span class="sos-badge sos-badge-gray">Not installed</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <input type="checkbox" name="<?php echo SERVICEOS_OPTION_KEY; ?>[gravity_enabled]" value="1"
-                                           <?php checked(!empty($settings['gravity_enabled'])); ?> <?php if (!$gravity_active) echo 'disabled'; ?> />
-                                </td>
-                            </tr>
-                            <tr>
-                                <td><strong>Fluent Forms</strong></td>
-                                <td>
-                                    <?php if ($fluent_active): ?>
-                                        <span class="sos-badge sos-badge-green">✓ Active</span>
-                                    <?php else: ?>
-                                        <span class="sos-badge sos-badge-gray">Not installed</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <input type="checkbox" name="<?php echo SERVICEOS_OPTION_KEY; ?>[fluent_enabled]" value="1"
-                                           <?php checked(!empty($settings['fluent_enabled'])); ?> <?php if (!$fluent_active) echo 'disabled'; ?> />
-                                </td>
-                            </tr>
-                            <tr>
-                                <td><strong>Elementor Forms</strong></td>
-                                <td>
-                                    <?php if ($elementor_active): ?>
-                                        <span class="sos-badge sos-badge-green">✓ Active</span>
-                                    <?php else: ?>
-                                        <span class="sos-badge sos-badge-gray">Not installed</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <input type="checkbox" name="<?php echo SERVICEOS_OPTION_KEY; ?>[elementor_enabled]" value="1"
-                                           <?php checked(!empty($settings['elementor_enabled'])); ?> <?php if (!$elementor_active) echo 'disabled'; ?> />
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-
-                    <p style="margin-top:16px;">
-                        <?php submit_button('Save Form Settings', 'primary', 'submit', false); ?>
-                    </p>
+                <h3 style="margin-top:24px;">How it works</h3>
+                <div style="background:#1e293b;color:#e2e8f0;padding:16px;border-radius:6px;font-size:12px;line-height:1.7;">
+WordPress page loads
+        ↓
+Plugin enqueues /embed.js (via wp_enqueue_script)
+        ↓
+window.SERVICEOS_CONFIG = { apiKey, apiUrl, interceptAjax }
+        ↓
+embed.js auto-detects ALL &lt;form&gt; submit events
+        ↓
+Fields mapped → POST /api/forms/leads  (header: X-API-Key)
+        ↓
+Lead appears in ServiceOS CRM dashboard
                 </div>
-            </form>
+            </div>
 
         <?php elseif ($active_tab === 'whatsapp'): ?>
             <!-- ════════════════════ WHATSAPP TAB ════════════════════ -->
@@ -809,13 +729,17 @@ function serviceos_settings_page() {
 
                 <div class="sos-card">
                     <h3>💬 WhatsApp Notifications</h3>
-                    <p style="color:#64748b;font-size:13px;margin-bottom:16px;">Get instant WhatsApp alerts when new leads arrive from your forms.</p>
+                    <p style="color:#64748b;font-size:13px;margin-bottom:16px;">
+                        These settings are sent to ServiceOS as optional metadata on the test-lead endpoint.
+                        For production lead capture, configure WhatsApp notifications directly in ServiceOS
+                        Settings → Integrations → Website Form Integration (per-endpoint owner + auto-reply).
+                    </p>
 
                     <div class="sos-field">
                         <label>
                             <input type="checkbox" name="<?php echo SERVICEOS_OPTION_KEY; ?>[whatsapp_notify]" value="1"
                                    <?php checked(!empty($settings['whatsapp_notify'])); ?> />
-                            Send WhatsApp notification to owner on new lead
+                            Send WhatsApp notification to owner on new lead (test-lead only)
                         </label>
                     </div>
 
@@ -831,7 +755,7 @@ function serviceos_settings_page() {
                         <label>
                             <input type="checkbox" name="<?php echo SERVICEOS_OPTION_KEY; ?>[whatsapp_auto_reply]" value="1"
                                    <?php checked(!empty($settings['whatsapp_auto_reply'])); ?> />
-                            Send WhatsApp auto-reply to the lead
+                            Send WhatsApp auto-reply to the lead (test-lead only)
                         </label>
                     </div>
 
@@ -906,7 +830,7 @@ function serviceos_settings_page() {
                 $logs = get_option(SERVICEOS_LOG_OPTION, array());
                 if (empty($logs)):
                 ?>
-                    <p style="color:#94a3b8;text-align:center;padding:24px;">No logs yet. Submit a form to see activity here.</p>
+                    <p style="color:#94a3b8;text-align:center;padding:24px;">No logs yet. (Lead delivery is handled by the embed script client-side; this log tracks plugin-side events like script injection and connection tests.)</p>
                 <?php else: ?>
                     <table>
                         <thead>

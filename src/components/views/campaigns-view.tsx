@@ -26,6 +26,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { authFetch } from '@/lib/client-auth';
 import { useAppStore } from '@/store/app-store';
 import { useDemoPageSize } from '@/hooks/use-demo-page-size';
+import { CampaignProviderGate } from '@/components/marketing/campaign-provider-gate';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -949,6 +950,12 @@ export function CampaignsView() {
 
   return (
     <div className="space-y-6 w-full">
+      {/* Provider gate — non-dismissible modal that blocks campaign usage
+          until the tenant has connected their own SMS, Email, and WhatsApp
+          providers. Platform-shared providers don't count. Renders null
+          when all 3 are configured or the user dismissed it this session. */}
+      <CampaignProviderGate onConfigure={() => setActiveView('emailProviders')} />
+
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">

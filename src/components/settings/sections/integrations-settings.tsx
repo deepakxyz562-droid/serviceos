@@ -40,6 +40,8 @@ import {
   Sparkles,
   Pencil,
   Code2,
+  Webhook,
+  ExternalLink,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -53,6 +55,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { toast } from 'sonner';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -184,6 +187,7 @@ export function IntegrationsSettings() {
   const [wfTesting, setWfTesting] = useState(false);
   const [wfShowApiKey, setWfShowApiKey] = useState(false);
   const [wfCopied, setWfCopied] = useState(false);
+  const [jotformCopied, setJotformCopied] = useState(false);
 
   // ─── WhatsApp Business Phone State ────────────────────────────────────
   const [whatsappPhone, setWhatsappPhone] = useState('');
@@ -1026,6 +1030,115 @@ curl_close($ch);`}
               </ol>
             </div>
           )}
+
+          {/* ─── JotForm Webhook Setup sub-section ─── */}
+          <Separator />
+          <div className="p-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/40 dark:bg-amber-950/10 space-y-3">
+            <div className="flex items-start gap-2.5">
+              <div className="flex items-center justify-center size-8 rounded-md bg-amber-100 dark:bg-amber-900/40 shrink-0">
+                <Webhook className="size-4 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-sm font-semibold text-amber-900 dark:text-amber-200 flex items-center gap-2 flex-wrap">
+                  Using JotForm? Use Webhooks Instead
+                  <Badge variant="outline" className="text-[10px] bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700">
+                    Cross-origin iframe
+                  </Badge>
+                </h4>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  JotForm embeds forms in a cross-origin iframe, so our universal JavaScript cannot capture
+                  submissions automatically. Instead, use JotForm&apos;s native Webhook integration to send
+                  submissions directly to ServiceOS.
+                </p>
+              </div>
+            </div>
+
+            <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside ml-1.5">
+              <li>
+                In JotForm Form Builder → <span className="font-medium text-foreground">Settings</span> →{' '}
+                <span className="font-medium text-foreground">Integrations</span> → search{' '}
+                <span className="font-medium text-foreground">&quot;Webhook&quot;</span> → click{' '}
+                <span className="font-medium text-foreground">Add</span>.
+              </li>
+              <li>Paste this URL into the <span className="font-medium text-foreground">Webhook Endpoint</span> field:</li>
+            </ol>
+
+            {/* Webhook URL + copy button */}
+            <div className="space-y-1.5 ml-1.5">
+              <div className="flex items-center gap-2">
+                <Input
+                  readOnly
+                  value={
+                    wfNewConfig?.apiKey
+                      ? `${wfNewConfig.apiUrl}?key=${wfNewConfig.apiKey}`
+                      : (wfEndpoints[0]?.apiUrl
+                          ? `${wfEndpoints[0].apiUrl}?key=${wfEndpoints[0].apiKeyPrefix || 'YOUR_API_KEY'}…`
+                          : 'Generate an API key above to reveal your webhook URL')
+                  }
+                  className="text-[11px] font-mono bg-white dark:bg-gray-900 h-8"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 gap-1 h-8"
+                  disabled={!wfNewConfig?.apiKey}
+                  onClick={() => {
+                    if (!wfNewConfig?.apiKey) return;
+                    const url = `${wfNewConfig.apiUrl}?key=${wfNewConfig.apiKey}`;
+                    navigator.clipboard.writeText(url);
+                    setJotformCopied(true);
+                    toast.success('JotForm webhook URL copied to clipboard');
+                    setTimeout(() => setJotformCopied(false), 2000);
+                  }}
+                >
+                  {jotformCopied ? <CheckCircle2 className="size-3" /> : <Copy className="size-3" />}
+                  {jotformCopied ? 'Copied' : 'Copy'}
+                </Button>
+              </div>
+              {!wfNewConfig?.apiKey && (
+                <p className="text-[10px] text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                  <KeyRound className="size-3" />
+                  {wfEndpoints.length > 0
+                    ? 'Generate a new API key above to view the complete webhook URL with key. (Existing keys are masked for security.)'
+                    : 'Click the Generate button at the top of this card to create an API key first.'}
+                </p>
+              )}
+            </div>
+
+            <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside ml-1.5" start={3}>
+              <li>Click <span className="font-medium text-foreground">Finish</span> in JotForm, then submit a test form.</li>
+              <li>
+                Check the <span className="font-medium text-foreground">Active Endpoints</span> list below — the{' '}
+                <code className="text-[10px] bg-background px-1 rounded">totalReceived</code> counter should increment.
+              </li>
+            </ol>
+
+            <Alert className="bg-white/70 dark:bg-gray-900/40 border-amber-200 dark:border-amber-800">
+              <Sparkles className="size-4 text-amber-600 dark:text-amber-400" />
+              <AlertTitle className="text-xs font-medium text-amber-900 dark:text-amber-200">
+                Automatic Field Mapping
+              </AlertTitle>
+              <AlertDescription className="text-[11px] text-amber-800 dark:text-amber-300">
+                Field mapping is automatic. JotForm fields like{' '}
+                <code className="text-[10px] bg-amber-100 dark:bg-amber-900/40 px-1 rounded">q1_name</code>,{' '}
+                <code className="text-[10px] bg-amber-100 dark:bg-amber-900/40 px-1 rounded">q2_email4</code>,{' '}
+                <code className="text-[10px] bg-amber-100 dark:bg-amber-900/40 px-1 rounded">q3_phone</code> are mapped to lead
+                name, email, phone. Custom field names may require manual mapping (coming soon).
+              </AlertDescription>
+            </Alert>
+
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <ExternalLink className="size-3" />
+              <a
+                href="https://www.jotform.com/help/245-How-to-Create-a-Webhook-in-JotForm/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-amber-700 dark:text-amber-400 hover:underline"
+              >
+                JotForm Webhook setup docs
+              </a>
+            </div>
+          </div>
 
           {/* Active Endpoints */}
           {wfLoading ? (

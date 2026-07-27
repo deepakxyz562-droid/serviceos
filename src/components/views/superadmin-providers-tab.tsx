@@ -175,13 +175,13 @@ const WHATSAPP_PROVIDER_CONFIGS: Record<string, { label: string; fields: { key: 
   },
 };
 
-const SMS_PROVIDER_CONFIGS: Record<string, { label: string; fields: { key: string; label: string; type: 'text' | 'password'; required?: boolean; placeholder?: string }[] }> = {
+const SMS_PROVIDER_CONFIGS: Record<string, { label: string; fields: { key: string; label: string; type: 'text' | 'password'; required?: boolean; placeholder?: string; help?: string }[] }> = {
   twilio: {
     label: 'Twilio SMS',
     fields: [
       { key: 'accountSid', label: 'Account SID', type: 'text', required: true },
       { key: 'authToken', label: 'Auth Token', type: 'password', required: true },
-      { key: 'fromNumber', label: 'From Number', type: 'text', required: true, placeholder: '+1234567890' },
+      { key: 'fromNumber', label: 'From Number or Sender ID', type: 'text', required: true, placeholder: '+1234567890 or ServiceOS', help: 'Phone number (+1234567890) OR alphanumeric sender ID (e.g. ServiceOS, max 11 chars). Recipients cannot reply to alphanumeric senders.' },
     ],
   },
   msg91: {
@@ -1102,6 +1102,9 @@ export function ProvidersTab() {
                         </button>
                       )}
                     </div>
+                    {field.help && (
+                      <p className="text-[11px] text-muted-foreground leading-tight">{field.help}</p>
+                    )}
                   </div>
                 ))}
               </div>

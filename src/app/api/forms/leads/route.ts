@@ -14,6 +14,14 @@ import { EventBus } from '@/lib/event-bus';
 // Authentication:
 //   Authorization: Bearer <api_key>   (server-side, preferred)
 //   X-API-Key: <api_key>              (client-side embed script)
+//   ?key=<api_key>                    (query param — for JotForm webhooks)
+//
+// Why query-param auth? JotForm webhooks cannot send custom HTTP headers.
+// JotForm only allows you to paste a webhook URL — no headers, no body
+// customization. To accept JotForm submissions directly, the API key MUST
+// ride in the URL's query string. Header auth remains the default for all
+// other integrations; query-param auth is a fallback used only when no
+// header key is present (so logs/curl with headers keep working).
 //
 // The API key maps to a WebhookEndpoint record with source='webform'
 // (or source='wordpress' for backward compatibility).
@@ -255,6 +263,16 @@ export async function GET(request: NextRequest) {
     providedKey = authHeader.slice(7).trim();
   } else if (xApiKey) {
     providedKey = xApiKey.trim();
+  } else {
+    // Fallback: ?key=<apikey> query param.
+    // Required for JotForm webhooks — JotForm cannot send custom headers,
+    // so the API key must ride in the URL. Only used when no header key is
+    // present (so callers using headers are unaffected).
+    const url = new URL(request.url);
+    const queryKey = url.searchParams.get('key');
+    if (queryKey) {
+      providedKey = queryKey.trim();
+    }
   }
 
   if (!providedKey) {
@@ -262,7 +280,7 @@ export async function GET(request: NextRequest) {
       status: 'ok',
       service: 'ServiceOS Universal Form Lead Capture',
       version: '1.0.0',
-      message: 'API key required. Use Authorization: Bearer <key> or X-API-Key: <key>',
+      message: 'API key required. Use Authorization: Bearer <key>, X-API-Key header, or ?key=<key> query param',
       features: [
         'lead_creation',
         'auto_customer',
@@ -344,12 +362,22 @@ export async function POST(request: NextRequest) {
       providedKey = authHeader.slice(7).trim();
     } else if (xApiKey) {
       providedKey = xApiKey.trim();
+    } else {
+      // Fallback: ?key=<apikey> query param.
+      // Required for JotForm webhooks — JotForm cannot send custom HTTP
+      // headers, so the API key must ride in the URL. Only used when no
+      // header key is present, so callers using headers keep working.
+      const url = new URL(request.url);
+      const queryKey = url.searchParams.get('key');
+      if (queryKey) {
+        providedKey = queryKey.trim();
+      }
     }
 
     if (!providedKey) {
       return NextResponse.json(
         {
-          error: 'API key required. Use Authorization: Bearer <key> or X-API-Key header',
+          error: 'API key required. Use Authorization: Bearer <key>, X-API-Key header, or ?key=<key> query param',
           code: 'AUTH_REQUIRED',
         },
         { status: 401, headers: CORS_HEADERS }

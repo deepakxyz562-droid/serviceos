@@ -53,6 +53,7 @@ import { Label } from '@/components/ui/label';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { WhatsAppCreditBanner } from '@/components/whatsapp-credit-banner';
 import { PayPalCheckoutDialog } from '@/components/billing/paypal-checkout-dialog';
+import { PaymentMethodChooserDialog, type ChooserPlan } from '@/components/billing/payment-method-chooser-dialog';
 import { authFetch } from '@/lib/client-auth';
 import { formatCurrency } from '@/lib/currency';
 
@@ -373,6 +374,7 @@ export function BillingView() {
   const [isYearly, setIsYearly] = useState(data.billingCycle === 'yearly');
   const [confirmPlan, setConfirmPlan] = useState<Plan | null>(null);
   const [paypalCheckoutPlan, setPaypalCheckoutPlan] = useState<Plan | null>(null);
+  const [chooserPlan, setChooserPlan] = useState<Plan | null>(null);
   const [isUpgrading, setIsUpgrading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [downgradeTarget, setDowngradeTarget] = useState<Plan | null>(null);
@@ -542,7 +544,9 @@ export function BillingView() {
     setProrationPreview(null);
 
     // Upgrade / trial→paid conversion: fetch proration preview first, then
-    // open PayPal checkout.
+    // open the Payment Method Chooser so the user can pick PayPal (primary)
+    // or Creem (card fallback). The chooser handles routing to the existing
+    // PayPalCheckoutDialog (via onChoosePayPal) or to /api/creem/checkout.
     try {
       const res = await authFetch(`/api/subscriptions/prorate?plan=${plan.id}`);
       if (res.ok) {
@@ -560,7 +564,7 @@ export function BillingView() {
       // Proration preview is best-effort; don't block checkout on failure.
     }
 
-    setPaypalCheckoutPlan(plan);
+    setChooserPlan(plan);
     setConfirmPlan(null);
   }
 
@@ -1399,6 +1403,20 @@ export function BillingView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Payment Method Chooser Dialog ─────────────────────────────────── */}
+      {/* Opens first when the user clicks "Upgrade". Routes to either PayPal
+          (existing dialog below) or Creem (server-side redirect to hosted
+          checkout). PayPal remains the primary/recommended option. */}
+      <PaymentMethodChooserDialog
+        plan={chooserPlan as ChooserPlan | null}
+        billingCycle={isYearly ? 'yearly' : 'monthly'}
+        onClose={() => setChooserPlan(null)}
+        onChoosePayPal={(p) => {
+          setChooserPlan(null);
+          setPaypalCheckoutPlan(p as Plan);
+        }}
+      />
 
       {/* ── PayPal Checkout Dialog ─────────────────────────────────────── */}
       {paypalCheckoutPlan && (

@@ -5,18 +5,26 @@
  * -------------------
  * A single-search address input backed by the OpenStreetMap Nominatim API.
  *
+ * Calls go to our OWN server-side proxy at `/api/geocode/search?q=<query>`
+ * rather than hitting `https://nominatim.openstreetmap.org/...` directly
+ * from the browser. Browsers strip the `User-Agent` header (it's a
+ * forbidden header in fetch/XHR), which violates Nominatim's usage policy
+ * (they require an identifying User-Agent) and causes aggressive
+ * rate-limiting (429s) or empty results — the dropdown never populated.
+ * The proxy sets `User-Agent: ServiceOS-Onboarding/1.0 (...)` server-side
+ * and adds a 60-second in-memory cache to respect Nominatim's rate limit.
+ *
  * Features:
  *   - Single search input with 300ms debounce.
- *   - Calls https://nominatim.openstreetmap.org/search?format=json&q={query}&addressdetails=1&limit=5
+ *   - Calls `/api/geocode/search?q={query}` (proxied to Nominatim
+ *     `?format=json&addressdetails=1&limit=5`).
  *   - Renders a dropdown of results (display_name + type).
  *   - On select, parses the `address` object from the Nominatim response and
  *     calls `onChange` with `{ address, city, state, pincode, latitude, longitude }`.
  *   - Shows the selected address as a chip/summary with a clear "X" button.
  *   - Falls back to a 4-input manual form (toggle) when Nominatim fails or
  *     the user prefers to enter the address by hand.
- *   - Respects Nominatim usage policy: 1 request per 300ms via debounce, and
- *     sends an `Accept` header (browsers strip custom User-Agent but we still
- *     send `Accept: application/json`).
+ *   - 3-character minimum (matches the proxy's validation).
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -107,18 +115,9 @@ export function AddressAutocomplete({ value, onChange }: AddressAutocompleteProp
     abortRef.current = controller;
 
     try {
-      const url =
-        'https://nominatim.openstreetmap.org/search?format=json' +
-        `&q=${encodeURIComponent(q)}` +
-        '&addressdetails=1&limit=5';
+      const url = `/api/geocode/search?q=${encodeURIComponent(q)}`;
       const res = await fetch(url, {
         method: 'GET',
-        headers: {
-          Accept: 'application/json',
-          // Browsers strip custom User-Agent, but we send the header anyway
-          // per Nominatim usage policy (server-side proxies may forward it).
-          'User-Agent': 'ServiceOS-Onboarding/1.0 (onboarding@serviceos.app)',
-        },
         signal: controller.signal,
       });
       if (!res.ok) {

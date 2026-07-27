@@ -52,6 +52,11 @@ export interface ProviderListItem {
   insuranceVerified: boolean;
   stripeConnected: boolean;
   planStatus: string | null;
+  /**
+   * Subscription plan tier — 'starter' | 'pro' | 'business' | 'enterprise'.
+   * Used by the featured carousel to identify paid/active subscribers.
+   */
+  plan?: string | null;
 }
 
 export interface ProviderListResponse {

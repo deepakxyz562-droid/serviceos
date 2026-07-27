@@ -1,5 +1,5 @@
 /*!
- * ServiceOS Embed Script v1.0.0
+ * ServiceOS Embed Script v1.1.0
  * Universal form lead capture for any website (HTML, React, Next.js, PHP, Vue, etc.)
  *
  * HOW IT WORKS:
@@ -10,10 +10,20 @@
  *   4. Your existing form handler (email, redirect, etc.) continues to run.
  *
  * ATTRIBUTES (on the <script> tag):
- *   data-key="pk_live_xxx"     REQUIRED — your publishable API key
- *   data-endpoint="https://…"  Optional — custom API endpoint (defaults to current origin + /api/forms/leads)
- *   data-toast="true"          Optional — show a "✓ Message sent" toast on success
- *   data-form-selector="form"  Optional — CSS selector for forms to capture (default: all forms)
+ *   data-key="pk_live_xxx"      REQUIRED — your publishable API key
+ *   data-endpoint="https://…"   Optional — custom API endpoint (defaults to current origin + /api/forms/leads)
+ *   data-toast="true"           Optional — show a "✓ Message sent" toast on success
+ *   data-form-selector="form"   Optional — CSS selector for forms to capture (default: all forms)
+ *   data-serviceos-ajax="true"  Optional — also intercept fetch()/XHR POSTs (AJAX forms)
+ *
+ * WORDPRESS / CONFIG OBJECT MODE:
+ *   The WordPress plugin injects `window.SERVICEOS_CONFIG` BEFORE this script loads:
+ *     window.SERVICEOS_CONFIG = {
+ *       apiKey:   'pk_live_xxx',
+ *       apiUrl:   'https://app.serviceos.io',
+ *       interceptAjax: false   // set true to also intercept AJAX form POSTs
+ *     };
+ *   When present, these values take priority over the data-* attributes.
  *
  * OPT-OUT:
  *   Add data-serviceos="false" to any <form> to exclude it from capture.
@@ -24,7 +34,7 @@
  *       console.log('Lead created:', e.detail.leadId);
  *     });
  *
- * No dependencies. Vanilla JS. ~4KB minified. Async-loaded.
+ * No dependencies. Vanilla JS. ~5KB minified. Async-loaded.
  */
 (function () {
   'use strict';
@@ -38,14 +48,25 @@
     return scripts[scripts.length - 1];
   })();
 
-  var API_KEY = scriptTag.getAttribute('data-key');
-  var ENDPOINT = scriptTag.getAttribute('data-endpoint');
-  var SHOW_TOAST = scriptTag.getAttribute('data-toast') === 'true';
+  // ─── Config resolution ────────────────────────────────────────────────────
+  // Priority: window.SERVICEOS_CONFIG (injected by WP plugin via wp_localize_script
+  // or inline <script>) → data-* attributes on the script tag.
+  var CONFIG = window.SERVICEOS_CONFIG || {};
+
+  var API_KEY = CONFIG.apiKey ||
+                scriptTag.getAttribute('data-key') ||
+                scriptTag.getAttribute('data-serviceos-api-key');
+  var ENDPOINT = CONFIG.apiUrl ||
+                 scriptTag.getAttribute('data-endpoint');
+  var SHOW_TOAST = (CONFIG.showToast === true) ||
+                   (scriptTag.getAttribute('data-toast') === 'true');
   var FORM_SELECTOR = scriptTag.getAttribute('data-form-selector') || 'form';
+  var INTERCEPT_AJAX = (CONFIG.interceptAjax === true) ||
+                       (scriptTag.getAttribute('data-serviceos-ajax') === 'true');
 
   if (!API_KEY) {
     if (console && console.warn) {
-      console.warn('[ServiceOS] Missing data-key attribute. Add data-key="pk_live_xxx" to the script tag.');
+      console.warn('[ServiceOS] Missing API key. Set window.SERVICEOS_CONFIG.apiKey or add data-key="pk_live_xxx" to the script tag.');
     }
     return;
   }
@@ -60,6 +81,9 @@
       origin = link.origin;
     }
     ENDPOINT = origin + '/api/forms/leads';
+  } else if (ENDPOINT.indexOf('/api/forms/leads') === -1) {
+    // If user supplied a base API URL (no /api/forms/leads suffix), append it.
+    ENDPOINT = ENDPOINT.replace(/\/+$/, '') + '/api/forms/leads';
   }
 
   // ─── Field auto-mapping ───────────────────────────────────────────────────
@@ -201,6 +225,48 @@
     return mapped;
   }
 
+  // ─── Map a raw key/value object (for AJAX body parsing) ───────────────────
+  // Same alias logic as mapFormFields, but works on a plain object instead of
+  // a DOM form. Used by the opt-in fetch/XHR interceptor.
+  function mapObjectFields(obj) {
+    var mapped = {};
+    var usedFields = {};
+    var keys = Object.keys(obj || {});
+
+    for (var fi = 0; fi < keys.length; fi++) {
+      var rawKey = keys[fi];
+      var value = obj[rawKey];
+      if (value === null || value === undefined || value === '') continue;
+      if (typeof value === 'object') continue; // skip nested objects/arrays
+      value = String(value);
+
+      var nk = normalizeKey(rawKey);
+      var matched = false;
+
+      for (var fieldKey in FIELD_ALIASES) {
+        if (usedFields[fieldKey]) continue;
+        var aliases = FIELD_ALIASES[fieldKey];
+        for (var j = 0; j < aliases.length; j++) {
+          var aliasNorm = normalizeKey(aliases[j]);
+          if (aliasNorm.length <= 2) continue; // avoid false positives on short aliases
+          if (nk === aliasNorm || nk.indexOf(aliasNorm) !== -1 || nk.endsWith(aliasNorm)) {
+            mapped[fieldKey] = value;
+            usedFields[fieldKey] = true;
+            matched = true;
+            break;
+          }
+        }
+        if (matched) break;
+      }
+
+      if (!matched && rawKey.indexOf('_') !== 0) {
+        mapped[rawKey] = value;
+      }
+    }
+
+    return mapped;
+  }
+
   // ─── Toast UI ─────────────────────────────────────────────────────────────
 
   function showToast(message, isError) {
@@ -316,6 +382,190 @@
     }
   }
 
+  // ─── Opt-in AJAX Interceptor ──────────────────────────────────────────────
+  // Activated only when data-serviceos-ajax="true" OR
+  // window.SERVICEOS_CONFIG.interceptAjax === true.
+  //
+  // Monkey-patches window.fetch and XMLHttpRequest to capture AJAX form POSTs
+  // (Contact Form 7's REST endpoint, Gravity Forms admin-ajax, WPForms,
+  // Fluent Forms, custom React forms, etc.). Captured payloads run through
+  // the same field mapper and POST to /api/forms/leads in parallel.
+  // The original request is ALWAYS allowed to proceed unchanged.
+  //
+  // Everything is wrapped in try/catch so a broken interception never breaks
+  // the site's normal form submission.
+
+  function shouldInterceptUrl(urlStr) {
+    if (!urlStr) return false;
+    try {
+      var u = urlStr.toLowerCase();
+      // WordPress AJAX + REST + common form endpoints
+      return (
+        u.indexOf('admin-ajax.php') !== -1 ||
+        u.indexOf('/wp-json/') !== -1 ||
+        u.indexOf('/wp-json/contact-form-7') !== -1 ||
+        u.indexOf('wpcf7') !== -1 ||
+        u.indexOf('wpforms') !== -1 ||
+        u.indexOf('gform') !== -1 ||
+        u.indexOf('gravityforms') !== -1 ||
+        u.indexOf('fluentform') !== -1 ||
+        u.indexOf('elementor') !== -1 ||
+        u.indexOf('ninjaform') !== -1 ||
+        u.indexOf('everestform') !== -1 ||
+        u.indexOf('metform') !== -1 ||
+        u.indexOf('formidable') !== -1 ||
+        u.indexOf('/forms/submit') !== -1 ||
+        u.indexOf('/form/submit') !== -1 ||
+        u.indexOf('submit-form') !== -1
+      );
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function captureAjaxPayload(urlStr, method, body) {
+    try {
+      if (!urlStr || (method && method.toUpperCase() !== 'POST')) return;
+      if (!shouldInterceptUrl(urlStr)) return;
+
+      var data = null;
+
+      // Try to parse body
+      if (!body) {
+        return;
+      } else if (typeof FormData !== 'undefined' && body instanceof FormData) {
+        data = {};
+        try {
+          body.forEach(function (value, key) {
+            data[key] = typeof value === 'string' ? value : String(value);
+          });
+        } catch (e) {
+          return;
+        }
+      } else if (typeof body === 'string') {
+        // Try JSON first, then URL-encoded
+        try {
+          data = JSON.parse(body);
+        } catch (e) {
+          try {
+            data = {};
+            new URLSearchParams(body).forEach(function (v, k) {
+              data[k] = v;
+            });
+          } catch (e2) {
+            return;
+          }
+        }
+      } else if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) {
+        data = {};
+        body.forEach(function (v, k) { data[k] = v; });
+      } else if (typeof body === 'object') {
+        data = {};
+        try {
+          for (var k in body) {
+            if (Object.prototype.hasOwnProperty.call(body, k)) {
+              data[k] = body[k];
+            }
+          }
+        } catch (e) {
+          return;
+        }
+      } else {
+        return;
+      }
+
+      if (!data || typeof data !== 'object') return;
+
+      // Map fields using the same alias table
+      var mapped = mapObjectFields(data);
+
+      // Add metadata
+      mapped._source_url = window.location.href;
+      mapped._page_title = document.title;
+      mapped._user_agent = navigator.userAgent;
+      mapped._form_title = 'AJAX Form (' + urlStr + ')';
+      mapped._form_plugin = 'ajax-interceptor';
+
+      if (console && console.log) {
+        console.log('[ServiceOS] AJAX intercepted:', urlStr);
+      }
+
+      // Fire and forget
+      fetch(ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': API_KEY,
+        },
+        body: JSON.stringify(mapped),
+        keepalive: true,
+      }).catch(function (err) {
+        if (console && console.warn) {
+          console.warn('[ServiceOS] AJAX capture network error:', err);
+        }
+      });
+    } catch (err) {
+      if (console && console.warn) {
+        console.warn('[ServiceOS] AJAX capture failed (non-fatal):', err);
+      }
+    }
+  }
+
+  function installAjaxInterceptor() {
+    // ─── Patch fetch() ───────────────────────────────────────────────────
+    if (typeof window.fetch === 'function' && !window.__serviceosFetchPatched) {
+      window.__serviceosFetchPatched = true;
+      var originalFetch = window.fetch;
+      window.fetch = function (input, init) {
+        try {
+          var url = '';
+          var method = 'GET';
+          if (typeof input === 'string') {
+            url = input;
+          } else if (input && input.url) {
+            url = input.url;
+            method = input.method || 'GET';
+          }
+          if (init && init.method) method = init.method;
+          if (init && init.body) {
+            captureAjaxPayload(url, method, init.body);
+          } else if (typeof input === 'object' && input && input.body) {
+            captureAjaxPayload(url, method, input.body);
+          }
+        } catch (e) {
+          // Never break the original fetch
+        }
+        return originalFetch.apply(this, arguments);
+      };
+    }
+
+    // ─── Patch XMLHttpRequest ────────────────────────────────────────────
+    if (typeof window.XMLHttpRequest === 'function' && !window.__serviceosXhrPatched) {
+      window.__serviceosXhrPatched = true;
+      var originalOpen = XMLHttpRequest.prototype.open;
+      var originalSend = XMLHttpRequest.prototype.send;
+
+      XMLHttpRequest.prototype.open = function (method, url) {
+        try {
+          this.__serviceosMethod = method;
+          this.__serviceosUrl = url;
+        } catch (e) {
+          // ignore
+        }
+        return originalOpen.apply(this, arguments);
+      };
+
+      XMLHttpRequest.prototype.send = function (body) {
+        try {
+          captureAjaxPayload(this.__serviceosUrl, this.__serviceosMethod, body);
+        } catch (e) {
+          // Never break the original send
+        }
+        return originalSend.apply(this, arguments);
+      };
+    }
+  }
+
   // ─── Init ─────────────────────────────────────────────────────────────────
 
   function init() {
@@ -335,6 +585,14 @@
         }
       });
       observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    // Install AJAX interceptor only if explicitly opted in
+    if (INTERCEPT_AJAX) {
+      installAjaxInterceptor();
+      if (console && console.log) {
+        console.log('[ServiceOS] AJAX interceptor enabled (fetch + XHR).');
+      }
     }
   }
 
