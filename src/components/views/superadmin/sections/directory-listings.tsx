@@ -1,0 +1,1101 @@
+'use client';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Directory Listings — Superadmin tool for seeding and managing the public
+// business marketplace (/b/[slug] and /marketplace). Two tabs:
+//
+//   1. Seed       — pull businesses from OpenStreetMap Overpass API and insert
+//                   them as `listingTier=free` tenants (name/phone/address/
+//                   geo). Used to bootstrap a city's marketplace overnight.
+//
+//   2. Manage     — paginated table of all marketplace listings with filters,
+//                   bulk edit (category / city / rating / public profile /
+//                   description with replace|append modes) and bulk delete
+//                   (soft = tier=none, hard = permanent).
+//
+// APIs (all superadmin-gated):
+//   POST   /api/superadmin/marketplace/seed
+//   GET    /api/superadmin/marketplace/listings
+//   PATCH  /api/superadmin/marketplace/listings/bulk
+//   DELETE /api/superadmin/marketplace/listings/bulk
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { toast } from 'sonner';
+import {
+  Store, Search, Trash2, Edit3, RefreshCw, CheckCircle2, AlertTriangle,
+  Database, MapPin, Star, Globe, Filter, Loader2, Plus,
+} from 'lucide-react';
+
+import { cn } from '@/lib/utils';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
+} from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import {
+  Table, TableHeader, TableBody, TableRow, TableCell, TableHead,
+} from '@/components/ui/table';
+import { SectionHeader } from '@/components/views/superadmin/_shared';
+import { INDUSTRY_CATALOG, getIndustry } from '@/lib/industry-catalog';
+
+// ─── Constants ──────────────────────────────────────────────────────────────
+
+const COUNTRIES = [
+  { code: 'AU', label: 'Australia' },
+  { code: 'US', label: 'United States' },
+  { code: 'GB', label: 'United Kingdom' },
+  { code: 'IN', label: 'India' },
+  { code: 'CA', label: 'Canada' },
+  { code: 'NZ', label: 'New Zealand' },
+  { code: 'AE', label: 'United Arab Emirates' },
+  { code: 'SG', label: 'Singapore' },
+];
+
+const TIERS = [
+  { value: 'free', label: 'Free' },
+  { value: 'claimed', label: 'Claimed' },
+  { value: 'pro', label: 'Pro' },
+  { value: 'none', label: 'None (hidden)' },
+];
+
+const PAGE_SIZE = 20;
+
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+interface Listing {
+  id: string;
+  name: string;
+  industry: string;
+  city: string;
+  state: string;
+  phone: string;
+  email: string;
+  rating: number;
+  reviewCount: number;
+  listingTier: string;
+  claimed: boolean;
+  publicProfileEnabled: boolean;
+  description: string;
+  createdAt: string | null;
+}
+
+interface SeedResult {
+  success: boolean;
+  inserted: number;
+  skipped: number;
+  failed: number;
+  total: number;
+  osmElements?: number;
+  sample: { name: string; industry: string; city: string }[];
+  error?: string;
+}
+
+interface BulkEditFields {
+  industry: string;        // '' = No change
+  city: string;            // '' = No change (when noChangeCity=true)
+  noChangeCity: boolean;
+  rating: string;          // '' = No change (when noChangeRating=true)
+  noChangeRating: boolean;
+  publicProfile: 'no-change' | 'enable' | 'disable';
+  description: string;
+  descriptionMode: 'replace' | 'append';
+  noChangeDescription: boolean;
+}
+
+const EMPTY_BULK_EDIT: BulkEditFields = {
+  industry: '',
+  city: '',
+  noChangeCity: true,
+  rating: '',
+  noChangeRating: true,
+  publicProfile: 'no-change',
+  description: '',
+  descriptionMode: 'replace',
+  noChangeDescription: true,
+};
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function tierBadgeClasses(tier: string): string {
+  switch (tier) {
+    case 'pro':
+      return 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20';
+    case 'claimed':
+      return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20';
+    case 'free':
+      return 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20';
+    case 'none':
+      return 'bg-muted text-muted-foreground border-border';
+    default:
+      return 'bg-muted text-muted-foreground border-border';
+  }
+}
+
+function industryLabel(id: string): string {
+  const ind = getIndustry(id);
+  return ind ? `${ind.emoji} ${ind.name}` : id;
+}
+
+// ─── Seed Tab ───────────────────────────────────────────────────────────────
+
+function SeedTab() {
+  const [city, setCity] = useState('');
+  const [country, setCountry] = useState('AU');
+  const [selectedCats, setSelectedCats] = useState<string[]>([]);
+  const [count, setCount] = useState(50);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<SeedResult | null>(null);
+
+  const toggleCat = (id: string) => {
+    setSelectedCats((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
+  };
+
+  const canSubmit = city.trim().length >= 2 && selectedCats.length > 0 && !loading;
+
+  const handleSeed = async () => {
+    if (!city.trim()) {
+      toast.error('City is required');
+      return;
+    }
+    if (selectedCats.length === 0) {
+      toast.error('Select at least 1 category');
+      return;
+    }
+    setLoading(true);
+    setResult(null);
+    try {
+      const res = await fetch('/api/superadmin/marketplace/seed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          city: city.trim(),
+          country,
+          categories: selectedCats,
+          count,
+        }),
+      });
+      const data = (await res.json()) as SeedResult;
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      setResult(data);
+      toast.success(`Seeded ${data.inserted} listings (${data.skipped} skipped, ${data.failed} failed)`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      toast.error(`Seeding failed: ${msg}`);
+      setResult({ success: false, inserted: 0, skipped: 0, failed: 0, total: 0, sample: [], error: msg });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+      <Card className="lg:col-span-2 card-shadow">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Database className="size-4 text-primary" />
+            Seed from OpenStreetMap
+          </CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Pull businesses from OSM Overpass API and insert them as free-tier
+            marketplace listings. This may take 30–60 seconds per category.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="seed-city">City <span className="text-destructive">*</span></Label>
+            <Input
+              id="seed-city"
+              placeholder="e.g. Sydney, Melbourne, Austin"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              disabled={loading}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="seed-country">Country</Label>
+            <Select value={country} onValueChange={setCountry} disabled={loading}>
+              <SelectTrigger id="seed-country" className="w-full">
+                <SelectValue placeholder="Select country" />
+              </SelectTrigger>
+              <SelectContent>
+                {COUNTRIES.map((c) => (
+                  <SelectItem key={c.code} value={c.code}>
+                    {c.label} ({c.code})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="seed-count">Count (1–200)</Label>
+            <Input
+              id="seed-count"
+              type="number"
+              min={1}
+              max={200}
+              value={count}
+              onChange={(e) => setCount(Math.max(1, Math.min(200, Number(e.target.value) || 1)))}
+              disabled={loading}
+            />
+            <p className="text-xs text-muted-foreground">
+              Total target — split evenly across selected categories.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Categories <span className="text-destructive">*</span></Label>
+            <p className="text-xs text-muted-foreground">
+              {selectedCats.length} of {INDUSTRY_CATALOG.length} selected.
+            </p>
+            <div className="max-h-64 overflow-y-auto rounded-md border border-border p-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              {INDUSTRY_CATALOG.map((ind) => {
+                const checked = selectedCats.includes(ind.id);
+                return (
+                  <label
+                    key={ind.id}
+                    className={cn(
+                      'flex items-center gap-2 px-2 py-1.5 rounded text-sm cursor-pointer hover:bg-muted/60 transition-colors',
+                      checked && 'bg-muted',
+                    )}
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={() => toggleCat(ind.id)}
+                      disabled={loading}
+                    />
+                    <span className="truncate">
+                      <span className="mr-1">{ind.emoji}</span>
+                      {ind.name}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          <Button onClick={handleSeed} disabled={!canSubmit} className="w-full">
+            {loading ? (
+              <>
+                <Loader2 className="size-4 mr-2 animate-spin" />
+                Seeding from OpenStreetMap...
+              </>
+            ) : (
+              <>
+                <Plus className="size-4 mr-2" />
+                Seed from OpenStreetMap
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="lg:col-span-3 card-shadow">
+        <CardHeader>
+          <CardTitle className="text-base">Result</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                Querying Overpass API... this may take 30–60 seconds.
+              </div>
+              <Progress value={50} className="animate-pulse" />
+            </div>
+          )}
+
+          {!loading && !result && (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="size-14 rounded-full bg-muted flex items-center justify-center mb-4">
+                <Globe className="size-7 text-muted-foreground" />
+              </div>
+              <p className="text-base font-medium text-foreground">No seeding run yet</p>
+              <p className="text-sm text-muted-foreground mt-1 max-w-sm">
+                Fill in the form on the left and click <strong>Seed from OpenStreetMap</strong> to
+                pull businesses for a city.
+              </p>
+            </div>
+          )}
+
+          {!loading && result && (
+            <div className="space-y-4">
+              {result.success ? (
+                <div className="flex items-start gap-3 p-3 rounded-md border border-emerald-500/30 bg-emerald-500/10">
+                  <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium text-emerald-700 dark:text-emerald-300">Seeding complete</p>
+                    <p className="text-muted-foreground mt-0.5">
+                      Inserted <strong>{result.inserted}</strong>, skipped{' '}
+                      <strong>{result.skipped}</strong> duplicates, failed{' '}
+                      <strong>{result.failed}</strong>
+                      {typeof result.osmElements === 'number' && (
+                        <> · {result.osmElements} OSM elements fetched</>
+                      )}
+                      .
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start gap-3 p-3 rounded-md border border-red-500/30 bg-red-500/10">
+                  <AlertTriangle className="size-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium text-red-700 dark:text-red-300">Seeding failed</p>
+                    <p className="text-muted-foreground mt-0.5">{result.error}</p>
+                  </div>
+                </div>
+              )}
+
+              {result.sample.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Sample of inserted listings
+                  </p>
+                  <div className="space-y-1.5">
+                    {result.sample.map((s, i) => (
+                      <div
+                        key={`${s.name}-${i}`}
+                        className="flex items-center gap-2 px-2.5 py-2 rounded-md border border-border bg-card text-sm"
+                      >
+                        <Store className="size-4 text-muted-foreground shrink-0" />
+                        <span className="font-medium truncate flex-1">{s.name}</span>
+                        <Badge variant="outline" className="text-[10px]">
+                          {industryLabel(s.industry)}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground flex items-center gap-1 shrink-0">
+                          <MapPin className="size-3" />
+                          {s.city}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ─── Manage Listings Tab ────────────────────────────────────────────────────
+
+function ManageTab() {
+  // Filters
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('all');
+  const [tier, setTier] = useState('all');
+  const [cityFilter, setCityFilter] = useState('all');
+
+  // Data
+  const [items, setItems] = useState<Listing[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+
+  // Selection
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Dialogs
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [editFields, setEditFields] = useState<BulkEditFields>(EMPTY_BULK_EDIT);
+  const [deleteMode, setDeleteMode] = useState<'soft' | 'hard'>('soft');
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  // Debounce search
+  const [searchInput, setSearchInput] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const fetchListings = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('page', String(page));
+      params.set('limit', String(PAGE_SIZE));
+      if (search) params.set('search', search);
+      if (category !== 'all') params.set('category', category);
+      if (tier !== 'all') params.set('tier', tier);
+      if (cityFilter !== 'all') params.set('city', cityFilter);
+
+      const res = await fetch(`/api/superadmin/marketplace/listings?${params.toString()}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = (await res.json()) as { items: Listing[]; total: number; page: number; limit: number };
+      setItems(data.items || []);
+      setTotal(data.total || 0);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      toast.error(`Failed to load listings: ${msg}`);
+      setItems([]);
+      setTotal(0);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, search, category, tier, cityFilter]);
+
+  useEffect(() => {
+    void fetchListings();
+  }, [fetchListings]);
+
+  // Reset selection when page/filter changes
+  useEffect(() => {
+    setSelected(new Set());
+  }, [page, search, category, tier, cityFilter]);
+
+  const distinctCities = useMemo(() => {
+    const set = new Set<string>();
+    items.forEach((it) => { if (it.city) set.add(it.city); });
+    return Array.from(set).sort();
+  }, [items]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const allOnPageSelected = items.length > 0 && items.every((it) => selected.has(it.id));
+
+  const toggleAll = () => {
+    if (allOnPageSelected) {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        items.forEach((it) => next.delete(it.id));
+        return next;
+      });
+    } else {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        items.forEach((it) => next.add(it.id));
+        return next;
+      });
+    }
+  };
+
+  const toggleOne = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const openBulkEdit = () => {
+    setEditFields(EMPTY_BULK_EDIT);
+    setEditOpen(true);
+  };
+
+  const openBulkDelete = () => {
+    setDeleteMode('soft');
+    setDeleteConfirm('');
+    setDeleteOpen(true);
+  };
+
+  const submitBulkEdit = async () => {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+
+    const fields: Record<string, unknown> = {};
+    if (editFields.industry) fields.industry = editFields.industry;
+    if (!editFields.noChangeCity && editFields.city.trim()) fields.city = editFields.city.trim();
+    if (!editFields.noChangeRating && editFields.rating !== '') {
+      const r = Number(editFields.rating);
+      if (Number.isNaN(r) || r < 0 || r > 5) {
+        toast.error('Rating must be between 0 and 5');
+        return;
+      }
+      fields.rating = r;
+    }
+    if (editFields.publicProfile === 'enable') fields.publicProfileEnabled = true;
+    if (editFields.publicProfile === 'disable') fields.publicProfileEnabled = false;
+    if (!editFields.noChangeDescription && editFields.description.trim()) {
+      fields.description = editFields.description.trim();
+      fields.descriptionMode = editFields.descriptionMode;
+    }
+
+    if (Object.keys(fields).length === 0) {
+      toast.error('No fields selected — toggle at least one "change" control');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await fetch('/api/superadmin/marketplace/listings/bulk', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, fields }),
+      });
+      const data = (await res.json()) as { success: boolean; updated: number; error?: string };
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      toast.success(`Updated ${data.updated} listing${data.updated === 1 ? '' : 's'}`);
+      setEditOpen(false);
+      await fetchListings();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      toast.error(`Bulk edit failed: ${msg}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const submitBulkDelete = async () => {
+    const ids = Array.from(selected);
+    if (ids.length === 0) return;
+    if (deleteMode === 'hard' && deleteConfirm !== 'DELETE') {
+      toast.error('Type DELETE to confirm hard delete');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await fetch('/api/superadmin/marketplace/listings/bulk', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, mode: deleteMode }),
+      });
+      const data = (await res.json()) as { success: boolean; deleted: number; mode: string; error?: string };
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      const verb = deleteMode === 'hard' ? 'permanently deleted' : 'soft-deleted';
+      toast.success(`${data.deleted} listing${data.deleted === 1 ? '' : 's'} ${verb}`);
+      setDeleteOpen(false);
+      setSelected(new Set());
+      await fetchListings();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      toast.error(`Bulk delete failed: ${msg}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Filters bar */}
+      <Card className="card-shadow">
+        <CardContent className="p-4">
+          <div className="flex flex-col md:flex-row md:items-end gap-3">
+            <div className="flex-1 space-y-1.5">
+              <Label htmlFor="ml-search" className="text-xs text-muted-foreground flex items-center gap-1">
+                <Search className="size-3" /> Search
+              </Label>
+              <Input
+                id="ml-search"
+                placeholder="Name, phone, or email..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Category</Label>
+              <Select value={category} onValueChange={(v) => { setCategory(v); setPage(1); }}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All categories</SelectItem>
+                  {INDUSTRY_CATALOG.map((ind) => (
+                    <SelectItem key={ind.id} value={ind.id}>
+                      {ind.emoji} {ind.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Tier</Label>
+              <Select value={tier} onValueChange={(v) => { setTier(v); setPage(1); }}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All tiers</SelectItem>
+                  {TIERS.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">City</Label>
+              <Select value={cityFilter} onValueChange={(v) => { setCityFilter(v); setPage(1); }}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All cities</SelectItem>
+                  {distinctCities.map((c) => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => void fetchListings()} disabled={loading}>
+              <RefreshCw className={cn('size-4', loading && 'animate-spin')} />
+              <span className="sr-only">Refresh</span>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 p-3 rounded-md border border-primary/30 bg-primary/5">
+          <span className="text-sm font-medium text-foreground">
+            {selected.size} selected
+          </span>
+          <div className="flex-1" />
+          <Button size="sm" variant="outline" onClick={openBulkEdit}>
+            <Edit3 className="size-3.5 mr-1.5" />
+            Bulk Edit
+          </Button>
+          <Button size="sm" variant="destructive" onClick={openBulkDelete}>
+            <Trash2 className="size-3.5 mr-1.5" />
+            Bulk Delete
+          </Button>
+        </div>
+      )}
+
+      {/* Table */}
+      <Card className="card-shadow">
+        <CardContent className="p-0">
+          <div className="max-h-[600px] overflow-y-auto">
+            <Table>
+              <TableHeader className="sticky top-0 bg-card z-10">
+                <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={allOnPageSelected}
+                      onCheckedChange={toggleAll}
+                      aria-label="Select all on page"
+                    />
+                  </TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>City</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead className="text-right">Rating</TableHead>
+                  <TableHead>Tier</TableHead>
+                  <TableHead>Public</TableHead>
+                  <TableHead>Claimed</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading && (
+                  <TableRow>
+                    <TableCell colSpan={10} className="text-center py-10 text-muted-foreground">
+                      <Loader2 className="size-5 animate-spin inline mr-2" />
+                      Loading listings...
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!loading && items.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={10} className="text-center py-10 text-muted-foreground">
+                      No listings match the current filters.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {!loading && items.map((it) => (
+                  <TableRow key={it.id} data-state={selected.has(it.id) ? 'selected' : undefined}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selected.has(it.id)}
+                        onCheckedChange={() => toggleOne(it.id)}
+                        aria-label={`Select ${it.name}`}
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Store className="size-3.5 text-muted-foreground shrink-0" />
+                        <span className="truncate">{it.name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-xs">{industryLabel(it.industry)}</span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-xs flex items-center gap-1 text-muted-foreground">
+                        <MapPin className="size-3" />
+                        {it.city || '—'}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{it.phone || '—'}</TableCell>
+                    <TableCell className="text-right">
+                      <span className="inline-flex items-center gap-1 text-xs">
+                        <Star className="size-3 text-amber-500" />
+                        {it.rating.toFixed(1)}
+                        <span className="text-muted-foreground">({it.reviewCount})</span>
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={cn('text-[10px] capitalize', tierBadgeClasses(it.listingTier))}>
+                        {it.listingTier}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {it.publicProfileEnabled ? (
+                        <CheckCircle2 className="size-4 text-emerald-500" />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {it.claimed ? (
+                        <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">
+                          Claimed
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2"
+                        onClick={() => {
+                          setSelected(new Set([it.id]));
+                          openBulkEdit();
+                        }}
+                      >
+                        <Edit3 className="size-3.5" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Pagination */}
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-muted-foreground">
+          Showing {items.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}–
+          {(page - 1) * PAGE_SIZE + items.length} of {total}
+        </span>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={page <= 1 || loading}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            Previous
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            Page {page} of {totalPages}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={page >= totalPages || loading}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
+
+      {/* Bulk Edit Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Bulk edit {selected.size} listing{selected.size === 1 ? '' : 's'}</DialogTitle>
+            <DialogDescription>
+              Only the fields you change will be updated. Leave the &quot;No change&quot;
+              controls checked to keep the existing value per row.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Category */}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">Category</Label>
+              <Select
+                value={editFields.industry || '__no_change__'}
+                onValueChange={(v) => setEditFields((f) => ({ ...f, industry: v === '__no_change__' ? '' : v }))}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="No change" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__no_change__">No change</SelectItem>
+                  {INDUSTRY_CATALOG.map((ind) => (
+                    <SelectItem key={ind.id} value={ind.id}>
+                      {ind.emoji} {ind.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* City */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">City</Label>
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+                  <Checkbox
+                    checked={editFields.noChangeCity}
+                    onCheckedChange={(c) => setEditFields((f) => ({ ...f, noChangeCity: c === true }))}
+                  />
+                  No change
+                </label>
+              </div>
+              <Input
+                placeholder="e.g. Sydney"
+                value={editFields.city}
+                onChange={(e) => setEditFields((f) => ({ ...f, city: e.target.value, noChangeCity: false }))}
+                disabled={editFields.noChangeCity}
+              />
+            </div>
+
+            {/* Rating */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Rating (0–5)</Label>
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+                  <Checkbox
+                    checked={editFields.noChangeRating}
+                    onCheckedChange={(c) => setEditFields((f) => ({ ...f, noChangeRating: c === true }))}
+                  />
+                  No change
+                </label>
+              </div>
+              <Input
+                type="number"
+                min={0}
+                max={5}
+                step={0.1}
+                placeholder="4.5"
+                value={editFields.rating}
+                onChange={(e) => setEditFields((f) => ({ ...f, rating: e.target.value, noChangeRating: false }))}
+                disabled={editFields.noChangeRating}
+              />
+            </div>
+
+            {/* Public Profile */}
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">Public Profile</Label>
+              <Select
+                value={editFields.publicProfile}
+                onValueChange={(v) => setEditFields((f) => ({ ...f, publicProfile: v as BulkEditFields['publicProfile'] }))}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="no-change">No change</SelectItem>
+                  <SelectItem value="enable">Enable (public)</SelectItem>
+                  <SelectItem value="disable">Disable (hidden)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Description */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Description</Label>
+                <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+                  <Checkbox
+                    checked={editFields.noChangeDescription}
+                    onCheckedChange={(c) => setEditFields((f) => ({ ...f, noChangeDescription: c === true }))}
+                  />
+                  No change
+                </label>
+              </div>
+              {!editFields.noChangeDescription && (
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span className="text-muted-foreground">Mode:</span>
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="desc-mode"
+                      checked={editFields.descriptionMode === 'replace'}
+                      onChange={() => setEditFields((f) => ({ ...f, descriptionMode: 'replace' }))}
+                      className="size-3"
+                    />
+                    Replace
+                  </label>
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="desc-mode"
+                      checked={editFields.descriptionMode === 'append'}
+                      onChange={() => setEditFields((f) => ({ ...f, descriptionMode: 'append' }))}
+                      className="size-3"
+                    />
+                    Append
+                  </label>
+                  <span className="text-muted-foreground">
+                    ({editFields.descriptionMode === 'append' ? 'adds to existing text' : 'overwrites existing text'})
+                  </span>
+                </div>
+              )}
+              <Textarea
+                rows={4}
+                placeholder="Description text..."
+                value={editFields.description}
+                onChange={(e) => setEditFields((f) => ({ ...f, description: e.target.value, noChangeDescription: false }))}
+                disabled={editFields.noChangeDescription}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button onClick={submitBulkEdit} disabled={saving}>
+              {saving ? <Loader2 className="size-4 mr-2 animate-spin" /> : <Edit3 className="size-4 mr-2" />}
+              Apply to {selected.size} listing{selected.size === 1 ? '' : 's'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Delete Dialog */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="size-5 text-amber-500" />
+              Delete {selected.size} listing{selected.size === 1 ? '' : 's'}
+            </DialogTitle>
+            <DialogDescription>
+              You are about to delete <strong>{selected.size}</strong> listing
+              {selected.size === 1 ? '' : 's'}. This action cannot be undone for hard deletes.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <RadioGroup
+              value={deleteMode}
+              onValueChange={(v) => setDeleteMode(v as 'soft' | 'hard')}
+              className="space-y-2"
+            >
+              <label className={cn(
+                'flex items-start gap-3 p-3 rounded-md border cursor-pointer transition-colors',
+                deleteMode === 'soft' ? 'border-amber-500/40 bg-amber-500/5' : 'border-border',
+              )}>
+                <RadioGroupItem value="soft" className="mt-1" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Soft delete</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Sets <code className="text-[10px] px-1 py-0.5 rounded bg-muted">tier=none</code> and
+                    disables marketplace opt-in. The tenant record is preserved.
+                  </p>
+                </div>
+              </label>
+              <label className={cn(
+                'flex items-start gap-3 p-3 rounded-md border cursor-pointer transition-colors',
+                deleteMode === 'hard' ? 'border-red-500/40 bg-red-500/5' : 'border-border',
+              )}>
+                <RadioGroupItem value="hard" className="mt-1" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-red-600 dark:text-red-400">Hard delete (permanent)</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Permanently removes the tenant rows from the database. This cannot be undone.
+                  </p>
+                </div>
+              </label>
+            </RadioGroup>
+
+            {deleteMode === 'hard' && (
+              <div className="space-y-1.5">
+                <Label htmlFor="del-confirm" className="text-xs text-muted-foreground">
+                  Type <strong className="text-foreground">DELETE</strong> to confirm
+                </Label>
+                <Input
+                  id="del-confirm"
+                  value={deleteConfirm}
+                  onChange={(e) => setDeleteConfirm(e.target.value)}
+                  placeholder="DELETE"
+                  className="font-mono"
+                />
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button
+              variant={deleteMode === 'hard' ? 'destructive' : 'default'}
+              className={deleteMode === 'soft' ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''}
+              onClick={submitBulkDelete}
+              disabled={saving || (deleteMode === 'hard' && deleteConfirm !== 'DELETE')}
+            >
+              {saving ? (
+                <Loader2 className="size-4 mr-2 animate-spin" />
+              ) : (
+                <Trash2 className="size-4 mr-2" />
+              )}
+              {deleteMode === 'hard' ? 'Permanently delete' : 'Soft delete'} {selected.size}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ─── Section ────────────────────────────────────────────────────────────────
+
+export function DirectoryListingsSection() {
+  return (
+    <div className="space-y-5">
+      <SectionHeader
+        title="Directory Listings"
+        description="Seed and manage public marketplace business listings across cities."
+        icon={Store}
+      />
+      <Tabs defaultValue="seed">
+        <TabsList>
+          <TabsTrigger value="seed" className="gap-1.5">
+            <Database className="size-3.5" />
+            Seed
+          </TabsTrigger>
+          <TabsTrigger value="manage" className="gap-1.5">
+            <Filter className="size-3.5" />
+            Manage Listings
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="seed" className="mt-4">
+          <SeedTab />
+        </TabsContent>
+        <TabsContent value="manage" className="mt-4">
+          <ManageTab />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+export default DirectoryListingsSection;

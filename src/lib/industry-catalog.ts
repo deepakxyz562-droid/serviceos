@@ -96,8 +96,6 @@ export const VERTICALS = [
   { id: 'logistics', name: 'Logistics', icon: '📦', description: 'Moving services, packing, storage.' },
   { id: 'health-personal', name: 'Health & Personal Services', icon: '💆', description: 'Massage, physiotherapy, personal trainer, beauty, spa.' },
   { id: 'professional', name: 'Professional Services', icon: '💼', description: 'Accounting, legal, consulting, marketing, photography, events.' },
-  { id: 'retail', name: 'Retail & Distribution', icon: '🛍️', description: 'Retail stores, fabric & textile, wholesale, distribution.' },
-  { id: 'industrial', name: 'Industrial & Manufacturing', icon: '🏭', description: 'Manufacturing, production, fabrication, and industrial services.' },
   { id: 'custom', name: 'Custom Services', icon: '✨', description: 'Custom services, window cleaning, solar, and other specialized work.' },
 ] as const;
 
@@ -124,10 +122,6 @@ export const VERTICAL_MAP: Record<string, string> = {
   'moving': 'logistics',
   'health-wellness': 'health-personal',
   'professional-services': 'professional',
-  'retail': 'retail',
-  'fabric-textile': 'retail',
-  'wholesale': 'retail',
-  'manufacturing': 'industrial',
   'others': 'custom',
   'window-cleaning': 'custom',
   'solar': 'custom',
@@ -757,98 +751,7 @@ export const INDUSTRY_CATALOG: Industry[] = [
   },
 
   // =========================================================================
-  // 25. RETAIL — general retail stores (boutiques, specialty shops, etc.)
-  // =========================================================================
-  {
-    id: 'retail',
-    name: 'Retail Store',
-    icon: 'ShoppingBag',
-    emoji: '🛍️',
-    description: 'General retail stores — boutiques, specialty shops, gift shops, electronics, and consumer goods',
-    vertical: 'retail',
-    hasSeoPage: false,
-    subServices: [
-      { slug: 'in-store-sales', name: 'In-Store Sales', description: 'Walk-in customer sales and assistance', category: 'Sales', defaultPrice: 0, duration: '30m', icon: 'ShoppingBag' },
-      { slug: 'product-consultation', name: 'Product Consultation', description: 'In-store product advice and recommendations', category: 'Service', defaultPrice: 0, duration: '30m', icon: 'Headphones' },
-      { slug: 'special-orders', name: 'Special Orders', description: 'Custom and out-of-stock product ordering', category: 'Sales', defaultPrice: 0, duration: '1h', icon: 'PackageCheck' },
-      { slug: 'gift-wrapping', name: 'Gift Wrapping', description: 'Gift wrapping and presentation services', category: 'Service', defaultPrice: 5, duration: '15m', icon: 'Gift' },
-      { slug: 'returns-exchanges', name: 'Returns & Exchanges', description: 'Product returns, exchanges, and refunds', category: 'Service', defaultPrice: 0, duration: '15m', icon: 'RotateCcw' },
-    ],
-    jobTypes: ['Sale', 'Consultation', 'Special Order', 'Return', 'Restock'],
-    employeeRoles: ['Store Manager', 'Sales Associate', 'Cashier', 'Stock Clerk'],
-  },
-
-  // =========================================================================
-  // 26. FABRIC & TEXTILE — fabric, textile, garment manufacturers/suppliers
-  //     (covers businesses like singhfab.com.au)
-  // =========================================================================
-  {
-    id: 'fabric-textile',
-    name: 'Fabric & Textile',
-    icon: 'Shirt',
-    emoji: '🧵',
-    description: 'Fabric retailers, textile suppliers, garment manufacturers, and upholstery businesses',
-    vertical: 'retail',
-    hasSeoPage: true,
-    seoSlug: 'fabric-textile',
-    subServices: [
-      { slug: 'fabric-retail', name: 'Fabric Retail', description: 'Sell fabric by the metre for apparel and home decor', category: 'Retail', defaultPrice: 0, duration: '30m', icon: 'ShoppingBag' },
-      { slug: 'textile-wholesale', name: 'Textile Wholesale', description: 'Bulk textile supply for businesses and designers', category: 'Wholesale', defaultPrice: 0, duration: '1h', icon: 'Package' },
-      { slug: 'garment-manufacturing', name: 'Garment Manufacturing', description: 'Cut, sew, and finish garments to spec', category: 'Production', defaultPrice: 0, duration: '8h', icon: 'Shirt' },
-      { slug: 'custom-tailoring', name: 'Custom Tailoring', description: 'Bespoke tailoring and alterations', category: 'Service', defaultPrice: 80, duration: '2h', icon: 'Scissors' },
-      { slug: 'upholstery', name: 'Upholstery', description: 'Furniture and automotive upholstery', category: 'Service', defaultPrice: 350, duration: '6h', icon: 'Armchair' },
-      { slug: 'embroidery-printing', name: 'Embroidery & Printing', description: 'Custom embroidery, screen printing, and DTG', category: 'Decoration', defaultPrice: 45, duration: '1h', icon: 'Palette' },
-    ],
-    jobTypes: ['Sale', 'Wholesale Order', 'Production Run', 'Alteration', 'Consultation'],
-    employeeRoles: ['Store Manager', 'Tailor', 'Cutter', 'Machinist', 'Sales Associate'],
-  },
-
-  // =========================================================================
-  // 27. WHOLESALE & DISTRIBUTION — B2B supply and distribution
-  // =========================================================================
-  {
-    id: 'wholesale',
-    name: 'Wholesale & Distribution',
-    icon: 'Package',
-    emoji: '📦',
-    description: 'Wholesale supply, distribution, import/export, and B2B product fulfillment',
-    vertical: 'retail',
-    hasSeoPage: false,
-    subServices: [
-      { slug: 'bulk-supply', name: 'Bulk Supply', description: 'Bulk product supply to retailers and businesses', category: 'Supply', defaultPrice: 0, duration: '1h', icon: 'Package' },
-      { slug: 'distribution', name: 'Distribution', description: 'Last-mile distribution and fulfillment', category: 'Logistics', defaultPrice: 0, duration: '2h', icon: 'Truck' },
-      { slug: 'import-export', name: 'Import / Export', description: 'International trade and customs clearance', category: 'Trade', defaultPrice: 0, duration: '4h', icon: 'Ship' },
-      { slug: 'dropshipping', name: 'Dropshipping', description: 'Direct-to-customer fulfillment for retailers', category: 'Logistics', defaultPrice: 0, duration: '1h', icon: 'Send' },
-    ],
-    jobTypes: ['Order', 'Shipment', 'Restock', 'Custom Quote', 'Contract'],
-    employeeRoles: ['Warehouse Manager', 'Sales Rep', 'Logistics Coordinator', 'Forklift Operator'],
-  },
-
-  // =========================================================================
-  // 28. MANUFACTURING — general manufacturing, production, and fabrication
-  // =========================================================================
-  {
-    id: 'manufacturing',
-    name: 'Manufacturing',
-    icon: 'Factory',
-    emoji: '🏭',
-    description: 'General manufacturing, production runs, metal fabrication, and assembly operations',
-    vertical: 'industrial',
-    hasSeoPage: false,
-    subServices: [
-      { slug: 'production-runs', name: 'Production Runs', description: 'Batch and mass production of finished goods', category: 'Production', defaultPrice: 0, duration: '8h', icon: 'Factory' },
-      { slug: 'metal-fabrication', name: 'Metal Fabrication', description: 'Welding, cutting, and forming of metal parts', category: 'Fabrication', defaultPrice: 0, duration: '4h', icon: 'Wrench' },
-      { slug: 'cnc-machining', name: 'CNC Machining', description: 'CNC milling, turning, and precision machining', category: 'Machining', defaultPrice: 0, duration: '4h', icon: 'Cog' },
-      { slug: 'assembly', name: 'Assembly', description: 'Sub-assembly and final product assembly', category: 'Production', defaultPrice: 0, duration: '4h', icon: 'Puzzle' },
-      { slug: 'prototyping', name: 'Prototyping', description: 'Rapid prototyping and product development', category: 'Service', defaultPrice: 0, duration: '8h', icon: 'Lightbulb' },
-      { slug: 'quality-control', name: 'Quality Control', description: 'Inspection, testing, and QA services', category: 'QA', defaultPrice: 0, duration: '2h', icon: 'ShieldCheck' },
-    ],
-    jobTypes: ['Production Run', 'Prototype', 'Custom Order', 'Inspection', 'Repair'],
-    employeeRoles: ['Production Manager', 'Machine Operator', 'Fabricator', 'QA Inspector', 'Assembler'],
-  },
-
-  // =========================================================================
-  // 29. OTHERS
+  // 25. OTHERS
   // =========================================================================
   {
     id: 'others',
@@ -925,6 +828,12 @@ export const INDUSTRY_ID_ALIASES: Record<string, string> = {
   'general-contractor': 'construction',
   // 'lawn-care' → 'landscaping' (consolidated)
   'lawn-care': 'landscaping',
+  // Removed categories → 'others' (retail/fabric-textile/wholesale/manufacturing
+  // were removed from the catalog; existing DB records resolve to 'others')
+  'retail': 'others',
+  'fabric-textile': 'others',
+  'wholesale': 'others',
+  'manufacturing': 'others',
 };
 
 /**

@@ -68,6 +68,7 @@ import { lazy, Suspense } from 'react';
 // 4GB container) and lets each section code-split naturally.
 const CommandCenterSection = lazy(() => import('@/components/views/superadmin/sections/command-center').then(m => ({ default: m.CommandCenterSection })));
 const AICenterSection = lazy(() => import('@/components/views/superadmin/sections/ai-center').then(m => ({ default: m.AICenterSection })));
+const DirectoryListingsSection = lazy(() => import('@/components/views/superadmin/sections/directory-listings').then(m => ({ default: m.DirectoryListingsSection })));
 const MarketplaceSection = lazy(() => import('@/components/views/superadmin/sections/marketplace').then(m => ({ default: m.MarketplaceSection })));
 const IndustryTemplatesSection = lazy(() => import('@/components/views/superadmin/sections/industry-templates').then(m => ({ default: m.IndustryTemplatesSection })));
 const PlatformSettingsSection = lazy(() => import('@/components/views/superadmin/sections/platform-settings').then(m => ({ default: m.PlatformSettingsSection })));
@@ -343,7 +344,7 @@ type TabKey =
   // Overview
   | 'dashboard'
   // BUSINESS
-  | 'tenants' | 'subscriptions' | 'users' | 'credits' | 'industry-templates'
+  | 'tenants' | 'subscriptions' | 'users' | 'credits' | 'industry-templates' | 'directory-listings'
   // PLATFORM
   | 'platform-settings' | 'theme-branding' | 'marketplace' | 'integrations' | 'ai-center' | 'menu-management'
   // COMMUNICATION
@@ -377,6 +378,7 @@ const NAV_GROUPS: NavGroup[] = [
       { key: 'users', label: 'Users', icon: Users },
       { key: 'credits', label: 'Credits', icon: Wallet },
       { key: 'industry-templates', label: 'Industry Templates', icon: LayoutGrid },
+      { key: 'directory-listings', label: 'Directory Listings', icon: Store },
     ],
   },
   {
@@ -2642,6 +2644,7 @@ export function SuperAdminView() {
       <Suspense fallback={<SectionLoader />}>
         {activeTab === 'dashboard' && <CommandCenterSection />}
         {activeTab === 'industry-templates' && <IndustryTemplatesSection />}
+        {activeTab === 'directory-listings' && <DirectoryListingsSection />}
         {activeTab === 'platform-settings' && <PlatformSettingsSection />}
         {activeTab === 'theme-branding' && <ThemeBrandingSection />}
         {activeTab === 'marketplace' && <MarketplaceSection />}
