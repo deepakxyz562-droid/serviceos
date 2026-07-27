@@ -322,40 +322,15 @@ export function MarketplaceBrowser({
           no Enter required. A <noscript> GET form in the server page still
           serves non-JS users. */}
 
-      {/* ── Results header ──────────────────────────────────────────────── */}
-      {/* The Sort dropdown used to live here; it has moved to the breadcrumb
-          bar above (see MarketplaceSortControl rendered by the page server
-          component). State is shared via the useMarketplaceSearch Zustand
-          store, so picking a sort in the breadcrumb instantly re-sorts this
-          grid — no prop drilling, no reload. */}
-      <div className="mb-5 mt-8">
-        <h2 className="text-2xl font-bold text-foreground sm:text-3xl">
-          {verticalFilter || industryFilter
-            ? (verticalFilter
-                ? verticalFilter
-                    .split('-')
-                    .map((w) => w[0].toUpperCase() + w.slice(1))
-                    .join(' ')
-                : getIndustry(industryFilter ?? '')?.name ?? 'Providers')
-            : 'All Providers'}
-        </h2>
-        {activeChips.length > 0 ? (
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-            <button
-              type="button"
-              onClick={clearAll}
-              className="inline-flex items-center gap-0.5 font-medium text-emerald-700 hover:text-emerald-800 dark:text-emerald-300"
-              aria-label="Clear all filters"
-            >
-              Clear all <span aria-hidden>&times;</span>
-            </button>
-          </div>
-        ) : null}
-      </div>
-
       {/* ── Active filter chips ──────────────────────────────────────────── */}
+      {/* The "All Providers" / vertical-name <h2> heading used to live above
+          this row; it was removed per design request — the breadcrumb bar
+          and the sidebar highlight already show the active vertical, so the
+          heading was redundant. The "Clear all" affordance is preserved here
+          inline at the end of the chip row so the filter-clear action stays
+          reachable when one or more chips are active. */}
       {activeChips.length > 0 ? (
-        <div className="mb-5 flex flex-wrap items-center gap-2">
+        <div className="mb-5 mt-8 flex flex-wrap items-center gap-2">
           {activeChips.map((chip, i) => (
             <span
               key={i}
@@ -372,6 +347,14 @@ export function MarketplaceBrowser({
               </button>
             </span>
           ))}
+          <button
+            type="button"
+            onClick={clearAll}
+            className="inline-flex items-center gap-0.5 text-sm font-medium text-emerald-700 hover:text-emerald-800 dark:text-emerald-300"
+            aria-label="Clear all filters"
+          >
+            Clear all <span aria-hidden>&times;</span>
+          </button>
         </div>
       ) : null}
 

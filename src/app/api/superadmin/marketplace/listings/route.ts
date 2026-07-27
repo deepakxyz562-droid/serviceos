@@ -146,7 +146,16 @@ export async function GET(request: NextRequest) {
     const items = rows.map((r) => {
       const featuredInfo = featuredMap.get(r.id);
       const isFeatured = Boolean(featuredInfo);
-      const trialEndsAt = r.trialEndsAt;
+      // Normalize to a Date (or null). Depending on the DB adapter /
+      // serialization path, r.trialEndsAt may arrive as an ISO string rather
+      // than a Date object — calling .toISOString() on a string throws
+      // "a.toISOString is not a function", which was surfacing as HTTP 500
+      // in the SuperAdmin Directory Listings view. new Date() accepts both
+      // strings and Date instances, so this makes the value safe for the
+      // .toISOString() call below and for the <= / > comparisons against
+      // `now` (which would otherwise silently do string-vs-Date comparison
+      // and return wrong trial-expiry results without throwing).
+      const trialEndsAt = r.trialEndsAt ? new Date(r.trialEndsAt) : null;
       const isTrialExpired =
         r.planStatus === 'trial' &&
         trialEndsAt !== null &&
