@@ -203,6 +203,10 @@ export function MarketplaceBrowser({
 
     // Sort
     list = list.slice().sort((a, b) => {
+      // Featured cards ALWAYS sort first, regardless of the selected sort key.
+      // This is the OLX-style "premium listings at the top" behaviour.
+      if (!!a.featured !== !!b.featured) return a.featured ? -1 : 1;
+
       switch (sort) {
         case 'reviews':
           return (b.reviewCount ?? 0) - (a.reviewCount ?? 0);
@@ -225,8 +229,7 @@ export function MarketplaceBrowser({
         }
         case 'rating':
         default:
-          // Featured first, then rating, then reviewCount
-          if (!!a.featured !== !!b.featured) return a.featured ? -1 : 1;
+          // Rating, then reviewCount (featured already sorted above)
           if ((b.rating ?? 0) !== (a.rating ?? 0))
             return (b.rating ?? 0) - (a.rating ?? 0);
           return (b.reviewCount ?? 0) - (a.reviewCount ?? 0);

@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { withRequestId } from '@/lib/logger';
 import { applyRateLimit, apiLimiter, rateLimitResponse } from '@/lib/rate-limit';
+import {
+  computeCardType,
+  fetchFeaturedListingsMap,
+} from '@/lib/marketplace-featured';
 
 /**
  * Provider Profile — list (ServiceOS V1.5 — P10-flows)
@@ -115,6 +119,11 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
         insuranceVerified: true,
         stripeConnected: true,
         planStatus: true,
+        plan: true,
+        claimed: true,
+        listingTier: true,
+        trialEndsAt: true,
+        phone: true,
         services: {
           where: { isActive: true, isPublic: true },
           select: {
@@ -157,60 +166,62 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
       );
     }
 
-    // ── Fetch featured listing flags in a single query ──
+    // ── Fetch featured listing flags via shared helper ──
     const tenantIds = filtered.map((t) => t.id);
-    const featuredListings = tenantIds.length
-      ? await db.featuredListing.findMany({
-          where: {
-            tenantId: { in: tenantIds },
-            isActive: true,
-            OR: [{ endDate: null }, { endDate: { gt: new Date() } }],
-          },
-          select: { tenantId: true, type: true },
-        })
-      : [];
-    const featuredMap = new Map<string, string>();
-    for (const fl of featuredListings) {
-      if (!featuredMap.has(fl.tenantId!)) {
-        featuredMap.set(fl.tenantId!, fl.type);
-      }
-    }
+    const featuredMap = await fetchFeaturedListingsMap(tenantIds);
 
-    const items = filtered.slice(offset, offset + limit).map((t) => ({
-      id: t.id,
-      name: t.name,
-      slug: t.slug,
-      publicSlug: t.publicSlug,
-      tagline: t.tagline,
-      industry: t.industry,
-      city: t.city,
-      state: t.state,
-      country: t.country,
-      currency: t.currency,
-      rating: t.rating,
-      reviewCount: t.reviewCount,
-      description: t.description,
-      coverImage: t.coverImage,
-      pricingType: t.pricingType,
-      callOutFee: t.callOutFee,
-      emergencyServiceAvailable: t.emergencyServiceAvailable,
-      serviceAreas: (() => {
-        try {
-          const arr = JSON.parse(t.serviceAreasJson || '[]');
-          return Array.isArray(arr) ? arr.slice(0, 10) : [];
-        } catch {
-          return [];
-        }
-      })(),
-      services: t.services,
-      featured: featuredMap.get(t.id) ?? null,
-      // Verification flags for client-side badge rendering
-      identityVerified: t.identityVerified,
-      businessVerified: t.businessVerified,
-      insuranceVerified: t.insuranceVerified,
-      stripeConnected: t.stripeConnected,
-      planStatus: t.planStatus,
-    }));
+    const items = filtered.slice(offset, offset + limit).map((t) => {
+      const hasFL = featuredMap.has(t.id);
+      const cardType = computeCardType(
+        {
+          claimed: t.claimed,
+          plan: t.plan,
+          planStatus: t.planStatus,
+          trialEndsAt: t.trialEndsAt,
+        },
+        hasFL,
+      );
+      return {
+        id: t.id,
+        name: t.name,
+        slug: t.slug,
+        publicSlug: t.publicSlug,
+        tagline: t.tagline,
+        industry: t.industry,
+        city: t.city,
+        state: t.state,
+        country: t.country,
+        currency: t.currency,
+        rating: t.rating,
+        reviewCount: t.reviewCount,
+        description: t.description,
+        coverImage: t.coverImage,
+        pricingType: t.pricingType,
+        callOutFee: t.callOutFee,
+        emergencyServiceAvailable: t.emergencyServiceAvailable,
+        serviceAreas: (() => {
+          try {
+            const arr = JSON.parse(t.serviceAreasJson || '[]');
+            return Array.isArray(arr) ? arr.slice(0, 10) : [];
+          } catch {
+            return [];
+          }
+        })(),
+        services: t.services,
+        featured: cardType === 'featured' ? 'featured' : null,
+        cardType,
+        claimed: t.claimed,
+        listingTier: t.listingTier,
+        phone: t.phone,
+        // Verification flags for client-side badge rendering
+        identityVerified: t.identityVerified,
+        businessVerified: t.businessVerified,
+        insuranceVerified: t.insuranceVerified,
+        stripeConnected: t.stripeConnected,
+        planStatus: t.planStatus,
+        plan: t.plan,
+      };
+    });
 
     log.info(
       { returned: items.length, total: filtered.length, industry, city, serviceId, search },

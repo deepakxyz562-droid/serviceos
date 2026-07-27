@@ -24,7 +24,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
 import {
   Store, Search, Trash2, Edit3, RefreshCw, CheckCircle2, AlertTriangle,
-  Database, MapPin, Star, Globe, Filter, Loader2, Plus,
+  Database, MapPin, Star, Globe, Filter, Loader2, Plus, Crown, Clock,
+  Calendar, X,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -89,6 +90,14 @@ interface Listing {
   publicProfileEnabled: boolean;
   description: string;
   createdAt: string | null;
+  // Featured + trial metadata (returned by the updated listings API)
+  plan?: string;
+  planStatus?: string;
+  trialEndsAt?: string | null;
+  isTrialExpired?: boolean;
+  isFeatured?: boolean;
+  featuredPriority?: number | null;
+  isEligibleForFeatured?: boolean;
 }
 
 interface SeedResult {
@@ -420,6 +429,158 @@ function ManageTab() {
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Featured + trial management
+  const [featuredBusy, setFeaturedBusy] = useState<string | null>(null);
+  const [trialDialog, setTrialDialog] = useState<Listing | null>(null);
+  const [trialDate, setTrialDate] = useState('');
+  const [trialSaving, setTrialSaving] = useState(false);
+
+  // ── Featured toggle handler ────────────────────────────────────────────
+  const toggleFeatured = async (it: Listing) => {
+    if (!it.isEligibleForFeatured && !it.isFeatured) {
+      toast.error('Not eligible to feature', {
+        description:
+          'Only real registered businesses (claimed) with an active paid subscription or valid trial can be featured. Seed data cannot be featured.',
+      });
+      return;
+    }
+    setFeaturedBusy(it.id);
+    try {
+      if (it.isFeatured) {
+        // Remove from featured
+        const res = await fetch(
+          `/api/superadmin/marketplace/listings/${it.id}/featured`,
+          { method: 'DELETE' },
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        toast.success(`Removed "${it.name}" from featured listings`);
+      } else {
+        // Add to featured
+        const res = await fetch(
+          `/api/superadmin/marketplace/listings/${it.id}/featured`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ priority: 10 }),
+          },
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        toast.success(`Featured "${it.name}"`);
+      }
+      await fetchListings();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      toast.error(`Failed to update featured status: ${msg}`);
+    } finally {
+      setFeaturedBusy(null);
+    }
+  };
+
+  // ── Trial management handlers ──────────────────────────────────────────
+  const openTrialDialog = (it: Listing) => {
+    if (!it.claimed) {
+      toast.error('Trial period can only be managed for real registered businesses', {
+        description: 'Seed data cannot have a trial period.',
+      });
+      return;
+    }
+    setTrialDialog(it);
+    // Pre-fill the date input with the current trialEndsAt (or 14 days from now)
+    const base =
+      it.trialEndsAt != null
+        ? new Date(it.trialEndsAt)
+        : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+    // Format as YYYY-MM-DD for the <input type="date">
+    const yyyy = base.getFullYear();
+    const mm = String(base.getMonth() + 1).padStart(2, '0');
+    const dd = String(base.getDate()).padStart(2, '0');
+    setTrialDate(`${yyyy}-${mm}-${dd}`);
+  };
+
+  const saveTrial = async () => {
+    if (!trialDialog || !trialDate) return;
+    setTrialSaving(true);
+    try {
+      // Set the trial to end at midnight (end of the selected day) in the
+      // server's local timezone.
+      const end = new Date(`${trialDate}T23:59:59`);
+      const res = await fetch(
+        `/api/superadmin/marketplace/listings/${trialDialog.id}/trial`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trialEndsAt: end.toISOString() }),
+        },
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      toast.success(`Trial updated for "${trialDialog.name}"`, {
+        description: `New trial end: ${end.toLocaleDateString()}`,
+      });
+      setTrialDialog(null);
+      await fetchListings();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      toast.error(`Failed to update trial: ${msg}`);
+    } finally {
+      setTrialSaving(false);
+    }
+  };
+
+  const endTrialNow = async () => {
+    if (!trialDialog) return;
+    setTrialSaving(true);
+    try {
+      const res = await fetch(
+        `/api/superadmin/marketplace/listings/${trialDialog.id}/trial`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trialEndsAt: null }),
+        },
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      toast.success(`Trial ended for "${trialDialog.name}"`);
+      setTrialDialog(null);
+      await fetchListings();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      toast.error(`Failed to end trial: ${msg}`);
+    } finally {
+      setTrialSaving(false);
+    }
+  };
+
+  const quickExtendTrial = async (it: Listing, days: number) => {
+    try {
+      const base =
+        it.trialEndsAt != null
+          ? new Date(it.trialEndsAt) > new Date()
+            ? new Date(it.trialEndsAt)
+            : new Date()
+          : new Date();
+      const end = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
+      const res = await fetch(
+        `/api/superadmin/marketplace/listings/${it.id}/trial`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trialEndsAt: end.toISOString() }),
+        },
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      toast.success(`Extended "${it.name}" trial by ${days} day${days === 1 ? '' : 's'}`);
+      await fetchListings();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      toast.error(`Failed to extend trial: ${msg}`);
+    }
+  };
+
   // Debounce search
   const [searchInput, setSearchInput] = useState('');
   useEffect(() => {
@@ -698,7 +859,8 @@ function ManageTab() {
                   <TableHead>Phone</TableHead>
                   <TableHead className="text-right">Rating</TableHead>
                   <TableHead>Tier</TableHead>
-                  <TableHead>Public</TableHead>
+                  <TableHead>Featured</TableHead>
+                  <TableHead>Trial</TableHead>
                   <TableHead>Claimed</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -706,7 +868,7 @@ function ManageTab() {
               <TableBody>
                 {loading && (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-10 text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center py-10 text-muted-foreground">
                       <Loader2 className="size-5 animate-spin inline mr-2" />
                       Loading listings...
                     </TableCell>
@@ -714,7 +876,7 @@ function ManageTab() {
                 )}
                 {!loading && items.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-10 text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center py-10 text-muted-foreground">
                       No listings match the current filters.
                     </TableCell>
                   </TableRow>
@@ -756,12 +918,107 @@ function ManageTab() {
                         {it.listingTier}
                       </Badge>
                     </TableCell>
+                    {/* Featured toggle column */}
                     <TableCell>
-                      {it.publicProfileEnabled ? (
-                        <CheckCircle2 className="size-4 text-emerald-500" />
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => toggleFeatured(it)}
+                        disabled={featuredBusy === it.id}
+                        title={
+                          it.isFeatured
+                            ? 'Remove from featured'
+                            : it.isEligibleForFeatured
+                              ? 'Add to featured'
+                              : 'Not eligible (seed data or expired trial)'
+                        }
+                        aria-label={
+                          it.isFeatured
+                            ? `Remove ${it.name} from featured`
+                            : `Feature ${it.name}`
+                        }
+                        className={cn(
+                          'inline-flex size-7 items-center justify-center rounded-md transition-all',
+                          it.isFeatured
+                            ? 'bg-amber-100 text-amber-600 hover:bg-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:hover:bg-amber-900/60'
+                            : it.isEligibleForFeatured
+                              ? 'text-muted-foreground hover:bg-amber-50 hover:text-amber-500 dark:hover:bg-amber-950/30'
+                              : 'cursor-not-allowed text-muted-foreground/30',
+                        )}
+                      >
+                        {featuredBusy === it.id ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Crown className={cn('size-3.5', it.isFeatured && 'fill-amber-400')} />
+                        )}
+                      </button>
+                    </TableCell>
+                    {/* Trial badge column */}
+                    <TableCell>
+                      {(() => {
+                        if (!it.claimed) {
+                          return <span className="text-xs text-muted-foreground">—</span>;
+                        }
+                        const status = it.planStatus;
+                        if (status === 'active') {
+                          return (
+                            <Badge variant="outline" className="text-[9px] bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20">
+                              Active
+                            </Badge>
+                          );
+                        }
+                        if (status === 'trial' && !it.isTrialExpired) {
+                          const daysLeft = it.trialEndsAt
+                            ? Math.max(
+                                0,
+                                Math.ceil(
+                                  (new Date(it.trialEndsAt).getTime() - Date.now()) /
+                                    (24 * 60 * 60 * 1000),
+                                ),
+                              )
+                            : null;
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => openTrialDialog(it)}
+                              title="Manage trial period"
+                              className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium text-emerald-600 transition-colors hover:bg-emerald-500/20 dark:text-emerald-400"
+                            >
+                              <Clock className="size-2.5" />
+                              {daysLeft != null ? `${daysLeft}d left` : 'Trial'}
+                            </button>
+                          );
+                        }
+                        if (status === 'trial' && it.isTrialExpired) {
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => openTrialDialog(it)}
+                              title="Trial expired — click to extend"
+                              className="inline-flex items-center gap-1 rounded-md bg-red-500/10 px-1.5 py-0.5 text-[9px] font-medium text-red-600 transition-colors hover:bg-red-500/20 dark:text-red-400"
+                            >
+                              <AlertTriangle className="size-2.5" />
+                              Expired
+                            </button>
+                          );
+                        }
+                        if (status === 'expired') {
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => openTrialDialog(it)}
+                              title="Click to reactivate"
+                              className="inline-flex items-center gap-1 rounded-md bg-red-500/10 px-1.5 py-0.5 text-[9px] font-medium text-red-600 transition-colors hover:bg-red-500/20 dark:text-red-400"
+                            >
+                              Expired
+                            </button>
+                          );
+                        }
+                        return (
+                          <span className="text-[9px] text-muted-foreground capitalize">
+                            {status ?? '—'}
+                          </span>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell>
                       {it.claimed ? (
@@ -1060,6 +1317,129 @@ function ManageTab() {
               {deleteMode === 'hard' ? 'Permanently delete' : 'Soft delete'} {selected.size}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Trial Management Dialog */}
+      <Dialog open={trialDialog !== null} onOpenChange={(o) => !o && setTrialDialog(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Clock className="size-4 text-emerald-600" />
+              Manage trial period
+            </DialogTitle>
+            <DialogDescription>
+              {trialDialog?.name
+                ? `Set the trial end date for "${trialDialog.name}". When the trial expires, the provider's marketplace card will downgrade to a minimal listing (no booking / quote / services).`
+                : ''}
+            </DialogDescription>
+          </DialogHeader>
+          {trialDialog ? (
+            <div className="space-y-4">
+              {/* Current status */}
+              <div className="rounded-md border border-border bg-muted/30 p-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Current plan</span>
+                  <Badge variant="outline" className="text-[10px] capitalize">
+                    {trialDialog.plan ?? 'starter'}
+                  </Badge>
+                </div>
+                <div className="mt-2 flex items-center justify-between">
+                  <span className="text-muted-foreground">Current status</span>
+                  <span className="text-xs font-medium capitalize">
+                    {trialDialog.planStatus ?? '—'}
+                  </span>
+                </div>
+                {trialDialog.trialEndsAt ? (
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="text-muted-foreground">Trial ends</span>
+                    <span className="text-xs font-medium">
+                      {new Date(trialDialog.trialEndsAt).toLocaleString()}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Quick-extend buttons */}
+              <div>
+                <Label className="text-xs text-muted-foreground mb-2 block">
+                  Quick extend
+                </Label>
+                <div className="flex gap-2">
+                  {[7, 14, 30].map((d) => (
+                    <Button
+                      key={d}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      disabled={trialSaving}
+                      onClick={() => {
+                        void quickExtendTrial(trialDialog, d);
+                      }}
+                    >
+                      +{d} days
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Custom date picker */}
+              <div>
+                <Label htmlFor="trial-date" className="text-xs text-muted-foreground mb-2 block">
+                  Or set a custom end date
+                </Label>
+                <div className="relative">
+                  <Calendar className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                  <Input
+                    id="trial-date"
+                    type="date"
+                    value={trialDate}
+                    onChange={(e) => setTrialDate(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+              </div>
+
+              <DialogFooter className="flex-row gap-2 sm:justify-between">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={trialSaving}
+                  onClick={() => void endTrialNow()}
+                >
+                  <X className="size-3.5 mr-1" />
+                  End trial now
+                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={trialSaving}
+                    onClick={() => setTrialDialog(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="bg-emerald-600 hover:bg-emerald-700"
+                    disabled={trialSaving || !trialDate}
+                    onClick={() => void saveTrial()}
+                  >
+                    {trialSaving ? (
+                      <Loader2 className="size-3.5 mr-1 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="size-3.5 mr-1" />
+                    )}
+                    Save
+                  </Button>
+                </div>
+              </DialogFooter>
+            </div>
+          ) : null}
         </DialogContent>
       </Dialog>
     </div>

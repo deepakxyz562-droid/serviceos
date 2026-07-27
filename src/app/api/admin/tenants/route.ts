@@ -170,6 +170,8 @@ export async function POST(request: NextRequest) {
     const passwordHash = await hashPassword(password);
 
     // Create tenant
+    // claimed=true + listingTier='claimed' — this is a real registered business
+    // created by the SuperAdmin, not seed data.
     const tenant = await db.tenant.create({
       data: {
         name: businessName,
@@ -179,6 +181,10 @@ export async function POST(request: NextRequest) {
         plan: selectedPlan,
         planStatus: 'trial',
         trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+        claimed: true,
+        listingTier: 'claimed',
+        marketplaceOptIn: true,
+        marketplaceTermsAcceptedAt: new Date(),
       },
     });
 

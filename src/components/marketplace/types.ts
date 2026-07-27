@@ -41,6 +41,18 @@ export interface ProviderListItem {
   services: ProviderService[];
   featured: string | null;
   /**
+   * Card-rendering mode — 'featured' | 'normal-full' | 'normal-minimal'.
+   * Drives the OLX-style featured tag + the minimal vs full card layout.
+   * Computed server-side by computeCardType() in src/lib/marketplace-featured.ts
+   */
+  cardType?: 'featured' | 'normal-full' | 'normal-minimal';
+  /** Whether the tenant has been claimed by a real registered business owner. */
+  claimed?: boolean;
+  /** Marketplace listing tier — 'none' | 'free' | 'claimed' | 'pro'. */
+  listingTier?: string | null;
+  /** Contact phone — used for the "Call Now" button on minimal cards. */
+  phone?: string | null;
+  /**
    * Verification flags — used to render trust badges on provider cards.
    * The marketplace browse query no longer hard-requires all 4 gates
    * (that excluded the long tail of providers who have a public page but

@@ -10,6 +10,9 @@ import { db } from '@/lib/db';
 //
 // Only returns tenants where listingTier != 'none' OR marketplaceOptIn = true.
 // Ordered by createdAt DESC, paginated.
+//
+// Response includes featured-listing + trial-status metadata so the SuperAdmin
+// Directory Listings table can show the featured star toggle and the trial badge.
 
 export async function GET(request: NextRequest) {
   try {
@@ -28,9 +31,15 @@ export async function GET(request: NextRequest) {
     const city = (searchParams.get('city') || '').trim();
 
     // ── Build where clause ───────────────────────────────────────────────
+    // Include tenants where listingTier is NULL (treat as 'none' = hidden) OR
+    // listingTier != 'none' OR marketplaceOptIn = true. The previous
+    // `{ listingTier: { not: 'none' } }` clause silently excluded NULL rows in
+    // SQL — this version explicitly includes them so the directory total is
+    // consistent with what's shown.
     const where: Record<string, unknown> = {
       OR: [
         { listingTier: { not: 'none' } },
+        { listingTier: null },
         { marketplaceOptIn: true },
       ],
     };
@@ -52,13 +61,13 @@ export async function GET(request: NextRequest) {
         { industry: category },
       ];
     }
-    if (tier) {
+    if (tier && tier !== 'all') {
       where.AND = [
         ...((where.AND as unknown[]) || []),
         { listingTier: tier },
       ];
     }
-    if (city) {
+    if (city && city !== 'all') {
       where.AND = [
         ...((where.AND as unknown[]) || []),
         { city },
@@ -83,6 +92,10 @@ export async function GET(request: NextRequest) {
           claimed: true,
           publicProfileEnabled: true,
           description: true,
+          plan: true,
+          planStatus: true,
+          trialEndsAt: true,
+          suspendedAt: true,
           createdAt: true,
         },
         orderBy: { createdAt: 'desc' },
@@ -92,22 +105,69 @@ export async function GET(request: NextRequest) {
       db.tenant.count({ where }),
     ]);
 
-    const items = rows.map((r: Record<string, unknown>) => ({
-      id: r.id,
-      name: r.name,
-      industry: r.industry || '',
-      city: r.city || '',
-      state: r.state || '',
-      phone: r.phone || '',
-      email: r.email || '',
-      rating: typeof r.rating === 'number' ? r.rating : Number(r.rating ?? 0),
-      reviewCount: typeof r.reviewCount === 'number' ? r.reviewCount : Number(r.reviewCount ?? 0),
-      listingTier: r.listingTier || 'none',
-      claimed: Boolean(r.claimed),
-      publicProfileEnabled: Boolean(r.publicProfileEnabled),
-      description: r.description || '',
-      createdAt: r.createdAt ? new Date(r.createdAt as string).toISOString() : null,
-    }));
+    // ── Fetch featured-listing flags in a single query ───────────────────
+    const tenantIds = rows.map((r) => r.id);
+    const featuredRows = tenantIds.length
+      ? await db.featuredListing.findMany({
+          where: {
+            tenantId: { in: tenantIds },
+            isActive: true,
+            OR: [{ endDate: null }, { endDate: { gt: new Date() } }],
+          },
+          select: { tenantId: true, priority: true, endDate: true },
+          orderBy: { priority: 'desc' },
+        })
+      : [];
+    const featuredMap = new Map<string, { priority: number; endDate: Date | null }>();
+    for (const fl of featuredRows) {
+      if (fl.tenantId && !featuredMap.has(fl.tenantId)) {
+        featuredMap.set(fl.tenantId, { priority: fl.priority, endDate: fl.endDate });
+      }
+    }
+
+    const now = new Date();
+    const items = rows.map((r) => {
+      const featuredInfo = featuredMap.get(r.id);
+      const isFeatured = Boolean(featuredInfo);
+      const trialEndsAt = r.trialEndsAt;
+      const isTrialExpired =
+        r.planStatus === 'trial' &&
+        trialEndsAt !== null &&
+        trialEndsAt <= now;
+      const isEligibleForFeatured =
+        r.claimed === true &&
+        ['growth', 'pro', 'business', 'enterprise'].includes(r.plan ?? '') &&
+        (r.planStatus === 'active' ||
+          (r.planStatus === 'trial' &&
+            (trialEndsAt === null || trialEndsAt > now)));
+
+      return {
+        id: r.id,
+        name: r.name,
+        industry: r.industry || '',
+        city: r.city || '',
+        state: r.state || '',
+        phone: r.phone || '',
+        email: r.email || '',
+        rating: typeof r.rating === 'number' ? r.rating : Number(r.rating ?? 0),
+        reviewCount:
+          typeof r.reviewCount === 'number'
+            ? r.reviewCount
+            : Number(r.reviewCount ?? 0),
+        listingTier: r.listingTier || 'none',
+        claimed: Boolean(r.claimed),
+        publicProfileEnabled: Boolean(r.publicProfileEnabled),
+        description: r.description || '',
+        plan: r.plan || 'starter',
+        planStatus: r.planStatus || 'trial',
+        trialEndsAt: trialEndsAt ? trialEndsAt.toISOString() : null,
+        isTrialExpired,
+        isFeatured,
+        featuredPriority: featuredInfo?.priority ?? null,
+        isEligibleForFeatured,
+        createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : null,
+      };
+    });
 
     return NextResponse.json({ items, total, page, limit });
   } catch (error) {

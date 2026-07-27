@@ -46,6 +46,13 @@ export async function POST(request: NextRequest) {
     // Settings → Public Hub → Marketplace listing). This fixes the issue
     // where previously-registered users with a public Business Hub page were
     // invisible on the marketplace because the flag was never set.
+    //
+    // claimed=true + listingTier='claimed' mark this as a real registered
+    // business (vs. seed/demo data which has claimed=false). These flags drive
+    // the marketplace card rendering: claimed providers with a valid
+    // subscription render as "normal-full" cards (with Book Now / Get Quote /
+    // services). Unclaimed or expired-trial providers render as "normal-minimal"
+    // cards (name / phone / rating / "Call Now" only).
     const tenant = await db.tenant.create({
       data: {
         name: businessName,
@@ -58,6 +65,8 @@ export async function POST(request: NextRequest) {
         trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial
         marketplaceOptIn: true,
         marketplaceTermsAcceptedAt: new Date(),
+        claimed: true,
+        listingTier: 'claimed',
       },
     });
 

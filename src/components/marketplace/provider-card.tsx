@@ -10,6 +10,7 @@ import {
   Sparkles,
   ArrowRight,
   Zap,
+  Phone,
   MessageSquareQuote,
   type LucideIcon,
 } from 'lucide-react';
@@ -20,22 +21,17 @@ import { getIndustry } from '@/lib/industry-catalog';
 import type { ProviderListItem, ProviderProfile } from './types';
 
 /**
- * ProviderCard (redesigned — TaskRabbit/Urban Company inspired)
- * --------------------------------------------------------------
- * Portrait card with:
- *   • Bigger cover banner (h-36) with featured/emergency badges
- *   • Avatar overlap
- *   • Rating row prominent (★ 4.9 · 124 reviews)
- *   • Name + tagline
- *   • Location with icon
- *   • Pricing: "From $X" (lowest service basePrice) or "Get a quote"
- *   • Compact verification badge row
- *   • Two-button footer: "View Profile" (outline) + "Get Quote" (primary)
+ * ProviderCard (redesigned — OLX-style featured tag + 3 rendering modes)
+ * --------------------------------------------------------------------
+ * The card renders in one of three modes, driven by `provider.cardType`:
  *
- * The whole card is NOT wrapped in an <a> — that created invalid HTML when
- * the footer buttons were also anchors (<a><button> nesting). Instead, each
- * CTA is its own Link. The cover image + name are also a Link so users can
- * click anywhere on the card body to view the profile.
+ *   - 'featured'       : full card with amber "Featured" tag + ring + sort-first
+ *   - 'normal-full'    : full card (Book Now / Get Quote / services)
+ *   - 'normal-minimal' : minimal card (name / phone / rating / "Call Now" only)
+ *                        — used for seed data and expired-trial providers
+ *
+ * The minimal mode is the OLX-style "unclaimed listing" treatment: no booking,
+ * no quote, no services. Just enough info for a customer to call the business.
  */
 
 interface ProviderCardProps {
@@ -124,6 +120,126 @@ function getPricingLabel(
   return { label: 'Get a quote', subLabel: 'custom pricing' };
 }
 
+// ─── Minimal card (seed data / expired trial) ────────────────────────────────
+
+function MinimalProviderCard({
+  provider,
+  className,
+  href,
+}: {
+  provider: ProviderListItem;
+  className?: string;
+  href?: string;
+}) {
+  const rating = provider.rating ?? 0;
+  const reviewCount = provider.reviewCount ?? 0;
+  const industry = provider.industry;
+  const industryMeta = industry ? getIndustry(industry) : undefined;
+  const industryLabel = industryMeta?.name ?? industry ?? 'Service Provider';
+  const industryEmoji = industryMeta?.emoji ?? '🛠️';
+  const location = [provider.city, provider.state].filter(Boolean).join(', ');
+  const phone = provider.phone ?? null;
+
+  const profileHref = href ?? '#';
+
+  return (
+    <Card
+      className={cn(
+        'group relative flex h-full flex-col overflow-hidden py-0 transition-all hover:shadow-md',
+        className,
+      )}
+    >
+      <CardContent className="flex flex-1 flex-col gap-3 p-4">
+        {/* Header row: avatar + industry chip */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 text-sm font-bold text-slate-600 dark:from-slate-800 dark:to-slate-900 dark:text-slate-300">
+              {buildInitials(provider.name)}
+            </div>
+            <div className="min-w-0">
+              {href ? (
+                <Link href={profileHref} aria-label={`View ${provider.name} profile`}>
+                  <h3 className="line-clamp-1 text-sm font-semibold text-foreground transition-colors group-hover:text-emerald-700">
+                    {provider.name}
+                  </h3>
+                </Link>
+              ) : (
+                <h3 className="line-clamp-1 text-sm font-semibold text-foreground">
+                  {provider.name}
+                </h3>
+              )}
+              <div className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
+                <span aria-hidden>{industryEmoji}</span>
+                <span className="truncate">{industryLabel}</span>
+              </div>
+            </div>
+          </div>
+          {/* "Unclaimed" pill — subtle, top-right */}
+          {!provider.claimed && (
+            <Badge variant="outline" className="shrink-0 text-[9px] uppercase tracking-wide text-muted-foreground">
+              Unclaimed
+            </Badge>
+          )}
+        </div>
+
+        {/* Rating + location row */}
+        <div className="flex items-center justify-between gap-2 text-xs">
+          {reviewCount > 0 ? (
+            <div className="flex items-center gap-1">
+              <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+              <span className="font-semibold text-foreground">{rating.toFixed(1)}</span>
+              <span className="text-muted-foreground">({reviewCount})</span>
+            </div>
+          ) : (
+            <span className="text-muted-foreground italic">No reviews yet</span>
+          )}
+          {location ? (
+            <span className="flex items-center gap-1 text-muted-foreground truncate">
+              <MapPin className="h-3 w-3 shrink-0" />
+              <span className="truncate">{location}</span>
+            </span>
+          ) : null}
+        </div>
+
+        {provider.description ? (
+          <p className="line-clamp-2 text-xs text-muted-foreground leading-relaxed">
+            {provider.description}
+          </p>
+        ) : null}
+      </CardContent>
+
+      {/* Footer — "Call Now" only (no booking, no quote) */}
+      <CardFooter className="mt-auto gap-2 border-t bg-muted/20 px-4 py-2.5">
+        {phone ? (
+          <a
+            href={`tel:${phone.replace(/[^+\d]/g, '')}`}
+            className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md bg-emerald-600 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700"
+            aria-label={`Call ${provider.name}`}
+          >
+            <Phone className="h-3.5 w-3.5" />
+            Call Now
+          </a>
+        ) : (
+          <span className="inline-flex h-9 flex-1 items-center justify-center text-xs text-muted-foreground">
+            No phone available
+          </span>
+        )}
+        {href ? (
+          <Link
+            href={profileHref}
+            className="inline-flex h-9 items-center justify-center gap-1 rounded-md border border-border bg-background px-3 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+            aria-label={`View ${provider.name} details`}
+          >
+            Details <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        ) : null}
+      </CardFooter>
+    </Card>
+  );
+}
+
+// ─── Full card (featured + normal-full) ──────────────────────────────────────
+
 export function ProviderCard({
   provider,
   featured,
@@ -132,6 +248,19 @@ export function ProviderCard({
   className,
   href,
 }: ProviderCardProps) {
+  // ── Route to minimal card if applicable ─────────────────────────────────
+  const listItem = provider as ProviderListItem;
+  const cardType = listItem.cardType;
+  if (cardType === 'normal-minimal' && !isProfile(provider)) {
+    return (
+      <MinimalProviderCard
+        provider={listItem}
+        className={className}
+        href={href}
+      />
+    );
+  }
+
   const rating = provider.rating ?? 0;
   const reviewCount = provider.reviewCount ?? 0;
   const industry = provider.industry;
@@ -139,7 +268,7 @@ export function ProviderCard({
   const industryLabel = industryMeta?.name ?? industry ?? 'Service Provider';
   const industryEmoji = industryMeta?.emoji ?? '🛠️';
 
-  const isFeat = featured ?? (!!(provider as ProviderListItem).featured);
+  const isFeat = featured ?? !!listItem.featured;
   const listFlags = provider as Partial<ProviderListItem>;
   const identityVerified = isProfile(provider)
     ? provider.identityVerified
@@ -189,7 +318,7 @@ export function ProviderCard({
         ) : null}
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
 
-        {/* Top-left badges */}
+        {/* Top-left badges — Featured tag (OLX-style amber pill) */}
         <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
           {isFeat ? (
             <Badge className="gap-1 bg-amber-400 text-amber-950 shadow hover:bg-amber-400">

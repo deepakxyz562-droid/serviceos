@@ -3,9 +3,12 @@ import { db } from '@/lib/db';
 import { VERTICALS, getIndustry } from '@/lib/industry-catalog';
 import { MarketplaceBrowser } from '@/components/marketplace/marketplace-browser';
 import { MarketplaceHeroSearch } from '@/components/marketplace/marketplace-hero-search';
-import { MarketplaceFeaturedCarousel } from '@/components/marketplace/marketplace-featured-carousel';
 import type { ProviderListItem } from '@/components/marketplace/types';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
+import {
+  computeCardType,
+  fetchFeaturedListingsMap,
+} from '@/lib/marketplace-featured';
 import {
   Wrench,
   Search,
@@ -16,11 +19,11 @@ import {
   Wallet,
   Star,
   Zap,
-  Crown,
 } from 'lucide-react';
 
-export const revalidate = 60; // ISR — revalidate every 60s (safety net; seed
-                              // endpoint also calls revalidatePath on insert)
+// Render dynamically — no ISR. Seed/featured/trial changes from SuperAdmin
+// should appear immediately without waiting for a 60s revalidate window.
+export const dynamic = 'force-dynamic';
 
 /**
  * Marketplace browse page — server-rendered for SEO.
@@ -81,27 +84,18 @@ async function fetchProviders() {
       stripeConnected: true,
       planStatus: true,
       plan: true,
+      claimed: true,
+      listingTier: true,
+      trialEndsAt: true,
+      phone: true,
     },
     orderBy: [{ rating: 'desc' }, { reviewCount: 'desc' }],
-    take: 120,
+    take: 500,
   });
 
-  // Fetch featured listing flags
+  // Fetch featured listing flags via the shared helper (single source of truth)
   const tenantIds = tenants.map((t) => t.id);
-  const featuredListings = tenantIds.length
-    ? await db.featuredListing.findMany({
-        where: {
-          tenantId: { in: tenantIds },
-          isActive: true,
-          OR: [{ endDate: null }, { endDate: { gt: new Date() } }],
-        },
-        select: { tenantId: true, type: true },
-      })
-    : [];
-  const featuredMap = new Map<string, string>();
-  for (const fl of featuredListings) {
-    if (!featuredMap.has(fl.tenantId!)) featuredMap.set(fl.tenantId!, fl.type);
-  }
+  const featuredMap = await fetchFeaturedListingsMap(tenantIds);
 
   return tenants.map((t) => {
     let serviceAreas: string[] = [];
@@ -111,6 +105,16 @@ async function fetchProviders() {
     } catch {
       // ignore
     }
+    const hasFL = featuredMap.has(t.id);
+    const cardType = computeCardType(
+      {
+        claimed: t.claimed,
+        plan: t.plan,
+        planStatus: t.planStatus,
+        trialEndsAt: t.trialEndsAt,
+      },
+      hasFL,
+    );
     return {
       id: t.id,
       name: t.name,
@@ -131,7 +135,15 @@ async function fetchProviders() {
       emergencyServiceAvailable: t.emergencyServiceAvailable,
       serviceAreas,
       services: [],
-      featured: featuredMap.get(t.id) ?? null,
+      // `featured` is set to 'featured' when the card type is featured, so the
+      // existing ProviderCard "featured" prop logic + the MarketplaceBrowser
+      // sort (featured-first) continue to work unchanged.
+      featured: cardType === 'featured' ? 'featured' : null,
+      // New: card-type + claim flags so ProviderCard can render minimal vs full
+      cardType,
+      claimed: t.claimed,
+      listingTier: t.listingTier,
+      phone: t.phone,
       identityVerified: t.identityVerified,
       businessVerified: t.businessVerified,
       insuranceVerified: t.insuranceVerified,
@@ -236,16 +248,9 @@ export default async function MarketplaceBrowsePage({
     dbError = true;
   }
 
-  // ── Split into featured (paid/active subscribers) vs regular ────────────
-  // Featured = planStatus 'active' AND plan in (pro, business, enterprise).
-  // Everyone else (trial, starter, no plan, etc.) goes in the regular grid.
-  // Both groups keep their existing rating-desc ordering from the DB query.
-  const PAID_PLANS = new Set(['pro', 'business', 'enterprise']);
-  const featuredProviders = providers.filter(
-    (p) => p.planStatus === 'active' && p.plan != null && PAID_PLANS.has(p.plan),
-  );
-  const featuredIds = new Set(featuredProviders.map((p) => p.id));
-  const regularProviders = providers.filter((p) => !featuredIds.has(p.id));
+  // No separate carousel — featured providers render in the SAME grid as
+  // regular providers, just with an amber "Featured" tag (OLX-style). The
+  // MarketplaceBrowser client component sorts featured-first automatically.
 
   // Build industry groups for the sidebar — 9 verticals, each with its industries
   const verticalGroups = VERTICALS.map((v) => {
@@ -366,38 +371,25 @@ export default async function MarketplaceBrowsePage({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
       />
 
-      {/* Header — sticky, two rows on desktop (logo+nav / search bar) */}
+      {/* Header — sticky, single row: logo on the left, slick search on the right.
+          On mobile the search wraps to a second row automatically. */}
       <header className="sticky top-0 z-40 border-b bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70 pt-[env(safe-area-inset-top,0px)]">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          {/* Row 1: logo + nav links */}
-          <div className="flex h-14 items-center justify-between">
-            <a href="/" className="flex items-center gap-2" aria-label="Back to ServiceOS">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
+          <div className="flex h-16 flex-wrap items-center gap-3 py-2 sm:flex-nowrap sm:gap-6">
+            {/* Logo (links home) */}
+            <a href="/" className="flex items-center gap-2 shrink-0" aria-label="ServiceOS home">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
                 <Wrench className="h-4 w-4" />
               </span>
-              <span className="text-lg font-bold text-foreground">ServiceOS</span>
+              <span className="hidden sm:block text-lg font-bold text-foreground tracking-tight">
+                ServiceOS<span className="text-emerald-600"> Marketplace</span>
+              </span>
             </a>
-            <nav className="flex items-center gap-3">
-              <a
-                href="/"
-                className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
-              >
-                ← Back to ServiceOS
-              </a>
-              <a
-                href="/#pricing"
-                className="hidden sm:inline-flex items-center gap-1 text-sm font-medium text-emerald-700 hover:text-emerald-800 dark:text-emerald-300"
-              >
-                For businesses
-              </a>
-            </nav>
-          </div>
 
-          {/* Row 2: search bar (client island) — drives the MarketplaceBrowser
-              below via a shared Zustand store. Instant search, no reload.
-              Stacks below the logo on mobile (max-w-3xl centered on desktop). */}
-          <div className="pb-2">
-            <MarketplaceHeroSearch />
+            {/* Search bar — right side on desktop, full-width on mobile */}
+            <div className="order-3 w-full sm:order-2 sm:flex-1">
+              <MarketplaceHeroSearch />
+            </div>
           </div>
         </div>
       </header>
@@ -478,27 +470,10 @@ export default async function MarketplaceBrowsePage({
         </ol>
       </nav>
 
-      {/* Featured providers — OLX-style horizontal carousel of paid/active
-          subscribers. Renders only when there's at least one featured provider.
-          Sits above the main grid so premium listings get top-of-fold visibility. */}
-      {featuredProviders.length > 0 ? (
-        <section className="border-b bg-gradient-to-r from-amber-50/50 to-emerald-50/30 dark:from-amber-950/10 dark:to-emerald-950/10">
-          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Crown className="h-5 w-5 text-amber-500" aria-hidden />
-                <h2 className="text-lg font-semibold text-foreground">Featured Providers</h2>
-                <Badge variant="outline" className="text-xs">
-                  {featuredProviders.length}
-                </Badge>
-              </div>
-            </div>
-            <MarketplaceFeaturedCarousel providers={featuredProviders} />
-          </div>
-        </section>
-      ) : null}
-
-      {/* Main grid: sidebar + provider cards */}
+      {/* Main grid: sidebar + provider cards.
+          Featured providers render in the SAME grid as regular providers,
+          with an amber "Featured" tag on the card (OLX-style). No separate
+          carousel section. */}
       <div id="all-providers" className="mx-auto max-w-7xl w-full px-4 sm:px-6 py-8 flex-1 scroll-mt-20">
         <div className="lg:grid lg:grid-cols-[260px_1fr] lg:gap-8">
           {/* Sidebar — industry filter by vertical (server-rendered links for crawlability) */}
@@ -640,7 +615,7 @@ export default async function MarketplaceBrowsePage({
               </div>
             ) : (
               <MarketplaceBrowser
-                providers={regularProviders}
+                providers={providers}
                 initialFilters={{
                   vertical: verticalFilter,
                   industry: industryFilter,
