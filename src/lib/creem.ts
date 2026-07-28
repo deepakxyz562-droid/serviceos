@@ -79,6 +79,7 @@ export interface CreateCreemCheckoutResult {
 
 const CREEM_FEATURE_KEY = 'creem_billing';
 const CREEM_BASE_URL = 'https://api.creem.io';
+const CREEM_TEST_BASE_URL = 'https://test-api.creem.io';
 
 // ─── Config resolution ───────────────────────────────────────────────────────
 
@@ -126,8 +127,16 @@ export async function isCreemConfigured(): Promise<boolean> {
   return !!cfg && !!cfg.apiKey;
 }
 
-/** Base URL — Creem currently has a single API host; test/live is determined by the key. */
-function getBaseUrl(): string {
+/**
+ * Base URL — Creem isolates test and production by host AND key. Test keys
+ * (creem_test_*) only work with test-api.creem.io; production keys only work
+ * with api.creem.io. Select the host from the key prefix so the superadmin
+ * never has to pick a host manually.
+ */
+function getBaseUrl(apiKey?: string): string {
+  if (apiKey && apiKey.startsWith('creem_test_')) {
+    return CREEM_TEST_BASE_URL;
+  }
   return CREEM_BASE_URL;
 }
 
@@ -166,17 +175,28 @@ export async function createCreemCheckoutSession(
     throw new Error('Free plans do not require a Creem checkout session.');
   }
 
-  // Creem expects the amount in the smallest currency unit (cents) — this is
-  // the convention used by Stripe / Paddle / Lemon Squeezy. If Creem's live
-  // API expects decimal dollars instead, change this single line.
-  const unitPrice = Math.round(amount * 100);
-  const currency = (plan.currency || 'USD').toUpperCase();
-
+  // Creem requires a pre-created product for every checkout — there is NO
+  // ad-hoc / inline-pricing mode. The superadmin must map each plan × cycle
+  // to a Creem product_id in the admin panel (stored in config.products).
   const productId = cfg.products?.[input.planCode]?.[cycle];
+  if (!productId) {
+    throw new Error(
+      `No Creem product_id mapped for plan "${input.planCode}" (${cycle}). ` +
+        `Ask the platform admin to map this plan in the Creem billing settings.`
+    );
+  }
 
+  // ── Build the POST /v1/checkouts request body (verified against Creem docs) ──
+  // Required:  product_id, success_url
+  // Optional:  request_id (idempotency/ref), customer { email }, metadata
+  // NOT supported by Creem:  cancel_url, customer_email (flat), unit_price,
+  //   currency, product_name, billing_type (ad-hoc pricing)
   const body: Record<string, unknown> = {
+    product_id: productId,
     success_url: input.successUrl,
-    cancel_url: input.cancelUrl,
+    // request_id surfaces in the success-URL query params + webhook payload,
+    // making it easy to correlate a checkout back to this tenant+plan.
+    request_id: `co_${input.tenantId}_${input.planCode}_${cycle}_${Date.now()}`,
     // Embed matching metadata so the webhook can resolve the tenant + plan.
     metadata: {
       tenantId: input.tenantId,
@@ -186,23 +206,15 @@ export async function createCreemCheckoutSession(
     },
   };
 
+  // Creem expects the customer email as a nested object, NOT a flat field.
   if (input.userEmail) {
-    body.customer_email = input.userEmail;
+    body.customer = { email: input.userEmail };
   }
 
-  if (productId) {
-    // Preferred path — product + price are managed in the Creem dashboard.
-    body.product_id = productId;
-  } else {
-    // Ad-hoc checkout — pass the price inline so the superadmin does NOT have
-    // to pre-create every plan × cycle combination in Creem.
-    body.unit_price = unitPrice;
-    body.currency = currency;
-    body.product_name = `${plan.name} Plan (${cycle})`;
-    body.billing_type = cycle === 'yearly' ? 'yearly' : 'monthly';
-  }
+  // NOTE: input.cancelUrl is intentionally NOT sent — Creem has no cancel_url
+  // field. Sending it would trigger a 400 "property cancel_url should not exist".
 
-  const res = await fetch(`${getBaseUrl()}/v1/checkout/sessions`, {
+  const res = await fetch(`${getBaseUrl(cfg.apiKey)}/v1/checkouts`, {
     method: 'POST',
     headers: {
       'x-api-key': cfg.apiKey,
@@ -223,9 +235,13 @@ export async function createCreemCheckoutSession(
   }
 
   if (!res.ok) {
+    // Creem's `message` field can be a string OR an array of validation
+    // errors (e.g. ["product_id must be a string"]). Handle both.
+    const msgField = json.message;
     const message =
+      (typeof msgField === 'string' && msgField) ||
+      (Array.isArray(msgField) && msgField.join('; ')) ||
       (json.error as string | undefined) ||
-      (json.message as string | undefined) ||
       rawText.slice(0, 300) ||
       `Creem API returned HTTP ${res.status}`;
     throw new Error(`Failed to create Creem checkout session: ${message}`);
@@ -300,57 +316,68 @@ export interface CreemTestConnectionResult {
 }
 
 /**
- * Ping the Creem API with the configured key by listing products.
+ * Ping the Creem API with the configured key to verify it works.
  * Used by the superadmin "Test Connection" button so the admin can verify
- * the key works before saving.
+ * the key works before saving. Uses a sentinel product_id fetch — a 404
+ * response proves the key was authenticated (Creem only 404s after auth).
  */
 export async function testCreemConnection(
   cfg: CreemConfig
 ): Promise<CreemTestConnectionResult> {
   try {
-    const res = await fetch(`${getBaseUrl()}/v1/products?limit=1`, {
-      method: 'GET',
-      headers: {
-        'x-api-key': cfg.apiKey,
-        Accept: 'application/json',
-      },
-      signal: AbortSignal.timeout(10_000),
-    });
+    // Creem has NO list-all-products endpoint. `/v1/products` is fetch-one-by-id
+    // and requires `?product_id=<id>`. To verify the key works without needing
+    // a real product ID, we fetch a sentinel ID and treat 404 "Product not
+    // found" as SUCCESS — Creem only returns 404 AFTER auth passes, so a 404
+    // proves the key was accepted. (A bad key returns 401 "API Key is missing".)
+    const res = await fetch(
+      `${getBaseUrl(cfg.apiKey)}/v1/products?product_id=__connection_test__`,
+      {
+        method: 'GET',
+        headers: {
+          'x-api-key': cfg.apiKey,
+          Accept: 'application/json',
+        },
+        signal: AbortSignal.timeout(10_000),
+      }
+    );
 
     if (res.status === 401 || res.status === 403) {
       return { ok: false, message: 'Invalid API key (Creem rejected the credentials).' };
     }
-    if (!res.ok) {
+
+    // 404 is the SUCCESS case — it proves the key was authenticated (Creem
+    // only returns 404 after auth passes). There is no list-products
+    // endpoint, so we can't enumerate real products to return as a sample.
+    if (res.status === 404 || res.ok) {
+      const env = cfg.apiKey.startsWith('creem_test_') ? 'test' : 'live';
       return {
-        ok: false,
-        message: `Creem API returned HTTP ${res.status}.`,
+        ok: true,
+        message: `Connected successfully. API key verified (${env} mode).`,
+        productCount: 0,
+        sampleProduct: null,
       };
     }
 
-    const raw = await res.text();
-    let json: Record<string, unknown> = {};
+    // Any other non-OK status is a real failure.
+    let detail = '';
     try {
-      json = raw ? JSON.parse(raw) : {};
+      const raw = await res.text();
+      const j = raw ? JSON.parse(raw) : {};
+      const msg = j.message;
+      detail =
+        (typeof msg === 'string' && msg) ||
+        (Array.isArray(msg) && msg.join('; ')) ||
+        (j.error as string | undefined) ||
+        '';
     } catch {
       /* ignore */
     }
-
-    // Creem may return either `{ data: [...] }` or a bare array.
-    const list =
-      (json.data as Array<Record<string, unknown>> | undefined) ||
-      (Array.isArray(json) ? (json as Array<Record<string, unknown>>) : []);
-    const sample = list[0]
-      ? {
-          id: String(list[0].id ?? ''),
-          name: list[0].name ? String(list[0].name) : undefined,
-        }
-      : null;
-
     return {
-      ok: true,
-      message: 'Connected successfully.',
-      productCount: list.length,
-      sampleProduct: sample,
+      ok: false,
+      message: detail
+        ? `Creem API returned HTTP ${res.status}: ${detail}`
+        : `Creem API returned HTTP ${res.status}.`,
     };
   } catch (err) {
     return {
