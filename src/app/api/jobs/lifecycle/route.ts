@@ -10,6 +10,7 @@ import {
 import { EventBus } from '@/lib/event-bus'
 import { notifyOwner } from '@/lib/owner-notifications'
 import { autoCreateInvoiceFromJob } from '@/lib/invoice-automation'
+import { autoRecordAssetServiceHistory } from '@/lib/asset-service-history'
 import { validateJobCompletionProof } from '@/lib/job-completion-validation'
 
 function safeParseJson(str: string): unknown[] {
@@ -454,6 +455,19 @@ export async function POST(request: NextRequest) {
             }
           } else if (!invResult.skipped) {
             console.error(`[JobLifecycle] Auto-invoice failed: ${invResult.error}`)
+          }
+        })
+
+        // ─── Auto-record AssetServiceHistory for the linked equipment (background) ────
+        // Fulfills the job-form promise: "Service history will be auto-recorded
+        // on this asset when the job completes." Idempotent — skips if no asset
+        // linked or an entry already exists for this job+asset.
+        fireAndForget('asset-service-history', async () => {
+          const ashResult = await autoRecordAssetServiceHistory(updatedJob)
+          if (ashResult.success) {
+            console.log(`[JobLifecycle] Auto-recorded service history for job ${updatedJob.id}`)
+          } else if (!ashResult.skipped) {
+            console.error(`[JobLifecycle] Asset service-history failed: ${ashResult.reason}`)
           }
         })
 

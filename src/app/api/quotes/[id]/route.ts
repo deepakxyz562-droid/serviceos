@@ -56,7 +56,7 @@ export async function PUT(
     const { id } = await params;
     const body = await req.json();
     const {
-      title, description, customerId, status,
+      title, description, customerId, status, jobId,
       services, addOns, discountType, discountValue, taxRate, validUntil,
     } = body;
 
@@ -96,6 +96,7 @@ export async function PUT(
     if (description !== undefined) updateData.description = description;
     if (customerId !== undefined) updateData.customerId = customerId;
     if (status !== undefined) updateData.status = status;
+    if (jobId !== undefined) updateData.jobId = jobId || null;
     if (services !== undefined) updateData.itemsJson = JSON.stringify(services);
     if (addOns !== undefined) updateData.addOnsJson = JSON.stringify(addOns);
     if (discountType !== undefined) updateData.discountType = discountType;

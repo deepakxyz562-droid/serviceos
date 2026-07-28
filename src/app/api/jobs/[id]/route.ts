@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { EventBus } from '@/lib/event-bus';
 import { logActivity } from '@/lib/activity-log';
 import { getAuthUser } from '@/lib/auth';
+import { autoRecordAssetServiceHistory } from '@/lib/asset-service-history';
 import { validateJobCompletionProof } from '@/lib/job-completion-validation';
 
 export async function GET(
@@ -218,6 +219,24 @@ export async function PUT(
         },
       },
     });
+
+    // ─── Auto-record AssetServiceHistory when job is marked completed ───
+    // Fulfills the job-form promise: "Service history will be auto-recorded
+    // on this asset when the job completes." Idempotent — skips if no asset
+    // linked or an entry already exists. Only fires on a real transition
+    // (existingJob.status !== 'completed' → 'completed').
+    if (body.status === 'completed' && existingJob.status !== 'completed') {
+      try {
+        const ashResult = await autoRecordAssetServiceHistory(job);
+        if (ashResult.success) {
+          console.log(`[Jobs PUT] Auto-recorded service history for job ${job.id}`);
+        } else if (!ashResult.skipped) {
+          console.error(`[Jobs PUT] Asset service-history failed: ${ashResult.reason}`);
+        }
+      } catch (e) {
+        console.error('Failed to auto-record asset service history on PUT:', e);
+      }
+    }
 
     // Emit events via EventBus based on status change
     try {

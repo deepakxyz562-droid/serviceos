@@ -3,6 +3,7 @@ import { getAuthUser } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { EventBus } from '@/lib/event-bus';
 import { autoCreateInvoiceFromJob } from '@/lib/invoice-automation';
+import { autoRecordAssetServiceHistory } from '@/lib/asset-service-history';
 import { validateJobCompletionProof } from '@/lib/job-completion-validation';
 
 /**
@@ -191,6 +192,21 @@ export async function POST(
       }
     } catch (e) {
       console.error('Failed to auto-create invoice on complete-proof:', e);
+    }
+
+    // ─── Auto-record AssetServiceHistory for linked equipment ───
+    // Fulfills the job-form promise: "Service history will be auto-recorded
+    // on this asset when the job completes." Idempotent — skips if no asset
+    // linked or an entry already exists for this job+asset.
+    try {
+      const ashResult = await autoRecordAssetServiceHistory(updatedJob);
+      if (ashResult.success) {
+        console.log(`[CompleteProof] Auto-recorded service history for job ${job.id}`);
+      } else if (!ashResult.skipped) {
+        console.error(`[CompleteProof] Asset service-history failed: ${ashResult.reason}`);
+      }
+    } catch (e) {
+      console.error('Failed to auto-record asset service history on complete-proof:', e);
     }
 
     // ─── Emit event via EventBus ───

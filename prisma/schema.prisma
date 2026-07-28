@@ -686,6 +686,7 @@ model Quote {
   customerId    String?
   leadId        String?
   jobRequestId String?  // -> JobRequest.id (if created from a quote request)
+  jobId         String? // -> Job.id (when a quote is linked/converted to a job)
   validUntil    DateTime?
   whatsappSent  Boolean   @default(false)
   whatsappSentAt DateTime?
@@ -695,10 +696,12 @@ model Quote {
   tenant     Tenant?     @relation(fields: [tenantId], references: [id])
   customer   Customer?   @relation(fields: [customerId], references: [id])
   jobRequest JobRequest? @relation("JobRequestQuotes", fields: [jobRequestId], references: [id])
+  job        Job?        @relation(fields: [jobId], references: [id])
 
   @@index([tenantId])
   @@index([status])
   @@index([customerId])
+  @@index([jobId])
 }
 
 // ==========================================
@@ -1281,6 +1284,7 @@ model Job {
   resource   Resource?  @relation("JobResource", fields: [resourceId], references: [id])
   lead       Lead?
   invoices   Invoice[]
+  quotes     Quote[]
   recurringInvoices RecurringInvoice[] @relation("JobRecurringInvoices")
   currentEmployee Employee? @relation("EmployeeCurrentJob")
   notificationLogs NotificationLog[]

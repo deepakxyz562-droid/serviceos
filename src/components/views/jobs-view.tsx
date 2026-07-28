@@ -217,6 +217,8 @@ interface JobFormData {
   linkToRelated: string[];
   // ── V1.5: linked CustomerAsset (equipment) ──
   assetId: string;
+  // ── V1.6: linked quote id (when "Quotes" is checked in Link to related) ──
+  linkedQuoteId: string;
 }
 
 const EMPTY_JOB_FORM: JobFormData = {
@@ -244,6 +246,7 @@ const EMPTY_JOB_FORM: JobFormData = {
   linkedChecklists: [],
   linkToRelated: [],
   assetId: '',
+  linkedQuoteId: '',
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -1069,6 +1072,44 @@ export function JobsView() {
     };
   }, [jobForm.customerId]);
 
+  // V1.6: Customer quotes — for the "Link to related → Quotes" picker.
+  // Loaded whenever the selected customerId changes (so the picker is instant
+  // when the user checks the Quotes checkbox). Only draft/sent quotes are
+  // linkable (accepted/rejected/expired are already resolved).
+  interface QuoteOption {
+    id: string;
+    title: string;
+    total: number;
+    currency: string;
+    status: string;
+  }
+  const [customerQuotes, setCustomerQuotes] = useState<QuoteOption[]>([]);
+  useEffect(() => {
+    if (!jobForm.customerId) {
+      setCustomerQuotes([]);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/quotes?customerId=${encodeURIComponent(jobForm.customerId)}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => {
+        if (!cancelled) {
+          const list = Array.isArray(data) ? data : [];
+          // Only show linkable quotes (draft + sent); exclude already-accepted/rejected/expired.
+          const linkable = list.filter(
+            (q: QuoteOption) => q.status === 'draft' || q.status === 'sent'
+          );
+          setCustomerQuotes(linkable);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setCustomerQuotes([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [jobForm.customerId]);
+
   // V1.5: When a job detail page is opened, fetch the linked asset (if any)
   // so we can show its name + type in the detail sidebar.
   useEffect(() => {
@@ -1391,6 +1432,7 @@ export function JobsView() {
       linkedChecklists: parseStringArray(job.linkedChecklistsJson),
       linkToRelated: parseStringArray(job.linkToRelatedJson),
       assetId: parseAssetIdFromMetadata(job.metadataJson),
+      linkedQuoteId: '',
     });
     setCustomerQuery('');
     setCustomerPickerOpen(false);
@@ -1655,6 +1697,73 @@ export function JobsView() {
         } catch {
           // Non-fatal — the job was created; the lead just won't auto-link.
           console.warn('[JobsView] Failed to mark lead as won after job creation');
+        }
+      }
+
+      // ── V1.6: "Link to related" → Invoices + Quotes ──────────────────
+      // Fires AFTER the job is saved so we have a jobId to link to. Each
+      // action is independent and wrapped in try/catch so a failure in one
+      // does not block the other or the job save itself.
+      const finalJobId = editingJob?.id || createdJobId;
+      if (finalJobId && jobForm.customerId) {
+        // (a) Invoices — create a draft invoice from the job's line items.
+        if (jobForm.linkToRelated.includes('invoices')) {
+          const invoiceItems = jobForm.lineItems
+            .filter((li) => li.name.trim() || Number(li.unitPrice) > 0)
+            .map((li) => ({
+              description: li.name.trim() || 'Service',
+              quantity: Number(li.quantity) || 1,
+              rate: Number(li.unitPrice) || 0,
+            }));
+          if (invoiceItems.length > 0) {
+            try {
+              const invRes = await fetch('/api/invoices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  customerId: jobForm.customerId,
+                  jobId: finalJobId,
+                  items: invoiceItems,
+                }),
+              });
+              if (invRes.ok) {
+                toast.success('Draft invoice created from job line items');
+              } else {
+                const e = await invRes.json().catch(() => ({}));
+                console.warn('[JobsView] Invoice creation failed:', e?.error);
+                toast.error('Job saved, but invoice creation failed: ' + (e?.error || 'unknown error'));
+              }
+            } catch (e) {
+              console.warn('[JobsView] Invoice creation error:', e);
+              toast.error('Job saved, but invoice creation failed (network error)');
+            }
+          } else {
+            toast.warning('Job saved, but no invoice created (no line items with content)');
+          }
+        }
+
+        // (b) Quotes — link an existing quote to this job + mark it accepted.
+        if (jobForm.linkToRelated.includes('quotes') && jobForm.linkedQuoteId) {
+          try {
+            const quoteRes = await fetch(`/api/quotes/${jobForm.linkedQuoteId}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                jobId: finalJobId,
+                status: 'accepted',
+              }),
+            });
+            if (quoteRes.ok) {
+              toast.success('Quote linked to job and marked as accepted');
+            } else {
+              const e = await quoteRes.json().catch(() => ({}));
+              console.warn('[JobsView] Quote linking failed:', e?.error);
+              toast.error('Job saved, but quote linking failed: ' + (e?.error || 'unknown error'));
+            }
+          } catch (e) {
+            console.warn('[JobsView] Quote linking error:', e);
+            toast.error('Job saved, but quote linking failed (network error)');
+          }
         }
       }
 
@@ -2340,43 +2449,36 @@ export function JobsView() {
         </FormSectionCard>
 
         {/* ─── Equipment (linked asset) ──────────────────────────── */}
-        <FormSectionCard icon={Wrench} title="Equipment" description="Link this job to a customer asset to track service history">
-          <div className="space-y-2">
-            {!jobForm.customerId ? (
-              <p className="text-xs text-muted-foreground italic">
-                Select a customer first to see their equipment.
-              </p>
-            ) : customerAssets.length === 0 ? (
-              <p className="text-xs text-muted-foreground italic">
-                This customer has no equipment tracked yet.
-              </p>
-            ) : (
-              <>
-                <Select
-                  value={jobForm.assetId || 'none'}
-                  onValueChange={(v) => setJobForm({ ...jobForm, assetId: v === 'none' ? '' : v })}
-                >
-                  <SelectTrigger className="form-input h-10">
-                    <SelectValue placeholder="None — no specific equipment" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None — no specific equipment</SelectItem>
-                    {customerAssets.map((a) => (
-                      <SelectItem key={a.id} value={a.id}>
-                        {a.name} ({a.assetType}){a.brand ? ` · ${a.brand}` : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {jobForm.assetId && (
-                  <p className="text-[11px] text-muted-foreground">
-                    Service history will be auto-recorded on this asset when the job completes.
-                  </p>
-                )}
-              </>
-            )}
-          </div>
-        </FormSectionCard>
+        {/* Only show this section when the selected customer has at least one
+            tracked asset. If the customer has no equipment, the entire section
+            is hidden (per product decision V1.6) — no empty-state message. */}
+        {jobForm.customerId && customerAssets.length > 0 && (
+          <FormSectionCard icon={Wrench} title="Equipment" description="Link this job to a customer asset to track service history">
+            <div className="space-y-2">
+              <Select
+                value={jobForm.assetId || 'none'}
+                onValueChange={(v) => setJobForm({ ...jobForm, assetId: v === 'none' ? '' : v })}
+              >
+                <SelectTrigger className="form-input h-10">
+                  <SelectValue placeholder="None — no specific equipment" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None — no specific equipment</SelectItem>
+                  {customerAssets.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name} ({a.assetType}){a.brand ? ` · ${a.brand}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {jobForm.assetId && (
+                <p className="text-[11px] text-muted-foreground">
+                  Service history will be auto-recorded on this asset when the job completes.
+                </p>
+              )}
+            </div>
+          </FormSectionCard>
+        )}
 
         {/* ─── Product / Service (line items) ───────────────────── */}
         <FormSectionCard icon={Briefcase} title="Product / Service" description="Search the catalog or add a custom item">
@@ -2544,10 +2646,8 @@ export function JobsView() {
             </p>
             <div className="space-y-2">
               {([
-                { id: 'invoices', label: 'Invoices', hint: 'Bill this job with invoices' },
-                { id: 'quotes', label: 'Quotes', hint: 'Link a quote to this job' },
-                { id: 'requests', label: 'Requests', hint: 'Link back to the originating request/lead' },
-                { id: 'visits', label: 'Visits', hint: 'Track repeat visits' },
+                { id: 'invoices', label: 'Invoices', hint: 'Create a draft invoice from this job\'s line items' },
+                { id: 'quotes', label: 'Quotes', hint: 'Link an existing quote to this job' },
               ] as const).map((opt) => {
                 const checked = jobForm.linkToRelated.includes(opt.id);
                 return (
@@ -2563,10 +2663,12 @@ export function JobsView() {
                           linkToRelated: v
                             ? [...prev.linkToRelated, opt.id]
                             : prev.linkToRelated.filter((x) => x !== opt.id),
+                          // Clear the linked quote when unchecking Quotes.
+                          ...(opt.id === 'quotes' && !v ? { linkedQuoteId: '' } : {}),
                         }));
                       }}
                     />
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium">{opt.label}</p>
                       <p className="text-xs text-muted-foreground">{opt.hint}</p>
                     </div>
@@ -2574,6 +2676,58 @@ export function JobsView() {
                 );
               })}
             </div>
+
+            {/* ── Quote picker (shown only when "Quotes" is checked) ── */}
+            {jobForm.linkToRelated.includes('quotes') && (
+              <div className="space-y-1.5 rounded-md border border-dashed bg-muted/20 p-3">
+                <p className="text-xs font-medium">Select a quote to link</p>
+                {!jobForm.customerId ? (
+                  <p className="text-xs text-muted-foreground italic">
+                    Select a customer first to see their quotes.
+                  </p>
+                ) : customerQuotes.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">
+                    This customer has no linkable quotes (only draft and sent quotes can be linked).
+                  </p>
+                ) : (
+                  <Select
+                    value={jobForm.linkedQuoteId || 'none'}
+                    onValueChange={(v) => setJobForm({ ...jobForm, linkedQuoteId: v === 'none' ? '' : v })}
+                  >
+                    <SelectTrigger className="form-input h-10">
+                      <SelectValue placeholder="None — no specific quote" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None — no specific quote</SelectItem>
+                      {customerQuotes.map((q) => (
+                        <SelectItem key={q.id} value={q.id}>
+                          {q.title} · {q.currency} {q.total.toFixed(2)} ({q.status})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {jobForm.linkedQuoteId && (
+                  <p className="text-[11px] text-muted-foreground">
+                    The selected quote will be marked as &quot;accepted&quot; and linked to this job when you save.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* ── Invoice note (shown only when "Invoices" is checked) ── */}
+            {jobForm.linkToRelated.includes('invoices') && (
+              <div className="rounded-md border border-dashed bg-muted/20 p-3">
+                <p className="text-[11px] text-muted-foreground">
+                  A draft invoice will be created from this job&apos;s line items when you save.
+                  {jobForm.lineItems.every((li) => !li.name.trim() && !Number(li.unitPrice)) && (
+                    <span className="text-amber-600 font-medium">
+                      {' '}⚠ Add at least one line item to the job for the invoice to have content.
+                    </span>
+                  )}
+                </p>
+              </div>
+            )}
           </div>
         </FormSectionCard>
 
