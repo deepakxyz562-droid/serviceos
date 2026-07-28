@@ -85,7 +85,7 @@ interface HistoryLead {
 
 // ─── Job History Tab ────────────────────────────────────────────────────────
 
-function JobHistoryTab() {
+export function JobHistoryTab() {
   const [jobs, setJobs] = useState<HistoryJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');

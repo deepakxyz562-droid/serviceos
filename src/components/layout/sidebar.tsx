@@ -133,6 +133,7 @@ const ownerNavSections: NavSection[] = [
     title: 'Operations',
     items: [
       { view: 'jobs', label: 'Jobs', icon: Briefcase },
+      { view: 'booking', label: 'Booking', icon: CalendarCheck },
       { view: 'dispatch', label: 'Live Dispatch', icon: Radio },
       { view: 'employees', label: 'Employees', icon: UserCog },
       { view: 'timesheet', label: 'Timesheet', icon: Clock },
@@ -257,6 +258,7 @@ const superadminNavSections: NavSection[] = [
     title: 'Operations',
     items: [
       { view: 'jobs', label: 'Jobs', icon: Briefcase },
+      { view: 'booking', label: 'Booking', icon: CalendarCheck },
       { view: 'employees', label: 'Employees', icon: UserCog },
       { view: 'timesheet', label: 'Timesheet', icon: Clock },
       { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },
@@ -410,7 +412,11 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     auth,
   } = useAppStore();
 
-  const [disabledMenus, setDisabledMenus] = useState<string[]>([]);
+  // null = "still loading visibility config" — prevents the flash-of-all-menus
+  // bug where the sidebar renders the FULL nav on first paint (before the
+  // /api/menu-visibility fetch resolves), then hides items a frame later.
+  // Empty array [] = "loaded, nothing disabled".
+  const [disabledMenus, setDisabledMenus] = useState<string[] | null>(null);
   // User-explicit overrides of each section's collapsed state. The effective
   // collapsed state is derived: override wins if present, otherwise the
   // section's `defaultCollapsed` flag applies. This avoids a setState-in-effect
@@ -481,20 +487,32 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
 
   const planBadge = getPlanBadge();
 
-  // Filter nav sections based on disabled menus
+  // Filter nav sections based on disabled menus.
+  // When disabledMenus is null (still loading) for non-superadmin users, we
+  // return an EMPTY array so the sidebar renders nothing until the config
+  // is resolved — this eliminates the "flash of all menus then hide" bug.
   const filteredNavSections = useMemo(() => {
-    let sections: NavSection[];
-
+    // Superadmin always sees the full nav (no fetch, no filtering).
     if (isSuperAdmin) {
-      sections = superadminNavSections;
-    } else if (isEmployee) {
+      return superadminNavSections;
+    }
+
+    // Non-superadmin: if still loading visibility config, render nothing.
+    // This prevents the flash where ALL items appear for one frame before
+    // the disabled set is applied.
+    if (disabledMenus === null) {
+      return [];
+    }
+
+    let sections: NavSection[];
+    if (isEmployee) {
       sections = employeeNavSections;
     } else {
       sections = ownerNavSections;
     }
 
-    // Filter out disabled menus for non-superadmin users
-    if (!isSuperAdmin && disabledMenus.length > 0) {
+    // Filter out disabled menus
+    if (disabledMenus.length > 0) {
       const disabledSet = new Set(disabledMenus);
       sections = sections
         .map((section) => ({
@@ -616,6 +634,17 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
       {/* Navigation Sections */}
       <ScrollArea className="flex-1 py-2 min-h-0">
         <div className="flex flex-col gap-0.5">
+          {/* Loading state — non-superadmin users see this briefly while
+              /api/menu-visibility resolves. Prevents the flash-of-all-menus
+              bug by NOT rendering the full nav before the disabled set is
+              known. Superadmin skips this (disabledMenus stays null but
+              filteredNavSections returns the full nav). */}
+          {!isSuperAdmin && disabledMenus === null && (
+            <div className="px-4 py-8 flex flex-col items-center gap-2">
+              <div className="size-5 border-2 border-slate-300 dark:border-slate-700 border-t-emerald-600 rounded-full animate-spin" />
+              <span className="text-[10px] text-slate-400 dark:text-slate-500">Loading menu…</span>
+            </div>
+          )}
           {filteredNavSections.map((section, sectionIdx) => {
             // Collapsing only applies in DESKTOP-EXPANDED mode. Mobile drawer
             // and icon-only mode ignore the collapsible flag (spec requirement):

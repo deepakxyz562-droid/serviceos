@@ -29,6 +29,7 @@ import {
 import {
   SectionHeader, DemoDataPill, KpiCard, EmptyState,
 } from '@/components/views/superadmin/_shared';
+import { MENU_CATALOG } from '@/lib/menu-catalog';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -63,77 +64,32 @@ interface Tenant {
 }
 
 // ─── Default catalog (fallback when API returns nothing) ─────────────────────
-// Mirrors the server-side DEFAULT_MENU_ITEMS in /api/superadmin/menu-items/route.ts
+// Imported from the single source of truth at `src/lib/menu-catalog.ts`.
+// This ensures the superadmin catalog matches the sidebar exactly — every
+// sidebar item can be toggled on/off.
+const DEFAULT_CATALOG: { key: string; label: string; section: string }[] = MENU_CATALOG.map(
+  (item) => ({ key: item.key, label: item.label, section: item.section })
+);
 
-const DEFAULT_CATALOG: { key: string; label: string; section: string }[] = [
-  // CRM
-  { key: 'leads', label: 'Leads', section: 'CRM' },
-  { key: 'contacts', label: 'Contacts', section: 'CRM' },
-  { key: 'customers', label: 'Customers', section: 'CRM' },
-  { key: 'customer360', label: 'Customer 360', section: 'CRM' },
-  { key: 'salesPipeline', label: 'Sales Pipeline', section: 'CRM' },
-  // Communication
-  { key: 'omnichannel', label: 'Omnichannel', section: 'Communication' },
-  { key: 'broadcast', label: 'Broadcast', section: 'Communication' },
-  { key: 'marketingTemplates', label: 'Marketing Templates', section: 'Communication' },
-  // Marketing
-  { key: 'campaigns', label: 'Campaigns', section: 'Marketing' },
-  { key: 'segments', label: 'Segments', section: 'Marketing' },
-  { key: 'retargeting', label: 'Retargeting', section: 'Marketing' },
-  { key: 'marketingAnalytics', label: 'Analytics', section: 'Marketing' },
-  // Automation
-  { key: 'workflows', label: 'Workflows', section: 'Automation' },
-  { key: 'triggers', label: 'Triggers', section: 'Automation' },
-  { key: 'variables', label: 'Variables', section: 'Automation' },
-  { key: 'executions', label: 'Executions', section: 'Automation' },
-  { key: 'formBuilder', label: 'Form Builder', section: 'Automation' },
-  { key: 'workflowAutomations', label: 'Workflow Automations', section: 'Automation' },
-  // Operations
-  { key: 'booking', label: 'Booking', section: 'Operations' },
-  { key: 'calendar', label: 'Calendar', section: 'Operations' },
-  { key: 'jobs', label: 'Jobs', section: 'Operations' },
-  { key: 'dispatch', label: 'Dispatch', section: 'Operations' },
-  { key: 'employees', label: 'Employees', section: 'Operations' },
-  // Finance
-  { key: 'quotes', label: 'Quotes', section: 'Finance' },
-  { key: 'invoices', label: 'Invoices', section: 'Finance' },
-  { key: 'billing', label: 'Billing', section: 'Finance' },
-  // System
-  { key: 'channels', label: 'Channels & Credentials', section: 'System' },
-  { key: 'credentials', label: 'Credentials', section: 'System' },
-  { key: 'integrations', label: 'Integrations', section: 'System' },
-  { key: 'settings', label: 'Settings', section: 'System' },
-  { key: 'auditLogs', label: 'Audit Logs', section: 'System' },
-  { key: 'reports', label: 'Reports', section: 'System' },
-  // Portals
-  { key: 'customerPortal', label: 'Customer Portal', section: 'Portals' },
-  { key: 'employeePortal', label: 'Employee Portal', section: 'Portals' },
-  // AI & More
-  { key: 'aiAssistant', label: 'AI Assistant', section: 'AI & More' },
-  { key: 'chatbotBuilder', label: 'Chatbot Builder', section: 'AI & More' },
-  { key: 'serviceCatalog', label: 'Service Catalog', section: 'AI & More' },
-  { key: 'communicationProviders', label: 'Providers', section: 'AI & More' },
-  { key: 'reviews', label: 'Reviews', section: 'AI & More' },
-];
-
-// Section display metadata — ordered as they should appear in the catalog.
+// Section display metadata — ordered to match the sidebar layout (Overview →
+// CRM → Operations → Marketing → Inbox & Automation → AI Receptionist →
+// Finance → Setup & Admin).
 const SECTION_ORDER = [
-  'CRM', 'Communication', 'Marketing', 'Automation',
-  'Operations', 'Finance', 'System', 'Portals', 'AI & More',
+  'Overview', 'CRM', 'Operations', 'Marketing',
+  'Inbox & Automation', 'AI Receptionist', 'Finance', 'Setup & Admin',
 ] as const;
 
 // Color tint per section — same palette family used by the rest of the
 // superadmin console (light + dark safe).
 const SECTION_TINT: Record<string, { dot: string; badge: string }> = {
-  CRM:           { dot: 'bg-emerald-500', badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' },
-  Communication: { dot: 'bg-sky-500',     badge: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20' },
-  Marketing:     { dot: 'bg-amber-500',   badge: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' },
-  Automation:    { dot: 'bg-violet-500',  badge: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20' },
-  Operations:    { dot: 'bg-orange-500',  badge: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20' },
-  Finance:       { dot: 'bg-teal-500',    badge: 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20' },
-  System:        { dot: 'bg-slate-500',   badge: 'bg-muted text-muted-foreground border-border' },
-  Portals:       { dot: 'bg-rose-500',    badge: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20' },
-  'AI & More':   { dot: 'bg-indigo-500',  badge: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20' },
+  'Overview':             { dot: 'bg-sky-500',     badge: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20' },
+  'CRM':                  { dot: 'bg-emerald-500', badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' },
+  'Operations':           { dot: 'bg-orange-500',  badge: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20' },
+  'Marketing':            { dot: 'bg-amber-500',   badge: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' },
+  'Inbox & Automation':   { dot: 'bg-violet-500',  badge: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20' },
+  'AI Receptionist':      { dot: 'bg-fuchsia-500', badge: 'bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400 border-fuchsia-500/20' },
+  'Finance':              { dot: 'bg-teal-500',    badge: 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20' },
+  'Setup & Admin':        { dot: 'bg-slate-500',   badge: 'bg-muted text-muted-foreground border-border' },
 };
 
 function tintFor(section: string) {

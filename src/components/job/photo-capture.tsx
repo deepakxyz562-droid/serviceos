@@ -65,6 +65,14 @@ interface PhotoCaptureProps {
   compact?: boolean;
   /** Called whenever the photos list changes (e.g. after upload/delete). */
   onChange?: (photos: JobPhoto[]) => void;
+  /**
+   * Optional refresh trigger — when this value changes, the component refetches
+   * photos. Pass the job's `status` or `updatedAt` so that when the job is
+   * completed (or the completion dialog closes and the parent re-renders with
+   * a new status), photos uploaded via a DIFFERENT PhotoCapture instance (e.g.
+   * the completion dialog's before/after uploaders) are picked up.
+   */
+  refreshKey?: string | number;
 }
 
 const PHOTO_TYPE_TABS: { value: PhotoType; label: string; color: string }[] = [
@@ -204,6 +212,7 @@ export function PhotoCapture({
   showTabs,
   compact = false,
   onChange,
+  refreshKey,
 }: PhotoCaptureProps) {
   // The "locked" mode (photoType provided + showTabs !== true) shows only that type.
   const lockedType = photoType;
@@ -259,6 +268,27 @@ export function PhotoCapture({
 
   useEffect(() => {
     fetchPhotos();
+  }, [fetchPhotos]);
+
+  // Refetch when `refreshKey` changes — this lets the parent (e.g. the job
+  // detail page) trigger a refresh when the job status changes (e.g. after
+  // completion) so photos uploaded via a DIFFERENT PhotoCapture instance
+  // (the completion dialog's before/after uploaders) are picked up.
+  useEffect(() => {
+    if (refreshKey === undefined) return;
+    fetchPhotos();
+  }, [refreshKey, fetchPhotos]);
+
+  // Refetch when the window regains focus — covers the case where the user
+  // uploads photos in another tab/dialog and returns to this page.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onFocus = () => {
+      console.log('[PhotoCapture] window focus — refetching photos');
+      fetchPhotos();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
   }, [fetchPhotos]);
 
   // Try to replay any pending offline photos on mount + when we come back online.

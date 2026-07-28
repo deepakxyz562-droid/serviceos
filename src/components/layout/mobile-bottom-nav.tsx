@@ -46,7 +46,9 @@ const superadminNavItems: MobileNavItem[] = [
 export function MobileBottomNav() {
   const { currentView, setCurrentView, toggleMobileSidebar, auth } = useAppStore();
 
-  const [disabledMenus, setDisabledMenus] = useState<string[]>([]);
+  // null = "still loading visibility config" — prevents the flash-of-all-menus
+  // bug on mobile (mirrors sidebar.tsx). Empty array [] = "loaded, nothing disabled".
+  const [disabledMenus, setDisabledMenus] = useState<string[] | null>(null);
 
   const isSuperAdmin = !!(auth.user?.isSuperAdmin || auth.user?.role === 'superadmin' || auth.user?.role === 'super_admin' || (auth.user?.role === 'admin' && !auth.user?.tenantId));
 
@@ -61,9 +63,13 @@ export function MobileBottomNav() {
         if (res.ok) {
           const data = await res.json();
           if (!cancelled) setDisabledMenus(data.disabledMenus || []);
+        } else {
+          if (!cancelled) setDisabledMenus([]);
         }
       } catch {
-        // Silently fail - all menus remain visible
+        // Silently fail — fall back to "nothing disabled" so the nav remains
+        // usable even if the menu-visibility endpoint errors.
+        if (!cancelled) setDisabledMenus([]);
       }
     }
     fetchMenuVisibility();
@@ -73,11 +79,15 @@ export function MobileBottomNav() {
   // Pick the first 4 non-disabled candidates so the nav stays a consistent
   // width. If fewer than 4 are available, the nav simply renders fewer items
   // (plus the More button).
+  // While loading (null), render empty placeholders so the nav bar doesn't
+  // flash all items before the disabled set is applied.
   const navItems: MobileNavItem[] = isSuperAdmin
     ? superadminNavItems
-    : ownerNavCandidates
-        .filter((item) => !disabledMenus.includes(item.view))
-        .slice(0, 4);
+    : disabledMenus === null
+      ? []  // loading — render no items (just the More button) to prevent flash
+      : ownerNavCandidates
+          .filter((item) => !disabledMenus.includes(item.view))
+          .slice(0, 4);
 
   return (
     <nav

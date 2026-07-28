@@ -79,7 +79,7 @@ function SheetContent({
         )}
         style={
           touchesTop
-            ? { paddingTop: "env(safe-area-inset-top, 0px)" }
+            ? { paddingTop: "calc(env(safe-area-inset-top, 0px) + 20px)" }
             : undefined
         }
         {...props}
@@ -91,7 +91,7 @@ function SheetContent({
           className={cn(
             "ring-offset-background focus:ring-ring data-[state=open]:bg-secondary absolute right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none",
             touchesTop
-              ? "top-[calc(env(safe-area-inset-top,0px)+1rem)]"
+              ? "top-[calc(env(safe-area-inset-top,0px)+1.25rem)]"
               : "top-4"
           )}
         >

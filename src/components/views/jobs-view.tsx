@@ -102,6 +102,7 @@ import {
 // V1.5 AI Field Assistant + Communication Engine
 import { AIAssistantPanel } from '@/components/job/ai-assistant-panel';
 import { CommunicationComposer } from '@/components/communication/composer';
+import { JobHistoryTab } from '@/components/views/history-view';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -907,6 +908,12 @@ export function JobsView() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  // Top-level view tab: 'active' = active jobs (pending → in_progress),
+  // 'history' = completed/archived jobs (rendered via JobHistoryTab).
+  // Completed jobs are excluded from the 'active' list to keep the Jobs
+  // page focused on work-in-progress; the History tab is the single place
+  // to review finished work.
+  const [jobsTab, setJobsTab] = useState<'active' | 'history'>('active');
   // ── Bulk select state ──
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
@@ -1168,9 +1175,12 @@ export function JobsView() {
       const res = await fetch(`/api/jobs?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        // Client-side filter: hide soft-deleted jobs (deletedAt !== null)
+        // Client-side filter: hide soft-deleted jobs (shown in History tab)
+        // AND exclude completed jobs from the active list — completed jobs
+        // are surfaced in the History tab instead, keeping the Jobs page
+        // focused on work-in-progress.
         const allJobs = Array.isArray(data) ? data : [];
-        setJobs(allJobs.filter((j: Job) => !j.deletedAt));
+        setJobs(allJobs.filter((j: Job) => !j.deletedAt && j.status !== 'completed'));
       }
     } catch {
       setJobs([]);
@@ -3271,7 +3281,7 @@ export function JobsView() {
                 )
               }
             >
-              <PhotoCapture jobId={job.id} showTabs />
+              <PhotoCapture jobId={job.id} showTabs refreshKey={`${job.status}-${job.updatedAt || ''}`} />
             </FormSectionCard>
 
             {/* V1.5: Signatures */}
@@ -3490,14 +3500,31 @@ export function JobsView() {
         </div>
       </div>
 
+      {/* ─── Top-level Active / History tabs ────────────────────── */}
+      {/* Completed jobs are excluded from the Active list and surfaced in the
+          History tab (reusing the JobHistoryTab from the History view) so the
+          Jobs page stays focused on work-in-progress. */}
+      <Tabs value={jobsTab} onValueChange={(v) => setJobsTab(v as 'active' | 'history')} className="w-full">
+        <TabsList className="h-11">
+          <TabsTrigger value="active" className="text-xs min-h-[44px]">Active Jobs</TabsTrigger>
+          <TabsTrigger value="history" className="text-xs min-h-[44px]">History</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {jobsTab === 'history' ? (
+        <div className="mt-4">
+          <JobHistoryTab />
+        </div>
+      ) : (
+        <>
+
       {/* ─── Stats ───────────────────────────────────────────────── */}
-      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
         {[
           { label: 'Total', value: stats.total, color: 'text-foreground', icon: Briefcase },
           { label: 'Pending', value: stats.pending, color: 'text-amber-600', icon: Clock },
           { label: 'Assigned', value: stats.assigned, color: 'text-blue-600', icon: User },
           { label: 'In Progress', value: stats.inProgress, color: 'text-emerald-600', icon: Activity },
-          { label: 'Completed', value: stats.completed, color: 'text-green-600', icon: CheckCircle2 },
           { label: 'Cancelled', value: stats.cancelled, color: 'text-red-600', icon: XCircle },
         ].map((stat) => {
           const Icon = stat.icon;
@@ -3525,7 +3552,6 @@ export function JobsView() {
                 <TabsTrigger value="pending" className="text-xs min-h-[44px]">Pending</TabsTrigger>
                 <TabsTrigger value="assigned" className="text-xs min-h-[44px]">Assigned</TabsTrigger>
                 <TabsTrigger value="in_progress" className="text-xs min-h-[44px]">In Progress</TabsTrigger>
-                <TabsTrigger value="completed" className="text-xs min-h-[44px]">Completed</TabsTrigger>
                 <TabsTrigger value="cancelled" className="text-xs min-h-[44px]">Cancelled</TabsTrigger>
               </TabsList>
             </Tabs>
@@ -3734,6 +3760,8 @@ export function JobsView() {
             </Table>
           </div>
         </Card>
+      )}
+        </>
       )}
         </>
       )}

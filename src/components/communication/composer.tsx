@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Mail, MessageSquare, Smartphone, Bell, Send, Loader2, X,
-  Users, Sparkles, Info,
+  Users, Sparkles, Info, AlertCircle, ExternalLink,
 } from 'lucide-react';
 import {
   Dialog,
@@ -35,6 +35,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useAppStore } from '@/store/app-store';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -182,6 +183,40 @@ export function CommunicationComposer(props: ComposerProps) {
 
   const [sending, setSending] = useState(false);
 
+  // ─── WhatsApp config check ──
+  // WhatsApp is only shown as a channel option if the tenant has added their
+  // OWN WhatsApp Business API credentials (source === 'tenant-own'). If the
+  // platform/superadmin provides a shared WhatsApp, or no config exists at
+  // all, the WhatsApp toggle is hidden and a hint is shown instead.
+  // Email and SMS remain always-available (platform-provided).
+  const [whatsappReady, setWhatsappReady] = useState(false);
+  const [whatsappChecking, setWhatsappChecking] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setWhatsappChecking(true);
+    fetch('/api/whatsapp/config')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data) {
+          setWhatsappReady(false);
+          return;
+        }
+        // Only show WhatsApp if the tenant has their OWN config (not the
+        // platform-shared one). source: 'tenant-own' = user-added credentials.
+        const ready = !!(data.isConfigured && data.source === 'tenant-own');
+        setWhatsappReady(ready);
+      })
+      .catch(() => {
+        if (!cancelled) setWhatsappReady(false);
+      })
+      .finally(() => {
+        if (!cancelled) setWhatsappChecking(false);
+      });
+    return () => { cancelled = true; };
+  }, [open]);
+
   // ─── Derived: selected customer object ──
   const selectedCustomer = useMemo<CustomerOption | undefined>(() => {
     if (selectedCustomerId) {
@@ -233,17 +268,18 @@ export function CommunicationComposer(props: ComposerProps) {
   }, [open, customerSearch]);
 
   // ─── When the customer changes, re-evaluate channel toggles based on
-  //     their available contact info. ──
+  //     their available contact info. WhatsApp is only auto-checked if the
+  //     tenant has their own WhatsApp API configured (whatsappReady). ──
   useEffect(() => {
     if (!selectedCustomer) return;
     setChannels((prev) => ({
       email: !!selectedCustomer.email,
       sms: !!selectedCustomer.phone && !selectedCustomer.whatsappId,
-      whatsapp: !!selectedCustomer.whatsappId || !!selectedCustomer.phone,
+      whatsapp: whatsappReady && (!!selectedCustomer.whatsappId || !!selectedCustomer.phone),
       push: prev.push,
       in_app: true,
     }));
-  }, [selectedCustomer]);
+  }, [selectedCustomer, whatsappReady]);
 
   // ─── When the template changes, populate subject/body (only if the user
   //     hasn't already customized). ──
@@ -461,12 +497,46 @@ export function CommunicationComposer(props: ComposerProps) {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {channelToggle('email', 'Email', <Mail className="size-3.5" />, 'bg-blue-500/5 text-blue-700')}
           {channelToggle('sms', 'SMS', <Smartphone className="size-3.5" />, 'bg-violet-500/5 text-violet-700')}
-          {channelToggle('whatsapp', 'WhatsApp', <MessageSquare className="size-3.5" />, 'bg-emerald-500/5 text-emerald-700')}
+          {whatsappReady
+            ? channelToggle('whatsapp', 'WhatsApp', <MessageSquare className="size-3.5" />, 'bg-emerald-500/5 text-emerald-700')
+            : (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-muted-foreground/30 bg-muted/30 opacity-70">
+                <MessageSquare className="size-3.5 text-muted-foreground" />
+                <span className="text-sm font-medium text-muted-foreground line-through">WhatsApp</span>
+              </div>
+            )
+          }
           {channelToggle('in_app', 'In-App', <Bell className="size-3.5" />, 'bg-amber-500/5 text-amber-700')}
         </div>
-        <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-          <Info className="size-3" /> Auto-checked based on customer contact info. Toggle to override.
-        </p>
+        {whatsappReady ? (
+          <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+            <Info className="size-3" /> Auto-checked based on customer contact info. Toggle to override.
+          </p>
+        ) : (
+          <div className="rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 flex items-start gap-2">
+            <AlertCircle className="size-3.5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] text-amber-800 dark:text-amber-300 font-medium">
+                WhatsApp not configured
+              </p>
+              <p className="text-[11px] text-amber-700 dark:text-amber-400/80 mt-0.5">
+                Add your WhatsApp Business API credentials in Communication Providers to enable WhatsApp messaging.
+              </p>
+              <a
+                href="#"
+                onClick={(e) => {
+                  // Navigate via the app store instead of a hard redirect.
+                  e.preventDefault();
+                  useAppStore.getState()?.setCurrentView?.('communicationProviders');
+                  onOpenChange(false);
+                }}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-400 hover:underline mt-1"
+              >
+                Go to Communication Providers <ExternalLink className="size-3" />
+              </a>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Template */}
