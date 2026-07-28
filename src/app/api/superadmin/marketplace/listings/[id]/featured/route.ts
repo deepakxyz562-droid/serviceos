@@ -101,6 +101,13 @@ export async function POST(
         isActive: true,
         amountCharged: 0,
         currency: 'USD',
+        // Explicit — matches the Prisma @default("{}"). The Supabase REST
+        // adapter does NOT apply Prisma @default values (it only auto-gens
+        // `id` and relies on DB-level DEFAULT clauses for the rest), and the
+        // metadataJson column is NOT NULL in Postgres with no DB default.
+        // Without this, the INSERT sends null → "null value in column
+        // metadataJson violates not-null constraint" HTTP 500.
+        metadataJson: '{}',
       },
     });
 
