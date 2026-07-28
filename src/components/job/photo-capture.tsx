@@ -217,6 +217,9 @@ export function PhotoCapture({
   const [captionDraft, setCaptionDraft] = useState<Record<string, string>>({});
   const [savingCaptionId, setSavingCaptionId] = useState<string | null>(null);
   const [isOnline, setIsOnline] = useState(true);
+  // Track photos whose <img> failed to load (broken storage URL). Shows a
+  // fallback placeholder + error message instead of a silent broken image.
+  const [brokenUrls, setBrokenUrls] = useState<Set<string>>(new Set());
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -245,6 +248,7 @@ export function PhotoCapture({
       const data = await res.json();
       const all: JobPhoto[] = data.photos || [];
       setPhotos(all);
+      setBrokenUrls(new Set()); // reset broken-URL tracking on fresh fetch
       onChange?.(all);
     } catch (err) {
       console.error('[PhotoCapture] fetch error:', err);
@@ -588,12 +592,26 @@ export function PhotoCapture({
                   className="block w-full aspect-square bg-muted/40 overflow-hidden"
                   aria-label="View photo full size"
                 >
-                  <img
-                    src={photo.url}
-                    alt={photo.caption || `${photo.photoType} photo`}
-                    className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                    loading="lazy"
-                  />
+                  {brokenUrls.has(photo.id) ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center gap-1 p-2 text-center">
+                      <AlertCircle className="size-5 text-red-500" />
+                      <p className="text-[10px] text-red-600 font-medium">Image load failed</p>
+                      <p className="text-[9px] text-muted-foreground leading-tight">
+                        URL may be unreachable. Check storage config.
+                      </p>
+                    </div>
+                  ) : (
+                    <img
+                      src={photo.url}
+                      alt={photo.caption || `${photo.photoType} photo`}
+                      className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                      loading="lazy"
+                      onError={() => {
+                        console.error('[PhotoCapture] Image failed to load:', photo.url);
+                        setBrokenUrls((prev) => new Set(prev).add(photo.id));
+                      }}
+                    />
+                  )}
                 </button>
 
                 {/* Top-left: type badge */}
@@ -686,11 +704,26 @@ export function PhotoCapture({
           </DialogHeader>
           {previewPhoto && (
             <div className="space-y-3">
-              <img
-                src={previewPhoto.url}
-                alt={previewPhoto.caption || 'Photo'}
-                className="w-full max-h-[60vh] object-contain rounded-lg bg-muted/20"
-              />
+              {brokenUrls.has(previewPhoto.id) ? (
+                <div className="w-full max-h-[60vh] flex flex-col items-center justify-center gap-2 rounded-lg bg-muted/20 p-8 text-center">
+                  <AlertCircle className="size-8 text-red-500" />
+                  <p className="text-sm font-medium text-red-600">Image failed to load</p>
+                  <p className="text-xs text-muted-foreground break-all max-w-md">
+                    The photo was uploaded but its URL is unreachable. This usually means
+                    storage (S3/Supabase/local FS) is misconfigured. URL: {previewPhoto.url}
+                  </p>
+                </div>
+              ) : (
+                <img
+                  src={previewPhoto.url}
+                  alt={previewPhoto.caption || 'Photo'}
+                  className="w-full max-h-[60vh] object-contain rounded-lg bg-muted/20"
+                  onError={() => {
+                    console.error('[PhotoCapture] Preview image failed to load:', previewPhoto.url);
+                    setBrokenUrls((prev) => new Set(prev).add(previewPhoto.id));
+                  }}
+                />
+              )}
               <div className="space-y-1 text-sm">
                 {previewPhoto.caption && (
                   <p className="text-foreground font-medium">{previewPhoto.caption}</p>

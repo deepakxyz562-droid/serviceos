@@ -372,8 +372,30 @@ export async function DELETE(
       return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
     }
 
-    // ─── Delete linked Deal (HubSpot model) ───────────────────
-    // When a Lead is deleted, its linked Deal is also deleted.
+    // ─── Check if this is a soft-delete request ──────────────────
+    // Body: { softDelete: true } → set deletedAt = now() (lead kept in History)
+    // No body or { softDelete: false } → hard delete (permanent, irreversible)
+    let softDelete = false;
+    try {
+      const body = await request.json();
+      softDelete = body?.softDelete === true;
+    } catch {
+      // No JSON body — default to hard delete (backward compatible)
+    }
+
+    if (softDelete) {
+      await db.lead.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
+      return NextResponse.json({
+        success: true,
+        message: 'Lead moved to History (soft-deleted)',
+      });
+    }
+
+    // ─── Hard delete: delete linked Deal (HubSpot model) ───────
+    // When a Lead is hard-deleted, its linked Deal is also deleted.
     try {
       const linkedDeal = await db.deal.findFirst({ where: { leadId: id } });
       if (linkedDeal) {

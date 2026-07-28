@@ -494,6 +494,15 @@ export function PublicHubTab({ tenantId, industry, slug }: Props) {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Auto-fill notice — clarifies that city/state/postal are pre-filled
+              from onboarding so the user knows they don't need to re-enter them. */}
+          <div className="flex items-start gap-2 rounded-md bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 px-3 py-2 text-xs text-emerald-800 dark:text-emerald-300">
+            <MapPin className="size-3.5 mt-0.5 shrink-0" />
+            <span>
+              <strong>Pre-filled from onboarding.</strong> These fields are auto-populated from your business
+              address entered during setup — edit here only if your location has changed.
+            </span>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="city" className="text-sm font-medium">City</Label>

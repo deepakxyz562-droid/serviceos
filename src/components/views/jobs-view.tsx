@@ -12,6 +12,7 @@ import {
   // V1.5 lifecycle + time tracking icons
   UserCheck, Check, Navigation, Wrench, Pause, Route as RouteIcon,
   Timer, PlayCircle, PauseCircle, StopCircle, ExternalLink, MapPinned,
+  Archive,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -141,6 +142,8 @@ interface Job {
   metadataJson?: string;
   // V1.5: AI-generated completion notes (written by the AI Field Assistant)
   completionNotes?: string | null;
+  // Soft-delete timestamp — when set, job is hidden from active list (in History)
+  deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
   assignee?: { id: string; name: string; phone: string; role: string };
@@ -230,7 +233,8 @@ const EMPTY_JOB_FORM: JobFormData = {
   assigneeId: 'none',
   visitInstructions: '',
   invoiceOnClose: true,
-  lineItems: [],
+  // Default to 1 empty line item so the user sees a service entry box immediately.
+  lineItems: [emptyLineItem()],
   notes: '',
   priority: 'medium',
   serviceId: '',
@@ -900,6 +904,10 @@ export function JobsView() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  // ── Bulk select state ──
+  const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkRunning, setBulkRunning] = useState(false);
   const isMobile = useIsMobile();
   // On mobile, always render cards — the 9-column table is unreadable on phones.
   const effectiveViewMode = isMobile ? 'cards' : viewMode;
@@ -1114,10 +1122,14 @@ export function JobsView() {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (search) params.set('search', search);
+      // Exclude soft-deleted jobs (shown in Job History instead)
+      params.set('includeDeleted', 'false');
       const res = await fetch(`/api/jobs?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        setJobs(Array.isArray(data) ? data : []);
+        // Client-side filter: hide soft-deleted jobs (deletedAt !== null)
+        const allJobs = Array.isArray(data) ? data : [];
+        setJobs(allJobs.filter((j: Job) => !j.deletedAt));
       }
     } catch {
       setJobs([]);
@@ -1153,6 +1165,51 @@ export function JobsView() {
   useEffect(() => {
     fetchJobs();
   }, [fetchJobs]);
+
+  // ── Bulk select helpers ──────────────────────────────────────────────────
+  const toggleJobSelect = (id: string) => {
+    setSelectedJobIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedJobIds.size === jobs.length) {
+      setSelectedJobIds(new Set());
+    } else {
+      setSelectedJobIds(new Set(jobs.map((j) => j.id)));
+    }
+  };
+
+  const runJobBulkAction = async (action: 'delete' | 'softDelete' | 'updateStatus', extra?: Record<string, unknown>) => {
+    if (selectedJobIds.size === 0) return;
+    setBulkRunning(true);
+    try {
+      const res = await fetch('/api/jobs/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobIds: Array.from(selectedJobIds), action, ...extra }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const verb = action === 'delete' ? 'deleted' : action === 'softDelete' ? 'archived' : 'updated';
+        toast.success(`${data.success} job${data.success !== 1 ? 's' : ''} ${verb}`);
+        setSelectedJobIds(new Set());
+        setBulkDeleteOpen(false);
+        fetchJobs();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Bulk action failed');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setBulkRunning(false);
+    }
+  };
 
   useEffect(() => {
     fetchEmployees();
@@ -2013,174 +2070,134 @@ export function JobsView() {
           submitLabel={isEditing ? 'Update Job' : 'Create Job'}
         />
 
-        {/* ─── Title & Client ───────────────────────────────────── */}
+        {/* ─── Title & Client + #job / Customize (merged) ────────── */}
         <FormSectionCard>
-          <div className="space-y-4">
-            <div className="grid gap-2">
-              <Label htmlFor="job-title">Title <span className="text-red-500 font-medium">*</span></Label>
-              <Input
-                id="job-title"
-                className="form-input h-10"
-                placeholder="Add a title (e.g. AC repair at customer site)"
-                value={jobForm.title}
-                onChange={(e) => setJobForm({ ...jobForm, title: e.target.value })}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>Select a client <span className="text-red-500 font-medium">*</span></Label>
-              <CustomerPicker
-                customers={customers}
-                selectedCustomerId={jobForm.customerId}
-                onPick={handlePickCustomer}
-                onClear={() => setJobForm({ ...jobForm, customerId: '' })}
-                onCreate={openCreateCustomerDialog}
-                query={customerQuery}
-                setQuery={setCustomerQuery}
-                open={customerPickerOpen}
-                setOpen={setCustomerPickerOpen}
-              />
-              <p className="text-xs text-muted-foreground">
-                Pick an existing client or click <span className="text-emerald-700 font-medium">+ Create new client</span> to add one on the fly.
-              </p>
-            </div>
-            {editingJob?.jobNumber && (
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
+            {/* Left: Title + Client */}
+            <div className="space-y-4">
               <div className="grid gap-2">
-                <Label>Job #</Label>
-                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-mono text-muted-foreground">
-                  {editingJob.jobNumber}
-                </div>
+                <Label htmlFor="job-title">Title <span className="text-red-500 font-medium">*</span></Label>
+                <Input
+                  id="job-title"
+                  className="form-input h-10"
+                  placeholder="Add a title (e.g. AC repair at customer site)"
+                  value={jobForm.title}
+                  onChange={(e) => setJobForm({ ...jobForm, title: e.target.value })}
+                />
               </div>
-            )}
-          </div>
-        </FormSectionCard>
-
-        {/* ─── "#job" / Customize: user-defined label+value pairs ── */}
-        {/* Matches the Jobber "Customize / Add Field" pattern: users can
-            attach arbitrary labelled fields to the job (e.g. PO Number,
-            Site Contact, Access Code). Each row is a label + input pair
-            that can be added/removed dynamically. */}
-        <FormSectionCard
-          icon={Tag}
-          title="#job"
-          description="Customize"
-          action={
-            <button
-              type="button"
-              onClick={addCustomField}
-              className="inline-flex items-center gap-1.5 min-h-[44px] px-3 rounded-md text-sm font-medium text-emerald-700 border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50 transition-colors"
-            >
-              <Plus className="size-4" /> Add Field
-            </button>
-          }
-        >
-          {jobForm.customFields.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic">
-              No custom fields. Click <span className="font-medium text-foreground">Add Field</span> to attach labelled info like PO Number, Site Contact, Access Code, etc.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {jobForm.customFields.map((f) => (
-                <div key={f.id} className="grid grid-cols-1 sm:grid-cols-[140px_1fr_auto] gap-2 items-center">
-                  <Input
-                    className="form-input h-9 text-sm"
-                    placeholder="Label (e.g. PO #)"
-                    value={f.label}
-                    onChange={(e) => updateCustomField(f.id, { label: e.target.value })}
-                  />
-                  <div className="flex items-center gap-2">
-                    <Input
-                      className="form-input h-9 text-sm flex-1"
-                      placeholder="Value"
-                      value={f.value}
-                      onChange={(e) => updateCustomField(f.id, { value: e.target.value })}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-9 text-red-500 hover:text-red-600 shrink-0 min-h-[44px]"
-                      onClick={() => removeCustomField(f.id)}
-                      title="Remove field"
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
+              <div className="grid gap-2">
+                <Label>Select a client</Label>
+                <CustomerPicker
+                  customers={customers}
+                  selectedCustomerId={jobForm.customerId}
+                  onPick={handlePickCustomer}
+                  onClear={() => setJobForm({ ...jobForm, customerId: '' })}
+                  onCreate={openCreateCustomerDialog}
+                  query={customerQuery}
+                  setQuery={setCustomerQuery}
+                  open={customerPickerOpen}
+                  setOpen={setCustomerPickerOpen}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Pick an existing client or click <span className="text-emerald-700 font-medium">+ Create new client</span> to add one on the fly.
+                </p>
+              </div>
+              {editingJob?.jobNumber && (
+                <div className="grid gap-2">
+                  <Label>Job #</Label>
+                  <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm font-mono text-muted-foreground">
+                    {editingJob.jobNumber}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </FormSectionCard>
-
-        {/* ─── Contact info (only when no client selected) ──────── */}
-        {/* Mirrors the lead form: when a client is linked, contact details
-            come from the client record, so the manual fields are hidden. */}
-        {!jobForm.customerId && (
-          <FormSectionCard icon={User} title="Customer details">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <Label htmlFor="job-cust-name">Customer name <span className="text-red-500 font-medium">*</span></Label>
-                <Input
-                  id="job-cust-name"
-                  className="form-input h-10"
-                  placeholder="Full name"
-                  value={jobForm.customerName}
-                  onChange={(e) => setJobForm({ ...jobForm, customerName: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="job-cust-phone">Phone</Label>
-                <Input
-                  id="job-cust-phone"
-                  className="form-input h-10"
-                  placeholder="+1 234 567 8900"
-                  value={jobForm.customerPhone}
-                  onChange={(e) => setJobForm({ ...jobForm, customerPhone: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="job-cust-email">Email</Label>
-                <Input
-                  id="job-cust-email"
-                  type="email"
-                  className="form-input h-10"
-                  placeholder="email@example.com"
-                  value={jobForm.customerEmail}
-                  onChange={(e) => setJobForm({ ...jobForm, customerEmail: e.target.value })}
-                />
-              </div>
-            </div>
-          </FormSectionCard>
-        )}
-
-        {/* ─── Job type ────────────────────────────────────────── */}
-        <FormSectionCard icon={Info} title="Job type">
-          <div className="inline-flex rounded-lg border p-0.5">
-            <button
-              type="button"
-              onClick={() => setJobForm({ ...jobForm, jobType: 'one-off' })}
-              className={cn(
-                'px-4 py-1.5 text-sm rounded-md transition-colors',
-                jobForm.jobType === 'one-off' ? 'bg-emerald-600 text-white' : 'text-muted-foreground hover:text-foreground'
               )}
-            >
-              One-off
-            </button>
-            <button
-              type="button"
-              onClick={() => setJobForm({ ...jobForm, jobType: 'recurring' })}
-              className={cn(
-                'px-4 py-1.5 text-sm rounded-md transition-colors',
-                jobForm.jobType === 'recurring' ? 'bg-emerald-600 text-white' : 'text-muted-foreground hover:text-foreground'
+            </div>
+
+            {/* Right: #job / Customize (light grey panel) */}
+            <div className="rounded-lg bg-muted/40 border border-muted-foreground/15 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Tag className="size-3.5 text-muted-foreground" />
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">#job / Customize</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={addCustomField}
+                  className="inline-flex items-center gap-1 min-h-[32px] px-2 rounded-md text-xs font-medium text-emerald-700 border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50 transition-colors"
+                >
+                  <Plus className="size-3" /> Add Field
+                </button>
+              </div>
+              {jobForm.customFields.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic py-2">
+                  No custom fields. Add labelled info like PO Number, Site Contact, Access Code.
+                </p>
+              ) : (
+                <div className="space-y-1.5">
+                  {jobForm.customFields.map((f) => (
+                    <div key={f.id} className="space-y-1">
+                      <Input
+                        className="form-input h-8 text-xs"
+                        placeholder="Label (e.g. PO #)"
+                        value={f.label}
+                        onChange={(e) => updateCustomField(f.id, { label: e.target.value })}
+                      />
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          className="form-input h-8 text-xs flex-1"
+                          placeholder="Value"
+                          value={f.value}
+                          onChange={(e) => updateCustomField(f.id, { value: e.target.value })}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 text-red-500 hover:text-red-600 shrink-0"
+                          onClick={() => removeCustomField(f.id)}
+                          title="Remove field"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
-            >
-              Recurring
-            </button>
+            </div>
           </div>
         </FormSectionCard>
 
-        {/* ─── Schedule ─────────────────────────────────────────── */}
-        <FormSectionCard icon={CalendarDays} title="Schedule">
+        {/* ─── Job Type & Schedule (merged into one box) ────────── */}
+        <FormSectionCard icon={CalendarDays} title="Job Type & Schedule">
           <div className="space-y-4">
+            {/* Job type toggle */}
+            <div className="flex items-center gap-3">
+              <Label className="text-sm text-muted-foreground shrink-0">Type</Label>
+              <div className="inline-flex rounded-lg border p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setJobForm({ ...jobForm, jobType: 'one-off' })}
+                  className={cn(
+                    'px-4 py-1.5 text-sm rounded-md transition-colors',
+                    jobForm.jobType === 'one-off' ? 'bg-emerald-600 text-white' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  One-off
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setJobForm({ ...jobForm, jobType: 'recurring' })}
+                  className={cn(
+                    'px-4 py-1.5 text-sm rounded-md transition-colors',
+                    jobForm.jobType === 'recurring' ? 'bg-emerald-600 text-white' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  Recurring
+                </button>
+              </div>
+            </div>
+
+            <div className="border-t border-border/40" />
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="grid gap-2">
                 <Label htmlFor="job-date">Start date</Label>
@@ -2423,96 +2440,99 @@ export function JobsView() {
           </div>
         </FormSectionCard>
 
-        {/* ─── Notes ────────────────────────────────────────────── */}
-        <FormSectionCard icon={StickyNote} title="Notes">
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground">Use @ in notes to mention your team</p>
-            <Textarea
-              rows={3}
-              className="form-input"
-              placeholder="Add a note for your team..."
-              value={jobForm.notes}
-              onChange={(e) => setJobForm({ ...jobForm, notes: e.target.value })}
-            />
-          </div>
-        </FormSectionCard>
+        {/* ─── Notes & Attachments (merged into one box) ────────── */}
+        <FormSectionCard icon={StickyNote} title="Notes & Attachments">
+          <div className="space-y-4">
+            {/* Notes */}
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">Use @ in notes to mention your team</p>
+              <Textarea
+                rows={3}
+                className="form-input"
+                placeholder="Add a note for your team..."
+                value={jobForm.notes}
+                onChange={(e) => setJobForm({ ...jobForm, notes: e.target.value })}
+              />
+            </div>
 
-        {/* ─── Attach files & photos ───────────────────────────── */}
-        <FormSectionCard icon={Paperclip} title="Attach files & photos">
-          <div className="space-y-3">
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(e) => handleFileUpload(e.target.files)}
-            />
-            {/* Drop zone */}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploadingFiles}
-              className="w-full rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/20 hover:bg-muted/40 hover:border-emerald-400/50 transition-colors px-4 py-6 text-sm flex flex-col items-center gap-1.5 disabled:opacity-50"
-            >
-              {uploadingFiles ? (
-                <>
-                  <Loader2 className="size-5 animate-spin text-emerald-600" />
-                  <span>Uploading...</span>
-                </>
-              ) : (
-                <>
-                  <UploadCloud className="size-5 text-emerald-600" />
-                  <span className="font-medium text-foreground">Select or drag files here to upload</span>
-                  <span className="text-xs text-muted-foreground">Click to browse — photos, PDFs, docs, etc.</span>
-                </>
-              )}
-            </button>
-            {/* Attached files list */}
-            {jobForm.attachments.length > 0 && (
-              <div className="space-y-1.5">
-                {jobForm.attachments.map((att, idx) => {
-                  const isImage = att.type?.startsWith('image/');
-                  return (
-                    <div
-                      key={idx}
-                      className="flex items-center gap-3 rounded-md border bg-background px-3 py-2"
-                    >
-                      {isImage ? (
-                        <img src={att.url} alt={att.name} className="size-8 rounded object-cover shrink-0" />
-                      ) : (
-                        <div className="size-8 rounded bg-muted flex items-center justify-center shrink-0">
-                          <FileIcon className="size-4 text-muted-foreground" />
+            <div className="border-t border-border/40" />
+
+            {/* Attach files & photos */}
+            <div className="space-y-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => handleFileUpload(e.target.files)}
+              />
+              {/* Drop zone */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingFiles}
+                className="w-full rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/20 hover:bg-muted/40 hover:border-emerald-400/50 transition-colors px-4 py-6 text-sm flex flex-col items-center gap-1.5 disabled:opacity-50"
+              >
+                {uploadingFiles ? (
+                  <>
+                    <Loader2 className="size-5 animate-spin text-emerald-600" />
+                    <span>Uploading...</span>
+                  </>
+                ) : (
+                  <>
+                    <UploadCloud className="size-5 text-emerald-600" />
+                    <span className="font-medium text-foreground">Select or drag files here to upload</span>
+                    <span className="text-xs text-muted-foreground">Click to browse — photos, PDFs, docs, etc.</span>
+                  </>
+                )}
+              </button>
+              {/* Attached files list */}
+              {jobForm.attachments.length > 0 && (
+                <div className="space-y-1.5">
+                  {jobForm.attachments.map((att, idx) => {
+                    const isImage = att.type?.startsWith('image/');
+                    return (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-3 rounded-md border bg-background px-3 py-2"
+                      >
+                        {isImage ? (
+                          <img src={att.url} alt={att.name} className="size-8 rounded object-cover shrink-0" />
+                        ) : (
+                          <div className="size-8 rounded bg-muted flex items-center justify-center shrink-0">
+                            <FileIcon className="size-4 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">{att.name}</p>
+                          {att.size ? (
+                            <p className="text-xs text-muted-foreground">{formatFileSize(att.size)}</p>
+                          ) : null}
                         </div>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium truncate">{att.name}</p>
-                        {att.size ? (
-                          <p className="text-xs text-muted-foreground">{formatFileSize(att.size)}</p>
-                        ) : null}
+                        <a
+                          href={att.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-emerald-700 hover:underline shrink-0"
+                        >
+                          View
+                        </a>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-7 text-red-500 hover:text-red-600 shrink-0"
+                          onClick={() => removeAttachment(idx)}
+                          title="Remove"
+                        >
+                          <X className="size-3.5" />
+                        </Button>
                       </div>
-                      <a
-                        href={att.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-emerald-700 hover:underline shrink-0"
-                      >
-                        View
-                      </a>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-7 text-red-500 hover:text-red-600 shrink-0"
-                        onClick={() => removeAttachment(idx)}
-                        title="Remove"
-                      >
-                        <X className="size-3.5" />
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </FormSectionCard>
 
@@ -3398,13 +3418,67 @@ export function JobsView() {
           <p className="text-lg font-medium">No jobs found</p>
           <p className="text-sm">Create a new job or adjust your filters</p>
         </div>
-      ) : effectiveViewMode === 'cards' ? (
-        /* ─── Card View ────────────────────────────────────────────── */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {jobs.map((job) => (
+      ) : (
+        <>
+          {/* ─── Bulk action bar (appears when ≥1 job selected) ─────── */}
+          {selectedJobIds.size > 0 && (
+            <div className="sticky top-0 z-20 flex items-center gap-3 rounded-lg border bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-900/50 px-4 py-2.5 mb-4 shadow-sm">
+              <Checkbox
+                checked={selectedJobIds.size === jobs.length && jobs.length > 0}
+                onCheckedChange={toggleSelectAll}
+              />
+              <span className="text-sm font-medium text-emerald-800 dark:text-emerald-300">
+                {selectedJobIds.size} selected
+              </span>
+              <div className="flex-1" />
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs"
+                onClick={() => runJobBulkAction('softDelete')}
+                disabled={bulkRunning}
+              >
+                <Archive className="size-3.5 mr-1" /> Archive
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                className="h-8 text-xs"
+                onClick={() => setBulkDeleteOpen(true)}
+                disabled={bulkRunning}
+              >
+                <Trash2 className="size-3.5 mr-1" /> Delete
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 text-xs"
+                onClick={() => setSelectedJobIds(new Set())}
+              >
+                Clear
+              </Button>
+            </div>
+          )}
+          {/* ─── Select-all checkbox row (when not in bulk mode) ────── */}
+          {selectedJobIds.size === 0 && jobs.length > 0 && (
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <Checkbox
+                checked={false}
+                onCheckedChange={toggleSelectAll}
+              />
+              <span className="text-xs text-muted-foreground">Select all ({jobs.length})</span>
+            </div>
+          )}
+          {effectiveViewMode === 'cards' ? (
+            /* ─── Card View ────────────────────────────────────────────── */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {jobs.map((job) => (
             <Card
               key={job.id}
-              className="cursor-pointer hover:shadow-md transition-all border-l-4"
+              className={cn(
+                "cursor-pointer hover:shadow-md transition-all border-l-4 relative",
+                selectedJobIds.has(job.id) && "ring-2 ring-emerald-400"
+              )}
               style={{
                 borderLeftColor:
                   job.status === 'pending' ? '#f59e0b' :
@@ -3415,7 +3489,14 @@ export function JobsView() {
               }}
               onClick={() => openJobDetail(job)}
             >
-              <CardContent className="p-4 space-y-3">
+              {/* Bulk-select checkbox (top-left corner) */}
+              <div
+                className="absolute top-2 left-2 z-10"
+                onClick={(e) => { e.stopPropagation(); toggleJobSelect(job.id); }}
+              >
+                <Checkbox checked={selectedJobIds.has(job.id)} />
+              </div>
+              <CardContent className="p-4 space-y-3 pt-7">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 mb-1">
@@ -3499,6 +3580,8 @@ export function JobsView() {
             </Table>
           </div>
         </Card>
+      )}
+        </>
       )}
         </>
       )}
@@ -3592,6 +3675,32 @@ export function JobsView() {
             <AlertDialogCancel disabled={deleteSaving}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteJob} disabled={deleteSaving} className="bg-red-600 hover:bg-red-700 focus:ring-red-600">
               {deleteSaving ? 'Deleting...' : 'Delete Job'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ─── Bulk Delete Confirmation ───────────────────────────────── */}
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="size-5 text-red-600" /> Delete {selectedJobIds.size} Job{selectedJobIds.size !== 1 ? 's' : ''}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete {selectedJobIds.size} selected job{selectedJobIds.size !== 1 ? 's' : ''}.
+              This action cannot be undone. Consider using <strong>Archive</strong> instead to keep
+              them in Job History.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkRunning}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => runJobBulkAction('delete')}
+              disabled={bulkRunning}
+              className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+            >
+              {bulkRunning ? 'Deleting...' : 'Delete Permanently'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

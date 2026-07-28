@@ -56,6 +56,7 @@ const CredentialsView = lazy(() => import('@/components/views/credentials-view')
 const SettingsView = lazy(() => import('@/components/views/settings-view').then(m => ({ default: m.SettingsView })));
 const AuditLogsView = lazy(() => import('@/components/views/reports-view').then(m => ({ default: m.ReportsView })));
 const ActivityLogsView = lazy(() => import('@/components/views/activity-logs-view').then(m => ({ default: m.ActivityLogsView })));
+const HistoryView = lazy(() => import('@/components/views/history-view').then(m => ({ default: m.HistoryView })));
 const ReportsView = lazy(() => import('@/components/views/reports-view').then(m => ({ default: m.ReportsView })));
 const NotificationsView = lazy(() => import('@/components/views/notifications-view').then(m => ({ default: m.NotificationsView })));
 
@@ -157,7 +158,7 @@ const lazyViews: Partial<Record<ViewType, ComponentType>> = {
   credentials: CredentialsView,
   settings: SettingsView,
   auditLogs: AuditLogsView,
-  activityLogs: ActivityLogsView,
+  activityLogs: HistoryView,
   reports: ReportsView,
   notifications: NotificationsView,
   // Portals

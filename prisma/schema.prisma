@@ -463,6 +463,9 @@ model Lead {
   assessmentImagesJson String @default("[]")
   followUpAt      DateTime?
   convertedAt     DateTime?
+  // ── Soft delete: when set, the lead is hidden from the main list but kept
+  // in "Lead History" for audit. Permanent delete = hard DELETE from DB. ──
+  deletedAt       DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -1266,6 +1269,9 @@ model Job {
   //   arrived, workStarted, completed, invoiceGenerated, paused, resumed } }
   metadataJson      String   @default("{}")
   workspaceId        String?
+  // ── Soft delete: when set, the job is hidden from the active list but kept
+  // in "Job History" for audit. Permanent delete = hard DELETE from DB. ──
+  deletedAt          DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 

@@ -1318,11 +1318,15 @@ export function LeadsView() {
       if (searchQuery) params.set('search', searchQuery);
       params.set('page', String(page));
       params.set('limit', String(pageSize));
+      // Exclude soft-deleted leads (shown in Lead History instead)
+      params.set('deleted', 'false');
 
       const res = await fetch(`/api/leads?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        setLeads(data.leads || []);
+        // Client-side filter: hide soft-deleted leads
+        const allLeads = data.leads || [];
+        setLeads(allLeads.filter((l: { deletedAt?: string | null }) => !l.deletedAt));
         setTotalLeads(data.pagination?.total || 0);
         setTotalPages(data.pagination?.totalPages || 1);
       } else {
@@ -1519,9 +1523,15 @@ export function LeadsView() {
     if (!deletingLead) return;
     setDeletingLeadLoading(true);
     try {
-      const res = await fetch(`/api/leads/${deletingLead.id}`, { method: 'DELETE' });
+      // Soft-delete: sets deletedAt = now(). Lead is hidden from active list
+      // but kept in Lead History for audit/permanent-delete.
+      const res = await fetch(`/api/leads/${deletingLead.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ softDelete: true }),
+      });
       if (res.ok) {
-        toast.success('Lead deleted');
+        toast.success('Lead moved to History');
         setShowDeleteDialog(false);
         setDeletingLead(null);
         if (showDetailDialog && selectedLead?.id === deletingLead.id) {

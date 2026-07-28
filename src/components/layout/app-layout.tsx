@@ -62,6 +62,7 @@ const IntegrationsView = lazy(() => import('@/components/views/integrations-view
 const SettingsView = lazy(() => import('@/components/views/settings-view').then(m => ({ default: m.SettingsView })));
 const ReportsView = lazy(() => import('@/components/views/reports-view').then(m => ({ default: m.ReportsView })));
 const ActivityLogsView = lazy(() => import('@/components/views/activity-logs-view').then(m => ({ default: m.ActivityLogsView })));
+const HistoryView = lazy(() => import('@/components/views/history-view').then(m => ({ default: m.HistoryView })));
 const NotificationsView = lazy(() => import('@/components/views/notifications-view').then(m => ({ default: m.NotificationsView })));
 
 // Portals
@@ -165,7 +166,7 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   integrations: IntegrationsView,
   settings: SettingsView,
   auditLogs: ReportsView,
-  activityLogs: ActivityLogsView,
+  activityLogs: HistoryView,
   reports: ReportsView,
   notifications: NotificationsView,
   // Portals
