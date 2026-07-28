@@ -138,10 +138,6 @@ const VARIABLE_HINTS = [
   '{{notes}}',
 ];
 
-function renderTemplate(tpl: string, vars: Record<string, string>): string {
-  return tpl.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? '');
-}
-
 // ─── Main component ────────────────────────────────────────────────────────
 
 export function CommunicationComposer(props: ComposerProps) {
@@ -155,7 +151,10 @@ export function CommunicationComposer(props: ComposerProps) {
     customerWhatsappId,
     relatedEntityType,
     relatedEntityId,
-    relatedEntityName,
+    // relatedEntityName is intentionally not destructured — the server
+    // resolves {{jobTitle}} etc. from the DB at send time, so we don't need
+    // the display name client-side anymore. The prop stays on the interface
+    // for backward compatibility with existing callers.
     defaultTemplateKey,
     defaultSubject,
     defaultBody,
@@ -182,6 +181,21 @@ export function CommunicationComposer(props: ComposerProps) {
   });
 
   const [sending, setSending] = useState(false);
+
+  // ─── AI Compose state ──
+  // The AI panel lets the user pick an intent + tone and have the LLM write
+  // a ready-to-send message using REAL customer/job/invoice data (loaded
+  // server-side). The generated text OVERWRITES whatever is in subject/body.
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [aiIntent, setAiIntent] = useState<string>('schedule_reminder');
+  const [aiTone, setAiTone] = useState<string>('friendly');
+  const [aiInstructions, setAiInstructions] = useState<string>('');
+  const [aiInstructionsOpen, setAiInstructionsOpen] = useState<boolean>(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  // Tracks whether we've already produced a draft in this panel session —
+  // drives the Generate vs Regenerate+Done button row.
+  const [aiGenerated, setAiGenerated] = useState(false);
 
   // ─── WhatsApp config check ──
   // WhatsApp is only shown as a channel option if the tenant has added their
@@ -288,24 +302,101 @@ export function CommunicationComposer(props: ComposerProps) {
       const tpl = TEMPLATES[key];
       if (!tpl) return;
       setTemplateKey(key);
-      // Render with whatever vars we have available.
-      const vars: Record<string, string> = {
-        customerName: selectedCustomer?.name || customerName || '',
-        jobTitle: relatedEntityName || '',
-        assigneeName: '',
-        companyName: '',
-        invoiceNumber: '',
-        amount: '',
-        dueDate: '',
-        eta: '',
-        notes: '',
-        scheduledDate: '',
-      };
-      setSubject((prev) => (prev && key === 'custom' ? prev : renderTemplate(tpl.subject, vars)));
-      setBody((prev) => (prev && key === 'custom' ? prev : renderTemplate(tpl.body, vars)));
+      // Load the RAW template text — {{var}} placeholders stay intact so the
+      // server can resolve them against live DB data (customer, job, invoice,
+      // tenant, …) at send time. We deliberately do NOT pre-render client-side
+      // because most variables aren't available here, and pre-rendering with
+      // empty values would either leak `{{var}}` text or produce awkward gaps.
+      // For the "custom" template we leave any existing user input untouched.
+      if (key !== 'custom') {
+        setSubject(tpl.subject);
+        setBody(tpl.body);
+      }
     },
-    [selectedCustomer, customerName, relatedEntityName],
+    [],
   );
+
+  // ─── AI Compose ──
+  // Generate a ready-to-send message via /api/ai/compose-message. The AI has
+  // server-side access to the real customer/job/invoice/tenant data, so it
+  // writes FINAL text (no {{var}} placeholders). On success we overwrite the
+  // current subject/body and flip templateKey to 'custom' so the server sends
+  // the AI text verbatim (the composer sends `templateKey: undefined` when
+  // templateKey === 'custom', which makes resolveTemplate skip the named-
+  // template lookup and use the user-supplied subject/body directly).
+  const handleAiGenerate = async () => {
+    if (!selectedCustomerId) {
+      setAiError('Please select a recipient first.');
+      toast.error('Please select a recipient first.');
+      return;
+    }
+    setAiError(null);
+    setAiLoading(true);
+    try {
+      // Pick the first AI-supported selected channel (push isn't supported
+      // by the compose API — only email/sms/whatsapp/in_app).
+      const aiSupported: Channel[] = ['email', 'sms', 'whatsapp', 'in_app'];
+      const activeAiChannels = aiSupported.filter((c) => channels[c]);
+      const aiChannel: Channel = activeAiChannels[0] || 'email';
+
+      const res = await fetch('/api/ai/compose-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customerId: selectedCustomerId,
+          jobId: relatedEntityType === 'job' ? relatedEntityId : undefined,
+          invoiceId: relatedEntityType === 'invoice' ? relatedEntityId : undefined,
+          channel: aiChannel,
+          intent: aiIntent,
+          tone: aiTone,
+          customInstructions: aiInstructions.trim() || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data) {
+        if (res.status === 503) {
+          const msg = data?.error || 'AI service not configured. Set OPENROUTER_API_KEY.';
+          setAiError(msg);
+          toast.error(msg);
+        } else if (res.status === 401) {
+          setAiError('Your session has expired. Please log in again.');
+          toast.error('Your session has expired. Please log in again.');
+        } else {
+          const msg = data?.error || `AI request failed (${res.status}).`;
+          setAiError(msg);
+          toast.error(msg);
+        }
+        return;
+      }
+      const generatedSubject = typeof data.subject === 'string' ? data.subject : '';
+      const generatedBody = typeof data.body === 'string' ? data.body : '';
+      if (!generatedBody) {
+        setAiError('AI returned an empty message. Please try again.');
+        toast.error('AI returned an empty message. Please try again.');
+        return;
+      }
+      // Overwrite subject/body with the AI-generated text. For email the API
+      // returns { subject, body }; for SMS/WhatsApp/in_app it returns { body }
+      // only (subject omitted). We only set subject when one was returned so
+      // we don't clobber an existing subject unnecessarily.
+      if (generatedSubject) setSubject(generatedSubject);
+      setBody(generatedBody);
+      // Flip to 'custom' so the server sends the AI text verbatim (no
+      // template lookup). For email both subject+body are non-empty so
+      // resolveTemplate step (1) already wins; for SMS/WhatsApp/in_app the
+      // subject is empty so we MUST clear templateKey to avoid the server
+      // falling back to a named template at send time.
+      setTemplateKey('custom');
+      setAiGenerated(true);
+      toast.success('AI message generated. Review and edit as needed.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Network error';
+      setAiError(msg);
+      toast.error(msg);
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   // Apply default template once on open.
   useEffect(() => {
@@ -385,6 +476,15 @@ export function CommunicationComposer(props: ComposerProps) {
     setTemplateKey('custom');
     setCustomerSearch('');
     setChannels({ email: false, sms: false, whatsapp: false, push: false, in_app: true });
+    // Reset AI Compose panel state too so reopening the composer starts fresh.
+    setAiPanelOpen(false);
+    setAiIntent('schedule_reminder');
+    setAiTone('friendly');
+    setAiInstructions('');
+    setAiInstructionsOpen(false);
+    setAiLoading(false);
+    setAiError(null);
+    setAiGenerated(false);
   };
 
   // ─── Renderers ──
@@ -574,6 +674,178 @@ export function CommunicationComposer(props: ComposerProps) {
         />
       </div>
 
+      {/* AI Write — prominent button (right-aligned) above the body textarea.
+          Opens an inline panel where the user picks intent + tone (+ optional
+          custom instructions) and has the LLM write a ready-to-send message
+          using real customer/job/invoice data. The generated text OVERWRITES
+          the current subject/body; the user can still edit manually after. */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+            <Sparkles className="size-3.5 text-violet-500" />
+            AI Compose
+          </Label>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setAiPanelOpen((v) => !v);
+              setAiError(null);
+            }}
+            className="bg-gradient-to-r from-emerald-600 to-violet-600 hover:from-emerald-700 hover:to-violet-700 text-white border-0 shadow-sm"
+          >
+            <Sparkles className="size-3.5 mr-1.5" />
+            {aiPanelOpen ? 'Hide' : 'AI Write'}
+          </Button>
+        </div>
+
+        {aiPanelOpen && (
+          <div className="rounded-lg border border-violet-500/30 bg-gradient-to-br from-emerald-500/5 via-violet-500/5 to-violet-500/10 p-3.5 space-y-3">
+            {/* Error banner */}
+            {aiError && (
+              <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive flex items-start gap-2">
+                <AlertCircle className="size-3.5 mt-0.5 shrink-0" />
+                <span className="flex-1">{aiError}</span>
+                <button
+                  type="button"
+                  onClick={() => setAiError(null)}
+                  className="text-destructive/70 hover:text-destructive shrink-0"
+                  aria-label="Dismiss error"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            )}
+
+            {/* Intent + Tone */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                  Intent
+                </Label>
+                <Select
+                  value={aiIntent}
+                  onValueChange={(v) => {
+                    setAiIntent(v);
+                    setAiGenerated(false);
+                  }}
+                  disabled={aiLoading}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Pick an intent" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="schedule_reminder">Schedule Reminder</SelectItem>
+                    <SelectItem value="job_started">Job Started</SelectItem>
+                    <SelectItem value="on_the_way">On The Way</SelectItem>
+                    <SelectItem value="job_complete">Job Complete</SelectItem>
+                    <SelectItem value="invoice_reminder">Invoice Reminder</SelectItem>
+                    <SelectItem value="thank_you">Thank You</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                  Tone
+                </Label>
+                <Select
+                  value={aiTone}
+                  onValueChange={(v) => {
+                    setAiTone(v);
+                    setAiGenerated(false);
+                  }}
+                  disabled={aiLoading}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Pick a tone" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="friendly">Friendly</SelectItem>
+                    <SelectItem value="professional">Professional</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                    <SelectItem value="casual">Casual</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Custom instructions — always shown for 'custom' intent,
+                collapsed-by-default for other intents (toggle link). */}
+            {aiIntent === 'custom' || aiInstructionsOpen ? (
+              <div className="space-y-1.5">
+                <Label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                  Custom instructions {aiIntent !== 'custom' && '(optional)'}
+                </Label>
+                <Textarea
+                  placeholder="Tell AI what to emphasize — e.g. 'mention the 10% early-bird discount' or 'keep it short, customer prefers brief texts'"
+                  value={aiInstructions}
+                  onChange={(e) => setAiInstructions(e.target.value)}
+                  rows={2}
+                  className="resize-y text-sm bg-background"
+                  disabled={aiLoading}
+                />
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAiInstructionsOpen(true)}
+                className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2"
+              >
+                + Add custom instructions
+              </button>
+            )}
+
+            {/* Action row */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                <Info className="size-3 shrink-0" />
+                AI uses real customer data — no variables needed.
+              </p>
+              {aiLoading ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" /> AI is writing…
+                </div>
+              ) : aiGenerated ? (
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setAiPanelOpen(false);
+                      setAiGenerated(false);
+                      setAiError(null);
+                    }}
+                  >
+                    <X className="size-3.5 mr-1.5" /> Done
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleAiGenerate}
+                    className="bg-gradient-to-r from-emerald-600 to-violet-600 hover:from-emerald-700 hover:to-violet-700 text-white border-0"
+                  >
+                    <Sparkles className="size-3.5 mr-1.5" /> Regenerate
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleAiGenerate}
+                  disabled={!selectedCustomerId || aiLoading}
+                  className="bg-gradient-to-r from-emerald-600 to-violet-600 hover:from-emerald-700 hover:to-violet-700 text-white border-0"
+                >
+                  <Sparkles className="size-3.5 mr-1.5" /> Generate
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Body */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
@@ -604,25 +876,20 @@ export function CommunicationComposer(props: ComposerProps) {
         </div>
       </div>
 
-      {/* Live preview */}
+      {/* Live preview — shows the RAW text with {{var}} placeholders visible.
+          Variables are resolved server-side at send time using live DB data,
+          so we don't try to preview them client-side (most are unavailable). */}
       {body && (
-        <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1">
+        <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1.5">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             Preview
           </p>
           <p className="text-sm whitespace-pre-wrap font-mono text-foreground/90">
-            {renderTemplate(body, {
-              customerName: selectedCustomer?.name || customerName || 'Customer',
-              jobTitle: relatedEntityName || '',
-              assigneeName: '',
-              companyName: '',
-              invoiceNumber: '',
-              amount: '',
-              dueDate: '',
-              eta: '',
-              notes: '',
-              scheduledDate: '',
-            })}
+            {body}
+          </p>
+          <p className="text-[11px] text-muted-foreground flex items-center gap-1 pt-0.5">
+            <Info className="size-3 shrink-0" />
+            Variables like {'{{customerName}}'} are auto-filled with live data when the message is sent.
           </p>
         </div>
       )}

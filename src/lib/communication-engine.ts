@@ -21,6 +21,7 @@
 import { db } from '@/lib/db';
 import { addTimelineEntry } from '@/lib/customer-timeline';
 import { logActivity } from '@/lib/activity-log';
+import { formatCurrency } from '@/lib/currency';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -77,37 +78,42 @@ export const COMMUNICATION_TEMPLATES: Record<string, TemplateDef> = {
   job_scheduled: {
     subject: 'Your service is scheduled — {{jobTitle}}',
     body:
-      "Hi {{customerName}},\n\nYour service \"{{jobTitle}}\" has been scheduled" +
-      "{{scheduledDate ? ' for ' + scheduledDate : ''}}. " +
-      "{{assigneeName ? 'Our technician ' + assigneeName + ' will be assigned to your job. ' : ''}}" +
-      "We'll send you another update when the technician is on the way.\n\nThank you for choosing {{companyName}}.",
+      "Hi {{customerName}},\n\n" +
+      "Your service \"{{jobTitle}}\" has been scheduled for {{scheduledDate}}. " +
+      "Our technician {{assigneeName}} will be assigned to your job. " +
+      "We'll send you another update when the technician is on the way.\n\n" +
+      "Thank you for choosing {{companyName}}.",
   },
   technician_on_route: {
     subject: 'Your technician is on the way — {{companyName}}',
     body:
-      "Hi {{customerName}},\n\nGood news! Your technician {{assigneeName}} is on the way to your location" +
-      "{{eta ? ' (ETA ' + eta + ')' : ''}}.\n\nIf you have any questions, feel free to reply to this message.\n\nThank you,\n{{companyName}}",
+      "Hi {{customerName}},\n\n" +
+      "Good news! Your technician {{assigneeName}} is on the way to your location. ETA: {{eta}}.\n\n" +
+      "If you have any questions, feel free to reply to this message.\n\n" +
+      "Thank you,\n{{companyName}}",
   },
   job_complete: {
     subject: 'Service completed — {{jobTitle}}',
     body:
-      "Hi {{customerName}},\n\nYour service \"{{jobTitle}}\" has been completed. " +
-      "{{notes ? 'Notes: ' + notes + '\\n\\n' : ''}}" +
+      "Hi {{customerName}},\n\n" +
+      "Your service \"{{jobTitle}}\" has been completed. Notes: {{notes}}\n\n" +
       "Thank you for choosing {{companyName}}. We'd love to hear your feedback!",
   },
   invoice_sent: {
     subject: 'Invoice {{invoiceNumber}} from {{companyName}}',
     body:
-      "Hi {{customerName}},\n\nYour invoice {{invoiceNumber}} for {{amount}} is now ready. " +
-      "Please review it at your earliest convenience. " +
-      "{{dueDate ? 'Payment is due by ' + dueDate + '. ' : ''}}" +
-      "\n\nThank you,\n{{companyName}}",
+      "Hi {{customerName}},\n\n" +
+      "Your invoice {{invoiceNumber}} for {{amount}} is now ready. " +
+      "Payment is due by {{dueDate}}.\n\n" +
+      "Thank you,\n{{companyName}}",
   },
   payment_received: {
     subject: 'Payment received — Thank you!',
     body:
-      "Hi {{customerName}},\n\nWe've received your payment of {{amount}} for invoice {{invoiceNumber}}. " +
-      "Thank you for your prompt payment!\n\nBest regards,\n{{companyName}}",
+      "Hi {{customerName}},\n\n" +
+      "We've received your payment of {{amount}} for invoice {{invoiceNumber}}. " +
+      "Thank you for your prompt payment!\n\n" +
+      "Best regards,\n{{companyName}}",
   },
   custom: {
     subject: 'Message from {{companyName}}',
@@ -136,11 +142,34 @@ export function renderTemplate(
 /**
  * Resolve a templateKey into a rendered subject + body, falling back to
  * the caller-provided subject/body if no template matches.
+ *
+ * Resolution order:
+ *   1. If BOTH `params.subject` AND `params.body` are non-empty (i.e. the
+ *      user typed/edited text in the composer), use those as the source —
+ *      they may still contain `{{var}}` placeholders which we render
+ *      against the supplied `variables` map. This prevents a picked
+ *      template from discarding the user's edits.
+ *   2. Otherwise, if `params.templateKey` matches a known template, use it.
+ *   3. Otherwise, fall back to whatever subject/body (if any) was supplied.
+ *
+ * The `variables` argument is the resolved-from-DB variable map (see
+ * `resolveContext`). If omitted, `params.variables` is used instead.
  */
 export function resolveTemplate(
   params: SendMessageParams,
+  variables: Record<string, string> = {},
 ): { subject: string; body: string } {
-  const vars = params.variables ?? {};
+  const vars = Object.keys(variables).length > 0 ? variables : (params.variables ?? {});
+
+  // (1) Prefer user-edited subject + body.
+  if (params.subject?.trim() && params.body?.trim()) {
+    return {
+      subject: renderTemplate(params.subject, vars),
+      body: renderTemplate(params.body, vars),
+    };
+  }
+
+  // (2) Named template lookup.
   if (params.templateKey && COMMUNICATION_TEMPLATES[params.templateKey]) {
     const tpl = COMMUNICATION_TEMPLATES[params.templateKey];
     return {
@@ -148,6 +177,8 @@ export function resolveTemplate(
       body: renderTemplate(tpl.body, vars),
     };
   }
+
+  // (3) Fall back to whatever was supplied (one or both may be empty).
   return {
     subject: params.subject ? renderTemplate(params.subject, vars) : '',
     body: params.body ? renderTemplate(params.body, vars) : '',
@@ -209,6 +240,72 @@ interface ResolvedContext {
   senderName: string;
   subject: string;
   body: string;
+  /** Full variable map (all 10 keys) resolved from the DB. */
+  variables: Record<string, string>;
+}
+
+// ─── Lightweight shape of a Job row — only the fields we read for templates.
+// (Defined as a structural type so we don't couple to the generated Prisma
+// type; `db.job.findUnique({ select })` returns an object that satisfies this.)
+interface JobForTemplate {
+  title?: string | null;
+  assigneeName?: string | null;
+  scheduledAt?: Date | null;
+  notes?: string | null;
+  customerId?: string | null;
+}
+
+interface InvoiceForTemplate {
+  number?: string | null;
+  amount?: number | null;
+  dueDate?: Date | null;
+  currency?: string | null;
+  jobId?: string | null;
+  customerId?: string | null;
+}
+
+/**
+ * Build the full 10-key variable map used by `renderTemplate`.
+ *
+ * Field-name reference (verified against `prisma/schema.prisma`):
+ *   - Job.title        : string
+ *   - Job.assigneeName : string?
+ *   - Job.scheduledAt  : DateTime?   ← surfaced as {{scheduledDate}}
+ *   - Job.notes        : string?
+ *   - Job.eta          : (no such field — {{eta}} resolves to '')
+ *   - Invoice.number   : string       ← surfaced as {{invoiceNumber}}
+ *   - Invoice.amount   : Float
+ *   - Invoice.dueDate  : DateTime?
+ *   - Invoice.currency : String
+ *   - Tenant.name      : string       ← surfaced as {{companyName}}
+ */
+function buildVariables(args: {
+  customerName: string | null;
+  tenantName: string | null;
+  tenantCurrency: string | null;
+  job?: JobForTemplate | null;
+  invoice?: InvoiceForTemplate | null;
+}): Record<string, string> {
+  const { customerName, tenantName, tenantCurrency, job, invoice } = args;
+  return {
+    customerName: customerName || '',
+    jobTitle: job?.title || '',
+    assigneeName: job?.assigneeName || '',
+    companyName: tenantName || '',
+    scheduledDate: job?.scheduledAt
+      ? new Date(job.scheduledAt).toLocaleDateString()
+      : '',
+    invoiceNumber: invoice?.number || '',
+    amount:
+      invoice && typeof invoice.amount === 'number' && invoice.amount > 0
+        ? formatCurrency(invoice.amount, invoice.currency || tenantCurrency || 'USD')
+        : '',
+    dueDate: invoice?.dueDate
+      ? new Date(invoice.dueDate).toLocaleDateString()
+      : '',
+    eta: '',
+    notes: job?.notes || '',
+  };
 }
 
 async function resolveContext(
@@ -233,20 +330,152 @@ async function resolveContext(
     }
   }
 
-  let senderName = params.senderName ?? 'ServiceOS';
-  if (!params.senderName && tenantId) {
+  // Always load the tenant when possible — we need its name for both
+  // `senderName` (fallback) and the `{{companyName}}` template variable.
+  let tenantName: string | null = null;
+  let tenantCurrency: string | null = null;
+  if (tenantId) {
     try {
       const tenant = await db.tenant.findUnique({
         where: { id: tenantId },
-        select: { name: true },
+        select: { name: true, currency: true },
       });
-      if (tenant?.name) senderName = tenant.name;
-    } catch {
-      /* fall through with default */
+      if (tenant?.name) tenantName = tenant.name;
+      if (tenant?.currency) tenantCurrency = tenant.currency;
+    } catch (err) {
+      console.error('[comm-engine] Failed to load tenant:', err);
     }
   }
 
-  const { subject, body } = resolveTemplate(params);
+  // ── Load related entity data (Job / Invoice) for variable resolution. ──
+  let job: JobForTemplate | null = null;
+  let invoice: InvoiceForTemplate | null = null;
+  const entType = params.relatedEntityType;
+  const entId = params.relatedEntityId;
+
+  if (entId && entType === 'job') {
+    try {
+      const j = await db.job.findUnique({
+        where: { id: entId },
+        select: {
+          title: true,
+          assigneeName: true,
+          scheduledAt: true,
+          notes: true,
+          customerId: true,
+        },
+      });
+      if (j) job = j as JobForTemplate;
+
+      // If the customer wasn't passed explicitly, fall back to the job's
+      // customer so we still have a recipient + customerName.
+      if (job && !customer && job.customerId) {
+        try {
+          const c = await db.customer.findUnique({
+            where: { id: job.customerId },
+            select: { id: true, name: true, phone: true, email: true, whatsappId: true },
+          });
+          if (c) {
+            customer = c;
+            customerName = c.name;
+          }
+        } catch (err) {
+          console.error('[comm-engine] Failed to load job customer:', err);
+        }
+      }
+
+      // Linked invoice for this job (most recent first).
+      try {
+        const inv = await db.invoice.findFirst({
+          where: { jobId: entId },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            number: true,
+            amount: true,
+            dueDate: true,
+            currency: true,
+            jobId: true,
+            customerId: true,
+          },
+        });
+        if (inv) invoice = inv as InvoiceForTemplate;
+      } catch (err) {
+        console.error('[comm-engine] Failed to load job invoice:', err);
+      }
+    } catch (err) {
+      console.error('[comm-engine] Failed to load job:', err);
+    }
+  } else if (entId && entType === 'invoice') {
+    try {
+      const inv = await db.invoice.findUnique({
+        where: { id: entId },
+        select: {
+          number: true,
+          amount: true,
+          dueDate: true,
+          currency: true,
+          jobId: true,
+          customerId: true,
+        },
+      });
+      if (inv) {
+        invoice = inv as InvoiceForTemplate;
+
+        // Linked job (for title / assignee / scheduledDate / notes).
+        if (invoice.jobId) {
+          try {
+            const j = await db.job.findUnique({
+              where: { id: invoice.jobId },
+              select: {
+                title: true,
+                assigneeName: true,
+                scheduledAt: true,
+                notes: true,
+                customerId: true,
+              },
+            });
+            if (j) job = j as JobForTemplate;
+          } catch (err) {
+            console.error('[comm-engine] Failed to load invoice job:', err);
+          }
+        }
+
+        // Linked customer (if not already loaded).
+        if (!customer && invoice.customerId) {
+          try {
+            const c = await db.customer.findUnique({
+              where: { id: invoice.customerId },
+              select: { id: true, name: true, phone: true, email: true, whatsappId: true },
+            });
+            if (c) {
+              customer = c;
+              customerName = c.name;
+            }
+          } catch (err) {
+            console.error('[comm-engine] Failed to load invoice customer:', err);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[comm-engine] Failed to load invoice:', err);
+    }
+  }
+
+  // ── Build the full variable map. ──
+  const variables = buildVariables({
+    customerName,
+    tenantName,
+    tenantCurrency,
+    job,
+    invoice,
+  });
+
+  // ── Resolve sender name. ──
+  let senderName = params.senderName ?? 'ServiceOS';
+  if (!params.senderName && tenantName) senderName = tenantName;
+
+  // ── Resolve the subject/body using the DB-built variable map. ──
+  const { subject, body } = resolveTemplate(params, variables);
 
   return {
     tenantId,
@@ -256,6 +485,7 @@ async function resolveContext(
     senderName,
     subject,
     body,
+    variables,
   };
 }
 

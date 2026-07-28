@@ -1025,6 +1025,17 @@ export function FormBuilderView() {
   const [waPhone, setWaPhone] = useState('');
   const [waSending, setWaSending] = useState(false);
 
+  // ─── AI Generate Form state ─────────────────────────────────────────────
+  // Lets the user describe a form in natural language; the backend calls
+  // OpenRouter and returns a field array. The user reviews the preview and
+  // chooses to append (never replace) the generated fields to the current form.
+  const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiFormType, setAiFormType] = useState<FormType>('custom');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiGeneratedFields, setAiGeneratedFields] = useState<FormField[] | null>(null);
+
   const filteredForms = forms.filter(f => f.name.toLowerCase().includes(search.toLowerCase()));
 
   // ─── Stats ────────────────────────────────────────────────────────────────
@@ -1199,6 +1210,74 @@ export function FormBuilderView() {
       config: tpl.config,
     };
     setFormData(prev => ({ ...prev, fields: [...prev.fields, newField] }));
+  };
+
+  // ─── AI Generate Form handlers ──────────────────────────────────────────
+  /** Call the backend to turn a natural-language prompt into a field array. */
+  const handleAiGenerate = async () => {
+    if (!aiPrompt.trim()) return;
+    setAiLoading(true);
+    setAiError(null);
+    setAiGeneratedFields(null);
+    try {
+      // Use authFetch (not raw fetch) so the Bearer token from localStorage
+      // is included — required because the gateway proxy doesn't forward
+      // HTTP-only cookies. Matches the pattern used by every other API call
+      // in this component.
+      const res = await authFetch('/api/ai/form-generator', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: aiPrompt, formType: aiFormType }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      // The API already filters/normalizes; coerce to the local FormField shape.
+      const fields: FormField[] = (data.fields || []).map((f: Record<string, unknown>, i: number) => ({
+        id: typeof f.id === 'string' && f.id ? f.id : `f-ai-${Date.now().toString(36)}-${i}`,
+        type: (typeof f.type === 'string' ? f.type : 'short_answer') as FieldType,
+        label: typeof f.label === 'string' ? f.label : '',
+        required: typeof f.required === 'boolean' ? f.required : false,
+        placeholder: typeof f.placeholder === 'string' ? f.placeholder : undefined,
+        options: Array.isArray(f.options) ? (f.options as string[]) : undefined,
+        description: typeof f.description === 'string' ? f.description : undefined,
+      }));
+      setAiGeneratedFields(fields);
+      if (fields.length === 0) {
+        setAiError('AI did not return any usable fields. Try rephrasing your prompt.');
+      }
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : 'Failed to generate form');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  /** Append the AI-generated fields to the current form (never replace). */
+  const handleAiInsert = () => {
+    if (!aiGeneratedFields || aiGeneratedFields.length === 0) return;
+    setFormData(prev => ({ ...prev, fields: [...prev.fields, ...aiGeneratedFields] }));
+    setAiDialogOpen(false);
+    setAiGeneratedFields(null);
+    setAiPrompt('');
+    setAiError(null);
+    toast.success(`Inserted ${aiGeneratedFields.length} AI-generated field${aiGeneratedFields.length === 1 ? '' : 's'}`);
+  };
+
+  /** Reset AI dialog state when the user closes it. */
+  const handleAiDialogChange = (open: boolean) => {
+    setAiDialogOpen(open);
+    if (!open) {
+      // Defer clearing so the close animation doesn't flash empty content.
+      setTimeout(() => {
+        setAiGeneratedFields(null);
+        setAiError(null);
+        setAiPrompt('');
+        setAiFormType('custom');
+      }, 150);
+    }
   };
 
   const moveField = (index: number, direction: 'up' | 'down') => {
@@ -1605,14 +1684,23 @@ export function FormBuilderView() {
 
               {/* ─── Fields Tab ──────────────────────────────────────────── */}
               <TabsContent value="fields" className="mt-4 space-y-3 pb-6">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <Label className="text-sm font-medium">Form Fields</Label>
-                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={addField}>
-                    <Plus className="size-3 mr-1" /> Add Blank Field
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      className="h-7 text-xs bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white border-0"
+                      onClick={() => { setAiGeneratedFields(null); setAiError(null); setAiDialogOpen(true); }}
+                    >
+                      <Sparkles className="size-3 mr-1" /> AI Generate
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={addField}>
+                      <Plus className="size-3 mr-1" /> Add Blank Field
+                    </Button>
+                  </div>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Add fields from the palette below, or click &ldquo;Add Blank Field&rdquo; for a legacy text field.
+                  Add fields from the palette below, click &ldquo;Add Blank Field&rdquo; for a legacy text field, or describe what you need and let AI generate the fields for you.
                   Use the grip handle to reorder, the gear icon to configure advanced logic.
                 </p>
 
@@ -2494,6 +2582,150 @@ export function FormBuilderView() {
             <Button variant="destructive" onClick={() => showDeleteConfirm && handleDelete(showDeleteConfirm)}>
               Delete
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════════════════════════════════════════════════════════════════════
+          AI GENERATE FORM DIALOG
+          User describes a form in natural language → backend calls OpenRouter
+          → returns a field array → user previews + chooses to append.
+         ═══════════════════════════════════════════════════════════════════════ */}
+      <Dialog open={aiDialogOpen} onOpenChange={handleAiDialogChange}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span className="inline-flex items-center justify-center size-6 rounded-md bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white">
+                <Sparkles className="size-3.5" />
+              </span>
+              AI Generate Form
+            </DialogTitle>
+            <DialogDescription>
+              Describe the form you want to build and AI will draft the fields for you. You can review and insert them into the current form.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-1">
+            {/* Prompt input */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Describe the form</Label>
+              <Textarea
+                placeholder="Describe the form you want to build... (e.g., 'A plumbing quote request form with customer contact info, photos of the issue, and preferred appointment time')"
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                rows={4}
+                disabled={aiLoading}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Be specific about the kind of information you want to collect. The more context, the better the result.
+              </p>
+            </div>
+
+            {/* Form type */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Form type (optional)</Label>
+              <Select
+                value={aiFormType}
+                onValueChange={(v) => setAiFormType(v as FormType)}
+                disabled={aiLoading}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {FORM_TYPES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Error display */}
+            {aiError && (
+              <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30 p-3">
+                <AlertCircle className="size-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-red-800 dark:text-red-200">{aiError}</p>
+              </div>
+            )}
+
+            {/* Loading state */}
+            {aiLoading && (
+              <div className="flex flex-col items-center justify-center py-8 gap-2">
+                <Loader2 className="size-6 animate-spin text-violet-600" />
+                <p className="text-sm text-muted-foreground">Generating form fields with AI…</p>
+              </div>
+            )}
+
+            {/* Preview of generated fields */}
+            {!aiLoading && aiGeneratedFields && aiGeneratedFields.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">
+                    Preview <span className="text-muted-foreground font-normal">({aiGeneratedFields.length} field{aiGeneratedFields.length === 1 ? '' : 's'})</span>
+                  </Label>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleAiGenerate} disabled={aiLoading}>
+                    Regenerate
+                  </Button>
+                </div>
+                <div className="max-h-72 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
+                  {aiGeneratedFields.map((f, i) => {
+                    const typeMeta = FIELD_TYPES.find((t) => t.value === f.type);
+                    const TypeIcon = typeMeta?.icon ?? Type;
+                    return (
+                      <div key={f.id || i} className="flex items-start gap-3 p-2.5 bg-white dark:bg-slate-950">
+                        <div className="shrink-0 mt-0.5 inline-flex items-center justify-center size-6 rounded-md bg-violet-100 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300">
+                          <TypeIcon className="size-3.5" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium truncate">{f.label || <span className="italic text-muted-foreground">Untitled</span>}</span>
+                            {f.required && (
+                              <Badge variant="secondary" className="text-[10px] h-4 px-1.5">Required</Badge>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-muted-foreground mt-0.5">
+                            {typeMeta?.label ?? f.type}
+                            {f.options && f.options.length > 0 && (
+                              <span className="ml-1">· {f.options.length} options</span>
+                            )}
+                            {f.placeholder && (
+                              <span className="ml-1 truncate">· &ldquo;{f.placeholder}&rdquo;</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Fields will be appended to the end of the current form. You can reorder and edit them after inserting.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => handleAiDialogChange(false)}>
+              Cancel
+            </Button>
+            {!aiGeneratedFields || aiGeneratedFields.length === 0 ? (
+              <Button
+                className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white gap-2"
+                onClick={handleAiGenerate}
+                disabled={aiLoading || !aiPrompt.trim()}
+              >
+                {aiLoading ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                {aiLoading ? 'Generating…' : 'Generate'}
+              </Button>
+            ) : (
+              <Button
+                className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white gap-2"
+                onClick={handleAiInsert}
+              >
+                <Sparkles className="size-4" />
+                Insert {aiGeneratedFields.length} Field{aiGeneratedFields.length === 1 ? '' : 's'}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

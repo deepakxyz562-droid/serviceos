@@ -21,6 +21,13 @@
  * Used by:
  *   - src/lib/seed-public-business.ts (auto-seed per-tenant AI content)
  *   - src/app/api/ai/generate-hub-content/route.ts (manual "Regenerate" button)
+ *
+ * Exports:
+ *   - callOpenRouter(options) — generic chat-completion client with model
+ *     fallback + 429 retry. Reuse this for any new OpenRouter call site.
+ *   - generateHubContent(input) — high-level hub-content generator built on
+ *     callOpenRouter (kept for backward compatibility with existing callers).
+ *   - extractJson<T>(raw) — robust JSON extractor for LLM responses.
  */
 
 // ─── Shared types ───────────────────────────────────────────────────────────
@@ -51,6 +58,39 @@ export interface HubContent {
   description: string
   faqs: HubContentFaq[]
   services: HubContentService[]
+}
+
+// ─── Generic OpenRouter client types ────────────────────────────────────────
+
+export interface OpenRouterMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+export interface CallOpenRouterOptions {
+  /** System prompt. If provided, prepended as a system message. */
+  system?: string
+  /** User prompt (required if `messages` is not provided). */
+  user: string
+  /** Additional messages for multi-turn. If provided, used instead of system/user. */
+  messages?: OpenRouterMessage[]
+  /** Sampling temperature. Default 0.7. */
+  temperature?: number
+  /** Max tokens. Default 4096. */
+  maxTokens?: number
+  /** If true, requests JSON response format. Default false. */
+  json?: boolean
+  /** Specific model to use. If omitted, tries OPENROUTER_MODELS in order. */
+  model?: string
+  /** Max retries on 429 per model. Default 2. */
+  maxRetries?: number
+}
+
+export interface CallOpenRouterResult {
+  /** The text content from the model. */
+  content: string
+  /** Which model actually succeeded. */
+  model: string
 }
 
 // ─── OpenRouter config ──────────────────────────────────────────────────────
@@ -188,107 +228,157 @@ interface OpenRouterResponse {
 }
 
 /**
- * Call a single OpenRouter model with the chat-completions API.
+ * Generic OpenRouter chat completion call.
  *
- * Uses `response_format: { type: 'json_object' }` to encourage valid JSON
- * output (silently ignored by models that don't support it).
+ * Tries models in order (custom model or OPENROUTER_MODELS fallback list).
+ * Retries on 429 with backoff. Returns the first successful response.
  *
- * Retries on HTTP 429 (free-pool rate limit) up to MAX_429_RETRIES times,
- * with RETRY_BACKOFF_MS backoff. OpenRouter explicitly recommends retrying
- * shortly on 429s.
+ * Message construction:
+ *   - If `options.messages` is provided, used verbatim (multi-turn).
+ *   - Otherwise built from `options.system` (optional) + `options.user`.
  *
- * Returns the text content from the first choice, or throws on failure.
+ * Resilience:
+ *   - Each model gets up to `maxRetries` retries on HTTP 429 (free-pool rate
+ *     limit). OpenRouter explicitly recommends retrying shortly on 429s.
+ *   - Transient errors (aborts/timeouts/network) are also retried; permanent
+ *     HTTP 4xx errors skip to the next model immediately.
+ *   - `response_format: { type: 'json_object' }` is sent only when
+ *     `options.json === true` (silently ignored by models that lack it).
+ *   - 60s timeout per attempt (free models can be slow on cold starts).
+ *
+ * @throws Error if OPENROUTER_API_KEY is missing or all models fail.
+ */
+export async function callOpenRouter(
+  options: CallOpenRouterOptions,
+): Promise<CallOpenRouterResult> {
+  const apiKey = process.env.OPENROUTER_API_KEY
+  if (!apiKey) {
+    throw new Error('OPENROUTER_API_KEY not set')
+  }
+
+  const {
+    system,
+    user,
+    messages,
+    temperature = 0.7,
+    maxTokens = 4096,
+    json = false,
+    model,
+    maxRetries = MAX_429_RETRIES,
+  } = options
+
+  // Build the messages array: explicit messages win, otherwise system + user.
+  const finalMessages: OpenRouterMessage[] = messages
+    ? messages
+    : system
+      ? [{ role: 'system', content: system }, { role: 'user', content: user }]
+      : [{ role: 'user', content: user }]
+
+  // Determine which models to try (single, or the fallback list in order).
+  const modelsToTry = model ? [model] : OPENROUTER_MODELS
+
+  let lastError: Error | null = null
+
+  for (const tryModel of modelsToTry) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      // 60s timeout per attempt — free models can be slow on cold starts.
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 60_000)
+
+      try {
+        const res = await fetch(OPENROUTER_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+            // Optional but recommended by OpenRouter for app identification.
+            'X-Title': 'ServiceOS AI',
+            // HTTP-Referer helps with rate-limit headers; sandbox has no real
+            // origin, so use the project domain placeholder.
+            'HTTP-Referer': 'https://serviceos.app',
+          },
+          body: JSON.stringify({
+            model: tryModel,
+            messages: finalMessages,
+            temperature,
+            max_tokens: maxTokens,
+            // Encourage JSON output only when explicitly requested —
+            // silently ignored by models that lack it.
+            ...(json ? { response_format: { type: 'json_object' } } : {}),
+          }),
+          signal: controller.signal,
+        })
+
+        // 429 — rate limited. Retry with backoff if attempts remain.
+        if (res.status === 429 && attempt < maxRetries) {
+          const text = await res.text().catch(() => '')
+          lastError = new Error(`OpenRouter ${tryModel} HTTP 429: ${text.slice(0, 200)}`)
+          console.warn(`[ai-client] ${tryModel}: 429 rate-limited, retrying in ${RETRY_BACKOFF_MS}ms (attempt ${attempt + 1}/${maxRetries})`)
+          await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS))
+          continue
+        }
+
+        if (!res.ok) {
+          const text = await res.text().catch(() => '')
+          // Common: 401 bad key, 402 paid-only model, 404 model removed, 503 upstream.
+          throw new Error(`OpenRouter ${tryModel} HTTP ${res.status}: ${text.slice(0, 250)}`)
+        }
+
+        const data = (await res.json()) as OpenRouterResponse
+
+        // OpenRouter sometimes returns 200 with an error body (upstream failure).
+        if (data.error?.message) {
+          throw new Error(`OpenRouter ${tryModel} error: ${data.error.message}`)
+        }
+
+        const content = data.choices?.[0]?.message?.content || ''
+        if (!content || content.trim().length < 10) {
+          const finishReason = data.choices?.[0]?.finish_reason
+          throw new Error(`OpenRouter ${tryModel} returned empty content (finish_reason=${finishReason || 'unknown'})`)
+        }
+
+        return { content, model: tryModel }
+      } catch (error) {
+        // Network errors / aborts: retry if attempts remain and it's not a known
+        // permanent failure (e.g. 404). We retry on abort/timeout too because
+        // free models can be slow.
+        const msg = error instanceof Error ? error.message : String(error)
+        if (attempt < maxRetries && !msg.includes('HTTP 4')) {
+          lastError = error instanceof Error ? error : new Error(msg)
+          console.warn(`[ai-client] ${tryModel}: transient error "${msg.slice(0, 100)}", retrying (attempt ${attempt + 1}/${maxRetries})`)
+          await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS))
+          continue
+        }
+        // Permanent failure for this model — record and try the next one.
+        lastError = error instanceof Error ? error : new Error(msg)
+        console.warn(`[ai-client] ${tryModel}: permanent error "${msg.slice(0, 150)}", trying next model`)
+        break
+      } finally {
+        clearTimeout(timeoutId)
+      }
+    }
+  }
+
+  // All models exhausted — throw the last error seen.
+  throw lastError || new Error('OpenRouter: all models failed')
+}
+
+/**
+ * Call a single OpenRouter model with the chat-completions API (JSON mode).
+ *
+ * Thin convenience wrapper around `callOpenRouter` that pins a single model
+ * and requests JSON output. Retries on HTTP 429 with backoff (up to
+ * MAX_429_RETRIES times) via the underlying generic call.
+ *
+ * Returns just the text content from the first choice, or throws on failure.
  */
 async function callOpenRouterModel(
   model: string,
   system: string,
   user: string,
 ): Promise<string> {
-  const apiKey = process.env.OPENROUTER_API_KEY
-  if (!apiKey) {
-    throw new Error('OPENROUTER_API_KEY not set')
-  }
-
-  let lastError: Error | null = null
-
-  for (let attempt = 0; attempt <= MAX_429_RETRIES; attempt++) {
-    // 60s timeout per attempt — free models can be slow on cold starts.
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 60_000)
-
-    try {
-      const res = await fetch(OPENROUTER_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey}`,
-          // Optional but recommended by OpenRouter for app identification.
-          'X-Title': 'ServiceOS Hub Generator',
-          // HTTP-Referer helps with rate-limit headers; sandbox has no real
-          // origin, so use the project domain placeholder.
-          'HTTP-Referer': 'https://serviceos.app',
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: 'system', content: system },
-            { role: 'user', content: user },
-          ],
-          temperature: 0.7,
-          max_tokens: 4096,
-          // Encourage JSON output — silently ignored by models that lack it.
-          response_format: { type: 'json_object' },
-        }),
-        signal: controller.signal,
-      })
-
-      // 429 — rate limited. Retry with backoff if attempts remain.
-      if (res.status === 429 && attempt < MAX_429_RETRIES) {
-        const text = await res.text().catch(() => '')
-        lastError = new Error(`OpenRouter ${model} HTTP 429: ${text.slice(0, 200)}`)
-        console.warn(`[ai-client] ${model}: 429 rate-limited, retrying in ${RETRY_BACKOFF_MS}ms (attempt ${attempt + 1}/${MAX_429_RETRIES})`)
-        await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS))
-        continue
-      }
-
-      if (!res.ok) {
-        const text = await res.text().catch(() => '')
-        // Common: 401 bad key, 402 paid-only model, 404 model removed, 503 upstream.
-        throw new Error(`OpenRouter ${model} HTTP ${res.status}: ${text.slice(0, 250)}`)
-      }
-
-      const data = (await res.json()) as OpenRouterResponse
-
-      // OpenRouter sometimes returns 200 with an error body (upstream failure).
-      if (data.error?.message) {
-        throw new Error(`OpenRouter ${model} error: ${data.error.message}`)
-      }
-
-      const content = data.choices?.[0]?.message?.content || ''
-      if (!content || content.trim().length < 10) {
-        const finishReason = data.choices?.[0]?.finish_reason
-        throw new Error(`OpenRouter ${model} returned empty content (finish_reason=${finishReason || 'unknown'})`)
-      }
-      return content
-    } catch (error) {
-      // Network errors / aborts: retry if attempts remain and it's not a known
-      // permanent failure (e.g. 404). We retry on abort/timeout too because
-      // free models can be slow.
-      const msg = error instanceof Error ? error.message : String(error)
-      if (attempt < MAX_429_RETRIES && !msg.includes('HTTP 4')) {
-        lastError = error instanceof Error ? error : new Error(msg)
-        console.warn(`[ai-client] ${model}: transient error "${msg.slice(0, 100)}", retrying (attempt ${attempt + 1}/${MAX_429_RETRIES})`)
-        await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS))
-        continue
-      }
-      throw error
-    } finally {
-      clearTimeout(timeoutId)
-    }
-  }
-
-  // All retries exhausted — throw the last 429 error.
-  throw lastError || new Error(`OpenRouter ${model}: retries exhausted`)
+  const result = await callOpenRouter({ model, system, user, json: true })
+  return result.content
 }
 
 /**
@@ -327,22 +417,23 @@ export async function generateHubContent(
 
   const { system, user } = buildPrompts(input)
 
-  for (const model of OPENROUTER_MODELS) {
-    try {
-      const raw = await callOpenRouterModel(model, system, user)
-      const parsed = extractJson<unknown>(raw)
+  // Single generic call — callOpenRouter iterates OPENROUTER_MODELS in order
+  // and retries each on 429, so we don't need an outer loop here. On any
+  // failure (all models exhausted) we return null so callers fall back to
+  // INDUSTRY_DUMMIES — onboarding must NEVER block on AI being down.
+  try {
+    const { content: raw, model } = await callOpenRouter({ system, user, json: true })
+    const parsed = extractJson<unknown>(raw)
 
-      if (isValidHubContent(parsed)) {
-        console.log(`[ai-client] Hub content generated via OpenRouter (${model})`)
-        return parsed
-      }
-      console.warn(`[ai-client] ${model}: response missing required fields, trying next model`)
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error)
-      console.warn(`[ai-client] ${model} failed: ${msg}`)
+    if (isValidHubContent(parsed)) {
+      console.log(`[ai-client] Hub content generated via OpenRouter (${model})`)
+      return parsed
     }
+    console.warn(`[ai-client] ${model}: response missing required fields`)
+    return null
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error)
+    console.error(`[ai-client] All OpenRouter models failed: ${msg}`)
+    return null
   }
-
-  console.error('[ai-client] All OpenRouter models failed')
-  return null
 }

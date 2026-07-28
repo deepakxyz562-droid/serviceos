@@ -1702,6 +1702,12 @@ function EmailEditorPage({ template, onClose, onSaved }: EmailEditorPageProps) {
   const [uploadingImage, setUploadingImage] = React.useState(false)
   const [showImagePicker, setShowImagePicker] = React.useState(false)
 
+  // AI Assistant state (email channel — distinct from WhatsApp editor's AI state)
+  const [emailAiLoading, setEmailAiLoading] = React.useState<string | null>(null)
+  const [emailAiTone, setEmailAiTone] = React.useState<string>('professional')
+  const [emailAiPrompt, setEmailAiPrompt] = React.useState('')
+  const [showEmailAi, setShowEmailAi] = React.useState(false)
+
   // Undo/redo history
   const [history, setHistory] = React.useState<string[]>([template?.htmlBody || ''])
   const [historyIndex, setHistoryIndex] = React.useState(0)
@@ -1814,6 +1820,87 @@ function EmailEditorPage({ template, onClose, onSaved }: EmailEditorPageProps) {
     setHtmlBody(newBody)
     pushHistory(newBody)
     toast.success('Image inserted')
+  }
+
+  /**
+   * Convert HTML email body to plain text for AI input.
+   * Strips tags, converts <br> and </p> to newlines so the AI sees the
+   * readable text content rather than raw markup.
+   */
+  const plainFromHtml = (html: string): string => {
+    return html
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>\s*/gi, '\n\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+  }
+
+  /**
+   * Convert AI plain-text body to minimal HTML for the email body editor.
+   * Wraps each paragraph in <p> tags so it renders correctly in the preview.
+   */
+  const htmlFromPlain = (plain: string): string => {
+    return plain
+      .split(/\n{2,}/)
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0)
+      .map((p) => `<p>${p.replace(/\n/g, '<br/>')}</p>`)
+      .join('\n')
+  }
+
+  /**
+   * AI Assistant handler for the email editor.
+   * Calls /api/ai/template-assist with channel='email' and updates both the
+   * subject and htmlBody state from the response.
+   */
+  const handleEmailAiAction = async (action: 'generate' | 'improve' | 'shorten') => {
+    setEmailAiLoading(action)
+    try {
+      // For improve/shorten, send subject + body as context so the AI sees
+      // the full current message. For generate, send the user's prompt.
+      const currentContent =
+        action === 'generate'
+          ? emailAiPrompt
+          : `${subject}\n\n${plainFromHtml(htmlBody)}`.trim()
+
+      const payload: Record<string, unknown> = {
+        action,
+        channel: 'email',
+        content: currentContent,
+        tone: emailAiTone,
+      }
+      if (action === 'generate') {
+        payload.context = emailAiPrompt
+      }
+
+      // Response shape: { subject?, body } — email always returns subject.
+      const res = (await api.post('/api/ai/template-assist', payload)) as {
+        subject?: string
+        body?: string
+      }
+
+      const outBody = res?.body
+      if (outBody && typeof outBody === 'string') {
+        if (res.subject && res.subject.trim()) {
+          setSubject(res.subject.trim())
+        }
+        const newHtml = htmlFromPlain(outBody)
+        setHtmlBody(newHtml)
+        pushHistory(newHtml)
+        toast.success(`AI ${action} complete`)
+      } else {
+        toast.error('AI returned no content')
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'AI request failed')
+    } finally {
+      setEmailAiLoading(null)
+    }
   }
 
   const handleSave = async () => {
@@ -2079,9 +2166,79 @@ function EmailEditorPage({ template, onClose, onSaved }: EmailEditorPageProps) {
               <VariableIcon className="size-3" />
               {showVars ? 'Hide Variables' : 'Insert Variables'}
             </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 text-xs text-teal-700"
+              onClick={() => setShowEmailAi(!showEmailAi)}
+            >
+              <Sparkles className="size-3" />
+              {showEmailAi ? 'Hide AI' : 'AI Assistant'}
+            </Button>
             <div className="flex-1" />
             <span className="text-[10px] text-muted-foreground">{htmlBody.length} chars</span>
           </div>
+
+          {/* AI Assistant (collapsible) */}
+          {showEmailAi && (
+            <div className="border-t bg-teal-50/40 p-3">
+              <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-teal-700">
+                <Sparkles className="size-3.5" /> AI Assistant
+              </h4>
+              <Input
+                value={emailAiPrompt}
+                onChange={(e) => setEmailAiPrompt(e.target.value)}
+                placeholder="Describe what you want (e.g. 'Welcome email for new customers')"
+                className="mb-2 text-sm"
+              />
+              <div className="mb-2 flex items-center gap-2">
+                <Label className="shrink-0 text-xs text-muted-foreground">Tone:</Label>
+                <Select value={emailAiTone} onValueChange={setEmailAiTone}>
+                  <SelectTrigger size="sm" className="h-7 w-[140px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="friendly">Friendly</SelectItem>
+                    <SelectItem value="professional">Professional</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                    <SelectItem value="casual">Casual</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handleEmailAiAction('generate')}
+                  disabled={!emailAiPrompt.trim() || emailAiLoading !== null}
+                >
+                  {emailAiLoading === 'generate' ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Sparkles className="mr-1.5 size-3.5" />}
+                  Generate
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handleEmailAiAction('improve')}
+                  disabled={!htmlBody.trim() || emailAiLoading !== null}
+                >
+                  {emailAiLoading === 'improve' ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 size-3.5" />}
+                  Improve
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => void handleEmailAiAction('shorten')}
+                  disabled={!htmlBody.trim() || emailAiLoading !== null}
+                >
+                  {emailAiLoading === 'shorten' ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 size-3.5" />}
+                  Shorten
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Variable picker (collapsible) */}
           {showVars && (
@@ -2746,6 +2903,7 @@ function WhatsAppEditorPage({ template, onClose, onSaved }: WhatsAppEditorPagePr
   const [varsOpen, setVarsOpen] = React.useState(false)
   const [aiLoading, setAiLoading] = React.useState<string | null>(null)
   const [aiPrompt, setAiPrompt] = React.useState('')
+  const [aiTone, setAiTone] = React.useState<string>('professional')
   const [showImagePicker, setShowImagePicker] = React.useState(false)
 
   const bodyRef = React.useRef<HTMLTextAreaElement>(null)
@@ -2804,9 +2962,17 @@ function WhatsAppEditorPage({ template, onClose, onSaved }: WhatsAppEditorPagePr
         action,
         channel: 'whatsapp',
         content: action === 'generate' ? aiPrompt : body,
+        tone: aiTone,
       }
-      const res = await api.post('/api/ai/template-assist', payload)
-      const out = res?.data?.content || res?.content
+      if (action === 'generate') {
+        payload.context = aiPrompt
+      }
+      // Response shape: { subject?, body } — WhatsApp has no subject.
+      const res = (await api.post('/api/ai/template-assist', payload)) as {
+        subject?: string
+        body?: string
+      }
+      const out = res?.body
       if (out && typeof out === 'string') {
         setBody(out)
         toast.success(`AI ${action} complete`)
@@ -3160,6 +3326,20 @@ function WhatsAppEditorPage({ template, onClose, onSaved }: WhatsAppEditorPagePr
               placeholder="Describe what you want (e.g. 'Reminder for tomorrow's appointment')"
               className="mb-2 text-sm"
             />
+            <div className="mb-2 flex items-center gap-2">
+              <Label className="shrink-0 text-xs text-muted-foreground">Tone:</Label>
+              <Select value={aiTone} onValueChange={setAiTone}>
+                <SelectTrigger size="sm" className="h-7 w-[140px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="friendly">Friendly</SelectItem>
+                  <SelectItem value="professional">Professional</SelectItem>
+                  <SelectItem value="urgent">Urgent</SelectItem>
+                  <SelectItem value="casual">Casual</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="flex flex-wrap gap-2">
               <Button type="button" size="sm" variant="outline" onClick={() => void handleAiAction('generate')} disabled={!aiPrompt.trim() || aiLoading !== null}>
                 {aiLoading === 'generate' ? <Loader2 className="mr-1.5 size-3.5 animate-spin" /> : <Sparkles className="mr-1.5 size-3.5" />}

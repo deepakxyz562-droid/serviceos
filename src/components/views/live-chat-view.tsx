@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { MessageSquare, Send, X, Phone, Mail, Clock, Circle, ChevronLeft } from 'lucide-react'
+import { MessageSquare, Send, X, Phone, Mail, Clock, Circle, ChevronLeft, Sparkles, FileText, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -50,6 +50,14 @@ export function LiveChatView() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const pollRef = useRef<NodeJS.Timeout | null>(null)
 
+  // AI assistant state — Suggest Reply (3 tones) + Summarize.
+  // Cleared on session switch (see the selectedSessionId effect below).
+  const [aiReplies, setAiReplies] = useState<{ text: string; tone: string }[] | null>(null)
+  const [aiRepliesLoading, setAiRepliesLoading] = useState(false)
+  const [aiSummary, setAiSummary] = useState<string | null>(null)
+  const [aiSummaryLoading, setAiSummaryLoading] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+
   // Fetch sessions
   const fetchSessions = useCallback(async () => {
     try {
@@ -95,6 +103,11 @@ export function LiveChatView() {
   }, [])
 
   useEffect(() => {
+    // Clear AI state when switching sessions (or closing the conversation).
+    setAiReplies(null)
+    setAiSummary(null)
+    setAiError(null)
+
     if (!selectedSessionId) {
       setMessages([])
       return
@@ -158,6 +171,54 @@ export function LiveChatView() {
       setMessages((prev) => prev.map((m) => m.id === optimistic.id ? { ...m, body: m.body + ' [failed]' } : m))
     } finally {
       setSending(false)
+    }
+  }
+
+  // AI: suggest 3 reply options with different tones.
+  async function handleAiSuggestReply() {
+    if (!selectedSessionId || aiRepliesLoading) return
+    setAiRepliesLoading(true)
+    setAiError(null)
+    setAiReplies(null)
+    try {
+      const res = await fetch('/api/ai/chat-suggested-reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: selectedSessionId, messageType: 'reply' }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || `Failed to get AI suggestions (${res.status})`)
+      }
+      setAiReplies(Array.isArray(data.replies) ? data.replies : [])
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : 'Failed to get AI suggestions')
+    } finally {
+      setAiRepliesLoading(false)
+    }
+  }
+
+  // AI: summarize the conversation in 1-2 sentences.
+  async function handleAiSummarize() {
+    if (!selectedSessionId || aiSummaryLoading) return
+    setAiSummaryLoading(true)
+    setAiError(null)
+    setAiSummary(null)
+    try {
+      const res = await fetch('/api/ai/chat-suggested-reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: selectedSessionId, messageType: 'summary' }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || `Failed to get AI summary (${res.status})`)
+      }
+      setAiSummary(typeof data.summary === 'string' ? data.summary : '')
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : 'Failed to get AI summary')
+    } finally {
+      setAiSummaryLoading(false)
     }
   }
 
@@ -316,6 +377,20 @@ export function LiveChatView() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAiSummarize}
+                  disabled={aiSummaryLoading || messages.length === 0}
+                  title="Summarize this conversation with AI"
+                >
+                  {aiSummaryLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileText className="h-4 w-4" />
+                  )}
+                  <span className="ml-1 hidden sm:inline">Summarize</span>
+                </Button>
                 <Badge variant={selectedSession.status === 'active' ? 'default' : 'secondary'} className="text-xs">
                   {selectedSession.status}
                 </Badge>
@@ -326,6 +401,34 @@ export function LiveChatView() {
                 )}
               </div>
             </div>
+
+            {/* AI Summary badge — shown above the messages list */}
+            {(aiSummary || aiSummaryLoading) && (
+              <div className="px-4 pt-3">
+                <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/40 px-3 py-2 text-sm">
+                  <Sparkles className="h-4 w-4 mt-0.5 shrink-0 text-emerald-700" />
+                  <div className="flex-1 min-w-0">
+                    {aiSummaryLoading ? (
+                      <span className="text-muted-foreground inline-flex items-center gap-2">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Summarizing conversation…
+                      </span>
+                    ) : (
+                      <span className="text-foreground">{aiSummary}</span>
+                    )}
+                  </div>
+                  {!aiSummaryLoading && (
+                    <button
+                      onClick={() => setAiSummary(null)}
+                      className="shrink-0 text-muted-foreground hover:text-foreground"
+                      aria-label="Dismiss summary"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Messages */}
             <ScrollArea className="flex-1 p-4 min-h-0">
@@ -349,7 +452,61 @@ export function LiveChatView() {
 
             {/* Input */}
             {selectedSession.status !== 'closed' && (
-              <div className="p-4 border-t">
+              <div className="p-4 border-t space-y-2">
+                {/* AI Suggested Replies panel — shown above the input when aiReplies is set */}
+                {aiReplies && aiReplies.length > 0 && (
+                  <div className="rounded-md border bg-muted/40 p-2 space-y-1.5">
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-xs font-medium text-muted-foreground inline-flex items-center gap-1">
+                        <Sparkles className="h-3 w-3" />
+                        AI Suggested Replies — click to insert
+                      </span>
+                      <button
+                        onClick={() => setAiReplies(null)}
+                        className="text-muted-foreground hover:text-foreground"
+                        aria-label="Close AI suggestions"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                      {aiReplies.map((r, i) => (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            setInputText(r.text)
+                            setAiReplies(null)
+                          }}
+                          className="w-full text-left rounded-md border bg-background px-2.5 py-1.5 hover:bg-accent transition-colors"
+                        >
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <Badge variant="secondary" className="text-[10px] capitalize px-1.5 py-0">
+                              {r.tone}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-foreground line-clamp-2">
+                            {r.text}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* AI error inline message */}
+                {aiError && (
+                  <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-1.5 text-xs text-destructive">
+                    <span className="flex-1">{aiError}</span>
+                    <button
+                      onClick={() => setAiError(null)}
+                      className="shrink-0 hover:opacity-70"
+                      aria-label="Dismiss error"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
+
                 <div className="flex gap-2">
                   <Input
                     value={inputText}
@@ -363,6 +520,19 @@ export function LiveChatView() {
                     placeholder="Type your reply…"
                     disabled={sending}
                   />
+                  <Button
+                    onClick={handleAiSuggestReply}
+                    disabled={aiRepliesLoading || sending || messages.length === 0}
+                    size="icon"
+                    variant="outline"
+                    title="AI Suggest Reply"
+                  >
+                    {aiRepliesLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
+                  </Button>
                   <Button onClick={handleSend} disabled={sending || !inputText.trim()} size="icon">
                     <Send className="h-4 w-4" />
                   </Button>

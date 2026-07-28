@@ -12,6 +12,22 @@ import { notifyOwner } from '@/lib/owner-notifications'
 import { autoCreateInvoiceFromJob } from '@/lib/invoice-automation'
 import { autoRecordAssetServiceHistory } from '@/lib/asset-service-history'
 import { validateJobCompletionProof } from '@/lib/job-completion-validation'
+import { getAuthUser } from '@/lib/auth'
+
+/**
+ * Role-based action authorization for POST /api/jobs/lifecycle.
+ *
+ * `super_admin` bypasses this check entirely (allowed for all actions).
+ * Unknown actions (not listed here) skip the role check and fall through to
+ * the switch's `default` case, which returns 400 Bad Request.
+ */
+const ACTION_ROLES: Record<string, string[]> = {
+  assign: ['owner', 'admin', 'manager'],
+  accept: ['owner', 'admin', 'manager', 'employee'],
+  reject: ['owner', 'admin', 'manager', 'employee'],
+  start: ['owner', 'admin', 'manager', 'employee'],
+  complete: ['owner', 'admin', 'manager', 'employee'],
+}
 
 function safeParseJson(str: string): unknown[] {
   try {
@@ -44,6 +60,12 @@ function addNotificationLog(logJson: string, entry: Record<string, unknown>): st
 
 export async function GET(request: NextRequest) {
   try {
+    // ─── Authentication ──────────────────────────────────────────────
+    const user = await getAuthUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
     const jobId = searchParams.get('jobId')
 
@@ -51,8 +73,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'jobId is required' }, { status: 400 })
     }
 
-    const job = await db.job.findUnique({
-      where: { id: jobId },
+    // Tenant scoping: super_admin sees all jobs; everyone else is scoped to
+    // their workspace. (Job has no `tenantId` column — the tenant link is via
+    // Job.workspaceId → Workspace.tenantId. Adapted from the task's
+    // tenantId template to match the actual Prisma schema.)
+    const job = await db.job.findFirst({
+      where: {
+        id: jobId,
+        ...(user.isSuperAdmin ? {} : { workspaceId: user.workspaceId }),
+      },
       include: {
         assignee: true,
         customer: true,
@@ -76,6 +105,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // ─── Authentication ──────────────────────────────────────────────
+    const user = await getAuthUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+
     const body = await request.json()
     const { action, jobId, resourceId, reason } = body
 
@@ -83,8 +118,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'action and jobId are required' }, { status: 400 })
     }
 
-    const job = await db.job.findUnique({
-      where: { id: jobId },
+    // ─── Role-based action authorization ────────────────────────────
+    // super_admin bypasses the role check (allowed for all actions).
+    // Unknown actions (not in ACTION_ROLES) skip this check and fall
+    // through to the switch's default case, which returns 400 Bad Request.
+    const allowedRoles = ACTION_ROLES[action]
+    if (!user.isSuperAdmin && allowedRoles && !allowedRoles.includes(user.role)) {
+      return NextResponse.json(
+        { error: 'You do not have permission to perform this action' },
+        { status: 403 },
+      )
+    }
+
+    // Tenant scoping: super_admin sees all jobs; everyone else is scoped to
+    // their workspace. (Job has no `tenantId` column — the tenant link is via
+    // Job.workspaceId → Workspace.tenantId. Adapted from the task's
+    // tenantId template to match the actual Prisma schema.)
+    const job = await db.job.findFirst({
+      where: {
+        id: jobId,
+        ...(user.isSuperAdmin ? {} : { workspaceId: user.workspaceId }),
+      },
       include: { assignee: true, resource: true },
     })
 
@@ -476,6 +530,37 @@ export async function POST(request: NextRequest) {
 
       default:
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 })
+    }
+
+    // ─── Audit logging (best-effort, non-fatal) ─────────────────────
+    // Mirrors the pattern in /api/jobs/[id]/lifecycle/route.ts. Skipped
+    // for users without a tenantId (e.g. a misconfigured super_admin) —
+    // ActivityLog.tenantId is a required (non-nullable) column.
+    // Field-name adaptations from the task template: userId→actorId,
+    // detailsJson→metadataJson (per the actual Prisma schema).
+    if (user.tenantId) {
+      try {
+        await db.activityLog.create({
+          data: {
+            action: `job.${action}`,
+            entityType: 'job',
+            entityId: jobId,
+            entityName: updatedJob?.title || job.title || undefined,
+            actorId: user.id,
+            actorType: 'user',
+            description: `Job ${action}: ${updatedJob?.title || job.title || jobId}`,
+            tenantId: user.tenantId,
+            metadataJson: JSON.stringify({
+              resourceId,
+              previousStatus: job.status,
+              newStatus: updatedJob?.status,
+            }),
+          },
+        })
+      } catch (e) {
+        // non-fatal — the action already succeeded
+        console.error('[JobLifecycle] audit log failed:', e)
+      }
     }
 
     return NextResponse.json(updatedJob)

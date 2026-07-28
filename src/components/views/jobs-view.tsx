@@ -56,6 +56,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useCurrentUser, isOwnerOrAdmin } from '@/hooks/use-current-user';
 import { FormSectionCard, FormPageHeader } from '@/components/shared/form-section-card';
 import { useAppStore, type JobPrefillData } from '@/store/app-store';
 import { ChecklistExecution } from '@/components/job/checklist-execution';
@@ -897,6 +898,15 @@ export function JobsView() {
   const pendingCreate = useAppStore((s) => s.pendingCreate);
   const setPendingCreate = useAppStore((s) => s.setPendingCreate);
   const setActiveView = useAppStore((s) => s.setActiveView);
+
+  // Current authenticated user + owner/admin gate. Used to decide whether the
+  // jobs list / detail render BOTH the primary lifecycle button AND a secondary
+  // management action (Start / Re-assign / Reopen) — owner/admin roles get the
+  // extra control; everyone else sees the single contextual button. While the
+  // user is still loading, `canManageJob` is `false`, so the single-button
+  // layout renders first (no layout shift once the user loads).
+  const { user: currentUser } = useCurrentUser();
+  const canManageJob = isOwnerOrAdmin(currentUser?.role);
 
   // State
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -2127,25 +2137,35 @@ export function JobsView() {
     switch (job.status) {
       case 'pending':
         return (
-          <div className="flex items-center gap-1 justify-end">
+          <div className="flex items-center gap-2 justify-end">
             <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-9 text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); openAssignDialog(job); }}>
               <User className="size-3 mr-1" /> Assign
             </Button>
+            {canManageJob && (
+              <Button size="sm" variant="outline" className="h-9 text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); handleLifecycleAction('start', job.id); }} disabled={loadingJobId === job.id && loadingAction === 'start'}>
+                {loadingJobId === job.id && loadingAction === 'start' ? <Loader2 className="size-3 mr-1 animate-spin" /> : <Play className="size-3 mr-1" />} Start
+              </Button>
+            )}
             {moreMenu}
           </div>
         );
       case 'assigned':
         return (
-          <div className="flex items-center gap-1 justify-end">
+          <div className="flex items-center gap-2 justify-end">
             <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 h-9 text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); handleLifecycleAction('start', job.id); }} disabled={loadingJobId === job.id && loadingAction === 'start'}>
               {loadingJobId === job.id && loadingAction === 'start' ? <Loader2 className="size-3 mr-1 animate-spin" /> : <Play className="size-3 mr-1" />} Start
             </Button>
+            {canManageJob && (
+              <Button size="sm" variant="outline" className="h-9 text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); openAssignDialog(job); }}>
+                <User className="size-3 mr-1" /> Re-assign
+              </Button>
+            )}
             {moreMenu}
           </div>
         );
       case 'in_progress':
         return (
-          <div className="flex items-center gap-1 justify-end">
+          <div className="flex items-center gap-2 justify-end">
             <Button size="sm" className="bg-green-600 hover:bg-green-700 h-9 text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); handleLifecycleAction('complete', job.id); }} disabled={loadingJobId === job.id && loadingAction === 'complete'}>
               {loadingJobId === job.id && loadingAction === 'complete' ? <Loader2 className="size-3 mr-1 animate-spin" /> : <CheckCircle2 className="size-3 mr-1" />} Complete
             </Button>
@@ -2156,7 +2176,7 @@ export function JobsView() {
       case 'cancelled':
       default:
         return (
-          <div className="flex items-center gap-1 justify-end">
+          <div className="flex items-center gap-2 justify-end">
             <Button size="sm" variant="outline" className="h-9 text-xs min-h-[44px]" onClick={(e) => { e.stopPropagation(); openJobDetail(job); }}>
               <Eye className="size-3 mr-1" /> View
             </Button>
@@ -2843,23 +2863,37 @@ export function JobsView() {
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              {/* Status-aware lifecycle action (primary) */}
+              {/* Status-aware lifecycle action (primary) + owner/admin secondary action */}
               {job.status === 'pending' && (
-                <button onClick={() => openAssignDialog(job)} className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm">
-                  <User className="size-4 mr-1.5" /> Assign
-                </button>
+                <>
+                  <button onClick={() => openAssignDialog(job)} className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors shadow-sm">
+                    <User className="size-4 mr-1.5" /> Assign
+                  </button>
+                  {canManageJob && (
+                    <button onClick={() => handleLifecycleAction('start', job.id)} disabled={lifecycleLoading} className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted disabled:opacity-60 transition-colors">
+                      {lifecycleLoading && loadingAction === 'start' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Play className="size-4 mr-1.5" />} Start Job
+                    </button>
+                  )}
+                </>
               )}
               {job.status === 'assigned' && (
-                <button onClick={() => handleLifecycleAction('start', job.id)} disabled={lifecycleLoading} className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm">
-                  {lifecycleLoading && loadingAction === 'start' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Play className="size-4 mr-1.5" />} Start Job
-                </button>
+                <>
+                  <button onClick={() => handleLifecycleAction('start', job.id)} disabled={lifecycleLoading} className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors shadow-sm">
+                    {lifecycleLoading && loadingAction === 'start' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <Play className="size-4 mr-1.5" />} Start Job
+                  </button>
+                  {canManageJob && (
+                    <button onClick={() => openAssignDialog(job)} className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-medium text-foreground border border-border bg-background hover:bg-muted transition-colors">
+                      <User className="size-4 mr-1.5" /> Re-assign
+                    </button>
+                  )}
+                </>
               )}
               {job.status === 'in_progress' && (
                 <button onClick={() => openCompletionDialog(job)} disabled={lifecycleLoading} className="inline-flex items-center justify-center min-h-[44px] px-4 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 transition-colors shadow-sm">
                   {lifecycleLoading && loadingAction === 'complete' ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : <CheckCircle2 className="size-4 mr-1.5" />} Complete
                 </button>
               )}
-              {isClosed && (
+              {isClosed && canManageJob && (
                 <button onClick={async () => {
                   await fetch(`/api/jobs/${job.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: job.id, status: 'pending' }) });
                   toast.success('Job reopened'); fetchJobs();
