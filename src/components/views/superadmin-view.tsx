@@ -2185,9 +2185,11 @@ export function SuperAdminView() {
   function UsersTab() {
     const [search, setSearch] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
-    const [actionDialog, setActionDialog] = useState<{ user: UserRecord; action: 'activate' | 'deactivate' | 'change_role' } | null>(null);
+    const [actionDialog, setActionDialog] = useState<{ user: UserRecord; action: 'activate' | 'deactivate' | 'change_role' | 'delete' } | null>(null);
     const [newRole, setNewRole] = useState('');
     const [saving, setSaving] = useState(false);
+    const [deleteConfirmText, setDeleteConfirmText] = useState('');
+    const queryClient = useQueryClient();
 
     const filteredUsers = useMemo(() => {
       return users.filter((u) => {
@@ -2202,19 +2204,40 @@ export function SuperAdminView() {
       if (!actionDialog) return;
       setSaving(true);
       try {
-        const res = await fetch('/api/admin/users', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: actionDialog.user.id,
-            action: actionDialog.action === 'activate' ? 'unlock' : actionDialog.action === 'deactivate' ? 'lock' : 'change_role',
-            role: actionDialog.action === 'change_role' ? newRole : undefined,
-          }),
-        });
-        if (res.ok) {
-          toast.success(`User ${actionDialog.action === 'activate' ? 'activated' : actionDialog.action === 'deactivate' ? 'deactivated' : 'role changed'} successfully`);
+        // Delete uses DELETE method with query param; all others use PUT
+        if (actionDialog.action === 'delete') {
+          const res = await fetch(`/api/admin/users?id=${encodeURIComponent(actionDialog.user.id)}`, {
+            method: 'DELETE',
+          });
+          if (res.ok) {
+            const data = await res.json().catch(() => ({}));
+            const empCount = data?.report?.employeesDeleted ?? 0;
+            toast.success(`User permanently deleted${empCount > 0 ? ` (${empCount} employee record${empCount > 1 ? 's' : ''} also removed)` : ''}`);
+            // Invalidate users list so the deleted user disappears
+            queryClient.invalidateQueries({ queryKey: ['users'] });
+          } else {
+            const err = await res.json().catch(() => ({}));
+            toast.error('Failed to delete user', {
+              description: err.error || 'Unknown error',
+              duration: 8000,
+            });
+          }
         } else {
-          toast.error('Failed to update user');
+          const res = await fetch('/api/admin/users', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: actionDialog.user.id,
+              action: actionDialog.action === 'activate' ? 'unlock' : actionDialog.action === 'deactivate' ? 'lock' : 'change_role',
+              role: actionDialog.action === 'change_role' ? newRole : undefined,
+            }),
+          });
+          if (res.ok) {
+            toast.success(`User ${actionDialog.action === 'activate' ? 'activated' : actionDialog.action === 'deactivate' ? 'deactivated' : 'role changed'} successfully`);
+            queryClient.invalidateQueries({ queryKey: ['users'] });
+          } else {
+            toast.error('Failed to update user');
+          }
         }
       } catch {
         toast.error('Network error');
@@ -2289,6 +2312,9 @@ export function SuperAdminView() {
                           <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-sky-600 hover:text-sky-700" onClick={() => { setNewRole(user.role); setActionDialog({ user, action: 'change_role' }); }} title="Change Role">
                             <UserCog className="size-3.5" />
                           </Button>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30" onClick={() => { setDeleteConfirmText(''); setActionDialog({ user, action: 'delete' }); }} title="Delete User">
+                            <Trash2 className="size-3.5" />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -2303,11 +2329,19 @@ export function SuperAdminView() {
         <Dialog open={!!actionDialog} onOpenChange={(open) => { if (!open) setActionDialog(null); }}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>
-                {actionDialog?.action === 'activate' ? 'Activate User' : actionDialog?.action === 'deactivate' ? 'Deactivate User' : 'Change Role'}
+              <DialogTitle className="flex items-center gap-2">
+                {actionDialog?.action === 'delete' && <Trash2 className="size-5 text-red-500" />}
+                {actionDialog?.action === 'activate'
+                  ? 'Activate User'
+                  : actionDialog?.action === 'deactivate'
+                    ? 'Deactivate User'
+                    : actionDialog?.action === 'delete'
+                      ? 'Permanently Delete User'
+                      : 'Change Role'}
               </DialogTitle>
               <DialogDescription>User: {actionDialog?.user.name} ({actionDialog?.user.email})</DialogDescription>
             </DialogHeader>
+
             {actionDialog?.action === 'change_role' && (
               <Select value={newRole} onValueChange={setNewRole}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -2319,13 +2353,50 @@ export function SuperAdminView() {
                 </SelectContent>
               </Select>
             )}
+
+            {actionDialog?.action === 'delete' && (
+              <div className="space-y-3 rounded-md border border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30 p-3 text-sm">
+                <p className="font-medium text-red-900 dark:text-red-100">
+                  ⚠️ This action cannot be undone.
+                </p>
+                <p className="text-red-700 dark:text-red-300">
+                  The user account will be <strong>permanently deleted</strong> along with:
+                </p>
+                <ul className="list-disc pl-5 space-y-1 text-red-700 dark:text-red-300">
+                  <li>Employee profile(s) linked to this account</li>
+                  <li>API keys, push subscriptions, notification preferences</li>
+                  <li>Agent monitor + conversation assignment records</li>
+                </ul>
+                <p className="text-red-700 dark:text-red-300">
+                  Historical records (jobs, invoices, photos, timeline entries) will be <strong>preserved</strong> but the user reference will be cleared.
+                </p>
+                <p className="text-xs text-red-600 dark:text-red-400">
+                  Type the user&apos;s email to confirm:
+                </p>
+                <Input
+                  placeholder={actionDialog?.user.email}
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  className="border-red-300 dark:border-red-800"
+                />
+              </div>
+            )}
+
             <DialogFooter className="gap-2">
               <Button variant="outline" onClick={() => setActionDialog(null)}>Cancel</Button>
               <Button
-                variant={actionDialog?.action === 'deactivate' ? 'destructive' : 'default'}
-                onClick={handleAction} disabled={saving}
+                variant={actionDialog?.action === 'deactivate' || actionDialog?.action === 'delete' ? 'destructive' : 'default'}
+                onClick={handleAction}
+                disabled={
+                  saving ||
+                  (actionDialog?.action === 'delete' &&
+                    deleteConfirmText.trim().toLowerCase() !== (actionDialog?.user.email || '').toLowerCase())
+                }
               >
-                {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : null} Confirm
+                {saving ? <Loader2 className="size-4 mr-1.5 animate-spin" /> : null}
+                {actionDialog?.action === 'delete'
+                  ? 'Delete Permanently'
+                  : 'Confirm'}
               </Button>
             </DialogFooter>
           </DialogContent>

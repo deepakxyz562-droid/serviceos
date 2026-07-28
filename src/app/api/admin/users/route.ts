@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { hashPassword } from '@/lib/auth';
 import { isSuperAdminRequest } from '@/lib/admin-auth';
+import { hardDeleteUser } from '@/lib/user-cascade-delete';
 
 // GET /api/admin/users - List all users across tenants
 export async function GET(request: NextRequest) {
@@ -162,5 +163,116 @@ export async function PUT(request: NextRequest) {
   } catch (error) {
     console.error('Admin user PUT error:', error);
     return NextResponse.json({ error: 'Failed to update user' }, { status: 500 });
+  }
+}
+
+// DELETE /api/admin/users?id=<userId> — Hard delete with cascade
+//
+// Permanently deletes a user account AND every record that references it:
+//   - Employee rows (and their dependents: shifts, time entries, GPS, etc.)
+//   - ApiKey, NotificationPreference, PushSubscription (deleted)
+//   - Notification, AuditLog, Credential, Workflow, CustomerTimelineEntry,
+//     JobPhoto, etc. (FK set to NULL — preserves historical records)
+//
+// Guards:
+//   - Super-admin only (isSuperAdminRequest)
+//   - Refuses to delete other super-admin accounts (footgun prevention)
+//   - Records an audit log entry BEFORE the user is gone
+export async function DELETE(request: NextRequest) {
+  try {
+    if (!(await isSuperAdminRequest())) {
+      return NextResponse.json(
+        { error: 'Forbidden: Super admin access required' },
+        { status: 403 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('id');
+
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'User ID is required (use ?id=<userId>)' },
+        { status: 400 }
+      );
+    }
+
+    // Load the user first (for audit log + super-admin guard)
+    const targetUser = await db.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        isSuperAdmin: true,
+        tenantId: true,
+      },
+    });
+
+    if (!targetUser) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    if (targetUser.isSuperAdmin) {
+      return NextResponse.json(
+        {
+          error:
+            'Refusing to delete super admin account. Demote the user to a regular role first, then delete.',
+        },
+        { status: 400 }
+      );
+    }
+
+    // Record an audit log entry BEFORE the cascade (so we still have the
+    // deleted user's identity for compliance).
+    try {
+      await db.auditLog.create({
+        data: {
+          userId: null, // no FK to a User (the actor may be the one being deleted)
+          action: 'USER_HARD_DELETE',
+          resourceType: 'User',
+          resourceId: userId,
+          ip: request.headers.get('x-forwarded-for') || 'unknown',
+          metadataJson: JSON.stringify({
+            deletedUserEmail: targetUser.email,
+            deletedUserName: targetUser.name,
+            deletedUserRole: targetUser.role,
+            deletedUserTenantId: targetUser.tenantId,
+            deletedAt: new Date().toISOString(),
+          }),
+        },
+      });
+    } catch (auditErr) {
+      // Non-fatal — the delete should still proceed even if audit logging fails
+      console.error('[Admin DELETE user] audit log failed:', auditErr);
+    }
+
+    // Run the cascade hard-delete
+    const report = await hardDeleteUser(userId);
+
+    if (!report.success) {
+      return NextResponse.json(
+        {
+          error: report.error || 'Cascade delete completed with errors',
+          report,
+        },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      message: `User "${targetUser.email}" permanently deleted`,
+      report: {
+        userId: report.userId,
+        userEmail: report.userEmail,
+        employeesDeleted: report.employeesDeleted,
+        steps: report.steps,
+      },
+    });
+  } catch (error) {
+    console.error('Admin user DELETE error:', error);
+    const message = error instanceof Error ? error.message : 'Failed to delete user';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
