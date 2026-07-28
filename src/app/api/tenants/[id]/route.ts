@@ -5,6 +5,7 @@ import { getAuthUser } from '@/lib/auth';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
 import { applyHubDefaultsToTenant } from '@/lib/public-business';
 import { computeProfileCompletion } from '@/lib/marketplace-eligibility';
+import { seedTenantDefaults } from '@/lib/seed-tenant-defaults';
 
 // GET /api/tenants/[id] - Get tenant details
 export async function GET(
@@ -267,6 +268,27 @@ export async function PUT(
       } catch (err) {
         console.error('[tenants PUT] auto-populate Hub defaults failed:', err);
         // Non-fatal — onboarding still completes; user can populate Hub manually.
+      }
+
+      // ── Seed starter workflows + forms ─────────────────────────────────
+      // New tenants should not land in an empty workspace. Seed 6 workflow
+      // automations + 4 forms so the user sees real value on first login.
+      // Idempotent (skips by name) — safe even if Hub-defaults ran before.
+      // Non-blocking — a seeding failure never blocks onboarding completion.
+      try {
+        const result = await seedTenantDefaults(
+          id,
+          authUser.workspaceId ?? null,
+          authUser.id
+        );
+        if (result.workflowsCreated > 0 || result.formsCreated > 0) {
+          console.log(
+            `[tenants PUT] seeded tenant defaults: ${result.workflowsCreated} workflows, ${result.formsCreated} forms`
+          );
+        }
+      } catch (err) {
+        console.error('[tenants PUT] seedTenantDefaults failed:', err);
+        // Non-fatal — onboarding still completes; user can create workflows/forms manually.
       }
     }
 
