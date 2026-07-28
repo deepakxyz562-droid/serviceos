@@ -93,6 +93,7 @@ const InfrastructureSection = lazy(() => import('@/components/views/superadmin/s
 const SystemHealthSection = lazy(() => import('@/components/views/superadmin/sections/system-health').then(m => ({ default: m.SystemHealthSection })));
 const MenuManagementSection = lazy(() => import('@/components/views/superadmin/sections/menu-management').then(m => ({ default: m.MenuManagementSection })));
 const CreemBillingSection = lazy(() => import('@/components/views/superadmin/sections/creem-billing').then(m => ({ default: m.CreemBillingSection })));
+const BackupSection = lazy(() => import('@/components/views/superadmin/sections/backup').then(m => ({ default: m.BackupSection })));
 
 // Lightweight Suspense fallback for lazy-loaded sections.
 function SectionLoader() {
@@ -357,7 +358,7 @@ type TabKey =
   // SUPPORT
   | 'support-center' | 'knowledge-base' | 'announcements'
   // SYSTEM
-  | 'feature-flags' | 'localization' | 'storage' | 'infrastructure' | 'system-health';
+  | 'feature-flags' | 'localization' | 'storage' | 'infrastructure' | 'system-health' | 'backup';
 
 interface NavGroup {
   label: string;
@@ -437,6 +438,7 @@ const NAV_GROUPS: NavGroup[] = [
       { key: 'storage', label: 'Storage', icon: HardDrive },
       { key: 'infrastructure', label: 'Infrastructure', icon: Server },
       { key: 'system-health', label: 'System Health', icon: Activity },
+      { key: 'backup', label: 'Database Backup', icon: Database },
     ],
   },
 ];
@@ -2742,6 +2744,7 @@ export function SuperAdminView() {
         {activeTab === 'storage' && <StorageSection />}
         {activeTab === 'infrastructure' && <InfrastructureSection />}
         {activeTab === 'system-health' && <SystemHealthSection />}
+        {activeTab === 'backup' && <BackupSection />}
       </Suspense>
     );
   };

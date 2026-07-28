@@ -322,16 +322,29 @@ export function PhotoCapture({
   // ── Upload handlers ────────────────────────────────────────────────
   const handleFiles = useCallback(
     async (files: FileList | null) => {
-      if (!files || files.length === 0) return;
+      if (!files || files.length === 0) {
+        console.log('[PhotoCapture] handleFiles: no files selected');
+        return;
+      }
+      // CRITICAL: Snapshot the FileList into a plain array BEFORE any await.
+      // The onChange handler calls `e.target.value = ''` synchronously right
+      // after calling handleFiles (to allow re-selecting the same file). On
+      // Chrome, clearing the input empties the live FileList object — so by
+      // the time handleFiles resumes from its first `await` (GPS, up to 8s),
+      // `files` would be empty and the upload loop would run zero iterations.
+      // Symptom: spinner shows then stops, no POST, no toast, no error.
+      const fileArray = Array.from(files);
+      console.log(`[PhotoCapture] handleFiles: ${fileArray.length} file(s) to upload`);
       setUploading(true);
       const typeToUse = lockedType || activeType;
-      // Capture GPS once for this batch (so all photos in the batch share the same fix).
-      const gps = await getCurrentPosition();
+      // Start GPS capture immediately (non-blocking). We'll await it later,
+      // right before the POST, so it runs in parallel with image compression.
+      const gpsPromise = getCurrentPosition();
 
       let successCount = 0;
       let offlineCount = 0;
 
-      for (const file of Array.from(files)) {
+      for (const file of fileArray) {
         try {
           // Guard: reject excessively large files before attempting compression
           // (canvas operations on 50MB+ RAW/HEIC files can crash mobile browsers).
@@ -356,6 +369,11 @@ export function PhotoCapture({
             });
             continue;
           }
+
+          // Await GPS now (it was started before the loop, so it's likely
+          // already resolved by the time compression finishes). This runs
+          // in parallel with compression rather than blocking the loop start.
+          const gps = await gpsPromise;
 
           // Offline path — queue to localStorage
           if (typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -383,6 +401,7 @@ export function PhotoCapture({
           }
 
           // Online path — upload immediately
+          console.log(`[PhotoCapture] POST /api/jobs/${jobId}/photos — ${file.name} (${Math.round(dataUrl.length / 1024)}KB base64)`);
           const res = await fetch(`/api/jobs/${jobId}/photos`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -416,6 +435,7 @@ export function PhotoCapture({
         }
       }
 
+      console.log(`[PhotoCapture] handleFiles done: ${successCount} uploaded, ${offlineCount} queued offline (of ${fileArray.length} total)`);
       if (successCount > 0) {
         toast.success(`${successCount} photo${successCount > 1 ? 's' : ''} uploaded`);
       }
