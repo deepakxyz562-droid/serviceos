@@ -26,7 +26,7 @@ export default function robots(): MetadataRoute.Robots {
         ],
       },
     ],
-    sitemap: "https://serviceos.com/sitemap.xml",
-    host: "https://serviceos.com",
+    sitemap: "https://serviceos.cc/sitemap.xml",
+    host: "https://serviceos.cc",
   };
 }

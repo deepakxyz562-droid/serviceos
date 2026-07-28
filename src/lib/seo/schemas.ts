@@ -8,7 +8,7 @@
  * Reference: https://schema.org / https://developers.google.com/search/docs/appearance/structured-data
  */
 
-const SITE_URL = "https://serviceos.com";
+const SITE_URL = "https://serviceos.cc";
 const LOGO_URL = `${SITE_URL}/icon-512.png`;
 
 // ─── Organization schema (site-wide, injected in root layout) ────────────────

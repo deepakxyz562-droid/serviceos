@@ -118,7 +118,7 @@ export interface PublicReviewData {
   responseJson: string
 }
 
-const SITE_URL = 'https://serviceos.com'
+const SITE_URL = 'https://serviceos.cc'
 
 /**
  * Resolve a tenant by the three URL segments (industry, city, slug).

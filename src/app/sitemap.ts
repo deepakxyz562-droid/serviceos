@@ -22,7 +22,7 @@ import { listIndexableBusinessUrls } from "@/lib/public-business";
  * they should not be indexed.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const base = "https://serviceos.com";
+  const base = "https://serviceos.cc";
   const now = new Date().toISOString();
 
   // Static marketing + legal routes.
