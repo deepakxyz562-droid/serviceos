@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Calendar, Quote, Zap, ShieldCheck } from 'lucide-react';
+import { Calendar, Check, Quote, Zap, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { InstantBookingDialog } from '@/components/marketplace/instant-booking-dialog';
 import { QuoteRequestDialog } from '@/components/marketplace/quote-request-dialog';
@@ -48,14 +48,21 @@ export function MarketplaceBookingPanel({
   return (
     <>
       <div className="bg-gradient-to-br from-emerald-700 to-teal-700 p-5 text-white">
-        <div className="mb-1 flex items-center gap-2">
+        <div className="mb-2 flex items-center gap-2">
           <ShieldCheck className="h-4 w-4" />
           <h3 className="text-lg font-bold">Marketplace Booking</h3>
         </div>
-        <p className="text-sm text-emerald-50">
-          Verified provider — book instantly or request a custom quote. Secured
-          by ServiceOS escrow payments.
-        </p>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-emerald-50">
+          <span className="inline-flex items-center gap-1">
+            <Check className="h-3.5 w-3.5" /> Verified Business
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Zap className="h-3.5 w-3.5" /> Instant Booking
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Quote className="h-3.5 w-3.5" /> Request Quote
+          </span>
+        </div>
       </div>
       <div className="p-5">
         <div className="flex flex-col gap-2">

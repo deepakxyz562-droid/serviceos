@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { sendJobNotification } from '@/lib/whatsapp-notifications';
 import { EventBus } from '@/lib/event-bus';
+import { checkFormSpam, incrementSpamBlockedCount, getClientIp } from '@/lib/form-spam-guard';
 
 // ─── Universal Form Lead Capture Endpoint ──────────────────────────────────
 //
@@ -671,6 +672,34 @@ export async function POST(request: NextRequest) {
           );
         }
       }
+    }
+
+    // ─── 2a. Spam protection (4 layers: honeypot / origin / rate / dup) ────
+    // Runs AFTER auth + payload parsing, BEFORE field mapping + lead insert.
+    // Honeypot → silent 200 (bot can't tell it was blocked).
+    // Rate/origin/dup → 429/403/409 with error message.
+    const spamResult = await checkFormSpam({
+      endpoint,
+      endpointId: endpoint.id,
+      payload,
+      origin: request.headers.get('origin'),
+      referer: request.headers.get('referer'),
+      ip: getClientIp(request),
+    });
+    if (spamResult.blocked) {
+      // Increment the endpoint's spamBlockedCount (non-fatal if it fails).
+      await incrementSpamBlockedCount(endpoint.id);
+      if (spamResult.silent) {
+        // Honeypot: return fake success so the bot thinks it worked.
+        return NextResponse.json(
+          { success: true, leadId: null, silent: true },
+          { status: 200, headers: CORS_HEADERS }
+        );
+      }
+      return NextResponse.json(
+        { error: spamResult.reason, code: 'SPAM_BLOCKED', layer: spamResult.layer },
+        { status: spamResult.status, headers: CORS_HEADERS }
+      );
     }
 
     // ─── 3. Map fields ──────────────────────────────────────────────────

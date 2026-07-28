@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import { CI } from '@/lib/db-utils';
 import { getAuthUser } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -52,8 +53,8 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } },
+        { name: { contains: search, ...CI } },
+        { description: { contains: search, ...CI } },
       ];
     }
 

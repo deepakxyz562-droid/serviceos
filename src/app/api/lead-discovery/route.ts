@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { CI } from '@/lib/db-utils';
 import { getAuthUser } from '@/lib/auth';
 
 // GET /api/lead-discovery — List discoveries with filters and counts
@@ -52,11 +53,11 @@ export async function GET(request: NextRequest) {
     }
     if (search) {
       where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
+        { name: { contains: search, ...CI } },
         { phone: { contains: search } },
-        { email: { contains: search, mode: 'insensitive' } },
-        { city: { contains: search, mode: 'insensitive' } },
-        { businessType: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, ...CI } },
+        { city: { contains: search, ...CI } },
+        { businessType: { contains: search, ...CI } },
       ];
     }
 

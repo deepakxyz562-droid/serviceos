@@ -139,6 +139,29 @@ export function HostedFormClient({
         {formDescription && <p style={{ fontSize: '14px', opacity: 0.9 }}>{formDescription}</p>}
       </div>
       <form onSubmit={handleSubmit} style={{ padding: '24px' }}>
+        {/* Honeypot — visually hidden from humans, but bots auto-fill all text
+            inputs. The server (form-spam-guard.ts Layer 4) silently drops
+            submissions where this field is non-empty. Uses type="text" +
+            off-screen positioning (not type="hidden") because many bots skip
+            hidden inputs but fill visible ones. */}
+        <input
+          type="text"
+          name="_hp_website"
+          tabIndex={-1}
+          autoComplete="off"
+          aria-hidden="true"
+          value={formData['_hp_website'] || ''}
+          onChange={e => handleFieldChange('_hp_website', e.target.value)}
+          style={{
+            position: 'absolute',
+            left: '-9999px',
+            top: 'auto',
+            width: '1px',
+            height: '1px',
+            overflow: 'hidden',
+            opacity: 0,
+          }}
+        />
         {error && (
           <div style={{
             background: '#fef2f2', border: '1px solid #fecaca',

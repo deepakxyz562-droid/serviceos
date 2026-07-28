@@ -20,6 +20,7 @@
 
 import bcrypt from 'bcryptjs';
 import { db } from '../src/lib/db';
+import { pickStockPhotoUrl } from '../src/lib/seed-stock-photos';
 
 // ─── Provider definitions ───────────────────────────────────────────────────
 
@@ -78,20 +79,27 @@ interface ProviderSeed {
   featured?: { type: string; priority: number };
 }
 
-// Stock cover images (Unsplash — stable hotlinks)
+// Stock cover images sourced from the verified seed-stock-photos library
+// (src/lib/seed-stock-photos.ts). All 15 photo IDs are HTTP-200 verified.
+// Previously this map held 6 broken/placeholder Unsplash IDs (hvac, electrical,
+// automotive, pest, roofing, locksmith) that returned 404 — now unified through
+// pickStockPhotoUrl() which only returns verified URLs and falls back to a
+// safe default for any industry not in the map.
+// To durably host these (S3/local FS) instead of hotlinking, call
+// downloadAndUploadCover(industry, index, slug) from the same library.
 const COVER = {
-  plumbing: 'https://images.unsplash.com/photo-1585704032915-c3400ca199e7?w=1200&h=400&fit=crop',
-  hvac: 'https://images.unsplash.com/photo-1631651031794-4793a97b2f9c?w=1200&h=400&fit=crop',
-  electrical: 'https://images.unsplash.com/photo-1621905251189-08b45d6a3b2f?w=1200&h=400&fit=crop',
-  cleaning: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=1200&h=400&fit=crop',
-  landscaping: 'https://images.unsplash.com/photo-1558904541-efa843a96f01?w=1200&h=400&fit=crop',
-  pest: 'https://images.unsplash.com/photo-1584395636220-2e3e3e3e3e3e?w=1200&h=400&fit=crop',
-  roofing: 'https://images.unsplash.com/photo-1632759145355-8b8f3e3e3e3e?w=1200&h=400&fit=crop',
-  painting: 'https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=1200&h=400&fit=crop',
-  locksmith: 'https://images.unsplash.com/photo-1597940322320-8d8f3e3e3e3e?w=1200&h=400&fit=crop',
-  appliance: 'https://images.unsplash.com/photo-1610557892470-55d9e80c0bce?w=1200&h=400&fit=crop',
-  pool: 'https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=1200&h=400&fit=crop',
-  automotive: 'https://images.unsplash.com/photo-1632823469850-1b7b1e3e3e3e?w=1200&h=400&fit=crop',
+  plumbing: pickStockPhotoUrl('plumbing', 0),
+  hvac: pickStockPhotoUrl('hvac', 0),
+  electrical: pickStockPhotoUrl('electrical', 0),
+  cleaning: pickStockPhotoUrl('cleaning', 0),
+  landscaping: pickStockPhotoUrl('landscaping', 0),
+  pest: pickStockPhotoUrl('pest-control', 0),
+  roofing: pickStockPhotoUrl('roofing', 0),
+  painting: pickStockPhotoUrl('painting', 0),
+  locksmith: pickStockPhotoUrl('locksmith', 0),
+  appliance: pickStockPhotoUrl('appliance-repair', 0),
+  pool: pickStockPhotoUrl('pool-spa', 0),
+  automotive: pickStockPhotoUrl('automotive', 0),
 };
 
 const GALLERY_ITEM = (url: string, caption: string) => ({ url, caption });

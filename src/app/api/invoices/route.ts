@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { CI } from '@/lib/db-utils';
 import { getAuthUser } from '@/lib/auth';
 import { getExchangeRate, convertCurrency } from '@/lib/currency';
 import { generateInvoiceNumber } from '@/lib/invoice-automation';
@@ -64,8 +65,8 @@ export async function GET(request: NextRequest) {
       }
       if (search) {
         where.OR = [
-          { number: { contains: search, mode: 'insensitive' } },
-          { customer: { name: { contains: search, mode: 'insensitive' } } },
+          { number: { contains: search, ...CI } },
+          { customer: { name: { contains: search, ...CI } } },
         ];
       }
 
@@ -111,8 +112,8 @@ export async function GET(request: NextRequest) {
     }
     if (search) {
       where.OR = [
-        { number: { contains: search, mode: 'insensitive' } },
-        { customer: { name: { contains: search, mode: 'insensitive' } } },
+        { number: { contains: search, ...CI } },
+        { customer: { name: { contains: search, ...CI } } },
       ];
     }
 

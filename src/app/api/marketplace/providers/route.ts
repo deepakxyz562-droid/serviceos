@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { CI } from '@/lib/db-utils';
 import { withRequestId } from '@/lib/logger';
 import { applyRateLimit, apiLimiter, rateLimitResponse } from '@/lib/rate-limit';
 import {
@@ -65,17 +66,17 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
 
   if (city) {
     where.OR = [
-      { city: { contains: city, mode: 'insensitive' } },
-      { state: { contains: city, mode: 'insensitive' } },
+      { city: { contains: city, ...CI } },
+      { state: { contains: city, ...CI } },
     ];
   }
 
   if (search) {
     // Combine with existing OR clause if both city + search are set.
     const searchOR = [
-      { name: { contains: search, mode: 'insensitive' } },
-      { description: { contains: search, mode: 'insensitive' } },
-      { tagline: { contains: search, mode: 'insensitive' } },
+      { name: { contains: search, ...CI } },
+      { description: { contains: search, ...CI } },
+      { tagline: { contains: search, ...CI } },
     ];
     if (where.OR) {
       // Prisma can't combine OR clauses directly — we'd need AND of two ORs.

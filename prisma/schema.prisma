@@ -1369,6 +1369,21 @@ model WebhookEndpoint {
   totalReceived Int      @default(0)
   lastReceived  DateTime?
   lastError     String?
+  // ── Spam protection config (layers 1–4, server-side) ─────────────────
+  // Layer 2: Origin/Referer allowlist. Comma-separated list of allowed
+  // origins (e.g. "https://example.com,https://www.example.com"). If null/
+  // empty, the origin check is skipped (backward compatible). When set,
+  // requests whose Origin or Referer header doesn't match are rejected.
+  allowedOrigins    String?
+  // Layer 1: Per-endpoint per-IP rate limits. Prevents a single source
+  // from flooding a user's lead inbox.
+  rateLimitPerMin   Int     @default(30)
+  rateLimitPerHour  Int     @default(200)
+  // Layer 4: Honeypot field toggle. embed.js injects a hidden _hp_website
+  // field; bots fill it, humans don't. Silently dropped server-side.
+  honeypotEnabled   Boolean @default(true)
+  // Counter — incremented every time a submission is blocked by any layer.
+  spamBlockedCount  Int     @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

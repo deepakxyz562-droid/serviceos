@@ -311,6 +311,18 @@
                        'Contact Form';
     data._form_plugin = 'embed-script';
 
+    // Honeypot — read the hidden honeypot field injected by attachListeners.
+    // Bots auto-fill all text inputs; humans never see this field. The server
+    // (form-spam-guard.ts Layer 4) silently drops submissions where this field
+    // is non-empty. Uses type="text" + CSS off-screen (not type="hidden")
+    // because many bots skip hidden inputs but fill visible ones.
+    var hpField = form.querySelector('[name="_hp_website"]');
+    if (hpField) {
+      data._hp_website = hpField.value || '';
+    } else {
+      data._hp_website = '';
+    }
+
     // Fire and forget — don't block the form's normal submission
     fetch(ENDPOINT, {
       method: 'POST',

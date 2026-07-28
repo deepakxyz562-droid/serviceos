@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { CI } from '@/lib/db-utils';
 import { getAuthUser } from '@/lib/auth';
 import { withRequestId } from '@/lib/logger';
 
@@ -61,9 +62,9 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { sku: { contains: search, mode: 'insensitive' } },
-        { barcode: { contains: search, mode: 'insensitive' } },
+        { name: { contains: search, ...CI } },
+        { sku: { contains: search, ...CI } },
+        { barcode: { contains: search, ...CI } },
       ];
     }
 

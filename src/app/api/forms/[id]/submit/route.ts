@@ -4,6 +4,7 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp-send';
 import { sendEmail } from '@/lib/email-send';
 import { EventBus } from '@/lib/event-bus';
 import { notifyOwner } from '@/lib/owner-notifications';
+import { checkFormSpam, getClientIp } from '@/lib/form-spam-guard';
 
 // ─── POST /api/forms/[id]/submit ───────────────────────────────────────────
 // CRITICAL route: Form submission with action execution
@@ -65,6 +66,33 @@ export async function POST(
     const source: string = body.source || 'direct';
     const respondent: string | undefined = body.respondent || formData.phone as string || formData.email as string || undefined;
     const respondentName: string | undefined = body.respondentName || formData.name as string || undefined;
+
+    // ─── 2a. Spam protection (4 layers: honeypot / origin / rate / dup) ──
+    // Hosted forms have no WebhookEndpoint, so endpoint=null uses defaults
+    // (30/min, 200/hour per IP). endpointId is the form ID for rate-limit
+    // keying + duplicate detection. Honeypot → silent 200 (no response
+    // stored, no actions executed). Other layers → 429/403/409.
+    const spamResult = await checkFormSpam({
+      endpoint: null,
+      endpointId: `form:${form.id}`,
+      payload: formData,
+      origin: request.headers.get('origin'),
+      referer: request.headers.get('referer'),
+      ip: getClientIp(request),
+    });
+    if (spamResult.blocked) {
+      if (spamResult.silent) {
+        // Honeypot: return fake success so the bot thinks it worked.
+        return NextResponse.json(
+          { success: true, responseId: null, silent: true },
+          { status: 200 }
+        );
+      }
+      return NextResponse.json(
+        { error: spamResult.reason, code: 'SPAM_BLOCKED', layer: spamResult.layer },
+        { status: spamResult.status }
+      );
+    }
 
     // ─── 3. Store the response ────────────────────────────────────────
     // Defensive: validate tenantId exists before linking (avoids FK errors

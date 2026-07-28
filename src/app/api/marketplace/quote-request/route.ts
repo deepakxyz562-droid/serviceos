@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { CI } from '@/lib/db-utils';
 import { logger, withRequestId } from '@/lib/logger';
 import { applyRateLimit, apiLimiter, rateLimitResponse } from '@/lib/rate-limit';
 import { getIndustry } from '@/lib/industry-catalog';
@@ -383,7 +384,7 @@ export async function GET(request: NextRequest) {
 
   const where: Record<string, unknown> = { status };
   if (industry) where.industry = industry.toLowerCase();
-  if (city) where.city = { contains: city, mode: 'insensitive' };
+  if (city) where.city = { contains: city, ...CI };
 
   try {
     const [items, total] = await Promise.all([

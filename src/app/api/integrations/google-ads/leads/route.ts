@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { CI } from '@/lib/db-utils';
 import { getAuthUser } from '@/lib/auth';
 import { Prisma } from '@prisma/client';
 
-// Note: SQLite's Prisma-generated StringNullableFilter type does not expose
-// `mode` (Postgres-only). We still pass `mode: 'insensitive'` per the API
-// contract and cast the where object at the call site — SQLite ignores the
-// mode field at runtime.
+// Note: `mode: 'insensitive'` is PostgreSQL-only and throws on SQLite. We use
+// the `CI` helper from @/lib/db-utils which spreads `{ mode: 'insensitive' }`
+// on PostgreSQL (Supabase/Neon) and `{}` on SQLite (already case-insensitive).
 
 /**
  * GET /api/integrations/google-ads/leads
@@ -36,9 +36,9 @@ export async function GET(request: NextRequest) {
     }
     if (q && q.trim()) {
       where.OR = [
-        { contactName: { contains: q, mode: 'insensitive' } },
-        { email: { contains: q, mode: 'insensitive' } },
-        { phone: { contains: q, mode: 'insensitive' } },
+        { contactName: { contains: q, ...CI } },
+        { email: { contains: q, ...CI } },
+        { phone: { contains: q, ...CI } },
       ];
     }
 

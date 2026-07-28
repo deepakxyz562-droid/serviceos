@@ -28,6 +28,7 @@
  */
 
 import { db } from '@/lib/db'
+import { CI } from '@/lib/db-utils'
 import { EventBus } from '@/lib/event-bus'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -853,8 +854,8 @@ async function handleDetectedIntent(
           where: {
             isActive: true,
             OR: [
-              { name: { contains: serviceType, mode: 'insensitive' } },
-              { category: { contains: serviceType, mode: 'insensitive' } },
+              { name: { contains: serviceType, ...CI } },
+              { category: { contains: serviceType, ...CI } },
             ],
           },
         })
@@ -941,8 +942,8 @@ async function handleDetectedIntent(
         where: {
           isActive: true,
           OR: [
-            { name: { contains: serviceName, mode: 'insensitive' } },
-            { category: { contains: serviceType, mode: 'insensitive' } },
+            { name: { contains: serviceName, ...CI } },
+            { category: { contains: serviceType, ...CI } },
           ],
         },
       })
@@ -1756,8 +1757,8 @@ async function createBookingFromConversation(conversation: Conversation): Promis
         where: {
           isActive: true,
           OR: [
-            { name: { contains: serviceType, mode: 'insensitive' } },
-            { category: { contains: serviceType, mode: 'insensitive' } },
+            { name: { contains: serviceType, ...CI } },
+            { category: { contains: serviceType, ...CI } },
           ],
         },
       })
