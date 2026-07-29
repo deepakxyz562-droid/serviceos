@@ -41,6 +41,15 @@ import {
   Menu,
   X,
   MessageCircle,
+  Thermometer,
+  Trees,
+  Bug,
+  Home,
+  Paintbrush,
+  Truck,
+  Plug,
+  Key,
+  PawPrint,
   type LucideIcon,
 } from 'lucide-react';
 import Image from 'next/image';
@@ -1592,6 +1601,28 @@ function CrmForProviders({ onGetStarted }: { onGetStarted?: () => void }) {
 
 // ─── Marketplace: AI search + featured providers ────────────────────────────
 
+/**
+ * Service categories surfaced in the "Browse by Service" grid on the home
+ * page marketplace audience view. Each entry links to the marketplace browse
+ * page with a `search` query (the browse page supports `industry`, `search`,
+ * and `city` — not `category` — so we use `search` for these human-readable
+ * category names which match against provider name / tagline / description).
+ */
+const SERVICE_CATEGORIES: { name: string; icon: LucideIcon; slug: string }[] = [
+  { name: 'Plumbing', icon: Wrench, slug: 'plumbing' },
+  { name: 'Electrical', icon: Zap, slug: 'electrical' },
+  { name: 'Cleaning', icon: Sparkles, slug: 'cleaning' },
+  { name: 'HVAC', icon: Thermometer, slug: 'hvac' },
+  { name: 'Landscaping', icon: Trees, slug: 'landscaping' },
+  { name: 'Pest Control', icon: Bug, slug: 'pest-control' },
+  { name: 'Roofing', icon: Home, slug: 'roofing' },
+  { name: 'Painting', icon: Paintbrush, slug: 'painting' },
+  { name: 'Moving', icon: Truck, slug: 'moving' },
+  { name: 'Appliance Repair', icon: Plug, slug: 'appliance-repair' },
+  { name: 'Locksmith', icon: Key, slug: 'locksmith' },
+  { name: 'Pet Care', icon: PawPrint, slug: 'pet-care' },
+];
+
 function MarketplaceCompact({
   onGetStarted,
   onSignIn,
@@ -1608,21 +1639,43 @@ function MarketplaceCompact({
     (async () => {
       setFeaturedLoading(true);
       try {
-        const res = await fetch(mpUrl('/api/marketplace/providers', { limit: 12 }));
-        const data = (await res.json()) as ProviderListResponse;
+        // Fetch featured providers first (server-side filter via ?featured=true).
+        // If zero featured are returned (e.g. fresh seed DB), fall back to the
+        // top-rated 8 so the section is never empty.
+        const featuredRes = await fetch(
+          mpUrl('/api/marketplace/providers', { limit: 8, featured: true }),
+        );
+        const featuredData = (await featuredRes.json()) as ProviderListResponse;
         if (cancelled) return;
-        const sorted = [...data.items].sort((a, b) => {
-          if (!!a.featured !== !!b.featured) return a.featured ? -1 : 1;
-          return (b.rating ?? 0) - (a.rating ?? 0);
-        });
-        setFeatured(sorted.slice(0, 8));
+        const featuredItems = featuredData.items;
+
+        if (featuredItems.length > 0) {
+          // Sort featured by rating (featured already ensures they're sponsored)
+          const sorted = [...featuredItems].sort(
+            (a, b) => (b.rating ?? 0) - (a.rating ?? 0),
+          );
+          setFeatured(sorted.slice(0, 8));
+        } else {
+          // Fallback: top-rated 8 so section is never empty
+          const topRes = await fetch(
+            mpUrl('/api/marketplace/providers', { limit: 8 }),
+          );
+          const topData = (await topRes.json()) as ProviderListResponse;
+          if (cancelled) return;
+          const sorted = [...topData.items].sort(
+            (a, b) => (b.rating ?? 0) - (a.rating ?? 0),
+          );
+          setFeatured(sorted.slice(0, 8));
+        }
       } catch {
         if (!cancelled) setFeatured([]);
       } finally {
         if (!cancelled) setFeaturedLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   function handleProviderClick(p: ProviderListItem) {
@@ -1720,6 +1773,44 @@ function MarketplaceCompact({
               })}
             </div>
           )}
+        </div>
+
+        {/* Browse by Service — quick category shortcuts */}
+        <div className="mt-12">
+          <Card className="overflow-hidden border-emerald-200/60 bg-gradient-to-br from-emerald-50 to-teal-50/50 dark:border-emerald-900/40 dark:from-emerald-950/30 dark:to-teal-950/20">
+            <CardHeader className="gap-1.5 pb-4">
+              <CardTitle className="flex items-center gap-2 text-2xl font-bold text-foreground sm:text-3xl">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 text-white">
+                  <Search className="h-4 w-4" />
+                </span>
+                Browse by Service
+              </CardTitle>
+              <CardDescription className="text-sm text-muted-foreground">
+                Find pros for any job — tap a category to jump straight into the marketplace.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+                {SERVICE_CATEGORIES.map(({ name, icon: Icon, slug }) => (
+                  <Link
+                    key={slug}
+                    href={`/marketplace?search=${encodeURIComponent(name)}`}
+                    className="group flex items-center gap-3 rounded-xl border border-emerald-100 bg-white/80 p-3 text-left transition-all hover:border-emerald-300 hover:bg-white hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:hover:border-emerald-700 dark:hover:bg-emerald-950/40"
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 transition-colors group-hover:bg-emerald-600 group-hover:text-white dark:bg-emerald-900/50 dark:text-emerald-300 dark:group-hover:bg-emerald-600 dark:group-hover:text-white">
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-foreground">
+                        {name}
+                      </span>
+                    </span>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-emerald-600/60 transition-transform group-hover:translate-x-0.5 group-hover:text-emerald-600" />
+                  </Link>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Three ways to get service */}

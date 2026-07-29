@@ -185,8 +185,6 @@ model Tenant {
   loyaltyPoints       LoyaltyPoint[]
   referrals           Referral[]
   pricingRules       PricingRule[]
-  // Dedicated phone numbers (SMS/Voice) bought by the tenant
-  phoneNumbers        PhoneNumber[]
 
   @@index([slug])
   @@index([plan])
@@ -2529,95 +2527,6 @@ model CommunicationProvider {
 }
 
 // ==========================================
-// DEDICATED PHONE NUMBERS (SMS / Voice)
-// ==========================================
-// Tenants buy/rent a dedicated phone number (£5/month via PayPal or Creem) to
-// use as their SMS sender ID + voice endpoint. The number lives in Twilio (or
-// another CPaaS) and we proxy inbound webhooks + outbound sends through it.
-// The lifecycle is:  pending  →  active  →  suspended  →  released  →  failed
-// • pending:  PhoneNumber row created at checkout, awaiting PayPal/Creem confirmation
-// • active:   Twilio purchase + webhook config completed
-// • suspended: payment failed mid-cycle (number kept in Twilio until released)
-// • released: returned to Twilio, billing cancelled
-// • failed:   Twilio purchase failed after payment; subscription auto-cancelled + refunded
-
-model PhoneNumber {
-  id              String   @id @default(cuid())
-  number          String   @unique // E.164 format: +1234567890
-  displayName     String?  // Friendly name set by tenant
-  provider        String   @default("twilio") // twilio, telnyx
-  providerSid     String?  // Twilio phone number SID (PNxxx)
-  capabilities    String   @default("sms") // comma-separated: sms,voice
-  countryCode     String?  // US, GB, IN
-  areaCode        String?
-  locality        String?  // "Mountain View, CA"
-  monthlyCost     Float    @default(5.00) // what tenant pays per month
-  costCurrency    String   @default("USD")
-  providerCost    Float    @default(1.15) // what WE pay Twilio (margin tracking)
-  status          String   @default("pending") // pending, active, suspended, released, failed
-  // ─── Number type (Phase 1.5 — Shopify-style Communication add-ons) ────────
-  // shared    : platform-shared number, FREE tier (one number, many tenants)
-  // dedicated : tenant-exclusive number, £5/mo via PayPal/Creem
-  // byo       : tenant brought their own number (ported in — V1.5+ feature)
-  type            String   @default("dedicated") // shared, dedicated, byo
-  // Payment linkage
-  paymentProvider String?  // paypal, creem
-  subscriptionId  String?  // PayPal subscription ID or Creem subscription ID
-  // Call forwarding (point 3 of the 17-point vision)
-  forwardToPhone  String?  // office number to forward calls to
-  forwardToVoicemail Boolean @default(false)
-  // ─── Voice mode (Phase 2.2 — Unified phone architecture) ──────────────────
-  // forward   : ring forwardToPhone (default — pre-existing behaviour)
-  // voicemail : play greeting + record a message (pre-existing behaviour)
-  // ai_vapi   : route inbound calls to a Vapi assistant via webhook
-  //             (ServiceOS keeps the Twilio number, just repoints VoiceUrl to Vapi)
-  voiceMode       String   @default("forward") // forward, voicemail, ai_vapi
-  vapiAssistantId String?  // Vapi assistant ID this number is routed to (when voiceMode='ai_vapi')
-  vapiNumberId    String?  // Vapi-side number ID returned by importPhoneNumber() (for unassign)
-  // Webhook config (set at purchase time)
-  smsWebhookUrl   String?
-  voiceWebhookUrl String?
-  // Ownership
-  tenantId        String?
-  purchasedAt     DateTime?
-  releasedAt      DateTime?
-  lastUsedAt      DateTime?
-  metadataJson    String   @default("{}")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  tenant          Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@index([tenantId])
-  @@index([status])
-  @@index([number])
-  @@index([type])
-}
-
-// ==========================================
-// PLAN-FEATURE MATRIX (Phase 3 — Shopify-style plan-based feature gating)
-// ==========================================
-// One row per (planCode, featureKey) pair. Superadmin toggles which features
-// are available on which plan tier (trial, starter, growth, business, enterprise).
-// Lookup is performed by `isFeatureEnabledForPlan(featureKey, planCode)` in
-// `src/lib/plan-features.ts`.
-//
-// Default seed lives in `src/lib/plan-features-seed.ts`.
-
-model PlanFeatureMatrix {
-  id              String   @id @default(cuid())
-  planCode        String   // trial, starter, growth, business, enterprise
-  featureKey      String   // e.g. sms_numbers, ai_receptionist, whatsapp, etc.
-  enabled         Boolean  @default(false)
-  updatedAt       DateTime @updatedAt
-  createdAt       DateTime @default(now())
-
-  @@unique([planCode, featureKey])
-  @@index([planCode])
-  @@index([featureKey])
-}
-
-// ==========================================
 // CONTACTS — Master audience database
 // Enterprise CRM structure: Contacts → Groups → Tags → Segments → Campaigns
 // ==========================================
@@ -4356,6 +4265,34 @@ model RevenueFeatureToggle {
 
   @@index([featureKey])
   @@index([enabled])
+}
+
+// ==========================================
+// AI PROVIDER KEYS (Multi-key with fallback chain)
+// ==========================================
+// Superadmin-managed API keys for AI providers (OpenRouter, OpenAI, Anthropic, Gemini).
+// The fallback chain walks ascending `priority` across all active keys of all providers.
+// On HTTP 429 (rate limit): rotate to next key of SAME provider.
+// On HTTP 5xx / network error / all keys of a provider exhausted: switch to NEXT provider.
+// Keys are AES-256 encrypted at rest using the app secret (ENCRYPTION_KEY env var).
+// Env-var fallback: if no DB keys exist, falls back to OPENROUTER_API_KEY / OPENAI_API_KEY etc.
+
+model AiProviderKey {
+  id            String    @id @default(cuid())
+  provider      String    // 'openrouter' | 'openai' | 'anthropic' | 'gemini'
+  label         String    // friendly name e.g. "OpenRouter Key 1"
+  encryptedKey  String    // AES-256-GCM encrypted API key (IV + ciphertext + tag, base64)
+  priority      Int       @default(0)  // lower = tried first in the fallback chain
+  isActive      Boolean   @default(true)
+  lastUsedAt    DateTime?
+  lastErrorAt   DateTime?
+  lastError     String?   // e.g. "429 rate limited" or "401 invalid key"
+  requestCount  Int       @default(0)  // lifetime request count via this key
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([provider, isActive, priority])
+  @@index([isActive, priority])
 }
 
 // ==========================================

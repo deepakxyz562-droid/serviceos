@@ -21,6 +21,10 @@ import {
  *   city:     string   (case-insensitive substring match)
  *   service:  string   (service id — providers offering this service)
  *   search:   string   (name / description contains)
+ *   featured: 'true'   (when set, only return providers with an active
+ *                       FeaturedListing row — drives the home page
+ *                       "Featured Providers" carousel so it never shows
+ *                       non-featured tenants)
  *   limit:    number   (default 20, max 100)
  *   offset:   number   (default 0)
  *
@@ -48,6 +52,7 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
   const city = searchParams.get('city')?.trim() || null;
   const serviceId = searchParams.get('service')?.trim() || null;
   const search = searchParams.get('search')?.trim() || null;
+  const featuredOnly = searchParams.get('featured') === 'true';
   const limit = Math.min(parseInt(searchParams.get('limit') || '20', 10) || 20, 100);
   const offset = Math.max(parseInt(searchParams.get('offset') || '0', 10) || 0, 0);
 
@@ -139,8 +144,10 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
         },
       },
       orderBy: [{ rating: 'desc' }, { reviewCount: 'desc' }],
-      take: industry || serviceId ? 200 : limit, // fetch extra if we'll filter in-app
-      skip: industry || serviceId ? 0 : offset,
+      // Fetch extra rows when we'll apply an in-app filter afterwards
+      // (industry, service, or featured-only) so pagination still works.
+      take: industry || serviceId || featuredOnly ? 200 : limit,
+      skip: industry || serviceId || featuredOnly ? 0 : offset,
     });
 
     // ── In-app industry filter ──
@@ -170,6 +177,27 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
     // ── Fetch featured listing flags via shared helper ──
     const tenantIds = filtered.map((t) => t.id);
     const featuredMap = await fetchFeaturedListingsMap(tenantIds);
+
+    // ── In-app featured-only filter ──
+    // When ?featured=true is set, keep only providers whose cardType resolves
+    // to 'featured' (i.e. they have an active FeaturedListing row). Applied
+    // AFTER the featuredMap is built and BEFORE the slice so pagination is
+    // still correct.
+    if (featuredOnly) {
+      filtered = filtered.filter((t) => {
+        const hasFL = featuredMap.has(t.id);
+        const cardType = computeCardType(
+          {
+            claimed: t.claimed,
+            plan: t.plan,
+            planStatus: t.planStatus,
+            trialEndsAt: t.trialEndsAt,
+          },
+          hasFL,
+        );
+        return cardType === 'featured';
+      });
+    }
 
     const items = filtered.slice(offset, offset + limit).map((t) => {
       const hasFL = featuredMap.has(t.id);
@@ -225,7 +253,7 @@ export async function GET(request: NextRequest, _ctx: RouteContext) {
     });
 
     log.info(
-      { returned: items.length, total: filtered.length, industry, city, serviceId, search },
+      { returned: items.length, total: filtered.length, industry, city, serviceId, search, featuredOnly },
       'marketplace/providers: list',
     );
 

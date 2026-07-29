@@ -1,36 +1,53 @@
 'use client';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AI Center — flagship superadmin section.
-// Multi-provider AI governance: OpenAI / Claude / Gemini / GLM / DeepSeek /
-// Mistral. Monitor token usage, costs, models, and prompt templates in one
-// place. Stripe-style cards + Vercel-style chart aesthetics. All demo data.
+// AI Center — superadmin section for managing the multi-provider AI key chain.
+//
+// This is the REAL key-management UI (Task 6d). It replaced the prior demo-only
+// screen (fake KPIs, fake cost charts, fake prompt templates) with a live CRUD
+// surface over the `/api/superadmin/ai-keys` routes added in Task 6b.
+//
+// Fallback chain order (mirrors `PROVIDER_ORDER` in src/lib/ai-client.ts):
+//   OpenRouter → OpenAI → Anthropic → Gemini
+// Within a provider, keys are tried in ascending `priority` order. 429/401/403
+// rotates to the next key; 5xx/network errors switch provider.
+//
+// TODO(server-side cache): `src/lib/ai-client.ts` caches the loaded key chain
+// for 60s (`keyChainCache` in `loadAiKeyChain`). The CRUD routes in Task 6b do
+// NOT call `invalidateAiKeyChainCache()` after a mutation, and we can't import
+// that server-only helper from this client component. So outbound AI calls may
+// use a stale key chain for up to 60 seconds after a key change here. Acceptable
+// for the admin surface; revisit if it causes confusion.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Sparkles,
   Plus,
-  Search,
-  Settings2,
-  PowerOff,
-  Cpu,
-  Coins,
-  DollarSign,
-  Clock,
-  Pencil,
   Trash2,
-  Plug,
-  Gauge,
-  Layers,
+  Pencil,
+  Zap,
+  Key as KeyIcon,
+  Activity,
+  AlertCircle,
+  CheckCircle2,
+  GripVertical,
+  Loader2,
+  ExternalLink,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { authFetch } from '@/lib/api';
+
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import {
   Table,
   TableBody,
@@ -39,578 +56,1275 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Progress } from '@/components/ui/progress';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Switch } from '@/components/ui/switch';
-
 import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
   Tooltip,
-  Cell,
-} from 'recharts';
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { toast } from 'sonner';
 
 import {
   SectionHeader,
-  DemoDataPill,
-  KpiCard,
-  formatCurrency,
-  formatNumber,
   getStatusBadgeClasses,
+  timeAgo,
 } from '@/components/views/superadmin/_shared';
-import type { KpiColor } from '@/components/views/superadmin/_shared';
+
+// ─── Providers ───────────────────────────────────────────────────────────────
+
+const PROVIDERS = [
+  {
+    value: 'openrouter',
+    label: 'OpenRouter',
+    description: 'Multi-model gateway (free + paid models)',
+    color: 'emerald',
+    docsUrl: 'https://openrouter.ai/keys',
+  },
+  {
+    value: 'openai',
+    label: 'OpenAI',
+    description: 'GPT-4o, GPT-4o-mini',
+    color: 'sky',
+    docsUrl: 'https://platform.openai.com/api-keys',
+  },
+  {
+    value: 'anthropic',
+    label: 'Anthropic',
+    description: 'Claude 3.5 Sonnet, Haiku',
+    color: 'amber',
+    docsUrl: 'https://console.anthropic.com/settings/keys',
+  },
+  {
+    value: 'gemini',
+    label: 'Google Gemini',
+    description: 'Gemini 1.5 Pro, Flash',
+    color: 'violet',
+    docsUrl: 'https://aistudio.google.com/app/apikey',
+  },
+] as const;
+
+type ProviderValue = (typeof PROVIDERS)[number]['value'];
+type ProviderColor = (typeof PROVIDERS)[number]['color'];
+
+const PROVIDER_COLOR_CLASSES: Record<ProviderColor, string> = {
+  emerald: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+  sky: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20',
+  amber: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
+  violet: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20',
+};
+
+function providerMeta(value: string) {
+  return PROVIDERS.find((p) => p.value === value);
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type ProviderColor = 'emerald' | 'amber' | 'sky' | 'violet' | 'rose' | 'teal';
-
-interface Provider {
+/** Shape returned by GET /api/superadmin/ai-keys (each key is masked). */
+interface AiKey {
   id: string;
-  name: string;
-  initial: string;
-  color: ProviderColor;
-  connected: boolean;
-  modelsCount: number;
-  monthlyCost: number;
-  monthlyTokens: number;
-  enabledModels: string[];
-}
-
-interface TopSpender {
-  rank: number;
-  name: string;
-  cost: number;
-  percent: number;
-}
-
-interface UsageKpi {
-  label: string;
-  value: string;
-  trend: number;
-  color: KpiColor;
-  icon: LucideIcon;
-  sub: string;
-}
-
-interface ModelRow {
-  id: string;
-  name: string;
   provider: string;
-  context: string;
-  inputCost: number; // $ per 1K tokens
-  outputCost: number; // $ per 1K tokens
-  active: boolean;
+  label: string;
+  maskedKey: string;
+  priority: number;
+  isActive: boolean;
+  lastUsedAt: string | null;
+  lastErrorAt: string | null;
+  lastError: string | null;
+  requestCount: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
-interface PromptTemplate {
-  id: string;
-  name: string;
-  category: string;
-  preview: string;
-  uses: number;
-  lastEdited: string; // human-readable relative string (static, avoids hydration issues)
+interface KeysResponse {
+  keys: AiKey[];
 }
 
-// ─── Demo data ───────────────────────────────────────────────────────────────
-
-const AVATAR_COLOR_CLASSES: Record<ProviderColor, string> = {
-  emerald: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-  amber: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-  sky: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
-  violet: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
-  rose: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
-  teal: 'bg-teal-500/10 text-teal-600 dark:text-teal-400',
-};
-
-// Brand-ish hex colors for the per-bar cells in the cost chart. These are
-// saturated brand tones that read well in both light and dark themes (grid /
-// axis strokes use OKLCH theme tokens below; cells stay brand-saturated).
-const BAR_COLORS: Record<ProviderColor, string> = {
-  emerald: '#10b981',
-  amber: '#f59e0b',
-  sky: '#0ea5e9',
-  violet: '#8b5cf6',
-  rose: '#f43f5e',
-  teal: '#14b8a6',
-};
-
-const PROVIDERS: Provider[] = [
-  { id: 'openai', name: 'OpenAI', initial: 'O', color: 'emerald', connected: true, modelsCount: 8, monthlyCost: 1284, monthlyTokens: 12_400_000, enabledModels: ['gpt-4o', 'gpt-4o-mini', 'o1-preview'] },
-  { id: 'claude', name: 'Claude', initial: 'C', color: 'amber', connected: true, modelsCount: 5, monthlyCost: 642, monthlyTokens: 4_200_000, enabledModels: ['claude-3.5-sonnet', 'claude-3-opus'] },
-  { id: 'gemini', name: 'Gemini', initial: 'G', color: 'sky', connected: true, modelsCount: 4, monthlyCost: 318, monthlyTokens: 8_100_000, enabledModels: ['gemini-1.5-pro', 'gemini-1.5-flash'] },
-  { id: 'glm', name: 'GLM', initial: 'GLM', color: 'violet', connected: true, modelsCount: 3, monthlyCost: 96, monthlyTokens: 5_600_000, enabledModels: ['glm-4-plus', 'glm-4-air'] },
-  { id: 'deepseek', name: 'DeepSeek', initial: 'D', color: 'rose', connected: false, modelsCount: 0, monthlyCost: 0, monthlyTokens: 0, enabledModels: [] },
-  { id: 'mistral', name: 'Mistral', initial: 'M', color: 'teal', connected: true, modelsCount: 4, monthlyCost: 124, monthlyTokens: 2_300_000, enabledModels: ['mistral-large', 'mixtral-8x7b'] },
-];
-
-const COST_BY_PROVIDER = PROVIDERS.map((p) => ({
-  name: p.name,
-  cost: p.monthlyCost,
-  color: BAR_COLORS[p.color],
-}));
-
-const TOP_SPENDERS: TopSpender[] = [
-  { rank: 1, name: 'AquaFlow Plumbing', cost: 412, percent: 12 },
-  { rank: 2, name: 'Bloom Beauty', cost: 318, percent: 9 },
-  { rank: 3, name: 'Apex HVAC', cost: 284, percent: 8 },
-  { rank: 4, name: 'ClearWell Cleaning', cost: 156, percent: 4 },
-  { rank: 5, name: 'VoltEdge Electric', cost: 124, percent: 3 },
-];
-
-const USAGE_KPIS: UsageKpi[] = [
-  { label: 'Total Tokens', value: '32.6M', trend: 14, color: 'violet', icon: Coins, sub: 'Across all providers' },
-  { label: 'Total Cost', value: '$2,464', trend: 8, color: 'emerald', icon: DollarSign, sub: 'This month' },
-  { label: 'Avg Latency', value: '340ms', trend: -2, color: 'sky', icon: Clock, sub: 'p50 response time' },
-];
-
-const MODELS: ModelRow[] = [
-  { id: 'm1', name: 'gpt-4o', provider: 'OpenAI', context: '128K', inputCost: 0.0025, outputCost: 0.01, active: true },
-  { id: 'm2', name: 'gpt-4o-mini', provider: 'OpenAI', context: '128K', inputCost: 0.00015, outputCost: 0.0006, active: true },
-  { id: 'm3', name: 'o1-preview', provider: 'OpenAI', context: '128K', inputCost: 0.015, outputCost: 0.06, active: true },
-  { id: 'm4', name: 'claude-3.5-sonnet', provider: 'Claude', context: '200K', inputCost: 0.003, outputCost: 0.015, active: true },
-  { id: 'm5', name: 'claude-3-opus', provider: 'Claude', context: '200K', inputCost: 0.015, outputCost: 0.075, active: false },
-  { id: 'm6', name: 'gemini-1.5-pro', provider: 'Gemini', context: '2M', inputCost: 0.00125, outputCost: 0.005, active: true },
-  { id: 'm7', name: 'gemini-1.5-flash', provider: 'Gemini', context: '1M', inputCost: 0.000075, outputCost: 0.0003, active: true },
-  { id: 'm8', name: 'glm-4-plus', provider: 'GLM', context: '128K', inputCost: 0.0007, outputCost: 0.0007, active: true },
-  { id: 'm9', name: 'glm-4-air', provider: 'GLM', context: '128K', inputCost: 0.0001, outputCost: 0.0001, active: true },
-  { id: 'm10', name: 'mistral-large', provider: 'Mistral', context: '128K', inputCost: 0.002, outputCost: 0.006, active: true },
-];
-
-const PROMPT_TEMPLATES: PromptTemplate[] = [
-  { id: 't1', name: 'Welcome Message', category: 'Customer Support', preview: 'Hi {{customer_name}}, welcome to {{business_name}}! We\'re thrilled to have you onboard. Here\'s what to expect from your first service visit...', uses: 1248, lastEdited: '2d ago' },
-  { id: 't2', name: 'Follow-up Sequence', category: 'Sales', preview: 'Just checking in after your recent service on {{date}}. Did everything meet your expectations? We\'d love to schedule your next visit...', uses: 892, lastEdited: '5d ago' },
-  { id: 't3', name: 'Review Request', category: 'Operations', preview: 'We hope you loved your experience with {{technician}}. Would you mind leaving a quick review? It helps us keep delivering great service.', uses: 654, lastEdited: '1d ago' },
-  { id: 't4', name: 'Quote Generator', category: 'Sales', preview: 'Based on your requirements for {{service_type}}, here\'s a tailored estimate. Our team can break down line items and answer any questions...', uses: 423, lastEdited: '9d ago' },
-  { id: 't5', name: 'Job Summary', category: 'Operations', preview: 'Service completed: {{service_summary}}. Technician notes: {{notes}}. Total time on site: {{duration}}. Parts used: {{parts}}.', uses: 234, lastEdited: '11h ago' },
-  { id: 't6', name: 'Support Triage', category: 'Customer Support', preview: 'Classify this inquiry: {{message}}. Suggested routing: {{team}}. Estimated priority: {{priority}}. Confidence score: {{confidence}}.', uses: 567, lastEdited: '3d ago' },
-];
-
-// ─── Subcomponents ────────────────────────────────────────────────────────────
-
-function ProviderCard({ provider }: { provider: Provider }) {
-  return (
-    <Card className="card-shadow card-hover flex flex-col">
-      <CardHeader className="pb-3">
-        <div className="flex items-start gap-3">
-          <div
-            className={cn(
-              'size-12 rounded-xl flex items-center justify-center font-bold text-base shrink-0',
-              AVATAR_COLOR_CLASSES[provider.color],
-            )}
-          >
-            {provider.initial}
-          </div>
-          <div className="min-w-0 flex-1">
-            <CardTitle className="text-base truncate">{provider.name}</CardTitle>
-            <Badge
-              variant="outline"
-              className={cn(
-                'text-[10px] mt-1',
-                getStatusBadgeClasses(provider.connected ? 'connected' : 'disconnected'),
-              )}
-            >
-              {provider.connected ? 'Connected' : 'Disconnected'}
-            </Badge>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="flex-1 flex flex-col gap-3">
-        <div className="grid grid-cols-3 gap-2 py-3 border-y border-border">
-          <div>
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Models</p>
-            <p className="text-sm font-semibold text-foreground">{provider.modelsCount}</p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Cost/mo</p>
-            <p className="text-sm font-semibold text-foreground">{formatCurrency(provider.monthlyCost)}</p>
-          </div>
-          <div>
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Tokens</p>
-            <p className="text-sm font-semibold text-foreground">{formatNumber(provider.monthlyTokens)}</p>
-          </div>
-        </div>
-
-        {provider.enabledModels.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5">
-            {provider.enabledModels.map((m) => (
-              <Badge key={m} variant="secondary" className="text-[10px] font-mono">
-                {m}
-              </Badge>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground italic">No models enabled</p>
-        )}
-
-        <div className="flex items-center gap-2 mt-auto pt-1">
-          {provider.connected ? (
-            <>
-              <Button variant="outline" size="sm" className="h-8 text-xs flex-1">
-                <Settings2 className="size-3.5 mr-1" /> Configure
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 text-xs text-red-600 dark:text-red-400 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
-                aria-label={`Disconnect ${provider.name}`}
-              >
-                <PowerOff className="size-3.5" />
-              </Button>
-            </>
-          ) : (
-            <Button size="sm" className="h-8 text-xs flex-1">
-              <Plus className="size-3.5 mr-1" /> Connect
-            </Button>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
+interface TestResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
 }
 
-function TopSpendersCard() {
-  return (
-    <Card className="card-shadow h-full">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center gap-2">
-          <Gauge className="size-4 text-primary" />
-          Top Spenders
-        </CardTitle>
-        <CardDescription className="text-xs">
-          Workspaces ranked by AI spend this month
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {TOP_SPENDERS.map((s) => (
-          <div key={s.rank} className="flex items-center gap-3">
-            <div className="size-6 rounded-full bg-muted flex items-center justify-center text-[11px] font-semibold text-muted-foreground shrink-0">
-              {s.rank}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium text-foreground truncate">{s.name}</p>
-                <p className="text-sm font-bold text-foreground shrink-0">
-                  {formatCurrency(s.cost)}
-                </p>
-              </div>
-              <div className="flex items-center gap-2 mt-1.5">
-                <Progress value={s.percent} className="h-1.5" />
-                <span className="text-[11px] text-muted-foreground shrink-0 w-9 text-right">
-                  {s.percent}%
-                </span>
-              </div>
-            </div>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
-
-// ─── Main section ─────────────────────────────────────────────────────────────
+// ─── Main section ────────────────────────────────────────────────────────────
 
 export function AICenterSection() {
-  const [modelEnabled, setModelEnabled] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(MODELS.map((m) => [m.id, m.active])),
-  );
-  const [promptQuery, setPromptQuery] = useState('');
+  const queryClient = useQueryClient();
+  const [addOpen, setAddOpen] = useState(false);
+  const [addProviderPref, setAddProviderPref] = useState<ProviderValue | undefined>(undefined);
+  const [editingKey, setEditingKey] = useState<AiKey | null>(null);
 
-  const filteredTemplates = PROMPT_TEMPLATES.filter((t) => {
-    const q = promptQuery.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      t.name.toLowerCase().includes(q) || t.category.toLowerCase().includes(q)
-    );
+  const { data, isLoading, error, refetch, isFetching } = useQuery<KeysResponse>({
+    queryKey: ['ai-keys'],
+    queryFn: async () => {
+      const res = await authFetch('/api/superadmin/ai-keys');
+      if (!res.ok) throw new Error('Failed to load AI keys');
+      return res.json() as Promise<KeysResponse>;
+    },
   });
+
+  const keys = data?.keys ?? [];
+
+  // Group keys by provider (only the 4 known providers), sorted by priority.
+  const keysByProvider = PROVIDERS.map((p) => ({
+    ...p,
+    keys: keys
+      .filter((k) => k.provider === p.value)
+      .sort((a, b) => a.priority - b.priority),
+  }));
+
+  // Aggregate stats for the banner.
+  const totalKeys = keys.length;
+  const activeKeys = keys.filter((k) => k.isActive).length;
+
+  const openAdd = (provider?: ProviderValue) => {
+    setAddProviderPref(provider);
+    setAddOpen(true);
+  };
+
+  // ─── Mutations ────────────────────────────────────────────────────────────
+
+  const invalidateAfterChange = () => {
+    queryClient.invalidateQueries({ queryKey: ['ai-keys'] });
+  };
+
+  const toggleMutation = useMutation({
+    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+      const res = await authFetch(`/api/superadmin/ai-keys/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || 'Failed to toggle key');
+      }
+      return res.json() as Promise<{ key: AiKey }>;
+    },
+    // Optimistic update: flip `isActive` in the cache before the server responds.
+    onMutate: async ({ id, isActive }) => {
+      await queryClient.cancelQueries({ queryKey: ['ai-keys'] });
+      const previous = queryClient.getQueryData<KeysResponse>(['ai-keys']);
+      if (previous) {
+        queryClient.setQueryData<KeysResponse>(['ai-keys'], {
+          ...previous,
+          keys: previous.keys.map((k) => (k.id === id ? { ...k, isActive } : k)),
+        });
+      }
+      return { previous };
+    },
+    onError: (err, _vars, ctx) => {
+      // Roll back on failure.
+      if (ctx?.previous) {
+        queryClient.setQueryData(['ai-keys'], ctx.previous);
+      }
+      toast.error(err instanceof Error ? err.message : 'Failed to toggle key');
+    },
+    onSettled: () => invalidateAfterChange(),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await authFetch(`/api/superadmin/ai-keys/${id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || 'Failed to delete key');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success('Key deleted');
+      invalidateAfterChange();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to delete key'),
+  });
+
+  const reorderMutation = useMutation({
+    mutationFn: async (items: { id: string; priority: number }[]) => {
+      const res = await authFetch('/api/superadmin/ai-keys/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || 'Failed to reorder keys');
+      }
+      return res.json();
+    },
+    onMutate: async (items) => {
+      // Optimistically apply the new priorities so the UI reorders instantly.
+      await queryClient.cancelQueries({ queryKey: ['ai-keys'] });
+      const previous = queryClient.getQueryData<KeysResponse>(['ai-keys']);
+      if (previous) {
+        const map = new Map(items.map((i) => [i.id, i.priority]));
+        queryClient.setQueryData<KeysResponse>(['ai-keys'], {
+          ...previous,
+          keys: previous.keys.map((k) =>
+            map.has(k.id) ? { ...k, priority: map.get(k.id)! } : k,
+          ),
+        });
+      }
+      return { previous };
+    },
+    onError: (_e, _vars, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(['ai-keys'], ctx.previous);
+      toast.error('Failed to reorder keys');
+    },
+    onSettled: () => invalidateAfterChange(),
+  });
+
+  // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
     <section className="space-y-6">
       <SectionHeader
         title="AI Center"
-        description="Manage AI providers, monitor token usage & costs, configure models and prompt templates."
+        description="Manage API keys for AI providers. The fallback chain walks keys in priority order: OpenRouter → OpenAI → Anthropic → Gemini."
         icon={Sparkles}
         actions={
-          <>
-            <DemoDataPill />
-            <Button variant="outline" size="sm">
-              <Plus className="size-4 mr-1" /> Connect Provider
-            </Button>
-          </>
+          <Button size="sm" onClick={() => openAdd()} disabled={isLoading}>
+            <Plus className="size-4" /> Add Key
+          </Button>
         }
       />
 
-      <Tabs defaultValue="providers" className="w-full">
-        <TabsList className="w-full">
-          <TabsTrigger value="providers" className="flex-1">
-            <Plug className="size-3.5" /> Providers
-          </TabsTrigger>
-          <TabsTrigger value="usage" className="flex-1">
-            <Coins className="size-3.5" /> Usage &amp; Costs
-          </TabsTrigger>
-          <TabsTrigger value="models" className="flex-1">
-            <Cpu className="size-3.5" /> Models
-          </TabsTrigger>
-          <TabsTrigger value="prompts" className="flex-1">
-            <Layers className="size-3.5" /> Templates
-          </TabsTrigger>
-        </TabsList>
+      {/* Loading skeletons */}
+      {isLoading && <AiCenterSkeleton />}
 
-        {/* ─── Tab 1: Providers ─────────────────────────────────────────── */}
-        <TabsContent value="providers" className="mt-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {PROVIDERS.map((p) => (
-              <ProviderCard key={p.id} provider={p} />
-            ))}
+      {/* Error state */}
+      {error && !isLoading && (
+        <Alert variant="destructive">
+          <AlertCircle className="size-4" />
+          <AlertTitle>Failed to load AI keys</AlertTitle>
+          <AlertDescription className="flex items-center gap-3">
+            <span>
+              {error instanceof Error ? error.message : 'Unknown error'}.
+              The backend may be unavailable or you may not have SuperAdmin access.
+            </span>
+            <Button size="sm" variant="outline" onClick={() => refetch()}>
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Main content */}
+      {!isLoading && !error && (
+        <div className="space-y-6">
+          <FallbackChainBanner
+            keys={keys}
+            totalKeys={totalKeys}
+            activeKeys={activeKeys}
+            isFetching={isFetching}
+            onAdd={() => openAdd()}
+          />
+
+          {keysByProvider.map((p) => (
+            <ProviderCard
+              key={p.value}
+              provider={p}
+              onAdd={() => openAdd(p.value)}
+              onEdit={(key) => setEditingKey(key)}
+              onToggle={(id, isActive) => toggleMutation.mutate({ id, isActive })}
+              onDelete={(id) => deleteMutation.mutate(id)}
+              onReorder={(items) => reorderMutation.mutate(items)}
+              togglePending={toggleMutation.isPending}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Add Key dialog (provider pre-filled when opened from a ProviderCard) */}
+      <AddKeyDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        providerPref={addProviderPref}
+        onCreated={() => {
+          setAddOpen(false);
+          setAddProviderPref(undefined);
+          invalidateAfterChange();
+        }}
+      />
+
+      {/* Edit Key dialog (label / priority / isActive only — key rotation is delete + re-create) */}
+      <EditKeyDialog
+        keyObj={editingKey}
+        onOpenChange={(open) => {
+          if (!open) setEditingKey(null);
+        }}
+        onSaved={() => {
+          setEditingKey(null);
+          invalidateAfterChange();
+        }}
+      />
+    </section>
+  );
+}
+
+// ─── Fallback chain banner ────────────────────────────────────────────────────
+
+function FallbackChainBanner({
+  keys,
+  totalKeys,
+  activeKeys,
+  isFetching,
+  onAdd,
+}: {
+  keys: AiKey[];
+  totalKeys: number;
+  activeKeys: number;
+  isFetching: boolean;
+  onAdd: () => void;
+}) {
+  // No keys at all → warning + CTA.
+  if (totalKeys === 0) {
+    return (
+      <Alert>
+        <AlertCircle className="size-4" />
+        <AlertTitle>No AI keys configured</AlertTitle>
+        <AlertDescription className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+          <span>
+            Add at least one key to enable AI features. The system will fall back
+            to the <code className="font-mono text-xs">OPENROUTER_API_KEY</code> env
+            var if set.
+          </span>
+          <Button size="sm" onClick={onAdd} className="shrink-0">
+            <Plus className="size-4" /> Add Key
+          </Button>
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  return (
+    <Card className="card-shadow">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Activity className="size-4 text-primary" />
+              Fallback Chain
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Providers are tried in this order. Within a provider, keys rotate on
+              429/401/403 and providers switch on 5xx/network errors.
+            </CardDescription>
           </div>
-        </TabsContent>
+          <div className="flex items-center gap-2 shrink-0">
+            <Badge variant="outline" className="text-[10px]">
+              {activeKeys} / {totalKeys} active
+            </Badge>
+            {isFetching && (
+              <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                <Loader2 className="size-3 animate-spin" /> syncing
+              </span>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-wrap items-center gap-2">
+          {PROVIDERS.map((p, idx) => {
+            const providerKeys = keys.filter((k) => k.provider === p.value);
+            const activeCount = providerKeys.filter((k) => k.isActive).length;
+            const hasActive = activeCount > 0;
+            return (
+              <div key={p.value} className="flex items-center gap-2">
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div
+                        className={cn(
+                          'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium',
+                          hasActive
+                            ? PROVIDER_COLOR_CLASSES[p.color]
+                            : 'bg-muted text-muted-foreground border-border',
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            'size-1.5 rounded-full',
+                            hasActive ? 'bg-current' : 'bg-muted-foreground/40',
+                          )}
+                        />
+                        {p.label}
+                        <span className="text-[10px] opacity-70">
+                          ({activeCount}/{providerKeys.length})
+                        </span>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {hasActive
+                        ? `${activeCount} active key${activeCount > 1 ? 's' : ''} for ${p.label}`
+                        : `No active keys for ${p.label}`}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                {idx < PROVIDERS.length - 1 && (
+                  <span className="text-muted-foreground/60 text-xs" aria-hidden>
+                    →
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
-        {/* ─── Tab 2: Usage & Costs ─────────────────────────────────────── */}
-        <TabsContent value="usage" className="mt-4 space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-            {/* Left (60%): cost-by-provider bar chart */}
-            <Card className="card-shadow lg:col-span-3">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Cost by Provider</CardTitle>
-                <CardDescription className="text-xs">
-                  Spend this month, in USD
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-[300px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={COST_BY_PROVIDER}
-                      margin={{ top: 8, right: 8, left: -8, bottom: 0 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                      <XAxis
-                        dataKey="name"
-                        tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
-                        tickLine={false}
-                        axisLine={{ stroke: 'var(--border)' }}
-                      />
-                      <YAxis
-                        tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
-                        tickLine={false}
-                        axisLine={false}
-                        width={56}
-                        tickFormatter={(v: number) => `$${v}`}
-                      />
-                      <Tooltip
-                        cursor={{ fill: 'var(--muted)', opacity: 0.4 }}
-                        contentStyle={{
-                          backgroundColor: 'var(--card)',
-                          border: '1px solid var(--border)',
-                          borderRadius: '8px',
-                          color: 'var(--foreground)',
-                          fontSize: '12px',
-                          padding: '6px 10px',
-                        }}
-                        labelStyle={{ color: 'var(--muted-foreground)', fontSize: '11px' }}
-                        formatter={(value: number) => [formatCurrency(value), 'Cost']}
-                      />
-                      <Bar dataKey="cost" radius={[6, 6, 0, 0]} maxBarSize={56}>
-                        {COST_BY_PROVIDER.map((entry, idx) => (
-                          <Cell key={`cell-${idx}`} fill={entry.color} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
+// ─── Provider card ────────────────────────────────────────────────────────────
 
-            {/* Right (40%): top spenders */}
-            <div className="lg:col-span-2">
-              <TopSpendersCard />
+interface ProviderCardProps {
+  provider: (typeof PROVIDERS)[number] & { keys: AiKey[] };
+  onAdd: () => void;
+  onEdit: (key: AiKey) => void;
+  onToggle: (id: string, isActive: boolean) => void;
+  onDelete: (id: string) => void;
+  onReorder: (items: { id: string; priority: number }[]) => void;
+  togglePending: boolean;
+}
+
+function ProviderCard({
+  provider,
+  onAdd,
+  onEdit,
+  onToggle,
+  onDelete,
+  onReorder,
+  togglePending,
+}: ProviderCardProps) {
+  const { keys } = provider;
+  const meta = providerMeta(provider.value)!;
+  const activeCount = keys.filter((k) => k.isActive).length;
+
+  return (
+    <Card className="card-shadow">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <div
+              className={cn(
+                'size-10 rounded-lg flex items-center justify-center shrink-0 border',
+                PROVIDER_COLOR_CLASSES[meta.color],
+              )}
+            >
+              <KeyIcon className="size-5" />
+            </div>
+            <div className="min-w-0">
+              <CardTitle className="text-base flex items-center gap-2 flex-wrap">
+                {meta.label}
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    'text-[10px]',
+                    keys.length > 0
+                      ? getStatusBadgeClasses(activeCount > 0 ? 'active' : 'inactive')
+                      : 'bg-muted text-muted-foreground border-border',
+                  )}
+                >
+                  {keys.length === 0
+                    ? 'No keys'
+                    : `${activeCount}/${keys.length} active`}
+                </Badge>
+              </CardTitle>
+              <CardDescription className="text-xs mt-0.5 flex items-center gap-1.5 flex-wrap">
+                <span>{meta.description}</span>
+                <a
+                  href={meta.docsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-0.5 text-primary hover:underline"
+                >
+                  Get key <ExternalLink className="size-3" />
+                </a>
+              </CardDescription>
             </div>
           </div>
-
-          {/* KPI row */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {USAGE_KPIS.map((k) => (
-              <KpiCard
-                key={k.label}
-                label={k.label}
-                value={k.value}
-                icon={k.icon}
-                trend={k.trend}
-                color={k.color}
-                sub={k.sub}
-              />
-            ))}
+          <Button size="sm" variant="outline" onClick={onAdd} className="shrink-0">
+            <Plus className="size-4" /> Add Key
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        {keys.length === 0 ? (
+          <div className="px-6 pb-6 pt-2 text-center">
+            <p className="text-xs text-muted-foreground italic">
+              No keys configured for {meta.label}. The fallback chain will skip
+              this provider.
+            </p>
           </div>
-        </TabsContent>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-10"></TableHead>
+                  <TableHead>Label</TableHead>
+                  <TableHead>Key</TableHead>
+                  <TableHead className="w-16 text-center">Priority</TableHead>
+                  <TableHead className="w-20 text-center">Status</TableHead>
+                  <TableHead className="w-32">Last Used</TableHead>
+                  <TableHead className="w-40">Last Error</TableHead>
+                  <TableHead className="w-24 text-right">Requests</TableHead>
+                  <TableHead className="w-44 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {keys.map((k, idx) => (
+                  <KeyRow
+                    key={k.id}
+                    keyObj={k}
+                    isFirst={idx === 0}
+                    isLast={idx === keys.length - 1}
+                    onEdit={() => onEdit(k)}
+                    onToggle={(isActive) => onToggle(k.id, isActive)}
+                    onDelete={() => onDelete(k.id)}
+                    onReorderUp={() => {
+                      if (idx === 0) return;
+                      const prev = keys[idx - 1];
+                      onReorder([
+                        { id: k.id, priority: prev.priority },
+                        { id: prev.id, priority: k.priority },
+                      ]);
+                    }}
+                    onReorderDown={() => {
+                      if (idx === keys.length - 1) return;
+                      const next = keys[idx + 1];
+                      onReorder([
+                        { id: k.id, priority: next.priority },
+                        { id: next.id, priority: k.priority },
+                      ]);
+                    }}
+                    togglePending={togglePending}
+                  />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
-        {/* ─── Tab 3: Models ────────────────────────────────────────────── */}
-        <TabsContent value="models" className="mt-4">
-          <Card className="card-shadow">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Enabled Models</CardTitle>
-              <CardDescription className="text-xs">
-                Pricing per 1,000 tokens. Toggle models on or off per workspace.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Model</TableHead>
-                      <TableHead>Provider</TableHead>
-                      <TableHead>Context</TableHead>
-                      <TableHead className="text-right">Input $/1K</TableHead>
-                      <TableHead className="text-right">Output $/1K</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {MODELS.map((m) => {
-                      const enabled = modelEnabled[m.id];
-                      return (
-                        <TableRow key={m.id}>
-                          <TableCell className="font-mono text-xs font-medium text-foreground">
-                            {m.name}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {m.provider}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {m.context}
-                          </TableCell>
-                          <TableCell className="text-right text-xs font-mono text-muted-foreground">
-                            ${m.inputCost.toFixed(4)}
-                          </TableCell>
-                          <TableCell className="text-right text-xs font-mono text-muted-foreground">
-                            ${m.outputCost.toFixed(4)}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant="outline"
-                              className={cn(
-                                'text-[10px]',
-                                getStatusBadgeClasses(enabled ? 'active' : 'inactive'),
-                              )}
-                            >
-                              {enabled ? 'Active' : 'Disabled'}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center justify-end gap-3">
-                              <Switch
-                                checked={enabled}
-                                onCheckedChange={(v) =>
-                                  setModelEnabled((prev) => ({ ...prev, [m.id]: v }))
-                                }
-                                aria-label={`Toggle ${m.name}`}
-                              />
-                              <Button
-                                variant="link"
-                                size="sm"
-                                className="h-auto p-0 text-xs text-primary"
-                              >
-                                Edit limits
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+// ─── Key row (table row with all actions) ─────────────────────────────────────
 
-        {/* ─── Tab 4: Prompt Templates ──────────────────────────────────── */}
-        <TabsContent value="prompts" className="mt-4 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h3 className="text-base font-semibold text-foreground">Prompt Templates</h3>
-              <p className="text-xs text-muted-foreground">
-                Reusable AI prompts shared across workflows
+interface KeyRowProps {
+  keyObj: AiKey;
+  isFirst: boolean;
+  isLast: boolean;
+  onEdit: () => void;
+  onToggle: (isActive: boolean) => void;
+  onDelete: () => void;
+  onReorderUp: () => void;
+  onReorderDown: () => void;
+  togglePending: boolean;
+}
+
+function KeyRow({
+  keyObj,
+  isFirst,
+  isLast,
+  onEdit,
+  onToggle,
+  onDelete,
+  onReorderUp,
+  onReorderDown,
+  togglePending,
+}: KeyRowProps) {
+  return (
+    <TableRow>
+      {/* Drag handle / reorder arrows */}
+      <TableCell className="align-middle">
+        <div className="flex items-center gap-0.5">
+          <GripVertical className="size-3.5 text-muted-foreground/50" aria-hidden />
+          <div className="flex flex-col">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-5 text-muted-foreground hover:text-foreground disabled:opacity-30"
+              disabled={isFirst}
+              onClick={onReorderUp}
+              aria-label="Move up"
+            >
+              <ArrowUp className="size-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-5 text-muted-foreground hover:text-foreground disabled:opacity-30"
+              disabled={isLast}
+              onClick={onReorderDown}
+              aria-label="Move down"
+            >
+              <ArrowDown className="size-3" />
+            </Button>
+          </div>
+        </div>
+      </TableCell>
+
+      <TableCell className="font-medium text-sm text-foreground align-middle">
+        {keyObj.label}
+      </TableCell>
+
+      <TableCell className="align-middle">
+        <code className="font-mono text-xs text-muted-foreground">{keyObj.maskedKey}</code>
+      </TableCell>
+
+      <TableCell className="text-center align-middle">
+        <span className="text-xs font-mono text-muted-foreground">{keyObj.priority}</span>
+      </TableCell>
+
+      <TableCell className="text-center align-middle">
+        <ToggleActiveSwitch
+          isActive={keyObj.isActive}
+          pending={togglePending}
+          onToggle={onToggle}
+          label={keyObj.label}
+        />
+      </TableCell>
+
+      <TableCell className="align-middle">
+        <span className="text-xs text-muted-foreground">
+          {timeAgo(keyObj.lastUsedAt)}
+        </span>
+      </TableCell>
+
+      <TableCell className="align-middle">
+        {keyObj.lastError ? (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex items-center gap-1 text-xs text-red-600 dark:text-red-400 cursor-help">
+                  <AlertCircle className="size-3 shrink-0" />
+                  <span className="truncate max-w-32">{timeAgo(keyObj.lastErrorAt)}</span>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-sm break-words">
+                {keyObj.lastError}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : (
+          <span className="text-xs text-muted-foreground">—</span>
+        )}
+      </TableCell>
+
+      <TableCell className="text-right align-middle">
+        <span className="text-xs font-mono text-muted-foreground">
+          {keyObj.requestCount.toLocaleString('en-US')}
+        </span>
+      </TableCell>
+
+      <TableCell className="text-right align-middle">
+        <div className="flex items-center justify-end gap-1">
+          <TestKeyButton keyId={keyObj.id} label={keyObj.label} />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 text-muted-foreground hover:text-foreground"
+            onClick={onEdit}
+            aria-label={`Edit ${keyObj.label}`}
+          >
+            <Pencil className="size-3.5" />
+          </Button>
+          <DeleteKeyButton label={keyObj.label} onDelete={onDelete} />
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+// ─── Toggle Active switch (optimistic) ────────────────────────────────────────
+
+function ToggleActiveSwitch({
+  isActive,
+  pending,
+  onToggle,
+  label,
+}: {
+  isActive: boolean;
+  pending: boolean;
+  onToggle: (isActive: boolean) => void;
+  label: string;
+}) {
+  return (
+    <div className="flex items-center justify-center">
+      <Switch
+        checked={isActive}
+        disabled={pending}
+        onCheckedChange={(checked) => onToggle(checked)}
+        aria-label={`${isActive ? 'Disable' : 'Enable'} ${label}`}
+      />
+    </div>
+  );
+}
+
+// ─── Test key button ──────────────────────────────────────────────────────────
+
+function TestKeyButton({ keyId, label }: { keyId: string; label: string }) {
+  const [result, setResult] = useState<'idle' | 'success' | 'error'>('idle');
+
+  const testMutation = useMutation({
+    mutationFn: async () => {
+      const res = await authFetch(`/api/superadmin/ai-keys/${keyId}/test`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || 'Test request failed');
+      }
+      return res.json() as Promise<TestResponse>;
+    },
+    onSuccess: (data) => {
+      if (data.success) {
+        setResult('success');
+        toast.success(`"${label}" is valid`, {
+          description: data.message || 'The upstream provider accepted the key.',
+        });
+      } else {
+        setResult('error');
+        toast.error(`"${label}" failed validation`, {
+          description: data.error || 'The upstream provider rejected the key.',
+        });
+      }
+      // Reset the icon after a short delay so the user can re-test if desired.
+      setTimeout(() => setResult('idle'), 2500);
+    },
+    onError: (e) => {
+      setResult('error');
+      toast.error(e instanceof Error ? e.message : 'Test request failed');
+      setTimeout(() => setResult('idle'), 2500);
+    },
+  });
+
+  const icon = testMutation.isPending ? (
+    <Loader2 className="size-3.5 animate-spin" />
+  ) : result === 'success' ? (
+    <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+  ) : result === 'error' ? (
+    <AlertCircle className="size-3.5 text-red-600 dark:text-red-400" />
+  ) : (
+    <Zap className="size-3.5" />
+  );
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="size-7 text-muted-foreground hover:text-foreground"
+      disabled={testMutation.isPending}
+      onClick={() => testMutation.mutate()}
+      aria-label={`Test ${label}`}
+      title="Test key"
+    >
+      {icon}
+    </Button>
+  );
+}
+
+// ─── Delete key button (AlertDialog confirmation) ─────────────────────────────
+
+function DeleteKeyButton({
+  label,
+  onDelete,
+}: {
+  label: string;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7 text-muted-foreground hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10"
+          aria-label={`Delete ${label}`}
+        >
+          <Trash2 className="size-3.5" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this key?</AlertDialogTitle>
+          <AlertDialogDescription>
+            You are about to permanently delete <strong>&ldquo;{label}&rdquo;</strong>.
+            This cannot be undone — the key will be removed from the fallback chain
+            immediately. To rotate the key value instead, delete and re-create it.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-white hover:bg-destructive/90"
+            onClick={() => {
+              onDelete();
+              setOpen(false);
+            }}
+          >
+            <Trash2 className="size-4" /> Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+// ─── Add Key dialog ───────────────────────────────────────────────────────────
+
+interface AddKeyDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  providerPref?: ProviderValue;
+  onCreated: () => void;
+}
+
+function AddKeyDialog({ open, onOpenChange, providerPref, onCreated }: AddKeyDialogProps) {
+  const [provider, setProvider] = useState<ProviderValue>(providerPref ?? 'openrouter');
+  const [label, setLabel] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [priority, setPriority] = useState('0');
+  const [isActive, setIsActive] = useState(true);
+
+  // Sync the provider when the pref changes (e.g. opened from a specific card).
+  // useEffect would cause a flash; instead we reset on open via the key prop below.
+  // For simplicity, we re-seed the form whenever `open` flips to true.
+  // The Dialog remounts this component when `open` toggles because of the conditional
+  // render in shadcn's DialogContent — but to be safe, we use an effect-free pattern.
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const res = await authFetch('/api/superadmin/ai-keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider,
+          label: label.trim(),
+          key: apiKey.trim(),
+          priority: Number.isFinite(parseInt(priority, 10)) ? parseInt(priority, 10) : 0,
+          isActive,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || 'Failed to create key');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success('Key added to the fallback chain');
+      // Reset the form.
+      setLabel('');
+      setApiKey('');
+      setPriority('0');
+      setIsActive(true);
+      onCreated();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to create key'),
+  });
+
+  // When opened with a provider pref, seed the select.
+  // (Re-seed on every open transition.)
+  if (open && providerPref && providerPref !== provider) {
+    setProvider(providerPref);
+  }
+
+  const canSubmit =
+    label.trim().length > 0 &&
+    apiKey.trim().length > 0 &&
+    !createMutation.isPending;
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) {
+          // Reset on close.
+          setLabel('');
+          setApiKey('');
+          setPriority('0');
+          setIsActive(true);
+        }
+        onOpenChange(o);
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Plus className="size-5 text-primary" />
+            Add API Key
+          </DialogTitle>
+          <DialogDescription>
+            Add a new key to the fallback chain. The plaintext is encrypted
+            server-side and never stored or returned in plaintext.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {/* Provider */}
+          <div className="space-y-1.5">
+            <Label htmlFor="add-provider">Provider</Label>
+            <Select value={provider} onValueChange={(v) => setProvider(v as ProviderValue)}>
+              <SelectTrigger id="add-provider" className="w-full">
+                <SelectValue placeholder="Select provider" />
+              </SelectTrigger>
+              <SelectContent>
+                {PROVIDERS.map((p) => (
+                  <SelectItem key={p.value} value={p.value}>
+                    {p.label} — {p.description}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Label */}
+          <div className="space-y-1.5">
+            <Label htmlFor="add-label">Label</Label>
+            <Input
+              id="add-label"
+              placeholder="e.g. OpenRouter Key 1"
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              maxLength={80}
+            />
+          </div>
+
+          {/* API Key */}
+          <div className="space-y-1.5">
+            <Label htmlFor="add-key">API Key</Label>
+            <Input
+              id="add-key"
+              type="password"
+              placeholder="sk-or-v1-…"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Paste the raw key from {providerMeta(provider)?.label}. It will be
+              encrypted at rest.
+            </p>
+          </div>
+
+          {/* Priority + Active */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="add-priority">Priority</Label>
+              <Input
+                id="add-priority"
+                type="number"
+                value={priority}
+                onChange={(e) => setPriority(e.target.value)}
+                min={0}
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Lower = tried first.
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1 sm:flex-initial">
-                <Search className="size-4 text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2" />
-                <Input
-                  placeholder="Search templates..."
-                  value={promptQuery}
-                  onChange={(e) => setPromptQuery(e.target.value)}
-                  className="pl-8 h-9 w-full sm:w-56"
-                  aria-label="Search prompt templates"
+            <div className="space-y-1.5">
+              <Label htmlFor="add-active">Active</Label>
+              <div className="flex items-center h-9 gap-2">
+                <Switch
+                  id="add-active"
+                  checked={isActive}
+                  onCheckedChange={setIsActive}
                 />
+                <span className="text-sm text-muted-foreground">
+                  {isActive ? 'Enabled' : 'Disabled'}
+                </span>
               </div>
-              <Button size="sm" className="h-9 shrink-0">
-                <Plus className="size-4 mr-1" /> New Template
-              </Button>
             </div>
           </div>
+        </div>
 
-          {filteredTemplates.length === 0 ? (
-            <Card className="border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                <Search className="size-6 text-muted-foreground mb-2" />
-                <p className="text-sm font-medium text-foreground">No templates found</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Try a different search term.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredTemplates.map((t) => (
-                <Card key={t.id} className="card-shadow card-hover">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <CardTitle className="text-base truncate">{t.name}</CardTitle>
-                        <Badge variant="secondary" className="text-[10px] mt-1.5">
-                          {t.category}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-7 text-muted-foreground hover:text-foreground"
-                          aria-label={`Edit ${t.name}`}
-                        >
-                          <Pencil className="size-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-7 text-muted-foreground hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10"
-                          aria-label={`Delete ${t.name}`}
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <p className="text-xs text-muted-foreground italic line-clamp-2 leading-relaxed">
-                      &ldquo;{t.preview}&rdquo;
-                    </p>
-                    <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-2 border-t border-border">
-                      <span>Used {formatNumber(t.uses)} times</span>
-                      <span>Last edited {t.lastEdited}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={createMutation.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => createMutation.mutate()}
+            disabled={!canSubmit}
+          >
+            {createMutation.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Plus className="size-4" />
+            )}
+            Create Key
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Edit Key dialog ──────────────────────────────────────────────────────────
+
+interface EditKeyDialogProps {
+  keyObj: AiKey | null;
+  onOpenChange: (open: boolean) => void;
+  onSaved: () => void;
+}
+
+function EditKeyDialog({ keyObj, onOpenChange, onSaved }: EditKeyDialogProps) {
+  const open = keyObj !== null;
+  const [label, setLabel] = useState('');
+  const [priority, setPriority] = useState('0');
+  const [isActive, setIsActive] = useState(true);
+
+  // Seed the form when the key changes. Using a layout-style pattern via
+  // useState + an effect-free `if (open && keyObj && label === '')` seed is
+  // fragile; instead we use a `key` prop on the inner content so it remounts.
+  // The simplest robust pattern: track which id we've seeded for.
+  const [seededId, setSeededId] = useState<string | null>(null);
+  if (open && keyObj && keyObj.id !== seededId) {
+    setLabel(keyObj.label);
+    setPriority(String(keyObj.priority));
+    setIsActive(keyObj.isActive);
+    setSeededId(keyObj.id);
+  }
+  // Clear the seeded id when the dialog closes so a future open re-seeds.
+  if (!open && seededId !== null) {
+    setSeededId(null);
+  }
+
+  const meta = keyObj ? providerMeta(keyObj.provider) : undefined;
+
+  const updateMutation = useMutation({
+    mutationFn: async () => {
+      if (!keyObj) throw new Error('No key selected');
+      const res = await authFetch(`/api/superadmin/ai-keys/${keyObj.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          label: label.trim(),
+          priority: Number.isFinite(parseInt(priority, 10)) ? parseInt(priority, 10) : 0,
+          isActive,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || 'Failed to update key');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success('Key updated');
+      onSaved();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to update key'),
+  });
+
+  const canSubmit =
+    keyObj !== null &&
+    label.trim().length > 0 &&
+    !updateMutation.isPending;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Pencil className="size-5 text-primary" />
+            Edit Key
+          </DialogTitle>
+          <DialogDescription>
+            Update the label, priority, or active state.{' '}
+            {meta && (
+              <>
+                Provider:{' '}
+                <Badge
+                  variant="outline"
+                  className={cn('text-[10px]', PROVIDER_COLOR_CLASSES[meta.color])}
+                >
+                  {meta.label}
+                </Badge>
+              </>
+            )}
+            The key value itself cannot be edited — rotate by deleting and
+            re-creating.
+          </DialogDescription>
+        </DialogHeader>
+
+        {keyObj && (
+          <div className="space-y-4 py-2">
+            {/* Masked key (read-only display) */}
+            <div className="space-y-1.5">
+              <Label>Key</Label>
+              <div className="rounded-md border border-border bg-muted/40 px-3 py-2">
+                <code className="font-mono text-xs text-muted-foreground">
+                  {keyObj.maskedKey}
+                </code>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                To replace this key value, delete this row and add a new one.
+              </p>
             </div>
-          )}
-        </TabsContent>
-      </Tabs>
-    </section>
+
+            {/* Label */}
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-label">Label</Label>
+              <Input
+                id="edit-label"
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                maxLength={80}
+              />
+            </div>
+
+            {/* Priority + Active */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-priority">Priority</Label>
+                <Input
+                  id="edit-priority"
+                  type="number"
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value)}
+                  min={0}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-active">Active</Label>
+                <div className="flex items-center h-9 gap-2">
+                  <Switch
+                    id="edit-active"
+                    checked={isActive}
+                    onCheckedChange={setIsActive}
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    {isActive ? 'Enabled' : 'Disabled'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Meta row */}
+            <div className="grid grid-cols-2 gap-3 pt-1 text-[11px] text-muted-foreground border-t border-border">
+              <div>
+                <span className="block">Last used</span>
+                <span className="text-foreground/80">
+                  {timeAgo(keyObj.lastUsedAt)}
+                </span>
+              </div>
+              <div>
+                <span className="block">Requests</span>
+                <span className="text-foreground/80 font-mono">
+                  {keyObj.requestCount.toLocaleString('en-US')}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={updateMutation.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => updateMutation.mutate()}
+            disabled={!canSubmit}
+          >
+            {updateMutation.isPending ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <CheckCircle2 className="size-4" />
+            )}
+            Save Changes
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Loading skeleton ─────────────────────────────────────────────────────────
+
+function AiCenterSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* Banner skeleton */}
+      <Card className="card-shadow">
+        <CardHeader className="pb-3">
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-3 w-80 mt-2" />
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-2">
+            {PROVIDERS.map((p) => (
+              <Skeleton key={p.value} className="h-8 w-32 rounded-lg" />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Provider cards skeleton */}
+      {PROVIDERS.map((p) => (
+        <Card key={p.value} className="card-shadow">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Skeleton className="size-10 rounded-lg" />
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3 w-48" />
+                </div>
+              </div>
+              <Skeleton className="h-8 w-24" />
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="px-6 pb-6 space-y-2">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
   );
 }

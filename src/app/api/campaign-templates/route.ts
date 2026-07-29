@@ -2,6 +2,7 @@ import { db } from '@/lib/db'
 import { getAuthUser, generateSlug } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { detectVariablesFromContent } from '@/lib/template-vars'
+import { requireNotTrial } from '@/lib/trial-gate'
 
 /**
  * GET /api/campaign-templates
@@ -65,6 +66,9 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    // Trial gate — Template Studio mutating actions are locked during trial.
+    const gate = await requireNotTrial('template_studio')
+    if (!gate.ok) return gate.response
     const tenantId = user.tenantId || 'default'
 
     const body = await request.json()

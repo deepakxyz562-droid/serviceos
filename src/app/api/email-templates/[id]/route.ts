@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { requireNotTrial } from '@/lib/trial-gate';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -93,6 +94,9 @@ export async function PUT(request: NextRequest, { params }: Params) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    // Trial gate — Template Studio mutating actions are locked during trial.
+    const gate = await requireNotTrial('template_studio');
+    if (!gate.ok) return gate.response;
     const tenantId = user.tenantId || 'default';
     const { id } = await params;
 
@@ -333,6 +337,9 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    // Trial gate — Template Studio mutating actions are locked during trial.
+    const gate = await requireNotTrial('template_studio');
+    if (!gate.ok) return gate.response;
     const tenantId = user.tenantId || 'default';
     const { id } = await params;
 

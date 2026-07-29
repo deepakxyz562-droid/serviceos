@@ -32,7 +32,7 @@ import {
   Bot,
   Sparkles,
   PhoneCall,
-  Phone,
+  PhoneIncoming,
   ClipboardList,
   GitBranch,
   Kanban,
@@ -94,7 +94,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
-import { useFeatureAccess } from '@/hooks/use-tenant-plan';
 
 // ─── Nav item definition ────────────────────────────────────────────────────
 
@@ -103,15 +102,6 @@ interface NavItem {
   label: string;
   icon: React.ElementType;
   badge?: string;
-  /**
-   * Optional plan-feature gate. When set, the item renders greyed-out with a
-   * Lock icon if the current tenant's plan doesn't include this feature.
-   * Clicking a locked item shows an "Upgrade" toast instead of navigating.
-   *
-   * Lookup happens via `useFeatureAccess(featureKey)` which fetches
-   * `/api/plan-features/check?feature=xxx` (60s SWR cache, module-level).
-   */
-  featureKey?: string;
 }
 
 interface NavSection {
@@ -144,7 +134,6 @@ const ownerNavSections: NavSection[] = [
     title: 'Operations',
     items: [
       { view: 'jobs', label: 'Jobs', icon: Briefcase },
-      { view: 'booking', label: 'Booking', icon: CalendarCheck },
       { view: 'dispatch', label: 'Live Dispatch', icon: Radio },
       { view: 'employees', label: 'Employees', icon: UserCog },
       { view: 'timesheet', label: 'Timesheet', icon: Clock },
@@ -154,10 +143,10 @@ const ownerNavSections: NavSection[] = [
   {
     title: 'Marketing',
     items: [
-      { view: 'campaigns', label: 'Campaigns', icon: Megaphone, featureKey: 'campaigns' },
-      { view: 'broadcast', label: 'Broadcast', icon: Send, featureKey: 'broadcast' },
+      { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
+      { view: 'broadcast', label: 'Broadcast', icon: Send },
       { view: 'templateStudio', label: 'Template Studio', icon: LayoutTemplate },
-      { view: 'retargeting', label: 'Retargeting', icon: RefreshCw, featureKey: 'retargeting' },
+      { view: 'retargeting', label: 'Retargeting', icon: RefreshCw },
       { view: 'marketingAnalytics', label: 'Analytics', icon: BarChart3 },
     ],
   },
@@ -166,7 +155,6 @@ const ownerNavSections: NavSection[] = [
     items: [
       { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
       { view: 'liveChat', label: 'Live Chat', icon: MessageSquare },
-      { view: 'smsNumbers', label: 'Phone Numbers', icon: Phone, featureKey: 'sms_numbers' },
       { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
       { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
       { view: 'workflows', label: 'Workflows', icon: Workflow },
@@ -179,9 +167,10 @@ const ownerNavSections: NavSection[] = [
   {
     title: 'AI Receptionist',
     items: [
-      { view: 'aiReceptionist', label: 'Dashboard', icon: PhoneCall, badge: 'Free', featureKey: 'ai_receptionist' },
-      { view: 'aiAgents', label: 'AI Agents', icon: Bot, featureKey: 'ai_receptionist' },
-      { view: 'aiCallHistory', label: 'Call History', icon: PhoneCall, featureKey: 'ai_receptionist' },
+      { view: 'aiReceptionist', label: 'Dashboard', icon: PhoneCall, badge: 'Free' },
+      { view: 'aiAgents', label: 'AI Agents', icon: Bot },
+      { view: 'aiPhoneNumbers', label: 'Phone Numbers', icon: PhoneIncoming },
+      { view: 'aiCallHistory', label: 'Call History', icon: PhoneCall },
     ],
   },
   {
@@ -269,7 +258,6 @@ const superadminNavSections: NavSection[] = [
     title: 'Operations',
     items: [
       { view: 'jobs', label: 'Jobs', icon: Briefcase },
-      { view: 'booking', label: 'Booking', icon: CalendarCheck },
       { view: 'employees', label: 'Employees', icon: UserCog },
       { view: 'timesheet', label: 'Timesheet', icon: Clock },
       { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },
@@ -278,10 +266,10 @@ const superadminNavSections: NavSection[] = [
   {
     title: 'Marketing',
     items: [
-      { view: 'campaigns', label: 'Campaigns', icon: Megaphone, featureKey: 'campaigns' },
-      { view: 'broadcast', label: 'Broadcast', icon: Send, featureKey: 'broadcast' },
+      { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
+      { view: 'broadcast', label: 'Broadcast', icon: Send },
       { view: 'templateStudio', label: 'Template Studio', icon: LayoutTemplate },
-      { view: 'retargeting', label: 'Retargeting', icon: RefreshCw, featureKey: 'retargeting' },
+      { view: 'retargeting', label: 'Retargeting', icon: RefreshCw },
       { view: 'marketingAnalytics', label: 'Analytics', icon: BarChart3 },
     ],
   },
@@ -290,7 +278,6 @@ const superadminNavSections: NavSection[] = [
     items: [
       { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
       { view: 'liveChat', label: 'Live Chat', icon: MessageSquare },
-      { view: 'smsNumbers', label: 'Phone Numbers', icon: Phone, featureKey: 'sms_numbers' },
       { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
       { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
       { view: 'workflows', label: 'Workflows', icon: Workflow },
@@ -303,9 +290,10 @@ const superadminNavSections: NavSection[] = [
   {
     title: 'AI Receptionist',
     items: [
-      { view: 'aiReceptionist', label: 'Dashboard', icon: PhoneCall, badge: 'Free', featureKey: 'ai_receptionist' },
-      { view: 'aiAgents', label: 'AI Agents', icon: Bot, featureKey: 'ai_receptionist' },
-      { view: 'aiCallHistory', label: 'Call History', icon: PhoneCall, featureKey: 'ai_receptionist' },
+      { view: 'aiReceptionist', label: 'Dashboard', icon: PhoneCall, badge: 'Free' },
+      { view: 'aiAgents', label: 'AI Agents', icon: Bot },
+      { view: 'aiPhoneNumbers', label: 'Phone Numbers', icon: PhoneIncoming },
+      { view: 'aiCallHistory', label: 'Call History', icon: PhoneCall },
     ],
   },
   {
@@ -410,95 +398,6 @@ function CreateMenu({ isMobile, leftSidebarOpen, onSelect }: CreateMenuProps) {
   );
 }
 
-// ─── Nav button (extracted so it can call useFeatureAccess per-item) ─────────
-//
-// Plan-tier gating: when `item.featureKey` is set and the current tenant's plan
-// doesn't include that feature, the button renders greyed-out with a Lock icon
-// (in place of the badge). Clicking it shows an "Upgrade" toast instead of
-// navigating. Superadmins bypass the check entirely (we pass `featureKey=null`
-// so the hook short-circuits to `enabled: true`).
-
-interface NavButtonProps {
-  item: NavItem;
-  isActive: boolean;
-  isExpandedMode: boolean;
-  isTrial: boolean;
-  isSuperAdmin: boolean;
-  onClick: (view: ViewType) => void;
-}
-
-function NavButton({ item, isActive, isExpandedMode, isTrial, isSuperAdmin, onClick }: NavButtonProps) {
-  // Superadmin bypasses the feature check (passing null makes the hook return
-  // `{ enabled: true, loading: false }` without firing a fetch).
-  const featureKeyForLookup = isSuperAdmin ? null : item.featureKey;
-  const { enabled: featureEnabled, loading: featureLoading } = useFeatureAccess(featureKeyForLookup);
-
-  const Icon = item.icon;
-  const isLocked = !!item.featureKey && !featureEnabled && !featureLoading;
-
-  const handleClick = () => {
-    if (isLocked) {
-      toast.error('Plan feature locked', {
-        description: `Upgrade your plan to unlock "${item.label}".`,
-        action: isTrial
-          ? { label: 'Upgrade', onClick: () => onClick('billing' as ViewType) }
-          : undefined,
-      });
-      return;
-    }
-    onClick(item.view);
-  };
-
-  // Locked items: muted + cursor-not-allowed + Lock icon instead of badge.
-  const baseClass = isLocked
-    ? 'flex items-center w-full rounded-lg text-sm font-medium transition-all duration-150 cursor-not-allowed text-slate-400/60 dark:text-slate-600/60'
-    : cn(
-        'flex items-center w-full rounded-lg text-sm font-medium transition-all duration-150',
-        isActive
-          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 shadow-sm'
-          : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200/70 dark:hover:bg-slate-800/70 hover:text-slate-800 dark:hover:text-slate-200',
-      );
-  const sizeClass = isExpandedMode ? 'h-9 px-3 gap-3' : 'h-9 justify-center';
-
-  const button = (
-    <button
-      key={item.view}
-      onClick={handleClick}
-      aria-disabled={isLocked ? 'true' : undefined}
-      title={isLocked ? `Locked — upgrade to unlock "${item.label}"` : undefined}
-      className={cn(baseClass, sizeClass)}
-    >
-      <Icon className={cn('shrink-0', isActive && !isLocked ? 'size-[18px] text-emerald-600 dark:text-emerald-400' : 'size-4')} />
-      {isExpandedMode && (
-        <span className="whitespace-nowrap flex-1 text-left text-[13px]">{item.label}</span>
-      )}
-      {isExpandedMode && isLocked && (
-        <Lock className="size-3.5 text-slate-400 dark:text-slate-600 ml-auto shrink-0" aria-label="Locked" />
-      )}
-      {isExpandedMode && !isLocked && item.badge && (
-        <Badge variant="outline" className="text-[9px] h-4 px-1.5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
-          {item.badge}
-        </Badge>
-      )}
-      {isExpandedMode && !isLocked && item.view === 'billing' && isTrial && (
-        <Crown className="size-3 text-amber-500 ml-auto" />
-      )}
-    </button>
-  );
-
-  // Tooltip wraps the button in icon-only mode so the user can see the label
-  // (and the lock reason). In expanded mode the inline label suffices.
-  if (isExpandedMode) return button;
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{button}</TooltipTrigger>
-      <TooltipContent side="right" sideOffset={8}>
-        {isLocked ? `Locked — ${item.label}` : item.label}
-      </TooltipContent>
-    </Tooltip>
-  );
-}
-
 // ─── Sidebar Content (shared between desktop and mobile) ────────────────────
 
 function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMobile?: boolean }) {
@@ -512,11 +411,7 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     auth,
   } = useAppStore();
 
-  // null = "still loading visibility config" — prevents the flash-of-all-menus
-  // bug where the sidebar renders the FULL nav on first paint (before the
-  // /api/menu-visibility fetch resolves), then hides items a frame later.
-  // Empty array [] = "loaded, nothing disabled".
-  const [disabledMenus, setDisabledMenus] = useState<string[] | null>(null);
+  const [disabledMenus, setDisabledMenus] = useState<string[]>([]);
   // User-explicit overrides of each section's collapsed state. The effective
   // collapsed state is derived: override wins if present, otherwise the
   // section's `defaultCollapsed` flag applies. This avoids a setState-in-effect
@@ -587,32 +482,20 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
 
   const planBadge = getPlanBadge();
 
-  // Filter nav sections based on disabled menus.
-  // When disabledMenus is null (still loading) for non-superadmin users, we
-  // return an EMPTY array so the sidebar renders nothing until the config
-  // is resolved — this eliminates the "flash of all menus then hide" bug.
+  // Filter nav sections based on disabled menus
   const filteredNavSections = useMemo(() => {
-    // Superadmin always sees the full nav (no fetch, no filtering).
-    if (isSuperAdmin) {
-      return superadminNavSections;
-    }
-
-    // Non-superadmin: if still loading visibility config, render nothing.
-    // This prevents the flash where ALL items appear for one frame before
-    // the disabled set is applied.
-    if (disabledMenus === null) {
-      return [];
-    }
-
     let sections: NavSection[];
-    if (isEmployee) {
+
+    if (isSuperAdmin) {
+      sections = superadminNavSections;
+    } else if (isEmployee) {
       sections = employeeNavSections;
     } else {
       sections = ownerNavSections;
     }
 
-    // Filter out disabled menus
-    if (disabledMenus.length > 0) {
+    // Filter out disabled menus for non-superadmin users
+    if (!isSuperAdmin && disabledMenus.length > 0) {
       const disabledSet = new Set(disabledMenus);
       sections = sections
         .map((section) => ({
@@ -636,6 +519,77 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     setPendingCreate(entity);
     setCurrentView(view);
     if (isMobile) setMobileSidebarOpen(false);
+  };
+
+  const renderNavItem = (item: NavItem) => {
+    const Icon = item.icon;
+    const isActive = currentView === item.view;
+
+    // ── Trial lock for Template Studio ─────────────────────────────────
+    // Trial users can VIEW the studio (GET routes are open) but cannot
+    // CREATE/EDIT/DELETE (POST/PUT/DELETE return 403). Show a lock icon,
+    // grey-out the entry, and prevent navigation — surface a toast instead.
+    // Superadmins bypass the lock (they always have access).
+    const isTemplateStudioLocked =
+      item.view === 'templateStudio' &&
+      !isSuperAdmin &&
+      auth.tenant?.planStatus === 'trial';
+
+    if (isTemplateStudioLocked) {
+      const showLabel = isMobile || leftSidebarOpen;
+      return (
+        <button
+          key={item.view}
+          type="button"
+          aria-disabled="true"
+          title="Template Studio is locked during trial. Upgrade to unlock."
+          onClick={(e) => {
+            e.preventDefault();
+            toast.error('Template Studio is locked during trial. Upgrade to unlock.');
+          }}
+          className={cn(
+            'flex items-center w-full rounded-lg text-sm font-medium transition-colors cursor-not-allowed',
+            isMobile || leftSidebarOpen ? 'h-9 px-3 gap-3' : 'h-9 justify-center',
+            'text-slate-400/60 dark:text-slate-500/60 hover:bg-transparent'
+          )}
+        >
+          <Icon className="shrink-0 size-4 opacity-60" />
+          {showLabel && (
+            <span className="whitespace-nowrap flex-1 text-left text-[13px]">{item.label}</span>
+          )}
+          {showLabel && (
+            <Lock className="size-3.5 text-slate-400/70 dark:text-slate-500/70 ml-auto shrink-0" />
+          )}
+        </button>
+      );
+    }
+
+    return (
+      <button
+        key={item.view}
+        onClick={() => handleNavClick(item.view)}
+        className={cn(
+          'flex items-center w-full rounded-lg text-sm font-medium transition-all duration-150',
+          isMobile || leftSidebarOpen ? 'h-9 px-3 gap-3' : 'h-9 justify-center',
+          isActive
+            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 shadow-sm'
+            : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200/70 dark:hover:bg-slate-800/70 hover:text-slate-800 dark:hover:text-slate-200'
+        )}
+      >
+        <Icon className={cn('shrink-0', isActive ? 'size-[18px] text-emerald-600 dark:text-emerald-400' : 'size-4')} />
+        {(isMobile || leftSidebarOpen) && (
+          <span className="whitespace-nowrap flex-1 text-left text-[13px]">{item.label}</span>
+        )}
+        {(isMobile || leftSidebarOpen) && item.badge && (
+          <Badge variant="outline" className="text-[9px] h-4 px-1.5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
+            {item.badge}
+          </Badge>
+        )}
+        {(isMobile || leftSidebarOpen) && item.view === 'billing' && auth.tenant?.planStatus === 'trial' && (
+          <Crown className="size-3 text-amber-500 ml-auto" />
+        )}
+      </button>
+    );
   };
 
   // Whether the sidebar is in "expanded" mode (mobile drawer OR desktop expanded).
@@ -702,17 +656,6 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
       {/* Navigation Sections */}
       <ScrollArea className="flex-1 py-2 min-h-0">
         <div className="flex flex-col gap-0.5">
-          {/* Loading state — non-superadmin users see this briefly while
-              /api/menu-visibility resolves. Prevents the flash-of-all-menus
-              bug by NOT rendering the full nav before the disabled set is
-              known. Superadmin skips this (disabledMenus stays null but
-              filteredNavSections returns the full nav). */}
-          {!isSuperAdmin && disabledMenus === null && (
-            <div className="px-4 py-8 flex flex-col items-center gap-2">
-              <div className="size-5 border-2 border-slate-300 dark:border-slate-700 border-t-emerald-600 rounded-full animate-spin" />
-              <span className="text-[10px] text-slate-400 dark:text-slate-500">Loading menu…</span>
-            </div>
-          )}
           {filteredNavSections.map((section, sectionIdx) => {
             // Collapsing only applies in DESKTOP-EXPANDED mode. Mobile drawer
             // and icon-only mode ignore the collapsible flag (spec requirement):
@@ -760,17 +703,19 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
                 )}
                 {showItems && (
                   <nav className="flex flex-col gap-0.5 px-2">
-                    {section.items.map((item) => (
-                      <NavButton
-                        key={item.view}
-                        item={item}
-                        isActive={currentView === item.view}
-                        isExpandedMode={isExpandedMode}
-                        isTrial={auth.tenant?.planStatus === 'trial'}
-                        isSuperAdmin={isSuperAdmin}
-                        onClick={handleNavClick}
-                      />
-                    ))}
+                    {section.items.map((item) => {
+                      if (isExpandedMode) return renderNavItem(item);
+                      return (
+                        <Tooltip key={item.view}>
+                          <TooltipTrigger asChild>
+                            {renderNavItem(item)}
+                          </TooltipTrigger>
+                          <TooltipContent side="right" sideOffset={8}>
+                            {item.label}
+                          </TooltipContent>
+                        </Tooltip>
+                      );
+                    })}
                   </nav>
                 )}
               </div>

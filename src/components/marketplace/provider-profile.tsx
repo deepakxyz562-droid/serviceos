@@ -221,29 +221,19 @@ export function ProviderProfile({ slug, onBack, backHref, initialData }: Provide
         </Button>
       )}
 
-      {/* Hero */}
-      <div className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-600">
-        <div className="h-44 sm:h-56">
-          {tenant.coverImage ? (
+      {/* Cover image — only render when available (no blank space when missing) */}
+      {tenant.coverImage ? (
+        <div className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-600">
+          <div className="h-44 sm:h-56">
             <img
               src={tenant.coverImage}
               alt=""
               className="h-full w-full object-cover opacity-90"
             />
-          ) : null}
+          </div>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
         </div>
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-        {featured ? (
-          <Badge className="absolute left-4 top-4 gap-1 bg-amber-400 text-amber-950 shadow">
-            <Award className="h-3.5 w-3.5" /> Featured Provider
-          </Badge>
-        ) : null}
-        {tenant.emergencyServiceAvailable ? (
-          <Badge className="absolute right-4 top-4 gap-1 bg-rose-500 text-white shadow">
-            <Zap className="h-3.5 w-3.5" /> 24/7 Emergency
-          </Badge>
-        ) : null}
-      </div>
+      ) : null}
 
       {/* Header row */}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -258,6 +248,16 @@ export function ProviderProfile({ slug, onBack, backHref, initialData }: Provide
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-bold text-foreground">{tenant.name}</h1>
+              {featured ? (
+                <Badge className="gap-1 bg-amber-400 text-amber-950 shadow">
+                  <Award className="h-3.5 w-3.5" /> Featured Provider
+                </Badge>
+              ) : null}
+              {tenant.emergencyServiceAvailable ? (
+                <Badge className="gap-1 bg-rose-500 text-white shadow">
+                  <Zap className="h-3.5 w-3.5" /> 24/7 Emergency
+                </Badge>
+              ) : null}
               {verified ? (
                 <Badge className="gap-1 bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300">
                   <BadgeCheck className="h-3.5 w-3.5" /> Verified

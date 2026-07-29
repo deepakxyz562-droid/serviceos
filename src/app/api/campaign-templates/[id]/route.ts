@@ -2,6 +2,7 @@ import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
 import { detectVariablesFromContent } from '@/lib/template-vars'
+import { requireNotTrial } from '@/lib/trial-gate'
 
 /**
  * GET /api/campaign-templates/[id]
@@ -50,6 +51,9 @@ export async function PUT(
     if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    // Trial gate — Template Studio mutating actions are locked during trial.
+    const gate = await requireNotTrial('template_studio')
+    if (!gate.ok) return gate.response
     const tenantId = authUser.tenantId || 'default'
 
     const { id } = await params
@@ -131,6 +135,9 @@ export async function DELETE(
     if (!authUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    // Trial gate — Template Studio mutating actions are locked during trial.
+    const gate = await requireNotTrial('template_studio')
+    if (!gate.ok) return gate.response
     const tenantId = authUser.tenantId || 'default'
 
     const { id } = await params

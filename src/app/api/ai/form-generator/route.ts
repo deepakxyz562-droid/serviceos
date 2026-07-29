@@ -1,254 +1,174 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getAuthUser } from '@/lib/auth'
-import { callOpenRouter, extractJson } from '@/lib/ai-client'
-import { FIELD_TYPES } from '@/lib/form-field-types'
+import { NextRequest, NextResponse } from 'next/server';
+import { getAuthUser } from '@/lib/auth';
+import { callOpenRouter, isAiConfiguredAsync } from '@/lib/ai-client';
+import { FIELD_TYPES } from '@/lib/form-field-types';
 
 /**
  * POST /api/ai/form-generator
  *
- * Generates an array of form fields from a natural-language description
- * using OpenRouter. Returns a `{ fields: [...] }` payload whose entries
- * match the `FormField` shape used by the form builder (see
- * `src/lib/form-field-types.ts` and `src/components/views/form-builder-view.tsx`).
+ * Generate form fields from a natural-language prompt using the multi-key
+ * AI fallback chain (OpenRouter → OpenAI → Anthropic → Gemini).
  *
- * Body:
- *   - prompt: string            (required) — natural-language form description
- *   - formType?: string         (optional) — one of the FormType values;
- *                               defaults to 'custom'
+ * Body: { prompt: string, formType?: string }
+ * Returns: { fields: FormField[] }
  *
- * Returns:
- *   - 200 `{ fields: FormField[] }`
- *   - 400 missing/empty prompt
- *   - 401 unauthorized
- *   - 503 AI service not configured (OPENROUTER_API_KEY missing)
- *   - 502 AI generation failed
- *   - 500 catch-all
+ * The AI is constrained to the 15 engine field types from FIELD_TYPES.
+ * Output is validated + normalized before returning.
  */
-
-const VALID_FORM_TYPES = [
-  'lead_capture',
-  'booking',
-  'feedback',
-  'survey',
-  'quote_request',
-  'job_request',
-  'custom',
-] as const
-
-/** Build a random id matching the builder's `f-...` convention. */
-function makeFieldId(): string {
-  return `f-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-}
-
 export async function POST(request: NextRequest) {
   try {
-    // ─── Auth ────────────────────────────────────────────────────────────
-    const user = await getAuthUser()
+    const user = await getAuthUser();
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // ─── Parse + validate body ───────────────────────────────────────────
-    const body = await request.json().catch(() => ({}))
-    const { prompt, formType } = body as { prompt?: string; formType?: string }
+    // Check if ANY AI provider is configured (DB keys or env vars)
+    const configured = await isAiConfiguredAsync();
+    if (!configured) {
+      return NextResponse.json(
+        { error: 'AI is not configured. Ask a superadmin to add an AI provider key in Superadmin → AI Center.' },
+        { status: 503 }
+      );
+    }
+
+    const body = await request.json();
+    const { prompt, formType } = body as { prompt?: string; formType?: string };
 
     if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
-      return NextResponse.json({ error: 'prompt is required' }, { status: 400 })
+      return NextResponse.json({ error: 'prompt is required' }, { status: 400 });
     }
 
-    const safeFormType =
-      formType && (VALID_FORM_TYPES as readonly string[]).includes(formType)
-        ? formType
-        : 'custom'
+    // Build the list of valid field types for the system prompt
+    const validTypes = FIELD_TYPES.map((t) => t.value).join(', ');
 
-    // ─── AI service availability ─────────────────────────────────────────
-    if (!process.env.OPENROUTER_API_KEY) {
-      return NextResponse.json(
-        { error: 'AI service not configured.' },
-        { status: 503 },
-      )
-    }
+    const systemPrompt = `You are a form builder assistant for ServiceOS, a field-service management platform.
+Given a natural-language description, generate an array of form fields that would be useful for the described form.
 
-    // ─── Build prompts ───────────────────────────────────────────────────
-    // The list of valid engine field types from src/lib/form-field-types.ts.
-    const validTypes = FIELD_TYPES.map((t) => t.value).join(', ')
-
-    const system = `You are a form-design assistant for a field-service SaaS platform. Given a short natural-language description, design a complete, well-structured form by returning a JSON array of fields.
-
-You may ONLY use the following field "type" values (use them verbatim — never invent new types):
-${validTypes}
+Valid field types (use ONLY these): ${validTypes}
 
 Field type guidance:
-- short_answer  → single-line text (name, email, phone, short title)
-- long_answer   → multi-line text (description, comments, issue details)
-- numerical     → numbers (age, quantity, price, area)
-- dropdown      → single-select from options (provide 2-8 options)
-- checkbox      → multi-select from options (provide 2-8 options)
-- photo         → photo upload (site photos, before/after, damage)
-- video         → video upload
-- voice_note    → audio recording
-- gps           → GPS location capture
-- signature     → customer signature
-- barcode       → barcode scan
-- qr_scan       → QR code scan
-- asset_selection → pick from a catalog of assets/equipment
-- ai_image_analysis → AI analyzes an uploaded image (use sparingly)
-- drawing_markup   → annotate on top of an image
+- "short_answer" — single-line text (name, title, short answer)
+- "long_answer" — multi-line text (message, description, notes)
+- "dropdown" — single-select from options (include "options" array)
+- "checkbox" — boolean yes/no
+- "numerical" — numbers (quantity, age, amount)
+- "photo" — photo upload (job site photos, before/after)
+- "video" — video upload
+- "gps" — GPS location capture
+- "signature" — signature capture (customer sign-off)
+- "barcode" — barcode scan
+- "qr_scan" — QR code scan
+- "asset_selection" — pick from asset inventory
+- "ai_image_analysis" — AI-powered image analysis
+- "voice_note" — voice recording
+- "drawing_markup" — draw on an image/diagram
 
-Output ONLY a JSON object with EXACTLY this shape (no markdown, no prose, no code fences):
-{
-  "fields": [
-    {
-      "id": "field_<unique_random_string>",
-      "type": "<one of the valid types above>",
-      "label": "<human-readable label>",
-      "required": true,
-      "placeholder": "<short hint, optional>",
-      "helpText": "<extra guidance, optional>",
-      "options": ["Option 1", "Option 2"],
-      "defaultValue": "<optional>"
-    }
-  ]
-}
+Return ONLY a valid JSON array (no markdown, no explanation) of field objects with this shape:
+[
+  {
+    "type": "short_answer",
+    "label": "Full Name",
+    "required": true,
+    "placeholder": "John Doe",
+    "description": "",
+    "options": []
+  }
+]
 
 Rules:
-- Generate between 4 and 12 fields — enough to capture the intent without overwhelming the user.
-- Include "options" ONLY for dropdown and checkbox fields (2-8 string options).
-- "options" MUST be omitted for all other field types.
-- Mark contact-identifying fields (name, phone, email) as required when appropriate.
-- Use clear, user-facing labels (Title Case, e.g. "Customer Name", "Preferred Appointment Time").
-- Every field MUST have a non-empty "type" and "label".
-- Do NOT include any text outside the JSON object.`
+- Generate 3-12 fields based on the prompt.
+- Use sensible labels (Title Case).
+- Mark essential fields (name, contact) as required.
+- For "dropdown" type, include 3-6 sensible "options".
+- For "photo"/"video"/"signature"/"gps"/"barcode"/"qr_scan"/"voice_note"/"drawing_markup"/"ai_image_analysis" types, omit "options" and "placeholder".
+- Keep "placeholder" empty for non-text fields.
+- Do NOT include an "id" field — the client will generate one.
+- Return ONLY the JSON array, no other text.`;
 
-    const userPrompt = `Form type: ${safeFormType}
+    const userMessage = formType
+      ? `Form type: ${formType}\n\nGenerate fields for: ${prompt}`
+      : `Generate fields for: ${prompt}`;
 
-User description:
-${prompt.trim()}
+    const raw = await callOpenRouter({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+      temperature: 0.7,
+      maxTokens: 2000,
+      json: true,
+    });
 
-Generate the JSON form definition now.`
+    // Extract JSON array from the response
+    let jsonStr = raw.trim();
+    // Strip markdown code fences
+    const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fenceMatch) {
+      jsonStr = fenceMatch[1].trim();
+    }
+    // Find the first [ and last ]
+    const firstBracket = jsonStr.indexOf('[');
+    const lastBracket = jsonStr.lastIndexOf(']');
+    if (firstBracket !== -1 && lastBracket !== -1) {
+      jsonStr = jsonStr.substring(firstBracket, lastBracket + 1);
+    }
 
-    // ─── Call OpenRouter ────────────────────────────────────────────────
-    let raw: string
-    let model: string
+    let parsed: unknown;
     try {
-      const result = await callOpenRouter({
-        system,
-        user: userPrompt,
-        json: true,
-        temperature: 0.7,
-        maxTokens: 2048,
+      parsed = JSON.parse(jsonStr);
+    } catch {
+      return NextResponse.json(
+        { error: 'AI returned invalid JSON. Please try again with a more specific prompt.' },
+        { status: 502 }
+      );
+    }
+
+    if (!Array.isArray(parsed)) {
+      return NextResponse.json(
+        { error: 'AI returned an unexpected format. Please try again.' },
+        { status: 502 }
+      );
+    }
+
+    // Normalize + validate each field
+    const validTypeSet = new Set(FIELD_TYPES.map((t) => t.value));
+    const normalized = parsed
+      .filter((f): f is Record<string, unknown> => typeof f === 'object' && f !== null)
+      .map((f, i) => {
+        const type = typeof f.type === 'string' && validTypeSet.has(f.type) ? f.type : 'short_answer';
+        const label = typeof f.label === 'string' && f.label.trim() ? f.label.trim() : `Field ${i + 1}`;
+        const required = typeof f.required === 'boolean' ? f.required : false;
+        const placeholder = typeof f.placeholder === 'string' ? f.placeholder : '';
+        const description = typeof f.description === 'string' ? f.description : '';
+        const options = Array.isArray(f.options)
+          ? f.options.filter((o): o is string => typeof o === 'string').slice(0, 10)
+          : [];
+        return {
+          id: `ai-${Date.now()}-${i}`,
+          type,
+          label,
+          required,
+          placeholder,
+          description,
+          options,
+        };
       })
-      raw = result.content
-      model = result.model
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      console.error('[api/ai/form-generator] OpenRouter call failed:', msg)
+      .filter((f) => f.label);
+
+    if (normalized.length === 0) {
       return NextResponse.json(
-        { error: 'AI generation failed. Please try again.' },
-        { status: 502 },
-      )
+        { error: 'AI could not generate fields from that prompt. Try describing the fields you need, e.g. "customer name, email, phone, service needed, preferred date".' },
+        { status: 422 }
+      );
     }
 
-    // ─── Parse + normalize ──────────────────────────────────────────────
-    let parsed: unknown
-    try {
-      parsed = extractJson<unknown>(raw)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      console.error(
-        `[api/ai/form-generator] JSON parse failed (model=${model}):`,
-        msg,
-        '\nraw (truncated):',
-        raw.slice(0, 500),
-      )
-      return NextResponse.json(
-        { error: 'AI returned malformed response. Please try again.' },
-        { status: 502 },
-      )
-    }
-
-    // The model may return either `{ fields: [...] }` or a bare array.
-    let candidateFields: unknown[]
-    if (Array.isArray(parsed)) {
-      candidateFields = parsed
-    } else if (
-      parsed &&
-      typeof parsed === 'object' &&
-      Array.isArray((parsed as Record<string, unknown>).fields)
-    ) {
-      candidateFields = (parsed as Record<string, unknown[]>).fields
-    } else {
-      console.error(
-        `[api/ai/form-generator] Unexpected payload shape (model=${model}):`,
-        JSON.stringify(parsed).slice(0, 500),
-      )
-      return NextResponse.json(
-        { error: 'AI returned an unexpected response shape. Please try again.' },
-        { status: 502 },
-      )
-    }
-
-    const validTypeSet = new Set<string>(FIELD_TYPES.map((t) => t.value))
-
-    const normalized: Record<string, unknown>[] = []
-    for (const entry of candidateFields) {
-      if (!entry || typeof entry !== 'object') continue
-      const f = entry as Record<string, unknown>
-
-      const type = typeof f.type === 'string' ? f.type : ''
-      const label = typeof f.label === 'string' ? f.label.trim() : ''
-
-      // Must have at least a valid type and a non-empty label.
-      if (!validTypeSet.has(type) || !label) continue
-
-      const id =
-        typeof f.id === 'string' && f.id.trim() ? f.id.trim() : makeFieldId()
-
-      const field: Record<string, unknown> = {
-        id,
-        type,
-        label,
-        required: typeof f.required === 'boolean' ? f.required : false,
-      }
-
-      // Optional string fields.
-      if (typeof f.placeholder === 'string' && f.placeholder.trim()) {
-        field.placeholder = f.placeholder
-      }
-      if (typeof f.helpText === 'string' && f.helpText.trim()) {
-        field.description = f.helpText
-      }
-      if (typeof f.defaultValue === 'string' && f.defaultValue.trim()) {
-        // No "defaultValue" on the local FormField shape — fold into placeholder
-        // when the model didn't already supply one.
-        if (typeof field.placeholder !== 'string') {
-          field.placeholder = f.defaultValue
-        }
-      }
-
-      // Options only valid for dropdown / checkbox.
-      if (
-        (type === 'dropdown' || type === 'checkbox') &&
-        Array.isArray(f.options)
-      ) {
-        const opts = f.options
-          .map((o) => (typeof o === 'string' ? o.trim() : ''))
-          .filter((o) => o.length > 0)
-        if (opts.length > 0) {
-          field.options = opts
-        }
-      }
-
-      normalized.push(field)
-    }
-
-    return NextResponse.json({ fields: normalized })
+    return NextResponse.json({ fields: normalized });
   } catch (error) {
-    console.error('[api/ai/form-generator] Unhandled error:', error)
-    const message = error instanceof Error ? error.message : 'Unknown error'
+    console.error('[/api/ai/form-generator] Error:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: `Failed to generate form: ${message}` },
-      { status: 500 },
-    )
+      { error: `AI form generation failed: ${message}` },
+      { status: 500 }
+    );
   }
 }
