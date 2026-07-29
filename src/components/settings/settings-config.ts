@@ -106,10 +106,9 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     id: 'communication',
     label: 'Communication',
     icon: 'MessageSquare',
-    description: 'Email, SMS, WhatsApp, templates, notification rules, sender identity',
+    description: 'Auto-reply, email, SMS, WhatsApp, templates, notification rules, sender identity',
     category: 'business',
-    comingSoon: true,
-    keywords: ['email', 'sms', 'whatsapp', 'templates', 'sender'],
+    keywords: ['email', 'sms', 'whatsapp', 'templates', 'sender', 'auto reply', 'auto-reply', 'offline', 'bot'],
   },
   {
     id: 'ai',
