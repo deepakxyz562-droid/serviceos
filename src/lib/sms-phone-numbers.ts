@@ -500,3 +500,136 @@ export async function cancelNumberSubscription(opts: {
     error: 'Creem subscriptions must be cancelled via the customer portal or Creem dashboard',
   }
 }
+
+// ─── Voice-mode switching (Phase 2.2 — Unified phone architecture) ───────────
+
+export type VoiceMode = 'forward' | 'voicemail' | 'ai_vapi';
+
+export interface SetNumberVoiceModeOpts {
+  phoneNumberId: string;
+  voiceMode: VoiceMode;
+  /** Required when voiceMode='ai_vapi'. The Vapi assistant this number is routed to. */
+  vapiAssistantId?: string;
+  /**
+   * Optional Twilio Account SID + Auth Token for Vapi BYOT automation.
+   * If provided, they're passed to Vapi.importPhoneNumber() so Vapi can
+   * register the Twilio credential on the fly. If NOT provided, the tenant
+   * must have pre-configured BYOT in the Vapi dashboard (one-time manual setup).
+   */
+  twilioAccountSid?: string;
+  twilioAuthToken?: string;
+  /** The ServiceOS app URL (for re-setting VoiceUrl when reverting from ai_vapi). */
+  appUrl: string;
+}
+
+/**
+ * Switch a phone number's voice-handling mode between forward, voicemail, and
+ * AI Receptionist (Vapi). This is the unified phone-number architecture:
+ * ServiceOS owns the Twilio number; Vapi handles voice when voiceMode='ai_vapi'.
+ *
+ * Flow:
+ *   forward / voicemail:
+ *     - Repoint Twilio VoiceUrl → `${appUrl}/api/sms/voice` (ServiceOS TwiML).
+ *     - If the number was previously in 'ai_vapi' mode (vapiNumberId is set),
+ *       call Vapi's DELETE /phone-number/{vapiNumberId} to release Vapi's claim.
+ *     - Clear vapiNumberId + vapiAssistantId on the PhoneNumber row.
+ *
+ *   ai_vapi:
+ *     - If vapiAssistantId is missing → return error.
+ *     - If vapiNumberId is null (first time on this number), call
+ *       Vapi.importPhoneNumber(number, friendlyName, { assistantId, twilioAccountSid, twilioAuthToken }).
+ *       Vapi will claim the number for voice and auto-repoint the Twilio VoiceUrl
+ *       to its own webhook. We DON'T need to call Twilio ourselves in this path.
+ *     - If vapiNumberId is already set, call Vapi.updatePhoneNumber(vapiNumberId, { assistantId })
+ *       to re-bind to a different assistant (no need to re-import).
+ *     - Save vapiAssistantId + vapiNumberId on the PhoneNumber row.
+ *
+ * Returns `{ success, error? }`. The caller (PATCH /api/sms/numbers/[id]) is
+ * responsible for updating the PhoneNumber row's `voiceMode` field.
+ */
+export async function setNumberVoiceMode(
+  opts: SetNumberVoiceModeOpts,
+): Promise<{ success: boolean; error?: string; vapiNumberId?: string }> {
+  const phoneRow = await db.phoneNumber.findUnique({
+    where: { id: opts.phoneNumberId },
+  });
+  if (!phoneRow) {
+    return { success: false, error: 'PhoneNumber row not found' };
+  }
+  if (phoneRow.status !== 'active' || !phoneRow.providerSid) {
+    return { success: false, error: 'Phone number must be active before changing voice mode' };
+  }
+
+  const cfg = await getTwilioConfig(phoneRow.tenantId || undefined);
+  if (!cfg) {
+    return { success: false, error: 'Twilio is not configured for this tenant' };
+  }
+
+  // ─── ai_vapi mode: route voice to Vapi ─────────────────────────────────
+  if (opts.voiceMode === 'ai_vapi') {
+    if (!opts.vapiAssistantId) {
+      return { success: false, error: 'vapiAssistantId is required when voiceMode is ai_vapi' };
+    }
+
+    // Dynamically import vapi-client to avoid circular deps at module load.
+    const { importPhoneNumber, updatePhoneNumber } = await import('@/lib/vapi-client');
+
+    let vapiNumberId = phoneRow.vapiNumberId || undefined;
+
+    try {
+      if (!vapiNumberId) {
+        // First-time registration with Vapi. Vapi will claim the Twilio number
+        // for voice and auto-repoint VoiceUrl to its own webhook.
+        const vapiRes = (await importPhoneNumber(phoneRow.number, phoneRow.displayName || undefined, {
+          assistantId: opts.vapiAssistantId,
+          twilioAccountSid: opts.twilioAccountSid,
+          twilioAuthToken: opts.twilioAuthToken,
+        })) as { id?: string };
+        vapiNumberId = vapiRes?.id;
+        if (!vapiNumberId) {
+          return { success: false, error: 'Vapi did not return a phone-number ID. The tenant may need to configure Twilio BYOT in the Vapi dashboard first.' };
+        }
+      } else {
+        // Already registered — just re-bind to the new assistant.
+        await updatePhoneNumber(vapiNumberId, { assistantId: opts.vapiAssistantId });
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        success: false,
+        error: `Failed to register number with Vapi: ${msg}. If this persists, configure Twilio BYOT credentials in the Vapi dashboard (one-time setup).`,
+      };
+    }
+
+    return { success: true, vapiNumberId };
+  }
+
+  // ─── forward / voicemail: route voice back to ServiceOS ────────────────
+  // If the number was previously in ai_vapi mode, release Vapi's claim first.
+  if (phoneRow.vapiNumberId) {
+    try {
+      const { deletePhoneNumber } = await import('@/lib/vapi-client');
+      await deletePhoneNumber(phoneRow.vapiNumberId);
+    } catch (err) {
+      // Non-fatal — Vapi may have already released it. Log and continue.
+      console.warn(
+        '[setNumberVoiceMode] Vapi deletePhoneNumber failed (continuing with Twilio VoiceUrl reset):',
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+
+  // Repoint Twilio VoiceUrl → ServiceOS /api/sms/voice.
+  const voiceWebhookUrl = `${opts.appUrl.replace(/\/$/, '')}/api/sms/voice`;
+  const res = await updateNumberWebhooks({
+    sid: phoneRow.providerSid,
+    voiceWebhookUrl,
+    twilioConfig: cfg,
+  });
+
+  if (!res.success) {
+    return { success: false, error: res.error || 'Failed to update Twilio VoiceUrl' };
+  }
+
+  return { success: true };
+}

@@ -93,6 +93,7 @@ const InfrastructureSection = lazy(() => import('@/components/views/superadmin/s
 const SystemHealthSection = lazy(() => import('@/components/views/superadmin/sections/system-health').then(m => ({ default: m.SystemHealthSection })));
 const MenuManagementSection = lazy(() => import('@/components/views/superadmin/sections/menu-management').then(m => ({ default: m.MenuManagementSection })));
 const CreemBillingSection = lazy(() => import('@/components/views/superadmin/sections/creem-billing').then(m => ({ default: m.CreemBillingSection })));
+const PlanFeaturesSection = lazy(() => import('@/components/views/superadmin/sections/plan-features').then(m => ({ default: m.PlanFeaturesSection })));
 const BackupSection = lazy(() => import('@/components/views/superadmin/sections/backup').then(m => ({ default: m.BackupSection })));
 
 // Lightweight Suspense fallback for lazy-loaded sections.
@@ -348,7 +349,7 @@ type TabKey =
   // BUSINESS
   | 'tenants' | 'subscriptions' | 'users' | 'credits' | 'industry-templates' | 'directory-listings' | 'creem-billing'
   // PLATFORM
-  | 'platform-settings' | 'theme-branding' | 'marketplace' | 'integrations' | 'ai-center' | 'menu-management'
+  | 'platform-settings' | 'plan-features' | 'theme-branding' | 'marketplace' | 'integrations' | 'ai-center' | 'menu-management'
   // COMMUNICATION
   | 'email-services' | 'sms-services' | 'whatsapp-providers' | 'push-notifications'
   // SECURITY
@@ -388,6 +389,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Platform',
     items: [
       { key: 'platform-settings', label: 'Platform Settings', icon: Settings },
+      { key: 'plan-features', label: 'Plan Features', icon: Lock },
       { key: 'theme-branding', label: 'Theme & Branding', icon: Palette },
       { key: 'marketplace', label: 'Marketplace', icon: Store },
       { key: 'integrations', label: 'Integrations', icon: Plug },
@@ -2722,6 +2724,7 @@ export function SuperAdminView() {
         {activeTab === 'directory-listings' && <DirectoryListingsSection />}
         {activeTab === 'creem-billing' && <CreemBillingSection />}
         {activeTab === 'platform-settings' && <PlatformSettingsSection />}
+        {activeTab === 'plan-features' && <PlanFeaturesSection />}
         {activeTab === 'theme-branding' && <ThemeBrandingSection />}
         {activeTab === 'marketplace' && <MarketplaceSection />}
         {activeTab === 'ai-center' && <AICenterSection />}

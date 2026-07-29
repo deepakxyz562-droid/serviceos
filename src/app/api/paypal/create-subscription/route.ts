@@ -252,7 +252,7 @@ export async function POST(request: NextRequest) {
     const planLimits: Record<string, { maxUsers: number; maxJobs: number; maxWorkflows: number; features: Record<string, boolean> }> = {
       starter: { maxUsers: 1, maxJobs: 100, maxWorkflows: 10, features: { whatsappIntegration: true, customWorkflows: false, apiAccess: false, prioritySupport: false } },
       growth: { maxUsers: 5, maxJobs: 1000, maxWorkflows: 50, features: { whatsappIntegration: true, customWorkflows: true, apiAccess: false, prioritySupport: true } },
-      pro: { maxUsers: 999, maxJobs: 99999, maxWorkflows: 999, features: { whatsappIntegration: true, customWorkflows: true, apiAccess: true, prioritySupport: true } },
+      business: { maxUsers: 999, maxJobs: 99999, maxWorkflows: 999, features: { whatsappIntegration: true, customWorkflows: true, apiAccess: true, prioritySupport: true } },
     };
     const limits = planLimits[planCode] || planLimits.growth;
 

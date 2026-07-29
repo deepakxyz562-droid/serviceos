@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
+import { requirePlanFeature } from '@/lib/plan-gate'
 import { sendSmsMessage, normaliseSmsPhone } from '@/lib/sms-send'
 
 /**
@@ -32,6 +33,15 @@ export async function POST(request: NextRequest) {
     const user = await getAuthUser()
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // ── Plan-tier gating: SMS Numbers add-on is locked on trial/starter ───
+    // Sending SMS requires a dedicated number (or at minimum the SMS Numbers
+    // add-on feature flag). GET endpoints elsewhere (inbox/conversation
+    // history) remain open so users can read past messages after downgrade.
+    const gate = await requirePlanFeature('sms_numbers')
+    if (!gate.ok) {
+      return NextResponse.json({ error: gate.reason }, { status: gate.status })
     }
 
     const body = await request.json().catch(() => ({}))

@@ -164,6 +164,9 @@ export function AiReceptionistView() {
                 Add your Vapi.ai API key in Settings → AI Voice to start using AI Receptionist.
                 It only takes a minute (BYOK — you pay Vapi directly, ServiceOS pays $0).
               </p>
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Phone numbers (for both SMS and AI voice) are managed in Inbox &amp; Automation → Phone Numbers.
+              </p>
             </div>
             <Button size="sm" variant="outline" className="shrink-0 gap-1.5" onClick={() => setActiveView('settings')}>
               <SettingsIcon className="size-3.5" />
@@ -216,8 +219,8 @@ export function AiReceptionistView() {
         <QuickAction
           icon={<Phone className="size-5" />}
           title="Phone Numbers"
-          description="Buy or import numbers"
-          onClick={() => setActiveView('aiPhoneNumbers')}
+          description="Buy numbers & enable AI voice"
+          onClick={() => setActiveView('smsNumbers')}
         />
         <QuickAction
           icon={<PhoneIncoming className="size-5" />}
@@ -398,7 +401,7 @@ export function AiReceptionistView() {
               <div className="flex items-center justify-center size-8 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 font-semibold shrink-0">3</div>
               <div>
                 <div className="font-medium">Get a Number</div>
-                <p className="text-xs text-muted-foreground mt-0.5">Buy via Vapi or import Twilio</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Buy via Phone Numbers and enable AI Voice mode on it</p>
               </div>
             </div>
             <div className="flex gap-3">

@@ -2555,12 +2555,25 @@ model PhoneNumber {
   costCurrency    String   @default("USD")
   providerCost    Float    @default(1.15) // what WE pay Twilio (margin tracking)
   status          String   @default("pending") // pending, active, suspended, released, failed
+  // ─── Number type (Phase 1.5 — Shopify-style Communication add-ons) ────────
+  // shared    : platform-shared number, FREE tier (one number, many tenants)
+  // dedicated : tenant-exclusive number, £5/mo via PayPal/Creem
+  // byo       : tenant brought their own number (ported in — V1.5+ feature)
+  type            String   @default("dedicated") // shared, dedicated, byo
   // Payment linkage
   paymentProvider String?  // paypal, creem
   subscriptionId  String?  // PayPal subscription ID or Creem subscription ID
   // Call forwarding (point 3 of the 17-point vision)
   forwardToPhone  String?  // office number to forward calls to
   forwardToVoicemail Boolean @default(false)
+  // ─── Voice mode (Phase 2.2 — Unified phone architecture) ──────────────────
+  // forward   : ring forwardToPhone (default — pre-existing behaviour)
+  // voicemail : play greeting + record a message (pre-existing behaviour)
+  // ai_vapi   : route inbound calls to a Vapi assistant via webhook
+  //             (ServiceOS keeps the Twilio number, just repoints VoiceUrl to Vapi)
+  voiceMode       String   @default("forward") // forward, voicemail, ai_vapi
+  vapiAssistantId String?  // Vapi assistant ID this number is routed to (when voiceMode='ai_vapi')
+  vapiNumberId    String?  // Vapi-side number ID returned by importPhoneNumber() (for unassign)
   // Webhook config (set at purchase time)
   smsWebhookUrl   String?
   voiceWebhookUrl String?
@@ -2578,6 +2591,30 @@ model PhoneNumber {
   @@index([tenantId])
   @@index([status])
   @@index([number])
+  @@index([type])
+}
+
+// ==========================================
+// PLAN-FEATURE MATRIX (Phase 3 — Shopify-style plan-based feature gating)
+// ==========================================
+// One row per (planCode, featureKey) pair. Superadmin toggles which features
+// are available on which plan tier (trial, starter, growth, business, enterprise).
+// Lookup is performed by `isFeatureEnabledForPlan(featureKey, planCode)` in
+// `src/lib/plan-features.ts`.
+//
+// Default seed lives in `src/lib/plan-features-seed.ts`.
+
+model PlanFeatureMatrix {
+  id              String   @id @default(cuid())
+  planCode        String   // trial, starter, growth, business, enterprise
+  featureKey      String   // e.g. sms_numbers, ai_receptionist, whatsapp, etc.
+  enabled         Boolean  @default(false)
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+
+  @@unique([planCode, featureKey])
+  @@index([planCode])
+  @@index([featureKey])
 }
 
 // ==========================================

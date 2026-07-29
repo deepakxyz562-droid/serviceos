@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send';
 import { getAuthUser } from '@/lib/auth';
+import { requirePlanFeature } from '@/lib/plan-gate';
 import { checkWhatsAppCredits } from '@/lib/credit-management';
 
 export async function POST(request: NextRequest) {
@@ -9,6 +10,15 @@ export async function POST(request: NextRequest) {
     const user = await getAuthUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // ── Plan-tier gating: WhatsApp integration is locked on trial/starter ──
+    // Sending WhatsApp messages requires the WhatsApp feature flag. GET
+    // endpoints (conversations, sessions) remain open so users can read past
+    // messages after a downgrade — only POST (send) is gated.
+    const gate = await requirePlanFeature('whatsapp');
+    if (!gate.ok) {
+      return NextResponse.json({ error: gate.reason }, { status: gate.status });
     }
 
     const body = await request.json();

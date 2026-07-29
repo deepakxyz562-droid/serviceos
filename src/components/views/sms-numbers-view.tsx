@@ -16,6 +16,11 @@ import {
   RefreshCw,
   Smartphone,
   AlertCircle,
+  Voicemail,
+  Sparkles,
+  X,
+  ArrowRight,
+  Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -23,6 +28,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   Table,
   TableBody,
@@ -61,6 +67,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { authFetch } from '@/lib/api';
+import { useFeatureAccess } from '@/hooks/use-tenant-plan';
+import { useAppStore } from '@/store/app-store';
 
 // ─── Tiny typed fetch wrapper ───────────────────────────────────────────────
 //
@@ -94,6 +102,9 @@ async function apiCall<T>(url: string, options?: RequestInit): Promise<T> {
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+// Voice mode — mirrors `VoiceMode` in src/lib/sms-phone-numbers.ts
+type VoiceMode = 'forward' | 'voicemail' | 'ai_vapi';
+
 interface SmsNumberUsage {
   sentThisMonth: number;
   receivedThisMonth: number;
@@ -116,6 +127,10 @@ interface SmsNumber {
   subscriptionId: string | null;
   forwardToPhone: string | null;
   forwardToVoicemail: boolean;
+  // Voice mode fields (Phase 2.4 — unified phone architecture)
+  voiceMode?: VoiceMode;
+  vapiAssistantId?: string | null;
+  vapiNumberId?: string | null;
   smsWebhookUrl: string | null;
   voiceWebhookUrl: string | null;
   purchasedAt: string | null;
@@ -123,6 +138,18 @@ interface SmsNumber {
   lastUsedAt: string | null;
   createdAt: string;
   usage: SmsNumberUsage;
+}
+
+interface VapiAgent {
+  id: string;
+  name: string;
+  vapiAssistantId: string | null;
+  active?: boolean;
+}
+
+interface VapiAgentsResponse {
+  agents: VapiAgent[];
+  vapiConfigured?: boolean;
 }
 
 interface AvailableNumber {
@@ -215,10 +242,47 @@ function formatRelativeTime(dateStr: string | null): string {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+// ─── Voice mode badge ──────────────────────────────────────────────────────
+//
+// Renders the current voice mode for a number as a small badge. Used in the
+// table's "Voice Mode" column.
+function voiceModeBadge(n: SmsNumber, agentName?: string | null) {
+  const mode: VoiceMode = n.voiceMode ?? 'forward';
+  switch (mode) {
+    case 'forward':
+      return (
+        <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800">
+          <PhoneForwarded className="size-3 mr-1" />
+          Forward
+        </Badge>
+      );
+    case 'voicemail':
+      return (
+        <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800">
+          <Voicemail className="size-3 mr-1" />
+          Voicemail
+        </Badge>
+      );
+    case 'ai_vapi':
+      return (
+        <Badge className="bg-purple-100 text-purple-700 border-purple-200 hover:bg-purple-100 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800">
+          <Sparkles className="size-3 mr-1" />
+          AI: {agentName || 'Assistant'}
+        </Badge>
+      );
+    default:
+      return <Badge variant="outline">{mode}</Badge>;
+  }
+}
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export function SmsNumbersView() {
   const queryClient = useQueryClient();
+  const setActiveView = useAppStore((s) => s.setActiveView);
+
+  // Plan-gating: AI Receptionist is required to use the AI Voice mode option
+  const aiReceptionist = useFeatureAccess('ai_receptionist');
 
   // Buy dialog state
   const [buyOpen, setBuyOpen] = useState(false);
@@ -236,9 +300,35 @@ export function SmsNumbersView() {
   const [editForwardEnabled, setEditForwardEnabled] = useState(false);
   const [editForwardPhone, setEditForwardPhone] = useState('');
   const [editVoicemail, setEditVoicemail] = useState(false);
+  // Voice mode state (Phase 2.4)
+  const [editVoiceMode, setEditVoiceMode] = useState<VoiceMode>('forward');
+  const [editVapiAssistantId, setEditVapiAssistantId] = useState<string>('');
 
   // Release dialog state
   const [releaseTarget, setReleaseTarget] = useState<SmsNumber | null>(null);
+
+  // Info banner dismissible state (one-time onboarding reminder).
+  // Stored in localStorage so the banner stays dismissed across sessions.
+  // Lazy init via `typeof window` guard avoids a setState-in-effect AND keeps
+  // SSR output deterministic (banner hidden server-side; revealed client-side
+  // only if the user hasn't dismissed it).
+  const INFO_BANNER_KEY = 'serviceos:phone-numbers-info-dismissed';
+  const [infoDismissed, setInfoDismissed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true; // SSR: hidden by default
+    try {
+      return localStorage.getItem(INFO_BANNER_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const dismissInfoBanner = () => {
+    setInfoDismissed(true);
+    try {
+      localStorage.setItem(INFO_BANNER_KEY, '1');
+    } catch {
+      // localStorage may be unavailable (private mode) — silently ignore.
+    }
+  };
 
   // ─── Queries ──────────────────────────────────────────────────────────
 
@@ -249,6 +339,21 @@ export function SmsNumbersView() {
   });
 
   const numbers = data?.numbers ?? [];
+
+  // Fetch Vapi assistants ONLY when the edit dialog is open AND the user is on
+  // (or could be on) the AI mode. This avoids an unnecessary fetch on every
+  // page load for tenants who never use AI Voice.
+  const { data: agentsData } = useQuery<VapiAgentsResponse>({
+    queryKey: ['vapi-agents', 'phone-numbers-edit'],
+    queryFn: () => apiCall<VapiAgentsResponse>('/api/vapi/agents'),
+    enabled: editOpen,
+    staleTime: 30_000,
+  });
+
+  const agents: VapiAgent[] = (agentsData?.agents || []).filter(
+    (a) => !!a.vapiAssistantId,
+  );
+  const vapiConfigured = !!agentsData?.vapiConfigured || agents.length > 0;
 
   // ─── Mutations ────────────────────────────────────────────────────────
 
@@ -314,6 +419,8 @@ export function SmsNumbersView() {
       displayName?: string | null;
       forwardToPhone?: string | null;
       forwardToVoicemail?: boolean;
+      voiceMode: VoiceMode;
+      vapiAssistantId: string | null;
     }) =>
       apiCall<{ success: boolean; number?: SmsNumber }>(
         `/api/sms/numbers/${vars.id}`,
@@ -324,6 +431,8 @@ export function SmsNumbersView() {
             displayName: vars.displayName,
             forwardToPhone: vars.forwardToPhone,
             forwardToVoicemail: vars.forwardToVoicemail,
+            voiceMode: vars.voiceMode,
+            vapiAssistantId: vars.voiceMode === 'ai_vapi' ? vars.vapiAssistantId : null,
           }),
         },
       ),
@@ -395,16 +504,42 @@ export function SmsNumbersView() {
     setEditForwardEnabled(!!n.forwardToPhone);
     setEditForwardPhone(n.forwardToPhone || '');
     setEditVoicemail(!!n.forwardToVoicemail);
+    // Initialise voice-mode state from the row's current mode.
+    setEditVoiceMode(n.voiceMode ?? 'forward');
+    setEditVapiAssistantId(n.vapiAssistantId ?? '');
     setEditOpen(true);
   };
 
   const handleSaveEdit = () => {
     if (!editNumber) return;
+    // Validate AI mode requires an assistant + plan + Vapi key
+    if (editVoiceMode === 'ai_vapi') {
+      if (!aiReceptionist.enabled) {
+        toast.error('AI Receptionist is locked', {
+          description: 'Upgrade to Growth or higher to enable AI Voice mode.',
+        });
+        return;
+      }
+      if (!vapiConfigured) {
+        toast.error('Vapi API key not configured', {
+          description: 'Add your Vapi API key in Settings → AI Voice first.',
+        });
+        return;
+      }
+      if (!editVapiAssistantId) {
+        toast.error('Select an AI assistant', {
+          description: 'Pick a Vapi assistant to route calls to.',
+        });
+        return;
+      }
+    }
     editMutation.mutate({
       id: editNumber.id,
       displayName: editDisplayName.trim() || null,
       forwardToPhone: editForwardEnabled ? (editForwardPhone.trim() || null) : null,
       forwardToVoicemail: editVoicemail,
+      voiceMode: editVoiceMode,
+      vapiAssistantId: editVoiceMode === 'ai_vapi' ? editVapiAssistantId : null,
     });
   };
 
@@ -419,9 +554,9 @@ export function SmsNumbersView() {
             <Phone className="size-5 text-emerald-600" />
           </div>
           <div>
-            <h1 className="text-lg sm:text-xl font-semibold tracking-tight">SMS Phone Numbers</h1>
+            <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Phone Numbers</h1>
             <p className="text-xs text-muted-foreground">
-              Buy dedicated numbers, configure forwarding, and manage SMS billing
+              Buy dedicated phone numbers for SMS texting, call forwarding, voicemail, and AI-answered voice calls.
             </p>
           </div>
         </div>
@@ -448,7 +583,29 @@ export function SmsNumbersView() {
       </div>
 
       {/* ─── Body ─────────────────────────────────────────────────────── */}
-      <div className="flex-1 p-4 sm:p-6">
+      <div className="flex-1 p-4 sm:p-6 space-y-4">
+        {/* ─── Dismissible info banner ────────────────────────────────── */}
+        {!infoDismissed && (
+          <Alert className="border-emerald-200 bg-emerald-50/60 dark:bg-emerald-950/20 dark:border-emerald-800 pr-10">
+            <Info className="size-4 text-emerald-600 dark:text-emerald-400" />
+            <div className="space-y-0.5">
+              <AlertTitle className="text-emerald-800 dark:text-emerald-300">
+                One number, every channel
+              </AlertTitle>
+              <AlertDescription className="text-emerald-700/90 dark:text-emerald-400/90">
+                Each phone number supports SMS texting, call forwarding, voicemail, and AI-answered voice (via Vapi). Pick a voice mode per number in its edit dialog.
+              </AlertDescription>
+            </div>
+            <button
+              type="button"
+              onClick={dismissInfoBanner}
+              aria-label="Dismiss info banner"
+              className="absolute top-2 right-2 p-1 rounded-md text-emerald-700/70 hover:text-emerald-800 hover:bg-emerald-100/70 dark:text-emerald-400/70 dark:hover:bg-emerald-900/30 transition-colors"
+            >
+              <X className="size-3.5" />
+            </button>
+          </Alert>
+        )}
         {isLoading ? (
           <NumbersTableSkeleton />
         ) : isError ? (
@@ -472,13 +629,13 @@ export function SmsNumbersView() {
                 <div className="flex items-center justify-center size-16 rounded-2xl bg-emerald-100 dark:bg-emerald-950/40">
                   <Smartphone className="size-8 text-emerald-600" />
                 </div>
-                <div className="space-y-1.5">
-                  <h3 className="text-lg font-semibold">Get your dedicated SMS number</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Purchase a dedicated phone number for £5.00/month to send and receive SMS
-                    messages from your customers. Includes voicemail and call forwarding.
-                  </p>
-                </div>
+                  <div className="space-y-1.5">
+                    <h3 className="text-lg font-semibold">Get your phone number</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Buy your first phone number to send SMS, forward calls, and answer inbound calls with AI.
+                      £5.00/month — cancel anytime.
+                    </p>
+                  </div>
                 <Button
                   onClick={openBuyDialog}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white"
@@ -515,6 +672,7 @@ export function SmsNumbersView() {
                       <TableHead>Monthly Cost</TableHead>
                       <TableHead>Usage (mo)</TableHead>
                       <TableHead>Forwarding</TableHead>
+                      <TableHead>Voice Mode</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -584,6 +742,14 @@ export function SmsNumbersView() {
                           )}
                           {n.forwardToVoicemail && (
                             <p className="text-[10px] text-amber-600 mt-0.5">Voicemail on</p>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {voiceModeBadge(
+                            n,
+                            // Resolve the assistant name from the agents list if available
+                            agents.find((a) => a.vapiAssistantId === n.vapiAssistantId)?.name ||
+                              null,
                           )}
                         </TableCell>
                         <TableCell className="text-right">
@@ -869,62 +1035,245 @@ export function SmsNumbersView() {
 
               <div className="h-px bg-border" />
 
-              {/* Call forwarding */}
+              {/* ─── Voice Mode (unified: Forward / Voicemail / AI Assistant) ── */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="forward-toggle" className="text-sm font-medium cursor-pointer">
-                      <span className="flex items-center gap-1.5">
-                        <PhoneForwarded className="size-3.5 text-emerald-600" />
-                        Forward calls
-                      </span>
-                    </Label>
-                    <p className="text-[11px] text-muted-foreground">
-                      Forward incoming voice calls to your office phone.
-                    </p>
-                  </div>
-                  <Switch
-                    id="forward-toggle"
-                    checked={editForwardEnabled}
-                    onCheckedChange={setEditForwardEnabled}
-                  />
+                <div className="space-y-0.5">
+                  <Label className="text-sm font-medium">Voice mode</Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Decide how inbound voice calls to this number are answered.
+                  </p>
                 </div>
-                {editForwardEnabled && (
-                  <div className="space-y-2 pl-1">
-                    <Label htmlFor="forwardPhone" className="text-xs text-muted-foreground">
-                      Forward to phone number
-                    </Label>
-                    <Input
-                      id="forwardPhone"
-                      placeholder="e.g. +14155551234"
-                      value={editForwardPhone}
-                      onChange={(e) => setEditForwardPhone(e.target.value)}
+                <RadioGroup
+                  value={editVoiceMode}
+                  onValueChange={(v) => setEditVoiceMode(v as VoiceMode)}
+                  className="space-y-2"
+                >
+                  {/* Forward to phone */}
+                  <Label
+                    htmlFor="vm-forward"
+                    className={cn(
+                      'flex items-start gap-2.5 p-3 rounded-lg border cursor-pointer transition-colors',
+                      editVoiceMode === 'forward'
+                        ? 'border-emerald-500 bg-emerald-50/50 ring-1 ring-emerald-500/30 dark:bg-emerald-950/20'
+                        : 'border-border hover:bg-muted/40',
+                    )}
+                  >
+                    <RadioGroupItem value="forward" id="vm-forward" className="mt-0.5" />
+                    <div className="space-y-0.5 flex-1">
+                      <p className="text-sm font-medium flex items-center gap-1.5">
+                        <PhoneForwarded className="size-3.5 text-emerald-600" />
+                        Forward to phone
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Ring your office phone; optionally fall through to voicemail.
+                      </p>
+                    </div>
+                  </Label>
+
+                  {/* Voicemail only */}
+                  <Label
+                    htmlFor="vm-voicemail"
+                    className={cn(
+                      'flex items-start gap-2.5 p-3 rounded-lg border cursor-pointer transition-colors',
+                      editVoiceMode === 'voicemail'
+                        ? 'border-amber-500 bg-amber-50/50 ring-1 ring-amber-500/30 dark:bg-amber-950/20'
+                        : 'border-border hover:bg-muted/40',
+                    )}
+                  >
+                    <RadioGroupItem value="voicemail" id="vm-voicemail" className="mt-0.5" />
+                    <div className="space-y-0.5 flex-1">
+                      <p className="text-sm font-medium flex items-center gap-1.5">
+                        <Voicemail className="size-3.5 text-amber-600" />
+                        Voicemail
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Play a greeting and record a message — no live answer.
+                      </p>
+                    </div>
+                  </Label>
+
+                  {/* AI Assistant */}
+                  <Label
+                    htmlFor="vm-ai"
+                    className={cn(
+                      'flex items-start gap-2.5 p-3 rounded-lg border transition-colors',
+                      !aiReceptionist.enabled && !aiReceptionist.loading
+                        ? 'border-slate-200 bg-slate-50/40 dark:bg-slate-900/20 cursor-not-allowed opacity-70'
+                        : editVoiceMode === 'ai_vapi'
+                          ? 'border-purple-500 bg-purple-50/50 ring-1 ring-purple-500/30 dark:bg-purple-950/20 cursor-pointer'
+                          : 'border-border hover:bg-muted/40 cursor-pointer',
+                    )}
+                  >
+                    <RadioGroupItem
+                      value="ai_vapi"
+                      id="vm-ai"
+                      className="mt-0.5"
+                      disabled={!aiReceptionist.enabled && !aiReceptionist.loading}
                     />
-                    <p className="text-[11px] text-muted-foreground">
-                      Use E.164 format (country code + number, no spaces).
+                    <div className="space-y-0.5 flex-1">
+                      <p className="text-sm font-medium flex items-center gap-1.5">
+                        <Sparkles className="size-3.5 text-purple-600" />
+                        AI Assistant
+                        {!aiReceptionist.enabled && !aiReceptionist.loading && (
+                          <Badge
+                            variant="outline"
+                            className="text-[9px] h-4 px-1.5 ml-1 bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800"
+                          >
+                            Upgrade
+                          </Badge>
+                        )}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Route calls to a Vapi AI assistant that answers, books, and captures leads 24/7.
+                      </p>
+                    </div>
+                  </Label>
+                </RadioGroup>
+
+                {/* ─── Mode-specific configuration ────────────────────────── */}
+
+                {editVoiceMode === 'forward' && (
+                  <div className="space-y-3 pl-1 pt-1">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="forward-toggle" className="text-sm font-medium cursor-pointer">
+                          <span className="flex items-center gap-1.5">
+                            <PhoneForwarded className="size-3.5 text-emerald-600" />
+                            Forward calls
+                          </span>
+                        </Label>
+                        <p className="text-[11px] text-muted-foreground">
+                          Forward incoming voice calls to your office phone.
+                        </p>
+                      </div>
+                      <Switch
+                        id="forward-toggle"
+                        checked={editForwardEnabled}
+                        onCheckedChange={setEditForwardEnabled}
+                      />
+                    </div>
+                    {editForwardEnabled && (
+                      <div className="space-y-2 pl-1">
+                        <Label htmlFor="forwardPhone" className="text-xs text-muted-foreground">
+                          Forward to phone number
+                        </Label>
+                        <Input
+                          id="forwardPhone"
+                          placeholder="e.g. +14155551234"
+                          value={editForwardPhone}
+                          onChange={(e) => setEditForwardPhone(e.target.value)}
+                        />
+                        <p className="text-[11px] text-muted-foreground">
+                          Use E.164 format (country code + number, no spaces).
+                        </p>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between gap-3 pt-1">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="voicemail-toggle" className="text-sm font-medium cursor-pointer">
+                          Send to voicemail when unanswered
+                        </Label>
+                        <p className="text-[11px] text-muted-foreground">
+                          When call forwarding is off (or the forward target is busy), let callers
+                          leave a voicemail.
+                        </p>
+                      </div>
+                      <Switch
+                        id="voicemail-toggle"
+                        checked={editVoicemail}
+                        onCheckedChange={setEditVoicemail}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {editVoiceMode === 'voicemail' && (
+                  <div className="p-3 rounded-lg bg-amber-50/40 border border-amber-200 dark:bg-amber-950/10 dark:border-amber-800">
+                    <p className="text-xs text-amber-800 dark:text-amber-400 flex items-start gap-1.5">
+                      <Voicemail className="size-3.5 shrink-0 mt-0.5" />
+                      <span>
+                        Callers will hear a default greeting and be prompted to leave a message.
+                        Recordings appear in your call history. (Custom greetings coming soon.)
+                      </span>
                     </p>
                   </div>
                 )}
-              </div>
 
-              <div className="h-px bg-border" />
+                {editVoiceMode === 'ai_vapi' && (
+                  <div className="space-y-3 pl-1 pt-1">
+                    {/* Plan-gate warning */}
+                    {!aiReceptionist.enabled && !aiReceptionist.loading && (
+                      <Alert className="border-amber-200 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-800">
+                        <AlertCircle className="size-4 text-amber-600" />
+                        <AlertDescription className="text-xs text-amber-800 dark:text-amber-400">
+                          AI Voice mode requires the <strong>Growth</strong> plan or higher.{' '}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditOpen(false);
+                              setActiveView('billing');
+                            }}
+                            className="underline font-medium hover:text-amber-900 dark:hover:text-amber-300 inline-flex items-center gap-0.5"
+                          >
+                            Upgrade <ArrowRight className="size-3" />
+                          </button>
+                        </AlertDescription>
+                      </Alert>
+                    )}
 
-              {/* Voicemail */}
-              <div className="flex items-center justify-between gap-3">
-                <div className="space-y-0.5">
-                  <Label htmlFor="voicemail-toggle" className="text-sm font-medium cursor-pointer">
-                    Send to voicemail when unanswered
-                  </Label>
-                  <p className="text-[11px] text-muted-foreground">
-                    When call forwarding is off (or the forward target is busy), let callers
-                    leave a voicemail.
-                  </p>
-                </div>
-                <Switch
-                  id="voicemail-toggle"
-                  checked={editVoicemail}
-                  onCheckedChange={setEditVoicemail}
-                />
+                    {/* Vapi API key not configured */}
+                    {aiReceptionist.enabled && !vapiConfigured && (
+                      <Alert className="border-amber-200 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-800">
+                        <AlertCircle className="size-4 text-amber-600" />
+                        <AlertDescription className="text-xs text-amber-800 dark:text-amber-400">
+                          Add your Vapi API key in{' '}
+                          <strong>Settings → AI Voice</strong> to use AI Assistant mode.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    {/* Assistant picker */}
+                    {aiReceptionist.enabled && vapiConfigured && (
+                      <div className="space-y-2">
+                        <Label htmlFor="vapiAssistant" className="text-xs text-muted-foreground">
+                          Vapi assistant
+                        </Label>
+                        <Select
+                          value={editVapiAssistantId || 'none'}
+                          onValueChange={(v) => setEditVapiAssistantId(v === 'none' ? '' : v)}
+                        >
+                          <SelectTrigger id="vapiAssistant">
+                            <SelectValue placeholder="Select an assistant" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">— Select an assistant —</SelectItem>
+                            {agents.map((a) => (
+                              <SelectItem key={a.id} value={a.vapiAssistantId || a.id}>
+                                {a.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {agents.length === 0 && (
+                          <p className="text-[11px] text-muted-foreground">
+                            No Vapi assistants yet. Create one in{' '}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditOpen(false);
+                                setActiveView('aiAgents');
+                              }}
+                              className="underline hover:text-foreground"
+                            >
+                              AI Receptionist → AI Agents
+                            </button>
+                            .
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -933,7 +1282,14 @@ export function SmsNumbersView() {
             <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
             <Button
               onClick={handleSaveEdit}
-              disabled={editMutation.isPending || (editForwardEnabled && !editForwardPhone.trim())}
+              disabled={
+                editMutation.isPending ||
+                (editVoiceMode === 'forward' && editForwardEnabled && !editForwardPhone.trim()) ||
+                (editVoiceMode === 'ai_vapi' &&
+                  aiReceptionist.enabled &&
+                  vapiConfigured &&
+                  !editVapiAssistantId)
+              }
               className="bg-emerald-600 hover:bg-emerald-700 text-white"
             >
               {editMutation.isPending ? (

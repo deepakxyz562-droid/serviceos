@@ -36,6 +36,9 @@ import {
   Zap,
   ExternalLink,
   RefreshCw,
+  Plus,
+  Sparkles,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -46,6 +49,16 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { SectionHeader } from '@/components/views/superadmin/_shared';
 import { authFetch } from '@/lib/client-auth';
 
@@ -71,27 +84,48 @@ interface TestResult {
 
 // ─── Product ID input grid definition ────────────────────────────────────────
 // The DB plan catalog (see `src/lib/billing-seed.ts` PLAN_DEFS) has 4 plans:
-//   starter (free), growth, business, enterprise.
-// Starter is free → no checkout needed. Enterprise is contact-sales ($0) but
-// we still surface its inputs in case the admin configures a paid enterprise
-// product in Creem later. So the grid has 3 plans × 2 cycles = 6 inputs.
+//   starter (paid — $5/mo), growth, business, enterprise (contact-sales).
+// We surface ALL 4 plans × 2 cycles = 8 inputs so the admin can map every
+// paid product. Starter is now a paid plan ($5/mo, $50/yr) so it needs a
+// real Creem product. Enterprise is contact-sales ($0) — its inputs are
+// still surfaced so the admin can configure a paid enterprise product in
+// Creem later without code changes.
 //
-// NOTE: the task spec mentioned "pro, business, enterprise" but the DB catalog
-// has migrated 'pro' → 'business' (see seedPlans() in billing-seed.ts). We use
-// the live DB plan codes here so the product IDs line up with the plan codes
-// the checkout endpoint looks up.
+// NOTE: the DB catalog has migrated 'pro' → 'business' (see seedPlans() in
+// billing-seed.ts). We use the live DB plan codes here so the product IDs
+// line up with the plan codes the checkout endpoint looks up.
 const PRODUCT_INPUT_DEFS: Array<{
   planCode: string;
   planName: string;
   cycle: 'monthly' | 'yearly';
   cycleLabel: string;
 }> = [
+  { planCode: 'starter', planName: 'Starter', cycle: 'monthly', cycleLabel: 'Monthly' },
+  { planCode: 'starter', planName: 'Starter', cycle: 'yearly', cycleLabel: 'Yearly' },
   { planCode: 'growth', planName: 'Growth', cycle: 'monthly', cycleLabel: 'Monthly' },
   { planCode: 'growth', planName: 'Growth', cycle: 'yearly', cycleLabel: 'Yearly' },
   { planCode: 'business', planName: 'Business', cycle: 'monthly', cycleLabel: 'Monthly' },
   { planCode: 'business', planName: 'Business', cycle: 'yearly', cycleLabel: 'Yearly' },
   { planCode: 'enterprise', planName: 'Enterprise', cycle: 'monthly', cycleLabel: 'Monthly' },
   { planCode: 'enterprise', planName: 'Enterprise', cycle: 'yearly', cycleLabel: 'Yearly' },
+];
+
+// ─── Add-on product ID inputs ────────────────────────────────────────────────
+// Add-ons are billed independently of the main plan. The SMS Number add-on is
+// $5/month per dedicated phone number (see src/app/api/sms/numbers/buy/route.ts).
+// Creem expects the product_id under cfg.products['sms_number'].monthly.
+const ADDON_INPUT_DEFS: Array<{
+  addonKey: string;
+  addonName: string;
+  cycle: 'monthly' | 'yearly';
+  cycleLabel: string;
+}> = [
+  {
+    addonKey: 'sms_number',
+    addonName: 'SMS Number Add-on',
+    cycle: 'monthly',
+    cycleLabel: 'Monthly £5',
+  },
 ];
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -118,6 +152,13 @@ export function CreemBillingSection() {
 
   // Webhook URL copy state
   const [copied, setCopied] = useState(false);
+
+  // "Create All in Creem" + per-slot "Create single" state
+  const [createAllDialogOpen, setCreateAllDialogOpen] = useState(false);
+  const [creatingAll, setCreatingAll] = useState(false);
+  // key format: "<planCode_or_addonKey>_<cycle>" — used to disable the
+  // per-slot button while its request is in flight.
+  const [creatingSingleKey, setCreatingSingleKey] = useState<string | null>(null);
 
   // ─── Load current config ──────────────────────────────────────────────────
   const loadConfig = useCallback(async () => {
@@ -241,6 +282,96 @@ export function CreemBillingSection() {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error('Failed to copy — please copy manually.');
+    }
+  }
+
+  // ─── Create ALL products in Creem ──────────────────────────────────────────
+  // Calls /api/superadmin/creem/create-all-products which creates up to 7
+  // products (starter×2 + growth×2 + business×2 + sms_number×1; enterprise is
+  // skipped because it's contact-sales $0). On success, refetch the config so
+  // the new product IDs auto-fill the inputs below.
+  async function handleCreateAllProducts() {
+    setCreatingAll(true);
+    try {
+      const res = await authFetch('/api/superadmin/creem/create-all-products', {
+        method: 'POST',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to create products');
+      }
+      const createdCount: number = data.created?.length || 0;
+      const failedCount: number = data.failed?.length || 0;
+      if (createdCount > 0) {
+        toast.success(`Created ${createdCount} product${createdCount === 1 ? '' : 's'} in Creem`, {
+          description:
+            failedCount > 0
+              ? `${failedCount} product(s) failed to create. See server logs for details.`
+              : 'Product IDs have been saved and auto-filled below.',
+        });
+      } else {
+        toast.error('No products were created', {
+          description:
+            failedCount > 0
+              ? `${failedCount} product(s) failed. Check your Creem API key and try again.`
+              : 'Please check your Creem API key and try again.',
+        });
+      }
+      // Close the confirm dialog and refetch so the IDs auto-fill.
+      setCreateAllDialogOpen(false);
+      await loadConfig();
+    } catch (err) {
+      toast.error('Failed to create products in Creem', {
+        description: err instanceof Error ? err.message : 'Please try again.',
+      });
+    } finally {
+      setCreatingAll(false);
+    }
+  }
+
+  // ─── Create a SINGLE product in Creem ───────────────────────────────────────
+  // Creates just the one plan×cycle or add-on×cycle product and fills the
+  // input with the returned product ID. Used by the small "Create" button
+  // next to each empty input slot.
+  async function handleCreateSingleProduct(opts: {
+    planCode?: string;
+    addonKey?: string;
+    cycle: 'monthly' | 'yearly';
+  }) {
+    const effectiveKey = opts.planCode || opts.addonKey;
+    if (!effectiveKey) return;
+    const stateKey = `${effectiveKey}_${opts.cycle}`;
+    setCreatingSingleKey(stateKey);
+    try {
+      const payload: Record<string, unknown> = { cycle: opts.cycle };
+      if (opts.planCode) payload.planCode = opts.planCode;
+      if (opts.addonKey) payload.addonKey = opts.addonKey;
+      const res = await authFetch('/api/superadmin/creem/create-product', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to create product');
+      }
+      // Fill the input with the newly-created product ID.
+      setProducts((prev) => ({
+        ...prev,
+        [effectiveKey]: {
+          ...prev[effectiveKey],
+          [opts.cycle]: data.productId,
+        },
+      }));
+      toast.success('Product created in Creem', {
+        description: `ID: ${data.productId}`,
+      });
+    } catch (err) {
+      toast.error('Failed to create product', {
+        description: err instanceof Error ? err.message : 'Please try again.',
+      });
+    } finally {
+      setCreatingSingleKey(null);
     }
   }
 
@@ -514,43 +645,131 @@ export function CreemBillingSection() {
       {/* ── Product ID mapping card ────────────────────────────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Product IDs</CardTitle>
-          <CardDescription>
-            Optional. Paste the Creem product ID for each plan × billing-cycle
-            combination so Creem uses the pre-created product (with tax + currency
-            handled by the Creem dashboard). If a combination is left blank, the
-            checkout falls back to an ad-hoc price derived from the local plan
-            catalog.
-          </CardDescription>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div className="space-y-1">
+              <CardTitle className="text-base">Product IDs</CardTitle>
+              <CardDescription>
+                Paste the Creem product ID for each plan × billing-cycle
+                combination, OR click the <strong>Create All in Creem</strong>{' '}
+                button to auto-create all of them in one go. Creem requires a
+                pre-created product for every checkout — there is no ad-hoc /
+                inline-pricing mode.
+              </CardDescription>
+            </div>
+            <AlertDialog open={createAllDialogOpen} onOpenChange={setCreateAllDialogOpen}>
+              <Button
+                type="button"
+                onClick={() => setCreateAllDialogOpen(true)}
+                disabled={creatingAll || loading || !isConfigured}
+                className="bg-primary text-primary-foreground hover:bg-primary/90 shrink-0"
+              >
+                {creatingAll ? (
+                  <>
+                    <Loader2 className="size-4 mr-2 animate-spin" />
+                    Creating…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="size-4 mr-2" />
+                    Create All in Creem
+                  </>
+                )}
+              </Button>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Create all products in Creem?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will create up to 9 products in your Creem account
+                    (starter, growth, business, enterprise × monthly/yearly +
+                    the SMS Number add-on). Enterprise is contact-sales so it
+                    will be skipped automatically. Continue?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={creatingAll}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    disabled={creatingAll}
+                    onClick={(e) => {
+                      // Prevent the dialog from auto-closing — we close it
+                      // ourselves after the request finishes.
+                      e.preventDefault();
+                      handleCreateAllProducts();
+                    }}
+                  >
+                    {creatingAll ? (
+                      <>
+                        <Loader2 className="size-4 mr-2 animate-spin" />
+                        Creating…
+                      </>
+                    ) : (
+                      'Continue'
+                    )}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {PRODUCT_INPUT_DEFS.map(({ planCode, planName, cycle, cycleLabel }) => {
               const id = `creem-product-${planCode}-${cycle}`;
               const value = products[planCode]?.[cycle] ?? '';
+              const stateKey = `${planCode}_${cycle}`;
+              const isCreatingThis = creatingSingleKey === stateKey;
               return (
                 <div key={id} className="space-y-1.5">
                   <Label htmlFor={id} className="text-xs font-medium">
                     {planName} — {cycleLabel} Product ID
                   </Label>
-                  <Input
-                    id={id}
-                    type="text"
-                    placeholder={`prod_xxxxxxxxxxxxxxxxxxxx`}
-                    value={value}
-                    onChange={(e) =>
-                      setProducts((prev) => ({
-                        ...prev,
-                        [planCode]: {
-                          ...prev[planCode],
-                          [cycle]: e.target.value.trim() || undefined,
-                        },
-                      }))
-                    }
-                    autoComplete="off"
-                    spellCheck={false}
-                    className="font-mono text-xs"
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      id={id}
+                      type="text"
+                      placeholder={`prod_xxxxxxxxxxxxxxxxxxxx`}
+                      value={value}
+                      onChange={(e) =>
+                        setProducts((prev) => ({
+                          ...prev,
+                          [planCode]: {
+                            ...prev[planCode],
+                            [cycle]: e.target.value.trim() || undefined,
+                          },
+                        }))
+                      }
+                      autoComplete="off"
+                      spellCheck={false}
+                      className="font-mono text-xs"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0 px-2"
+                      disabled={
+                        !!value ||
+                        isCreatingThis ||
+                        creatingAll ||
+                        loading ||
+                        !isConfigured
+                      }
+                      onClick={() => handleCreateSingleProduct({ planCode, cycle })}
+                      title={
+                        value
+                          ? 'Already set'
+                          : 'Create this product in Creem and fill the ID'
+                      }
+                    >
+                      {isCreatingThis ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Plus className="size-3.5" />
+                      )}
+                      <span className="sr-only">
+                        Create {planName} {cycleLabel} product in Creem
+                      </span>
+                    </Button>
+                  </div>
                   <p className="text-[10px] text-muted-foreground">
                     Create this product in the Creem dashboard and paste the ID here.
                   </p>
@@ -558,12 +777,95 @@ export function CreemBillingSection() {
               );
             })}
           </div>
-          <div className="rounded-md border border-blue-500/20 bg-blue-500/5 p-3 text-xs text-muted-foreground">
-            <strong className="text-foreground">Tip:</strong> if a tenant picks
-            the Creem path and no product ID is configured for their plan +
-            cycle, the checkout will use the plan&apos;s catalog price as an
-            ad-hoc unit price. Pre-creating products in Creem is recommended so
-            tax + currency are handled consistently across both payment paths.
+
+          {/* ── Add-on section ──────────────────────────────────────────── */}
+          <Separator />
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                Add-on
+              </Badge>
+              <p className="text-xs font-medium text-foreground">
+                Optional add-on products (billed independently of the main plan)
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {ADDON_INPUT_DEFS.map(({ addonKey, addonName, cycle, cycleLabel }) => {
+                const id = `creem-product-${addonKey}-${cycle}`;
+                const value = products[addonKey]?.[cycle] ?? '';
+                const stateKey = `${addonKey}_${cycle}`;
+                const isCreatingThis = creatingSingleKey === stateKey;
+                return (
+                  <div key={id} className="space-y-1.5">
+                    <Label htmlFor={id} className="text-xs font-medium">
+                      {addonName} — {cycleLabel} Product ID
+                    </Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id={id}
+                        type="text"
+                        placeholder={`prod_xxxxxxxxxxxxxxxxxxxx`}
+                        value={value}
+                        onChange={(e) =>
+                          setProducts((prev) => ({
+                            ...prev,
+                            [addonKey]: {
+                              ...prev[addonKey],
+                              [cycle]: e.target.value.trim() || undefined,
+                            },
+                          }))
+                        }
+                        autoComplete="off"
+                        spellCheck={false}
+                        className="font-mono text-xs"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 px-2"
+                        disabled={
+                          !!value ||
+                          isCreatingThis ||
+                          creatingAll ||
+                          loading ||
+                          !isConfigured
+                        }
+                        onClick={() => handleCreateSingleProduct({ addonKey, cycle })}
+                        title={
+                          value
+                            ? 'Already set'
+                            : 'Create this product in Creem and fill the ID'
+                        }
+                      >
+                        {isCreatingThis ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Plus className="size-3.5" />
+                        )}
+                        <span className="sr-only">
+                          Create {addonName} {cycleLabel} product in Creem
+                        </span>
+                      </Button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      Create this product in the Creem dashboard and paste the ID here.
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-700 dark:text-amber-400">
+            <AlertTriangle className="size-4 mt-0.5 shrink-0" />
+            <div>
+              <strong className="text-foreground">Required —</strong>{' '}
+              checkout will fail if a slot is blank. Creem requires a pre-created
+              product for every checkout (there is no ad-hoc fallback). Click the{' '}
+              <strong>Create All in Creem</strong> button above to auto-create
+              all products and fill these IDs automatically.
+            </div>
           </div>
         </CardContent>
       </Card>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser, getAppUrl } from '@/lib/auth'
+import { requirePlanFeature } from '@/lib/plan-gate'
 import {
   getPayPalAccessToken,
   getPayPalBaseUrl,
@@ -47,6 +48,14 @@ export async function POST(request: NextRequest) {
         { error: 'Only owners or admins can buy phone numbers' },
         { status: 403 },
       )
+    }
+
+    // ── Plan-tier gating: SMS Numbers add-on is locked on trial/starter ───
+    // GET (list) is allowed for everyone so users can see their existing
+    // numbers after a downgrade — only POST (buy) is gated.
+    const gate = await requirePlanFeature('sms_numbers')
+    if (!gate.ok) {
+      return NextResponse.json({ error: gate.reason }, { status: gate.status })
     }
 
     const tenantId = authUser.tenantId

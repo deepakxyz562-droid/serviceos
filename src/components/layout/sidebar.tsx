@@ -32,7 +32,6 @@ import {
   Bot,
   Sparkles,
   PhoneCall,
-  PhoneIncoming,
   Phone,
   ClipboardList,
   GitBranch,
@@ -69,6 +68,7 @@ import {
   TrendingUp,
   Wallet,
   Clock,
+  Lock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -94,6 +94,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
+import { useFeatureAccess } from '@/hooks/use-tenant-plan';
 
 // ─── Nav item definition ────────────────────────────────────────────────────
 
@@ -102,6 +103,15 @@ interface NavItem {
   label: string;
   icon: React.ElementType;
   badge?: string;
+  /**
+   * Optional plan-feature gate. When set, the item renders greyed-out with a
+   * Lock icon if the current tenant's plan doesn't include this feature.
+   * Clicking a locked item shows an "Upgrade" toast instead of navigating.
+   *
+   * Lookup happens via `useFeatureAccess(featureKey)` which fetches
+   * `/api/plan-features/check?feature=xxx` (60s SWR cache, module-level).
+   */
+  featureKey?: string;
 }
 
 interface NavSection {
@@ -144,10 +154,10 @@ const ownerNavSections: NavSection[] = [
   {
     title: 'Marketing',
     items: [
-      { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
-      { view: 'broadcast', label: 'Broadcast', icon: Send },
+      { view: 'campaigns', label: 'Campaigns', icon: Megaphone, featureKey: 'campaigns' },
+      { view: 'broadcast', label: 'Broadcast', icon: Send, featureKey: 'broadcast' },
       { view: 'templateStudio', label: 'Template Studio', icon: LayoutTemplate },
-      { view: 'retargeting', label: 'Retargeting', icon: RefreshCw },
+      { view: 'retargeting', label: 'Retargeting', icon: RefreshCw, featureKey: 'retargeting' },
       { view: 'marketingAnalytics', label: 'Analytics', icon: BarChart3 },
     ],
   },
@@ -156,7 +166,7 @@ const ownerNavSections: NavSection[] = [
     items: [
       { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
       { view: 'liveChat', label: 'Live Chat', icon: MessageSquare },
-      { view: 'smsNumbers', label: 'SMS Numbers', icon: Phone, badge: 'New' },
+      { view: 'smsNumbers', label: 'Phone Numbers', icon: Phone, featureKey: 'sms_numbers' },
       { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
       { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
       { view: 'workflows', label: 'Workflows', icon: Workflow },
@@ -169,10 +179,9 @@ const ownerNavSections: NavSection[] = [
   {
     title: 'AI Receptionist',
     items: [
-      { view: 'aiReceptionist', label: 'Dashboard', icon: PhoneCall, badge: 'Free' },
-      { view: 'aiAgents', label: 'AI Agents', icon: Bot },
-      { view: 'aiPhoneNumbers', label: 'Phone Numbers', icon: PhoneIncoming },
-      { view: 'aiCallHistory', label: 'Call History', icon: PhoneCall },
+      { view: 'aiReceptionist', label: 'Dashboard', icon: PhoneCall, badge: 'Free', featureKey: 'ai_receptionist' },
+      { view: 'aiAgents', label: 'AI Agents', icon: Bot, featureKey: 'ai_receptionist' },
+      { view: 'aiCallHistory', label: 'Call History', icon: PhoneCall, featureKey: 'ai_receptionist' },
     ],
   },
   {
@@ -269,10 +278,10 @@ const superadminNavSections: NavSection[] = [
   {
     title: 'Marketing',
     items: [
-      { view: 'campaigns', label: 'Campaigns', icon: Megaphone },
-      { view: 'broadcast', label: 'Broadcast', icon: Send },
+      { view: 'campaigns', label: 'Campaigns', icon: Megaphone, featureKey: 'campaigns' },
+      { view: 'broadcast', label: 'Broadcast', icon: Send, featureKey: 'broadcast' },
       { view: 'templateStudio', label: 'Template Studio', icon: LayoutTemplate },
-      { view: 'retargeting', label: 'Retargeting', icon: RefreshCw },
+      { view: 'retargeting', label: 'Retargeting', icon: RefreshCw, featureKey: 'retargeting' },
       { view: 'marketingAnalytics', label: 'Analytics', icon: BarChart3 },
     ],
   },
@@ -281,7 +290,7 @@ const superadminNavSections: NavSection[] = [
     items: [
       { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
       { view: 'liveChat', label: 'Live Chat', icon: MessageSquare },
-      { view: 'smsNumbers', label: 'SMS Numbers', icon: Phone, badge: 'New' },
+      { view: 'smsNumbers', label: 'Phone Numbers', icon: Phone, featureKey: 'sms_numbers' },
       { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
       { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
       { view: 'workflows', label: 'Workflows', icon: Workflow },
@@ -294,10 +303,9 @@ const superadminNavSections: NavSection[] = [
   {
     title: 'AI Receptionist',
     items: [
-      { view: 'aiReceptionist', label: 'Dashboard', icon: PhoneCall, badge: 'Free' },
-      { view: 'aiAgents', label: 'AI Agents', icon: Bot },
-      { view: 'aiPhoneNumbers', label: 'Phone Numbers', icon: PhoneIncoming },
-      { view: 'aiCallHistory', label: 'Call History', icon: PhoneCall },
+      { view: 'aiReceptionist', label: 'Dashboard', icon: PhoneCall, badge: 'Free', featureKey: 'ai_receptionist' },
+      { view: 'aiAgents', label: 'AI Agents', icon: Bot, featureKey: 'ai_receptionist' },
+      { view: 'aiCallHistory', label: 'Call History', icon: PhoneCall, featureKey: 'ai_receptionist' },
     ],
   },
   {
@@ -399,6 +407,95 @@ function CreateMenu({ isMobile, leftSidebarOpen, onSelect }: CreateMenuProps) {
         })}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+// ─── Nav button (extracted so it can call useFeatureAccess per-item) ─────────
+//
+// Plan-tier gating: when `item.featureKey` is set and the current tenant's plan
+// doesn't include that feature, the button renders greyed-out with a Lock icon
+// (in place of the badge). Clicking it shows an "Upgrade" toast instead of
+// navigating. Superadmins bypass the check entirely (we pass `featureKey=null`
+// so the hook short-circuits to `enabled: true`).
+
+interface NavButtonProps {
+  item: NavItem;
+  isActive: boolean;
+  isExpandedMode: boolean;
+  isTrial: boolean;
+  isSuperAdmin: boolean;
+  onClick: (view: ViewType) => void;
+}
+
+function NavButton({ item, isActive, isExpandedMode, isTrial, isSuperAdmin, onClick }: NavButtonProps) {
+  // Superadmin bypasses the feature check (passing null makes the hook return
+  // `{ enabled: true, loading: false }` without firing a fetch).
+  const featureKeyForLookup = isSuperAdmin ? null : item.featureKey;
+  const { enabled: featureEnabled, loading: featureLoading } = useFeatureAccess(featureKeyForLookup);
+
+  const Icon = item.icon;
+  const isLocked = !!item.featureKey && !featureEnabled && !featureLoading;
+
+  const handleClick = () => {
+    if (isLocked) {
+      toast.error('Plan feature locked', {
+        description: `Upgrade your plan to unlock "${item.label}".`,
+        action: isTrial
+          ? { label: 'Upgrade', onClick: () => onClick('billing' as ViewType) }
+          : undefined,
+      });
+      return;
+    }
+    onClick(item.view);
+  };
+
+  // Locked items: muted + cursor-not-allowed + Lock icon instead of badge.
+  const baseClass = isLocked
+    ? 'flex items-center w-full rounded-lg text-sm font-medium transition-all duration-150 cursor-not-allowed text-slate-400/60 dark:text-slate-600/60'
+    : cn(
+        'flex items-center w-full rounded-lg text-sm font-medium transition-all duration-150',
+        isActive
+          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 shadow-sm'
+          : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200/70 dark:hover:bg-slate-800/70 hover:text-slate-800 dark:hover:text-slate-200',
+      );
+  const sizeClass = isExpandedMode ? 'h-9 px-3 gap-3' : 'h-9 justify-center';
+
+  const button = (
+    <button
+      key={item.view}
+      onClick={handleClick}
+      aria-disabled={isLocked ? 'true' : undefined}
+      title={isLocked ? `Locked — upgrade to unlock "${item.label}"` : undefined}
+      className={cn(baseClass, sizeClass)}
+    >
+      <Icon className={cn('shrink-0', isActive && !isLocked ? 'size-[18px] text-emerald-600 dark:text-emerald-400' : 'size-4')} />
+      {isExpandedMode && (
+        <span className="whitespace-nowrap flex-1 text-left text-[13px]">{item.label}</span>
+      )}
+      {isExpandedMode && isLocked && (
+        <Lock className="size-3.5 text-slate-400 dark:text-slate-600 ml-auto shrink-0" aria-label="Locked" />
+      )}
+      {isExpandedMode && !isLocked && item.badge && (
+        <Badge variant="outline" className="text-[9px] h-4 px-1.5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
+          {item.badge}
+        </Badge>
+      )}
+      {isExpandedMode && !isLocked && item.view === 'billing' && isTrial && (
+        <Crown className="size-3 text-amber-500 ml-auto" />
+      )}
+    </button>
+  );
+
+  // Tooltip wraps the button in icon-only mode so the user can see the label
+  // (and the lock reason). In expanded mode the inline label suffices.
+  if (isExpandedMode) return button;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipContent side="right" sideOffset={8}>
+        {isLocked ? `Locked — ${item.label}` : item.label}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -541,38 +638,6 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     if (isMobile) setMobileSidebarOpen(false);
   };
 
-  const renderNavItem = (item: NavItem) => {
-    const Icon = item.icon;
-    const isActive = currentView === item.view;
-
-    return (
-      <button
-        key={item.view}
-        onClick={() => handleNavClick(item.view)}
-        className={cn(
-          'flex items-center w-full rounded-lg text-sm font-medium transition-all duration-150',
-          isMobile || leftSidebarOpen ? 'h-9 px-3 gap-3' : 'h-9 justify-center',
-          isActive
-            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 shadow-sm'
-            : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200/70 dark:hover:bg-slate-800/70 hover:text-slate-800 dark:hover:text-slate-200'
-        )}
-      >
-        <Icon className={cn('shrink-0', isActive ? 'size-[18px] text-emerald-600 dark:text-emerald-400' : 'size-4')} />
-        {(isMobile || leftSidebarOpen) && (
-          <span className="whitespace-nowrap flex-1 text-left text-[13px]">{item.label}</span>
-        )}
-        {(isMobile || leftSidebarOpen) && item.badge && (
-          <Badge variant="outline" className="text-[9px] h-4 px-1.5 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
-            {item.badge}
-          </Badge>
-        )}
-        {(isMobile || leftSidebarOpen) && item.view === 'billing' && auth.tenant?.planStatus === 'trial' && (
-          <Crown className="size-3 text-amber-500 ml-auto" />
-        )}
-      </button>
-    );
-  };
-
   // Whether the sidebar is in "expanded" mode (mobile drawer OR desktop expanded).
   // Used for label visibility, padding, full-width buttons, etc.
   const isExpandedMode = isMobile || leftSidebarOpen;
@@ -695,19 +760,17 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
                 )}
                 {showItems && (
                   <nav className="flex flex-col gap-0.5 px-2">
-                    {section.items.map((item) => {
-                      if (isExpandedMode) return renderNavItem(item);
-                      return (
-                        <Tooltip key={item.view}>
-                          <TooltipTrigger asChild>
-                            {renderNavItem(item)}
-                          </TooltipTrigger>
-                          <TooltipContent side="right" sideOffset={8}>
-                            {item.label}
-                          </TooltipContent>
-                        </Tooltip>
-                      );
-                    })}
+                    {section.items.map((item) => (
+                      <NavButton
+                        key={item.view}
+                        item={item}
+                        isActive={currentView === item.view}
+                        isExpandedMode={isExpandedMode}
+                        isTrial={auth.tenant?.planStatus === 'trial'}
+                        isSuperAdmin={isSuperAdmin}
+                        onClick={handleNavClick}
+                      />
+                    ))}
                   </nav>
                 )}
               </div>

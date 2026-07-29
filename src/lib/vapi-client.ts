@@ -166,11 +166,38 @@ export async function buyPhoneNumber(areaCode?: string, country = 'US') {
   });
 }
 
-export async function importPhoneNumber(number: string, friendlyName?: string) {
-  // For importing an existing Twilio number into Vapi
+export async function importPhoneNumber(
+  number: string,
+  friendlyName?: string,
+  options?: {
+    assistantId?: string;
+    /** Twilio Account SID for BYOT (Bring Your Own Twilio) automation. */
+    twilioAccountSid?: string;
+    /** Twilio Auth Token matching the SID above. */
+    twilioAuthToken?: string;
+  },
+) {
+  // For importing an existing Twilio number into Vapi.
+  //
+  // BYOT (Bring Your Own Twilio) flow:
+  //   1. If twilioAccountSid + twilioAuthToken are provided, Vapi will register
+  //      the Twilio credential on the fly and claim the number for voice.
+  //   2. If they're NOT provided, Vapi will use a previously-configured Twilio
+  //      credential from the tenant's Vapi dashboard (one-time manual setup).
+  //   3. Either way, Vapi automatically repoints the Twilio VoiceUrl to its
+  //      own voice-webhook so inbound calls are answered by the assigned
+  //      assistant. The SmsUrl is left untouched — SMS keeps flowing to ServiceOS.
+  //   4. If `assistantId` is provided, the number is immediately bound to that
+  //      assistant on the Vapi side (no second PATCH required).
+  const body: Record<string, unknown> = { number, name: friendlyName };
+  if (options?.assistantId) body.assistantId = options.assistantId;
+  if (options?.twilioAccountSid && options?.twilioAuthToken) {
+    body.twilioAccountSid = options.twilioAccountSid;
+    body.twilioAuthToken = options.twilioAuthToken;
+  }
   return vapiFetch('/phone-number', {
     method: 'POST',
-    body: JSON.stringify({ number, name: friendlyName }),
+    body: JSON.stringify(body),
   });
 }
 

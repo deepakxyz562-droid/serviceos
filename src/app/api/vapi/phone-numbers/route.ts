@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
+import { requirePlanFeature } from '@/lib/plan-gate';
 import {
   listPhoneNumbers as vapiListNumbers,
   buyPhoneNumber as vapiBuyNumber,
@@ -87,6 +88,15 @@ export async function POST(request: NextRequest) {
     if (!(await isFeatureVisible(auth.tenantId))) {
       return NextResponse.json({ error: 'Feature not available' }, { status: 403 });
     }
+
+    // ── Plan-tier gating: AI Receptionist is locked on trial/starter ──────
+    // GET (list) is allowed for everyone so users can see their existing
+    // numbers after a downgrade — only POST (buy/import) is gated.
+    const gate = await requirePlanFeature('ai_receptionist');
+    if (!gate.ok) {
+      return NextResponse.json({ error: gate.reason }, { status: gate.status });
+    }
+
     const body = await request.json();
     const { action, areaCode, country, number, friendlyName } = body as {
       action: 'buy' | 'import';

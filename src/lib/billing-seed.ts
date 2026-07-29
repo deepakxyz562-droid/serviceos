@@ -376,8 +376,9 @@ const PLAN_DEFS: PlanDef[] = [
  * matters because pricing is now centralized in PLAN_DEFS — when we change
  * a price here, the DB row must follow or the billing UI / PayPal orders
  * would charge the stale amount. The only fields an admin can override
- * without being clobbered are `isActive` and (optionally) `popular`, which
- * we deliberately do NOT touch here.
+ * without being clobbered are `isActive`, `popular`, `featuresJson`, and
+ * `limitsJson` — the JSON blobs are deliberately NOT touched on update so
+ * that superadmin edits made via the Billing UI persist across re-seeds.
  */
 export async function seedPlans(): Promise<{ seeded: number; skipped: number }> {
   let seeded = 0;
@@ -394,8 +395,9 @@ export async function seedPlans(): Promise<{ seeded: number; skipped: number }> 
           maxUsers: p.maxUsers,
           maxJobs: p.maxJobs,
           maxWorkflows: p.maxWorkflows,
-          featuresJson: JSON.stringify(p.features),
-          limitsJson: JSON.stringify(p.limits ?? {}),
+          // NOTE: featuresJson + limitsJson are intentionally OMITTED from
+          // the `update` block so admin edits (via the superadmin billing UI)
+          // are preserved across re-seeds. Only the `create` path seeds them.
           isAddon: p.isAddon ?? false,
           parentPlanCode: p.parentPlanCode ?? null,
           marketplaceAccess: p.marketplaceAccess ?? 'none',

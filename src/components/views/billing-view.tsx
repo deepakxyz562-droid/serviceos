@@ -76,7 +76,7 @@ interface BillingRecord {
 }
 
 interface SubscriptionData {
-  plan: 'starter' | 'growth' | 'pro' | 'enterprise';
+  plan: 'starter' | 'growth' | 'business' | 'enterprise';
   status: 'active' | 'trialing' | 'past_due' | 'cancelled' | 'trial' | 'expired' | 'pending_payment';
   billingCycle: 'monthly' | 'yearly';
   trialEndsAt: string | null;
@@ -143,7 +143,7 @@ interface PlanFeature {
 }
 
 interface Plan {
-  id: 'starter' | 'growth' | 'pro' | 'enterprise';
+  id: 'starter' | 'growth' | 'business' | 'enterprise';
   name: string;
   monthlyPrice: number;
   yearlyPrice: number;
@@ -198,8 +198,8 @@ const PLANS: Plan[] = [
     ],
   },
   {
-    id: 'pro',
-    name: 'Pro',
+    id: 'business',
+    name: 'Business',
     monthlyPrice: 50,
     yearlyPrice: 300,
     description: 'For scaling organizations',
@@ -265,7 +265,7 @@ function getPlanIcon(planId: string) {
   switch (planId) {
     case 'starter': return <Zap className="size-5 text-emerald-600 dark:text-emerald-400" />;
     case 'growth': return <Sparkles className="size-5 text-emerald-600 dark:text-emerald-400" />;
-    case 'pro': return <Crown className="size-5 text-emerald-600 dark:text-emerald-400" />;
+    case 'business': return <Crown className="size-5 text-emerald-600 dark:text-emerald-400" />;
     case 'enterprise': return <Building2 className="size-5 text-emerald-600 dark:text-emerald-400" />;
     default: return <Zap className="size-5 text-emerald-600 dark:text-emerald-400" />;
   }

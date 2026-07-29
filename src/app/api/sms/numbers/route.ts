@@ -91,6 +91,10 @@ export async function GET(_request: NextRequest) {
       subscriptionId: n.subscriptionId,
       forwardToPhone: n.forwardToPhone,
       forwardToVoicemail: n.forwardToVoicemail,
+      // Voice mode (Phase 2.4 — unified phone UI)
+      voiceMode: n.voiceMode,
+      vapiAssistantId: n.vapiAssistantId,
+      vapiNumberId: n.vapiNumberId,
       smsWebhookUrl: n.smsWebhookUrl,
       voiceWebhookUrl: n.voiceWebhookUrl,
       purchasedAt: n.purchasedAt,

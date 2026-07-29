@@ -1,26 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getAuthUser } from '@/lib/auth'
+import { getAuthUser, getAppUrl } from '@/lib/auth'
 import {
   releaseNumber,
   updateNumberWebhooks,
   getTwilioConfig,
+  setNumberVoiceMode,
+  type VoiceMode,
 } from '@/lib/sms-phone-numbers'
 import { cancelPayPalSubscription } from '@/lib/paypal'
 import { logBillingEvent } from '@/lib/billing-events'
+import { requirePlanFeature } from '@/lib/plan-gate'
 
 /**
  * PATCH /api/sms/numbers/[id]
  *
- * Update the phone number's display name and/or call-forwarding settings.
- * When forwarding config changes, we update the Twilio VoiceUrl to point
- * at our /api/sms/voice endpoint (which inspects the called number and
- * returns the appropriate TwiML: forward / voicemail / generic greeting).
+ * Update the phone number's display name, call-forwarding settings, OR voice
+ * mode (forward / voicemail / ai_vapi). When voiceMode changes to/from
+ * 'ai_vapi', the helper calls Vapi to register/release the number and
+ * repoints the Twilio VoiceUrl accordingly.
  *
  * Body (all optional):
  *   - displayName?: string
  *   - forwardToPhone?: string | null
  *   - forwardToVoicemail?: boolean
+ *   - voiceMode?: 'forward' | 'voicemail' | 'ai_vapi'
+ *   - vapiAssistantId?: string | null   (required when voiceMode='ai_vapi')
  *
  * DELETE /api/sms/numbers/[id]
  *
@@ -59,16 +64,27 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
     }
 
     const body = await request.json().catch(() => ({}))
-    const { displayName, forwardToPhone, forwardToVoicemail } = body as {
+    const {
+      displayName,
+      forwardToPhone,
+      forwardToVoicemail,
+      voiceMode,
+      vapiAssistantId,
+    } = body as {
       displayName?: string
       forwardToPhone?: string | null
       forwardToVoicemail?: boolean
+      voiceMode?: VoiceMode
+      vapiAssistantId?: string | null
     }
 
     const data: {
       displayName?: string | null
       forwardToPhone?: string | null
       forwardToVoicemail?: boolean
+      voiceMode?: VoiceMode
+      vapiAssistantId?: string | null
+      vapiNumberId?: string | null
     } = {}
     if (typeof displayName === 'string') data.displayName = displayName.trim() || null
     if (forwardToPhone !== undefined) {
@@ -78,21 +94,73 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
         : null
     }
     if (typeof forwardToVoicemail === 'boolean') data.forwardToVoicemail = forwardToVoicemail
+    if (voiceMode === 'forward' || voiceMode === 'voicemail' || voiceMode === 'ai_vapi') {
+      data.voiceMode = voiceMode
+    }
+    if (vapiAssistantId !== undefined) {
+      data.vapiAssistantId = (typeof vapiAssistantId === 'string' && vapiAssistantId.trim())
+        ? vapiAssistantId.trim()
+        : null
+    }
 
     const forwardingChanged =
       'forwardToPhone' in data || 'forwardToVoicemail' in data
+
+    // ─── Plan-gate: switching to ai_vapi requires the ai_receptionist feature ──
+    if (data.voiceMode === 'ai_vapi') {
+      const gate = await requirePlanFeature('ai_receptionist')
+      if (!gate.ok) {
+        return NextResponse.json(
+          { error: 'AI Receptionist is not available on your current plan. Please upgrade to Growth or higher.' },
+          { status: gate.status },
+        )
+      }
+    }
+
+    // ─── Voice-mode switching (Phase 2.3 — unified phone architecture) ──────
+    // When voiceMode is being changed, call setNumberVoiceMode() to perform
+    // the Vapi registration/release + Twilio VoiceUrl repoint. The helper
+    // returns the new vapiNumberId (when registering) which we persist below.
+    let voiceModeResult: { success: boolean; error?: string; vapiNumberId?: string } | null = null
+    if ('voiceMode' in data && data.voiceMode) {
+      const appUrl = getAppUrl(request)
+      voiceModeResult = await setNumberVoiceMode({
+        phoneNumberId: id,
+        voiceMode: data.voiceMode,
+        vapiAssistantId: data.vapiAssistantId || undefined,
+        appUrl,
+      })
+      if (!voiceModeResult.success) {
+        return NextResponse.json(
+          { error: voiceModeResult.error || 'Failed to switch voice mode' },
+          { status: 400 },
+        )
+      }
+      // Persist the vapiNumberId returned on first registration.
+      if (voiceModeResult.vapiNumberId) {
+        data.vapiNumberId = voiceModeResult.vapiNumberId
+      }
+      // When reverting from ai_vapi → forward/voicemail, clear the Vapi fields.
+      if (data.voiceMode === 'forward' || data.voiceMode === 'voicemail') {
+        data.vapiNumberId = null
+        data.vapiAssistantId = null
+      }
+    }
 
     const updated = await db.phoneNumber.update({
       where: { id },
       data,
     })
 
-    // If forwarding changed AND the number is active, push the updated
-    // voice webhook config to Twilio. The webhook URL itself doesn't change
-    // (always /api/sms/voice) — but we re-POST it so Twilio's webhook is
-    // current (in case it was cleared for some reason) and we mark the
-    // number as "lastUsedAt" so the operator can see the config touched.
-    if (forwardingChanged && updated.status === 'active' && updated.providerSid) {
+    // If forwarding changed AND the number is active AND we did NOT just
+    // process a voiceMode change (which would have repointed VoiceUrl itself),
+    // push the updated voice webhook config to Twilio as before.
+    if (
+      forwardingChanged &&
+      !voiceModeResult &&
+      updated.status === 'active' &&
+      updated.providerSid
+    ) {
       const cfg = await getTwilioConfig(tenantId)
       if (cfg && updated.voiceWebhookUrl) {
         const res = await updateNumberWebhooks({

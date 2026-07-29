@@ -306,6 +306,285 @@ export function verifyCreemWebhookSignature(
   }
 }
 
+// ─── Product creation ────────────────────────────────────────────────────────
+
+export interface CreateCreemProductInput {
+  /** Human-readable product name, e.g. "ServiceOS Growth — Monthly". */
+  name: string;
+  /** Optional long-form description shown in the Creem dashboard. */
+  description?: string;
+  /** Tax mode — default 'exclusive' (tax added on top at checkout). */
+  taxMode?: 'inclusive' | 'exclusive';
+  /**
+   * Creem may require billing_type at product creation time — pass it through.
+   * Defaults to 'recurring' (we only use Creem for subscriptions).
+   */
+  billingType?: 'one_time' | 'recurring';
+  /** Price in MAJOR currency units (e.g. 29.00 for $29). */
+  priceAmount?: number;
+  /** ISO currency code, e.g. 'USD'. */
+  priceCurrency?: string;
+  /** For recurring products, the billing interval. Defaults to 'month'. */
+  billingInterval?: 'month' | 'year';
+}
+
+export interface CreateCreemProductResult {
+  /** The newly-created Creem product ID (e.g. "prod_xxx"). */
+  productId: string;
+  /** The raw Creem API response, for debugging / logging. */
+  raw: Record<string, unknown>;
+}
+
+/**
+ * Create a Creem Product via `POST /v1/products`.
+ *
+ * Uses the merchant-of-record convention (similar to Paddle / Lemon Squeezy):
+ *   - `name`, `description`, `tax_mode`, `billing_type` at the top level
+ *   - `prices` array with one entry specifying amount (major units), currency,
+ *     and — for recurring products — `interval` + `interval_count`.
+ *
+ * NOTE: Creem's exact API shape was not fetchable in this sandbox; this
+ * function follows the merchant-of-record convention. If the live Creem API
+ * differs (e.g. it accepts a flat `price` field instead of a `prices` array),
+ * only this function needs adjusting — callers receive `{ productId, raw }`
+ * and do not depend on the wire format.
+ *
+ * Throws a clear Error on non-2xx with the response body included.
+ */
+export async function createCreemProduct(
+  input: CreateCreemProductInput
+): Promise<CreateCreemProductResult> {
+  const cfg = await getCreemConfig();
+  if (!cfg) {
+    throw new Error(
+      'Creem is not configured. Ask the platform admin to add a Creem API key before creating products.'
+    );
+  }
+
+  const billingType = input.billingType ?? 'recurring';
+  const taxMode = input.taxMode ?? 'exclusive';
+  const currency = input.priceCurrency ?? 'USD';
+
+  // ── Build the POST /v1/products request body ───────────────────────────
+  // Assumed shape (merchant-of-record convention):
+  //   {
+  //     "name": "ServiceOS Growth — Monthly",
+  //     "description": "...",
+  //     "tax_mode": "exclusive",
+  //     "billing_type": "recurring",
+  //     "prices": [
+  //       {
+  //         "amount": 29,
+  //         "currency": "USD",
+  //         "type": "recurring",
+  //         "interval": "month",
+  //         "interval_count": 1
+  //       }
+  //     ]
+  //   }
+  const body: Record<string, unknown> = {
+    name: input.name,
+    tax_mode: taxMode,
+    billing_type: billingType,
+  };
+  if (input.description) body.description = input.description;
+
+  // Attach the price as a single-element `prices` array. Creem's MoR convention
+  // (like Paddle / Lemon Squeezy) attaches prices to the product at creation
+  // time. If Creem's actual API accepts a flat `price` field instead, this is
+  // the only block that needs to change.
+  if (input.priceAmount !== undefined && input.priceAmount > 0) {
+    const priceEntry: Record<string, unknown> = {
+      amount: input.priceAmount,
+      currency,
+      type: billingType,
+    };
+    if (billingType === 'recurring') {
+      priceEntry.interval = input.billingInterval ?? 'month';
+      priceEntry.interval_count = 1;
+    }
+    body.prices = [priceEntry];
+  }
+
+  const res = await fetch(`${getBaseUrl(cfg.apiKey)}/v1/products`, {
+    method: 'POST',
+    headers: {
+      'x-api-key': cfg.apiKey,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify(body),
+    // Don't let a hung Creem API block the request indefinitely.
+    signal: AbortSignal.timeout(15_000),
+  });
+
+  const rawText = await res.text();
+  let json: Record<string, unknown> = {};
+  try {
+    json = rawText ? JSON.parse(rawText) : {};
+  } catch {
+    /* keep rawText for the error message */
+  }
+
+  if (!res.ok) {
+    // Creem's `message` field can be a string OR an array of validation
+    // errors (e.g. ["name must be a string"]). Handle both.
+    const msgField = json.message;
+    const message =
+      (typeof msgField === 'string' && msgField) ||
+      (Array.isArray(msgField) && msgField.join('; ')) ||
+      (json.error as string | undefined) ||
+      rawText.slice(0, 300) ||
+      `Creem API returned HTTP ${res.status}`;
+    throw new Error(
+      `Failed to create Creem product "${input.name}" (HTTP ${res.status}): ${message}`
+    );
+  }
+
+  // Creem returns the product `id` at the top level (e.g. "prod_xxx"). Accept
+  // a few fallback keys in case the response shape differs across versions.
+  const productId =
+    (json.id as string | undefined) ||
+    (json.product_id as string | undefined) ||
+    (json.productId as string | undefined) ||
+    '';
+
+  if (!productId) {
+    throw new Error(
+      `Creem create-product response did not include an id (HTTP ${res.status}). Raw: ${rawText.slice(0, 300)}`
+    );
+  }
+
+  return { productId, raw: json };
+}
+
+// ─── Bulk product creation ───────────────────────────────────────────────────
+
+export interface CreateAllProductsResult {
+  created: Array<{
+    /** Stable key like "growth_monthly" / "sms_number_monthly". */
+    key: string;
+    /** Plan code (e.g. "growth") or add-on key (e.g. "sms_number"). */
+    planCode: string;
+    /** "monthly" | "yearly". */
+    cycle: string;
+    /** Newly-created Creem product ID. */
+    productId: string;
+    /** Human-readable name passed to Creem. */
+    name: string;
+  }>;
+  failed: Array<{
+    key: string;
+    planCode: string;
+    cycle: string;
+    error: string;
+  }>;
+}
+
+/**
+ * Create all expected Creem products in sequence:
+ *   - starter  × (monthly + yearly)
+ *   - growth   × (monthly + yearly)
+ *   - business × (monthly + yearly)
+ *   - sms_number (monthly only — $5/month add-on)
+ *
+ * Enterprise is contact-sales (monthlyPrice=0) so it is SKIPPED — no product
+ * needs to be created for it in Creem.
+ *
+ * This function ONLY reads the Plan catalog from the DB and calls Creem. It
+ * does NOT write to the DB. The caller (admin route) is responsible for
+ * persisting the returned product IDs into
+ * `RevenueFeatureToggle.configJson.products`.
+ *
+ * Failures are COLLECTED, not thrown, so the UI can show partial success —
+ * e.g. if Creem rejects one name as a duplicate, the other 6 still get
+ * created and their IDs are returned.
+ */
+export async function createAllCreemProducts(): Promise<CreateAllProductsResult> {
+  const created: CreateAllProductsResult['created'] = [];
+  const failed: CreateAllProductsResult['failed'] = [];
+
+  // Load the plan catalog. Codes: starter, growth, business, enterprise.
+  // Skip any plan with monthlyPrice<=0 (enterprise — contact-sales).
+  const plans = await db.plan.findMany({
+    where: { isActive: true },
+    orderBy: { sortOrder: 'asc' },
+  });
+
+  for (const plan of plans) {
+    if (!plan.monthlyPrice || plan.monthlyPrice <= 0) continue;
+
+    for (const cycle of ['monthly', 'yearly'] as const) {
+      const price = cycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
+      if (!price || price <= 0) continue;
+
+      const cycleLabel = cycle === 'yearly' ? 'Yearly' : 'Monthly';
+      const name = `ServiceOS ${plan.name} — ${cycleLabel}`;
+      const description =
+        plan.description || `ServiceOS ${plan.name} plan, ${cycle} subscription`;
+      const billingInterval = cycle === 'yearly' ? 'year' : 'month';
+
+      try {
+        const result = await createCreemProduct({
+          name,
+          description,
+          billingType: 'recurring',
+          priceAmount: price,
+          priceCurrency: plan.currency || 'USD',
+          billingInterval,
+        });
+        created.push({
+          key: `${plan.code}_${cycle}`,
+          planCode: plan.code,
+          cycle,
+          productId: result.productId,
+          name,
+        });
+      } catch (err) {
+        failed.push({
+          key: `${plan.code}_${cycle}`,
+          planCode: plan.code,
+          cycle,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  }
+
+  // ── SMS number add-on (monthly, $5) ─────────────────────────────────────
+  // Mirrors the expectation in src/app/api/sms/numbers/buy/route.ts which
+  // looks up cfg.products['sms_number'].monthly as the Creem product_id for
+  // the dedicated-SMS-number checkout.
+  const smsName = 'ServiceOS Dedicated SMS Number — Monthly';
+  try {
+    const result = await createCreemProduct({
+      name: smsName,
+      description:
+        'Dedicated phone number for SMS + voice. Billed monthly per number.',
+      billingType: 'recurring',
+      priceAmount: 5,
+      priceCurrency: 'USD',
+      billingInterval: 'month',
+    });
+    created.push({
+      key: 'sms_number_monthly',
+      planCode: 'sms_number',
+      cycle: 'monthly',
+      productId: result.productId,
+      name: smsName,
+    });
+  } catch (err) {
+    failed.push({
+      key: 'sms_number_monthly',
+      planCode: 'sms_number',
+      cycle: 'monthly',
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  return { created, failed };
+}
+
 // ─── Test connection (used by the superadmin "Test Connection" button) ───────
 
 export interface CreemTestConnectionResult {

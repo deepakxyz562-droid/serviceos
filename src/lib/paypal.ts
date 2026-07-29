@@ -56,8 +56,10 @@ export interface PayPalPlanConfig {
 }
 
 // Plan definitions matching our SaaS tiers
-// IMPORTANT: Keep in sync with billing-seed.ts and billing-view.tsx PLANS
-// Yearly price = 50% off (annual total). Starter $60/yr, Growth $150/yr, Pro $300/yr.
+// IMPORTANT: Keep in sync with billing-seed.ts and billing-view.tsx PLANS.
+// Codes: starter / growth / business / enterprise (the old 'pro' code was
+// migrated to 'business' — see seedPlans() in billing-seed.ts).
+// Yearly prices follow the seed (~2 months free on the annual total).
 export const PAYPAL_PLANS: Record<string, PayPalPlanConfig> = {
   starter: {
     planId: 'starter',
@@ -71,11 +73,11 @@ export const PAYPAL_PLANS: Record<string, PayPalPlanConfig> = {
     monthlyPrice: 25,
     yearlyPrice: 150,
   },
-  pro: {
-    planId: 'pro',
-    name: 'Pro',
-    monthlyPrice: 50,
-    yearlyPrice: 300,
+  business: {
+    planId: 'business',
+    name: 'Business',
+    monthlyPrice: 79,
+    yearlyPrice: 790,
   },
 };
 
