@@ -147,6 +147,8 @@ interface Plan {
   name: string;
   monthlyPrice: number;
   yearlyPrice: number;
+  /** Original monthly price before the 40% promotional discount (null for Enterprise/Custom). */
+  originalMonthlyPrice?: number | null;
   description: string;
   popular?: boolean;
   features: PlanFeature[];
@@ -159,6 +161,7 @@ const PLANS: Plan[] = [
     id: 'starter',
     name: 'Starter',
     monthlyPrice: 10,
+    originalMonthlyPrice: 17,
     yearlyPrice: 60,
     description: 'For solo entrepreneurs & freelancers',
     features: [
@@ -179,6 +182,7 @@ const PLANS: Plan[] = [
     id: 'growth',
     name: 'Growth',
     monthlyPrice: 25,
+    originalMonthlyPrice: 42,
     yearlyPrice: 150,
     description: 'For growing service businesses',
     popular: true,
@@ -199,8 +203,9 @@ const PLANS: Plan[] = [
   },
   {
     id: 'business',
-    name: 'Business',
+    name: 'Pro',
     monthlyPrice: 50,
+    originalMonthlyPrice: 83,
     yearlyPrice: 300,
     description: 'For scaling organizations',
     features: [
@@ -984,6 +989,13 @@ export function BillingView() {
                     <p className="text-3xl font-bold">Custom</p>
                   ) : (
                     <>
+                      {/* Monthly mode: show original monthly price struck through (40% off promo) */}
+                      {!isYearly && plan.originalMonthlyPrice && plan.originalMonthlyPrice > plan.monthlyPrice && (
+                        <p className="text-sm text-muted-foreground line-through mb-0.5">
+                          {formatCurrency(plan.originalMonthlyPrice, 'USD')}<span className="text-xs">/mo</span>
+                        </p>
+                      )}
+                      {/* Yearly mode: show original yearly price struck through (50% off) */}
                       {isYearly && plan.monthlyPrice > 0 && (
                         <p className="text-sm text-muted-foreground line-through mb-0.5">
                           {formatCurrency(plan.monthlyPrice * 12, 'USD')}<span className="text-xs">/yr</span>
@@ -995,6 +1007,13 @@ export function BillingView() {
                       <span className="text-sm text-muted-foreground">
                         /{isYearly ? 'year' : 'month'}
                       </span>
+                      {/* Monthly: 40% off promotional badge */}
+                      {!isYearly && plan.originalMonthlyPrice && plan.originalMonthlyPrice > plan.monthlyPrice && (
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">
+                          Save 40% — limited time
+                        </p>
+                      )}
+                      {/* Yearly: effective monthly + 50% off */}
                       {isYearly && plan.monthlyPrice > 0 && (
                         <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">
                           {formatCurrency(Math.round(plan.yearlyPrice / 12), 'USD')}/mo · 50% off

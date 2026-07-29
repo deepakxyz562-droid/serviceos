@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAppStore } from '@/store/app-store';
 import { resolvePlanTierClient } from '@/lib/plan-features';
 import { Button } from '@/components/ui/button';
@@ -17,13 +16,14 @@ const DISMISS_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
  * Features:
  * - Shows "Day X / 14" progress + "Y days left" countdown
  * - "Save up to 40%" messaging
- * - "Upgrade" button → navigates to /subscribe
+ * - "Upgrade" button → navigates to the Billing view (Sidebar → Finance → Subscription)
+ *   which has the real PayPal + card checkout flow.
  * - Dismiss (×) button → hides banner for 24h (localStorage)
  * - Auto-hides when trial expires (the TrialPaywallOverlay takes over)
  * - Hidden for superadmins and paid users
  */
 export function TrialBanner() {
-  const router = useRouter();
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
   const auth = useAppStore((s) => s.auth);
 
   // Check localStorage via lazy initializer (avoids setState-in-effect lint
@@ -96,7 +96,10 @@ export function TrialBanner() {
   };
 
   const handleUpgrade = () => {
-    router.push('/subscribe');
+    // Navigate to the existing Billing view which has the real checkout
+    // flow (PayPal + Creem card). The old /subscribe page was a dead-end
+    // marketing page with no payment integration — removed.
+    setCurrentView('billing');
   };
 
   // Urgency color: amber for >3 days, red for ≤3 days

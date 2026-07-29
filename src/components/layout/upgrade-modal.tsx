@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   Dialog,
   DialogContent,
@@ -15,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Lock, Sparkles, Check } from 'lucide-react';
 import { MENU_CATALOG } from '@/lib/menu-catalog';
 import { PLAN_TIERS, planRank } from '@/lib/plan-features';
+import { useAppStore } from '@/store/app-store';
 
 export interface UpgradeModalState {
   menuKey: string;
@@ -91,7 +91,7 @@ const PLAN_PRICES: Record<string, { original: number; discounted: number }> = {
  */
 export function UpgradeModal() {
   const [state, setState] = useState<UpgradeModalState | null>(null);
-  const router = useRouter();
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
 
   useEffect(() => {
     _openHandler = (s: UpgradeModalState) => setState(s);
@@ -104,7 +104,10 @@ export function UpgradeModal() {
 
   const handleUpgrade = () => {
     setState(null);
-    router.push('/subscribe');
+    // Navigate to the existing Billing view (Sidebar → Finance → Subscription)
+    // which has the REAL checkout flow (PayPal + Creem card). The old
+    // /subscribe page was a dead-end marketing page with no payment integration.
+    setCurrentView('billing');
   };
 
   if (!state) return null;
