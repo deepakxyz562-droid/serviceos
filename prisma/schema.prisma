@@ -4045,6 +4045,53 @@ model AiAgent {
   @@index([status])
 }
 
+/// Dedicated/shared/BYO phone numbers purchased or configured by tenants for
+/// SMS + voice (Twilio). One row per E.164 number. Referenced by the SMS
+/// inbound webhook, the SMS numbers purchase flow, and the voice forwarding
+/// logic. `tenantId` is a plain String (not a @relation) to keep the model
+/// decoupled from the Tenant lifecycle — a released number keeps its row for
+/// audit/billing history.
+model PhoneNumber {
+  id              String   @id @default(cuid())
+  number          String   @unique
+  displayName     String?
+  provider        String   @default("twilio") // twilio | vonage | manual
+  capabilities    String   @default("sms,voice") // csv: sms,voice
+  countryCode     String?
+  type            String   @default("dedicated") // shared | dedicated | byo
+
+  // Billing
+  monthlyCost     Float    @default(0)
+  costCurrency    String   @default("USD")
+  providerCost    Float    @default(0)
+  paymentProvider String?  // paypal | creem | none
+  subscriptionId  String?  // PayPal/Creem subscription ID for recurring billing
+
+  // Twilio provider state
+  providerSid     String?  // Twilio PNxxx SID
+  smsWebhookUrl   String?
+  voiceWebhookUrl String?
+
+  // Lifecycle
+  status          String   @default("pending") // pending | active | released
+  releasedAt      DateTime?
+  lastUsedAt      DateTime?
+
+  // Voice forwarding / AI voice
+  voiceMode        String?  // forward | voicemail | ai_vapi
+  forwardToPhone   String?
+  forwardToVoicemail String?
+  vapiAssistantId  String?
+  vapiNumberId     String?
+
+  tenantId        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@index([provider, status])
+}
+
 model AiPhoneNumber {
   id              String   @id @default(cuid())
   tenantId        String

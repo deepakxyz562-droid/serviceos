@@ -6,6 +6,28 @@ import { getToken } from '@/lib/client-auth';
 import { authFetch } from '@/lib/client-auth';
 
 /**
+ * Module-level cache of tenant online status, updated by the
+ * `presence-update` socket event. The inbox view and other consumers can
+ * read this synchronously to render an immediate "N agents online" badge
+ * without waiting for the polling fallback.
+ *
+ * Shape: `{ [tenantId]: boolean }`.
+ */
+const tenantPresenceCache: Record<string, boolean> = {};
+
+/**
+ * Synchronously read the most recent tenant online status from the cache.
+ * Returns `null` if no socket event has been received yet (caller should
+ * fall back to polling `/api/presence/status?tenantId=X`).
+ */
+export function getCachedTenantPresence(tenantId: string): boolean | null {
+  if (!tenantId) return null;
+  return Object.prototype.hasOwnProperty.call(tenantPresenceCache, tenantId)
+    ? tenantPresenceCache[tenantId]
+    : null;
+}
+
+/**
  * Whether the realtime socket.io server is expected to be reachable.
  *
  * The socket.io mini-service (mini-services/realtime-service on port 3003)
@@ -163,6 +185,25 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
       if (tenantId) {
         socket?.emit('join-tenant', { tenantId, employeeId });
       }
+
+      // Send an immediate heartbeat on connect so the server's in-memory
+      // presence map registers this user without waiting for the first 30s
+      // interval. Include userId + tenantId from the auth token so the
+      // server can upsert AgentMonitor even if its socket.data extraction
+      // ever falls back to the payload (defense in depth).
+      const presence = getPresenceInfoFromStorage();
+      if (presence) {
+        try {
+          socket?.emit('heartbeat', {
+            employeeId,
+            userId: presence.userId,
+            tenantId: presence.tenantId,
+            status: 'online',
+          });
+        } catch {
+          // Ignore heartbeat errors — the interval will retry.
+        }
+      }
     });
 
     socket.on('disconnect', () => {
@@ -231,9 +272,20 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
     // Legacy event name
     socket.on('job-update', (data: any) => onJobUpdateRef.current?.(data));
 
-    // Listen for presence updates - track online employees
+    // Listen for presence updates - track online employees AND tenant-level
+    // online status. The realtime service emits two shapes:
+    //   - Tenant-level: { tenantId, online: boolean, userId?, removed? }
+    //     → updates the module-level `tenantPresenceCache` so consumers can
+    //       read the current state synchronously via `getCachedTenantPresence`.
+    //   - Employee-level (legacy): { employeeId, status }
+    //     → updates the `onlineEmployees` Set.
     socket.on('presence-update', (data: any) => {
       onPresenceUpdateRef.current?.(data);
+
+      // Tenant-level presence (from realtime service heartbeat / disconnect).
+      if (data?.tenantId && typeof data.online === 'boolean') {
+        tenantPresenceCache[data.tenantId] = data.online;
+      }
 
       if (data.employeeId) {
         setOnlineEmployees((prev) => {
@@ -274,20 +326,31 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
     };
   }, [enabled, tenantId, employeeId]);
 
-  // Set up heartbeat interval when connected and employeeId is provided
+  // Set up heartbeat interval when connected. We require `connected` but
+  // NOT `employeeId` — tenant-level presence (the auto-reply signal) only
+  // needs userId + tenantId from the JWT, which every authenticated socket
+  // has. The employeeId is included opportunistically when available so the
+  // legacy employee-presence features keep working.
   useEffect(() => {
-    if (!enabled || !employeeId || !connected) return;
+    if (!enabled || !connected) return;
+
+    const sendHeartbeat = () => {
+      if (!socketRef.current?.connected) return;
+      const presence = getPresenceInfoFromStorage();
+      try {
+        socketRef.current.emit('heartbeat', {
+          employeeId: employeeId ?? presence?.employeeId ?? undefined,
+          userId: presence?.userId,
+          tenantId: presence?.tenantId ?? tenantId,
+          status: 'online',
+        });
+      } catch {
+        // Ignore heartbeat errors
+      }
+    };
 
     // Send heartbeat every 30 seconds
-    heartbeatRef.current = setInterval(() => {
-      if (socketRef.current?.connected) {
-        try {
-          socketRef.current.emit('heartbeat', { employeeId, status: 'online' });
-        } catch {
-          // Ignore heartbeat errors
-        }
-      }
-    }, 30000);
+    heartbeatRef.current = setInterval(sendHeartbeat, 30000);
 
     return () => {
       if (heartbeatRef.current) {
@@ -295,28 +358,40 @@ export function useRealtime(options: UseRealtimeOptions = {}): UseRealtimeReturn
         heartbeatRef.current = null;
       }
     };
-  }, [enabled, employeeId, connected]);
+  }, [enabled, employeeId, connected, tenantId]);
 
   // Send a heartbeat manually
   const sendHeartbeat = useCallback(
     (empId: string, status: string) => {
       if (socketRef.current?.connected) {
+        const presence = getPresenceInfoFromStorage();
         try {
-          socketRef.current.emit('heartbeat', { employeeId: empId, status });
+          socketRef.current.emit('heartbeat', {
+            employeeId: empId,
+            userId: presence?.userId,
+            tenantId: presence?.tenantId ?? tenantId,
+            status,
+          });
         } catch {
           // Ignore errors
         }
       }
     },
-    []
+    [tenantId]
   );
 
   // Emit a status change event
   const emitStatusChange = useCallback(
     (empId: string, status: string) => {
       if (socketRef.current?.connected) {
+        const presence = getPresenceInfoFromStorage();
         try {
-          socketRef.current.emit('status-change', { employeeId: empId, status, tenantId });
+          socketRef.current.emit('status-change', {
+            employeeId: empId,
+            status,
+            userId: presence?.userId,
+            tenantId: presence?.tenantId ?? tenantId,
+          });
         } catch {
           // Ignore errors
         }
@@ -427,6 +502,45 @@ export function usePresence(employeeIds: string[] = []): Record<string, 'online'
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Read the user's auth info from localStorage so we can include userId and
+ * tenantId in heartbeat payloads. The realtime service uses these to
+ * upsert the AgentMonitor row (presence tracking for the auto-reply
+ * feature). Returns null on the server (no localStorage) or when the auth
+ * data is missing/malformed.
+ *
+ * Reads `serviceos_auth` (preferred — set by the login flow with shape
+ * `{ token, user: { id, tenantId, employeeId? } }`) and falls back to
+ * decoding the JWT from `serviceos_token` if needed.
+ */
+function getPresenceInfoFromStorage(): {
+  userId: string;
+  tenantId: string;
+  employeeId?: string | null;
+} | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem('serviceos_auth');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as {
+      token?: string;
+      user?: {
+        id?: string;
+        tenantId?: string | null;
+        employeeId?: string | null;
+      };
+    };
+    const u = parsed?.user;
+    if (u?.id && u.tenantId) {
+      return { userId: u.id, tenantId: u.tenantId, employeeId: u.employeeId ?? null };
+    }
+  } catch {
+    // Ignore parse errors — the heartbeat just won't include userId/tenantId
+    // and the server will fall back to the JWT payload it already has.
+  }
+  return null;
+}
 
 function mapStatusToPresence(
   status: string | undefined,

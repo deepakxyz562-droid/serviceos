@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { cookies, headers } from 'next/headers';
+import { recordUserActivity } from '@/lib/presence';
 
 // JWT secret resolution.
 // NOTE: We intentionally do NOT throw at module-load time. During `next build`,
@@ -91,27 +92,59 @@ export function verifyToken(token: string): AuthUser | null {
  * `id` to `cust_<customerId>` (with a `cust_` prefix). We strip that prefix
  * here so every downstream API can use `user.id` directly as the Customer.id
  * without needing to normalise it individually.
+ *
+ * PRESENCE SIDE-EFFECT: For authenticated NON-customer sessions (i.e. users
+ * with a `tenantId` who are agents/admins, not visitors or customers), we
+ * fire-and-forget a `recordUserActivity()` call. This updates
+ * `User.lastActivityAt` and `AgentMonitor.lastActivityAt` so the "tenant
+ * online?" check picks up API activity as a presence signal — even when
+ * the realtime socket isn't connected. The call is non-blocking and never
+ * throws; it's safe to call on every request.
  */
 export async function getAuthUser(): Promise<AuthUser | null> {
   try {
+    let user: AuthUser | null = null;
+
     // 1. Try HTTP-only cookie first (preferred)
     const cookieStore = await cookies();
     const token = cookieStore.get(TOKEN_NAME)?.value;
     if (token) {
-      const user = verifyToken(token);
-      if (user) return normalizeCustomerId(user);
+      user = verifyToken(token);
     }
 
     // 2. Fallback: Check Authorization header (Bearer token)
-    const headersList = await headers();
-    const authHeader = headersList.get('authorization');
-    if (authHeader?.startsWith('Bearer ')) {
-      const bearerToken = authHeader.slice(7);
-      const user = verifyToken(bearerToken);
-      if (user) return normalizeCustomerId(user);
+    if (!user) {
+      const headersList = await headers();
+      const authHeader = headersList.get('authorization');
+      if (authHeader?.startsWith('Bearer ')) {
+        const bearerToken = authHeader.slice(7);
+        user = verifyToken(bearerToken);
+      }
     }
 
-    return null;
+    if (!user) return null;
+    const normalized = normalizeCustomerId(user);
+
+    // Presence side-effect (fire-and-forget, never throws). Skip for:
+    //   - Customer sessions (role === 'customer' or id starts with `cust_`)
+    //     — customers are not agents and shouldn't appear in AgentMonitor.
+    //   - Sessions without a tenantId (super-admins without an active
+    //     tenant, unauthenticated requests).
+    //   - The `verify-otp` / `exchange-magic-link` paths still set role to
+    //     'customer' so they're correctly skipped here.
+    if (
+      normalized.tenantId &&
+      normalized.role !== 'customer' &&
+      !normalized.id.startsWith('cust_')
+    ) {
+      try {
+        recordUserActivity(normalized.id, normalized.tenantId);
+      } catch {
+        // Never let presence tracking break auth — swallow all errors.
+      }
+    }
+
+    return normalized;
   } catch {
     return null;
   }

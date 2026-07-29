@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 import { EventBus } from '@/lib/event-bus'
+import { maybeAutoReply } from '@/lib/auto-reply'
 
 const CHANNEL_LABELS: Record<string, string> = {
-  whatsapp: 'WhatsApp',
   website: 'Website',
   facebook: 'Facebook',
   instagram: 'Instagram',
@@ -14,12 +14,13 @@ const CHANNEL_LABELS: Record<string, string> = {
   sms: 'SMS',
   phone: 'Phone',
   manual: 'Manual',
+  whatsapp: 'WhatsApp',
 }
 
 // Valid channel values
 const VALID_CHANNELS = [
-  'whatsapp', 'website', 'facebook', 'instagram',
-  'google_ads', 'justdial', 'email', 'sms', 'phone', 'manual',
+  'website', 'facebook', 'instagram',
+  'google_ads', 'justdial', 'email', 'sms', 'phone', 'manual', 'whatsapp',
 ]
 
 // POST /api/omnichannel/ingest - Handle incoming leads from ALL channels
@@ -268,31 +269,25 @@ export async function POST(request: NextRequest) {
       console.error('[OmnichannelIngest] Failed to emit conversation.message_received event:', eventErr)
     }
 
-    // ── Step 7: Handle auto-reply if configured ──
-    if (channelConfig?.autoReply && channelConfig.autoReplyMessage) {
+    // ── Step 7: Auto-reply when tenant is offline ─────────────────────────
+    // The legacy `ChannelConfig.autoReply` / `autoReplyMessage` fields are
+    // no longer used here — the new presence-conditional orchestrator reads
+    // its config from `Tenant.settingsJson.autoReplyOffline`. The orchestrator
+    // checks subscription + config + presence + cooldown internally and
+    // never throws. Fire-and-forget so the inbound ingestion response isn't
+    // delayed by the auto-reply pipeline (which may include an LLM call).
+    if (tenantId && conversation.conversationId) {
       try {
-        await db.inboxMessage.create({
-          data: {
-            conversationId: conversation.conversationId,
-            senderType: 'bot',
-            senderName: 'Auto Reply',
-            content: channelConfig.autoReplyMessage,
-            messageType: 'text',
-            direction: 'outbound',
-            status: 'sent',
-            metadataJson: JSON.stringify({ autoReply: true, channel }),
-            tenantId,
-            workspaceId,
-          },
+        await maybeAutoReply({
+          tenantId,
+          conversationId: conversation.conversationId,
+          visitorMessage: message || '',
+          channel,
+          visitorName: name || undefined,
+          visitorPhone: phone || undefined,
         })
-
-        // Update conversation last direction
-        await db.conversation.update({
-          where: { id: conversation.id },
-          data: { lastDirection: 'outbound' },
-        })
-      } catch (replyErr) {
-        console.error('[OmnichannelIngest] Failed to send auto-reply:', replyErr)
+      } catch (err) {
+        console.warn('[OmnichannelIngest] maybeAutoReply failed:', err)
       }
     }
 

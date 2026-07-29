@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate channels
-    const validChannels: NotificationChannel[] = ['whatsapp', 'email', 'sms', 'push', 'in_app']
+    const validChannels: NotificationChannel[] = ['email', 'sms', 'whatsapp', 'push', 'in_app']
     const invalidChannels = channels.filter((c: string) => !validChannels.includes(c as NotificationChannel))
     if (invalidChannels.length > 0) {
       return NextResponse.json(

@@ -1326,7 +1326,7 @@ export const actionNodes: NodeTypeDefinition[] = [
     inputs: [{ id: 'main', name: 'main', type: 'input' }],
     outputs: [{ id: 'main', name: 'main', type: 'output' }],
     properties: [
-      { name: 'channel', displayName: 'Channel', type: 'select', default: 'whatsapp', options: [{ name: 'WhatsApp', value: 'whatsapp' }, { name: 'Email', value: 'email' }, { name: 'SMS', value: 'sms' }] },
+      { name: 'channel', displayName: 'Channel', type: 'select', default: 'email', options: [{ name: 'Email', value: 'email' }, { name: 'SMS', value: 'sms' }, { name: 'WhatsApp', value: 'whatsapp' }] },
       { name: 'recipient', displayName: 'Recipient', type: 'select', default: 'customer', options: [{ name: 'Customer', value: 'customer' }, { name: 'Store Admin', value: 'admin' }, { name: 'Custom', value: 'custom' }] },
       { name: 'template', displayName: 'Message Template', type: 'text', required: true, placeholder: 'Hi {{name}}, your order #{{orderId}} has been {{status}}.' },
       { name: 'eventType', displayName: 'Event Type', type: 'select', default: 'order_confirmation', options: [{ name: 'Order Confirmation', value: 'order_confirmation' }, { name: 'Shipping Update', value: 'shipping_update' }, { name: 'Abandoned Cart Reminder', value: 'abandoned_cart' }, { name: 'Refund Notification', value: 'refund' }, { name: 'Custom', value: 'custom' }] },

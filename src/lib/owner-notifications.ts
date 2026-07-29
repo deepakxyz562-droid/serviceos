@@ -50,9 +50,9 @@ export interface OwnerNotificationPayload {
 }
 
 export interface OwnerNotificationResult {
-  whatsapp: { sent: boolean; simulated: boolean; to?: string; error?: string }
   email: { sent: boolean; simulated: boolean; to?: string; error?: string }
   sms: { sent: boolean; simulated: boolean; to?: string; error?: string }
+  whatsapp: { sent: boolean; simulated: boolean; to?: string; error?: string }
   push: { sent: number; failed: number; notConfigured: boolean }
   inApp: { created: boolean }
   ownerPhone?: string
@@ -177,9 +177,9 @@ export async function notifyOwner(
   payload: OwnerNotificationPayload,
 ): Promise<OwnerNotificationResult> {
   const result: OwnerNotificationResult = {
-    whatsapp: { sent: false, simulated: false },
     email: { sent: false, simulated: false },
     sms: { sent: false, simulated: false },
+    whatsapp: { sent: false, simulated: false },
     push: { sent: 0, failed: 0, notConfigured: false },
     inApp: { created: false },
   }

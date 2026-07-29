@@ -199,10 +199,10 @@ interface CustomerLike {
  * customer's available contact info.
  *
  * Priority order (for customers):
- *   1. WhatsApp (if customer.whatsappId is set — indicates they've opted in
- *      via WhatsApp at least once)
+ *   1. Email (if customer.email is set)
  *   2. SMS (if customer.phone is set)
- *   3. Email (if customer.email is set)
+ *   3. WhatsApp (if customer.whatsappId is set — indicates they've opted in
+ *      via WhatsApp at least once)
  *
  * For internal users (no customerId, only userId), always return ['in_app'].
  *
@@ -219,9 +219,9 @@ export function selectBestChannels(
   if (!customer) return ['in_app'];
 
   const channels: Channel[] = [];
-  if (customer.whatsappId) channels.push('whatsapp');
-  if (customer.phone) channels.push('sms');
   if (customer.email) channels.push('email');
+  if (customer.phone) channels.push('sms');
+  if (customer.whatsappId) channels.push('whatsapp');
   // Always also create an in-app notification for the internal team when
   // we send to a customer (so admins/managers see the conversation in the
   // customer 360 timeline even without an inbox check).

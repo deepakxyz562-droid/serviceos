@@ -241,10 +241,11 @@ export function CommunicationProvidersView() {
   const [saving, setSaving] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  // Form state (shared for add/edit). Default to WhatsApp since 'email' is
-  // deprecated and 'whatsapp' is the most common tenant-managed channel.
+  // Form state (shared for add/edit). Default to SMS — it works instantly and
+  // doesn't require the complex WhatsApp API setup that 'whatsapp' does.
+  // 'email' is intentionally not offered in the type selector (deprecated path).
   const [formName, setFormName] = useState('');
-  const [formType, setFormType] = useState<'email' | 'sms' | 'whatsapp'>('whatsapp');
+  const [formType, setFormType] = useState<'email' | 'sms' | 'whatsapp'>('sms');
   const [formProvider, setFormProvider] = useState('meta_cloud_api');
   const [formConfig, setFormConfig] = useState<Record<string, string>>({});
   const [formCredentialId, setFormCredentialId] = useState<string>('');

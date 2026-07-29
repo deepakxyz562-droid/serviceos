@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
         customerPhone: resolvedCustomerPhone || null,
         customerEmail: resolvedCustomerEmail || null,
         status: 'pending',
-        channel: channel || 'whatsapp',
+        channel: channel || 'email',
         tenantId: user.tenantId,
       },
     });

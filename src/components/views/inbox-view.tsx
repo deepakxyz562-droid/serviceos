@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   MessageSquare, Search, Send, Phone, User, Tag, Flag,
   ArrowRightLeft, StickyNote, AtSign, MoreVertical,
@@ -24,7 +25,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { apiPost } from '@/lib/api';
+import { apiPost, authFetch } from '@/lib/api';
 
 // ─── API Types ──────────────────────────────────────────────────────────────
 
@@ -343,6 +344,33 @@ export function InboxView() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
+
+  // ─── Tenant presence (auto-reply indicator) ───────────────────────────
+  // Polls /api/presence/status every 30s so the inbox reflects the tenant's
+  // current online/offline state. When the tenant is offline, auto-reply (if
+  // enabled) will fire on inbound messages — the badge tells the user that.
+  const { data: presenceData, isLoading: presenceLoading } = useQuery<{
+    online: boolean;
+    checkedAt: string;
+    tenantId: string;
+  }>({
+    queryKey: ['tenant-presence'],
+    queryFn: async () => {
+      const res = await authFetch('/api/presence/status');
+      if (!res.ok) throw new Error('Failed to fetch presence');
+      return res.json();
+    },
+    refetchInterval: 30000,
+    // Don't retry aggressively — presence is a soft signal, not critical.
+    retry: 1,
+  });
+
+  const isOnline = presenceData?.online === true;
+  const presenceLabel = presenceLoading
+    ? '...'
+    : isOnline
+      ? 'Online'
+      : 'Offline';
 
   // ─── Detect mobile viewport ───────────────────────────────────────────
 
@@ -1394,7 +1422,50 @@ export function InboxView() {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Presence pill — auto-reply context */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    'gap-1.5 h-7 px-2.5 text-xs font-medium cursor-default',
+                    presenceLoading
+                      ? 'bg-muted/50 text-muted-foreground border-muted'
+                      : isOnline
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800'
+                        : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800/50 dark:text-slate-300 dark:border-slate-700',
+                  )}
+                >
+                  <span className="relative flex size-2">
+                    {!presenceLoading && isOnline && (
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                    )}
+                    <span
+                      className={cn(
+                        'relative inline-flex size-2 rounded-full',
+                        presenceLoading
+                          ? 'bg-muted-foreground/50'
+                          : isOnline
+                            ? 'bg-emerald-500'
+                            : 'bg-slate-400',
+                      )}
+                    />
+                  </span>
+                  {presenceLabel}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-[260px]">
+                {presenceLoading
+                  ? 'Checking your online status…'
+                  : isOnline
+                    ? 'You are currently online — auto-reply is paused.'
+                    : 'You are offline — auto-reply is active for inbound messages.'}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Circle className="size-2 fill-emerald-500 text-emerald-500" />
             <span>{stats.active} active</span>

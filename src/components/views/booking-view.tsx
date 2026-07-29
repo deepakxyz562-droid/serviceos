@@ -185,10 +185,10 @@ const STATUS_OPTIONS = Object.entries(STATUS_CONFIG).map(([value, cfg]) => ({
 
 const SOURCE_OPTIONS = [
   { value: 'manual', label: 'Manual' },
-  { value: 'whatsapp', label: 'WhatsApp' },
   { value: 'website', label: 'Website' },
   { value: 'form', label: 'Form' },
   { value: 'api', label: 'API' },
+  { value: 'whatsapp', label: 'WhatsApp' },
 ];
 
 // ---------------------------------------------------------------------------

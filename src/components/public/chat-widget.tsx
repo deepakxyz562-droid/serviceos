@@ -10,11 +10,14 @@
  *   1. Visitor clicks the floating button → panel opens.
  *   2. If no session in localStorage → show pre-chat form (name + email optional).
  *   3. Visitor submits first message:
- *        POST /api/public/chat/session  → creates PublicChatSession
+ *        POST /api/public/chat/session  → creates PublicChatSession (returns tenantId)
  *        POST /api/public/chat/[id]/messages  → first visitor message
- *   4. Widget polls /api/public/chat/[id]/messages?since= every 4s for admin replies.
- *   5. Visitor can end chat via the X menu → POST /api/public/chat/[id]/close.
- *   6. Session ID persisted in localStorage so returning visitor resumes chat.
+ *   4. Widget polls /api/public/chat/[id]/messages?since= every 4s for admin replies
+ *      (the response also includes tenantId so restored sessions get it too).
+ *   5. Widget polls /api/presence/status?tenantId= every 15s to check if the
+ *      tenant is online. When offline, an "We'll reply shortly" banner shows.
+ *   6. Visitor can end chat via the X menu → POST /api/public/chat/[id]/close.
+ *   7. Session ID + tenantId persisted in localStorage so returning visitor resumes chat.
  *
  * Self-contained: no external CSS deps, no app state. All inline styles + Tailwind.
  * Scoped to a high z-index so it floats above the public page content but below
@@ -22,6 +25,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, FormEvent } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   MessageSquare,
   X,
@@ -30,6 +34,7 @@ import {
   Circle,
   Loader2,
   RefreshCw,
+  Clock,
 } from 'lucide-react'
 
 interface ChatWidgetProps {
@@ -47,6 +52,12 @@ interface ChatMessage {
   createdAt: string
 }
 
+interface PresenceResponse {
+  online: boolean
+  checkedAt: string
+  tenantId: string
+}
+
 type Phase = 'closed' | 'prechat' | 'chatting'
 
 const STORAGE_KEY_PREFIX = 'serviceos_chat_'
@@ -58,12 +69,16 @@ export function ChatWidget({ businessSlug, businessName }: ChatWidgetProps) {
   const [visitorName, setVisitorName] = useState('')
   const [visitorEmail, setVisitorEmail] = useState('')
   const [sessionId, setSessionId] = useState<string | null>(null)
+  const [tenantId, setTenantId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputText, setInputText] = useState('')
   const [sending, setSending] = useState(false)
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [adminOnline, setAdminOnline] = useState(true) // optimistic; turns false on closed status
+  // True when the session has been explicitly closed (either by visitor or by
+  // admin). Used as an ADDITIONAL offline signal — even if presence says the
+  // tenant is online, a closed session shows the offline banner.
+  const [sessionClosed, setSessionClosed] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -71,15 +86,21 @@ export function ChatWidget({ businessSlug, businessName }: ChatWidgetProps) {
 
   const storageKey = `${STORAGE_KEY_PREFIX}${businessSlug}`
 
-  // ─── Restore session from localStorage on mount ─────────────────────────
+  // ─── Restore session + tenantId from localStorage on mount ────────────
   useEffect(() => {
     if (typeof window === 'undefined') return
     try {
       const stored = localStorage.getItem(storageKey)
       if (stored) {
-        const parsed = JSON.parse(stored) as { sessionId: string; visitorName?: string; visitorEmail?: string }
+        const parsed = JSON.parse(stored) as {
+          sessionId: string
+          tenantId?: string
+          visitorName?: string
+          visitorEmail?: string
+        }
         if (parsed.sessionId) {
           setSessionId(parsed.sessionId)
+          if (parsed.tenantId) setTenantId(parsed.tenantId)
           setVisitorName(parsed.visitorName || '')
           setVisitorEmail(parsed.visitorEmail || '')
           setPhase('chatting')
@@ -91,16 +112,42 @@ export function ChatWidget({ businessSlug, businessName }: ChatWidgetProps) {
     }
   }, [storageKey])
 
-  // ─── Persist session to localStorage whenever it changes ────────────────
+  // ─── Persist session + tenantId to localStorage whenever they change ──
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (sessionId) {
       localStorage.setItem(
         storageKey,
-        JSON.stringify({ sessionId, visitorName, visitorEmail }),
+        JSON.stringify({ sessionId, tenantId, visitorName, visitorEmail }),
       )
     }
-  }, [sessionId, visitorName, visitorEmail, storageKey])
+  }, [sessionId, tenantId, visitorName, visitorEmail, storageKey])
+
+  // ─── Presence query (PUBLIC — no auth token) ──────────────────────────
+  // Polls every 15s. We default `adminOnline` to `true` if the API fails so
+  // we never show the "offline" banner on a backend hiccup — visitors
+  // shouldn't see "we're offline" just because of a network blip.
+  const { data: presenceData } = useQuery<PresenceResponse | null>({
+    queryKey: ['public-presence', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return null
+      const res = await fetch(
+        `/api/presence/status?tenantId=${encodeURIComponent(tenantId)}&XTransformPort=3000`,
+      )
+      if (!res.ok) return null
+      return res.json() as Promise<PresenceResponse>
+    },
+    enabled: !!tenantId,
+    refetchInterval: 15000,
+    retry: 1,
+  })
+
+  // Derive admin online state: tenant online per presence API AND session
+  // not explicitly closed. Default to `true` (online) when:
+  //   - We don't have a tenantId yet (haven't started a chat).
+  //   - The presence API returned null/errored.
+  //   - The presence API is still loading.
+  const adminOnline = !sessionClosed && (presenceData?.online ?? true)
 
   // ─── Fetch messages (polling) ───────────────────────────────────────────
   const fetchMessages = useCallback(async (sid: string) => {
@@ -111,6 +158,12 @@ export function ChatWidget({ businessSlug, businessName }: ChatWidgetProps) {
       const res = await fetch(`/api/public/chat/${sid}/messages${sinceParam}`)
       if (!res.ok) return
       const data = await res.json()
+
+      // Pick up tenantId if we don't have it yet (restored session case).
+      if (data.tenantId && !tenantId) {
+        setTenantId(data.tenantId as string)
+      }
+
       const incoming: ChatMessage[] = data.messages || []
       if (incoming.length === 0) return
 
@@ -120,15 +173,17 @@ export function ChatWidget({ businessSlug, businessName }: ChatWidgetProps) {
         return [...prev, ...fresh]
       })
 
-      // If a system message says "ended by visitor" or admin closed, mark offline.
+      // If a system message says "ended by visitor" or admin closed, mark
+      // the session closed — this is an additional offline signal that
+      // presence polling can't detect.
       const hasClose = incoming.some(
         (m) => m.senderType === 'system' && /ended|closed/i.test(m.body),
       )
-      if (hasClose) setAdminOnline(false)
+      if (hasClose) setSessionClosed(true)
     } catch {
       // silent — poll will retry
     }
-  }, [messages])
+  }, [messages, tenantId])
 
   // ─── Polling effect when chatting ───────────────────────────────────────
   useEffect(() => {
@@ -176,7 +231,7 @@ export function ChatWidget({ businessSlug, businessName }: ChatWidgetProps) {
 
     setStarting(true)
     try {
-      // 1. Create session
+      // 1. Create session — response includes tenantId for the presence query.
       const sessionRes = await fetch('/api/public/chat/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -197,6 +252,8 @@ export function ChatWidget({ businessSlug, businessName }: ChatWidgetProps) {
       const sessionData = await sessionRes.json()
       const newSessionId: string = sessionData.sessionId
       setSessionId(newSessionId)
+      if (sessionData.tenantId) setTenantId(sessionData.tenantId as string)
+      setSessionClosed(false)
       setPhase('chatting')
       // Fetch the initial system message ("Chat session started")
       // Use a tiny delay to let the DB write commit.
@@ -282,11 +339,12 @@ export function ChatWidget({ businessSlug, businessName }: ChatWidgetProps) {
       localStorage.removeItem(storageKey)
     }
     setSessionId(null)
+    setTenantId(null)
     setMessages([])
     setPhase('closed')
     setVisitorName('')
     setVisitorEmail('')
-    setAdminOnline(true)
+    setSessionClosed(false)
     setError(null)
   }
 
@@ -370,6 +428,20 @@ export function ChatWidget({ businessSlug, businessName }: ChatWidgetProps) {
           </button>
         </div>
       </div>
+
+      {/* Offline banner — only shown when admin is offline AND visitor is in chat */}
+      {phase === 'chatting' && !adminOnline && (
+        <div
+          role="status"
+          className="flex items-start gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800"
+        >
+          <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            We&apos;re offline right now. We&apos;ll reply as soon as we&apos;re
+            back. Leave your message and we&apos;ll get back to you.
+          </span>
+        </div>
+      )}
 
       {/* Body */}
       {phase === 'prechat' ? (

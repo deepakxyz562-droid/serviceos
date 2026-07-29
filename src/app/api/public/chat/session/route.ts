@@ -275,6 +275,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         sessionId: session.id,
+        tenantId: tenant.id,
         tenantName: tenant.name,
         message: 'Chat started',
       },

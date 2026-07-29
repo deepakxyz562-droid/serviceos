@@ -4,12 +4,14 @@ import { getAuthUser } from '@/lib/auth'
 
 // Default channel configs to auto-create when none exist
 const DEFAULT_CHANNELS = [
-  { channel: 'whatsapp', name: 'WhatsApp Business', status: 'active', isDefault: true, autoCreateLead: true },
+  { channel: 'email', name: 'Email', status: 'active', isDefault: true, autoCreateLead: true },
+  { channel: 'sms', name: 'SMS', status: 'active', isDefault: false, autoCreateLead: true },
   { channel: 'website', name: 'Website Forms', status: 'active', isDefault: true, autoCreateLead: true },
   { channel: 'facebook', name: 'Facebook Messenger', status: 'inactive', isDefault: false, autoCreateLead: true },
   { channel: 'instagram', name: 'Instagram DM', status: 'inactive', isDefault: false, autoCreateLead: true },
   { channel: 'google_ads', name: 'Google Ads Lead Forms', status: 'inactive', isDefault: false, autoCreateLead: true },
   { channel: 'justdial', name: 'JustDial', status: 'inactive', isDefault: false, autoCreateLead: true },
+  { channel: 'whatsapp', name: 'WhatsApp Business', status: 'active', isDefault: false, autoCreateLead: true },
 ]
 
 // GET /api/omnichannel/channels - List all channel configs in the format the frontend expects

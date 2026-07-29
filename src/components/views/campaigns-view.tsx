@@ -32,7 +32,7 @@ import { CampaignProviderGate } from '@/components/marketing/campaign-provider-g
 
 type CampaignType = 'promotional' | 'transactional' | 'reminder' | 'seasonal' | 're_engagement' | 'follow_up';
 type CampaignStatus = 'draft' | 'scheduled' | 'running' | 'paused' | 'completed' | 'cancelled';
-type CampaignChannel = 'whatsapp' | 'email' | 'sms' | 'multi';
+type CampaignChannel = 'email' | 'sms' | 'whatsapp' | 'multi';
 
 interface Campaign {
   id: string;
@@ -71,9 +71,9 @@ const CAMPAIGN_TYPES: { value: CampaignType; label: string }[] = [
 ];
 
 const CAMPAIGN_CHANNELS: { value: CampaignChannel; label: string }[] = [
-  { value: 'whatsapp', label: 'WhatsApp' },
   { value: 'email', label: 'Email' },
   { value: 'sms', label: 'SMS' },
+  { value: 'whatsapp', label: 'WhatsApp' },
   { value: 'multi', label: 'Multi-channel' },
 ];
 
@@ -393,13 +393,13 @@ export function CampaignsView() {
   const [marketingConnected, setMarketingConnected] = useState<boolean | null>(null);
 
   const [createForm, setCreateForm] = useState({
-    name: '', type: 'promotional' as CampaignType, channel: 'whatsapp' as CampaignChannel,
+    name: '', type: 'promotional' as CampaignType, channel: 'email' as CampaignChannel,
     audienceMode: 'all' as AudienceMode, audienceId: '', manualEmails: '',
     messageContent: '', ctaText: '', ctaUrl: '', subject: '',
     scheduleDate: '', scheduleTime: '', timezone: 'Asia/Kolkata',
   });
   const [editForm, setEditForm] = useState({
-    name: '', type: 'promotional' as CampaignType, channel: 'whatsapp' as CampaignChannel,
+    name: '', type: 'promotional' as CampaignType, channel: 'email' as CampaignChannel,
     audienceMode: 'all' as AudienceMode, audienceId: '', manualEmails: '',
     messageContent: '', ctaText: '', ctaUrl: '', subject: '',
     scheduleDate: '', scheduleTime: '', timezone: 'Asia/Kolkata',
@@ -778,7 +778,7 @@ export function CampaignsView() {
         setCampaigns(prev => [result.data, ...prev]);
         setShowCreateDialog(false);
         setCreateForm({
-          name: '', type: 'promotional', channel: 'whatsapp',
+          name: '', type: 'promotional', channel: 'email',
           audienceMode: 'all', audienceId: '', manualEmails: '',
           messageContent: '', ctaText: '', ctaUrl: '', subject: '',
           scheduleDate: '', scheduleTime: '', timezone: 'Asia/Kolkata',

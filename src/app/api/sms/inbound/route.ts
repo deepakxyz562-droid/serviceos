@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { maybeAutoReply } from '@/lib/auto-reply'
 
 /**
  * POST /api/sms/inbound
@@ -117,6 +118,10 @@ export async function POST(request: NextRequest) {
       providerSid: messageSid || undefined,
     }
 
+    // Track the conversationId across both branches so we can pass it to
+    // maybeAutoReply after the save logic.
+    let conversationId: string
+
     if (existingConversation) {
       let messages: unknown[] = []
       try { messages = JSON.parse(existingConversation.messagesJson || '[]') } catch { messages = [] }
@@ -132,8 +137,9 @@ export async function POST(request: NextRequest) {
           ...(customerId && !existingConversation.customerId ? { customerId } : null),
         },
       })
+      conversationId = existingConversation.conversationId
     } else {
-      const conversationId = `conv_sms_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+      conversationId = `conv_sms_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
       await db.conversation.create({
         data: {
           conversationId,
@@ -204,7 +210,39 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── 8. Return empty TwiML ───────────────────────────────────────────
+    // ── 8. Auto-reply when tenant is offline ────────────────────────────
+    // The orchestrator checks subscription + config + presence + cooldown
+    // internally and NEVER throws. We AWAIT it so the TwiML response body
+    // contains the reply text — Twilio expects the auto-reply message in
+    // the HTTP response body of the webhook.
+    if (tenantId && conversationId) {
+      try {
+        const result = await maybeAutoReply({
+          tenantId,
+          conversationId,
+          visitorMessage: body,
+          channel: 'sms',
+          visitorPhone: from,
+          visitorName: customerName || undefined,
+        })
+        if (result.replied && result.message) {
+          // Twilio requires XML-escaped message body.
+          const escaped = result.message
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+          return new NextResponse(
+            `<Response><Message>${escaped}</Message></Response>`,
+            { status: 200, headers: { 'Content-Type': 'text/xml' } },
+          )
+        }
+      } catch (err) {
+        // maybeAutoReply is supposed to never throw, but defensive guard.
+        console.warn('[/api/sms/inbound] maybeAutoReply threw:', err)
+      }
+    }
+
+    // ── 9. Return empty TwiML ───────────────────────────────────────────
     return new NextResponse('<Response></Response>', {
       status: 200,
       headers: { 'Content-Type': 'text/xml' },

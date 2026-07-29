@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
       tenantFilter = { tenantId: '__NO_TENANT__' }
     }
 
-    const ALL_OMNI_CHANNELS = ['whatsapp', 'website', 'facebook', 'instagram', 'google_ads', 'justdial'] as const
+    const ALL_OMNI_CHANNELS = ['website', 'facebook', 'instagram', 'google_ads', 'justdial', 'whatsapp'] as const
     type ChannelType = typeof ALL_OMNI_CHANNELS[number]
 
     // ── 1. Total conversations ──

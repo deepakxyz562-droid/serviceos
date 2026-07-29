@@ -73,7 +73,6 @@ interface CredentialItem {
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const typeConfig: Record<string, { icon: React.ElementType; label: string; color: string; bgColor: string }> = {
-  whatsapp: { icon: MessageSquare, label: 'WhatsApp Business API', color: 'text-emerald-600', bgColor: 'bg-emerald-50 border-emerald-200' },
   apiKey: { icon: KeyRound, label: 'API Key', color: 'text-emerald-600', bgColor: 'bg-emerald-50 border-emerald-200' },
   httpBasic: { icon: Shield, label: 'Basic Auth', color: 'text-teal-600', bgColor: 'bg-teal-50 border-teal-200' },
   httpBearer: { icon: KeyRound, label: 'Bearer Token', color: 'text-cyan-600', bgColor: 'bg-cyan-50 border-cyan-200' },
@@ -82,6 +81,7 @@ const typeConfig: Record<string, { icon: React.ElementType; label: string; color
   sshKey: { icon: Shield, label: 'SSH Key', color: 'text-rose-600', bgColor: 'bg-rose-50 border-rose-200' },
   awsIam: { icon: Cloud, label: 'AWS IAM', color: 'text-orange-600', bgColor: 'bg-orange-50 border-orange-200' },
   googleServiceAccount: { icon: Globe, label: 'Google SA', color: 'text-green-600', bgColor: 'bg-green-50 border-green-200' },
+  whatsapp: { icon: MessageSquare, label: 'WhatsApp Business API', color: 'text-emerald-600', bgColor: 'bg-emerald-50 border-emerald-200' },
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -134,7 +134,7 @@ export function CredentialsView() {
 
   // Create form
   const [newCredName, setNewCredName] = useState('');
-  const [newCredType, setNewCredType] = useState('whatsapp');
+  const [newCredType, setNewCredType] = useState('apiKey');
   const [newCredService, setNewCredService] = useState('');
   const [newCredFields, setNewCredFields] = useState<Record<string, string>>({});
 
@@ -551,15 +551,7 @@ export function CredentialsView() {
               <Select value={newCredType} onValueChange={v => { setNewCredType(v); setNewCredFields({}); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {/* WhatsApp listed first for prominence */}
-                  <SelectItem value="whatsapp">
-                    <span className="flex items-center gap-2">
-                      <MessageSquare className="size-3.5 text-emerald-600" />
-                      <span className="font-medium">WhatsApp Business API</span>
-                    </span>
-                  </SelectItem>
-                  <Separator className="my-1" />
-                  {Object.entries(typeConfig).filter(([key]) => key !== 'whatsapp').map(([key, cfg]) => {
+                  {Object.entries(typeConfig).map(([key, cfg]) => {
                     const Icon = cfg.icon;
                     return <SelectItem key={key} value={key}><span className="flex items-center gap-2"><Icon className="size-3.5" />{cfg.label}</span></SelectItem>;
                   })}

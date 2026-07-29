@@ -699,7 +699,7 @@ function CredentialsSection() {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ChannelsView() {
-  const [activeTab, setActiveTab] = useState('whatsapp')
+  const [activeTab, setActiveTab] = useState('email')
   return (
     <div className="space-y-6">
       <div>
@@ -708,14 +708,14 @@ export default function ChannelsView() {
       </div>
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="whatsapp" className="flex items-center gap-2"><MessageSquare className="size-4" /><span className="hidden sm:inline">WhatsApp</span></TabsTrigger>
-          <TabsTrigger value="sms" className="flex items-center gap-2"><Smartphone className="size-4" /><span className="hidden sm:inline">SMS</span></TabsTrigger>
           <TabsTrigger value="email" className="flex items-center gap-2"><Mail className="size-4" /><span className="hidden sm:inline">Email</span></TabsTrigger>
+          <TabsTrigger value="sms" className="flex items-center gap-2"><Smartphone className="size-4" /><span className="hidden sm:inline">SMS</span></TabsTrigger>
+          <TabsTrigger value="whatsapp" className="flex items-center gap-2"><MessageSquare className="size-4" /><span className="hidden sm:inline">WhatsApp</span></TabsTrigger>
           <TabsTrigger value="credentials" className="flex items-center gap-2"><KeyRound className="size-4" /><span className="hidden sm:inline">Credentials</span></TabsTrigger>
         </TabsList>
-        <TabsContent value="whatsapp"><WhatsAppSection /></TabsContent>
-        <TabsContent value="sms"><SMSSection /></TabsContent>
         <TabsContent value="email"><EmailSection /></TabsContent>
+        <TabsContent value="sms"><SMSSection /></TabsContent>
+        <TabsContent value="whatsapp"><WhatsAppSection /></TabsContent>
         <TabsContent value="credentials"><CredentialsSection /></TabsContent>
       </Tabs>
     </div>)

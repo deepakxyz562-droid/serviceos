@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { resolveWhatsAppConfig } from '@/lib/whatsapp-config';
 import { executeWorkflow, type NodeOutput } from '@/lib/workflow-executor';
+import { maybeAutoReply } from '@/lib/auto-reply';
 
 /**
  * GET - Webhook verification endpoint
@@ -62,10 +63,10 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Handle incoming messages (interactive responses)
+        // Handle incoming messages (interactive responses + plain-text inbound)
         if (value.messages) {
           for (const message of value.messages) {
-            await handleIncomingMessage(message);
+            await handleIncomingMessage(message, value);
           }
         }
       }
@@ -121,14 +122,28 @@ async function handleMessageStatus(status: Record<string, unknown>) {
 }
 
 /**
- * Handle incoming interactive message responses from WhatsApp
- * Supports:
+ * Handle incoming message from WhatsApp.
+ *
+ * Two branches:
+ * 1. Plain-text inbound (no `interactive` field): the visitor sent a chat
+ *    message. We resolve the tenant from `value.metadata.phone_number_id`,
+ *    create a Conversation + InboxMessage, then call maybeAutoReply which
+ *    (when the tenant is offline) generates + saves + sends a reply back
+ *    via sendWhatsAppMessage(). If the tenant is online, no auto-reply fires
+ *    and the message simply lands in the inbox for an agent to handle.
+ * 2. Interactive response (`interactive` field present): button_reply /
+ *    list_reply handling for workflows and job assignment (unchanged).
+ *
+ * Supported:
  * 1. List reply (user selected an item from a list)
  * 2. Button reply (user clicked a quick reply button)
  * 3. On-select webhook triggers (configured in WhatsApp node config)
  * 4. Native updateJobAssignee action (update job assignee on selection)
  */
-async function handleIncomingMessage(message: Record<string, unknown>) {
+async function handleIncomingMessage(
+  message: Record<string, unknown>,
+  value?: Record<string, unknown>,
+) {
   try {
     const { from: senderPhone, interactive, id: messageId, context: messageContext } = message as {
       from: string;
@@ -137,8 +152,20 @@ async function handleIncomingMessage(message: Record<string, unknown>) {
       context?: { id?: string; forwarded?: boolean };
     };
 
+    // ─── Plain-text inbound branch ──────────────────────────────────────────
+    // Triggered when there's no `interactive` field. Delegates to
+    // handlePlainTextInbound which creates a Conversation + InboxMessage and
+    // calls maybeAutoReply. Interactive messages fall through to the original
+    // list/button reply handlers below.
     if (!interactive) {
-      console.log('Non-interactive message received, ignoring');
+      const messageType = (message as { type?: string }).type;
+      if (messageType === 'text') {
+        await handlePlainTextInbound(message, value);
+      } else {
+        // Other non-text, non-interactive types (image, audio, location,
+        // document, etc.) — log and ignore. Auto-reply only fires on text.
+        console.log('[WhatsApp Callback] Non-text non-interactive message received, ignoring');
+      }
       return;
     }
 
@@ -195,6 +222,225 @@ async function handleIncomingMessage(message: Record<string, unknown>) {
     }
   } catch (error) {
     console.error('Error handling incoming message:', error);
+  }
+}
+
+/**
+ * Handle plain-text inbound WhatsApp messages (auto-reply path).
+ *
+ * The WhatsApp Cloud API webhook payload for a text message looks like:
+ *   {
+ *     "entry": [{
+ *       "changes": [{
+ *         "value": {
+ *           "metadata": { "phone_number_id": "..." },
+ *           "messages": [{ "from": "...", "id": "wamid...", "type": "text",
+ *                          "text": { "body": "Hi" }, "timestamp": "..." }]
+ *         }
+ *       }]
+ *     }]
+ *   }
+ *
+ * Flow:
+ *   1. Extract `from`, `id`, `text.body`, `timestamp` from `message`.
+ *   2. Resolve the tenant from `value.metadata.phone_number_id` — looks up
+ *      a CommunicationProvider with type='whatsapp' whose configJson or
+ *      linked credential contains the matching phoneNumberId. If no tenant
+ *      is found, log and bail (we can't attribute the message).
+ *   3. Idempotency: if a UnifiedMessage already exists with this externalId
+ *      (wamid), skip (WhatsApp retries webhooks).
+ *   4. Find or create a Conversation (channel='whatsapp', customerPhone=from).
+ *   5. Create an InboxMessage (senderType='customer', direction='inbound').
+ *   6. Call maybeAutoReply — the orchestrator checks subscription + config +
+ *      presence + cooldown, then generates + saves + sends the reply via
+ *      sendWhatsAppMessage() internally. If the tenant is online, no
+ *      auto-reply fires.
+ */
+async function handlePlainTextInbound(
+  message: Record<string, unknown>,
+  value?: Record<string, unknown>,
+) {
+  try {
+    const from = (message as { from?: string }).from || '';
+    const messageId = (message as { id?: string }).id || '';
+    const timestamp = (message as { timestamp?: string }).timestamp;
+    const textBody =
+      ((message as { text?: { body?: string } }).text?.body || '').toString();
+
+    if (!from || !textBody) {
+      console.warn('[WhatsApp Callback] Plain-text inbound missing from/body');
+      return;
+    }
+
+    // ── 1. Resolve tenant from phone_number_id ────────────────────────────
+    const phoneNumberId =
+      (value as { metadata?: { phone_number_id?: string } })?.metadata?.phone_number_id || '';
+
+    let tenantId: string | null = null;
+    if (phoneNumberId) {
+      try {
+        // Look for any WhatsApp CommunicationProvider whose configJson or
+        // linked credential contains this phoneNumberId. Use a contains
+        // filter on configJson (the JSON is stored as a string).
+        const provider = await db.communicationProvider.findFirst({
+          where: {
+            type: 'whatsapp',
+            status: 'active',
+            configJson: { contains: phoneNumberId },
+          },
+          orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }],
+          select: { id: true, tenantId: true, name: true },
+        });
+        if (provider?.tenantId) {
+          tenantId = provider.tenantId;
+        }
+      } catch (err) {
+        console.warn('[WhatsApp Callback] tenant lookup failed:', err);
+      }
+    }
+
+    if (!tenantId) {
+      console.warn(
+        '[WhatsApp Callback] Could not resolve tenant for phone_number_id:',
+        phoneNumberId,
+        '— skipping auto-reply (message not saved)',
+      );
+      return;
+    }
+
+    // ── 2. Idempotency check on wamid ─────────────────────────────────────
+    if (messageId) {
+      try {
+        const existing = await db.unifiedMessage.findFirst({
+          where: { externalId: messageId, channel: 'whatsapp' },
+          select: { id: true },
+        });
+        if (existing) {
+          // Already processed — WhatsApp is retrying the webhook.
+          return;
+        }
+      } catch (err) {
+        console.warn('[WhatsApp Callback] idempotency check failed:', err);
+      }
+    }
+
+    // ── 3. Find or create a Conversation ──────────────────────────────────
+    let conversationId: string;
+    try {
+      const existingConv = await db.conversation.findFirst({
+        where: {
+          customerPhone: from,
+          channel: 'whatsapp',
+          status: 'active',
+          tenantId,
+        },
+        orderBy: { lastMessageAt: 'desc' },
+      });
+
+      if (existingConv) {
+        conversationId = existingConv.conversationId;
+        await db.conversation.update({
+          where: { id: existingConv.id },
+          data: {
+            lastMessageAt: new Date(),
+            lastMessageBody: textBody,
+            lastDirection: 'inbound',
+          },
+        });
+      } else {
+        conversationId = `conv_wa_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        await db.conversation.create({
+          data: {
+            conversationId,
+            customerPhone: from,
+            channel: 'whatsapp',
+            status: 'active',
+            currentStage: 'greeting',
+            lastMessageAt: new Date(),
+            lastMessageBody: textBody,
+            lastDirection: 'inbound',
+            messagesJson: JSON.stringify([
+              {
+                id: messageId,
+                direction: 'inbound',
+                body: textBody,
+                timestamp: timestamp ? new Date(Number(timestamp) * 1000).toISOString() : new Date().toISOString(),
+                providerSid: messageId || undefined,
+              },
+            ]),
+            tenantId,
+          },
+        });
+      }
+    } catch (err) {
+      console.error('[WhatsApp Callback] Conversation save failed:', err);
+      return;
+    }
+
+    // ── 4. Create InboxMessage (senderType='customer', direction='inbound') ──
+    try {
+      await db.inboxMessage.create({
+        data: {
+          conversationId,
+          senderType: 'customer',
+          senderName: from,
+          content: textBody,
+          messageType: 'text',
+          direction: 'inbound',
+          status: 'sent',
+          externalId: messageId || null,
+          metadataJson: JSON.stringify({
+            channel: 'whatsapp',
+            whatsappMessageId: messageId,
+            phoneNumberId,
+          }),
+          tenantId,
+        },
+      });
+    } catch (err) {
+      console.error('[WhatsApp Callback] InboxMessage create failed:', err);
+      // Continue anyway — maybeAutoReply may still fire and the conversation
+      // record exists. The InboxMessage is the canonical record but missing
+      // it doesn't break the auto-reply pipeline.
+    }
+
+    // ── 5. Create a UnifiedMessage row (for the unified inbox view) ───────
+    try {
+      await db.unifiedMessage.create({
+        data: {
+          channel: 'whatsapp',
+          direction: 'inbound',
+          senderId: from,
+          recipientId: phoneNumberId,
+          content: textBody,
+          contentType: 'text',
+          externalId: messageId || null,
+          status: 'delivered',
+          tenantId,
+        },
+      });
+    } catch (err) {
+      console.warn('[WhatsApp Callback] UnifiedMessage create failed (non-fatal):', err);
+    }
+
+    // ── 6. Auto-reply when tenant is offline ──────────────────────────────
+    // maybeAutoReply checks subscription + config + presence + cooldown
+    // internally and never throws. For the whatsapp channel, it sends the
+    // reply via sendWhatsAppMessage() best-effort — if sending fails, the
+    // InboxMessage is still saved so the inbox shows the would-be reply.
+    try {
+      await maybeAutoReply({
+        tenantId,
+        conversationId,
+        visitorMessage: textBody,
+        channel: 'whatsapp',
+        visitorPhone: from,
+      });
+    } catch (err) {
+      console.warn('[WhatsApp Callback] maybeAutoReply failed:', err);
+    }
+  } catch (error) {
+    console.error('[WhatsApp Callback] handlePlainTextInbound error:', error);
   }
 }
 

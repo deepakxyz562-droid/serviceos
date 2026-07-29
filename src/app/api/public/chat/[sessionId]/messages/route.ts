@@ -26,6 +26,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { createNotification } from '@/lib/notifications'
 import { sendWebPushToUser } from '@/lib/web-push-send'
+import { maybeAutoReply } from '@/lib/auto-reply'
 
 export const runtime = 'nodejs'
 
@@ -133,6 +134,7 @@ export async function POST(
     status: string
     visitorName: string | null
     visitorEmail: string | null
+    visitorPhone: string | null
     tenantId: string
     unreadCount: number
   } | null = null
@@ -144,6 +146,7 @@ export async function POST(
         status: true,
         visitorName: true,
         visitorEmail: true,
+        visitorPhone: true,
         tenantId: true,
         unreadCount: true,
       },
@@ -281,8 +284,63 @@ export async function POST(
       }
     }
 
+    // --- Auto-reply when tenant is offline ────────────────────────────────
+    // The orchestrator checks subscription + config + presence + cooldown
+    // internally and never throws. For the website channel, it saves the
+    // reply as an InboxMessage (canonical inbox record) but doesn't send
+    // via any provider — the widget shows the reply via this API response.
+    // We mirror the reply into a PublicChatMessage (senderType='system') so
+    // the visitor's GET poll / socket.io stream renders it inline.
+    let autoReplyMessage: { id: string; createdAt: Date; body: string } | null = null
+    try {
+      const result = await maybeAutoReply({
+        tenantId: session.tenantId,
+        // Use the chat session ID as the conversationId — there's no
+        // Conversation row for website chat, and InboxMessage.conversationId
+        // is a free-form string (not a FK). This keeps the cooldown check
+        // scoped to the same visitor session.
+        conversationId: session.id,
+        visitorMessage: text,
+        channel: 'website',
+        visitorName: session.visitorName || visitorName || undefined,
+        visitorPhone: session.visitorPhone || undefined,
+      })
+      if (result.replied && result.message) {
+        // Mirror the reply into a PublicChatMessage so the visitor widget
+        // renders it inline alongside admin messages.
+        const sysMsg = await db.publicChatMessage.create({
+          data: {
+            sessionId: session.id,
+            senderType: 'system',
+            senderName: 'Auto Reply',
+            body: result.message,
+          },
+        })
+        autoReplyMessage = {
+          id: sysMsg.id,
+          createdAt: sysMsg.createdAt,
+          body: result.message,
+        }
+      }
+    } catch (err) {
+      // Auto-reply failures must NEVER break the visitor's message delivery.
+      console.warn('[public-chat/messages POST] maybeAutoReply failed:', err)
+    }
+
     return NextResponse.json(
-      { messageId: message.id, createdAt: message.createdAt },
+      {
+        messageId: message.id,
+        createdAt: message.createdAt,
+        ...(autoReplyMessage
+          ? {
+              autoReply: {
+                messageId: autoReplyMessage.id,
+                createdAt: autoReplyMessage.createdAt,
+                body: autoReplyMessage.body,
+              },
+            }
+          : {}),
+      },
       { headers: CORS_HEADERS },
     )
   } catch (err) {
@@ -315,7 +373,7 @@ export async function GET(
   try {
     const session = await db.publicChatSession.findUnique({
       where: { id: sessionId },
-      select: { id: true },
+      select: { id: true, tenantId: true },
     })
     if (!session) {
       return NextResponse.json(
@@ -360,7 +418,11 @@ export async function GET(
     }
 
     return NextResponse.json(
-      { messages },
+      // `tenantId` is included so the visitor chat widget can poll the
+      // presence API without an extra round-trip — needed when the visitor
+      // restored an existing session from localStorage and never re-POSTed
+      // to /session.
+      { messages, tenantId: session.tenantId },
       { headers: CORS_HEADERS },
     )
   } catch (err) {

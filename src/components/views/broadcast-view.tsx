@@ -30,7 +30,7 @@ import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 
 type BroadcastType = 'promotional' | 'transactional' | 'reminder' | 'announcement';
 type BroadcastStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed';
-type BroadcastChannel = 'whatsapp' | 'email' | 'sms' | 'multi';
+type BroadcastChannel = 'email' | 'sms' | 'whatsapp' | 'multi';
 
 interface Broadcast {
   id: string;
@@ -63,9 +63,9 @@ interface Broadcast {
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const BROADCAST_CHANNELS: { value: BroadcastChannel; label: string }[] = [
-  { value: 'whatsapp', label: 'WhatsApp' },
   { value: 'email', label: 'Email' },
   { value: 'sms', label: 'SMS' },
+  { value: 'whatsapp', label: 'WhatsApp' },
   { value: 'multi', label: 'Multi-channel' },
 ];
 
@@ -282,7 +282,7 @@ export function BroadcastView() {
   const [isCreating, setIsCreating] = useState(false);
 
   const [createForm, setCreateForm] = useState({
-    name: '', type: 'promotional' as BroadcastType, channel: 'whatsapp' as BroadcastChannel,
+    name: '', type: 'promotional' as BroadcastType, channel: 'email' as BroadcastChannel,
     message: '', mediaUrl: '', ctaText: '', ctaUrl: '',
     audienceMode: 'all' as AudienceMode, audienceId: '', manualEmails: '', customerIds: [] as string[],
     scheduleDate: '', scheduleTime: '', timezone: 'Asia/Kolkata',
@@ -298,7 +298,7 @@ export function BroadcastView() {
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
-    name: '', type: 'promotional' as BroadcastType, channel: 'whatsapp' as BroadcastChannel,
+    name: '', type: 'promotional' as BroadcastType, channel: 'email' as BroadcastChannel,
     message: '', mediaUrl: '', ctaText: '', ctaUrl: '',
     audienceMode: 'all' as AudienceMode, audienceId: '', manualEmails: '', customerIds: [] as string[],
     scheduleDate: '', scheduleTime: '', timezone: 'Asia/Kolkata',
@@ -571,7 +571,7 @@ export function BroadcastView() {
         setBroadcasts(prev => [newBroadcast, ...prev]);
         setShowCreateDialog(false);
         setCreateForm({
-          name: '', type: 'promotional', channel: 'whatsapp', message: '', mediaUrl: '',
+          name: '', type: 'promotional', channel: 'email', message: '', mediaUrl: '',
           ctaText: '', ctaUrl: '', audienceMode: 'all', audienceId: '', manualEmails: '', customerIds: [],
           scheduleDate: '', scheduleTime: '', timezone: 'Asia/Kolkata',
           isRecurring: false, recurringInterval: 'weekly',

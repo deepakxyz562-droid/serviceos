@@ -17,6 +17,13 @@ import { db } from '@/lib/db';
  *   const gate = await requireNotTrial('template_studio');
  *   if (!gate.ok) return gate.response;
  *
+ *   const gate = await requireNotTrial('auto_reply_offline');
+ *   if (!gate.ok) return gate.response;
+ *
+ * The 403 error message is built dynamically from `featureKey` (humanized):
+ *   - 'template_studio'    → "Template Studio is locked during trial. Upgrade to unlock."
+ *   - 'auto_reply_offline' → "Auto Reply Offline is locked during trial. Upgrade to unlock."
+ *
  * Mirrors the existing pattern in `src/app/api/vapi/phone-numbers/route.ts`
  * (db.featureFlag check + planStatus fallback) so the gating rules stay
  * consistent with the rest of the platform.
@@ -26,6 +33,21 @@ export interface TrialGateResult {
   response?: NextResponse;
   userId?: string;
   tenantId?: string;
+}
+
+/**
+ * Convert a snake_case feature key into a human-readable display name for
+ * error messages. e.g. 'template_studio' → 'Template Studio',
+ * 'auto_reply_offline' → 'Auto Reply Offline'. Falls back to the raw key
+ * if it can't be split.
+ */
+function humanizeFeatureKey(featureKey: string): string {
+  if (!featureKey) return 'This feature';
+  return featureKey
+    .split(/[_\-\s]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
 }
 
 export async function requireNotTrial(featureKey: string): Promise<TrialGateResult> {
@@ -76,13 +98,14 @@ export async function requireNotTrial(featureKey: string): Promise<TrialGateResu
     isTrial && tenant.trialEndsAt ? new Date(tenant.trialEndsAt) < new Date() : false;
 
   if (isTrial) {
+    const displayName = humanizeFeatureKey(featureKey);
     return {
       ok: false,
       response: NextResponse.json(
         {
           error: trialExpired
-            ? 'Your trial has expired. Upgrade to unlock Template Studio.'
-            : 'Template Studio is locked during trial. Upgrade to unlock it.',
+            ? `Your trial has expired. Upgrade to unlock ${displayName}.`
+            : `${displayName} is locked during trial. Upgrade to unlock.`,
           code: 'TRIAL_LOCKED',
           featureKey,
         },

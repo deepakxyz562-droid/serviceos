@@ -27,7 +27,7 @@
  *
  * Usage:
  *   const result = await orchestrateNotification({
- *     channels: ['whatsapp', 'email', 'sms'],
+ *     channels: ['email', 'sms', 'whatsapp'],
  *     recipient: { phone: '+1234567890', email: 'user@example.com', name: 'John' },
  *     template: 'job_assigned',
  *     templateData: { jobNumber: 'ABC123', customerName: 'Jane', ... },
@@ -44,7 +44,7 @@ export { _sendJobNotification as sendJobNotification }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type NotificationChannel = 'whatsapp' | 'email' | 'sms' | 'push' | 'in_app'
+export type NotificationChannel = 'email' | 'sms' | 'whatsapp' | 'push' | 'in_app'
 
 export type NotificationTemplate =
   | 'job_assigned'
@@ -1033,7 +1033,7 @@ export async function notifyJobAssigned(
   const empData = buildEmployeeTemplateData(employee)
 
   return orchestrateNotification({
-    channels: options?.channels || ['whatsapp', 'email', 'sms'],
+    channels: options?.channels || ['email', 'sms', 'whatsapp'],
     recipient: {
       phone: employee.phone || employee.whatsappId,
       email: employee.email,
@@ -1084,7 +1084,7 @@ export async function notifyJobStarted(
       }
 
   return orchestrateNotification({
-    channels: options?.channels || ['whatsapp', 'email', 'sms'],
+    channels: options?.channels || ['email', 'sms', 'whatsapp'],
     recipient,
     template: 'job_started',
     templateData: { ...jobData, ...empData },
@@ -1141,7 +1141,7 @@ export async function notifyJobCompleted(
       }
 
   return orchestrateNotification({
-    channels: options?.channels || ['whatsapp', 'email', 'sms'],
+    channels: options?.channels || ['email', 'sms', 'whatsapp'],
     recipient,
     template: 'job_completed',
     templateData: { ...jobData, ...empData, tenantName },
@@ -1179,7 +1179,7 @@ export async function notifyReviewRequest(
   }
 
   return orchestrateNotification({
-    channels: options?.channels || ['whatsapp', 'email'],
+    channels: options?.channels || ['email', 'whatsapp'],
     recipient: {
       phone: job.customerPhone,
       email: job.customerEmail,
@@ -1209,7 +1209,7 @@ export async function notifyBookingConfirmed(
   const jobData = buildJobTemplateData(job)
 
   return orchestrateNotification({
-    channels: options?.channels || ['whatsapp', 'email', 'sms'],
+    channels: options?.channels || ['email', 'sms', 'whatsapp'],
     recipient: {
       phone: job.customerPhone,
       email: job.customerEmail,

@@ -69,10 +69,10 @@ export async function POST(request: NextRequest) {
     // Whitelist + default the fields we accept. Prevents mass-assignment of
     // unexpected keys and ensures `channel` is persisted (was previously dropped,
     // causing all new campaigns to silently default to 'whatsapp').
-    const allowedChannels = ['whatsapp', 'email', 'sms', 'multi']
+    const allowedChannels = ['email', 'sms', 'whatsapp', 'multi']
     const channel = body.channel && allowedChannels.includes(body.channel)
       ? body.channel
-      : 'whatsapp'
+      : 'email'
 
     // ── Compute live audience count so the list shows a real number, not 0 ──
     let totalRecipients = body.totalRecipients || 0

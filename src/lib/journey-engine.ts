@@ -105,7 +105,7 @@ export interface StageAction {
 }
 
 export interface NotificationAction {
-  channel: 'whatsapp' | 'email' | 'sms' | 'in_app'
+  channel: 'email' | 'sms' | 'whatsapp' | 'in_app'
   recipient: 'customer' | 'employee' | 'both'
   template: string
   interactive?: boolean

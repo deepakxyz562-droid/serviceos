@@ -110,8 +110,8 @@ export function WhiteLabelView() {
         <TabsList className="grid w-full grid-cols-3 lg:grid-cols-5">
           <TabsTrigger value="branding" className="text-xs gap-1"><Palette className="size-3" />Branding</TabsTrigger>
           <TabsTrigger value="colors" className="text-xs gap-1"><Palette className="size-3" />Colors</TabsTrigger>
-          <TabsTrigger value="whatsapp" className="text-xs gap-1"><MessageSquare className="size-3" />WhatsApp</TabsTrigger>
           <TabsTrigger value="email" className="text-xs gap-1"><Mail className="size-3" />Email</TabsTrigger>
+          <TabsTrigger value="whatsapp" className="text-xs gap-1"><MessageSquare className="size-3" />WhatsApp</TabsTrigger>
           <TabsTrigger value="domain" className="text-xs gap-1"><Globe className="size-3" />Domain</TabsTrigger>
         </TabsList>
 
