@@ -164,6 +164,24 @@ export function resolvePlanTier(plan: string, planStatus: string): PlanTier {
 }
 
 /**
+ * Numeric rank for a plan tier — higher = more features.
+ * Used to compare the current tenant's tier against a menu item's `minPlan`.
+ *
+ *   planRank('trial') = 0
+ *   planRank('starter') = 1
+ *   planRank('growth') = 2
+ *   planRank('business') = 3
+ *   planRank('enterprise') = 4
+ *
+ * Unknown plans default to 0 (trial-level access) so a malformed tenant
+ * record doesn't accidentally unlock paid features.
+ */
+export function planRank(tier: string): number {
+  const idx = PLAN_TIERS.indexOf(tier as PlanTier);
+  return idx === -1 ? 0 : idx;
+}
+
+/**
  * Client-side mirror of `resolvePlanTier`. Exported so client hooks can
  * compute the tier from `useAppStore(s => s.auth.tenant)` without importing
  * the (server-only) `db`-depending module path.

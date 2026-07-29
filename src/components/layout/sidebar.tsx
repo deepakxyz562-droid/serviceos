@@ -94,6 +94,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
+import { openUpgradeModal, checkMenuLock } from '@/components/layout/upgrade-modal';
+import { resolvePlanTierClient } from '@/lib/plan-features';
 
 // ─── Nav item definition ────────────────────────────────────────────────────
 
@@ -525,40 +527,45 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     const Icon = item.icon;
     const isActive = currentView === item.view;
 
-    // ── Trial lock for Template Studio ─────────────────────────────────
-    // Trial users can VIEW the studio (GET routes are open) but cannot
-    // CREATE/EDIT/DELETE (POST/PUT/DELETE return 403). Show a lock icon,
-    // grey-out the entry, and prevent navigation — surface a toast instead.
-    // Superadmins bypass the lock (they always have access).
-    const isTemplateStudioLocked =
-      item.view === 'templateStudio' &&
-      !isSuperAdmin &&
-      auth.tenant?.planStatus === 'trial';
+    // ── Plan-gated lock (generalized) ──────────────────────────────────
+    // Any menu item with a `minPlan` in MENU_CATALOG that exceeds the
+    // current tenant's plan tier renders with a Lock icon. Clicking it
+    // opens the UpgradeModal instead of navigating. Superadmins bypass.
+    const planTier = resolvePlanTierClient(
+      auth.tenant?.plan || 'starter',
+      auth.tenant?.planStatus || 'active'
+    );
+    const lockCheck = checkMenuLock(item.view, planTier, isSuperAdmin);
 
-    if (isTemplateStudioLocked) {
+    if (lockCheck.locked) {
       const showLabel = isMobile || leftSidebarOpen;
       return (
         <button
           key={item.view}
           type="button"
           aria-disabled="true"
-          title="Template Studio is locked during trial. Upgrade to unlock."
+          title={`${item.label} — Available on ${lockCheck.minPlan} plan and above`}
           onClick={(e) => {
             e.preventDefault();
-            toast.error('Template Studio is locked during trial. Upgrade to unlock.');
+            openUpgradeModal({
+              menuKey: item.view,
+              label: item.label,
+              description: lockCheck.description || `Available on the ${lockCheck.minPlan} plan and above.`,
+              minPlan: lockCheck.minPlan!,
+            });
           }}
           className={cn(
-            'flex items-center w-full rounded-lg text-sm font-medium transition-colors cursor-not-allowed',
+            'flex items-center w-full rounded-lg text-sm font-medium transition-colors cursor-pointer group',
             isMobile || leftSidebarOpen ? 'h-9 px-3 gap-3' : 'h-9 justify-center',
-            'text-slate-400/60 dark:text-slate-500/60 hover:bg-transparent'
+            'text-slate-400/60 dark:text-slate-500/60 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 hover:text-slate-500 dark:hover:text-slate-400'
           )}
         >
-          <Icon className="shrink-0 size-4 opacity-60" />
+          <Icon className="shrink-0 size-4 opacity-60 group-hover:opacity-80 transition-opacity" />
           {showLabel && (
             <span className="whitespace-nowrap flex-1 text-left text-[13px]">{item.label}</span>
           )}
           {showLabel && (
-            <Lock className="size-3.5 text-slate-400/70 dark:text-slate-500/70 ml-auto shrink-0" />
+            <Lock className="size-3.5 text-slate-400/70 dark:text-slate-500/70 ml-auto shrink-0 group-hover:text-amber-500 transition-colors" />
           )}
         </button>
       );

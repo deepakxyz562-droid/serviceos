@@ -22,6 +22,25 @@ export interface MenuCatalogItem {
   icon: string;
   section: string;
   sortOrder: number;
+  /**
+   * Minimum plan tier required to ACCESS this menu item (not just see it).
+   * When the current tenant's plan rank < planRank(minPlan), the item renders
+   * with a Lock icon and clicking it opens an Upgrade modal instead of
+   * navigating. The item stays VISIBLE (not hidden) so trial users can
+   * discover paid features.
+   *
+   * Omit `minPlan` (or set to 'trial') to make the item accessible to everyone,
+   * including trial users.
+   *
+   * Canonical tiers: 'trial' | 'starter' | 'growth' | 'business' | 'enterprise'
+   * (see src/lib/plan-features.ts)
+   */
+  minPlan?: 'trial' | 'starter' | 'growth' | 'business' | 'enterprise';
+  /**
+   * One-line description shown in the Upgrade modal when this item is locked.
+   * Helps the user understand what they'd get by upgrading.
+   */
+  upgradeDescription?: string;
 }
 
 export const MENU_CATALOG: MenuCatalogItem[] = [
@@ -47,9 +66,9 @@ export const MENU_CATALOG: MenuCatalogItem[] = [
   { key: 'serviceCatalog', label: 'Service Catalog', icon: 'BookOpen', section: 'Operations', sortOrder: 25 },
 
   // ─── Marketing ───────────────────────────────────────────────────────
-  { key: 'campaigns', label: 'Campaigns', icon: 'Megaphone', section: 'Marketing', sortOrder: 30 },
+  { key: 'campaigns', label: 'Campaigns', icon: 'Megaphone', section: 'Marketing', sortOrder: 30, minPlan: 'growth', upgradeDescription: 'Create and manage marketing campaigns across email, SMS, and WhatsApp to grow your customer base.' },
   { key: 'broadcast', label: 'Broadcast', icon: 'Send', section: 'Marketing', sortOrder: 31 },
-  { key: 'templateStudio', label: 'Template Studio', icon: 'LayoutTemplate', section: 'Marketing', sortOrder: 32 },
+  { key: 'templateStudio', label: 'Template Studio', icon: 'LayoutTemplate', section: 'Marketing', sortOrder: 32, minPlan: 'growth', upgradeDescription: 'Design reusable templates for emails, messages, quotes, and invoices.' },
   { key: 'retargeting', label: 'Retargeting', icon: 'RefreshCw', section: 'Marketing', sortOrder: 33 },
   { key: 'marketingAnalytics', label: 'Analytics', icon: 'BarChart3', section: 'Marketing', sortOrder: 34 },
   { key: 'segments', label: 'Segments', icon: 'Filter', section: 'Marketing', sortOrder: 35 },
@@ -57,21 +76,21 @@ export const MENU_CATALOG: MenuCatalogItem[] = [
 
   // ─── Inbox & Automation ──────────────────────────────────────────────
   { key: 'omnichannel', label: 'Omnichannel Inbox', icon: 'RadioTower', section: 'Inbox & Automation', sortOrder: 40 },
-  { key: 'liveChat', label: 'Live Chat', icon: 'MessageSquare', section: 'Inbox & Automation', sortOrder: 41 },
+  { key: 'liveChat', label: 'Live Chat', icon: 'MessageSquare', section: 'Inbox & Automation', sortOrder: 41, minPlan: 'growth', upgradeDescription: 'Real-time live chat with website visitors and customers directly from your dashboard.' },
   { key: 'aiAssistant', label: 'AI Assistant', icon: 'Sparkles', section: 'Inbox & Automation', sortOrder: 42 },
   { key: 'chatbotBuilder', label: 'Chatbot Builder', icon: 'Bot', section: 'Inbox & Automation', sortOrder: 43 },
-  { key: 'workflows', label: 'Workflows', icon: 'Workflow', section: 'Inbox & Automation', sortOrder: 44 },
+  { key: 'workflows', label: 'Workflows', icon: 'Workflow', section: 'Inbox & Automation', sortOrder: 44, minPlan: 'growth', upgradeDescription: 'Automate business processes — job assignments, reminders, follow-ups, and multi-step actions.' },
   { key: 'workflowAutomations', label: 'Automations', icon: 'GitBranch', section: 'Inbox & Automation', sortOrder: 45 },
   { key: 'triggers', label: 'Triggers', icon: 'Zap', section: 'Inbox & Automation', sortOrder: 46 },
-  { key: 'formBuilder', label: 'Form Builder', icon: 'ClipboardList', section: 'Inbox & Automation', sortOrder: 47 },
+  { key: 'formBuilder', label: 'Form Builder', icon: 'ClipboardList', section: 'Inbox & Automation', sortOrder: 47, minPlan: 'growth', upgradeDescription: 'Build custom forms for lead capture, surveys, customer intake, and service requests.' },
   { key: 'variables', label: 'Variables', icon: 'Variable', section: 'Inbox & Automation', sortOrder: 48 },
   { key: 'executions', label: 'Executions', icon: 'Activity', section: 'Inbox & Automation', sortOrder: 49 },
 
   // ─── AI Receptionist ─────────────────────────────────────────────────
-  { key: 'aiReceptionist', label: 'AI Receptionist Dashboard', icon: 'PhoneCall', section: 'AI Receptionist', sortOrder: 50 },
-  { key: 'aiAgents', label: 'AI Agents', icon: 'Bot', section: 'AI Receptionist', sortOrder: 51 },
-  { key: 'aiPhoneNumbers', label: 'Phone Numbers', icon: 'PhoneIncoming', section: 'AI Receptionist', sortOrder: 52 },
-  { key: 'aiCallHistory', label: 'Call History', icon: 'PhoneCall', section: 'AI Receptionist', sortOrder: 53 },
+  { key: 'aiReceptionist', label: 'AI Receptionist Dashboard', icon: 'PhoneCall', section: 'AI Receptionist', sortOrder: 50, minPlan: 'business', upgradeDescription: 'AI-powered receptionist dashboard for call management, analytics, and performance insights.' },
+  { key: 'aiAgents', label: 'AI Agents', icon: 'Bot', section: 'AI Receptionist', sortOrder: 51, minPlan: 'business', upgradeDescription: 'Create and manage AI voice agents for automated call handling, scheduling, and customer support.' },
+  { key: 'aiPhoneNumbers', label: 'Phone Numbers', icon: 'PhoneIncoming', section: 'AI Receptionist', sortOrder: 52, minPlan: 'business', upgradeDescription: 'Purchase and manage dedicated phone numbers for your AI receptionist and business communications.' },
+  { key: 'aiCallHistory', label: 'Call History', icon: 'PhoneCall', section: 'AI Receptionist', sortOrder: 53, minPlan: 'business', upgradeDescription: 'View call logs, recordings, transcripts, and analytics for all AI receptionist calls.' },
 
   // ─── Finance ─────────────────────────────────────────────────────────
   { key: 'quotes', label: 'Quotes', icon: 'Receipt', section: 'Finance', sortOrder: 60 },

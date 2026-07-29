@@ -185,6 +185,22 @@ export function AuthPage({ onAuthSuccess, onBackToLanding }: AuthPageProps) {
         token: data.token,
       }));
       toast.success('Account created successfully!');
+      // Email verification notification — shown alongside the success toast.
+      // Uses a custom toast with a close (X) button so the user can dismiss it.
+      setTimeout(() => {
+        toast(
+          "We've sent you an email with a link to confirm your address.",
+          {
+            description: 'Check your inbox and click the confirmation link to verify your account.',
+            duration: 10000,
+            icon: '📧',
+            action: {
+              label: '✕',
+              onClick: () => {},
+            },
+          }
+        );
+      }, 500);
       onAuthSuccess(data.user, data.tenant);
     } catch {
       toast.error('Something went wrong. Please try again.');

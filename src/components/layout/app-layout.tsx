@@ -6,6 +6,8 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { AppSidebar } from '@/components/layout/sidebar';
 import { AppHeader } from '@/components/layout/header';
 import { MobileBottomNav } from '@/components/layout/mobile-bottom-nav';
+import { TrialBanner } from '@/components/layout/trial-banner';
+import { UpgradeModal } from '@/components/layout/upgrade-modal';
 import { Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -364,6 +366,7 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <AppHeader onLogout={onLogout} />
+        <TrialBanner />
 
         <main
           className={cn(
@@ -404,6 +407,9 @@ export function AppLayout({ onLogout }: AppLayoutProps) {
           when the tenant's trial has expired. Forces the user to add a
           payment method via the sidebar Subscription page. */}
       <TrialPaywallOverlay trialStatus={trialStatus} />
+
+      {/* Global UpgradeModal — triggered by clicking locked menu items */}
+      <UpgradeModal />
     </div>
   );
 }
