@@ -60,6 +60,25 @@ export interface BreadcrumbItem {
   url: string;
 }
 
+/**
+ * Convert a relative URL to an absolute one using the canonical ServiceOS
+ * origin. Google's BreadcrumbList structured data REQUIRES absolute URLs
+ * (relative URLs produce "Missing field 'item'" warnings in Search Console),
+ * but the visible breadcrumb links should stay relative so they work on any
+ * host (localhost in dev, serviceos.cc in prod, custom domains).
+ *
+ * Pass relative URLs to <Breadcrumbs>; this function absolutizes them only
+ * for the JSON-LD payload. Already-absolute URLs (http://, https://) are
+ * returned unchanged.
+ */
+function absolutizeUrl(url: string): string {
+  if (/^https?:\/\//i.test(url)) return url;
+  // Ensure the path starts with "/" so we don't accidentally produce
+  // "https://serviceos.ccmarketplace" when a caller passes "marketplace".
+  const path = url.startsWith("/") ? url : `/${url}`;
+  return `${SITE_URL}${path}`;
+}
+
 export function getBreadcrumbSchema(items: BreadcrumbItem[]) {
   return {
     "@context": "https://schema.org",
@@ -68,7 +87,7 @@ export function getBreadcrumbSchema(items: BreadcrumbItem[]) {
       "@type": "ListItem",
       position: i + 1,
       name: item.name,
-      item: item.url,
+      item: absolutizeUrl(item.url),
     })),
   };
 }

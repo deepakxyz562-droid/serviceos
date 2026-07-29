@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '@/store/app-store';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { ViewType } from '@/types/workflow';
@@ -16,6 +16,7 @@ import {
   Settings,
   LogOut,
   Download,
+  MessageSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,6 +34,8 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { MessageDrawer } from '@/components/layout/message-drawer';
+import { authFetch } from '@/lib/api';
 
 // ─── View label mapping ─────────────────────────────────────────────────────
 
@@ -101,6 +104,7 @@ const viewLabels: Record<ViewType, string> = {
   emailProviders: 'Email Providers',
   emailTemplates: 'Email Templates',
   notifications: 'Notifications',
+  smsNumbers: 'SMS Numbers',
 };
 
 // ─── PWA install helpers ────────────────────────────────────────────────────
@@ -152,6 +156,8 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [hasInstallPrompt, setHasInstallPrompt] = useState(false);
+  const [messageDrawerOpen, setMessageDrawerOpen] = useState(false);
+  const queryClient = useQueryClient();
 
   const setCurrentView = useAppStore((s) => s.setCurrentView);
 
@@ -184,6 +190,57 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
     retry: false,
   });
   const unreadCount = unreadData?.unreadCount ?? 0;
+
+  // ─── Live message-unread count (polled every 60s) ───────────────────────
+  // Heuristic: the Conversation model has no dedicated unreadCount column,
+  // so we treat "lastDirection=inbound + status=active" as waiting-for-reply
+  // = 1 unread. Live chat (PublicChatSession) has a real unreadCount column
+  // we sum directly. Three cheap parallel fetches; paused when the tab is
+  // hidden so background tabs don't burn mobile data/battery.
+  const { data: msgUnreadData } = useQuery<number>({
+    queryKey: ['messages-unread-count'],
+    queryFn: async () => {
+      const [smsRes, waRes, chatRes] = await Promise.allSettled([
+        authFetch('/api/conversations?channel=sms&limit=50&status=active'),
+        authFetch('/api/conversations?channel=whatsapp&limit=50&status=active'),
+        authFetch('/api/chat/sessions?status=active'),
+      ]);
+      let count = 0;
+      if (smsRes.status === 'fulfilled' && smsRes.value.ok) {
+        const data = await smsRes.value.json();
+        count += (data.conversations || []).filter(
+          (c: { status: string; lastDirection: string | null }) =>
+            c.status === 'active' && c.lastDirection === 'inbound',
+        ).length;
+      }
+      if (waRes.status === 'fulfilled' && waRes.value.ok) {
+        const data = await waRes.value.json();
+        count += (data.conversations || []).filter(
+          (c: { status: string; lastDirection: string | null }) =>
+            c.status === 'active' && c.lastDirection === 'inbound',
+        ).length;
+      }
+      if (chatRes.status === 'fulfilled' && chatRes.value.ok) {
+        const data = await chatRes.value.json();
+        count += (data.sessions || []).reduce(
+          (sum: number, s: { unreadCount?: number }) => sum + (s.unreadCount || 0),
+          0,
+        );
+      }
+      return count;
+    },
+    enabled: isAuthenticated,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: isAuthenticated,
+    refetchIntervalInBackground: false,
+    staleTime: 30_000,
+    retry: false,
+  });
+  const messageUnreadCount = msgUnreadData ?? 0;
+
+  const refreshMessageUnread = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['messages-unread-count'] });
+  }, [queryClient]);
 
   const goNotifications = useCallback(() => {
     setNotifOpen(false);
@@ -232,6 +289,7 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
   };
 
   return (
+    <>
     <header className={cn(
       // Height extends INTO the notch (background fills safe zone) while
       // pt-[env(safe-area-inset-top)] keeps the 64px content row below it.
@@ -302,6 +360,30 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
 
       {/* ─── Right side actions ────────────────────────────────────────── */}
       <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+        {/* ─── Messages icon (opens Skype-style left drawer) ─────────────── */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9 relative"
+          aria-label="Messages"
+          onClick={() => setMessageDrawerOpen(!messageDrawerOpen)}
+        >
+          <MessageSquare className="size-4" />
+          {messageUnreadCount > 0 && (
+            <span
+              className="absolute top-1 right-1 min-w-3.5 h-3.5 px-1 flex items-center justify-center rounded-full bg-emerald-500 text-white text-[9px] font-bold leading-none"
+              aria-hidden="true"
+            >
+              {messageUnreadCount > 99 ? '99+' : messageUnreadCount}
+            </span>
+          )}
+          <span className="sr-only">
+            {messageUnreadCount === 0
+              ? 'No unread messages'
+              : `${messageUnreadCount} unread message${messageUnreadCount === 1 ? '' : 's'}`}
+          </span>
+        </Button>
+
         {/* ─── Notifications bell ──────────────────────────────────────── */}
         <DropdownMenu open={notifOpen} onOpenChange={setNotifOpen}>
           <DropdownMenuTrigger asChild>
@@ -442,5 +524,13 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
         </DropdownMenu>
       </div>
     </header>
+
+    {/* ─── Skype-style left message drawer (overlay, fixed-position) ────── */}
+    <MessageDrawer
+      open={messageDrawerOpen}
+      onClose={() => setMessageDrawerOpen(false)}
+      onRefresh={refreshMessageUnread}
+    />
+    </>
   );
 }

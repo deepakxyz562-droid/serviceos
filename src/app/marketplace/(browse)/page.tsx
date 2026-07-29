@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { db } from '@/lib/db';
 import { VERTICALS, getIndustry } from '@/lib/industry-catalog';
 import { MarketplaceBrowser } from '@/components/marketplace/marketplace-browser';
-import { MarketplaceHeroSearch } from '@/components/marketplace/marketplace-hero-search';
+import { MarketplaceHeader } from '@/components/marketplace/marketplace-header';
 import { MarketplaceSortControl } from '@/components/marketplace/marketplace-sort-control';
 import type { ProviderListItem } from '@/components/marketplace/types';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
@@ -199,7 +199,12 @@ export async function generateMetadata({
       'Browse 2,500+ verified local service professionals across 25 industries — HVAC, plumbing, electrical, cleaning, landscaping, pest control, roofing, painting, locksmiths, appliance repair, pool & spa, and automotive. Read real reviews, compare quotes, and book instantly or request emergency dispatch.';
   }
 
-  const url = `https://serviceos.com/marketplace${
+  // Relative canonical URL — Next.js resolves against the request origin
+  // automatically for metadata.alternates.canonical and openGraph.url. This
+  // keeps the page portable across localhost / serviceos.cc / custom domains
+  // (the previous absolute `https://serviceos.com/...` URL pointed at a
+  // stale domain that doesn't match the actual deployment).
+  const url = `/marketplace${
     verticalFilter || industryFilter || cityFilter || searchFilter
       ? '?' +
         [
@@ -291,7 +296,7 @@ export default async function MarketplaceBrowsePage({
           '@type': 'LocalBusiness',
           name: p.name,
           description: p.description || p.tagline || undefined,
-          url: `https://serviceos.com${canonicalHref}`,
+          url: canonicalHref,
           image: p.coverImage || undefined,
           address: {
             '@type': 'PostalAddress',
@@ -314,28 +319,34 @@ export default async function MarketplaceBrowsePage({
   };
 
   // ── BreadcrumbList JSON-LD ──────────────────────────────────────────────
+  // Relative URLs — Google's BreadcrumbList validator accepts relative URLs
+  // here, but Search Console recommends absolute URLs. We keep the visible
+  // breadcrumb links (rendered as <a href> below) relative so they work on
+  // any host, and the JSON-LD payload uses the same relative URLs for
+  // consistency. If Google warnings appear later, swap these for
+  // `https://serviceos.cc/marketplace` (the canonical production origin).
   const breadcrumbItems: Array<{ name: string; url: string }> = [
-    { name: 'Home', url: 'https://serviceos.com' },
-    { name: 'Marketplace', url: 'https://serviceos.com/marketplace' },
+    { name: 'Home', url: '/marketplace' },
+    { name: 'Marketplace', url: '/marketplace' },
   ];
   if (verticalFilter) {
     const vName = VERTICALS.find((v) => v.id === verticalFilter)?.name ?? verticalFilter;
     breadcrumbItems.push({
       name: vName,
-      url: `https://serviceos.com/marketplace?vertical=${verticalFilter}`,
+      url: `/marketplace?vertical=${verticalFilter}`,
     });
   }
   if (industryFilter) {
     const iName = getIndustry(industryFilter)?.name ?? industryFilter;
     breadcrumbItems.push({
       name: iName,
-      url: `https://serviceos.com/marketplace?industry=${industryFilter}`,
+      url: `/marketplace?industry=${industryFilter}`,
     });
   }
   if (params.city) {
     breadcrumbItems.push({
       name: params.city,
-      url: `https://serviceos.com/marketplace?city=${encodeURIComponent(params.city)}`,
+      url: `/marketplace?city=${encodeURIComponent(params.city)}`,
     });
   }
   const breadcrumbLd = {
@@ -367,28 +378,16 @@ export default async function MarketplaceBrowsePage({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
       />
 
-      {/* Header — sticky, single row: logo on the left, slick search on the right.
-          On mobile the search wraps to a second row automatically. */}
-      <header className="sticky top-0 z-40 border-b bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70 pt-[env(safe-area-inset-top,0px)]">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <div className="flex h-16 flex-wrap items-center gap-3 py-2 sm:flex-nowrap sm:gap-6">
-            {/* Logo (links home) */}
-            <a href="/" className="flex items-center gap-2 shrink-0" aria-label="ServiceOS home">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm">
-                <Wrench className="h-4 w-4" />
-              </span>
-              <span className="hidden sm:block text-lg font-bold text-foreground tracking-tight">
-                ServiceOS<span className="text-emerald-600"> Marketplace</span>
-              </span>
-            </a>
-
-            {/* Search bar — right side on desktop, full-width on mobile */}
-            <div className="order-3 w-full sm:order-2 sm:flex-1">
-              <MarketplaceHeroSearch />
-            </div>
-          </div>
-        </div>
-      </header>
+      {/* Header — shared with the provider detail page. Sticky, single row:
+          logo on the left (links to /marketplace), form-based search on the
+          right (GETs to /marketplace?search=...&city=...). The form's
+          `defaultValue`s are pre-filled from the current URL search params so
+          a deep link like /marketplace?search=plumbing shows the user's
+          query in the box on page load. */}
+      <MarketplaceHeader
+        initialSearch={params.search ?? ''}
+        initialCity={params.city ?? ''}
+      />
 
       {/* Visually-hidden h1 for SEO/accessibility (hero section was removed
           per design decision, but the page still needs a single h1). */}
@@ -429,7 +428,7 @@ export default async function MarketplaceBrowsePage({
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-xs text-muted-foreground sm:px-6">
           <ol className="flex flex-wrap items-center gap-1 min-w-0">
             <li className="flex items-center gap-1">
-              <a href="/" className="inline-flex items-center gap-1 hover:text-foreground">
+              <a href="/marketplace" className="inline-flex items-center gap-1 hover:text-foreground">
                 <HomeIcon className="h-3.5 w-3.5" /> Home
               </a>
               <ChevronRight className="h-3 w-3" />

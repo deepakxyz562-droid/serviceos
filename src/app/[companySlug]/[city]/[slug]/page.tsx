@@ -23,7 +23,8 @@ import {
 
 import { StructuredData } from '@/components/seo/structured-data'
 import { Breadcrumbs } from '@/components/seo/breadcrumbs'
-import { CornerstoneHeader } from '@/components/seo/cornerstone-header'
+import { MarketplaceHeader } from '@/components/marketplace/marketplace-header'
+import { SafeImage } from '@/components/marketplace/safe-image'
 import { CornerstoneFooter } from '@/components/seo/cornerstone-footer'
 import {
   getLocalBusinessSchema,
@@ -57,8 +58,6 @@ import {
 // without forcing every visitor to wait for a DB query.
 export const revalidate = 3600
 export const dynamicParams = true
-
-const SITE_URL = 'https://serviceos.com'
 
 // ── Metadata ────────────────────────────────────────────────────────────────
 
@@ -257,17 +256,28 @@ export default async function PublicBusinessHubPage({
   if (faqSchema) allSchema.push(faqSchema)
 
   // Note: breadcrumb schema is injected by the <Breadcrumbs> component itself.
+  // The visible <Link> items use RELATIVE URLs so they work on any host
+  // (localhost / serviceos.cc / custom domains). The JSON-LD schema is
+  // absolutized by `getBreadcrumbSchema` in @/lib/seo/schemas.ts using the
+  // canonical `https://serviceos.cc` origin — Google requires absolute URLs
+  // for rich results, but visible links should stay relative.
+  //
+  // Home → /marketplace (NOT /): this page is part of the marketplace
+  // surface, so "Home" should land the user on the marketplace browse page,
+  // not the marketing landing page. Industry and City also point to
+  // /marketplace — no per-industry / per-city browse page exists yet, so we
+  // funnel both back to the main browse grid (where the user can refine).
   const breadcrumbItems = [
-    { name: 'Home', url: SITE_URL },
-    { name: business.industry || 'Service', url: `${SITE_URL}/${business.industryUrlSlug}` },
-    { name: business.city || 'Area', url: `${SITE_URL}/${business.industryUrlSlug}/${business.cityUrlSlug}` },
+    { name: 'Home', url: '/marketplace' },
+    { name: business.industry || 'Service', url: '/marketplace' },
+    { name: business.city || 'Area', url: '/marketplace' },
     { name: business.name, url: business.canonicalUrl },
   ]
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       <StructuredData data={allSchema} />
-      <CornerstoneHeader />
+      <MarketplaceHeader />
 
       <main className="flex-1">
         {/* Breadcrumb bar */}
@@ -384,7 +394,7 @@ export default async function PublicBusinessHubPage({
                     {gallery.slice(0, 9).map((img, i) => (
                       <div key={i} className="aspect-square rounded-lg overflow-hidden bg-muted relative group">
                         {img.url ? (
-                          <img
+                          <SafeImage
                             src={img.url}
                             alt={img.caption || `${business.name} project ${i + 1}`}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
@@ -691,28 +701,28 @@ function PublicBusinessHero({
   if (!business) return null
   return (
     <section className="border-b bg-gradient-to-b from-emerald-50/60 to-background dark:from-emerald-950/20">
-      {/* Cover image — or a gradient banner fallback when no cover is set */}
+      {/* Cover image — when no cover is set, hide the entire area (no
+          gradient fallback, no empty space). The hero content below still
+          renders with its own emerald-tinted background. */}
       {business.coverImage ? (
         <div className="h-40 sm:h-56 w-full overflow-hidden bg-muted">
-          <img
+          <SafeImage
             src={business.coverImage}
             alt={`${business.name} cover`}
             className="w-full h-full object-cover"
             loading="eager"
           />
         </div>
-      ) : (
-        <div
-          aria-hidden
-          className="h-32 sm:h-40 w-full bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 dark:from-emerald-800 dark:via-teal-800 dark:to-cyan-900"
-        />
-      )}
+      ) : null}
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-          {/* Logo */}
+          {/* Logo — hidden entirely when null (the flex container's
+              `items-start sm:items-center` keeps the h1 vertically centered
+              without it). SafeImage hides the <img> on load error so a stale
+              logo URL doesn't render a broken-image icon. */}
           {business.logo && (
             <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl overflow-hidden bg-muted shrink-0 border">
-              <img src={business.logo} alt={`${business.name} logo`} className="w-full h-full object-cover" />
+              <SafeImage src={business.logo} alt={`${business.name} logo`} className="w-full h-full object-cover" />
             </div>
           )}
           <div className="flex-1">
@@ -775,7 +785,7 @@ function ServiceCard({
     <div className="rounded-lg border bg-card text-card-foreground overflow-hidden hover:shadow-md transition-shadow">
       {service.image && (
         <div className="h-32 w-full bg-muted overflow-hidden">
-          <img src={service.image} alt={service.name} className="w-full h-full object-cover" loading="lazy" />
+          <SafeImage src={service.image} alt={service.name} className="w-full h-full object-cover" loading="lazy" />
         </div>
       )}
       <div className="p-4">

@@ -27,6 +27,7 @@ const CampaignsView = lazy(() => import('@/components/views/campaigns-view').the
 const MarketingTemplatesView = lazy(() => import('@/components/views/marketing-templates-view').then(m => ({ default: m.MarketingTemplatesView })));
 const OmnichannelView = lazy(() => import('@/components/views/omnichannel-view').then(m => ({ default: m.OmnichannelView })));
 const LiveChatView = lazy(() => import('@/components/views/live-chat-view').then(m => ({ default: m.LiveChatView })));
+const SmsNumbersView = lazy(() => import('@/components/views/sms-numbers-view').then(m => ({ default: m.SmsNumbersView })));
 
 // Automation
 const TriggersView = lazy(() => import('@/components/views/triggers-view').then(m => ({ default: m.TriggersView })));
@@ -133,6 +134,7 @@ const lazyViews: Partial<Record<ViewType, ComponentType>> = {
   marketingTemplates: MarketingTemplatesView,
   omnichannel: OmnichannelView,
   liveChat: LiveChatView,
+  smsNumbers: SmsNumbersView,
   // Automation
   triggers: TriggersView,
   variables: VariablesView,

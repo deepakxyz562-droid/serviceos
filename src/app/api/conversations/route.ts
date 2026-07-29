@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status')
     const tenantId = searchParams.get('tenantId')
     const phone = searchParams.get('phone')
+    const channel = searchParams.get('channel') // whatsapp | sms | website | ...
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '50')
 
@@ -41,13 +42,14 @@ export async function GET(request: NextRequest) {
     }
 
     if (status) where.status = status
+    if (channel) where.channel = channel
     if (phone) where.customerPhone = { contains: phone }
 
     // PERFORMANCE: Cache high-frequency list queries (no phone search).
     // The dashboard polls /api/conversations?status=active every 60s —
     // caching means most polls hit the cache instead of the DB.
     const isCacheable = !phone
-    const cacheKey = `conversations:${authUser?.id || 'anon'}:${authUser?.tenantId || tenantId || ''}:${status || ''}:${customerIdParam || ''}:${page}:${limit}`
+    const cacheKey = `conversations:${authUser?.id || 'anon'}:${authUser?.tenantId || tenantId || ''}:${status || ''}:${channel || ''}:${customerIdParam || ''}:${page}:${limit}`
 
     if (isCacheable) {
       const cached = cache.get<{ conversations: unknown[]; pagination: unknown }>(cacheKey)

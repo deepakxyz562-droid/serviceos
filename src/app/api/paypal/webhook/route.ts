@@ -7,6 +7,10 @@ import {
   isPayPalConfigured,
 } from '@/lib/paypal';
 import { logBillingEvent } from '@/lib/billing-events';
+import {
+  activatePurchasedNumber,
+  cancelNumberSubscription,
+} from '@/lib/sms-phone-numbers';
 
 /**
  * POST /api/paypal/webhook
@@ -199,10 +203,131 @@ async function nextInvoiceNumber(): Promise<string> {
 
 // ─── Subscription lifecycle handlers ────────────────────────────────────────
 
+/**
+ * Detect whether a PayPal subscription activation event corresponds to a
+ * dedicated phone-number purchase (rather than a SaaS plan subscription).
+ *
+ * Phone-number purchases created by /api/sms/numbers/buy store the PayPal
+ * subscription ID on a `PhoneNumber` row (NOT a `Subscription` row) and
+ * set `custom_id=phn_<phoneNumberId>` so we can resolve it here.
+ *
+ * If matched, this function triggers the Twilio purchase via
+ * `activatePurchasedNumber()` and returns `true` so the caller knows to skip
+ * the regular Subscription-row handling. On failure, the PayPal subscription
+ * is cancelled so the user is not charged for a number they don't have.
+ *
+ * Returns `false` if this event is NOT a phone-number purchase — the caller
+ * should fall through to the regular Subscription-row handler.
+ */
+async function tryHandlePhoneNumberSubscription(
+  subId: string,
+  resource: Record<string, unknown>,
+): Promise<boolean> {
+  // Resolve the PhoneNumber row by subscriptionId OR custom_id.
+  let phoneRow = await db.phoneNumber.findFirst({
+    where: { subscriptionId: subId, paymentProvider: 'paypal' },
+  })
+
+  if (!phoneRow) {
+    const customId = (resource.custom_id as string) || ''
+    const m = customId.match(/^phn_(.+)$/)
+    if (m) {
+      phoneRow = await db.phoneNumber.findUnique({ where: { id: m[1] } })
+      if (phoneRow && !phoneRow.subscriptionId) {
+        // Cache the PayPal subscription ID on the row so future events
+        // (PAYMENT.SALE.COMPLETED etc.) can find it.
+        await db.phoneNumber.update({
+          where: { id: phoneRow.id },
+          data: { subscriptionId: subId },
+        })
+      }
+    }
+  }
+
+  if (!phoneRow) return false
+
+  // It IS a phone-number subscription — handle here, skip regular flow.
+  console.log('[paypal-webhook] Phone-number subscription detected:', subId, '→ phoneNumber', phoneRow.id)
+
+  // If already active, idempotent success.
+  if (phoneRow.status === 'active' && phoneRow.providerSid) {
+    return true
+  }
+  if (phoneRow.status === 'released' || phoneRow.status === 'failed') {
+    // The user cancelled (or the previous purchase failed) before the
+    // activation webhook arrived. Cancel the PayPal sub to stop billing.
+    try {
+      await cancelNumberSubscription({
+        phoneNumberId: phoneRow.id,
+        reason: `Number in status=${phoneRow.status}; PayPal activation arrived too late`,
+      })
+    } catch (err) {
+      console.warn('[paypal-webhook] cancelNumberSubscription failed:', err)
+    }
+    return true
+  }
+
+  // Trigger the Twilio purchase.
+  const result = await activatePurchasedNumber({ phoneNumberId: phoneRow.id })
+
+  if (!result.success) {
+    // Twilio purchase failed — refund by cancelling the PayPal subscription.
+    const cancelRes = await cancelNumberSubscription({
+      phoneNumberId: phoneRow.id,
+      reason: `Twilio purchase failed: ${result.error || 'unknown'}`,
+    })
+
+    await logBillingEvent({
+      tenantId: phoneRow.tenantId || 'unknown',
+      type: 'fail',
+      status: 'failed',
+      amount: phoneRow.monthlyCost,
+      currency: phoneRow.costCurrency,
+      description: `Phone number ${phoneRow.number} purchase FAILED via PayPal webhook: ${result.error}. Subscription cancel: ${cancelRes.cancelled ? 'success' : 'failed'}`,
+      paymentProvider: 'paypal',
+      metadata: {
+        kind: 'phone_number',
+        phoneNumberId: phoneRow.id,
+        phoneNumber: phoneRow.number,
+        paypalSubscriptionId: subId,
+        twilioError: result.error,
+        subscriptionCancelled: cancelRes.cancelled,
+      },
+    })
+    return true
+  }
+
+  await logBillingEvent({
+    tenantId: phoneRow.tenantId || 'unknown',
+    type: 'subscription_created',
+    status: 'success',
+    amount: phoneRow.monthlyCost,
+    currency: phoneRow.costCurrency,
+    description: `Phone number ${phoneRow.number} activated via PayPal webhook (Twilio sid: ${result.sid})`,
+    paymentProvider: 'paypal',
+    metadata: {
+      kind: 'phone_number',
+      phoneNumberId: phoneRow.id,
+      phoneNumber: phoneRow.number,
+      paypalSubscriptionId: subId,
+      twilioSid: result.sid,
+    },
+  })
+
+  return true
+}
+
 async function handleSubscriptionActivated(body: Record<string, unknown>) {
   const subId = extractSubscriptionId(body);
   if (!subId) return;
   const resource = body.resource as Record<string, unknown>;
+
+  // ── Phone number subscription? ────────────────────────────────────────
+  // Phone-number purchases reuse the PayPal Subscriptions API but do NOT
+  // create a Subscription row — they create a PhoneNumber row with
+  // subscriptionId=subId. Detect this and trigger the Twilio purchase flow.
+  const handled = await tryHandlePhoneNumberSubscription(subId, resource);
+  if (handled) return
 
   const local = await findLocalSubscription(subId);
   if (!local) {

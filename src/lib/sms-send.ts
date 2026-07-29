@@ -12,6 +12,10 @@ interface SendSmsOptions {
   providerOverride?: string
   /** Override the resolved config (skip DB resolution) */
   configOverride?: Record<string, string>
+  /** Override just the From number (e.g. when sending from a dedicated number
+   * the tenant bought via /api/sms/numbers). Applied AFTER resolution so the
+   * provider config (auth, etc.) is still resolved normally. */
+  fromNumberOverride?: string
 }
 
 interface SendSmsResult {
@@ -446,6 +450,13 @@ export async function sendSmsMessage(options: SendSmsOptions): Promise<SendSmsRe
   if (!resolved) {
     console.log(`[SMS SIMULATED] To: ${to}, Body: ${message.slice(0, 80)}`)
     return { success: true, messageId: `sim_sms_${Date.now()}`, simulated: true, credentialUsed: 'none' }
+  }
+
+  // Apply from-number override AFTER resolution so the provider's auth
+  // credentials are still resolved normally but the From number is the
+  // tenant's dedicated number (e.g. purchased via /api/sms/numbers).
+  if (options.fromNumberOverride) {
+    resolved.config = { ...resolved.config, fromNumber: options.fromNumberOverride }
   }
 
   const sender = SENDER_BY_PROVIDER[resolved.provider]

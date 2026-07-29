@@ -33,6 +33,7 @@ import {
   Sparkles,
   PhoneCall,
   PhoneIncoming,
+  Phone,
   ClipboardList,
   GitBranch,
   Kanban,
@@ -155,6 +156,7 @@ const ownerNavSections: NavSection[] = [
     items: [
       { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
       { view: 'liveChat', label: 'Live Chat', icon: MessageSquare },
+      { view: 'smsNumbers', label: 'SMS Numbers', icon: Phone, badge: 'New' },
       { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
       { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
       { view: 'workflows', label: 'Workflows', icon: Workflow },
@@ -279,6 +281,7 @@ const superadminNavSections: NavSection[] = [
     items: [
       { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
       { view: 'liveChat', label: 'Live Chat', icon: MessageSquare },
+      { view: 'smsNumbers', label: 'SMS Numbers', icon: Phone, badge: 'New' },
       { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
       { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
       { view: 'workflows', label: 'Workflows', icon: Workflow },

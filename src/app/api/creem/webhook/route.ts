@@ -6,6 +6,10 @@ import {
   verifyCreemWebhookSignature,
 } from '@/lib/creem';
 import { logBillingEvent } from '@/lib/billing-events';
+import {
+  activatePurchasedNumber,
+  cancelNumberSubscription,
+} from '@/lib/sms-phone-numbers';
 
 /**
  * POST /api/creem/webhook
@@ -92,6 +96,15 @@ export async function POST(request: NextRequest) {
 
   // ─── 5. Route to the appropriate handler ────────────────────────────────
   try {
+    // Phone-number purchases bypass the regular subscription handler — they
+    // reuse the Creem checkout flow but record on a `PhoneNumber` row (NOT a
+    // `Subscription` row). Detect via metadata.kind === 'phone_number' and
+    // trigger the Twilio purchase instead.
+    if (event.metadata.kind === 'phone_number' && event.metadata.phoneNumberId) {
+      await handlePhoneNumberCheckout(event);
+      return NextResponse.json({ received: true, eventType: event.type, kind: 'phone_number' });
+    }
+
     switch (event.type) {
       case 'checkout.session.completed':
       case 'checkout.session.paid':
@@ -222,6 +235,105 @@ function invalidateCache(tenantId: string) {
 }
 
 // ─── Handlers ────────────────────────────────────────────────────────────────
+
+/**
+ * Handle a Creem checkout.session.completed (or subscription.active) event
+ * for a phone-number purchase. Triggers the Twilio purchase via
+ * `activatePurchasedNumber()`. On failure, the Creem subscription is flagged
+ * for cancellation (Creem has no direct cancel API in our lib — the operator
+ * must cancel via the Creem dashboard).
+ *
+ * Metadata (set at /api/sms/numbers/buy):
+ *   { kind: 'phone_number', phoneNumberId, tenantId, source: 'serviceos-sms' }
+ */
+async function handlePhoneNumberCheckout(event: NormalisedEvent) {
+  const phoneNumberId = (event.metadata.phoneNumberId as string) || '';
+  const tenantId = (event.metadata.tenantId as string) || null;
+  if (!phoneNumberId) {
+    console.warn('[creem/webhook] phone_number event missing phoneNumberId', event.metadata);
+    return;
+  }
+
+  const phoneRow = await db.phoneNumber.findUnique({ where: { id: phoneNumberId } });
+  if (!phoneRow) {
+    console.warn('[creem/webhook] phone_number event for unknown PhoneNumber row:', phoneNumberId);
+    return;
+  }
+
+  // Cache the Creem subscription/checkout ID on the row if we don't have it yet.
+  const creemSubId =
+    (event.object.subscription as string | undefined) ||
+    (event.object.subscription_id as string | undefined) ||
+    (event.object.id as string | undefined) ||
+    '';
+  if (creemSubId && !phoneRow.subscriptionId) {
+    await db.phoneNumber.update({
+      where: { id: phoneRow.id },
+      data: { subscriptionId: creemSubId },
+    });
+  }
+
+  // Idempotent: skip if already active.
+  if (phoneRow.status === 'active' && phoneRow.providerSid) {
+    return;
+  }
+  if (phoneRow.status === 'released' || phoneRow.status === 'failed') {
+    console.warn(
+      '[creem/webhook] phone_number event for row in status=',
+      phoneRow.status,
+      '— operator should cancel the Creem subscription manually',
+      creemSubId || '(no sub id)',
+    );
+    return;
+  }
+
+  const result = await activatePurchasedNumber({ phoneNumberId: phoneRow.id });
+
+  if (!result.success) {
+    // Refund by cancelling the subscription. Creem has no direct cancel API
+    // in our lib (must be done via the customer portal), so we log + mark.
+    const cancelRes = await cancelNumberSubscription({
+      phoneNumberId: phoneRow.id,
+      reason: `Twilio purchase failed: ${result.error || 'unknown'}`,
+    });
+
+    await logBillingEvent({
+      tenantId: tenantId || 'unknown',
+      type: 'fail',
+      status: 'failed',
+      amount: phoneRow.monthlyCost,
+      currency: phoneRow.costCurrency,
+      description: `Phone number ${phoneRow.number} purchase FAILED via Creem webhook: ${result.error}. Subscription cancel attempted: ${cancelRes.cancelled ? 'success' : 'manual follow-up required'}`,
+      paymentProvider: 'creem',
+      metadata: {
+        kind: 'phone_number',
+        phoneNumberId: phoneRow.id,
+        phoneNumber: phoneRow.number,
+        creemSubscriptionId: creemSubId,
+        twilioError: result.error,
+        subscriptionCancelled: cancelRes.cancelled,
+      },
+    });
+    return;
+  }
+
+  await logBillingEvent({
+    tenantId: tenantId || 'unknown',
+    type: 'subscription_created',
+    status: 'success',
+    amount: phoneRow.monthlyCost,
+    currency: phoneRow.costCurrency,
+    description: `Phone number ${phoneRow.number} activated via Creem webhook (Twilio sid: ${result.sid})`,
+    paymentProvider: 'creem',
+    metadata: {
+      kind: 'phone_number',
+      phoneNumberId: phoneRow.id,
+      phoneNumber: phoneRow.number,
+      creemSubscriptionId: creemSubId,
+      twilioSid: result.sid,
+    },
+  });
+}
 
 /**
  * Handle checkout.session.completed.

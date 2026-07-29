@@ -6,7 +6,7 @@ import {
   ArrowRightLeft, StickyNote, AtSign, MoreVertical,
   Check, CheckCheck, ChevronLeft, Smile, Paperclip,
   Circle, Inbox, RefreshCw, AlertCircle, PanelRightOpen, PanelRightClose,
-  Globe, Mail, MessageCircle,
+  Globe, Mail, Sparkles, Loader2, Smartphone,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { apiPost } from '@/lib/api';
 
 // ─── API Types ──────────────────────────────────────────────────────────────
 
@@ -196,10 +197,17 @@ function getChannelIcon(channel: string): { icon: typeof MessageSquare; label: s
     case 'email':
       return { icon: Mail, label: 'Email', color: 'text-purple-600' };
     case 'sms':
-      return { icon: MessageCircle, label: 'SMS', color: 'text-sky-600' };
+      return { icon: Smartphone, label: 'SMS', color: 'text-sky-600' };
     default:
       return { icon: MessageSquare, label: 'Chat', color: 'text-slate-600' };
   }
+}
+
+// ─── SMS AI suggested reply type ────────────────────────────────────────────
+
+interface SmsSuggestedReply {
+  text: string;
+  tone: 'friendly' | 'professional' | 'urgent';
 }
 
 // ─── Sub-Components ─────────────────────────────────────────────────────────
@@ -319,6 +327,7 @@ export function InboxView() {
 
   // UI state
   const [filter, setFilter] = useState('all');
+  const [channelFilter, setChannelFilter] = useState<'all' | 'whatsapp' | 'sms' | 'web' | 'other'>('all');
   const [search, setSearch] = useState('');
   const [messageInput, setMessageInput] = useState('');
   const [isInternalNote, setIsInternalNote] = useState(false);
@@ -327,6 +336,10 @@ export function InboxView() {
   const [showInfoPanel, setShowInfoPanel] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [mobileShowThread, setMobileShowThread] = useState(false);
+
+  // AI suggested replies state (SMS only)
+  const [aiReplies, setAiReplies] = useState<SmsSuggestedReply[]>([]);
+  const [aiLoading, setAiLoading] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
@@ -412,6 +425,8 @@ export function InboxView() {
     } else {
       setMessages([]);
     }
+    // Clear AI suggestions when switching conversations.
+    setAiReplies([]);
   }, [selectedConversation?.conversationId, fetchMessages]);
 
   // ─── Scroll to bottom on new messages ─────────────────────────────────
@@ -425,6 +440,16 @@ export function InboxView() {
   const filteredConversations = useMemo(() => {
     return conversations.filter((c) => {
       if (filter !== 'all' && c.status !== filter) return false;
+      // Channel filter — group 'web' covers both 'web' and 'website' values
+      if (channelFilter !== 'all') {
+        if (channelFilter === 'web') {
+          if (c.channel !== 'web' && c.channel !== 'website') return false;
+        } else if (channelFilter === 'other') {
+          if (['whatsapp', 'sms', 'web', 'website'].includes(c.channel)) return false;
+        } else if (c.channel !== channelFilter) {
+          return false;
+        }
+      }
       if (search) {
         const q = search.toLowerCase();
         const name = (c.customerName || c.customerPhone || '').toLowerCase();
@@ -433,7 +458,7 @@ export function InboxView() {
       }
       return true;
     });
-  }, [conversations, filter, search]);
+  }, [conversations, filter, channelFilter, search]);
 
   // ─── Stats ────────────────────────────────────────────────────────────
 
@@ -457,8 +482,43 @@ export function InboxView() {
   const handleSendMessage = async () => {
     if (!messageInput.trim() || !selectedConversation) return;
 
+    const trimmed = messageInput.trim();
+    const isSms = selectedConversation.channel === 'sms';
+
     setSendingMessage(true);
     try {
+      // SMS path: route through /api/sms/send which (1) sends the actual SMS
+      // via Twilio, (2) appends to the Conversation timeline, (3) creates a
+      // UnifiedMessage row that /api/inbox-messages will surface on next
+      // refetch. Internal notes on SMS conversations still use the inbox API.
+      if (isSms && !isInternalNote) {
+        const data = await apiPost<{
+          success: boolean;
+          messageId?: string;
+          conversationId?: string | null;
+          error?: string;
+        }>('/api/sms/send', {
+          to: selectedConversation.customerPhone,
+          body: trimmed,
+          conversationId: selectedConversation.conversationId,
+        });
+
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to send SMS');
+        }
+
+        // Refetch messages so the new outbound SMS record (created by
+        // /api/sms/send) appears in the thread.
+        await fetchMessages(selectedConversation.conversationId);
+        // Refresh the conversation list so the last-message preview updates.
+        fetchConversations();
+        setMessageInput('');
+        setAiReplies([]); // clear AI suggestions after sending
+        toast.success('SMS sent');
+        return;
+      }
+
+      // Default path (WhatsApp / web / email / internal note on SMS)
       const res = await fetch('/api/inbox-messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -466,7 +526,7 @@ export function InboxView() {
           conversationId: selectedConversation.conversationId,
           senderType: 'agent',
           senderName: 'You',
-          content: messageInput.trim(),
+          content: trimmed,
           messageType: 'text',
           direction: 'outbound',
           isInternalNote,
@@ -479,6 +539,7 @@ export function InboxView() {
 
       setMessages((prev) => [...prev, newMsg]);
       setMessageInput('');
+      setAiReplies([]); // clear AI suggestions after sending
 
       // Update conversation's last message in local state
       setConversations((prev) =>
@@ -486,7 +547,7 @@ export function InboxView() {
           c.conversationId === selectedConversation.conversationId
             ? {
                 ...c,
-                lastMessageBody: messageInput.trim(),
+                lastMessageBody: trimmed,
                 lastMessageAt: new Date().toISOString(),
                 lastDirection: 'outbound',
               }
@@ -499,6 +560,44 @@ export function InboxView() {
       toast.error(err instanceof Error ? err.message : 'Failed to send message');
     } finally {
       setSendingMessage(false);
+    }
+  };
+
+  // ─── AI suggested replies (SMS only) ──────────────────────────────────
+
+  const handleGetAiReplies = async () => {
+    if (!selectedConversation) return;
+    // Only available for SMS conversations — the endpoint loads from
+    // Conversation.messagesJson, which is what /api/sms/* populates.
+    if (selectedConversation.channel !== 'sms') {
+      toast.info('AI suggestions are available for SMS conversations.');
+      return;
+    }
+    setAiLoading(true);
+    setAiReplies([]);
+    try {
+      const data = await apiPost<{ replies?: SmsSuggestedReply[]; error?: string }>(
+        '/api/ai/sms-suggested-reply',
+        { conversationId: selectedConversation.conversationId },
+      );
+      if (!data.replies || data.replies.length === 0) {
+        throw new Error(data.error || 'AI did not return any suggestions.');
+      }
+      setAiReplies(data.replies.slice(0, 3));
+      toast.success(`${data.replies.length} suggestions ready`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to get AI suggestions');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleUseSuggestion = (text: string) => {
+    setMessageInput(text);
+    setAiReplies([]); // collapse the chips after one is picked
+    // Focus the textarea so the user can edit + send
+    if (messageInputRef.current) {
+      messageInputRef.current.focus();
     }
   };
 
@@ -723,6 +822,31 @@ export function InboxView() {
             </TabsTrigger>
           </TabsList>
         </Tabs>
+
+        {/* Channel filter — horizontal scrollable chips */}
+        <div className="flex items-center gap-1 mt-2 overflow-x-auto no-scrollbar -mx-1 px-1">
+          {([
+            { key: 'all', label: 'All channels' },
+            { key: 'whatsapp', label: 'WhatsApp' },
+            { key: 'sms', label: 'SMS' },
+            { key: 'web', label: 'Website' },
+            { key: 'other', label: 'Other' },
+          ] as const).map((c) => (
+            <button
+              key={c.key}
+              type="button"
+              onClick={() => setChannelFilter(c.key)}
+              className={cn(
+                'shrink-0 text-[10px] px-2 py-0.5 rounded-full border transition-colors whitespace-nowrap',
+                channelFilter === c.key
+                  ? 'bg-emerald-600 text-white border-emerald-600'
+                  : 'bg-background text-muted-foreground border-border hover:bg-muted/60 hover:text-foreground',
+              )}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Conversation List */}
@@ -813,6 +937,11 @@ export function InboxView() {
                             WhatsApp
                           </Badge>
                         )}
+                        {conv.channel === 'sms' && (
+                          <Badge variant="outline" className="text-[9px] h-4 px-1.5 bg-sky-50 text-sky-700 border-sky-200">
+                            SMS
+                          </Badge>
+                        )}
                         {conv.intentDetected && (
                           <Badge variant="outline" className="text-[9px] h-4 px-1.5 bg-violet-50 text-violet-600 border-violet-200">
                             {conv.intentDetected}
@@ -852,6 +981,12 @@ export function InboxView() {
               <span className="font-semibold text-sm truncate">
                 {selectedConversation.customerName || selectedConversation.customerPhone}
               </span>
+              {selectedConversation.channel === 'sms' && (
+                <Badge variant="outline" className="text-[10px] h-5 shrink-0 bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950/30 dark:text-sky-300 dark:border-sky-800">
+                  <Smartphone className="size-3 mr-1" />
+                  SMS
+                </Badge>
+              )}
               <Badge variant="outline" className={cn(getStatusColor(selectedConversation.status), 'text-[10px] h-5 shrink-0')}>
                 {selectedConversation.status.replace('_', ' ')}
               </Badge>
@@ -1072,6 +1207,58 @@ export function InboxView() {
             </Button>
           </div>
         )}
+        {/* AI suggested replies — only for SMS conversations */}
+        {selectedConversation?.channel === 'sms' && !isInternalNote && (
+          <div className="mb-2">
+            {aiReplies.length > 0 ? (
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1.5 px-1">
+                  <Sparkles className="size-3 text-violet-600" />
+                  <span className="text-[11px] font-medium text-violet-700 dark:text-violet-400">
+                    AI suggested replies
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-5 text-[10px] ml-auto p-0 text-muted-foreground"
+                    onClick={() => setAiReplies([])}
+                  >
+                    Dismiss
+                  </Button>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  {aiReplies.map((reply, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleUseSuggestion(reply.text)}
+                      className="group text-left p-2.5 rounded-lg border border-violet-200 bg-violet-50/60 dark:bg-violet-950/20 dark:border-violet-800/60 hover:border-violet-400 hover:bg-violet-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <Badge
+                          variant="outline"
+                          className="text-[9px] h-4 px-1.5 capitalize bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700"
+                        >
+                          {reply.tone}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-foreground leading-snug whitespace-pre-wrap">
+                        {reply.text}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : aiLoading ? (
+              <div className="flex items-center gap-2 p-2 rounded-lg border border-violet-200 bg-violet-50/60 dark:bg-violet-950/20 dark:border-violet-800/60">
+                <Loader2 className="size-3.5 text-violet-600 animate-spin" />
+                <span className="text-[11px] text-violet-700 dark:text-violet-400">
+                  Generating suggestions…
+                </span>
+              </div>
+            ) : null}
+          </div>
+        )}
         {/* Quick actions */}
         <div className="flex items-center gap-0.5 mb-2">
           <TooltipProvider>
@@ -1122,6 +1309,33 @@ export function InboxView() {
               <TooltipContent>Internal Note</TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          {/* AI Reply — SMS only */}
+          {selectedConversation?.channel === 'sms' && !isInternalNote && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn(
+                      'h-7 px-2 ml-auto gap-1 text-[11px] font-medium',
+                      'text-violet-600 hover:text-violet-700 hover:bg-violet-50 dark:hover:bg-violet-950/30',
+                    )}
+                    onClick={handleGetAiReplies}
+                    disabled={aiLoading}
+                  >
+                    {aiLoading ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="size-3.5" />
+                    )}
+                    AI Reply
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Suggest 3 AI replies (friendly / professional / urgent)</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
         </div>
         {/* Input + Send */}
         <div className="flex items-end gap-2">

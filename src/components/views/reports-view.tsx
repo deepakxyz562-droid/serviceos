@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   BarChart3,
   TrendingUp,
@@ -23,6 +24,8 @@ import {
   CheckCircle2,
   Timer,
   Bot,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -62,6 +65,93 @@ import {
 } from 'recharts';
 import { toast } from 'sonner';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
+import { authFetch, apiUrl } from '@/lib/api';
+
+// ============================================================
+// API Response Types (mirror /api/analytics shapes)
+// ============================================================
+
+interface OverviewResponse {
+  metric: 'overview';
+  totalJobs: number;
+  completedJobs: number;
+  activeLeads: number;
+  totalRevenue: number;
+  totalCustomers: number;
+  totalEmployees: number;
+  completionRate: number;
+  recentJobs: Array<{
+    id: string;
+    title: string;
+    status: string;
+    customerName: string | null;
+    createdAt: string;
+  }>;
+}
+
+interface RevenueTrendsResponse {
+  metric: 'revenue_trends';
+  groupBy: string;
+  totalRevenue?: number;
+  data: Array<{ date: string; value: number }>;
+}
+
+interface JobStatsResponse {
+  metric: 'job_stats';
+  statusDistribution: Record<string, number>;
+  priorityDistribution: Record<string, number>;
+  avgCompletionTimeMs: number;
+  avgCompletionTimeHours: number;
+  total: number;
+}
+
+interface EmployeeProductivityResponse {
+  metric: 'employee_productivity';
+  employees: Array<{
+    id: string;
+    name: string;
+    role: string;
+    status: string;
+    rating: number;
+    totalCompletedJobs: number;
+    completedInPeriod: number;
+  }>;
+}
+
+interface LeadConversionResponse {
+  metric: 'lead_conversion';
+  totalLeads: number;
+  convertedLeads: number;
+  conversionRate: number;
+  bySource: Record<string, number>;
+  byStatus: Record<string, number>;
+}
+
+interface WhatsAppAnalyticsResponse {
+  metric: 'whatsapp_analytics';
+  totalConversations: number;
+  activeConversations: number;
+  intentDistribution: Record<string, number>;
+  avgResponseTimeMin: number;
+  buttonResponseRate: number;
+  conversations: Array<{
+    id: string;
+    currentStage: string;
+    intentDetected: string | null;
+    lastMessageAt: string | null;
+    createdAt: string;
+  }>;
+}
+
+interface JourneyAnalyticsResponse {
+  metric: 'journey_analytics';
+  totalJourneys: number;
+  completedJourneys: number;
+  completionRate: number;
+  stageDistribution: Record<string, number>;
+  scheduledActionsPending: number;
+  avgJourneyTimeHours: number;
+}
 
 // ============================================================
 // Chart Configs
@@ -87,17 +177,15 @@ const jobsByStatusConfig: ChartConfig = {
 };
 
 const serviceRevenueConfig: ChartConfig = {
-  revenue: { label: 'Revenue', color: '#14b8a6' },
+  jobs: { label: 'Jobs', color: '#14b8a6' },
 };
 
 const revenueSourceConfig: ChartConfig = {
-  WhatsApp: { label: 'WhatsApp', color: '#10b981' },
-  Manual: { label: 'Manual', color: '#14b8a6' },
-  Website: { label: 'Website', color: '#2dd4bf' },
+  leads: { label: 'Leads', color: '#14b8a6' },
 };
 
 const workloadConfig: ChartConfig = {
-  jobs: { label: 'Active Jobs', color: '#14b8a6' },
+  jobs: { label: 'Completed Jobs', color: '#14b8a6' },
 };
 
 const leadTrendConfig: ChartConfig = {
@@ -106,12 +194,7 @@ const leadTrendConfig: ChartConfig = {
 };
 
 const leadSourceConfig: ChartConfig = {
-  WhatsApp: { label: 'WhatsApp', color: '#10b981' },
-  Website: { label: 'Website', color: '#14b8a6' },
-  Google_Ads: { label: 'Google Ads', color: '#2dd4bf' },
-  Referral: { label: 'Referral', color: '#5eead4' },
-  Facebook: { label: 'Facebook', color: '#99f6e4' },
-  Manual: { label: 'Manual', color: '#a7f3d0' },
+  count: { label: 'Leads', color: '#10b981' },
 };
 
 const whatsappVolumeConfig: ChartConfig = {
@@ -119,12 +202,7 @@ const whatsappVolumeConfig: ChartConfig = {
 };
 
 const intentConfig: ChartConfig = {
-  cleaning: { label: 'Cleaning', color: '#10b981' },
-  plumbing: { label: 'Plumbing', color: '#14b8a6' },
-  hvac: { label: 'HVAC', color: '#2dd4bf' },
-  electrical: { label: 'Electrical', color: '#f59e0b' },
-  moving: { label: 'Moving', color: '#5eead4' },
-  other: { label: 'Other', color: '#99f6e4' },
+  count: { label: 'Requests', color: '#10b981' },
 };
 
 const journeyStageConfig: ChartConfig = {
@@ -136,6 +214,40 @@ const journeyTimeConfig: ChartConfig = {
 };
 
 // ============================================================
+// Color palettes (used for dynamic data from API records)
+// ============================================================
+
+const SOURCE_COLOR_PALETTE = [
+  '#10b981', '#14b8a6', '#2dd4bf', '#5eead4',
+  '#99f6e4', '#a7f3d0', '#94a3b8', '#f59e0b',
+];
+
+const INTENT_COLOR_PALETTE = [
+  '#10b981', '#14b8a6', '#2dd4bf', '#f59e0b',
+  '#5eead4', '#99f6e4', '#a7f3d0', '#94a3b8',
+];
+
+const JOB_STATUS_COLOR_MAP: Record<string, string> = {
+  pending: '#f59e0b',
+  assigned: '#14b8a6',
+  in_progress: '#10b981',
+  en_route: '#06b6d4',
+  completed: '#059669',
+  cancelled: '#ef4444',
+  on_hold: '#94a3b8',
+};
+
+const JOB_STATUS_LABEL_MAP: Record<string, string> = {
+  pending: 'Pending',
+  assigned: 'Assigned',
+  in_progress: 'In Progress',
+  en_route: 'En Route',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+  on_hold: 'On Hold',
+};
+
+// ============================================================
 // Helpers
 // ============================================================
 
@@ -143,134 +255,37 @@ function formatNumber(n: number): string {
   return new Intl.NumberFormat('en-US').format(n);
 }
 
-// ============================================================
-// Mock / Fallback Data
-// ============================================================
+function getInitials(name: string): string {
+  return name
+    .split(' ')
+    .map(p => p[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+}
 
-const fallbackRevenueTrend = [
-  { month: 'Aug', revenue: 18200 },
-  { month: 'Sep', revenue: 22400 },
-  { month: 'Oct', revenue: 19800 },
-  { month: 'Nov', revenue: 25600 },
-  { month: 'Dec', revenue: 28900 },
-  { month: 'Jan', revenue: 31200 },
-  { month: 'Feb', revenue: 34500 },
-  { month: 'Mar', revenue: 37800 },
-];
+function formatRevenueDate(dateKey: string, groupBy: string): string {
+  if (groupBy === 'month') {
+    const [year, month] = dateKey.split('-');
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const idx = parseInt(month, 10) - 1;
+    if (idx >= 0 && idx < 12) return monthNames[idx];
+    return dateKey;
+  }
+  if (groupBy === 'day') {
+    const parts = dateKey.split('-');
+    if (parts.length === 3) return `${parts[1]}/${parts[2]}`;
+  }
+  return dateKey;
+}
 
-const fallbackJobCompletion = [
-  { status: 'Completed', completed: 186, inProgress: 0, pending: 0, cancelled: 0 },
-  { status: 'In Progress', completed: 0, inProgress: 42, pending: 0, cancelled: 0 },
-  { status: 'Pending', completed: 0, inProgress: 0, pending: 28, cancelled: 0 },
-  { status: 'Cancelled', completed: 0, inProgress: 0, pending: 0, cancelled: 12 },
-];
-
-const fallbackLeadFunnel = [
-  { stage: 'New', count: 245 },
-  { stage: 'Contacted', count: 182 },
-  { stage: 'Qualified', count: 118 },
-  { stage: 'Quoted', count: 86 },
-  { stage: 'Won', count: 72 },
-];
-
-const fallbackJobsByStatus = [
-  { status: 'Pending', count: 28, fill: '#f59e0b' },
-  { status: 'Assigned', count: 18, fill: '#14b8a6' },
-  { status: 'In Progress', count: 42, fill: '#10b981' },
-  { status: 'Completed', count: 186, fill: '#059669' },
-  { status: 'Cancelled', count: 12, fill: '#ef4444' },
-];
-
-const fallbackRevenueByService = [
-  { service: 'HVAC', revenue: 42500 },
-  { service: 'Plumbing', revenue: 36800 },
-  { service: 'Cleaning', revenue: 31200 },
-  { service: 'Electrical', revenue: 28400 },
-  { service: 'Pest Control', revenue: 18900 },
-  { service: 'Moving', revenue: 15200 },
-];
-
-const fallbackRevenueBySource = [
-  { source: 'WhatsApp', revenue: 84200, fill: '#10b981' },
-  { source: 'Manual', revenue: 42600, fill: '#14b8a6' },
-  { source: 'Website', revenue: 56800, fill: '#2dd4bf' },
-];
-
-const fallbackEmployeeProductivity = [
-  { name: 'Rajesh Kumar', completedJobs: 48, avgRating: 4.8, avgCompletionTime: '2.4h', status: 'busy', activeJobs: 3 },
-  { name: 'Priya Sharma', completedJobs: 42, avgRating: 4.9, avgCompletionTime: '2.1h', status: 'available', activeJobs: 0 },
-  { name: 'Amit Patel', completedJobs: 38, avgRating: 4.6, avgCompletionTime: '2.8h', status: 'busy', activeJobs: 2 },
-  { name: 'Sunita Devi', completedJobs: 35, avgRating: 4.7, avgCompletionTime: '2.5h', status: 'available', activeJobs: 1 },
-  { name: 'Vikram Singh', completedJobs: 31, avgRating: 4.5, avgCompletionTime: '3.1h', status: 'offline', activeJobs: 0 },
-  { name: 'Neha Gupta', completedJobs: 28, avgRating: 4.8, avgCompletionTime: '2.3h', status: 'busy', activeJobs: 2 },
-];
-
-const fallbackWorkload = [
-  { name: 'Rajesh K.', jobs: 3 },
-  { name: 'Priya S.', jobs: 0 },
-  { name: 'Amit P.', jobs: 2 },
-  { name: 'Sunita D.', jobs: 1 },
-  { name: 'Vikram S.', jobs: 0 },
-  { name: 'Neha G.', jobs: 2 },
-];
-
-const fallbackLeadSource = [
-  { source: 'WhatsApp', count: 54, fill: '#10b981' },
-  { source: 'Website', count: 68, fill: '#14b8a6' },
-  { source: 'Google Ads', count: 42, fill: '#2dd4bf' },
-  { source: 'Referral', count: 38, fill: '#5eead4' },
-  { source: 'Facebook', count: 28, fill: '#99f6e4' },
-  { source: 'Manual', count: 15, fill: '#a7f3d0' },
-];
-
-const fallbackLeadTrend = [
-  { month: 'Aug', leads: 32, converted: 12 },
-  { month: 'Sep', leads: 38, converted: 16 },
-  { month: 'Oct', leads: 29, converted: 11 },
-  { month: 'Nov', leads: 42, converted: 18 },
-  { month: 'Dec', leads: 48, converted: 22 },
-  { month: 'Jan', leads: 52, converted: 24 },
-  { month: 'Feb', leads: 58, converted: 28 },
-  { month: 'Mar', leads: 64, converted: 32 },
-];
-
-const fallbackWhatsappVolume = [
-  { day: 'Mon', conversations: 18 },
-  { day: 'Tue', conversations: 24 },
-  { day: 'Wed', conversations: 21 },
-  { day: 'Thu', conversations: 28 },
-  { day: 'Fri', conversations: 32 },
-  { day: 'Sat', conversations: 15 },
-  { day: 'Sun', conversations: 8 },
-];
-
-const fallbackIntentDist = [
-  { intent: 'Cleaning', count: 42, fill: '#10b981' },
-  { intent: 'Plumbing', count: 28, fill: '#14b8a6' },
-  { intent: 'HVAC', count: 22, fill: '#2dd4bf' },
-  { intent: 'Electrical', count: 16, fill: '#f59e0b' },
-  { intent: 'Moving', count: 12, fill: '#5eead4' },
-  { intent: 'Other', count: 8, fill: '#99f6e4' },
-];
-
-const fallbackJourneyStages = [
-  { stage: 'Lead', count: 86 },
-  { stage: 'Booking', count: 62 },
-  { stage: 'Assigned', count: 48 },
-  { stage: 'En Route', count: 32 },
-  { stage: 'In Progress', count: 42 },
-  { stage: 'Completed', count: 186 },
-  { stage: 'Review', count: 24 },
-];
-
-const fallbackJourneyTime = [
-  { stage: 'Lead → Booking', hours: 4.2 },
-  { stage: 'Booking → Assigned', hours: 1.8 },
-  { stage: 'Assigned → En Route', hours: 0.6 },
-  { stage: 'En Route → In Progress', hours: 0.4 },
-  { stage: 'In Progress → Completed', hours: 2.6 },
-  { stage: 'Completed → Review', hours: 12.4 },
-];
+function humanizeKey(key: string): string {
+  return key
+    .charAt(0)
+    .toUpperCase()
+    .concat(key.slice(1).replace(/[_-]/g, ' '));
+}
 
 // ============================================================
 // Loading Skeletons
@@ -320,6 +335,33 @@ function TableSkeleton() {
           <Skeleton className="h-8 w-20" />
         </div>
       ))}
+    </div>
+  );
+}
+
+// ============================================================
+// Shared UI: Error / Empty states
+// ============================================================
+
+function ErrorBanner({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-8 text-center gap-2">
+      <AlertTriangle className="size-6 text-amber-500" />
+      <p className="text-xs text-muted-foreground">Failed to load this section</p>
+      <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={onRetry}>
+        <RefreshCw className="size-3" />Retry
+      </Button>
+    </div>
+  );
+}
+
+function EmptyHint({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-10 text-center">
+      <div className="size-10 rounded-full bg-muted/60 flex items-center justify-center mb-2">
+        <BarChart3 className="size-5 text-muted-foreground/60" />
+      </div>
+      <p className="text-xs text-muted-foreground">{message}</p>
     </div>
   );
 }
@@ -385,84 +427,310 @@ export function ReportsView() {
   const { currency, format, formatCompact, symbol } = useCompanyCurrency();
   const [dateRange, setDateRange] = useState('30d');
   const [activeTab, setActiveTab] = useState('overview');
-  const [analytics, setAnalytics] = useState<Record<string, unknown> | null>(null);
-  const [loadedRange, setLoadedRange] = useState<string | null>(null);
 
-  const loading = loadedRange !== dateRange;
+  // ─── Fetch all 7 metrics in parallel via TanStack Query ─────────
+  const overviewQuery = useQuery<OverviewResponse>({
+    queryKey: ['reports', 'overview', dateRange],
+    queryFn: async () => {
+      const res = await authFetch(apiUrl(`/api/analytics?metric=overview&range=${dateRange}`));
+      if (!res.ok) throw new Error('Failed to fetch overview');
+      return res.json() as Promise<OverviewResponse>;
+    },
+  });
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/analytics?XTransformPort=3000&metric=overview&range=${dateRange}`)
-      .then(r => r.json())
-      .then(data => {
-        if (!cancelled) {
-          setAnalytics(data);
-          setLoadedRange(dateRange);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setAnalytics(null);
-          setLoadedRange(dateRange);
-        }
-      });
-    return () => { cancelled = true; };
-  }, [dateRange]);
+  const revenueQuery = useQuery<RevenueTrendsResponse>({
+    queryKey: ['reports', 'revenue_trends', dateRange],
+    queryFn: async () => {
+      const res = await authFetch(
+        apiUrl(`/api/analytics?metric=revenue_trends&range=${dateRange}&groupBy=month`),
+      );
+      if (!res.ok) throw new Error('Failed to fetch revenue trends');
+      return res.json() as Promise<RevenueTrendsResponse>;
+    },
+  });
 
-  // Derived overview data
-  const totalRevenue = useMemo(() => {
-    if (analytics && typeof analytics.totalRevenue === 'number') {
-      return analytics.totalRevenue;
+  const jobStatsQuery = useQuery<JobStatsResponse>({
+    queryKey: ['reports', 'job_stats', dateRange],
+    queryFn: async () => {
+      const res = await authFetch(apiUrl(`/api/analytics?metric=job_stats&range=${dateRange}`));
+      if (!res.ok) throw new Error('Failed to fetch job stats');
+      return res.json() as Promise<JobStatsResponse>;
+    },
+  });
+
+  const employeeQuery = useQuery<EmployeeProductivityResponse>({
+    queryKey: ['reports', 'employee_productivity', dateRange],
+    queryFn: async () => {
+      const res = await authFetch(apiUrl(`/api/analytics?metric=employee_productivity&range=${dateRange}`));
+      if (!res.ok) throw new Error('Failed to fetch employee productivity');
+      return res.json() as Promise<EmployeeProductivityResponse>;
+    },
+  });
+
+  const leadConvQuery = useQuery<LeadConversionResponse>({
+    queryKey: ['reports', 'lead_conversion', dateRange],
+    queryFn: async () => {
+      const res = await authFetch(apiUrl(`/api/analytics?metric=lead_conversion&range=${dateRange}`));
+      if (!res.ok) throw new Error('Failed to fetch lead conversion');
+      return res.json() as Promise<LeadConversionResponse>;
+    },
+  });
+
+  const whatsappQuery = useQuery<WhatsAppAnalyticsResponse>({
+    queryKey: ['reports', 'whatsapp_analytics', dateRange],
+    queryFn: async () => {
+      const res = await authFetch(apiUrl(`/api/analytics?metric=whatsapp_analytics&range=${dateRange}`));
+      if (!res.ok) throw new Error('Failed to fetch WhatsApp analytics');
+      return res.json() as Promise<WhatsAppAnalyticsResponse>;
+    },
+  });
+
+  const journeyQuery = useQuery<JourneyAnalyticsResponse>({
+    queryKey: ['reports', 'journey_analytics', dateRange],
+    queryFn: async () => {
+      const res = await authFetch(apiUrl(`/api/analytics?metric=journey_analytics&range=${dateRange}`));
+      if (!res.ok) throw new Error('Failed to fetch journey analytics');
+      return res.json() as Promise<JourneyAnalyticsResponse>;
+    },
+  });
+
+  // ─── Derived: overview ─────────────────────────────────────────
+  const overview = overviewQuery.data;
+
+  // ─── Derived: revenue trends ───────────────────────────────────
+  const revenueData = useMemo(() => {
+    if (!revenueQuery.data?.data) return [];
+    const gb = revenueQuery.data.groupBy;
+    return revenueQuery.data.data.map(d => ({
+      month: formatRevenueDate(d.date, gb),
+      revenue: d.value,
+    }));
+  }, [revenueQuery.data]);
+
+  const totalRevenue = overview?.totalRevenue ?? revenueQuery.data?.totalRevenue ?? 0;
+
+  const revenueGrowth = useMemo(() => {
+    const arr = revenueQuery.data?.data ?? [];
+    if (arr.length < 2) return '0';
+    const last = arr[arr.length - 1].value;
+    const prev = arr[arr.length - 2].value;
+    if (prev === 0) return last > 0 ? '100' : '0';
+    return (((last - prev) / prev) * 100).toFixed(1);
+  }, [revenueQuery.data]);
+
+  const avgJobValue = useMemo(() => {
+    const denom = overview?.completedJobs ?? 0;
+    if (denom === 0 || totalRevenue === 0) return 0;
+    return Math.round(totalRevenue / denom);
+  }, [overview, totalRevenue]);
+
+  // ─── Derived: job stats ────────────────────────────────────────
+  const jobStats = jobStatsQuery.data;
+
+  const jobsByStatusData = useMemo(() => {
+    if (!jobStats?.statusDistribution) return [];
+    const order = ['pending', 'assigned', 'in_progress', 'en_route', 'completed', 'on_hold', 'cancelled'];
+    const present = order.filter(s => (jobStats.statusDistribution[s] ?? 0) > 0);
+    const extras = Object.keys(jobStats.statusDistribution).filter(
+      s => !order.includes(s) && (jobStats.statusDistribution[s] ?? 0) > 0,
+    );
+    return [...present, ...extras].map(status => ({
+      status: JOB_STATUS_LABEL_MAP[status] || humanizeKey(status),
+      key: status,
+      count: jobStats.statusDistribution[status] ?? 0,
+      fill: JOB_STATUS_COLOR_MAP[status] || '#94a3b8',
+    }));
+  }, [jobStats]);
+
+  // Stacked-bar rows: one row per status with that status's count in its own segment
+  const jobCompletionData = useMemo(() => {
+    return jobsByStatusData.map(d => {
+      const row: Record<string, number | string> = { status: d.status };
+      row['completed'] = d.key === 'completed' ? d.count : 0;
+      row['in_progress'] = d.key === 'in_progress' ? d.count : 0;
+      row['pending'] = d.key === 'pending' ? d.count : 0;
+      row['cancelled'] = d.key === 'cancelled' ? d.count : 0;
+      return row as { status: string; completed: number; in_progress: number; pending: number; cancelled: number };
+    });
+  }, [jobsByStatusData]);
+
+  const activeJobsCount = useMemo(() => {
+    if (!jobStats?.statusDistribution) return 0;
+    const d = jobStats.statusDistribution;
+    return (d['pending'] ?? 0) + (d['assigned'] ?? 0) + (d['in_progress'] ?? 0) + (d['en_route'] ?? 0);
+  }, [jobStats]);
+
+  const jobCompletionRate = overview?.completionRate ?? 0;
+
+  // ─── Derived: employees ────────────────────────────────────────
+  const employees = employeeQuery.data?.employees ?? [];
+
+  const employeeStatusCounts = useMemo(() => {
+    const counts = { available: 0, busy: 0, offline: 0 };
+    for (const emp of employees) {
+      const s = (emp.status || '').toLowerCase();
+      if (s === 'available' || s === 'active' || s === 'online') counts.available++;
+      else if (s === 'busy' || s === 'on_job' || s === 'assigned') counts.busy++;
+      else counts.offline++;
     }
-    return fallbackRevenueTrend.reduce((s, m) => s + m.revenue, 0);
-  }, [analytics]);
+    return counts;
+  }, [employees]);
 
-  const currentMonthRev = fallbackRevenueTrend[fallbackRevenueTrend.length - 1].revenue;
-  const prevMonthRev = fallbackRevenueTrend[fallbackRevenueTrend.length - 2].revenue;
-  const revenueGrowth = ((currentMonthRev - prevMonthRev) / prevMonthRev * 100).toFixed(1);
-  const avgJobValue = Math.round(totalRevenue / 286);
+  const topPerformer = useMemo(() => {
+    if (employees.length === 0) return null;
+    return employees.reduce(
+      (best, emp) => (emp.totalCompletedJobs > best.totalCompletedJobs ? emp : best),
+      employees[0],
+    );
+  }, [employees]);
 
-  // Funnel data
-  const funnelData = useMemo(() => {
-    return fallbackLeadFunnel;
-  }, []);
+  const teamAvgRating = useMemo(() => {
+    const rated = employees.filter(e => typeof e.rating === 'number' && e.rating > 0);
+    if (rated.length === 0) return null;
+    return rated.reduce((s, e) => s + e.rating, 0) / rated.length;
+  }, [employees]);
+
+  const totalCompletedJobs = employees.reduce((s, e) => s + e.totalCompletedJobs, 0);
+  const totalCompletedInPeriod = employees.reduce((s, e) => s + e.completedInPeriod, 0);
+
+  const workloadData = useMemo(() => {
+    return employees
+      .map(e => ({
+        name: getInitials(e.name) || e.name.slice(0, 6),
+        fullName: e.name,
+        jobs: e.completedInPeriod,
+      }))
+      .sort((a, b) => b.jobs - a.jobs)
+      .slice(0, 8);
+  }, [employees]);
+
+  // ─── Derived: leads ────────────────────────────────────────────
+  const leadConv = leadConvQuery.data;
+
+  const leadFunnelData = useMemo(() => {
+    if (!leadConv?.byStatus) return [];
+    const newCount = leadConv.byStatus.new ?? 0;
+    const contactedCount = leadConv.byStatus.contacted ?? 0;
+    const qualifiedCount = leadConv.byStatus.qualified ?? 0;
+    const wonCount = (leadConv.byStatus.won ?? 0) + (leadConv.byStatus.converted ?? 0);
+    const stages = [
+      { stage: 'New', count: newCount },
+      { stage: 'Contacted', count: contactedCount },
+      { stage: 'Qualified', count: qualifiedCount },
+      { stage: 'Won', count: wonCount },
+    ];
+    // Always show the full funnel shape when we have any lead data
+    if (stages.every(s => s.count === 0)) return [];
+    return stages;
+  }, [leadConv]);
 
   const funnelConversions = useMemo(() => {
     const rates: { from: string; to: string; rate: string }[] = [];
-    for (let i = 0; i < funnelData.length - 1; i++) {
-      const from = funnelData[i];
-      const to = funnelData[i + 1];
-      const rate = ((to.count / from.count) * 100).toFixed(0);
+    for (let i = 0; i < leadFunnelData.length - 1; i++) {
+      const from = leadFunnelData[i];
+      const to = leadFunnelData[i + 1];
+      const rate = from.count > 0 ? ((to.count / from.count) * 100).toFixed(0) : '0';
       rates.push({ from: from.stage, to: to.stage, rate });
     }
     return rates;
-  }, [funnelData]);
+  }, [leadFunnelData]);
 
-  // Employee stats
-  const employeeStatusCounts = useMemo(() => {
-    const counts = { available: 0, busy: 0, offline: 0 };
-    for (const emp of fallbackEmployeeProductivity) {
-      counts[emp.status as keyof typeof counts]++;
+  const overallConversionRate = leadConv?.conversionRate ?? 0;
+  const totalLeads = leadConv?.totalLeads ?? 0;
+
+  const leadSourceData = useMemo(() => {
+    if (!leadConv?.bySource) return [];
+    return Object.entries(leadConv.bySource)
+      .filter(([, v]) => typeof v === 'number' && v > 0)
+      .map(([k, v], i) => ({
+        source: humanizeKey(k),
+        count: v as number,
+        fill: SOURCE_COLOR_PALETTE[i % SOURCE_COLOR_PALETTE.length],
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [leadConv]);
+
+  // Revenue by source: use lead_conversion.bySource as the only real-data proxy
+  const revenueBySourceData = useMemo(() => {
+    if (!leadConv?.bySource) return [];
+    return Object.entries(leadConv.bySource)
+      .filter(([, v]) => typeof v === 'number' && v > 0)
+      .map(([k, v], i) => ({
+        source: humanizeKey(k),
+        revenue: v as number,
+        fill: SOURCE_COLOR_PALETTE[i % SOURCE_COLOR_PALETTE.length],
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+  }, [leadConv]);
+
+  // Revenue by service: group overview.recentJobs by title (job counts per service)
+  const revenueByServiceData = useMemo(() => {
+    if (!overview?.recentJobs || overview.recentJobs.length === 0) return [];
+    const counts = new Map<string, number>();
+    for (const job of overview.recentJobs) {
+      const title = job.title?.trim() || 'Untitled';
+      counts.set(title, (counts.get(title) || 0) + 1);
     }
-    return counts;
-  }, []);
+    return Array.from(counts.entries())
+      .map(([service, count]) => ({ service, jobs: count }))
+      .sort((a, b) => b.jobs - a.jobs)
+      .slice(0, 8);
+  }, [overview]);
 
-  const topPerformer = useMemo(() => {
-    return fallbackEmployeeProductivity.reduce((best, emp) =>
-      emp.completedJobs > best.completedJobs ? emp : best
-    , fallbackEmployeeProductivity[0]);
-  }, []);
+  // ─── Derived: WhatsApp ─────────────────────────────────────────
+  const whatsapp = whatsappQuery.data;
 
-  // Lead stats
-  const totalLeads = funnelData.reduce((s, l) => s + l.count, 0);
-  const wonLeads = funnelData.find(l => l.stage === 'Won')?.count || 0;
-  const overallConversionRate = (wonLeads / totalLeads * 100).toFixed(1);
+  const intentDistData = useMemo(() => {
+    if (!whatsapp?.intentDistribution) return [];
+    return Object.entries(whatsapp.intentDistribution)
+      .filter(([, v]) => typeof v === 'number' && v > 0)
+      .map(([k, v], i) => ({
+        intent: humanizeKey(k),
+        count: v as number,
+        fill: INTENT_COLOR_PALETTE[i % INTENT_COLOR_PALETTE.length],
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [whatsapp]);
 
-  // Journey stats
-  const journeyTotal = fallbackJourneyStages.reduce((s, d) => s + d.count, 0);
-  const journeyCompleted = fallbackJourneyStages.find(s => s.stage === 'Completed')?.count || 0;
-  const journeyCompletionRate = (journeyCompleted / journeyTotal * 100).toFixed(1);
-  const scheduledActions = 14;
+  // WhatsApp daily conversation volume: group conversations by day of week
+  const whatsappVolumeData = useMemo(() => {
+    if (!whatsapp?.conversations || whatsapp.conversations.length === 0) return [];
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const counts = new Map<string, number>();
+    for (const c of whatsapp.conversations) {
+      const d = new Date(c.createdAt);
+      if (isNaN(d.getTime())) continue;
+      const day = dayNames[d.getDay()];
+      counts.set(day, (counts.get(day) || 0) + 1);
+    }
+    const order = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return order.map(day => ({ day, conversations: counts.get(day) ?? 0 }));
+  }, [whatsapp]);
+
+  // ─── Derived: journey ──────────────────────────────────────────
+  const journey = journeyQuery.data;
+
+  const journeyStagesData = useMemo(() => {
+    if (!journey?.stageDistribution) return [];
+    return Object.entries(journey.stageDistribution)
+      .filter(([, v]) => typeof v === 'number' && v > 0)
+      .map(([stage, count]) => ({
+        stage: humanizeKey(stage),
+        count: count as number,
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [journey]);
+
+  const journeyCompletionRate = journey?.completionRate ?? 0;
+  const journeyTotal = journey?.totalJourneys ?? 0;
+  const journeyCompleted = journey?.completedJourneys ?? 0;
+  const scheduledActions = journey?.scheduledActionsPending ?? 0;
+  const avgJourneyTimeHours = journey?.avgJourneyTimeHours ?? 0;
+
+  // ─── Loading flags per tab ─────────────────────────────────────
+  const overviewLoading =
+    overviewQuery.isLoading || revenueQuery.isLoading || jobStatsQuery.isLoading ||
+    leadConvQuery.isLoading || employeeQuery.isLoading;
 
   return (
     <div className="space-y-6 w-full">
@@ -513,7 +781,7 @@ export function ReportsView() {
         <TabsContent value="overview" className="space-y-6 mt-4">
           {/* KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {loading ? (
+            {overviewLoading ? (
               Array.from({ length: 4 }).map((_, i) => <CardSkeleton key={i} />)
             ) : (
               <>
@@ -523,15 +791,16 @@ export function ReportsView() {
                   icon={DollarSign}
                   iconBg="bg-emerald-50"
                   iconColor="text-emerald-600"
-                  trend={{ value: `${revenueGrowth}% growth`, positive: true }}
+                  trend={parseFloat(revenueGrowth) !== 0 ? { value: `${revenueGrowth}% vs prev period`, positive: parseFloat(revenueGrowth) > 0 } : undefined}
+                  subtitle={parseFloat(revenueGrowth) === 0 ? `Last ${dateRange}` : undefined}
                 />
                 <StatCard
                   label="Active Jobs"
-                  value="88"
+                  value={formatNumber(activeJobsCount)}
                   icon={Briefcase}
                   iconBg="bg-teal-50"
                   iconColor="text-teal-600"
-                  trend={{ value: '+12% this month', positive: true }}
+                  subtitle={`${jobStats?.total ?? 0} total in period`}
                 />
                 <StatCard
                   label="Lead Conversion"
@@ -539,15 +808,15 @@ export function ReportsView() {
                   icon={Target}
                   iconBg="bg-cyan-50"
                   iconColor="text-cyan-600"
-                  trend={{ value: '+3.2% improvement', positive: true }}
+                  subtitle={`${leadConv?.convertedLeads ?? 0} of ${totalLeads} leads`}
                 />
                 <StatCard
                   label="Team Rating"
-                  value="4.7/5"
+                  value={teamAvgRating !== null ? `${teamAvgRating.toFixed(1)}/5` : 'N/A'}
                   icon={Star}
                   iconBg="bg-amber-50"
                   iconColor="text-amber-600"
-                  subtitle="Based on 186 reviews"
+                  subtitle={teamAvgRating !== null ? `Across ${employees.length} team members` : 'No ratings yet'}
                 />
               </>
             )}
@@ -560,11 +829,15 @@ export function ReportsView() {
               <CardDescription>Monthly revenue over the selected period</CardDescription>
             </CardHeader>
             <CardContent>
-              {loading ? (
+              {revenueQuery.isLoading ? (
                 <ChartSkeleton />
+              ) : revenueQuery.isError ? (
+                <ErrorBanner onRetry={() => revenueQuery.refetch()} />
+              ) : revenueData.length === 0 ? (
+                <EmptyHint message="No revenue data yet for this period" />
               ) : (
                 <ChartContainer config={revenueChartConfig} className="h-[300px] w-full aspect-auto">
-                  <AreaChart data={fallbackRevenueTrend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <AreaChart data={revenueData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
@@ -582,10 +855,10 @@ export function ReportsView() {
                       tick={{ fontSize: 11, fill: '#94a3b8' }}
                       axisLine={false}
                       tickLine={false}
-                      tickFormatter={(v: any) => `${symbol}${(v / 1000).toFixed(0)}k`}
+                      tickFormatter={(v: number) => `${symbol}${(v / 1000).toFixed(0)}k`}
                     />
                     <ChartTooltip
-                      content={<ChartTooltipContent formatter={(value: any) => [format(value), 'Revenue']} />}
+                      content={<ChartTooltipContent formatter={(value: number) => [format(value), 'Revenue']} />}
                     />
                     <Area
                       type="monotone"
@@ -609,11 +882,15 @@ export function ReportsView() {
                 <CardDescription>Jobs by current status</CardDescription>
               </CardHeader>
               <CardContent>
-                {loading ? (
+                {jobStatsQuery.isLoading ? (
                   <ChartSkeleton />
+                ) : jobStatsQuery.isError ? (
+                  <ErrorBanner onRetry={() => jobStatsQuery.refetch()} />
+                ) : jobCompletionData.length === 0 ? (
+                  <EmptyHint message="No jobs in this period" />
                 ) : (
                   <ChartContainer config={jobCompletionConfig} className="h-[280px] w-full aspect-auto">
-                    <BarChart data={fallbackJobsByStatus.map(d => ({ ...d, pending: d.status === 'Pending' ? d.count : 0, assigned: d.status === 'Assigned' ? d.count : 0, in_progress: d.status === 'In Progress' ? d.count : 0, completed: d.status === 'Completed' ? d.count : 0, cancelled: d.status === 'Cancelled' ? d.count : 0 }))}>
+                    <BarChart data={jobCompletionData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                       <XAxis
                         dataKey="status"
@@ -625,6 +902,7 @@ export function ReportsView() {
                         tick={{ fontSize: 11, fill: '#94a3b8' }}
                         axisLine={false}
                         tickLine={false}
+                        allowDecimals={false}
                       />
                       <ChartTooltip content={<ChartTooltipContent />} />
                       <Bar dataKey="completed" stackId="a" fill="var(--color-completed)" radius={[0, 0, 0, 0]} />
@@ -640,18 +918,22 @@ export function ReportsView() {
             {/* Active Jobs by Status - Donut Chart */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Active Jobs by Status</CardTitle>
-                <CardDescription>Distribution of current job statuses</CardDescription>
+                <CardTitle className="text-base">Jobs by Status</CardTitle>
+                <CardDescription>Distribution of all job statuses</CardDescription>
               </CardHeader>
               <CardContent>
-                {loading ? (
+                {jobStatsQuery.isLoading ? (
                   <ChartSkeleton />
+                ) : jobStatsQuery.isError ? (
+                  <ErrorBanner onRetry={() => jobStatsQuery.refetch()} />
+                ) : jobsByStatusData.length === 0 ? (
+                  <EmptyHint message="No jobs in this period" />
                 ) : (
                   <div className="flex flex-col sm:flex-row items-center gap-4">
                     <ChartContainer config={jobsByStatusConfig} className="h-[240px] w-full sm:w-1/2 aspect-square">
                       <PieChart>
                         <Pie
-                          data={fallbackJobsByStatus}
+                          data={jobsByStatusData}
                           cx="50%"
                           cy="50%"
                           innerRadius={55}
@@ -661,17 +943,17 @@ export function ReportsView() {
                           nameKey="status"
                           strokeWidth={0}
                         >
-                          {fallbackJobsByStatus.map((entry, index) => (
+                          {jobsByStatusData.map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={entry.fill} />
                           ))}
                         </Pie>
                         <ChartTooltip
-                          content={<ChartTooltipContent formatter={(value: any, name: any) => [`${value} jobs`, name]} />}
+                          content={<ChartTooltipContent formatter={(value: number, name: string) => [`${value} jobs`, name]} />}
                         />
                       </PieChart>
                     </ChartContainer>
                     <div className="flex flex-col gap-2.5 w-full sm:w-1/2">
-                      {fallbackJobsByStatus.map(item => (
+                      {jobsByStatusData.map(item => (
                         <div key={item.status} className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <div className="size-3 rounded-full shrink-0" style={{ backgroundColor: item.fill }} />
@@ -694,15 +976,19 @@ export function ReportsView() {
               <CardDescription>Conversion rates through each pipeline stage</CardDescription>
             </CardHeader>
             <CardContent>
-              {loading ? (
+              {leadConvQuery.isLoading ? (
                 <ChartSkeleton />
+              ) : leadConvQuery.isError ? (
+                <ErrorBanner onRetry={() => leadConvQuery.refetch()} />
+              ) : leadFunnelData.length === 0 ? (
+                <EmptyHint message="No leads in this period" />
               ) : (
                 <div className="space-y-3">
-                  {funnelData.map((stage, idx) => {
-                    const maxCount = funnelData[0].count;
+                  {leadFunnelData.map((stage, idx) => {
+                    const maxCount = leadFunnelData[0].count > 0 ? leadFunnelData[0].count : 1;
                     const widthPercent = (stage.count / maxCount) * 100;
                     const conversion = funnelConversions[idx];
-                    const stageColor = idx === 0 ? '#94a3b8' : idx === funnelData.length - 1 ? '#10b981' : '#14b8a6';
+                    const stageColor = idx === 0 ? '#94a3b8' : idx === leadFunnelData.length - 1 ? '#10b981' : '#14b8a6';
 
                     return (
                       <div key={stage.stage}>
@@ -749,7 +1035,7 @@ export function ReportsView() {
         <TabsContent value="revenue" className="space-y-6 mt-4">
           {/* Revenue stat cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {loading ? (
+            {overviewLoading ? (
               Array.from({ length: 3 }).map((_, i) => <CardSkeleton key={i} />)
             ) : (
               <>
@@ -759,15 +1045,15 @@ export function ReportsView() {
                   icon={DollarSign}
                   iconBg="bg-emerald-50"
                   iconColor="text-emerald-600"
-                  trend={{ value: `${revenueGrowth}% growth`, positive: true }}
+                  subtitle={`Last ${dateRange}`}
                 />
                 <StatCard
                   label="Avg Job Value"
-                  value={formatCompact(avgJobValue)}
+                  value={avgJobValue > 0 ? formatCompact(avgJobValue) : '—'}
                   icon={Activity}
                   iconBg="bg-teal-50"
                   iconColor="text-teal-600"
-                  trend={{ value: '+5.2% vs last month', positive: true }}
+                  subtitle={avgJobValue > 0 ? `Per completed job` : 'No completed jobs'}
                 />
                 <StatCard
                   label="Revenue Growth"
@@ -775,7 +1061,8 @@ export function ReportsView() {
                   icon={TrendingUp}
                   iconBg="bg-cyan-50"
                   iconColor="text-cyan-600"
-                  trend={{ value: 'Trending upward', positive: parseFloat(revenueGrowth) > 0 }}
+                  trend={parseFloat(revenueGrowth) !== 0 ? { value: 'Vs previous period', positive: parseFloat(revenueGrowth) > 0 } : undefined}
+                  subtitle={parseFloat(revenueGrowth) === 0 ? 'Insufficient trend data' : undefined}
                 />
               </>
             )}
@@ -788,11 +1075,15 @@ export function ReportsView() {
               <CardDescription>Revenue performance over time</CardDescription>
             </CardHeader>
             <CardContent>
-              {loading ? (
+              {revenueQuery.isLoading ? (
                 <ChartSkeleton />
+              ) : revenueQuery.isError ? (
+                <ErrorBanner onRetry={() => revenueQuery.refetch()} />
+              ) : revenueData.length === 0 ? (
+                <EmptyHint message="No paid invoices in this period" />
               ) : (
                 <ChartContainer config={revenueChartConfig} className="h-[320px] w-full aspect-auto">
-                  <AreaChart data={fallbackRevenueTrend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <AreaChart data={revenueData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="revenueGradient2" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
@@ -810,10 +1101,10 @@ export function ReportsView() {
                       tick={{ fontSize: 11, fill: '#94a3b8' }}
                       axisLine={false}
                       tickLine={false}
-                      tickFormatter={(v: any) => `${symbol}${(v / 1000).toFixed(0)}k`}
+                      tickFormatter={(v: number) => `${symbol}${(v / 1000).toFixed(0)}k`}
                     />
                     <ChartTooltip
-                      content={<ChartTooltipContent formatter={(value: any) => [format(value), 'Revenue']} />}
+                      content={<ChartTooltipContent formatter={(value: number) => [format(value), 'Revenue']} />}
                     />
                     <Area
                       type="monotone"
@@ -830,19 +1121,23 @@ export function ReportsView() {
 
           {/* Revenue by Service + Revenue by Source row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Revenue by Service Type - Bar Chart */}
+            {/* Jobs by Service Type - Bar Chart (real data: counts of recent jobs per service) */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Revenue by Service Type</CardTitle>
-                <CardDescription>Breakdown across service categories</CardDescription>
+                <CardTitle className="text-base">Jobs by Service Type</CardTitle>
+                <CardDescription>Recent job counts per service category</CardDescription>
               </CardHeader>
               <CardContent>
-                {loading ? (
+                {overviewQuery.isLoading ? (
                   <ChartSkeleton />
+                ) : overviewQuery.isError ? (
+                  <ErrorBanner onRetry={() => overviewQuery.refetch()} />
+                ) : revenueByServiceData.length === 0 ? (
+                  <EmptyHint message="No recent jobs in this period" />
                 ) : (
                   <ChartContainer config={serviceRevenueConfig} className="h-[320px] w-full aspect-auto">
                     <BarChart
-                      data={fallbackRevenueByService}
+                      data={revenueByServiceData}
                       layout="vertical"
                       margin={{ top: 8, right: 24, left: 8, bottom: 0 }}
                     >
@@ -852,22 +1147,22 @@ export function ReportsView() {
                         tick={{ fontSize: 11, fill: '#94a3b8' }}
                         axisLine={false}
                         tickLine={false}
-                        tickFormatter={(v: any) => `${symbol}${(v / 1000).toFixed(0)}k`}
+                        allowDecimals={false}
                       />
                       <YAxis
                         type="category"
                         dataKey="service"
-                        tick={{ fontSize: 12, fill: '#64748b' }}
+                        tick={{ fontSize: 11, fill: '#64748b' }}
                         axisLine={false}
                         tickLine={false}
-                        width={80}
+                        width={100}
                       />
                       <ChartTooltip
-                        content={<ChartTooltipContent formatter={(value: any) => [format(value), 'Revenue']} />}
+                        content={<ChartTooltipContent formatter={(value: number) => [`${value} jobs`, 'Count']} />}
                       />
                       <Bar
-                        dataKey="revenue"
-                        fill="var(--color-revenue)"
+                        dataKey="jobs"
+                        fill="var(--color-jobs)"
                         radius={[0, 6, 6, 0]}
                         maxBarSize={28}
                       />
@@ -877,21 +1172,25 @@ export function ReportsView() {
               </CardContent>
             </Card>
 
-            {/* Revenue by Source - Pie Chart */}
+            {/* Leads by Source - Pie Chart (real data: lead counts per source) */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Revenue by Source</CardTitle>
+                <CardTitle className="text-base">Leads by Source</CardTitle>
                 <CardDescription>Distribution by acquisition channel</CardDescription>
               </CardHeader>
               <CardContent>
-                {loading ? (
+                {leadConvQuery.isLoading ? (
                   <ChartSkeleton />
+                ) : leadConvQuery.isError ? (
+                  <ErrorBanner onRetry={() => leadConvQuery.refetch()} />
+                ) : revenueBySourceData.length === 0 ? (
+                  <EmptyHint message="No leads in this period" />
                 ) : (
                   <div className="flex flex-col sm:flex-row items-center gap-6">
                     <ChartContainer config={revenueSourceConfig} className="h-[240px] w-full sm:w-1/2 aspect-square">
                       <PieChart>
                         <Pie
-                          data={fallbackRevenueBySource}
+                          data={revenueBySourceData}
                           cx="50%"
                           cy="50%"
                           innerRadius={55}
@@ -901,18 +1200,18 @@ export function ReportsView() {
                           nameKey="source"
                           strokeWidth={0}
                         >
-                          {fallbackRevenueBySource.map((entry, index) => (
+                          {revenueBySourceData.map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={entry.fill} />
                           ))}
                         </Pie>
                         <ChartTooltip
-                          content={<ChartTooltipContent formatter={(value: any, name: any) => [format(value), name]} />}
+                          content={<ChartTooltipContent formatter={(value: number, name: string) => [`${value} leads`, name]} />}
                         />
                       </PieChart>
                     </ChartContainer>
                     <div className="flex flex-col gap-3 w-full sm:w-1/2">
-                      {fallbackRevenueBySource.map(item => {
-                        const total = fallbackRevenueBySource.reduce((s, d) => s + d.revenue, 0);
+                      {revenueBySourceData.map(item => {
+                        const total = revenueBySourceData.reduce((s, d) => s + d.revenue, 0);
                         return (
                           <div key={item.source} className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
@@ -920,9 +1219,9 @@ export function ReportsView() {
                               <span className="text-sm">{item.source}</span>
                             </div>
                             <div className="flex items-center gap-3">
-                              <span className="text-sm font-medium">{format(item.revenue)}</span>
+                              <span className="text-sm font-medium">{item.revenue}</span>
                               <span className="text-xs text-muted-foreground">
-                                {((item.revenue / total) * 100).toFixed(0)}%
+                                {total > 0 ? ((item.revenue / total) * 100).toFixed(0) : 0}%
                               </span>
                             </div>
                           </div>
@@ -942,33 +1241,33 @@ export function ReportsView() {
         <TabsContent value="employees" className="space-y-6 mt-4">
           {/* Employee stat cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {loading ? (
+            {employeeQuery.isLoading ? (
               Array.from({ length: 3 }).map((_, i) => <CardSkeleton key={i} />)
             ) : (
               <>
                 <StatCard
                   label="Top Performer"
-                  value={topPerformer.name}
+                  value={topPerformer ? topPerformer.name : 'N/A'}
                   icon={Star}
                   iconBg="bg-amber-50"
                   iconColor="text-amber-600"
-                  subtitle={`${topPerformer.completedJobs} jobs · ${topPerformer.avgRating}★`}
+                  subtitle={topPerformer ? `${topPerformer.totalCompletedJobs} jobs · ${topPerformer.rating > 0 ? topPerformer.rating.toFixed(1) + '★' : 'No rating'}` : 'No employees yet'}
                 />
                 <StatCard
                   label="Team Utilization"
-                  value="83%"
+                  value={employees.length > 0 ? `${Math.round(((employeeStatusCounts.available + employeeStatusCounts.busy) / employees.length) * 100)}%` : '—'}
                   icon={UserCheck}
                   iconBg="bg-emerald-50"
                   iconColor="text-emerald-600"
-                  trend={{ value: '+2% this month', positive: true }}
+                  subtitle={`${employeeStatusCounts.available} available · ${employeeStatusCounts.busy} busy`}
                 />
                 <StatCard
-                  label="Total Jobs Done"
-                  value={formatNumber(fallbackEmployeeProductivity.reduce((s, e) => s + e.completedJobs, 0))}
+                  label="Jobs Completed"
+                  value={formatNumber(totalCompletedInPeriod)}
                   icon={Briefcase}
                   iconBg="bg-teal-50"
                   iconColor="text-teal-600"
-                  trend={{ value: '+18% vs last period', positive: true }}
+                  subtitle={`${totalCompletedJobs} all-time`}
                 />
               </>
             )}
@@ -981,55 +1280,72 @@ export function ReportsView() {
               <CardDescription>Individual performance metrics and workload</CardDescription>
             </CardHeader>
             <CardContent>
-              {loading ? (
+              {employeeQuery.isLoading ? (
                 <TableSkeleton />
+              ) : employeeQuery.isError ? (
+                <ErrorBanner onRetry={() => employeeQuery.refetch()} />
+              ) : employees.length === 0 ? (
+                <EmptyHint message="No employees found" />
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Employee</TableHead>
-                        <TableHead className="text-right">Completed Jobs</TableHead>
+                        <TableHead className="text-right">Completed (period)</TableHead>
+                        <TableHead className="text-right">Total Completed</TableHead>
                         <TableHead className="text-right">Avg Rating</TableHead>
-                        <TableHead className="text-right">Avg Completion</TableHead>
                         <TableHead>Status</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {fallbackEmployeeProductivity.map(emp => (
-                        <TableRow key={emp.name}>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <div className="size-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-semibold text-xs">
-                                {emp.name.split(' ').map(n => n[0]).join('')}
+                      {employees.map(emp => {
+                        const statusLower = (emp.status || '').toLowerCase();
+                        const statusLabel = statusLower === 'available' || statusLower === 'active' || statusLower === 'online'
+                          ? 'available'
+                          : statusLower === 'busy' || statusLower === 'on_job' || statusLower === 'assigned'
+                          ? 'busy'
+                          : 'offline';
+                        return (
+                          <TableRow key={emp.id}>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <div className="size-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-semibold text-xs">
+                                  {getInitials(emp.name) || '?'}
+                                </div>
+                                <div>
+                                  <div className="font-medium text-sm">{emp.name}</div>
+                                  {emp.role && <div className="text-xs text-muted-foreground">{emp.role}</div>}
+                                </div>
                               </div>
-                              <span className="font-medium text-sm">{emp.name}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right text-sm font-medium">{emp.completedJobs}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              <Star className="size-3.5 text-amber-400 fill-amber-400" />
-                              <span className="text-sm font-medium">{emp.avgRating}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right text-sm font-medium">{emp.avgCompletionTime}</TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={emp.status === 'available' ? 'default' : emp.status === 'busy' ? 'secondary' : 'outline'}
-                              className={
-                                emp.status === 'available'
-                                  ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100'
-                                  : emp.status === 'busy'
-                                  ? 'bg-amber-100 text-amber-700 hover:bg-amber-100'
-                                  : 'bg-gray-100 text-gray-500 hover:bg-gray-100'
-                              }
-                            >
-                              {emp.status}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                            </TableCell>
+                            <TableCell className="text-right text-sm font-medium">{emp.completedInPeriod}</TableCell>
+                            <TableCell className="text-right text-sm font-medium">{emp.totalCompletedJobs}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex items-center justify-end gap-1">
+                                <Star className="size-3.5 text-amber-400 fill-amber-400" />
+                                <span className="text-sm font-medium">
+                                  {emp.rating > 0 ? emp.rating.toFixed(1) : '—'}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={statusLabel === 'available' ? 'default' : statusLabel === 'busy' ? 'secondary' : 'outline'}
+                                className={
+                                  statusLabel === 'available'
+                                    ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100'
+                                    : statusLabel === 'busy'
+                                    ? 'bg-amber-100 text-amber-700 hover:bg-amber-100'
+                                    : 'bg-gray-100 text-gray-500 hover:bg-gray-100'
+                                }
+                              >
+                                {statusLabel}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
@@ -1043,14 +1359,18 @@ export function ReportsView() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Workload Distribution</CardTitle>
-                <CardDescription>Active jobs per employee</CardDescription>
+                <CardDescription>Completed jobs per employee this period</CardDescription>
               </CardHeader>
               <CardContent>
-                {loading ? (
+                {employeeQuery.isLoading ? (
                   <ChartSkeleton />
+                ) : employeeQuery.isError ? (
+                  <ErrorBanner onRetry={() => employeeQuery.refetch()} />
+                ) : workloadData.length === 0 || workloadData.every(w => w.jobs === 0) ? (
+                  <EmptyHint message="No completed jobs in this period" />
                 ) : (
                   <ChartContainer config={workloadConfig} className="h-[280px] w-full aspect-auto">
-                    <BarChart data={fallbackWorkload} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <BarChart data={workloadData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                       <XAxis
                         dataKey="name"
@@ -1065,7 +1385,7 @@ export function ReportsView() {
                         allowDecimals={false}
                       />
                       <ChartTooltip
-                        content={<ChartTooltipContent formatter={(value: any) => [`${value} jobs`, 'Active Jobs']} />}
+                        content={<ChartTooltipContent formatter={(value: number) => [`${value} jobs`, 'Completed']} />}
                       />
                       <Bar
                         dataKey="jobs"
@@ -1086,12 +1406,16 @@ export function ReportsView() {
                 <CardDescription>Current availability across the team</CardDescription>
               </CardHeader>
               <CardContent>
-                {loading ? (
+                {employeeQuery.isLoading ? (
                   <div className="space-y-4 p-4">
                     {Array.from({ length: 3 }).map((_, i) => (
                       <Skeleton key={i} className="h-16 w-full rounded-lg" />
                     ))}
                   </div>
+                ) : employeeQuery.isError ? (
+                  <ErrorBanner onRetry={() => employeeQuery.refetch()} />
+                ) : employees.length === 0 ? (
+                  <EmptyHint message="No employees to display" />
                 ) : (
                   <div className="space-y-4">
                     <div className="flex items-center gap-4 p-4 rounded-lg bg-emerald-50/60 border border-emerald-100">
@@ -1106,7 +1430,7 @@ export function ReportsView() {
                         <div className="h-2 bg-emerald-100 rounded-full mt-1.5 overflow-hidden">
                           <div
                             className="h-full bg-emerald-500 rounded-full"
-                            style={{ width: `${(employeeStatusCounts.available / fallbackEmployeeProductivity.length) * 100}%` }}
+                            style={{ width: `${(employeeStatusCounts.available / employees.length) * 100}%` }}
                           />
                         </div>
                       </div>
@@ -1123,7 +1447,7 @@ export function ReportsView() {
                         <div className="h-2 bg-amber-100 rounded-full mt-1.5 overflow-hidden">
                           <div
                             className="h-full bg-amber-500 rounded-full"
-                            style={{ width: `${(employeeStatusCounts.busy / fallbackEmployeeProductivity.length) * 100}%` }}
+                            style={{ width: `${(employeeStatusCounts.busy / employees.length) * 100}%` }}
                           />
                         </div>
                       </div>
@@ -1140,7 +1464,7 @@ export function ReportsView() {
                         <div className="h-2 bg-gray-100 rounded-full mt-1.5 overflow-hidden">
                           <div
                             className="h-full bg-gray-400 rounded-full"
-                            style={{ width: `${(employeeStatusCounts.offline / fallbackEmployeeProductivity.length) * 100}%` }}
+                            style={{ width: `${(employeeStatusCounts.offline / employees.length) * 100}%` }}
                           />
                         </div>
                       </div>
@@ -1158,7 +1482,7 @@ export function ReportsView() {
         <TabsContent value="leads" className="space-y-6 mt-4">
           {/* Lead stat cards */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            {loading ? (
+            {(leadConvQuery.isLoading || whatsappQuery.isLoading) ? (
               Array.from({ length: 4 }).map((_, i) => <CardSkeleton key={i} />)
             ) : (
               <>
@@ -1168,7 +1492,7 @@ export function ReportsView() {
                   icon={Target}
                   iconBg="bg-emerald-50"
                   iconColor="text-emerald-600"
-                  trend={{ value: '+22% this month', positive: true }}
+                  subtitle={`Last ${dateRange}`}
                 />
                 <StatCard
                   label="Conversion Rate"
@@ -1176,23 +1500,23 @@ export function ReportsView() {
                   icon={Zap}
                   iconBg="bg-teal-50"
                   iconColor="text-teal-600"
-                  trend={{ value: '+3.2% improvement', positive: true }}
+                  subtitle={`${leadConv?.convertedLeads ?? 0} converted`}
                 />
                 <StatCard
                   label="Avg Response"
-                  value="12 min"
+                  value={whatsapp ? `${whatsapp.avgResponseTimeMin} min` : '—'}
                   icon={Clock}
                   iconBg="bg-cyan-50"
                   iconColor="text-cyan-600"
-                  trend={{ value: '-4 min faster', positive: true }}
+                  subtitle="WhatsApp channel"
                 />
                 <StatCard
-                  label="Lead-to-Job"
-                  value="29.4%"
+                  label="Active Leads"
+                  value={formatNumber(overview?.activeLeads ?? 0)}
                   icon={Briefcase}
                   iconBg="bg-amber-50"
                   iconColor="text-amber-600"
-                  trend={{ value: '+2.8% this period', positive: true }}
+                  subtitle="In pipeline (new/contacted/qualified)"
                 />
               </>
             )}
@@ -1205,15 +1529,19 @@ export function ReportsView() {
               <CardDescription>Conversion rates through each pipeline stage</CardDescription>
             </CardHeader>
             <CardContent>
-              {loading ? (
+              {leadConvQuery.isLoading ? (
                 <ChartSkeleton />
+              ) : leadConvQuery.isError ? (
+                <ErrorBanner onRetry={() => leadConvQuery.refetch()} />
+              ) : leadFunnelData.length === 0 ? (
+                <EmptyHint message="No leads in this period" />
               ) : (
                 <div className="space-y-3">
-                  {funnelData.map((stage, idx) => {
-                    const maxCount = funnelData[0].count;
+                  {leadFunnelData.map((stage, idx) => {
+                    const maxCount = leadFunnelData[0].count > 0 ? leadFunnelData[0].count : 1;
                     const widthPercent = (stage.count / maxCount) * 100;
                     const conversion = funnelConversions[idx];
-                    const stageColor = idx === 0 ? '#94a3b8' : idx === funnelData.length - 1 ? '#10b981' : '#14b8a6';
+                    const stageColor = idx === 0 ? '#94a3b8' : idx === leadFunnelData.length - 1 ? '#10b981' : '#14b8a6';
 
                     return (
                       <div key={stage.stage}>
@@ -1237,7 +1565,7 @@ export function ReportsView() {
                             </div>
                           </div>
                           <span className="text-xs text-muted-foreground w-14 text-right shrink-0">
-                            {((stage.count / funnelData[0].count) * 100).toFixed(0)}%
+                            {maxCount > 0 ? ((stage.count / maxCount) * 100).toFixed(0) : 0}%
                           </span>
                         </div>
                         {conversion && (
@@ -1265,14 +1593,18 @@ export function ReportsView() {
                 <CardDescription>Distribution by acquisition channel</CardDescription>
               </CardHeader>
               <CardContent>
-                {loading ? (
+                {leadConvQuery.isLoading ? (
                   <ChartSkeleton />
+                ) : leadConvQuery.isError ? (
+                  <ErrorBanner onRetry={() => leadConvQuery.refetch()} />
+                ) : leadSourceData.length === 0 ? (
+                  <EmptyHint message="No leads by source in this period" />
                 ) : (
                   <div className="flex flex-col sm:flex-row items-center gap-6">
                     <ChartContainer config={leadSourceConfig} className="h-[260px] w-full sm:w-1/2 aspect-square">
                       <PieChart>
                         <Pie
-                          data={fallbackLeadSource}
+                          data={leadSourceData}
                           cx="50%"
                           cy="50%"
                           innerRadius={55}
@@ -1282,18 +1614,18 @@ export function ReportsView() {
                           nameKey="source"
                           strokeWidth={0}
                         >
-                          {fallbackLeadSource.map((entry, index) => (
+                          {leadSourceData.map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={entry.fill} />
                           ))}
                         </Pie>
                         <ChartTooltip
-                          content={<ChartTooltipContent formatter={(value: any, name: any) => [`${value} leads`, name]} />}
+                          content={<ChartTooltipContent formatter={(value: number, name: string) => [`${value} leads`, name]} />}
                         />
                       </PieChart>
                     </ChartContainer>
                     <div className="flex flex-col gap-3 w-full sm:w-1/2">
-                      {fallbackLeadSource.map(item => {
-                        const total = fallbackLeadSource.reduce((s, d) => s + d.count, 0);
+                      {leadSourceData.map(item => {
+                        const total = leadSourceData.reduce((s, d) => s + d.count, 0);
                         return (
                           <div key={item.source} className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
@@ -1303,7 +1635,7 @@ export function ReportsView() {
                             <div className="flex items-center gap-3">
                               <span className="text-sm font-medium">{item.count}</span>
                               <span className="text-xs text-muted-foreground">
-                                {((item.count / total) * 100).toFixed(0)}%
+                                {total > 0 ? ((item.count / total) * 100).toFixed(0) : 0}%
                               </span>
                             </div>
                           </div>
@@ -1315,49 +1647,14 @@ export function ReportsView() {
               </CardContent>
             </Card>
 
-            {/* Lead Trend Over Time - Line Chart */}
+            {/* Lead Trend Over Time - Line Chart (no time-series API → empty state) */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Lead Trend Over Time</CardTitle>
-                <CardDescription>New leads vs conversions monthly</CardDescription>
+                <CardDescription>New leads vs conversions over time</CardDescription>
               </CardHeader>
               <CardContent>
-                {loading ? (
-                  <ChartSkeleton />
-                ) : (
-                  <ChartContainer config={leadTrendConfig} className="h-[280px] w-full aspect-auto">
-                    <LineChart data={fallbackLeadTrend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                      <XAxis
-                        dataKey="month"
-                        tick={{ fontSize: 12, fill: '#94a3b8' }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <YAxis
-                        tick={{ fontSize: 11, fill: '#94a3b8' }}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <ChartTooltip content={<ChartTooltipContent />} />
-                      <ChartLegend content={<ChartLegendContent />} />
-                      <Line
-                        type="monotone"
-                        dataKey="leads"
-                        stroke="var(--color-leads)"
-                        strokeWidth={2}
-                        dot={{ fill: 'var(--color-leads)', r: 4 }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="converted"
-                        stroke="var(--color-converted)"
-                        strokeWidth={2}
-                        dot={{ fill: 'var(--color-converted)', r: 4 }}
-                      />
-                    </LineChart>
-                  </ChartContainer>
-                )}
+                <EmptyHint message="Lead time-series analytics not yet available — connect a leads history source to populate this chart" />
               </CardContent>
             </Card>
           </div>
@@ -1369,21 +1666,21 @@ export function ReportsView() {
         <TabsContent value="whatsapp" className="space-y-6 mt-4">
           {/* WhatsApp stat cards */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            {loading ? (
+            {whatsappQuery.isLoading ? (
               Array.from({ length: 4 }).map((_, i) => <CardSkeleton key={i} />)
             ) : (
               <>
                 <StatCard
                   label="Avg Response Time"
-                  value="12 min"
+                  value={`${whatsapp?.avgResponseTimeMin ?? 0} min`}
                   icon={Clock}
                   iconBg="bg-emerald-50"
                   iconColor="text-emerald-600"
-                  trend={{ value: '-4 min faster', positive: true }}
+                  subtitle="WhatsApp channel"
                 />
                 <StatCard
                   label="Active Chats"
-                  value="24"
+                  value={formatNumber(whatsapp?.activeConversations ?? 0)}
                   icon={MessageSquare}
                   iconBg="bg-teal-50"
                   iconColor="text-teal-600"
@@ -1391,96 +1688,42 @@ export function ReportsView() {
                 />
                 <StatCard
                   label="Button Response"
-                  value="78%"
+                  value={`${whatsapp?.buttonResponseRate ?? 0}%`}
                   icon={Bot}
                   iconBg="bg-cyan-50"
                   iconColor="text-cyan-600"
-                  trend={{ value: '+5% this week', positive: true }}
+                  subtitle="Quick reply engagement"
                 />
                 <StatCard
                   label="Total Conversations"
-                  value="146"
+                  value={formatNumber(whatsapp?.totalConversations ?? 0)}
                   icon={Phone}
                   iconBg="bg-amber-50"
                   iconColor="text-amber-600"
-                  trend={{ value: '+18% this month', positive: true }}
+                  subtitle={`Last ${dateRange}`}
                 />
               </>
             )}
           </div>
 
-          {/* Response Time Analytics Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">WhatsApp Response Time Analytics</CardTitle>
-              <CardDescription>Average time to first reply by day of week</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <ChartSkeleton />
-              ) : (
-                <ChartContainer config={whatsappVolumeConfig} className="h-[300px] w-full aspect-auto">
-                  <AreaChart
-                    data={[
-                      { day: 'Mon', responseMin: 8 },
-                      { day: 'Tue', responseMin: 11 },
-                      { day: 'Wed', responseMin: 9 },
-                      { day: 'Thu', responseMin: 14 },
-                      { day: 'Fri', responseMin: 12 },
-                      { day: 'Sat', responseMin: 18 },
-                      { day: 'Sun', responseMin: 22 },
-                    ]}
-                    margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-                  >
-                    <defs>
-                      <linearGradient id="responseGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#14b8a6" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                    <XAxis
-                      dataKey="day"
-                      tick={{ fontSize: 12, fill: '#94a3b8' }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 11, fill: '#94a3b8' }}
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={(v: any) => `${v}m`}
-                    />
-                    <ChartTooltip
-                      content={<ChartTooltipContent formatter={(value: any) => [`${value} min`, 'Avg Response']} />}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="responseMin"
-                      stroke="#14b8a6"
-                      fill="url(#responseGradient)"
-                      strokeWidth={2}
-                    />
-                  </AreaChart>
-                </ChartContainer>
-              )}
-            </CardContent>
-          </Card>
-
           {/* Conversation Volume + Intent Distribution row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Conversation Volume Over Time */}
+            {/* Conversation Volume */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Conversation Volume</CardTitle>
-                <CardDescription>Daily WhatsApp conversations this week</CardDescription>
+                <CardDescription>WhatsApp conversations by day of week</CardDescription>
               </CardHeader>
               <CardContent>
-                {loading ? (
+                {whatsappQuery.isLoading ? (
                   <ChartSkeleton />
+                ) : whatsappQuery.isError ? (
+                  <ErrorBanner onRetry={() => whatsappQuery.refetch()} />
+                ) : whatsappVolumeData.length === 0 || whatsappVolumeData.every(d => d.conversations === 0) ? (
+                  <EmptyHint message="No WhatsApp conversations in this period" />
                 ) : (
                   <ChartContainer config={whatsappVolumeConfig} className="h-[280px] w-full aspect-auto">
-                    <LineChart data={fallbackWhatsappVolume} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                    <LineChart data={whatsappVolumeData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                       <XAxis
                         dataKey="day"
@@ -1495,7 +1738,7 @@ export function ReportsView() {
                         allowDecimals={false}
                       />
                       <ChartTooltip
-                        content={<ChartTooltipContent formatter={(value: any) => [`${value} conversations`, 'Volume']} />}
+                        content={<ChartTooltipContent formatter={(value: number) => [`${value} conversations`, 'Volume']} />}
                       />
                       <Line
                         type="monotone"
@@ -1517,14 +1760,18 @@ export function ReportsView() {
                 <CardDescription>Detected intents from WhatsApp conversations</CardDescription>
               </CardHeader>
               <CardContent>
-                {loading ? (
+                {whatsappQuery.isLoading ? (
                   <ChartSkeleton />
+                ) : whatsappQuery.isError ? (
+                  <ErrorBanner onRetry={() => whatsappQuery.refetch()} />
+                ) : intentDistData.length === 0 ? (
+                  <EmptyHint message="No intent data in this period" />
                 ) : (
                   <div className="flex flex-col sm:flex-row items-center gap-6">
                     <ChartContainer config={intentConfig} className="h-[240px] w-full sm:w-1/2 aspect-square">
                       <PieChart>
                         <Pie
-                          data={fallbackIntentDist}
+                          data={intentDistData}
                           cx="50%"
                           cy="50%"
                           innerRadius={50}
@@ -1534,18 +1781,18 @@ export function ReportsView() {
                           nameKey="intent"
                           strokeWidth={0}
                         >
-                          {fallbackIntentDist.map((entry, index) => (
+                          {intentDistData.map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={entry.fill} />
                           ))}
                         </Pie>
                         <ChartTooltip
-                          content={<ChartTooltipContent formatter={(value: any, name: any) => [`${value} requests`, name]} />}
+                          content={<ChartTooltipContent formatter={(value: number, name: string) => [`${value} requests`, name]} />}
                         />
                       </PieChart>
                     </ChartContainer>
                     <div className="flex flex-col gap-2.5 w-full sm:w-1/2">
-                      {fallbackIntentDist.map(item => {
-                        const total = fallbackIntentDist.reduce((s, d) => s + d.count, 0);
+                      {intentDistData.map(item => {
+                        const total = intentDistData.reduce((s, d) => s + d.count, 0);
                         return (
                           <div key={item.intent} className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
@@ -1555,7 +1802,7 @@ export function ReportsView() {
                             <div className="flex items-center gap-3">
                               <span className="text-sm font-medium">{item.count}</span>
                               <span className="text-xs text-muted-foreground">
-                                {((item.count / total) * 100).toFixed(0)}%
+                                {total > 0 ? ((item.count / total) * 100).toFixed(0) : 0}%
                               </span>
                             </div>
                           </div>
@@ -1568,44 +1815,83 @@ export function ReportsView() {
             </Card>
           </div>
 
-          {/* Interactive Button Response Rates */}
+          {/* WhatsApp Response Time Analytics */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">WhatsApp Response Analytics</CardTitle>
+              <CardDescription>Average first-response time across the WhatsApp channel</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {whatsappQuery.isLoading ? (
+                <ChartSkeleton />
+              ) : whatsappQuery.isError ? (
+                <ErrorBanner onRetry={() => whatsappQuery.refetch()} />
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-lg bg-emerald-50/60 border border-emerald-100">
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Avg Response Time</p>
+                    <p className="text-2xl font-bold text-emerald-700 mt-1">{whatsapp?.avgResponseTimeMin ?? 0} min</p>
+                    <div className="flex items-center gap-1 mt-1">
+                      <Clock className="size-3 text-emerald-500" />
+                      <span className="text-[10px] text-emerald-600 font-medium">Target: &lt; 3 min</span>
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-lg bg-teal-50/60 border border-teal-100">
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Button Response Rate</p>
+                    <p className="text-2xl font-bold text-teal-700 mt-1">{whatsapp?.buttonResponseRate ?? 0}%</p>
+                    <div className="flex items-center gap-1 mt-1">
+                      <Bot className="size-3 text-teal-500" />
+                      <span className="text-[10px] text-teal-600 font-medium">Quick reply engagement</span>
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-lg bg-amber-50/60 border border-amber-100">
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Active Conversations</p>
+                    <p className="text-2xl font-bold text-amber-700 mt-1">{whatsapp?.activeConversations ?? 0}</p>
+                    <div className="flex items-center gap-1 mt-1">
+                      <MessageSquare className="size-3 text-amber-500" />
+                      <span className="text-[10px] text-amber-600 font-medium">{whatsapp?.totalConversations ?? 0} total</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Interactive Button Response Rates — per-button breakdown not exposed by API → summary only */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Interactive Button Response Rates</CardTitle>
-              <CardDescription>How customers interact with WhatsApp quick reply buttons</CardDescription>
+              <CardDescription>Overall WhatsApp quick reply engagement</CardDescription>
             </CardHeader>
             <CardContent>
-              {loading ? (
+              {whatsappQuery.isLoading ? (
                 <ChartSkeleton />
+              ) : whatsappQuery.isError ? (
+                <ErrorBanner onRetry={() => whatsappQuery.refetch()} />
               ) : (
                 <div className="space-y-4">
-                  {[
-                    { label: 'Book Now', rate: 82, responses: 156, color: '#10b981' },
-                    { label: 'Get Quote', rate: 74, responses: 132, color: '#14b8a6' },
-                    { label: 'Talk to Agent', rate: 68, responses: 98, color: '#2dd4bf' },
-                    { label: 'View Services', rate: 62, responses: 84, color: '#5eead4' },
-                    { label: 'Reschedule', rate: 45, responses: 52, color: '#99f6e4' },
-                  ].map(btn => (
-                    <div key={btn.label} className="flex items-center gap-4">
-                      <div className="w-28 text-sm font-medium shrink-0">{btn.label}</div>
-                      <div className="flex-1">
-                        <div className="relative h-8 rounded-lg bg-muted/30 overflow-hidden">
-                          <div
-                            className="absolute inset-y-0 left-0 rounded-lg flex items-center pl-3 transition-all duration-500"
-                            style={{
-                              width: `${btn.rate}%`,
-                              backgroundColor: btn.color,
-                            }}
-                          >
-                            <span className="text-xs font-bold text-white">{btn.rate}%</span>
-                          </div>
+                  <div className="flex items-center gap-4">
+                    <div className="w-32 text-sm font-medium shrink-0">Overall Response</div>
+                    <div className="flex-1">
+                      <div className="relative h-8 rounded-lg bg-muted/30 overflow-hidden">
+                        <div
+                          className="absolute inset-y-0 left-0 rounded-lg flex items-center pl-3 transition-all duration-500"
+                          style={{
+                            width: `${whatsapp?.buttonResponseRate ?? 0}%`,
+                            backgroundColor: '#10b981',
+                          }}
+                        >
+                          <span className="text-xs font-bold text-white">{whatsapp?.buttonResponseRate ?? 0}%</span>
                         </div>
                       </div>
-                      <span className="text-xs text-muted-foreground w-20 text-right shrink-0">
-                        {btn.responses} responses
-                      </span>
                     </div>
-                  ))}
+                    <span className="text-xs text-muted-foreground w-24 text-right shrink-0">
+                      {whatsapp?.activeConversations ?? 0} active chats
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Per-button response breakdowns are not yet exposed by the analytics API. Overall engagement is shown above.
+                  </p>
                 </div>
               )}
             </CardContent>
@@ -1618,7 +1904,7 @@ export function ReportsView() {
         <TabsContent value="journey" className="space-y-6 mt-4">
           {/* Journey stat cards */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            {loading ? (
+            {journeyQuery.isLoading ? (
               Array.from({ length: 4 }).map((_, i) => <CardSkeleton key={i} />)
             ) : (
               <>
@@ -1628,7 +1914,7 @@ export function ReportsView() {
                   icon={Route}
                   iconBg="bg-emerald-50"
                   iconColor="text-emerald-600"
-                  trend={{ value: '+4.5% this month', positive: true }}
+                  subtitle={`${journeyCompleted} of ${journeyTotal} completed`}
                 />
                 <StatCard
                   label="Active Journeys"
@@ -1648,11 +1934,11 @@ export function ReportsView() {
                 />
                 <StatCard
                   label="Avg Journey Time"
-                  value="22h"
+                  value={avgJourneyTimeHours > 0 ? `${avgJourneyTimeHours}h` : '—'}
                   icon={Clock}
                   iconBg="bg-amber-50"
                   iconColor="text-amber-600"
-                  trend={{ value: '-3h faster', positive: true }}
+                  subtitle="End-to-end average"
                 />
               </>
             )}
@@ -1665,12 +1951,16 @@ export function ReportsView() {
               <CardDescription>Number of customers at each journey stage</CardDescription>
             </CardHeader>
             <CardContent>
-              {loading ? (
+              {journeyQuery.isLoading ? (
                 <ChartSkeleton />
+              ) : journeyQuery.isError ? (
+                <ErrorBanner onRetry={() => journeyQuery.refetch()} />
+              ) : journeyStagesData.length === 0 ? (
+                <EmptyHint message="No customer journeys in this period" />
               ) : (
                 <ChartContainer config={journeyStageConfig} className="h-[320px] w-full aspect-auto">
                   <BarChart
-                    data={fallbackJourneyStages}
+                    data={journeyStagesData}
                     layout="vertical"
                     margin={{ top: 8, right: 24, left: 8, bottom: 0 }}
                   >
@@ -1680,6 +1970,7 @@ export function ReportsView() {
                       tick={{ fontSize: 11, fill: '#94a3b8' }}
                       axisLine={false}
                       tickLine={false}
+                      allowDecimals={false}
                     />
                     <YAxis
                       type="category"
@@ -1687,10 +1978,10 @@ export function ReportsView() {
                       tick={{ fontSize: 12, fill: '#64748b' }}
                       axisLine={false}
                       tickLine={false}
-                      width={100}
+                      width={110}
                     />
                     <ChartTooltip
-                      content={<ChartTooltipContent formatter={(value: any) => [`${value} customers`, 'Count']} />}
+                      content={<ChartTooltipContent formatter={(value: number) => [`${value} customers`, 'Count']} />}
                     />
                     <Bar
                       dataKey="count"
@@ -1704,46 +1995,14 @@ export function ReportsView() {
             </CardContent>
           </Card>
 
-          {/* Average Time in Each Stage */}
+          {/* Average Time in Each Stage — API only returns overall avg → empty state */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Average Time in Each Stage</CardTitle>
               <CardDescription>How long customers spend at each journey transition</CardDescription>
             </CardHeader>
             <CardContent>
-              {loading ? (
-                <ChartSkeleton />
-              ) : (
-                <ChartContainer config={journeyTimeConfig} className="h-[300px] w-full aspect-auto">
-                  <BarChart data={fallbackJourneyTime} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                    <XAxis
-                      dataKey="stage"
-                      tick={{ fontSize: 10, fill: '#94a3b8' }}
-                      axisLine={false}
-                      tickLine={false}
-                      angle={-20}
-                      textAnchor="end"
-                      height={60}
-                    />
-                    <YAxis
-                      tick={{ fontSize: 11, fill: '#94a3b8' }}
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={(v: any) => `${v}h`}
-                    />
-                    <ChartTooltip
-                      content={<ChartTooltipContent formatter={(value: any) => [`${value} hours`, 'Avg Time']} />}
-                    />
-                    <Bar
-                      dataKey="hours"
-                      fill="var(--color-hours)"
-                      radius={[6, 6, 0, 0]}
-                      maxBarSize={48}
-                    />
-                  </BarChart>
-                </ChartContainer>
-              )}
+              <EmptyHint message="Per-stage journey timing breakdown is not yet exposed by the analytics API. Overall average is shown in the stat cards above." />
             </CardContent>
           </Card>
 
@@ -1756,8 +2015,12 @@ export function ReportsView() {
                 <CardDescription>Percentage of journeys that reach completion</CardDescription>
               </CardHeader>
               <CardContent>
-                {loading ? (
+                {journeyQuery.isLoading ? (
                   <div className="p-4"><Skeleton className="h-32 w-full rounded-lg" /></div>
+                ) : journeyQuery.isError ? (
+                  <ErrorBanner onRetry={() => journeyQuery.refetch()} />
+                ) : journeyTotal === 0 ? (
+                  <EmptyHint message="No journeys to display" />
                 ) : (
                   <div className="flex flex-col items-center py-4">
                     <div className="relative size-40">
@@ -1773,7 +2036,7 @@ export function ReportsView() {
                           fill="none"
                           stroke="#10b981"
                           strokeWidth="3"
-                          strokeDasharray={`${parseFloat(journeyCompletionRate)}, 100`}
+                          strokeDasharray={`${journeyCompletionRate}, 100`}
                           strokeLinecap="round"
                         />
                       </svg>
@@ -1808,39 +2071,33 @@ export function ReportsView() {
                 <CardDescription>Automated actions queued for execution</CardDescription>
               </CardHeader>
               <CardContent>
-                {loading ? (
+                {journeyQuery.isLoading ? (
                   <div className="space-y-3 p-4">
                     {Array.from({ length: 4 }).map((_, i) => (
                       <Skeleton key={i} className="h-12 w-full rounded-lg" />
                     ))}
                   </div>
+                ) : journeyQuery.isError ? (
+                  <ErrorBanner onRetry={() => journeyQuery.refetch()} />
+                ) : scheduledActions === 0 ? (
+                  <EmptyHint message="No scheduled actions pending" />
                 ) : (
                   <div className="space-y-3">
-                    {[
-                      { type: 'WhatsApp Follow-up', count: 6, icon: MessageSquare, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-                      { type: 'Email Reminder', count: 4, icon: Activity, color: 'text-teal-600', bg: 'bg-teal-50' },
-                      { type: 'Status Update', count: 3, icon: Clock, color: 'text-cyan-600', bg: 'bg-cyan-50' },
-                      { type: 'Review Request', count: 1, icon: Star, color: 'text-amber-600', bg: 'bg-amber-50' },
-                    ].map(action => (
-                      <div key={action.type} className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors">
-                        <div className={`size-9 rounded-lg ${action.bg} flex items-center justify-center`}>
-                          <action.icon className={`size-4 ${action.color}`} />
-                        </div>
-                        <div className="flex-1">
-                          <p className="text-sm font-medium">{action.type}</p>
-                          <p className="text-xs text-muted-foreground">Pending execution</p>
-                        </div>
-                        <Badge variant="secondary" className="font-bold">
-                          {action.count}
-                        </Badge>
+                    <div className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors">
+                      <div className="size-9 rounded-lg bg-emerald-50 flex items-center justify-center">
+                        <Timer className="size-4 text-emerald-600" />
                       </div>
-                    ))}
-                    <div className="pt-2 border-t">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Total Pending</span>
-                        <span className="font-bold text-emerald-600">{scheduledActions}</span>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">Pending automated actions</p>
+                        <p className="text-xs text-muted-foreground">Awaiting execution window</p>
                       </div>
+                      <Badge variant="secondary" className="font-bold">
+                        {scheduledActions}
+                      </Badge>
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                      Per-type breakdown is not exposed by the analytics API. Total pending count is shown above.
+                    </p>
                   </div>
                 )}
               </CardContent>

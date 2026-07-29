@@ -185,6 +185,8 @@ model Tenant {
   loyaltyPoints       LoyaltyPoint[]
   referrals           Referral[]
   pricingRules       PricingRule[]
+  // Dedicated phone numbers (SMS/Voice) bought by the tenant
+  phoneNumbers        PhoneNumber[]
 
   @@index([slug])
   @@index([plan])
@@ -2524,6 +2526,58 @@ model CommunicationProvider {
   @@index([tenantId])
   @@index([credentialId])
   @@index([isPlatform])
+}
+
+// ==========================================
+// DEDICATED PHONE NUMBERS (SMS / Voice)
+// ==========================================
+// Tenants buy/rent a dedicated phone number (£5/month via PayPal or Creem) to
+// use as their SMS sender ID + voice endpoint. The number lives in Twilio (or
+// another CPaaS) and we proxy inbound webhooks + outbound sends through it.
+// The lifecycle is:  pending  →  active  →  suspended  →  released  →  failed
+// • pending:  PhoneNumber row created at checkout, awaiting PayPal/Creem confirmation
+// • active:   Twilio purchase + webhook config completed
+// • suspended: payment failed mid-cycle (number kept in Twilio until released)
+// • released: returned to Twilio, billing cancelled
+// • failed:   Twilio purchase failed after payment; subscription auto-cancelled + refunded
+
+model PhoneNumber {
+  id              String   @id @default(cuid())
+  number          String   @unique // E.164 format: +1234567890
+  displayName     String?  // Friendly name set by tenant
+  provider        String   @default("twilio") // twilio, telnyx
+  providerSid     String?  // Twilio phone number SID (PNxxx)
+  capabilities    String   @default("sms") // comma-separated: sms,voice
+  countryCode     String?  // US, GB, IN
+  areaCode        String?
+  locality        String?  // "Mountain View, CA"
+  monthlyCost     Float    @default(5.00) // what tenant pays per month
+  costCurrency    String   @default("USD")
+  providerCost    Float    @default(1.15) // what WE pay Twilio (margin tracking)
+  status          String   @default("pending") // pending, active, suspended, released, failed
+  // Payment linkage
+  paymentProvider String?  // paypal, creem
+  subscriptionId  String?  // PayPal subscription ID or Creem subscription ID
+  // Call forwarding (point 3 of the 17-point vision)
+  forwardToPhone  String?  // office number to forward calls to
+  forwardToVoicemail Boolean @default(false)
+  // Webhook config (set at purchase time)
+  smsWebhookUrl   String?
+  voiceWebhookUrl String?
+  // Ownership
+  tenantId        String?
+  purchasedAt     DateTime?
+  releasedAt      DateTime?
+  lastUsedAt      DateTime?
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant          Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([number])
 }
 
 // ==========================================
