@@ -696,9 +696,39 @@ async function resolveIncludes(
     const rel = modelRelations[relName];
     const relInclude = relConfig as Record<string, unknown>;
     const relSelect = (relInclude?.select as Record<string, boolean>) || undefined;
-    const selectStr = relSelect
-      ? Object.entries(relSelect).filter(([, v]) => v === true).map(([k]) => k).join(',')
-      : '*';
+
+    // ── Determine the join key for this relation type ───────────────────
+    // The join key is the column on the TARGET table that we use to map
+    // fetched rows back to the main records:
+    //   - Forward relation (main.tenantId → Tenant.id): join key = 'id'
+    //   - Reverse relation (Target.tenantId → Tenant.id): join key = targetFkColumn
+    //   - One-to-many (Target.subscriptionId → Subscription.id): join key = targetFkColumn
+    //
+    // CRITICAL: When the caller uses a `select` clause (e.g.
+    //   include: { tenant: { select: { name: true, email: true } } })
+    // the select string would NOT include the join key. Without it, the
+    // Supabase response rows lack the field we need to map them back,
+    // causing EVERY relation lookup to return null → "Unknown" bug.
+    //
+    // Fix: auto-append the join key to the select string, then strip it
+    // from the results AFTER mapping so the output matches Prisma's
+    // select behavior exactly.
+    const joinKey = rel.isMany
+      ? rel.targetFkColumn!
+      : (rel.targetFkColumn || 'id');
+
+    let shouldStripJoinKey = false;
+    let finalSelectStr = '*';
+    if (relSelect) {
+      const fields = Object.entries(relSelect)
+        .filter(([, v]) => v === true)
+        .map(([k]) => k);
+      if (!fields.includes(joinKey)) {
+        fields.push(joinKey);
+        shouldStripJoinKey = true;
+      }
+      finalSelectStr = fields.join(',');
+    }
 
     // Determine the FK column direction
     if (rel.isMany) {
@@ -708,20 +738,25 @@ async function resolveIncludes(
       const mainIds = results.map(r => r.id).filter(Boolean) as string[];
       if (mainIds.length === 0) continue;
 
-      // Fetch all related records
+      // Fetch all related records (join key is guaranteed present)
       const { data: related, error } = await client
         .from(rel.targetTable)
-        .select(selectStr)
+        .select(finalSelectStr)
         .in(targetFkCol, mainIds);
 
       if (error || !related) continue;
 
-      // Group by FK value
+      // Group by FK value (join key is present in each row)
       const grouped = new Map<string, unknown[]>();
       for (const r of related) {
         const fkVal = r[targetFkCol] as string;
         if (!grouped.has(fkVal)) grouped.set(fkVal, []);
         grouped.get(fkVal)!.push(r);
+      }
+
+      // Strip the join key if we added it (matches Prisma select behavior)
+      if (shouldStripJoinKey) {
+        for (const r of related) delete r[joinKey];
       }
 
       // Attach to main records
@@ -735,14 +770,20 @@ async function resolveIncludes(
 
       const { data: related, error } = await client
         .from(rel.targetTable)
-        .select(selectStr)
+        .select(finalSelectStr)
         .in(rel.targetFkColumn, mainIds);
 
       if (error || !related) continue;
 
+      // Map by FK value (join key is present in each row)
       const relatedMap = new Map<string, unknown>();
       for (const r of related) {
         relatedMap.set(r[rel.targetFkColumn] as string, r);
+      }
+
+      // Strip the join key if we added it
+      if (shouldStripJoinKey) {
+        for (const r of related) delete r[joinKey];
       }
 
       for (const main of results) {
@@ -758,18 +799,23 @@ async function resolveIncludes(
         continue;
       }
 
-      // Fetch target records
+      // Fetch target records (join key 'id' is guaranteed present)
       const { data: related, error } = await client
         .from(rel.targetTable)
-        .select(selectStr)
+        .select(finalSelectStr)
         .in('id', fkValues);
 
       if (error || !related) continue;
 
-      // Map by ID
+      // Map by ID (join key 'id' is present in each row)
       const relatedMap = new Map<string, unknown>();
       for (const r of related) {
         relatedMap.set(r.id as string, r);
+      }
+
+      // Strip the join key if we added it
+      if (shouldStripJoinKey) {
+        for (const r of related) delete r[joinKey];
       }
 
       // Attach to main records
