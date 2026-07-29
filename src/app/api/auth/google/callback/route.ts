@@ -65,31 +65,44 @@ async function createTenantForGoogleUser(userId: string, userEmail: string, user
   });
 
   // Create default subscription (starter plan, 14-day trial).
-  await db.subscription.create({
-    data: {
-      tenantId: tenant.id,
-      plan: 'starter',
-      status: 'trial',
-      amount: 0,
-      currency: 'USD',
-      billingCycle: 'monthly',
-      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-      maxUsers: 1,
-      maxJobs: 100,
-      maxWorkflows: 10,
-      featuresJson: JSON.stringify({
-        whatsappIntegration: true,
-        customWorkflows: false,
-        apiAccess: false,
-        prioritySupport: false,
-      }),
-      trialWhatsappCredits: 10,
-      trialWhatsappUsed: 0,
-      platformWhatsappEnabled: true,
-      ownWhatsappConnected: false,
-      ownEmailProviderConnected: false,
-    },
+  // GUARD: only create if no subscription already exists for this tenant.
+  // Previously this always called .create(), which could produce duplicate
+  // subscription rows if the Google OAuth flow was re-entered (e.g. user
+  // retried after a network error). The plan picked during onboarding is
+  // written via /api/subscriptions POST, which now upserts instead of
+  // creating a new row.
+  const existingSub = await db.subscription.findFirst({
+    where: { tenantId: tenant.id },
   });
+  if (!existingSub) {
+    await db.subscription.create({
+      data: {
+        tenantId: tenant.id,
+        plan: 'starter',
+        status: 'trial',
+        amount: 0,
+        currency: 'USD',
+        billingCycle: 'monthly',
+        trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+        maxUsers: 1,
+        maxJobs: 100,
+        maxWorkflows: 10,
+        featuresJson: JSON.stringify({
+          whatsappIntegration: true,
+          customWorkflows: false,
+          apiAccess: false,
+          prioritySupport: false,
+        }),
+        trialWhatsappCredits: 10,
+        trialWhatsappUsed: 0,
+        platformWhatsappEnabled: true,
+        ownWhatsappConnected: false,
+        ownEmailProviderConnected: false,
+      },
+    });
+  } else {
+    console.log('[Google Callback] Subscription already exists for tenant', tenant.id, '— skipping create');
+  }
 
   // Auto-import notification WhatsApp templates (best-effort, non-blocking).
   try {

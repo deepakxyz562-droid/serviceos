@@ -102,32 +102,45 @@ export async function POST(request: NextRequest) {
     });
 
     // Create default subscription (starter plan, trial status, 14-day trial)
-    await db.subscription.create({
-      data: {
-        tenantId: tenant.id,
-        plan: 'starter',
-        status: 'trial',
-        amount: 0,
-        currency: 'USD',
-        billingCycle: 'monthly',
-        trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
-        maxUsers: 1,
-        maxJobs: 100,
-        maxWorkflows: 10,
-        featuresJson: JSON.stringify({
-          whatsappIntegration: true,
-          customWorkflows: false,
-          apiAccess: false,
-          prioritySupport: false,
-        }),
-        // Trial credit system defaults (explicit for clarity)
-        trialWhatsappCredits: 10,
-        trialWhatsappUsed: 0,
-        platformWhatsappEnabled: true,
-        ownWhatsappConnected: false,
-        ownEmailProviderConnected: false,
-      },
+    // GUARD: only create if no subscription already exists for this tenant.
+    // Previously this always called .create(), which could produce duplicate
+    // subscription rows if register was called twice (e.g. user retried after
+    // a network error, or Google OAuth flow re-entered this path). The plan
+    // picked during onboarding is written via /api/subscriptions POST, which
+    // now upserts instead of creating a new row.
+    const existingSub = await db.subscription.findFirst({
+      where: { tenantId: tenant.id },
     });
+    if (!existingSub) {
+      await db.subscription.create({
+        data: {
+          tenantId: tenant.id,
+          plan: 'starter',
+          status: 'trial',
+          amount: 0,
+          currency: 'USD',
+          billingCycle: 'monthly',
+          trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+          maxUsers: 1,
+          maxJobs: 100,
+          maxWorkflows: 10,
+          featuresJson: JSON.stringify({
+            whatsappIntegration: true,
+            customWorkflows: false,
+            apiAccess: false,
+            prioritySupport: false,
+          }),
+          // Trial credit system defaults (explicit for clarity)
+          trialWhatsappCredits: 10,
+          trialWhatsappUsed: 0,
+          platformWhatsappEnabled: true,
+          ownWhatsappConnected: false,
+          ownEmailProviderConnected: false,
+        },
+      });
+    } else {
+      console.log('[Register] Subscription already exists for tenant', tenant.id, '— skipping create');
+    }
 
     // Auto-import notification WhatsApp templates for the new tenant
     // (New Job Assigned, Technician Assigned, On The Way, Job Completed, Service Completed)

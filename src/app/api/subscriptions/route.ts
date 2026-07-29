@@ -441,33 +441,55 @@ export async function POST(request: NextRequest) {
       subStatus = 'pending_payment';
     }
 
-    // Create new subscription record
+    // Upsert subscription: UPDATE the existing row if one exists, else CREATE.
+    // Previously this always called .create(), which produced a NEW row every
+    // time a user changed plans during onboarding (bug: tenants accumulated
+    // 2-3+ subscription rows, confusing the superadmin subscriptions list and
+    // breaking "current plan" lookups). The audit trail is preserved via
+    // BillingEvent records (billingEvents relation), so the Subscription row
+    // itself should represent only the CURRENT state, not a history log.
+    //
     // startMode 'pay' creates a 'pending_payment' record — the user has
     // expressed intent to pay but hasn't completed PayPal checkout yet.
     // The actual activation happens via /api/paypal/activate-subscription
     // (recurring) or /api/paypal/capture-order (one-time) after the user
     // completes checkout on the billing page. Until then the tenant stays
     // on trial so they retain 14-day trial access.
-    const subscription = await db.subscription.create({
-      data: {
-        tenantId,
-        plan,
-        status: subStatus,
-        amount: selectedPlan.amount,
-        currency: 'USD',
-        billingCycle: cycle,
-        startDate: now,
-        endDate,
-        // trialEndsAt is set for both modes — for 'pay' it's informational
-        // (the trial was bypassed); for 'trial' it's the gate the
-        // trial-paywall middleware checks.
-        trialEndsAt: mode === 'trial' ? trialEndsAt : null,
-        maxUsers: selectedPlan.maxUsers,
-        maxJobs: selectedPlan.maxJobs,
-        maxWorkflows: selectedPlan.maxWorkflows,
-        featuresJson: JSON.stringify(selectedPlan.features),
-      },
-    });
+    const subscriptionData = {
+      plan,
+      status: subStatus,
+      amount: selectedPlan.amount,
+      currency: 'USD',
+      billingCycle: cycle,
+      startDate: now,
+      endDate,
+      // trialEndsAt is set for both modes — for 'pay' it's informational
+      // (the trial was bypassed); for 'trial' it's the gate the
+      // trial-paywall middleware checks.
+      trialEndsAt: mode === 'trial' ? trialEndsAt : null,
+      maxUsers: selectedPlan.maxUsers,
+      maxJobs: selectedPlan.maxJobs,
+      maxWorkflows: selectedPlan.maxWorkflows,
+      featuresJson: JSON.stringify(selectedPlan.features),
+      // Reset downgrade scheduling + paused fields if user is re-subscribing
+      pendingDowngradePlan: null,
+      pendingDowngradeAt: null,
+      pendingDowngradeCycle: null,
+      pausedAt: null,
+      pauseReason: null,
+    };
+
+    const subscription = currentSub
+      ? await db.subscription.update({
+          where: { id: currentSub.id },
+          data: subscriptionData,
+        })
+      : await db.subscription.create({
+          data: {
+            tenantId,
+            ...subscriptionData,
+          },
+        });
 
     // Update tenant plan info:
     //   - 'trial' mode → planStatus='trial' so trial-lifecycle cron +
