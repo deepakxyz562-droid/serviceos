@@ -74,7 +74,7 @@ const viewLabels: Record<ViewType, string> = {
   adsIntegration: 'Ads Integration',
   journeyAutomation: 'Journey Automation',
   salesPipeline: 'Sales Pipeline',
-  omnichannel: 'Omnichannel',
+  omnichannel: 'Omnichannel Inbox',
   marketplace: 'Marketplace',
   enterprise: 'Enterprise',
   broadcast: 'Broadcast',

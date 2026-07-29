@@ -54,6 +54,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
+import { MENU_CATALOG } from '@/lib/menu-catalog';
 import { IntegrationsTab } from '@/components/views/superadmin-integrations-tab';
 import { ProvidersTab } from '@/components/views/superadmin-providers-tab';
 import {
@@ -228,69 +229,49 @@ interface CreditInfo {
   ownEmailProviderConnected: boolean;
 }
 
-// ─── Constants: Product Module Structure (aligned with the app sidebar) ──────
+// ─── Constants: Product Module Structure (aligned with MENU_CATALOG) ────────
+//
+// Both MODULE_SECTIONS and DEFAULT_MENU_ITEMS are now derived from the single
+// source of truth in `src/lib/menu-catalog.ts`. Previously these were a
+// separate hardcoded list with a different 9-section taxonomy (CRM,
+// Communication, Marketing, Automation, Operations, Finance, System, Portals,
+// AI & More) that had drifted from the actual sidebar — causing the superadmin
+// Modules tab to show a different set of items than the Menu Management tab
+// and the live sidebar. Deriving from MENU_CATALOG guarantees all three
+// surfaces stay in sync.
 
-const MODULE_SECTIONS = [
-  { key: 'CRM', label: 'CRM', icon: UsersRound, color: 'emerald' },
-  { key: 'Communication', label: 'Communication', icon: MessageSquare, color: 'sky' },
-  { key: 'Marketing', label: 'Marketing', icon: Megaphone, color: 'amber' },
-  { key: 'Automation', label: 'Automation', icon: Bot, color: 'violet' },
-  { key: 'Operations', label: 'Operations', icon: LayoutDashboard, color: 'orange' },
-  { key: 'Finance', label: 'Finance', icon: Wallet, color: 'teal' },
-  { key: 'System', label: 'System', icon: Settings2, color: 'slate' },
-  { key: 'Portals', label: 'Portals', icon: Globe, color: 'rose' },
-  { key: 'AI & More', label: 'AI & More', icon: Cpu, color: 'indigo' },
-] as const;
+// Icon + color per section. The 8 sections here match MENU_CATALOG exactly.
+const SECTION_META: Record<string, { icon: typeof UsersRound; color: string }> = {
+  'Overview': { icon: LayoutDashboard, color: 'slate' },
+  'CRM': { icon: UsersRound, color: 'emerald' },
+  'Operations': { icon: Briefcase, color: 'orange' },
+  'Marketing': { icon: Megaphone, color: 'amber' },
+  'Inbox & Automation': { icon: MessageSquare, color: 'sky' },
+  'AI Receptionist': { icon: Cpu, color: 'indigo' },
+  'Finance': { icon: Wallet, color: 'teal' },
+  'Setup & Admin': { icon: Settings2, color: 'rose' },
+};
 
-const DEFAULT_MENU_ITEMS: { key: string; label: string; section: string }[] = [
-  // CRM
-  { key: 'leads', label: 'Leads', section: 'CRM' },
-  { key: 'contacts', label: 'Contacts', section: 'CRM' },
-  { key: 'customers', label: 'Customers', section: 'CRM' },
-  { key: 'customer360', label: 'Customer 360', section: 'CRM' },
-  { key: 'salesPipeline', label: 'Sales Pipeline', section: 'CRM' },
-  // Communication
-  { key: 'omnichannel', label: 'Omnichannel', section: 'Communication' },
-  { key: 'broadcast', label: 'Broadcast', section: 'Communication' },
-  { key: 'marketingTemplates', label: 'Marketing Templates', section: 'Communication' },
-  // Marketing
-  { key: 'campaigns', label: 'Campaigns', section: 'Marketing' },
-  { key: 'segments', label: 'Segments', section: 'Marketing' },
-  { key: 'retargeting', label: 'Retargeting', section: 'Marketing' },
-  { key: 'marketingAnalytics', label: 'Analytics', section: 'Marketing' },
-  // Automation
-  { key: 'workflows', label: 'Workflows', section: 'Automation' },
-  { key: 'triggers', label: 'Triggers', section: 'Automation' },
-  { key: 'variables', label: 'Variables', section: 'Automation' },
-  { key: 'executions', label: 'Executions', section: 'Automation' },
-  { key: 'formBuilder', label: 'Form Builder', section: 'Automation' },
-  { key: 'workflowAutomations', label: 'Workflow Automations', section: 'Automation' },
-  // Operations
-  { key: 'booking', label: 'Booking', section: 'Operations' },
-  { key: 'calendar', label: 'Calendar', section: 'Operations' },
-  { key: 'jobs', label: 'Jobs', section: 'Operations' },
-  { key: 'dispatch', label: 'Dispatch', section: 'Operations' },
-  { key: 'employees', label: 'Employees', section: 'Operations' },
-  // Finance
-  { key: 'quotes', label: 'Quotes', section: 'Finance' },
-  { key: 'invoices', label: 'Invoices', section: 'Finance' },
-  { key: 'billing', label: 'Billing', section: 'Finance' },
-  // System
-  { key: 'credentials', label: 'Credentials', section: 'System' },
-  { key: 'integrations', label: 'Integrations', section: 'System' },
-  { key: 'settings', label: 'Settings', section: 'System' },
-  { key: 'auditLogs', label: 'Audit Logs', section: 'System' },
-  { key: 'reports', label: 'Reports', section: 'System' },
-  // Portals
-  { key: 'customerPortal', label: 'Customer Portal', section: 'Portals' },
-  { key: 'employeePortal', label: 'Employee Portal', section: 'Portals' },
-  // AI & More
-  { key: 'aiAssistant', label: 'AI Assistant', section: 'AI & More' },
-  { key: 'chatbotBuilder', label: 'Chatbot Builder', section: 'AI & More' },
-  { key: 'serviceCatalog', label: 'Service Catalog', section: 'AI & More' },
-  { key: 'communicationProviders', label: 'Providers', section: 'AI & More' },
-  { key: 'reviews', label: 'Reviews', section: 'AI & More' },
-];
+// Build MODULE_SECTIONS from the unique sections in MENU_CATALOG, preserving
+// the catalog's section order (which is already sorted by sortOrder ranges).
+const MODULE_SECTIONS = (() => {
+  const seen = new Set<string>();
+  const result: Array<{ key: string; label: string; icon: typeof UsersRound; color: string }> = [];
+  for (const item of MENU_CATALOG) {
+    if (!seen.has(item.section)) {
+      seen.add(item.section);
+      const meta = SECTION_META[item.section] || { icon: Settings2, color: 'slate' };
+      result.push({ key: item.section, label: item.section, icon: meta.icon, color: meta.color });
+    }
+  }
+  return result;
+})();
+
+// Derive DEFAULT_MENU_ITEMS from MENU_CATALOG so the legacy Modules tab shows
+// exactly the same items as the Menu Management tab and the live sidebar.
+const DEFAULT_MENU_ITEMS: { key: string; label: string; section: string }[] = MENU_CATALOG.map(
+  (item) => ({ key: item.key, label: item.label, section: item.section })
+);
 
 const FEATURE_DEFINITIONS = [
   { key: 'whatsapp_crm', label: 'WhatsApp CRM', description: 'Manage WhatsApp conversations and customer relationships' },
@@ -313,21 +294,21 @@ const FEATURE_DEFINITIONS = [
 // Map each feature-flag key to the product module it belongs in.
 // This drives the merged "Modules" tab — features + menu items grouped by module.
 const FEATURE_MODULE_MAP: Record<string, string> = {
-  whatsapp_crm: 'Communication',
-  ai_assistant: 'AI & More',
+  whatsapp_crm: 'Inbox & Automation',
+  ai_assistant: 'AI Receptionist',
   campaigns: 'Marketing',
-  workflows: 'Automation',
-  chatbot_builder: 'AI & More',
-  form_builder: 'Automation',
-  omnichannel: 'Communication',
+  workflows: 'Inbox & Automation',
+  chatbot_builder: 'Inbox & Automation',
+  form_builder: 'Inbox & Automation',
+  omnichannel: 'Inbox & Automation',
   salesPipeline: 'CRM',
-  journey_automation: 'Automation',
-  knowledge_base: 'AI & More',
-  marketplace: 'System',
-  custom_domains: 'System',
-  api_access: 'System',
-  bulk_operations: 'System',
-  advanced_analytics: 'System',
+  journey_automation: 'Inbox & Automation',
+  knowledge_base: 'Setup & Admin',
+  marketplace: 'Setup & Admin',
+  custom_domains: 'Setup & Admin',
+  api_access: 'Setup & Admin',
+  bulk_operations: 'Setup & Admin',
+  advanced_analytics: 'Overview',
 };
 
 const PLAN_AMOUNTS: Record<string, number> = {
@@ -1995,7 +1976,7 @@ export function SuperAdminView() {
       const map: Record<string, FeatureFlagDef[]> = {};
       MODULE_SECTIONS.forEach((s) => { map[s.key] = []; });
       localFlags.forEach((f) => {
-        const moduleKey = FEATURE_MODULE_MAP[f.key] || 'System';
+        const moduleKey = FEATURE_MODULE_MAP[f.key] || 'Setup & Admin';
         if (!map[moduleKey]) map[moduleKey] = [];
         map[moduleKey].push(f);
       });
@@ -2006,7 +1987,7 @@ export function SuperAdminView() {
       const map: Record<string, MenuItemDef[]> = {};
       MODULE_SECTIONS.forEach((s) => { map[s.key] = []; });
       localMenuItems.forEach((item) => {
-        const sectionKey = item.section || 'System';
+        const sectionKey = item.section || 'Setup & Admin';
         if (!map[sectionKey]) map[sectionKey] = [];
         map[sectionKey].push(item);
       });

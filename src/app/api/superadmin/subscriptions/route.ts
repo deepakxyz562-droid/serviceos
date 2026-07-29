@@ -74,7 +74,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ subscriptions: formatted, total: formatted.length });
   } catch (error) {
     console.error('[SuperAdmin Subscriptions GET] Error:', error);
-    return NextResponse.json({ subscriptions: [], total: 0 });
+    // Return a 500 with the error so the frontend can distinguish a real failure
+    // from a legitimate empty list. Previously this returned HTTP 200 with an
+    // empty array, which hid broken queries (e.g. missing RELATION_MAP entries).
+    const message = error instanceof Error ? error.message : 'Failed to load subscriptions';
+    return NextResponse.json(
+      { error: message, subscriptions: [], total: 0 },
+      { status: 500 }
+    );
   }
 }
 

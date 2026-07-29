@@ -6,7 +6,7 @@ import type { ViewType } from '@/types/workflow';
 import {
   LayoutDashboard,
   Briefcase,
-  Inbox,
+  RadioTower,
   Users,
   Menu,
   ShieldCheck,
@@ -27,10 +27,15 @@ interface MobileNavItem {
 // desktop sidebar uses) so the mobile bottom nav respects the same hide rules.
 // Calendar is included as a fallback so the nav stays 4 slots wide when
 // Omnichannel is disabled.
+//
+// NOTE: the `omnichannel` item keeps its short "Inbox" label (space is tight on
+// a 4-slot bottom nav) but uses the `RadioTower` icon to visually match the
+// desktop sidebar — previously this used the `Inbox` tray icon, which made
+// mobile and desktop look like different features.
 const ownerNavCandidates: MobileNavItem[] = [
   { view: 'dashboard', label: 'Home', icon: LayoutDashboard },
   { view: 'jobs', label: 'Jobs', icon: Briefcase },
-  { view: 'omnichannel', label: 'Inbox', icon: Inbox },
+  { view: 'omnichannel', label: 'Inbox', icon: RadioTower },
   { view: 'contacts', label: 'People', icon: Users },
   { view: 'calendar', label: 'Calendar', icon: Calendar },
   { view: 'leads', label: 'Leads', icon: Target },

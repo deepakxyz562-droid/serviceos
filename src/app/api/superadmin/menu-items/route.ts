@@ -25,6 +25,51 @@ function parseSettings(raw: unknown): Record<string, unknown> {
   return raw as Record<string, unknown>;
 }
 
+/**
+ * Merge the persisted config snapshot with the current MENU_CATALOG.
+ *
+ * Why this exists: the persisted snapshot (in Tenant.settingsJson) is a
+ * point-in-time copy of the catalog. When new items are added to
+ * MENU_CATALOG, they would NOT appear in the Menu Management UI until the
+ * snapshot was manually re-seeded — which is exactly the bug "I can't see
+ * all the menu in superadmin menu management".
+ *
+ * The merge starts from the CURRENT catalog (so every catalog item is
+ * present, defaulting to `enabled: true`) and then applies any persisted
+ * `enabled` override for the same `key`. Catalog metadata (label, icon,
+ * section, sortOrder) always wins over the persisted snapshot — so renaming
+ * an item in the catalog is reflected immediately. Only the on/off toggle
+ * state is preserved from the persisted snapshot.
+ *
+ * Returns the merged list, sorted by section then sortOrder. If the
+ * persisted snapshot is empty/null, returns the defaults and (optionally)
+ * seeds the DB so subsequent reads are fast.
+ */
+function mergeWithCatalog(
+  persisted: MenuItemEntry[] | undefined | null
+): MenuItemEntry[] {
+  const defaults = getDefaultItems();
+  if (!persisted || persisted.length === 0) {
+    return defaults;
+  }
+
+  // Build a lookup of persisted enabled-state by menuKey.
+  const persistedEnabledByKey = new Map<string, boolean>();
+  for (const entry of persisted) {
+    if (entry && typeof entry.key === 'string') {
+      persistedEnabledByKey.set(entry.key, !!entry.enabled);
+    }
+  }
+
+  // Start from catalog defaults; overlay persisted enabled-state where present.
+  return defaults.map((item) => ({
+    ...item,
+    enabled: persistedEnabledByKey.has(item.key)
+      ? (persistedEnabledByKey.get(item.key) as boolean)
+      : item.enabled,
+  }));
+}
+
 // Get global menu config from the first tenant's settingsJson
 async function getGlobalMenuConfig(): Promise<MenuItemEntry[]> {
   try {
@@ -32,15 +77,18 @@ async function getGlobalMenuConfig(): Promise<MenuItemEntry[]> {
     if (!tenants || tenants.length === 0) return getDefaultItems();
 
     const settings = parseSettings(tenants[0].settingsJson);
-    const config = settings[GLOBAL_CONFIG_KEY] as MenuItemEntry[] | undefined;
+    const rawConfig = settings[GLOBAL_CONFIG_KEY] as MenuItemEntry[] | undefined;
 
-    if (!config || config.length === 0) {
+    if (!rawConfig || rawConfig.length === 0) {
       // Initialize with defaults
       const defaults = getDefaultItems();
       await saveGlobalMenuConfig(defaults);
       return defaults;
     }
-    return config;
+    // Merge persisted snapshot with the current catalog so newly-added
+    // catalog items appear immediately (defaulting to enabled: true) while
+    // preserving previously-saved enabled/disabled toggles.
+    return mergeWithCatalog(rawConfig);
   } catch (error) {
     console.error('[getGlobalMenuConfig] Error:', error);
     return getDefaultItems();
@@ -70,9 +118,11 @@ async function getTenantMenuConfig(tenantId: string): Promise<MenuItemEntry[]> {
   if (!tenant) return getDefaultItems();
 
   const settings = parseSettings(tenant.settingsJson);
-  const config = settings.menuConfig as MenuItemEntry[] | undefined;
-  if (!config || config.length === 0) return getDefaultItems();
-  return config;
+  const rawConfig = settings.menuConfig as MenuItemEntry[] | undefined;
+  if (!rawConfig || rawConfig.length === 0) return getDefaultItems();
+  // Merge persisted snapshot with the current catalog so newly-added
+  // catalog items appear immediately for this tenant too.
+  return mergeWithCatalog(rawConfig);
 }
 
 // Save tenant-specific menu config to the tenant's settingsJson

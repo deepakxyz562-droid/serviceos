@@ -357,6 +357,19 @@ const RELATION_MAP: Record<string, Record<string, RelationInfo>> = {
   FeatureFlag: {
     tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
   },
+  Subscription: {
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+    payments: { targetTable: 'SubscriptionPayment', targetFkColumn: 'subscriptionId', isMany: true },
+    billingEvents: { targetTable: 'BillingEvent', targetFkColumn: 'subscriptionId', isMany: true },
+  },
+  SubscriptionPayment: {
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+    subscription: { targetTable: 'Subscription', fkColumn: 'subscriptionId' },
+  },
+  BillingEvent: {
+    tenant: { targetTable: 'Tenant', fkColumn: 'tenantId' },
+    subscription: { targetTable: 'Subscription', fkColumn: 'subscriptionId' },
+  },
 };
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -670,7 +683,15 @@ async function resolveIncludes(
 
   for (const [relName, relConfig] of Object.entries(include)) {
     if (relName === '_count') continue; // handled separately
-    if (!modelRelations[relName]) continue;
+    if (!modelRelations[relName]) {
+      // Surface missing-relation bugs loudly instead of silently skipping.
+      // This is the most common cause of "include not working" in Supabase mode.
+      console.warn(
+        `[SupabaseDB] RELATION_MAP missing: ${tableName}.${relName} — include silently skipped. ` +
+          `Add an entry to RELATION_MAP.${tableName} in src/lib/supabase-db.ts to fix.`
+      );
+      continue;
+    }
 
     const rel = modelRelations[relName];
     const relInclude = relConfig as Record<string, unknown>;
