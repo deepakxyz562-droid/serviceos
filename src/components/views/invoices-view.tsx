@@ -430,6 +430,9 @@ export function InvoicesView() {
   const [recurringSaving, setRecurringSaving] = useState(false);
   const [recurringActionLoading, setRecurringActionLoading] = useState<Record<string, boolean>>({});
   const [recurringForm, setRecurringForm] = useState<RecurringScheduleForm>(EMPTY_RECURRING_FORM());
+  // When non-null, the recurring form dialog is in "edit" mode and will PUT to /api/recurring-invoices/[id]
+  // instead of POSTing a new schedule to /api/recurring-invoices.
+  const [editingRecurringId, setEditingRecurringId] = useState<string | null>(null);
 
   // Filter & search
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -1169,6 +1172,93 @@ export function InvoicesView() {
         delete next[`deactivate-${scheduleId}`];
         return next;
       });
+    }
+  };
+
+  // Open the recurring form panel pre-filled with an existing schedule's values,
+  // switching the dialog into "edit" mode. The same form panel is reused for
+  // create — only the title, submit button label and submit handler differ.
+  const openEditRecurring = (schedule: RecurringSchedule) => {
+    setEditingRecurringId(schedule.id);
+    setRecurringForm({
+      name: schedule.name || '',
+      customerId: schedule.customerId || '',
+      frequency: schedule.frequency,
+      dayOfMonth: schedule.dayOfMonth ?? 1,
+      amount: schedule.amount ?? 0,
+      taxPercent: schedule.taxPercent ?? 0,
+      currency: schedule.currency || 'USD',
+      notes: schedule.notes || '',
+    });
+    setShowRecurringForm(true);
+  };
+
+  // Close the recurring form panel and reset to create-mode defaults.
+  const closeRecurringForm = () => {
+    setShowRecurringForm(false);
+    setEditingRecurringId(null);
+    setRecurringForm(EMPTY_RECURRING_FORM());
+  };
+
+  // Toggle the form panel from the "Create Schedule" / "Cancel" header button.
+  // Opening it always starts a fresh create (clears any prior edit selection);
+  // closing it clears edit state too.
+  const toggleRecurringForm = () => {
+    if (showRecurringForm) {
+      closeRecurringForm();
+    } else {
+      setEditingRecurringId(null);
+      setRecurringForm(EMPTY_RECURRING_FORM());
+      setShowRecurringForm(true);
+    }
+  };
+
+  const handleUpdateRecurring = async () => {
+    if (!editingRecurringId) return;
+    if (!recurringForm.name.trim()) {
+      toast.error('Schedule name is required');
+      return;
+    }
+    if (!recurringForm.customerId) {
+      toast.error('Please select a customer');
+      return;
+    }
+    if (recurringForm.amount <= 0) {
+      toast.error('Amount must be greater than zero');
+      return;
+    }
+    setRecurringSaving(true);
+    try {
+      const body = {
+        name: recurringForm.name,
+        customerId: recurringForm.customerId,
+        frequency: recurringForm.frequency,
+        dayOfMonth: recurringForm.dayOfMonth,
+        amount: recurringForm.amount,
+        taxPercent: recurringForm.taxPercent,
+        currency: recurringForm.currency || 'USD',
+        notes: recurringForm.notes || undefined,
+      };
+      const res = await authFetch(`/api/recurring-invoices/${editingRecurringId}`, {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((data as { error?: string }).error || 'Failed to update recurring schedule');
+      }
+      const updated = (data as { schedule: RecurringSchedule }).schedule;
+      setRecurringSchedules((prev) =>
+        prev.map((s) => (s.id === editingRecurringId ? { ...s, ...updated } : s))
+      );
+      setEditingRecurringId(null);
+      setRecurringForm(EMPTY_RECURRING_FORM());
+      setShowRecurringForm(false);
+      toast.success('Schedule updated');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to update recurring schedule');
+    } finally {
+      setRecurringSaving(false);
     }
   };
 
@@ -2782,7 +2872,19 @@ export function InvoicesView() {
       </Dialog>
 
       {/* ── Recurring Schedules Dialog ──────────────────────────────── */}
-      <Dialog open={showRecurringDialog} onOpenChange={setShowRecurringDialog}>
+      <Dialog
+        open={showRecurringDialog}
+        onOpenChange={(open) => {
+          setShowRecurringDialog(open);
+          if (!open) {
+            // Closing the outer dialog also resets any in-progress edit/create
+            // so the next open starts from a clean slate.
+            setShowRecurringForm(false);
+            setEditingRecurringId(null);
+            setRecurringForm(EMPTY_RECURRING_FORM());
+          }
+        }}
+      >
         <DialogContent className="max-w-3xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -2801,7 +2903,7 @@ export function InvoicesView() {
             <Button
               size="sm"
               className="bg-emerald-600 hover:bg-emerald-700"
-              onClick={() => setShowRecurringForm((v) => !v)}
+              onClick={toggleRecurringForm}
             >
               <Plus className="size-3.5 mr-1" /> {showRecurringForm ? 'Cancel' : 'Create Schedule'}
             </Button>
@@ -2809,6 +2911,16 @@ export function InvoicesView() {
 
           {showRecurringForm && (
             <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                {editingRecurringId ? (
+                  <Pencil className="size-4 text-emerald-600" />
+                ) : (
+                  <PlusCircle className="size-4 text-emerald-600" />
+                )}
+                <h4 className="text-sm font-semibold">
+                  {editingRecurringId ? 'Edit Recurring Schedule' : 'Create Recurring Schedule'}
+                </h4>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Schedule Name *</Label>
@@ -2918,17 +3030,19 @@ export function InvoicesView() {
                 </div>
               </div>
               <div className="flex justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={() => setShowRecurringForm(false)}>
-                  Cancel
+                <Button variant="outline" size="sm" onClick={closeRecurringForm}>
+                  {editingRecurringId ? 'Cancel Edit' : 'Cancel'}
                 </Button>
                 <Button
                   size="sm"
                   className="bg-emerald-600 hover:bg-emerald-700"
                   disabled={recurringSaving}
-                  onClick={handleCreateRecurring}
+                  onClick={editingRecurringId ? handleUpdateRecurring : handleCreateRecurring}
                 >
                   {recurringSaving ? (
                     <><Loader2 className="size-3.5 mr-1 animate-spin" /> Saving...</>
+                  ) : editingRecurringId ? (
+                    'Save Changes'
                   ) : (
                     'Create Schedule'
                   )}
@@ -2985,6 +3099,17 @@ export function InvoicesView() {
                           <span>Runs: {schedule.executionCount || 0}</span>
                         </div>
                         <div className="flex items-center gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            disabled={!!recurringSaving || !!recurringActionLoading[`run-${schedule.id}`] || !!recurringActionLoading[`deactivate-${schedule.id}`]}
+                            onClick={() => openEditRecurring(schedule)}
+                            title="Edit schedule"
+                          >
+                            <Pencil className="size-3 mr-1" />
+                            <span className="hidden sm:inline">Edit</span>
+                          </Button>
                           <Button
                             variant="outline"
                             size="sm"

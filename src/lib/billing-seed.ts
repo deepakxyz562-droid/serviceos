@@ -348,7 +348,7 @@ const PLAN_DEFS: PlanDef[] = [
     code: 'business',
     name: 'Business',
     description:
-      'For multi-branch service businesses. Everything in Professional + AI Receptionist, AI Agents, AI phone numbers, AI call history, AI Dispatcher, inventory, purchase orders, recurring jobs, route optimization, advanced reports, role-based permissions.',
+      'For multi-branch service businesses. Everything in Professional + AI Receptionist, AI Agents, AI phone numbers, AI call history, AI Dispatcher, inventory, purchase orders, recurring jobs, live technician map (GPS), advanced reports, role-based permissions.',
     monthlyPrice: 149,
     yearlyPrice: 1490, // 2 months free
     originalMonthlyPrice: 249,

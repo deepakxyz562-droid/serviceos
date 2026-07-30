@@ -183,7 +183,7 @@ const FALLBACK_PRICING_PLANS: PricingPlan[] = [
       'Inventory Management',
       'Purchase Orders',
       'Recurring Jobs',
-      'Route Optimization',
+      'Live Technician Map (GPS)',
       'Advanced Reports',
       'Role Permissions',
       '200 GB Storage',
@@ -356,7 +356,7 @@ const featurePillars = [
     features: [
       'Bookings & calendar',
       'Smart dispatch center',
-      'Route optimization',
+      'Live technician map',
       'Employee timesheets',
       'Service catalog & checklists',
       'Real-time job tracking',
@@ -396,7 +396,7 @@ const aiHighlights = [
   { icon: PhoneCall, title: 'AI Receptionist', description: 'Answers every call 24/7, books appointments, qualifies leads, routes urgent calls — never miss a customer again.' },
   { icon: Bot, title: 'AI Assistant', description: 'Drafts replies, summarizes threads, suggests next-best-actions across your inbox.' },
   { icon: Sparkles, title: 'AI Campaign Generator', description: 'Generates email & SMS campaign copy, audience segments, and send-time suggestions.' },
-  { icon: TrendingUp, title: 'AI Dispatcher', description: 'Auto-assigns jobs to the nearest available tech with route optimization.' },
+  { icon: TrendingUp, title: 'AI Dispatcher', description: 'Auto-assigns jobs to the best-matching technician using skills, proximity, workload, and ratings.' },
 ];
 
 const aiReceptionistCapabilities = [
@@ -475,7 +475,7 @@ const howItWorksSteps = [
     step: 2,
     title: 'Dispatch & Track Jobs',
     subtitle: 'Smart Routing · Real-time',
-    description: 'Assign jobs to the nearest tech with route optimization, live status tracking, and automated customer notifications.',
+    description: 'Smart-assign jobs to the best technician with live GPS tracking, real-time status, and automated customer notifications.',
     icon: Zap,
     image: '/images/landing/step-dispatch.png',
   },

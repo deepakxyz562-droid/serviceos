@@ -1184,7 +1184,14 @@ export async function generateRecurringInvoice(scheduleId: string): Promise<Auto
     if (!schedule) return { success: false, error: 'Schedule not found' }
     if (!schedule.active) return { success: false, skipped: true, reason: 'Schedule inactive' }
     if (schedule.endDate && new Date() > schedule.endDate) {
-      return { success: false, skipped: true, reason: 'Schedule ended' }
+      // Auto-deactivate the schedule so the cron stops trying to process it.
+      // Previously this just returned "skipped" but left active=true forever,
+      // causing the cron to keep re-evaluating this schedule on every run.
+      await db.recurringInvoice.update({
+        where: { id: scheduleId },
+        data: { active: false },
+      })
+      return { success: false, skipped: true, reason: 'Schedule ended — auto-deactivated' }
     }
 
     const settings = await getInvoiceSettings(schedule.tenantId)

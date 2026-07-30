@@ -353,36 +353,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Define plan details — keep in sync with billing-seed.ts and paypal.ts
-    // `amount` is the monthly price. Yearly totals (50% off) live in
-    // PAYPAL_PLANS.yearlyPrice and the Plan catalog (db.plan.yearlyPrice).
+    // Plan details — kept in sync with billing-seed.ts (the canonical source).
+    // `amount` is the monthly price. Yearly totals (2 months free) live in
+    // the Plan catalog (db.plan.yearlyPrice). See `src/lib/billing-seed.ts:PLAN_DEFS`.
     const planDetails: Record<string, { amount: number; maxUsers: number; maxJobs: number; maxWorkflows: number; features: Record<string, boolean> }> = {
       starter: {
-        amount: 10,
+        amount: 29,
         maxUsers: 1,
         maxJobs: 100,
         maxWorkflows: 10,
         features: {
-          whatsappIntegration: true,
+          whatsappIntegration: false,
           customWorkflows: false,
           apiAccess: false,
           prioritySupport: false,
         },
       },
       growth: {
-        amount: 25,
+        amount: 79,
         maxUsers: 5,
         maxJobs: 1000,
         maxWorkflows: 50,
         features: {
           whatsappIntegration: true,
           customWorkflows: true,
-          apiAccess: false,
+          apiAccess: true,
           prioritySupport: true,
         },
       },
-      pro: {
-        amount: 50,
+      business: {
+        amount: 149,
         maxUsers: 20,
         maxJobs: 99999,
         maxWorkflows: 999,
@@ -395,9 +395,9 @@ export async function POST(request: NextRequest) {
       },
       enterprise: {
         amount: 0,
-        maxUsers: 100,
-        maxJobs: 10000,
-        maxWorkflows: 1000,
+        maxUsers: 999999,
+        maxJobs: 999999,
+        maxWorkflows: 999999,
         features: {
           whatsappIntegration: true,
           customWorkflows: true,

@@ -730,46 +730,13 @@ export async function checkTenantFeature(
 }
 
 /**
- * Check tenant subscription limits (max jobs, max employees, etc.).
- *
- * @param tenantId - The tenant ID
- * @param limitType - The type of limit to check
- * @param currentCount - The current count of the limited resource
- * @returns Whether the tenant is within limits
+ * NOTE: `checkTenantLimit()` was removed — it was dead code (defined but never
+ * called) and contained stale plan keys (`professional` instead of `growth`/`business`).
+ * Plan limits are sourced from the `Subscription` row (`maxUsers`, `maxJobs`,
+ * `maxWorkflows`) and surfaced to the billing UI via `GET /api/subscriptions`.
+ * To enforce seat limits in the future, add a server helper that reads the
+ * Subscription row and call it from the employee/invitation/downgrade routes.
  */
-export async function checkTenantLimit(
-  tenantId: string,
-  limitType: 'jobs' | 'employees' | 'workspaces' | 'users',
-  currentCount: number
-): Promise<{ allowed: boolean; limit: number; current: number }> {
-  const subscription = await db.subscription.findFirst({
-    where: { tenantId, status: { in: ['active', 'trial'] } },
-    select: { plan: true, maxJobs: true, maxUsers: true, maxWorkflows: true },
-  })
-
-  const limits: Record<string, Record<string, number>> = {
-    starter: { jobs: 100, employees: 10, workspaces: 1, users: 1 },
-    professional: { jobs: 1000, employees: 50, workspaces: 5, users: 10 },
-    enterprise: { jobs: -1, employees: -1, workspaces: -1, users: -1 }, // -1 = unlimited
-  }
-
-  const plan = subscription?.plan || 'starter'
-  const planLimits = limits[plan] || limits['starter']
-  const limit = limitType === 'jobs'
-    ? (subscription?.maxJobs || planLimits.jobs)
-    : (planLimits[limitType] ?? -1)
-
-  // -1 means unlimited
-  if (limit === -1) {
-    return { allowed: true, limit: -1, current: currentCount }
-  }
-
-  return {
-    allowed: currentCount < limit,
-    limit,
-    current: currentCount,
-  }
-}
 
 // ─── Export Role Constants ─────────────────────────────────────────────────────
 

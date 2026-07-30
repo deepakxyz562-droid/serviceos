@@ -147,13 +147,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Determine plan defaults
+    // Determine plan defaults — kept in sync with billing-seed.ts (canonical)
     const selectedPlan = plan || 'starter';
     const planConfig: Record<string, { amount: number; maxUsers: number; maxJobs: number; maxWorkflows: number }> = {
-      starter: { amount: 10, maxUsers: 3, maxJobs: 100, maxWorkflows: 10 },
-      growth: { amount: 25, maxUsers: 10, maxJobs: 500, maxWorkflows: 50 },
-      business: { amount: 50, maxUsers: 50, maxJobs: 2000, maxWorkflows: 200 },
-      enterprise: { amount: 0, maxUsers: -1, maxJobs: -1, maxWorkflows: -1 },
+      starter: { amount: 29, maxUsers: 1, maxJobs: 100, maxWorkflows: 10 },
+      growth: { amount: 79, maxUsers: 5, maxJobs: 1000, maxWorkflows: 50 },
+      business: { amount: 149, maxUsers: 20, maxJobs: 99999, maxWorkflows: 999 },
+      enterprise: { amount: 0, maxUsers: 999999, maxJobs: 999999, maxWorkflows: 999999 },
     };
     const config = planConfig[selectedPlan] || planConfig.starter;
 

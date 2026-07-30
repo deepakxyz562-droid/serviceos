@@ -8,7 +8,7 @@ import {
   Loader2, ArrowLeft, FileText, StickyNote, CalendarDays, Info,
   Repeat, ClipboardList, Paperclip, ChevronDown, Tag, Link2,
   UploadCloud, File as FileIcon, X, Mail, DollarSign, MoreHorizontal,
-  TrendingUp, Printer, Send, Camera, PenLine, ImagePlus,
+  TrendingUp, Printer, Send, Camera, PenLine, ImagePlus, Sparkles,
   // V1.5 lifecycle + time tracking icons
   UserCheck, Check, Navigation, Wrench, Pause, Route as RouteIcon,
   Timer, PlayCircle, PauseCircle, StopCircle, ExternalLink, MapPinned,
@@ -25,6 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -177,6 +178,31 @@ interface Employee {
   skills: string;
   rating: number;
   completedJobs: number;
+}
+
+// Smart-match candidate returned by POST /api/dispatch/smart with
+// { autoAssign: false }. The endpoint delegates to findBestMatch() and
+// spreads the DispatchResult, so each candidate carries a full score
+// breakdown (Skills/40, Proximity/30, Workload/15, Rating/15).
+// Used by the "Recommended Technicians" section in the Assign dialog.
+interface SmartCandidate {
+  employeeId: string;
+  employeeName: string;
+  employeePhone: string;
+  employeeRole: string;
+  employeeStatus: string;
+  score: number;
+  breakdown: {
+    total: number;
+    skillScore: number;
+    proximityScore: number;
+    workloadScore: number;
+    ratingScore: number;
+    reasons: string[];
+    matchedSkills: string[];
+    distanceKm: number | null;
+    activeJobCount: number;
+  };
 }
 
 // V1.5: Lightweight customer-asset shape used by the job form's Equipment
@@ -977,6 +1003,13 @@ export function JobsView() {
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
   const [deletingJob, setDeletingJob] = useState<Job | null>(null);
   const [deleteSaving, setDeleteSaving] = useState(false);
+
+  // Smart-match candidates fetched from POST /api/dispatch/smart whenever
+  // the Assign dialog opens. Rendered ABOVE the manual employee list as
+  // "Recommended Technicians". Falls back to the manual list on failure.
+  const [smartCandidates, setSmartCandidates] = useState<SmartCandidate[]>([]);
+  const [loadingSmart, setLoadingSmart] = useState(false);
+  const [smartError, setSmartError] = useState(false);
 
   // V1.5: Job completion dialog (photos + signatures + notes)
   const [completionJob, setCompletionJob] = useState<Job | null>(null);
@@ -2016,7 +2049,33 @@ export function JobsView() {
 
   const openAssignDialog = (job: Job) => {
     setAssigningJob(job);
+    // Reset smart-match state on each open so stale candidates from a
+    // previous job don't briefly render.
+    setSmartCandidates([]);
+    setSmartError(false);
+    setLoadingSmart(true);
     setShowAssignDialog(true);
+
+    // Fetch ranked smart-match candidates (autoAssign=false — we only want
+    // the scored list, the user still picks one). On any failure we just
+    // flip smartError and the dialog falls back to the manual list.
+    fetch('/api/dispatch/smart', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jobId: job.id, autoAssign: false }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && Array.isArray(data.candidates)) {
+          setSmartCandidates(data.candidates as SmartCandidate[]);
+        }
+      })
+      .catch(() => {
+        setSmartError(true);
+      })
+      .finally(() => {
+        setLoadingSmart(false);
+      });
   };
 
   const handleCancelJob = async (jobId: string) => {
@@ -3819,8 +3878,97 @@ export function JobsView() {
                 {assigningJob.address && <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="size-3" /> {assigningJob.address}</p>}
               </div>
               <Separator />
+              {/* ── Recommended Technicians (smart-match) ─────────────────── */}
+              {/* Fetched on dialog open from POST /api/dispatch/smart with
+                  autoAssign=false. Each candidate is a ranked employee with
+                  a score breakdown. Clicking a candidate runs the existing
+                  handleLifecycleAction('assign', ...) flow — same path as
+                  the manual list below. */}
+              <div className="space-y-2">
+                <p className="text-sm font-medium flex items-center gap-1.5">
+                  <Sparkles className="size-3.5 text-amber-500" />
+                  Recommended Technicians
+                </p>
+                {loadingSmart ? (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                    <span className="ml-2 text-sm text-muted-foreground">Finding best matches...</span>
+                  </div>
+                ) : smartError ? (
+                  <div className="flex items-center gap-2 py-2 px-3 rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-xs">
+                    <AlertCircle className="size-3.5 shrink-0" />
+                    <span>Smart match unavailable — pick manually below.</span>
+                  </div>
+                ) : smartCandidates.length === 0 ? (
+                  <div className="text-center py-3 text-muted-foreground text-xs">
+                    No smart matches — pick manually below.
+                  </div>
+                ) : (
+                  <ScrollArea className="max-h-64">
+                    <div className="space-y-2 pr-2">
+                      {smartCandidates.slice(0, 5).map((candidate) => (
+                        <button
+                          key={candidate.employeeId}
+                          className="w-full text-left p-3 rounded-lg border hover:border-emerald-300 hover:bg-emerald-50/40 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                          onClick={() => handleLifecycleAction('assign', assigningJob.id, candidate.employeeId)}
+                          disabled={lifecycleLoading}
+                        >
+                          {/* Header: avatar · name · role · total score bar */}
+                          <div className="flex items-center gap-3">
+                            <Avatar className="size-9 shrink-0">
+                              <AvatarFallback className="bg-emerald-100 text-emerald-700 text-sm font-medium">
+                                {candidate.employeeName.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium text-sm truncate">{candidate.employeeName}</span>
+                                <Badge variant="outline" className="text-[10px] h-4">{candidate.employeeRole}</Badge>
+                              </div>
+                              <div className="flex items-center gap-2 mt-1">
+                                <Progress value={candidate.score} className="h-1.5 flex-1" />
+                                <span className="text-xs font-medium text-emerald-600 shrink-0">{candidate.score}/100</span>
+                              </div>
+                            </div>
+                          </div>
+                          {/* Score breakdown: Skills/40 · Proximity/30 · Workload/15 · Rating/15 */}
+                          <div className="mt-2 pt-2 border-t grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px]">
+                            <div>
+                              <span className="text-muted-foreground block">Skills</span>
+                              <span className="font-medium">{candidate.breakdown.skillScore}/40</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground block">Proximity</span>
+                              <span className="font-medium">{candidate.breakdown.proximityScore}/30</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground block">Workload</span>
+                              <span className="font-medium">{candidate.breakdown.workloadScore}/15</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground block">Rating</span>
+                              <span className="font-medium">{candidate.breakdown.ratingScore}/15</span>
+                            </div>
+                          </div>
+                          {/* Matched skills badges */}
+                          {candidate.breakdown.matchedSkills.length > 0 && (
+                            <div className="mt-1.5 flex flex-wrap gap-1">
+                              {candidate.breakdown.matchedSkills.map((skill, i) => (
+                                <Badge key={i} variant="outline" className="text-[9px] h-4 bg-emerald-50 border-emerald-200 text-emerald-700">
+                                  {skill}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
+              </div>
+              <Separator />
               <div>
-                <p className="text-sm font-medium mb-2">Available Employees</p>
+                <p className="text-sm font-medium mb-2">All Available Technicians</p>
                 {employees.filter((e) => e.status === 'available').length === 0 ? (
                   <div className="text-center py-6 text-muted-foreground text-sm">No available employees</div>
                 ) : (

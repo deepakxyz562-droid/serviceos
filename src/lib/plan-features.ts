@@ -152,11 +152,12 @@ export const DEFAULT_PLAN_MATRIX: Record<PlanTier, Record<string, boolean>> = {
     workflows: true, form_builder: false, marketing_campaigns: false, broadcast: false,
     customer_segments: false, template_studio: false, retargeting: false, journey_automation: false,
     // Operations (all basic — excludes route_optimization which is business+)
-    dispatch_board: true, gps_tracking: true, customer_portal: true, employee_portal: true,
+    // dispatch_board + gps_tracking are growth+/business+ per tier model (solo operator doesn't need them)
+    dispatch_board: false, gps_tracking: false, customer_portal: true, employee_portal: true,
     online_booking: true, time_tracking: true, expenses: true, digital_signatures: true,
     before_after_photos: true, checklists: true, route_optimization: false,
-    // Finance (all)
-    online_payments: true, recurring_invoices: true, service_plans: true, warranties: true,
+    // Finance (recurring_invoices is growth+ per tier model)
+    online_payments: true, recurring_invoices: false, service_plans: true, warranties: true,
     tax_rules: true, multi_currency: true,
     // Inventory (none)
     inventory: false, purchase_orders: false, recurring_jobs: false,
@@ -175,10 +176,11 @@ export const DEFAULT_PLAN_MATRIX: Record<PlanTier, Record<string, boolean>> = {
     ai_form_generator: false,
     workflows: false, form_builder: false, marketing_campaigns: false, broadcast: false,
     customer_segments: false, template_studio: false, retargeting: false, journey_automation: false,
-    dispatch_board: true, gps_tracking: true, customer_portal: true, employee_portal: true,
+    // Starter = solo operator: no dispatch_board, no gps_tracking, no recurring_invoices
+    dispatch_board: false, gps_tracking: false, customer_portal: true, employee_portal: true,
     online_booking: true, time_tracking: true, expenses: true, digital_signatures: true,
     before_after_photos: true, checklists: true, route_optimization: false,
-    online_payments: true, recurring_invoices: true, service_plans: true, warranties: true,
+    online_payments: true, recurring_invoices: false, service_plans: true, warranties: true,
     tax_rules: true, multi_currency: true,
     inventory: false, purchase_orders: false, recurring_jobs: false,
     white_label: false, api_access: false, webhooks: false, knowledge_base: true,
@@ -195,7 +197,8 @@ export const DEFAULT_PLAN_MATRIX: Record<PlanTier, Record<string, boolean>> = {
     ai_form_generator: true,
     workflows: true, form_builder: true, marketing_campaigns: true, broadcast: true,
     customer_segments: true, template_studio: true, retargeting: false, journey_automation: false,
-    dispatch_board: true, gps_tracking: true, customer_portal: true, employee_portal: true,
+    // Professional: dispatch_board + recurring_invoices enabled; gps_tracking still business+
+    dispatch_board: true, gps_tracking: false, customer_portal: true, employee_portal: true,
     online_booking: true, time_tracking: true, expenses: true, digital_signatures: true,
     before_after_photos: true, checklists: true, route_optimization: false,
     online_payments: true, recurring_invoices: true, service_plans: true, warranties: true,

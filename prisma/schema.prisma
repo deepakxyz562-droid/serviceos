@@ -455,6 +455,7 @@ model RecurringJobSchedule {
 
   tenant   Tenant?  @relation(fields: [tenantId], references: [id])
   customer Customer? @relation("CustomerRecurringJobs", fields: [customerId], references: [id])
+  generatedJobs Job[] @relation("RecurringJobGeneratedJobs")
 
   @@index([tenantId])
   @@index([active])
@@ -1444,6 +1445,10 @@ model Job {
   //   arrived, workStarted, completed, invoiceGenerated, paused, resumed } }
   metadataJson      String   @default("{}")
   workspaceId        String?
+  // ── FK back to the RecurringJobSchedule that generated this job (nullable
+  // for manually-created jobs). Replaces the previous loose best-effort
+  // matching by title+customer+date. ──
+  recurringScheduleId String?
   // ── Soft delete: when set, the job is hidden from the active list but kept
   // in "Job History" for audit. Permanent delete = hard DELETE from DB. ──
   deletedAt          DateTime?
@@ -1458,6 +1463,7 @@ model Job {
   invoices   Invoice[]
   quotes     Quote[]
   recurringInvoices RecurringInvoice[] @relation("JobRecurringInvoices")
+  recurringSchedule RecurringJobSchedule? @relation("RecurringJobGeneratedJobs", fields: [recurringScheduleId], references: [id])
   currentEmployee Employee? @relation("EmployeeCurrentJob")
   notificationLogs NotificationLog[]
   conversation      Conversation?
@@ -1470,6 +1476,7 @@ model Job {
   @@index([customerId])
   @@index([scheduledAt])
   @@index([workspaceId])
+  @@index([recurringScheduleId])
 }
 
 model ContactList {

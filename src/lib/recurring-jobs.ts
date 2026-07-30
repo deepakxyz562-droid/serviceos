@@ -25,6 +25,8 @@
 
 import { db } from '@/lib/db';
 import { logActivity } from '@/lib/activity-log';
+import { sendWhatsAppMessage } from '@/lib/whatsapp-send';
+import { sendSmsMessage } from '@/lib/sms-send';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -372,10 +374,14 @@ async function processSingleSchedule(scheduleId: string): Promise<void> {
         visitInstructions: schedule.visitInstructions ?? null,
         linkedChecklistsJson: JSON.stringify(checklistIds),
         workspaceId,
+        recurringScheduleId: schedule.id,
       },
     });
 
     // 2. Create the linked JobVisit.
+    // Set teamReminder='24h' so the appointment-reminders cron picks it up
+    // (previously defaulted to 'none' which caused the cron to skip these
+    // visits — customers received no reminder for recurring visits).
     const visitTitle = customerName
       ? `${customerName} - ${schedule.title}`
       : schedule.title;
@@ -396,6 +402,7 @@ async function processSingleSchedule(scheduleId: string): Promise<void> {
           assigneeName ? [assigneeName] : [],
         ),
         checklistIdsJson: JSON.stringify(checklistIds),
+        teamReminder: '24h',
         status: 'scheduled',
       },
     });
@@ -445,6 +452,47 @@ async function processSingleSchedule(scheduleId: string): Promise<void> {
     });
   } catch (logErr) {
     console.error('[RecurringJobs] activity log failed:', logErr);
+  }
+
+  // 5. Customer notification (best-effort, outside the transaction).
+  // Send a "your service visit is scheduled" message via WhatsApp + SMS so the
+  // customer knows about the upcoming recurring visit. Previously the customer
+  // received NO notification at job-generation time.
+  if (customerPhone) {
+    const visitDate = scheduledAt
+      ? new Date(scheduledAt).toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+        })
+      : 'soon';
+    const visitTimeStr = scheduledTime
+      ? ` at ${scheduledTime}`
+      : '';
+    const assigneeLine = assigneeName ? ` Technician: ${assigneeName}.` : '';
+    const messageText = `Hi${customerName ? ` ${customerName}` : ''}, your service visit "${schedule.title}" has been scheduled for ${visitDate}${visitTimeStr}.${assigneeLine} — ${schedule.tenantId ? 'We will see you then!' : ''}`;
+
+    // WhatsApp (best-effort)
+    try {
+      await sendWhatsAppMessage({
+        to: customerPhone,
+        message: messageText,
+        tenantId: schedule.tenantId,
+      });
+    } catch (waErr) {
+      console.error('[RecurringJobs] customer WhatsApp notification failed:', waErr);
+    }
+
+    // SMS (best-effort — only if WhatsApp fails or as a secondary channel)
+    try {
+      await sendSmsMessage({
+        to: customerPhone,
+        message: messageText,
+        tenantId: schedule.tenantId,
+      });
+    } catch (smsErr) {
+      console.error('[RecurringJobs] customer SMS notification failed:', smsErr);
+    }
   }
 }
 

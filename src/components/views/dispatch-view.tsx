@@ -23,7 +23,18 @@ import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { useRealtime, usePresence } from '@/hooks/use-realtime';
+import dynamic from 'next/dynamic';
 import { useMemo } from 'react';
+
+// SSR-safe dynamic import: Leaflet needs `window`, so we disable SSR for the map.
+const LiveTechnicianMap = dynamic(
+  () => import('@/components/dispatch/live-technician-map'),
+  { ssr: false, loading: () => (
+    <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
+      <Loader2 className="size-4 mr-2 animate-spin" /> Loading map…
+    </div>
+  ) },
+);
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -221,7 +232,7 @@ export function DispatchView() {
   // ─── Fetch functions ─────────────────────────────────────────────────
   const fetchJobs = useCallback(async () => {
     try {
-      const params = new URLSearchParams({ status: 'pending,assigned' });
+      const params = new URLSearchParams({ status: 'pending,assigned,scheduled' });
       const res = await fetch(`/api/jobs?XTransformPort=3000&${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
@@ -298,6 +309,20 @@ export function DispatchView() {
   const availableCount = employees.filter(e => e.status === 'available').length;
   const busyCount = employees.filter(e => e.status === 'busy').length;
   const offlineCount = employees.filter(e => e.status === 'offline' || e.status === 'leave').length;
+
+  // Technicians with valid GPS coordinates for the Live Map panel.
+  // Re-uses the existing `employees` state from the Team panel — no extra fetch.
+  const mapTechnicians = useMemo(
+    () =>
+      employees.filter(
+        (e) =>
+          typeof e.latitude === 'number' &&
+          typeof e.longitude === 'number' &&
+          !Number.isNaN(e.latitude) &&
+          !Number.isNaN(e.longitude),
+      ),
+    [employees],
+  );
 
   // Unique service types from pending jobs
   const serviceTypes = [...new Set(pendingJobs.map(j => j.type).filter(Boolean))];
@@ -710,8 +735,9 @@ export function DispatchView() {
         </Card>
       </div>
 
-      {/* ─── Split Panel Layout ────────────────────────────────────────── */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-5 gap-4 min-h-0">
+      {/* ─── Split Panel + Live Map Layout ─────────────────────────────── */}
+      <div className="flex-1 flex flex-col gap-4 min-h-0">
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-5 gap-4 min-h-0">
         {/* ─── Left Panel: Job Queue ───────────────────────────────────── */}
         <div className="lg:col-span-3 flex flex-col min-h-0">
           <Card className="flex-1 flex flex-col min-h-0 border shadow-sm">
@@ -884,6 +910,49 @@ export function DispatchView() {
             </ScrollArea>
           </Card>
         </div>
+        </div>
+
+        {/* ─── Live Technician Map Panel ──────────────────────────────── */}
+        <Card className="h-[360px] lg:h-[420px] shrink-0 flex flex-col border shadow-sm">
+          <CardHeader className="pb-3 shrink-0">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <MapPin className="size-4 text-teal-600" />
+                Live Technician Map
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="text-xs">
+                  {mapTechnicians.length} of {employees.length} technicians on map
+                </Badge>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                        <div className="size-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <span>GPS live</span>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>Refreshes with team panel every 15s</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            </div>
+          </CardHeader>
+          <Separator />
+          <CardContent className="flex-1 min-h-0 p-2 sm:p-3">
+            {mapTechnicians.length === 0 ? (
+              <div className="flex h-full w-full flex-col items-center justify-center rounded-md border border-dashed border-border bg-muted/30 px-6 py-8 text-center">
+                <MapPin className="size-8 mb-3 text-muted-foreground/50" />
+                <p className="text-sm font-medium text-foreground">No technician locations available</p>
+                <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+                  Technicians will appear here once they start GPS tracking from the employee app.
+                </p>
+              </div>
+            ) : (
+              <LiveTechnicianMap employees={mapTechnicians} className="h-full w-full" />
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* ─── Assignment Dialog ─────────────────────────────────────────── */}

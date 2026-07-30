@@ -193,7 +193,7 @@ const FALLBACK_PLANS: OnboardingPlan[] = [
     yearlyPrice: 1490, // 2 months free on yearly
     originalMonthlyPrice: 249,
     description: 'For multi-branch operators',
-    features: ['Up to 20 users', 'AI Receptionist + AI Dispatcher', 'Inventory + Purchase Orders', 'Recurring Jobs', 'Route Optimization', 'Advanced Reports', 'Role Permissions'],
+    features: ['Up to 20 users', 'AI Receptionist + AI Dispatcher', 'Inventory + Purchase Orders', 'Recurring Jobs', 'Live Technician Map (GPS)', 'Advanced Reports', 'Role Permissions'],
     icon: Crown,
   },
   {
@@ -258,7 +258,7 @@ const PLAN_FEATURE_LABELS: Record<string, string> = {
   inventory: 'Inventory Management',
   purchaseOrders: 'Purchase Orders',
   recurringJobs: 'Recurring Jobs',
-  routeOptimization: 'Route Optimization',
+  routeOptimization: 'Live Technician Map',
   advancedReports: 'Advanced Reports',
   rolePermissions: 'Role Permissions',
   whiteLabel: 'White Label Branding',

@@ -60,7 +60,7 @@ export const MENU_CATALOG: MenuCatalogItem[] = [
   // ─── Operations ──────────────────────────────────────────────────────
   { key: 'jobs', label: 'Jobs', icon: 'Briefcase', section: 'Operations', sortOrder: 20 },
   { key: 'booking', label: 'Booking', icon: 'CalendarCheck', section: 'Operations', sortOrder: 21 },
-  { key: 'dispatch', label: 'Live Dispatch', icon: 'Radio', section: 'Operations', sortOrder: 22 },
+  { key: 'dispatch', label: 'Live Dispatch', icon: 'Radio', section: 'Operations', sortOrder: 22, minPlan: 'growth', upgradeDescription: 'Dispatch board with smart-assign, live technician map, and real-time job queue. Available on Professional and above — solo operators on Starter can use the Jobs view directly.' },
   { key: 'employees', label: 'Employees', icon: 'UserCog', section: 'Operations', sortOrder: 23 },
   { key: 'timesheet', label: 'Timesheet', icon: 'Clock', section: 'Operations', sortOrder: 24 },
   { key: 'serviceCatalog', label: 'Service Catalog', icon: 'BookOpen', section: 'Operations', sortOrder: 25 },
