@@ -16,6 +16,10 @@ export async function GET(request: NextRequest) {
     const role = searchParams.get('role') || '';
     const tenantId = searchParams.get('tenantId') || '';
 
+    // Pagination params — defaults: page=1, limit=50. Limit clamped to [1, 200].
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50', 10) || 50));
+
     // Build where clause - show all users including admins
     const where: Record<string, unknown> = {};
 
@@ -33,32 +37,41 @@ export async function GET(request: NextRequest) {
       where.tenantId = tenantId;
     }
 
-    const users = await db.user.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        role: true,
-        isActive: true,
-        avatar: true,
-        authProvider: true,
-        lastLoginAt: true,
-        tenantId: true,
-        workspaceId: true,
-        createdAt: true,
-        tenant: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            plan: true,
+    // Run the paginated findMany and the total count in parallel. The count
+    // reuses the SAME `where` so `totalPages` reflects the filtered set.
+    const [users, total] = await Promise.all([
+      db.user.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: (page - 1) * limit,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          role: true,
+          isActive: true,
+          avatar: true,
+          authProvider: true,
+          lastLoginAt: true,
+          tenantId: true,
+          workspaceId: true,
+          createdAt: true,
+          tenant: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              plan: true,
+            },
           },
         },
-      },
-    });
+      }),
+      db.user.count({ where }),
+    ]);
+
+    const totalPages = limit > 0 ? Math.ceil(total / limit) : 0;
 
     const formattedUsers = users.map((user: Record<string, unknown>) => ({
       id: user.id,
@@ -77,7 +90,14 @@ export async function GET(request: NextRequest) {
       createdAt: new Date(user.createdAt as string | Date).toISOString(),
     }));
 
-    return NextResponse.json({ users: formattedUsers, total: formattedUsers.length });
+    // Paginated response shape: { data, page, limit, total, totalPages }.
+    return NextResponse.json({
+      data: formattedUsers,
+      page,
+      limit,
+      total,
+      totalPages,
+    });
   } catch (error) {
     console.error('Admin users GET error:', error);
     return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });

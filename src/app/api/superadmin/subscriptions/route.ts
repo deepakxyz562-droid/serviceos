@@ -18,6 +18,11 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const statusFilter = searchParams.get('status') || '';
     const tenantIdFilter = searchParams.get('tenantId') || '';
+    const search = searchParams.get('search') || '';
+
+    // Pagination params — defaults: page=1, limit=50. Limit clamped to [1, 200].
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50', 10) || 50));
 
     // Build where clause
     const where: Record<string, unknown> = {};
@@ -27,16 +32,41 @@ export async function GET(request: NextRequest) {
     if (tenantIdFilter) {
       where.tenantId = tenantIdFilter;
     }
-
-    const subscriptions = await db.subscription.findMany({
-      where,
-      include: {
-        tenant: {
-          select: { name: true, email: true, plan: true, planStatus: true },
+    if (search) {
+      // Search across the tenant relation (name/email) and the subscription's
+      // own plan column. Uses Prisma's relation filter syntax so the search
+      // is pushed down to the DB rather than filtering in JS after the fetch.
+      where.OR = [
+        {
+          tenant: {
+            OR: [
+              { name: { contains: search } },
+              { email: { contains: search } },
+            ],
+          },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        { plan: { contains: search } },
+      ];
+    }
+
+    // Run the paginated findMany and the total count in parallel. The count
+    // reuses the SAME `where` so `totalPages` reflects the filtered set.
+    const [subscriptions, total] = await Promise.all([
+      db.subscription.findMany({
+        where,
+        include: {
+          tenant: {
+            select: { name: true, email: true, plan: true, planStatus: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: (page - 1) * limit,
+      }),
+      db.subscription.count({ where }),
+    ]);
+
+    const totalPages = limit > 0 ? Math.ceil(total / limit) : 0;
 
     const formatted = subscriptions.map((s: Record<string, unknown>) => {
       const tenant = s.tenant as Record<string, unknown> | null;
@@ -71,7 +101,16 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({ subscriptions: formatted, total: formatted.length });
+    // Paginated response shape: { data, page, limit, total, totalPages }.
+    // The 500 branch keeps the old `subscriptions: []` shape so existing
+    // error consumers keep working — only the success path changes shape.
+    return NextResponse.json({
+      data: formatted,
+      page,
+      limit,
+      total,
+      totalPages,
+    });
   } catch (error) {
     console.error('[SuperAdmin Subscriptions GET] Error:', error);
     // Return a 500 with the error so the frontend can distinguish a real failure

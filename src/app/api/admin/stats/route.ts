@@ -106,9 +106,21 @@ export async function GET() {
       // Monthly paid invoices for revenue chart. We only need the `total`
       // and `paidAt` columns to bucket by month, so select just those two
       // (no tenantId, no other fields) to keep the row payload small.
+      //
+      // `take: 1000` caps the row count pulled into Node memory. The query
+      // is already scoped to the last 12 months via `paidAt: { gte: ... }`,
+      // so 1000 rows is well above any realistic monthly invoice volume for
+      // a single tenant dashboard — but it bounds the worst case so an
+      // unbounded history (e.g. a tenant that bulk-imported 100k legacy
+      // invoices) can't OOM the stats endpoint.
+      // `orderBy: { paidAt: 'desc' }` prefers the most recent invoices if
+      // the take limit is ever hit, so the chart stays representative of
+      // recent revenue rather than the oldest 1000 rows.
       db.invoice.findMany({
         where: { status: 'paid', paidAt: { gte: twelveMonthsAgo } },
         select: { total: true, paidAt: true },
+        orderBy: { paidAt: 'desc' },
+        take: 1000,
       }),
     ]);
 

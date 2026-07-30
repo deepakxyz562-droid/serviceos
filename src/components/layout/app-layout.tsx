@@ -83,7 +83,8 @@ const ChatbotBuilderView = lazy(() => import('@/components/views/chatbot-builder
 // AI Receptionist (Vapi.ai BYOK)
 const AiReceptionistView = lazy(() => import('@/components/views/ai-receptionist-view').then(m => ({ default: m.AiReceptionistView })));
 const AiAgentsView = lazy(() => import('@/components/views/ai-agents-view').then(m => ({ default: m.AiAgentsView })));
-const AiPhoneNumbersView = lazy(() => import('@/components/views/ai-phone-numbers-view').then(m => ({ default: m.AiPhoneNumbersView })));
+// (aiPhoneNumbers view removed — phone numbers now managed in Settings → Communication → Dedicated Phone Number.
+//  The view type is kept in the type union for backward-compat; deep links to 'aiPhoneNumbers' will render SmsNumbersView.)
 const AiCallHistoryView = lazy(() => import('@/components/views/ai-call-history-view').then(m => ({ default: m.AiCallHistoryView })));
 const RetargetingView = lazy(() => import('@/components/views/retargeting-view').then(m => ({ default: m.RetargetingView })));
 const SegmentsView = lazy(() => import('@/components/views/segments-view').then(m => ({ default: m.SegmentsView })));
@@ -189,7 +190,7 @@ const viewComponents: Record<string, React.LazyExoticComponent<React.ComponentTy
   // AI Receptionist (Vapi.ai BYOK)
   aiReceptionist: AiReceptionistView,
   aiAgents: AiAgentsView,
-  aiPhoneNumbers: AiPhoneNumbersView,
+  aiPhoneNumbers: SmsNumbersView, // redirect legacy deep links to the real phone numbers UI
   aiCallHistory: AiCallHistoryView,
   retargeting: RetargetingView,
   segments: SegmentsView,

@@ -32,7 +32,6 @@ import {
   Bot,
   Sparkles,
   PhoneCall,
-  PhoneIncoming,
   ClipboardList,
   GitBranch,
   Kanban,
@@ -42,7 +41,6 @@ import {
   History,
   UserCog,
   Eye,
-  MessageSquare,
   Send,
   LayoutTemplate,
   CalendarCheck,
@@ -161,7 +159,6 @@ const ownerNavSections: NavSection[] = [
     title: 'Inbox & Automation',
     items: [
       { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
-      { view: 'liveChat', label: 'Live Chat', icon: MessageSquare },
       { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
       { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
       { view: 'workflows', label: 'Workflows', icon: Workflow },
@@ -176,7 +173,6 @@ const ownerNavSections: NavSection[] = [
     items: [
       { view: 'aiReceptionist', label: 'Dashboard', icon: PhoneCall, badge: 'Free' },
       { view: 'aiAgents', label: 'AI Agents', icon: Bot },
-      { view: 'aiPhoneNumbers', label: 'Phone Numbers', icon: PhoneIncoming },
       { view: 'aiCallHistory', label: 'Call History', icon: PhoneCall },
     ],
   },
@@ -288,7 +284,6 @@ const superadminNavSections: NavSection[] = [
     title: 'Inbox & Automation',
     items: [
       { view: 'omnichannel', label: 'Omnichannel Inbox', icon: RadioTower },
-      { view: 'liveChat', label: 'Live Chat', icon: MessageSquare },
       { view: 'aiAssistant', label: 'AI Assistant', icon: Sparkles },
       { view: 'chatbotBuilder', label: 'Chatbot Builder', icon: Bot },
       { view: 'workflows', label: 'Workflows', icon: Workflow },
@@ -303,7 +298,6 @@ const superadminNavSections: NavSection[] = [
     items: [
       { view: 'aiReceptionist', label: 'Dashboard', icon: PhoneCall, badge: 'Free' },
       { view: 'aiAgents', label: 'AI Agents', icon: Bot },
-      { view: 'aiPhoneNumbers', label: 'Phone Numbers', icon: PhoneIncoming },
       { view: 'aiCallHistory', label: 'Call History', icon: PhoneCall },
     ],
   },

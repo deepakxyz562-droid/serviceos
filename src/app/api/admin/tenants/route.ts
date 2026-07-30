@@ -15,6 +15,10 @@ export async function GET(request: NextRequest) {
     const plan = searchParams.get('plan') || '';
     const status = searchParams.get('status') || '';
 
+    // Pagination params — defaults: page=1, limit=50. Limit clamped to [1, 200].
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get('limit') || '50', 10) || 50));
+
     // Build where clause
     const where: Record<string, unknown> = {};
     if (search) {
@@ -36,31 +40,42 @@ export async function GET(request: NextRequest) {
       where.suspendedAt = { not: null };
     }
 
-    const tenants = await db.tenant.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        industry: true,
-        email: true,
-        phone: true,
-        plan: true,
-        planStatus: true,
-        trialEndsAt: true,
-        suspendedAt: true,
-        createdAt: true,
-        _count: {
-          select: {
-            users: true,
-            leads: true,
-            workspaces: true,
-            subscriptions: true,
+    // Run the paginated findMany and the total count in parallel so we get
+    // both the page slice and the full match count in a single round-trip.
+    // The count MUST use the same `where` clause so totalPages reflects the
+    // filtered result set, not the entire table.
+    const [tenants, total] = await Promise.all([
+      db.tenant.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: (page - 1) * limit,
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          industry: true,
+          email: true,
+          phone: true,
+          plan: true,
+          planStatus: true,
+          trialEndsAt: true,
+          suspendedAt: true,
+          createdAt: true,
+          _count: {
+            select: {
+              users: true,
+              leads: true,
+              workspaces: true,
+              subscriptions: true,
+            },
           },
         },
-      },
-    });
+      }),
+      db.tenant.count({ where }),
+    ]);
+
+    const totalPages = limit > 0 ? Math.ceil(total / limit) : 0;
 
     // Get job counts per tenant via workspace -> job relationship
     const tenantIds = tenants.map((t) => t.id);
@@ -113,7 +128,16 @@ export async function GET(request: NextRequest) {
       createdAt: new Date(tenant.createdAt).toISOString(),
     }));
 
-    return NextResponse.json({ tenants: formattedTenants, total: formattedTenants.length });
+    // Paginated response shape: { data, page, limit, total, totalPages }.
+    // Frontend consumers read `.data` for the page slice and use `total`/
+    // `totalPages` to render pagination controls.
+    return NextResponse.json({
+      data: formattedTenants,
+      page,
+      limit,
+      total,
+      totalPages,
+    });
   } catch (error) {
     console.error('Admin tenants GET error:', error);
     return NextResponse.json({ error: 'Failed to fetch tenants' }, { status: 500 });

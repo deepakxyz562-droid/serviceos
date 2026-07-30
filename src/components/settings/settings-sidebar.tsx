@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * SettingsSidebar — left navigation for the 14 Business Owner settings
- * sections.
+ * SettingsSidebar — left navigation for the Business Owner settings
+ * sections, organized into enterprise-level groups.
  *
  * Desktop (lg+): sticky left column with grouped sections.
  * Mobile (<lg): hidden by default; a "Section: X" button at the top
@@ -22,7 +22,10 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { getSettingsIcon } from '@/components/settings/settings-icons';
 import {
   SETTINGS_SECTIONS,
+  SETTINGS_GROUP_LABELS,
+  SETTINGS_GROUP_ORDER,
   type SettingsSection,
+  type SettingsGroup,
 } from '@/components/settings/settings-config';
 
 interface SettingsSidebarProps {
@@ -33,7 +36,6 @@ interface SettingsSidebarProps {
 export function SettingsSidebar({ activeSectionId, onSelect }: SettingsSidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const businessSections = SETTINGS_SECTIONS.filter((s) => s.category === 'business');
   const activeSection = SETTINGS_SECTIONS.find((s) => s.id === activeSectionId);
 
   const handleSelect = (id: string) => {
@@ -80,7 +82,6 @@ export function SettingsSidebar({ activeSectionId, onSelect }: SettingsSidebarPr
             </SheetHeader>
             <ScrollArea className="h-[calc(100vh-65px)]">
               <SidebarList
-                sections={businessSections}
                 activeSectionId={activeSectionId}
                 onSelect={handleSelect}
               />
@@ -99,12 +100,11 @@ export function SettingsSidebar({ activeSectionId, onSelect }: SettingsSidebarPr
                 Business Settings
               </h2>
               <p className="text-[11px] text-muted-foreground mt-0.5">
-                14 sections
+                {SETTINGS_SECTIONS.length} sections
               </p>
             </div>
             <ScrollArea className="h-[calc(100vh-180px)] min-h-[400px]">
               <SidebarList
-                sections={businessSections}
                 activeSectionId={activeSectionId}
                 onSelect={handleSelect}
               />
@@ -119,51 +119,27 @@ export function SettingsSidebar({ activeSectionId, onSelect }: SettingsSidebarPr
 // ─── Internal: section list (shared between desktop + mobile) ──────────────
 
 interface SidebarListProps {
-  sections: SettingsSection[];
   activeSectionId: string;
   onSelect: (id: string) => void;
 }
 
-function SidebarList({ sections, activeSectionId, onSelect }: SidebarListProps) {
-  // Group sections into logical buckets so the list is scannable.
-  // Buckets are derived from the section's position in the spec, not from
-  // a separate `group` field — keeps the config simple.
-  const groups: Array<{ label: string; sections: SettingsSection[] }> = [
-    {
-      label: 'Business',
-      sections: sections.filter((s) =>
-        ['company', 'marketplace', 'crm', 'jobs-scheduling', 'finance'].includes(s.id),
-      ),
-    },
-    {
-      label: 'People',
-      sections: sections.filter((s) =>
-        ['team', 'customers', 'communication'].includes(s.id),
-      ),
-    },
-    {
-      label: 'Platform',
-      sections: sections.filter((s) =>
-        ['ai', 'integrations', 'automations'].includes(s.id),
-      ),
-    },
-    {
-      label: 'Admin',
-      sections: sections.filter((s) =>
-        ['security', 'developer', 'billing'].includes(s.id),
-      ),
-    },
-  ];
+function SidebarList({ activeSectionId, onSelect }: SidebarListProps) {
+  // Group sections by their `group` field, in the canonical group order.
+  const grouped = SETTINGS_GROUP_ORDER.map((group) => ({
+    group,
+    label: SETTINGS_GROUP_LABELS[group],
+    sections: SETTINGS_SECTIONS.filter((s) => s.group === group),
+  })).filter((g) => g.sections.length > 0);
 
   return (
     <nav className="p-2 space-y-4" aria-label="Settings sections">
-      {groups.map((group) => (
-        <div key={group.label}>
+      {grouped.map(({ group, label, sections }) => (
+        <div key={group}>
           <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {group.label}
+            {label}
           </p>
           <ul className="space-y-0.5">
-            {group.sections.map((section) => {
+            {sections.map((section) => {
               const Icon = getSettingsIcon(section.icon);
               const isActive = section.id === activeSectionId;
               return (

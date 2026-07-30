@@ -66,7 +66,25 @@ export async function GET(request: NextRequest) {
         description: def.description,
       }));
 
-      await db.featureFlag.createMany({ data: createData, skipDuplicates: true });
+      // SQLite doesn't support `createMany({ skipDuplicates: true })` on tables
+      // with composite unique constraints — Prisma rejects the `skipDuplicates`
+      // argument entirely. Use an upsert per row (run in parallel) instead so
+      // the seed is idempotent: a flag that already exists for this
+      // (tenantId, featureKey) pair is updated, otherwise it's created.
+      await Promise.all(
+        createData.map((item) =>
+          db.featureFlag.upsert({
+            where: {
+              tenantId_featureKey: {
+                tenantId: item.tenantId,
+                featureKey: item.featureKey,
+              },
+            },
+            create: item,
+            update: { enabled: item.enabled },
+          }),
+        ),
+      );
 
       existingFlags = await db.featureFlag.findMany({
         where: { tenantId },

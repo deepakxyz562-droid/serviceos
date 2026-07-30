@@ -405,7 +405,16 @@ export function useDeleteTenant() {
 export function useSubscriptions() {
   return useQuery({
     queryKey: queryKeys.subscriptions(),
-    queryFn: () => apiFetch<any>('/api/superadmin/subscriptions'),
+    // Server-side paginated endpoint. The API now returns
+    // `{ data, page, limit, total, totalPages }`; `select` extracts the
+    // page slice so existing consumers can keep treating the hook result
+    // as an array (matches the prior `{ subscriptions: [...] }` shape they
+    // read via the `Array.isArray(...) ? ... : .subscriptions` fallback).
+    // Page 1 / limit 50 keeps the initial payload small; a future task can
+    // wire up real pagination controls (Load more / page numbers) in the
+    // SubscriptionsTab UI.
+    queryFn: () => apiFetch<any>('/api/superadmin/subscriptions?page=1&limit=50'),
+    select: (res: any) => (Array.isArray(res) ? res : (res?.data ?? [])),
   });
 }
 
@@ -470,7 +479,15 @@ export function useToggleMenuItem() {
 export function useUsers() {
   return useQuery({
     queryKey: queryKeys.users(),
-    queryFn: () => apiFetch<any>('/api/admin/users'),
+    // Server-side paginated endpoint. The API now returns
+    // `{ data, page, limit, total, totalPages }`; `select` extracts the
+    // page slice so existing consumers can keep treating the hook result
+    // as an array (matches the prior `{ users: [...] }` shape they read
+    // via the `Array.isArray(...) ? ... : .users` fallback). Page 1 /
+    // limit 50 keeps the initial payload small; a future task can wire up
+    // real pagination controls in the UsersTab UI.
+    queryFn: () => apiFetch<any>('/api/admin/users?page=1&limit=50'),
+    select: (res: any) => (Array.isArray(res) ? res : (res?.data ?? [])),
   });
 }
 
