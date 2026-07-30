@@ -73,7 +73,29 @@ import { DeveloperSettings } from '@/components/settings/sections/developer-sett
 import { BillingSettings } from '@/components/settings/sections/billing-settings';
 import { GoogleBusinessProfileSettings } from '@/components/settings/sections/google-business-profile-settings';
 import { DedicatedPhoneSettings } from '@/components/settings/sections/dedicated-phone-settings';
+import { WorkSettings } from '@/components/settings/sections/work-settings';
+import { SmsTextSettings } from '@/components/settings/sections/sms-text-settings';
+import { WhatsAppSettings } from '@/components/settings/sections/whatsapp-settings';
+import { AiAutoReplySettings } from '@/components/settings/sections/ai-auto-reply-settings';
+import { PaymentIntegrationsSettings } from '@/components/settings/sections/payment-integrations-settings';
 import { GenericPlaceholder } from '@/components/settings/sections/generic-placeholder';
+
+// Embed full developed views inside Settings (single source of truth pattern).
+import { ServiceCatalogView } from '@/components/views/service-catalog-view';
+import { WorkflowsView } from '@/components/views/workflows-view';
+import { ChecklistBuilder } from '@/components/views/checklists-view';
+import { FormBuilderView } from '@/components/views/form-builder-view';
+import ChannelsView from '@/components/views/channels-view';
+import { CredentialsView } from '@/components/views/credentials-view';
+import { EmailProvidersView } from '@/components/views/email-providers-view';
+import { EmailTemplatesView } from '@/components/views/email-templates-view';
+import { ActivityLogsView } from '@/components/views/activity-logs-view';
+import { HistoryView } from '@/components/views/history-view';
+import { HelpCenterView } from '@/components/views/help-center-view';
+import { BillingView } from '@/components/views/billing-view';
+import { ExpensesView } from '@/components/views/expenses-view';
+import { CustomerPortalView } from '@/components/views/customer-portal-view';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -549,6 +571,57 @@ export function SettingsView() {
         return <GoogleBusinessProfileSettings />;
       case 'dedicated-phone':
         return <DedicatedPhoneSettings />;
+
+      // ─── Sections that embed developed views (Phase 2 mapping) ──────────
+      case 'products-services':
+        return <ServiceCatalogView />;
+      case 'workflows':
+        return <WorkflowsView />;
+      case 'checklists':
+        return <ChecklistBuilder />;
+      case 'custom-fields':
+        return <FormBuilderView />;
+      case 'channels-credentials':
+        return (
+          <Tabs defaultValue="channels" className="w-full">
+            <TabsList>
+              <TabsTrigger value="channels">Channels</TabsTrigger>
+              <TabsTrigger value="credentials">Credentials</TabsTrigger>
+            </TabsList>
+            <TabsContent value="channels" className="mt-4">
+              <ChannelsView />
+            </TabsContent>
+            <TabsContent value="credentials" className="mt-4">
+              <CredentialsView />
+            </TabsContent>
+          </Tabs>
+        );
+      case 'email-providers':
+        return <EmailProvidersView />;
+      case 'emails':
+        return <EmailTemplatesView />;
+      case 'audit-logs':
+        return <ActivityLogsView />;
+      case 'history':
+        return <HistoryView />;
+      case 'help-support':
+        return <HelpCenterView />;
+      case 'subscription':
+        return <BillingView />;
+      case 'expenses':
+        return <ExpensesView />;
+
+      // ─── Phase 3: newly built DB-backed settings sections ───────────────
+      case 'work-settings':
+        return <WorkSettings />;
+      case 'sms-text':
+        return <SmsTextSettings />;
+      case 'whatsapp':
+        return <WhatsAppSettings />;
+      case 'ai-auto-reply':
+        return <AiAutoReplySettings />;
+      case 'payment-integrations':
+        return <PaymentIntegrationsSettings />;
 
       // ─── Placeholder sections (Coming Soon) ─────────────────────────────
       default: {

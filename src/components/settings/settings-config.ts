@@ -110,7 +110,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: 'Package',
     description: 'Service catalog, product catalog, pricing tiers, service categories',
     group: 'business',
-    comingSoon: true,
     keywords: ['products', 'services', 'catalog', 'pricing', 'categories'],
   },
   {
@@ -119,7 +118,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: 'Users',
     description: 'Lead pipeline, opportunity stages, customer types, tags, segments, custom fields',
     group: 'business',
-    comingSoon: true,
     keywords: ['leads', 'pipeline', 'opportunities', 'stages', 'segments', 'tags'],
   },
   {
@@ -137,7 +135,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: 'Braces',
     description: 'Custom fields for contacts, jobs, invoices. Includes Form Builder for custom intake forms',
     group: 'business',
-    comingSoon: true,
     keywords: ['custom fields', 'form builder', 'intake forms', 'custom data'],
   },
   {
@@ -163,7 +160,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: 'Workflow',
     description: 'Visual workflow builder — multi-step automations with branching logic',
     group: 'business',
-    comingSoon: true,
     keywords: ['workflow', 'visual builder', 'automation', 'branching', 'multi-step'],
   },
   {
@@ -216,10 +212,9 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     id: 'work-settings',
     label: 'Work Settings',
     icon: 'Briefcase',
-    description: 'Working hours, leave policies, overtime rules, shift templates',
+    description: 'Quotes, jobs, invoices, visit titles, payment terms, invoice reminders, chemical tracking',
     group: 'team',
-    comingSoon: true,
-    keywords: ['working hours', 'leave', 'overtime', 'shifts', 'work policy'],
+    keywords: ['quotes', 'jobs', 'invoices', 'visit titles', 'payment terms', 'reminders', 'chemical tracking', 'work settings'],
   },
 
   // ─── Schedule ───────────────────────────────────────────────────────────
@@ -238,7 +233,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: 'ListChecks',
     description: 'Job checklists, visit checklists, inspection forms, completion rules',
     group: 'schedule',
-    comingSoon: true,
     keywords: ['checklist', 'inspection', 'job', 'visit', 'completion'],
   },
 
@@ -258,7 +252,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: 'Mail',
     description: 'Email templates, sender identity, signature, notification rules',
     group: 'client',
-    comingSoon: true,
     keywords: ['email', 'templates', 'sender', 'signature', 'notification'],
   },
   {
@@ -304,7 +297,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: 'MessageCircle',
     description: 'Meta Cloud API config, templates, phone number, webhook setup',
     group: 'communication',
-    comingSoon: true,
     keywords: ['whatsapp', 'meta', 'cloud api', 'templates', 'webhook'],
   },
   {
@@ -313,7 +305,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: 'Mail',
     description: 'SMTP config, sender domain, DKIM/SPF, delivery settings',
     group: 'communication',
-    comingSoon: true,
     keywords: ['email', 'smtp', 'provider', 'dkim', 'spf', 'delivery', 'sender'],
   },
   {
@@ -322,16 +313,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: 'Bot',
     description: 'Auto-reply when offline, AI message generation, call reply configuration',
     group: 'communication',
-    comingSoon: true,
     keywords: ['ai', 'auto reply', 'offline', 'message', 'call reply', 'bot'],
-  },
-  {
-    id: 'communication',
-    label: 'Communication (Legacy)',
-    icon: 'MessageSquare',
-    description: 'Auto-reply, email, SMS, WhatsApp, templates, notification rules, sender identity',
-    group: 'communication',
-    keywords: ['email', 'sms', 'whatsapp', 'templates', 'sender', 'auto reply', 'auto-reply', 'offline', 'bot'],
   },
 
   // ─── Integrations & Channels ────────────────────────────────────────────
@@ -350,7 +332,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: 'KeyRound',
     description: 'API keys, provider credentials, secure vault for all channel configs',
     group: 'integrations',
-    comingSoon: true,
     keywords: ['credentials', 'api keys', 'secrets', 'vault', 'channels'],
   },
   {
@@ -359,7 +340,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: 'CreditCard',
     description: 'Stripe, PayPal, Square, QuickBooks, bank feeds, payment gateway config',
     group: 'integrations',
-    comingSoon: true,
     keywords: ['stripe', 'paypal', 'square', 'quickbooks', 'payment', 'gateway', 'bank'],
   },
   {
@@ -390,7 +370,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: 'CreditCard',
     description: 'Current plan, upgrade/downgrade, billing cycle, plan features',
     group: 'billing',
-    comingSoon: true,
     keywords: ['subscription', 'plan', 'upgrade', 'downgrade', 'billing cycle'],
   },
   {
@@ -408,7 +387,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: 'Wallet',
     description: 'Business expenses, receipt upload, categorization, export for tax',
     group: 'billing',
-    comingSoon: true,
     keywords: ['expenses', 'receipts', 'upload', 'categorize', 'export', 'tax'],
   },
   {
@@ -420,15 +398,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     comingSoon: true,
     keywords: ['payment method', 'card', 'bank', 'auto-pay', 'default'],
   },
-  {
-    id: 'billing',
-    label: 'Billing (Legacy)',
-    icon: 'CreditCard',
-    description: 'Subscription, usage, invoices, marketplace plan, AI credits, SMS/email usage, storage, payment history, upgrade',
-    group: 'billing',
-    comingSoon: true,
-    keywords: ['subscription', 'plan', 'usage', 'credits', 'storage', 'history', 'upgrade'],
-  },
 
   // ─── System ─────────────────────────────────────────────────────────────
   {
@@ -437,7 +406,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: 'ScrollText',
     description: 'System audit trail, admin actions, config changes, compliance log',
     group: 'system',
-    comingSoon: true,
     keywords: ['audit', 'logs', 'trail', 'admin actions', 'compliance'],
   },
   {
@@ -446,7 +414,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: 'History',
     description: 'Activity history, record changes, undo log, timeline view',
     group: 'system',
-    comingSoon: true,
     keywords: ['history', 'activity', 'changes', 'undo', 'timeline'],
   },
   {
@@ -473,7 +440,6 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     icon: 'LifeBuoy',
     description: 'Support tickets, knowledge base, contact support, system status',
     group: 'system',
-    comingSoon: true,
     keywords: ['help', 'support', 'tickets', 'knowledge base', 'contact', 'status'],
   },
 ];

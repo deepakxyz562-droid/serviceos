@@ -191,13 +191,6 @@ const ownerNavSections: NavSection[] = [
     defaultCollapsed: true,
     items: [
       { view: 'settings', label: 'Settings', icon: Settings },
-      { view: 'integrations', label: 'Integrations', icon: Plug, badge: 'New' },
-      { view: 'channels', label: 'Channels & Credentials', icon: RadioTower },
-      { view: 'auditLogs', label: 'Audit Logs', icon: ScrollText },
-      { view: 'activityLogs', label: 'History', icon: History },
-      { view: 'customerPortal', label: 'Customer Portal', icon: Globe },
-      { view: 'employeePortal', label: 'Employee Portal', icon: HardHat },
-      { view: 'helpCenter', label: 'Help & Support', icon: LifeBuoy },
     ],
   },
 ];
@@ -314,10 +307,6 @@ const superadminNavSections: NavSection[] = [
     title: 'Setup & Admin',
     items: [
       { view: 'settings', label: 'Settings', icon: Settings },
-      { view: 'integrations', label: 'Integrations', icon: Plug, badge: 'New' },
-      { view: 'channels', label: 'Channels & Credentials', icon: RadioTower },
-      { view: 'auditLogs', label: 'Audit Logs', icon: ScrollText },
-      { view: 'activityLogs', label: 'History', icon: History },
       { view: 'helpAdminTickets', label: 'Support Tickets', icon: Ticket },
       { view: 'helpAdminKB', label: 'Knowledge Base', icon: BookOpen },
       { view: 'helpAdminCategories', label: 'Categories', icon: FolderTree },
