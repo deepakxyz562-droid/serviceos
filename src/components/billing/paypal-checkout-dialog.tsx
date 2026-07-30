@@ -56,7 +56,7 @@ import { formatCurrency } from '@/lib/currency';
  * interface and the onboarding wizard's `PLANS` array entries satisfy this.
  */
 export interface PaypalCheckoutPlan {
-  id: 'starter' | 'growth' | 'pro' | 'enterprise' | string;
+  id: 'starter' | 'growth' | 'business' | 'enterprise' | string;
   name: string;
   monthlyPrice: number;
   yearlyPrice: number;

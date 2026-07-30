@@ -708,8 +708,8 @@ const LIFECYCLE_EVENTS: ServiceEvent[] = [
   'booking.created', 'booking.confirmed', 'booking.cancelled',
   'booking.completed', 'booking.rescheduled',
   // Invoice / Quote / Payment
-  'invoice.created', 'invoice.paid', 'invoice.overdue',
-  'quote.sent', 'quote.accepted', 'quote.rejected',
+  'invoice.created', 'invoice.sent', 'invoice.paid', 'invoice.overdue',
+  'quote.created', 'quote.sent', 'quote.accepted', 'quote.rejected',
   'payment.received', 'payment.failed',
   // Employee
   'employee.status_changed', 'employee.heartbeat',

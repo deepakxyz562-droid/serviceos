@@ -141,14 +141,14 @@ const LATEST_ERRORS: ErrorItem[] = [
 
 interface SignupItem {
   company: string;
-  plan: 'starter' | 'growth' | 'pro';
+  plan: 'starter' | 'growth' | 'business';
   minsAgo: number;
 }
 
 const RECENT_SIGNUPS: SignupItem[] = [
   { company: 'AquaFlow Plumbing', plan: 'starter', minsAgo: 5 },
   { company: 'Bloom Beauty', plan: 'growth', minsAgo: 22 },
-  { company: 'Apex HVAC', plan: 'pro', minsAgo: 60 },
+  { company: 'Apex HVAC', plan: 'business', minsAgo: 60 },
   { company: 'ClearWell Cleaning', plan: 'starter', minsAgo: 120 },
   { company: 'VoltEdge Electric', plan: 'growth', minsAgo: 180 },
 ];

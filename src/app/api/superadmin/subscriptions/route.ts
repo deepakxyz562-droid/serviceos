@@ -275,19 +275,29 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: 'New plan is required' }, { status: 400 });
       }
 
-      const planAmounts: Record<string, number> = {
-        trial: 0,
-        starter: 10,
-        growth: 25,
-        pro: 50,
-        enterprise: 0,
-      };
+      // Look up the plan's monthly price from the Plan catalog so the
+      // subscription amount stays in sync with the seeded prices
+      // (starter $29 / growth $79 / business $149 / enterprise $0 / trial $0).
+      // Falls back to 0 if the Plan row is missing (e.g. plan table not yet
+      // seeded) so the change_plan action still succeeds.
+      let planAmount = 0;
+      try {
+        const plan = await db.plan.findUnique({
+          where: { code: newPlan },
+          select: { monthlyPrice: true },
+        });
+        if (plan?.monthlyPrice !== undefined && plan?.monthlyPrice !== null) {
+          planAmount = plan.monthlyPrice;
+        }
+      } catch {
+        // Plan table missing — fall through with amount = 0.
+      }
 
       const subscription = await db.subscription.update({
         where: { id: subscriptionId },
         data: {
           plan: newPlan,
-          amount: planAmounts[newPlan] ?? 0,
+          amount: planAmount,
         },
       });
 

@@ -8,6 +8,7 @@ import {
   CalendarDays, Calculator, MessageCircle, Phone, ShoppingCart, Tag,
   Percent, Receipt, Copy, Edit3, Loader2,
   User, Mail, MapPin, Briefcase, StickyNote, Printer, ScrollText, Pencil,
+  Sparkles, Lock,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,6 +33,12 @@ import { toast } from 'sonner';
 import { useCompanyCurrency } from '@/hooks/use-company-currency';
 import { authFetch } from '@/lib/client-auth';
 import { FormSectionCard } from '@/components/shared/form-section-card';
+import { useFeatureAccess } from '@/hooks/use-tenant-plan';
+import { openUpgradeModal } from '@/components/layout/upgrade-modal';
+import {
+  AiQuoteGeneratorDialog,
+  type AiGeneratedQuote,
+} from '@/components/quotes/ai-quote-generator-dialog';
 import { cn } from '@/lib/utils';
 
 // ============================================================
@@ -305,12 +312,17 @@ export function QuotesView() {
 
   const [showPreviewDialog, setShowPreviewDialog] = useState(false);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
+  const [showAiDialog, setShowAiDialog] = useState(false);
   const [selectedQuote, setSelectedQuote] = useState<Quote | null>(null);
   const [editingQuoteId, setEditingQuoteId] = useState<string | null>(null);
   const [formMode, setFormMode] = useState<'list' | 'detail' | 'create'>('list');
 
   const [form, setForm] = useState<QuoteFormData>(EMPTY_FORM());
   const [saving, setSaving] = useState(false);
+
+  // ── Plan gating: AI Quote Generator requires Professional (growth) tier ──
+  const aiQuoteAccess = useFeatureAccess('ai_quote_generator');
+  const aiQuoteLocked = !aiQuoteAccess.enabled && !aiQuoteAccess.loading;
 
   // ── Currency from hook ───────────────────────────────────
   const { currency, format, formatCompact, symbol } = useCompanyCurrency();
@@ -447,6 +459,43 @@ export function QuotesView() {
   const closeCreatePage = () => {
     setFormMode('list');
     setEditingQuoteId(null);
+  };
+
+  /**
+   * Open the AI Quote Generator. If the user's plan doesn't include
+   * `ai_quote_generator`, open the UpgradeModal instead (so trial users can
+   * still discover the feature, and paid-starter users are nudged to upgrade).
+   */
+  const openAiQuoteDialog = () => {
+    if (aiQuoteLocked) {
+      openUpgradeModal({
+        menuKey: 'quotes',
+        label: 'AI Quote Generator',
+        description:
+          'Generate professional quotes instantly from a job description. ' +
+          'Upgrade to the Professional plan or above to unlock AI Quote Generator.',
+        minPlan: 'growth',
+      });
+      return;
+    }
+    setShowAiDialog(true);
+  };
+
+  /**
+   * Called by AiQuoteGeneratorDialog when the user clicks "Open Quote" on the
+   * success screen. We normalize the raw API response into our Quote shape,
+   * prepend it to the list, and open it in the edit form so the user can
+   * tweak the AI-generated line items / pricing / valid-until date.
+   */
+  const handleAiQuoteCreated = (raw: AiGeneratedQuote) => {
+    const normalized = normalizeQuote(raw, customers);
+    const customer = customers.find((c) => c.id === normalized.customerId);
+    if (customer) {
+      normalized.customerName = customer.name;
+      normalized.customerPhone = customer.phone;
+    }
+    setQuotes((prev) => [normalized, ...prev]);
+    openEditDialog(normalized);
   };
 
   const openEditDialog = (quote: Quote) => {
@@ -1153,6 +1202,41 @@ export function QuotesView() {
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start">
           {/* Left column: form fields */}
           <div className="space-y-6">
+            {/* AI auto-fill banner */}
+            <div className="rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 dark:bg-emerald-950/20 dark:border-emerald-900 dark:from-emerald-950/30 dark:to-teal-950/20 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-3 min-w-0">
+                <span className="flex items-center justify-center size-9 rounded-lg bg-emerald-600 shrink-0 shadow-sm">
+                  <Sparkles className="size-5 text-white" />
+                </span>
+                <div className="min-w-0">
+                  <p className="font-semibold text-foreground flex items-center gap-2">
+                    Auto-fill with AI
+                    {aiQuoteLocked && (
+                      <Badge variant="outline" className="text-[10px] h-5 bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800">
+                        <Lock className="size-3 mr-1" /> Pro
+                      </Badge>
+                    )}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Describe the job and let AI build the entire quote — line items, pricing, timeline, and risk assessment.
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={openAiQuoteDialog}
+                className="border-emerald-600/50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/40 shrink-0"
+              >
+                {aiQuoteLocked ? (
+                  <Lock className="size-4 mr-1.5" />
+                ) : (
+                  <Sparkles className="size-4 mr-1.5" />
+                )}
+                Auto-fill with AI
+              </Button>
+            </div>
+
             {/* Quote metadata */}
             <FormSectionCard icon={FileText} title="Quote Details">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1506,6 +1590,23 @@ export function QuotesView() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={openAiQuoteDialog}
+            className="border-emerald-600/50 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
+            title={
+              aiQuoteLocked
+                ? 'AI Quote Generator — upgrade to the Professional plan to unlock'
+                : 'Generate a quote from a job description with AI'
+            }
+          >
+            {aiQuoteLocked ? (
+              <Lock className="size-4 mr-1.5" />
+            ) : (
+              <Sparkles className="size-4 mr-1.5" />
+            )}
+            Generate with AI
+          </Button>
           <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={openCreateDialog}>
             <Plus className="size-4 mr-1.5" /> Create Quote
           </Button>
@@ -1860,6 +1961,17 @@ export function QuotesView() {
       </Dialog>
         </>
       )}
+
+      {/* ── AI Quote Generator Dialog ────────────────────────────── */}
+      {/* Mounted OUTSIDE the formMode ternary so it's accessible from both
+          the list header button AND the New Quote form's "Auto-fill" banner. */}
+      <AiQuoteGeneratorDialog
+        open={showAiDialog}
+        onOpenChange={setShowAiDialog}
+        customers={customers}
+        tenantId={tenantId}
+        onQuoteCreated={handleAiQuoteCreated}
+      />
     </div>
   );
 }

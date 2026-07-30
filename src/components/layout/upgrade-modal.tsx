@@ -13,8 +13,16 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Lock, Sparkles, Check } from 'lucide-react';
 import { MENU_CATALOG } from '@/lib/menu-catalog';
-import { PLAN_TIERS, planRank } from '@/lib/plan-features';
+import { PLAN_TIERS, planRank, PLAN_DISPLAY_NAMES } from '@/lib/plan-features';
 import { useAppStore } from '@/store/app-store';
+
+export type MenuAccessState = 'visible' | 'locked' | 'hidden';
+
+export interface MenuAccessResult {
+  state: MenuAccessState;
+  minPlan?: string;
+  description?: string;
+}
 
 export interface UpgradeModalState {
   menuKey: string;
@@ -45,45 +53,120 @@ export function getMenuCatalogItem(key: string) {
 }
 
 /**
- * Checks if a menu item is locked for the current tenant.
- * Pure function — caller passes in planTier and isSuperAdmin.
+ * Checks the visibility/lock state of a menu item for the current tenant.
+ * Pure function — caller passes in planTier, isSuperAdmin and planStatus.
  *
- * Returns { locked, minPlan, description }.
+ * Behaviour matrix (per the spec):
+ *   - Superadmin: always 'visible' (bypass).
+ *   - Item has no minPlan or current tier meets/exceeds it: 'visible'.
+ *   - Trial users (planStatus === 'trial'): 'locked' — discovery mode. They
+ *     SEE items above their tier with a Lock icon, so they learn what they'd
+ *     get by upgrading. Clicking opens the UpgradeModal.
+ *   - Paid users below the required tier: 'hidden' — clean-workspace mode.
+ *     Items above their tier are removed from the sidebar entirely.
+ *
+ * Returns { state, minPlan, description }. `minPlan`/`description` are only
+ * populated when state === 'locked' (callers don't need them for 'hidden'
+ * since the item isn't rendered at all).
  */
-export function checkMenuLock(
+export function checkMenuAccess(
   menuKey: string,
   planTier: string,
-  isSuperAdmin: boolean
-): { locked: boolean; minPlan?: string; description?: string } {
-  if (isSuperAdmin) return { locked: false };
+  isSuperAdmin: boolean,
+  planStatus?: string,
+): MenuAccessResult {
+  if (isSuperAdmin) return { state: 'visible' };
+
   const item = getMenuCatalogItem(menuKey);
-  if (!item?.minPlan) return { locked: false };
+  if (!item || !item.minPlan) return { state: 'visible' };
 
   const currentRank = planRank(planTier);
   const requiredRank = planRank(item.minPlan);
-  if (currentRank >= requiredRank) return { locked: false };
+  if (currentRank >= requiredRank) return { state: 'visible' };
 
-  return {
-    locked: true,
-    minPlan: item.minPlan,
-    description: item.upgradeDescription || '',
-  };
+  // Trial users see LOCKED items (discovery mode) — they can see what they'd
+  // get by upgrading. Paid users see HIDDEN items (clean workspace) — items
+  // above their tier are removed entirely.
+  if (planStatus === 'trial') {
+    return {
+      state: 'locked',
+      minPlan: item.minPlan,
+      description: item.upgradeDescription,
+    };
+  }
+  return { state: 'hidden' };
 }
 
-const PLAN_DISPLAY_NAMES: Record<string, string> = {
-  trial: 'Trial',
-  starter: 'Starter',
-  growth: 'Growth',
-  business: 'Pro',
-  enterprise: 'Enterprise',
+// ─── Plan prices ────────────────────────────────────────────────────────────
+// Phase 5: prices now come from the DB-backed Plan catalog via /api/plans so
+// superadmins can edit them via the Plan Catalog UI. We keep FALLBACK_PRICES
+// as a hard-coded safety net so the modal still renders correctly while the
+// fetch is in-flight or if the API is unreachable. A module-level cache
+// ensures we only hit /api/plans once per page load, no matter how many times
+// the modal is opened.
+
+interface PlanPriceEntry {
+  monthlyPrice: number;
+  yearlyPrice: number;
+  originalMonthlyPrice: number; // 0 = no strikethrough
+  discountBadge: string | null;
+}
+
+const FALLBACK_PRICES: Record<string, PlanPriceEntry> = {
+  starter: { monthlyPrice: 29, yearlyPrice: 290, originalMonthlyPrice: 49, discountBadge: null },
+  growth: { monthlyPrice: 79, yearlyPrice: 790, originalMonthlyPrice: 129, discountBadge: null },
+  business: { monthlyPrice: 149, yearlyPrice: 1490, originalMonthlyPrice: 249, discountBadge: null },
+  enterprise: { monthlyPrice: 0, yearlyPrice: 0, originalMonthlyPrice: 0, discountBadge: null },
 };
 
-const PLAN_PRICES: Record<string, { original: number; discounted: number }> = {
-  starter: { original: 17, discounted: 10 },
-  growth: { original: 42, discounted: 25 },
-  business: { original: 83, discounted: 50 },
-  enterprise: { original: 0, discounted: 0 },
-};
+let _plansCache: Record<string, PlanPriceEntry> | null = null;
+let _plansFetchPromise: Promise<Record<string, PlanPriceEntry>> | null = null;
+
+/**
+ * Fetch the DB-backed plan prices and cache them at module scope. Returns a
+ * map keyed by plan code (starter | growth | business | enterprise). Falls
+ * back to FALLBACK_PRICES on any error. Safe to call repeatedly — concurrent
+ * callers share the same in-flight promise.
+ */
+function fetchPlanPrices(): Promise<Record<string, PlanPriceEntry>> {
+  if (_plansCache) return Promise.resolve(_plansCache);
+  if (_plansFetchPromise) return _plansFetchPromise;
+  _plansFetchPromise = (async () => {
+    try {
+      const res = await fetch('/api/plans');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      const plansArr = (json.plans || []) as Array<{
+        code: string;
+        monthlyPrice: number;
+        yearlyPrice: number;
+        originalMonthlyPrice?: number;
+        originalYearlyPrice?: number;
+        discountBadge?: string | null;
+        isAddon?: boolean;
+      }>;
+      const map: Record<string, PlanPriceEntry> = { ...FALLBACK_PRICES };
+      for (const p of plansArr) {
+        if (p.isAddon) continue; // skip ai_pro_addon, marketplace_*, etc.
+        map[p.code] = {
+          monthlyPrice: p.monthlyPrice ?? 0,
+          yearlyPrice: p.yearlyPrice ?? 0,
+          originalMonthlyPrice: p.originalMonthlyPrice ?? 0,
+          discountBadge: p.discountBadge ?? null,
+        };
+      }
+      _plansCache = map;
+      return map;
+    } catch {
+      // Network/seed failure — keep using FALLBACK_PRICES.
+      _plansCache = FALLBACK_PRICES;
+      return _plansCache;
+    } finally {
+      _plansFetchPromise = null;
+    }
+  })();
+  return _plansFetchPromise;
+}
 
 /**
  * Global UpgradeModal — mount ONCE in app-layout.tsx.
@@ -91,6 +174,7 @@ const PLAN_PRICES: Record<string, { original: number; discounted: number }> = {
  */
 export function UpgradeModal() {
   const [state, setState] = useState<UpgradeModalState | null>(null);
+  const [planPrices, setPlanPrices] = useState<Record<string, PlanPriceEntry>>(FALLBACK_PRICES);
   const setCurrentView = useAppStore((s) => s.setCurrentView);
 
   useEffect(() => {
@@ -99,6 +183,18 @@ export function UpgradeModal() {
       _openHandler = null;
     };
   }, []);
+
+  // Fetch DB-backed plan prices once on mount (and cache module-level so
+  // subsequent modal opens reuse the result). Falls back to FALLBACK_PRICES.
+  useEffect(() => {
+    let mounted = true;
+    fetchPlanPrices().then((prices) => {
+      if (mounted && prices !== planPrices) setPlanPrices(prices);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [planPrices]);
 
   const handleClose = () => setState(null);
 
@@ -142,7 +238,12 @@ export function UpgradeModal() {
             </p>
             <div className="flex flex-wrap gap-2">
               {unlockingPlans.map((plan) => {
-                const prices = PLAN_PRICES[plan];
+                const prices = planPrices[plan] || FALLBACK_PRICES[plan];
+                const hasDiscount =
+                  prices &&
+                  prices.originalMonthlyPrice > 0 &&
+                  prices.originalMonthlyPrice > prices.monthlyPrice &&
+                  prices.monthlyPrice > 0;
                 return (
                   <Badge
                     key={plan}
@@ -151,10 +252,18 @@ export function UpgradeModal() {
                   >
                     <Check className="h-3 w-3 text-emerald-600" />
                     <span className="font-medium">{PLAN_DISPLAY_NAMES[plan]}</span>
-                    {prices && prices.discounted > 0 && (
+                    {prices && prices.monthlyPrice > 0 && (
                       <span className="text-muted-foreground text-[10px]">
-                        ${prices.discounted}/mo
+                        {hasDiscount && (
+                          <span className="line-through mr-1">
+                            ${prices.originalMonthlyPrice}
+                          </span>
+                        )}
+                        ${prices.monthlyPrice}/mo
                       </span>
+                    )}
+                    {prices && prices.monthlyPrice === 0 && plan === 'enterprise' && (
+                      <span className="text-muted-foreground text-[10px]">Custom</span>
                     )}
                   </Badge>
                 );

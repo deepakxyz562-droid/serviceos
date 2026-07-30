@@ -185,6 +185,11 @@ model Tenant {
   loyaltyPoints       LoyaltyPoint[]
   referrals           Referral[]
   pricingRules       PricingRule[]
+  // New billing/automation relations
+  addonSubscriptions  AddonSubscription[]
+  recurringJobSchedules RecurringJobSchedule[]
+  scheduledMessages   ScheduledMessage[]
+  scheduledExecutions ScheduledExecution[]
 
   @@index([slug])
   @@index([plan])
@@ -337,11 +342,14 @@ model BillingEvent {
 // Seeded on first run by /api/plans/seed (idempotent).
 model Plan {
   id              String   @id @default(cuid())
-  code            String   @unique // starter | growth | business | enterprise | marketplace_addon
+  code            String   @unique // starter | growth | business | enterprise | marketplace_addon | ai_addon
   name            String
   description     String?
   monthlyPrice    Float    @default(0)
   yearlyPrice     Float    @default(0)
+  originalMonthlyPrice  Float  @default(0)   // strikethrough price (0 = no discount shown)
+  originalYearlyPrice   Float  @default(0)
+  discountBadge   String?                     // optional override like "Launch offer"
   currency        String   @default("USD")
   maxUsers        Int      @default(1)
   maxJobs         Int      @default(100)
@@ -364,6 +372,165 @@ model Plan {
 
   @@index([code])
   @@index([isActive])
+}
+
+// ── Plan Feature Matrix (DB-backed, superadmin-editable) ────────────────────
+// Each (planCode, featureKey) pair is a row. The superadmin "Plan Features"
+// matrix UI toggles these; `requirePlanFeature()` in plan-gate.ts reads them.
+// Falls back to DEFAULT_PLAN_MATRIX in plan-features.ts if a row is missing.
+model PlanFeatureMatrix {
+  id          String   @id @default(cuid())
+  planCode    String   // trial | starter | growth | business | enterprise
+  featureKey  String   // matches PLAN_FEATURE_DEFS[].key
+  enabled     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([planCode, featureKey])
+  @@index([planCode])
+}
+
+// ── Add-on Subscriptions (AI Add-on, Marketplace Featured Add-on) ───────────
+// Separate from the main Subscription because add-ons are optional, can be
+// added to any base plan, and have their own billing cycle / provider.
+model AddonSubscription {
+  id              String   @id @default(cuid())
+  tenantId        String
+  addonCode       String   // ai_starter | ai_pro | ai_unlimited | marketplace_featured | marketplace_premium
+  displayName     String
+  status          String   @default("active") // active | cancelled | expired | past_due
+  amount          Float    @default(0)
+  currency        String   @default("USD")
+  billingCycle    String   @default("monthly") // monthly | yearly
+  paymentProvider String   @default("none") // none | creem | paypal
+  providerSubscriptionId String?
+  providerProductId String?
+  startDate       DateTime @default(now())
+  endDate         DateTime? // null = open-ended
+  nextBillingAt   DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, addonCode, status])
+  @@index([tenantId])
+  @@index([addonCode])
+  @@index([status])
+}
+
+// ── Recurring Job Schedules (true recurring jobs, not batch visit creation) ─
+// Mirrors RecurringInvoice. A cron job reads nextRunAt and generates a new
+// Job + JobVisit when due. Supports pause/resume and holiday skip.
+model RecurringJobSchedule {
+  id              String   @id @default(cuid())
+  tenantId        String
+  customerId      String?
+  templateJobId   String?  // optional template job to clone details from
+  title           String
+  description     String?
+  frequency       String   @default("weekly") // weekly | biweekly | monthly | quarterly | annually
+  dayOfWeek       Int?     // 0-6 for weekly/biweekly
+  dayOfMonth      Int?     // 1-31 for monthly/quarterly/annually
+  weekOfMonth     Int?     // 1-5 (for "second Tuesday" patterns)
+  timeOfDay       String?  // "09:30" 24h format
+  durationMins    Int      @default(60)
+  startDate       DateTime @default(now())
+  endDate         DateTime?  // null = open-ended
+  nextRunAt       DateTime @default(now())
+  lastRunAt       DateTime?
+  lastJobId       String?
+  executionCount  Int      @default(0)
+  assigneeIdsJson String   @default("[]") // array of employee IDs
+  serviceId       String?
+  branchId        String?
+  visitInstructions String?
+  checklistIdsJson String  @default("[]")
+  lineItemsJson   String   @default("[]") // for auto-quoting
+  active          Boolean  @default(true)
+  pausedAt        DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant   Tenant?  @relation(fields: [tenantId], references: [id])
+  customer Customer? @relation("CustomerRecurringJobs", fields: [customerId], references: [id])
+
+  @@index([tenantId])
+  @@index([active])
+  @@index([nextRunAt])
+  @@index([customerId])
+}
+
+// ── Scheduled Messages (automated reminders + follow-ups) ───────────────────
+// Persistent replacement for the in-memory journey scheduledActionsStore.
+// A cron job reads dueAt and dispatches the message via the appropriate channel.
+model ScheduledMessage {
+  id              String   @id @default(cuid())
+  tenantId        String
+  customerId      String?
+  jobId           String?
+  invoiceId       String?
+  quoteId         String?
+  bookingId       String?
+  conversationId  String?
+  messageType     String   // appointment_reminder | payment_reminder | overdue_reminder | quote_followup | invoice_followup | review_request | completion_followup | custom
+  channel         String   @default("email") // email | whatsapp | sms | in_app
+  recipientEmail  String?
+  recipientPhone  String?
+  subject         String?
+  bodyText        String?
+  bodyHtml        String?
+  dueAt           DateTime // when to send
+  sentAt          DateTime?
+  status          String   @default("pending") // pending | sent | failed | cancelled
+  attempts        Int      @default(0)
+  lastError       String?
+  metadataJson    String   @default("{}")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant   Tenant?    @relation(fields: [tenantId], references: [id])
+  customer Customer?  @relation("CustomerScheduledMessages", fields: [customerId], references: [id])
+  job      Job?       @relation("JobScheduledMessages", fields: [jobId], references: [id])
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([dueAt])
+  @@index([customerId])
+  @@index([jobId])
+  @@index([invoiceId])
+  @@index([quoteId])
+}
+
+// ── Scheduled Executions (delayed workflow automations) ─────────────────────
+// Persistent replacement for setTimeout() in trigger-engine.ts. When a
+// workflow automation has a delayMinutes, instead of setTimeout we create a
+// ScheduledExecution row. A cron picks up due rows and fires the actions.
+model ScheduledExecution {
+  id              String   @id @default(cuid())
+  tenantId        String
+  automationId    String?  // WorkflowAutomation.id
+  triggerEvent    String   // quote.sent | invoice.created | invoice.overdue | etc.
+  entityType      String?  // quote | invoice | job | lead | booking
+  entityId        String?
+  delayMinutes    Int      @default(0)
+  dueAt           DateTime
+  executedAt      DateTime?
+  status          String   @default("pending") // pending | executing | completed | failed | cancelled
+  actionsJson     String   @default("[]") // actions to execute
+  contextJson     String   @default("{}") // entity snapshot for action templating
+  attempts        Int      @default(0)
+  lastError       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([dueAt])
+  @@index([entityType, entityId])
 }
 
 model User {
@@ -553,6 +720,8 @@ model RecurringInvoice {
   active          Boolean  @default(true)
   executionCount  Int      @default(0)
   createdById     String?
+  autoChargeEnabled Boolean @default(false)             // auto-charge saved payment method on generation
+  paymentMethodId String?                              // saved PaymentMethod.id to charge
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -1059,6 +1228,7 @@ model Employee {
   userId          String?   @unique
   lastLocationAt  DateTime?
   onLeaveUntil    DateTime?
+  hourlyRate      Float     @default(0)  // used for job costing / profitability
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -1169,6 +1339,8 @@ model Customer {
   documents            Document[]
   paymentMethods       PaymentMethod[]
   invitations          Invitation[]
+  recurringJobSchedules RecurringJobSchedule[] @relation("CustomerRecurringJobs")
+  scheduledMessages   ScheduledMessage[] @relation("CustomerScheduledMessages")
 
   @@index([phone])
   @@index([email])
@@ -1291,6 +1463,7 @@ model Job {
   conversation      Conversation?
   journey           CustomerJourney?
   documents         Document[]
+  scheduledMessages ScheduledMessage[] @relation("JobScheduledMessages")
 
   @@index([status])
   @@index([assigneeId])

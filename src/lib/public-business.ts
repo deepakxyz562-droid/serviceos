@@ -59,7 +59,7 @@ export interface PublicBusinessData {
    * (Book Now + Request Quote) and a minimal "Call Now" CTA.
    */
   claimed: boolean
-  /** Subscription plan tier — 'starter' | 'growth' | 'pro' | 'business' | 'enterprise'. */
+  /** Subscription plan tier — 'starter' | 'growth' | 'business' | 'enterprise'. */
   plan: string | null
   /** Subscription status — 'active' | 'trial' | 'expired' | 'cancelled' | 'suspended'. */
   planStatus: string | null

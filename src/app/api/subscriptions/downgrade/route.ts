@@ -13,7 +13,7 @@ import { logBillingEvent } from '@/lib/billing-events';
  * applies the downgrade (see /api/cron/renewal).
  *
  * Body:
- *   - plan: 'starter' | 'growth' | 'pro'  (the target lower plan)
+ *   - plan: 'starter' | 'growth' | 'business'  (the target lower plan)
  *   - billingCycle: 'monthly' | 'yearly'  (cycle for the downgraded plan)
  *
  * Auth: owner only.
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Plan is required' }, { status: 400 });
     }
 
-    const validPlans = ['starter', 'growth', 'pro'];
+    const validPlans = ['starter', 'growth', 'business'];
     if (!validPlans.includes(newPlanCode)) {
       return NextResponse.json(
         { error: `Invalid plan. Must be one of: ${validPlans.join(', ')}` },

@@ -109,7 +109,7 @@ const faqs = [
   {
     question: "Does ServiceOS integrate with my accounting software?",
     answer:
-      "Yes. ServiceOS exports invoices, payments, and customer data to popular accounting platforms including QuickBooks, Xero, and Zoho Books. You can also download CSV exports for any other accounting tool. Many plumbing businesses use ServiceOS as their plumbing invoicing software and let it push clean, categorized data into their accounting system — eliminating duplicate data entry and reconciliation headaches.",
+      "ServiceOS lets you export invoices and financial reports as CSV files that you can import into any accounting tool — QuickBooks, Xero, Zoho Books, or your existing platform. Many plumbing businesses use ServiceOS as their plumbing invoicing software and use the CSV exports to keep their accounting system in sync, eliminating duplicate data entry and reconciliation headaches.",
   },
 ];
 

@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { sendJobNotification } from '@/lib/whatsapp-notifications';
 import { sendEmail } from '@/lib/email-send';
 import { issueCustomerMagicLink } from '@/lib/customer-magic-link';
+import { EventBus } from '@/lib/event-bus';
 
 export async function POST(
   req: NextRequest,
@@ -157,6 +158,7 @@ export async function POST(
     }
 
     // Mark as sent via WhatsApp
+    const wasDraft = quote.status === 'draft';
     const updated = await db.quote.update({
       where: { id },
       data: {
@@ -165,6 +167,30 @@ export async function POST(
         status: quote.status === 'draft' ? 'sent' : quote.status,
       },
     });
+
+    // ─── Emit quote.sent event (only on draft → sent transition) ──────
+    // Best-effort — never fails the response. If the quote was already
+    // in 'sent' status, this is a re-send and we don't re-emit (avoids
+    // double-counting follow-up timers).
+    if (wasDraft) {
+      try {
+        await EventBus.emit(
+          'quote.sent',
+          {
+            quoteId: updated.id,
+            customerId: updated.customerId || null,
+            tenantId: updated.tenantId || null,
+            fromStatus: 'draft',
+            toStatus: 'sent',
+            resourceType: 'quote',
+            resourceId: updated.id,
+          },
+          { tenantId: updated.tenantId || undefined }
+        );
+      } catch (eventErr) {
+        console.error('[Quotes send-whatsapp] quote.sent event failed:', eventErr);
+      }
+    }
 
     return NextResponse.json({
       success: true,

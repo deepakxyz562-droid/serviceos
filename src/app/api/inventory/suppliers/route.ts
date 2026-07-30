@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { CI } from '@/lib/db-utils';
 import { getAuthUser } from '@/lib/auth';
 import { withRequestId } from '@/lib/logger';
+import { requirePlanFeature } from '@/lib/plan-gate';
 
 /**
  * Suppliers API
@@ -31,6 +32,12 @@ export async function GET(request: NextRequest) {
     const authUser = await getAuthUser();
     if (!authUser) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    // Plan-tier gate: Inventory module is business+.
+    const gate = await requirePlanFeature('inventory');
+    if (!gate.ok) {
+      return NextResponse.json({ error: gate.reason }, { status: gate.status });
     }
 
     const { searchParams } = new URL(request.url);
@@ -87,6 +94,12 @@ export async function POST(request: NextRequest) {
     }
     if (!authUser.tenantId) {
       return NextResponse.json({ error: 'Tenant not found for user' }, { status: 400 });
+    }
+
+    // Plan-tier gate: Inventory module is business+.
+    const gate = await requirePlanFeature('inventory');
+    if (!gate.ok) {
+      return NextResponse.json({ error: gate.reason }, { status: gate.status });
     }
 
     const body = await request.json().catch(() => null);

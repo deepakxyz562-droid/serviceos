@@ -46,6 +46,10 @@ const EmployeesView = lazy(() => import('@/components/views/employees-view').the
 const EmployeePerformanceView = lazy(() => import('@/components/views/employee-performance-view').then(m => ({ default: m.EmployeePerformanceView })));
 const TimesheetView = lazy(() => import('@/components/views/timesheet-view').then(m => ({ default: m.TimesheetView })));
 
+// Operations — Inventory
+const InventoryView = lazy(() => import('@/components/views/inventory-view').then(m => ({ default: m.InventoryView })));
+const PurchaseOrdersView = lazy(() => import('@/components/views/purchase-orders-view').then(m => ({ default: m.PurchaseOrdersView })));
+
 // Finance
 const QuotesView = lazy(() => import('@/components/views/quotes-view').then(m => ({ default: m.QuotesView })));
 const InvoicesView = lazy(() => import('@/components/views/invoices-view').then(m => ({ default: m.InvoicesView })));
@@ -79,6 +83,7 @@ const SegmentsView = lazy(() => import('@/components/views/segments-view').then(
 const MarketingAnalyticsView = lazy(() => import('@/components/views/marketing-analytics-view').then(m => ({ default: m.MarketingAnalyticsView })));
 const ServiceCatalogView = lazy(() => import('@/components/views/service-catalog-view').then(m => ({ default: m.ServiceCatalogView })));
 const CommunicationProvidersView = lazy(() => import('@/components/views/communication-providers-view').then(m => ({ default: m.CommunicationProvidersView })));
+const RecurringJobsView = lazy(() => import('@/components/views/recurring-jobs-view').then(m => ({ default: m.RecurringJobsView })));
 const ChannelsView = lazy(() => import('@/components/views/channels-view'));
 const ReviewsView = lazy(() => import('@/components/views/reviews-view').then(m => ({ default: m.ReviewsView })));
 const LeadDiscoveryView = lazy(() => import('@/components/views/lead-discovery-view').then(m => ({ default: m.LeadDiscoveryView })));
@@ -151,6 +156,8 @@ const lazyViews: Partial<Record<ViewType, ComponentType>> = {
   employees: EmployeesView,
   employeePerformance: EmployeePerformanceView,
   timesheet: TimesheetView,
+  inventory: InventoryView,
+  purchaseOrders: PurchaseOrdersView,
   // Finance
   quotes: QuotesView,
   invoices: InvoicesView,
@@ -178,6 +185,7 @@ const lazyViews: Partial<Record<ViewType, ComponentType>> = {
   segments: SegmentsView,
   marketingAnalytics: MarketingAnalyticsView,
   serviceCatalog: ServiceCatalogView,
+  recurringJobs: RecurringJobsView,
   communicationProviders: CommunicationProvidersView,
   channels: ChannelsView,
   reviews: ReviewsView,

@@ -214,6 +214,22 @@ export async function POST(request: NextRequest) {
     const tenantId = await resolveTenantId(authUser);
     const { employeeId, employeeName } = await resolveEmployee(authUser);
 
+    // Resolve the tenant's base currency so expense entries default to the
+    // tenant currency rather than a hard-coded 'USD' (mirrors the
+    // /api/invoices POST handler's baseCurrency resolution).
+    let baseCurrency = 'USD';
+    if (tenantId) {
+      try {
+        const tenant = await db.tenant.findUnique({
+          where: { id: tenantId },
+          select: { currency: true },
+        });
+        if (tenant?.currency) baseCurrency = tenant.currency;
+      } catch {
+        // Tenant lookup failed — fall back to USD.
+      }
+    }
+
     const number = await generateExpenseNumber(tenantId);
 
     // Resolve optional linked job title if jobId supplied without title.
@@ -240,7 +256,7 @@ export async function POST(request: NextRequest) {
         category: category || 'General',
         description: description.trim(),
         amount: Number(amount),
-        currency: currency || 'USD',
+        currency: currency || baseCurrency,
         expenseDate: expenseDate ? new Date(expenseDate) : new Date(),
         status: 'pending',
         receiptUrl: receiptUrl || null,

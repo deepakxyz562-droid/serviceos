@@ -39,8 +39,8 @@ export type ServiceEvent =
   | 'booking.created' | 'booking.confirmed' | 'booking.cancelled'
   | 'booking.completed' | 'booking.rescheduled'
   | 'contract.renewed' | 'schedule.trigger'
-  | 'invoice.created' | 'invoice.paid' | 'invoice.overdue'
-  | 'quote.sent' | 'quote.accepted' | 'quote.rejected'
+  | 'invoice.created' | 'invoice.sent' | 'invoice.paid' | 'invoice.overdue'
+  | 'quote.created' | 'quote.sent' | 'quote.accepted' | 'quote.rejected'
   | 'payment.received' | 'payment.failed'
   | 'employee.status_changed' | 'employee.heartbeat'
   | 'conversation.message_received' | 'conversation.message_sent'
@@ -84,8 +84,10 @@ export const SERVICE_EVENT_LABELS: Record<ServiceEvent, { label: string; descrip
   'contract.renewed':  { label: 'Contract Renewed',   description: 'A service contract was renewed',            category: 'contract' },
   'schedule.trigger':  { label: 'Schedule Trigger',   description: 'A time-based schedule trigger fired',       category: 'schedule' },
   'invoice.created':   { label: 'Invoice Created',    description: 'A new invoice was created',                 category: 'invoice' },
+  'invoice.sent':     { label: 'Invoice Sent',       description: 'An invoice was sent to a customer',          category: 'invoice' },
   'invoice.paid':      { label: 'Invoice Paid',       description: 'An invoice was paid',                       category: 'invoice' },
   'invoice.overdue':   { label: 'Invoice Overdue',    description: 'An invoice became overdue',                 category: 'invoice' },
+  'quote.created':    { label: 'Quote Created',     description: 'A new quote was created',                   category: 'quote' },
   'quote.sent':        { label: 'Quote Sent',         description: 'A quote was sent to a customer',            category: 'quote' },
   'quote.accepted':    { label: 'Quote Accepted',     description: 'A quote was accepted',                      category: 'quote' },
   'quote.rejected':    { label: 'Quote Rejected',     description: 'A quote was rejected',                      category: 'quote' },

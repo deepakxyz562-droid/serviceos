@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
 import { withRequestId } from '@/lib/logger';
+import { requirePlanFeature } from '@/lib/plan-gate';
 
 /**
  * Single Inventory Item API
@@ -38,6 +39,12 @@ export async function GET(
     const authUser = await getAuthUser();
     if (!authUser) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    // Plan-tier gate: Inventory module is business+.
+    const gate = await requirePlanFeature('inventory');
+    if (!gate.ok) {
+      return NextResponse.json({ error: gate.reason }, { status: gate.status });
     }
 
     const { id } = await params;
@@ -92,6 +99,12 @@ export async function PATCH(
     const authUser = await getAuthUser();
     if (!authUser) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    // Plan-tier gate: Inventory module is business+.
+    const gate = await requirePlanFeature('inventory');
+    if (!gate.ok) {
+      return NextResponse.json({ error: gate.reason }, { status: gate.status });
     }
 
     const { id } = await params;
@@ -246,6 +259,12 @@ export async function DELETE(
     const authUser = await getAuthUser();
     if (!authUser) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    // Plan-tier gate: Inventory module is business+.
+    const gate = await requirePlanFeature('inventory');
+    if (!gate.ok) {
+      return NextResponse.json({ error: gate.reason }, { status: gate.status });
     }
 
     const { id } = await params;

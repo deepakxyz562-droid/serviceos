@@ -85,13 +85,21 @@ interface DualAudienceLandingProps {
 
 type Audience = 'crm' | 'marketplace';
 
-// ─── Pricing — uses seed plan prices from src/lib/billing-seed.ts ────────────
-//   Starter $5/mo (or $5 first-year promo) · Growth $29 · Business $79 · Enterprise Custom
+// ─── Pricing — DB-backed at runtime (see CrmPricing useEffect) ──────────────
+//   The local FALLBACK_PRICING_PLANS array is used if the fetch to
+//   /api/plans/public fails (network error, DB unreachable, etc.).
+//   Canonical plan codes: starter | growth | business | enterprise.
+//   Mid-tier code is `growth` but its display name is "Professional".
+//   Prices: Starter $29/mo · Professional $79/mo · Business $149/mo ·
+//   Enterprise Custom. Original (strikethrough) prices: $49/$129/$249/—.
 
 interface PricingPlan {
+  code: string; // canonical DB plan code: starter | growth | business | enterprise
   name: string;
   monthlyPrice: number | null;
   yearlyPrice: number | null;
+  /** Strikethrough "original" monthly price (0/null = no strikethrough shown). */
+  originalMonthlyPrice: number;
   description: string;
   icon: LucideIcon;
   features: string[];
@@ -100,72 +108,104 @@ interface PricingPlan {
   highlight?: boolean;
 }
 
-const pricingPlans: PricingPlan[] = [
+const FALLBACK_PRICING_PLANS: PricingPlan[] = [
   {
+    code: 'starter',
     name: 'Starter',
-    monthlyPrice: 5,
-    yearlyPrice: 50,
+    monthlyPrice: 29,
+    yearlyPrice: 290,
+    originalMonthlyPrice: 49,
     description: 'For solo pros & new businesses',
     icon: Zap,
     features: [
-      '1 user · 100 jobs/month',
-      'CRM, leads, jobs, scheduling',
-      'Email + SMS notifications',
-      'Invoicing & estimates',
-      'Customer portal',
-      'Marketplace browse-only',
+      '1 User',
+      'CRM & Customer Management',
+      'Leads & Sales Pipeline',
+      'Quotes & Estimates',
+      'Jobs & Scheduling',
+      'Calendar',
+      'Invoices & Online Payments',
+      'Customer Portal',
+      'Employee Portal',
+      'Online Booking',
+      'Time Tracking & Expenses',
+      'Before & After Photos',
+      'Digital Signatures',
+      'Customer 360',
+      'GPS Tracking',
+      'Reviews Management',
+      'Basic Reports',
+      '5 GB Storage',
     ],
-    highlight: true,
     cta: 'Start Free Trial',
   },
   {
-    name: 'Growth',
-    monthlyPrice: 29,
-    yearlyPrice: 290,
-    description: 'For growing teams',
+    code: 'growth',
+    name: 'Professional',
+    monthlyPrice: 79,
+    yearlyPrice: 790,
+    originalMonthlyPrice: 129,
+    description: 'For growing teams — most popular',
     icon: Building2,
     features: [
-      '5 users · unlimited jobs',
-      'Everything in Starter',
-      'AI Assistant + AI Receptionist (BYOK)',
-      'WhatsApp integration',
-      'Smart dispatch & routing',
-      'Lead pipeline + segments',
-      'Marketplace bookings',
+      'Everything in Starter, plus:',
+      'Up to 5 Users',
+      'Unlimited Customers & Jobs',
+      'WhatsApp + Email + SMS Integration',
+      'Omnichannel Inbox',
+      'AI Assistant + AI Quote Generator',
+      'AI Job Summary & Suggested Replies',
+      'Workflow Builder + Forms Builder',
+      'Marketing Campaigns & Broadcast',
+      'Customer Segments',
+      'Template Studio',
+      'Live Chat Widget',
+      'API Access & Webhooks',
+      '50 GB Storage',
     ],
     popular: true,
     cta: 'Start Free Trial',
   },
   {
+    code: 'business',
     name: 'Business',
-    monthlyPrice: 79,
-    yearlyPrice: 790,
+    monthlyPrice: 149,
+    yearlyPrice: 1490,
+    originalMonthlyPrice: 249,
     description: 'For multi-branch operators',
     icon: Shield,
     features: [
-      'Unlimited users · jobs',
-      'Everything in Growth',
-      'AI Dispatcher + Quote Generator',
-      'Marketing automation',
-      'Inventory + asset management',
-      'Multi-branch + custom workflows',
-      'Marketplace priority placement',
+      'Everything in Professional, plus:',
+      'Up to 20 Users',
+      'AI Receptionist (Voice Agents)',
+      'AI Phone Numbers + Call History',
+      'AI Dispatcher (Smart Dispatch)',
+      'Inventory Management',
+      'Purchase Orders',
+      'Recurring Jobs',
+      'Route Optimization',
+      'Advanced Reports',
+      'Role Permissions',
+      '200 GB Storage',
     ],
     cta: 'Start Free Trial',
   },
   {
+    code: 'enterprise',
     name: 'Enterprise',
     monthlyPrice: null,
     yearlyPrice: null,
+    originalMonthlyPrice: 0,
     description: 'For large organizations',
     icon: Globe,
     features: [
-      'Everything in Business',
-      'White-label branding',
-      'SSO + custom integrations',
-      'Dedicated account manager',
-      'SLA + onboarding training',
-      'API access & webhooks',
+      'Everything in Business, plus:',
+      'Unlimited Users & Storage',
+      'White Label Branding',
+      'Advanced Security & Audit Logs',
+      'Data Retention Policies',
+      'Dedicated Support',
+      'Custom Onboarding',
     ],
     cta: 'Contact Sales',
   },
@@ -1396,6 +1436,67 @@ function CrmTestimonials() {
 
 function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
   const [yearly, setYearly] = React.useState(false);
+  // Plan catalog — fetched from /api/plans/public (no auth required) on
+  // mount so prices stay in sync with the DB (editable by super-admins
+  // without a deploy). Falls back to FALLBACK_PRICING_PLANS on any fetch
+  // failure. We merge DB-backed prices/names/popular flags into the
+  // curated marketing copy (features + icon + description stay hardcoded
+  // so the landing page reads well — DB feature flags aren't curated for
+  // marketing).
+  const [plans, setPlans] = React.useState<PricingPlan[]>(FALLBACK_PRICING_PLANS);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/plans/public');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data?.plans || !Array.isArray(data.plans)) return;
+        // Index the curated fallback by code so we can overlay DB values
+        // while preserving the marketing-curated feature list + icon.
+        const curatedByCode = new Map<string, PricingPlan>(
+          FALLBACK_PRICING_PLANS.map((p) => [p.code, p]),
+        );
+        const mapped: PricingPlan[] = data.plans
+          .map((p: any) => {
+            const curated = curatedByCode.get(p.code);
+            // For unknown plan codes, skip — only show plans we have
+            // curated marketing copy for.
+            if (!curated) return null;
+            return {
+              ...curated,
+              name: p.name || curated.name,
+              monthlyPrice: p.monthlyPrice !== null && p.monthlyPrice !== undefined
+                ? Number(p.monthlyPrice)
+                : curated.monthlyPrice,
+              yearlyPrice: p.yearlyPrice !== null && p.yearlyPrice !== undefined
+                ? Number(p.yearlyPrice)
+                : curated.yearlyPrice,
+              originalMonthlyPrice: Number(p.originalMonthlyPrice) || curated.originalMonthlyPrice,
+              popular: p.popular ?? curated.popular,
+            } as PricingPlan;
+          })
+          .filter((p: PricingPlan | null): p is PricingPlan => p !== null);
+        if (cancelled || mapped.length === 0) return;
+        setPlans(mapped);
+      } catch (err) {
+        // Network / parse error — keep FALLBACK_PRICING_PLANS.
+        console.warn('[landing] Failed to fetch /api/plans/public, using fallback:', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Percentage discount from an original price to a current price.
+  // Returns 0 when there's no meaningful discount to show.
+  const discountPct = (original: number, current: number) => {
+    if (!original || original <= 0 || current >= original) return 0;
+    return Math.round(((original - current) / original) * 100);
+  };
+
   return (
     <section id="pricing" className="border-t bg-muted/30 py-14 sm:py-20">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
@@ -1419,17 +1520,22 @@ function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
             </button>
             <span className={cn('text-sm font-medium flex items-center gap-1', yearly ? 'text-foreground' : 'text-muted-foreground')}>
               Yearly
-              <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs">Save 17%</Badge>
+              <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs">Save ~17%</Badge>
             </span>
           </div>
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
-          {pricingPlans.map((plan) => {
+          {plans.map((plan) => {
             const Icon = plan.icon;
+            const monthlySave = discountPct(plan.originalMonthlyPrice, plan.monthlyPrice ?? 0);
+            const yearlySave = discountPct(
+              plan.originalMonthlyPrice * 12,
+              plan.yearlyPrice ?? 0,
+            );
             return (
               <Card
-                key={plan.name}
+                key={plan.code}
                 className={cn(
                   'relative bg-white border h-full flex flex-col transition-all',
                   plan.popular
@@ -1439,12 +1545,7 @@ function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
               >
                 {plan.popular ? (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <Badge className="bg-emerald-600 text-white font-semibold border-0 px-3 shadow-md">Popular</Badge>
-                  </div>
-                ) : null}
-                {plan.highlight ? (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <Badge className="bg-amber-500 text-white font-semibold border-0 px-3 shadow-md whitespace-nowrap">$5 starter</Badge>
+                    <Badge className="bg-emerald-600 text-white font-semibold border-0 px-3 shadow-md">Most Popular</Badge>
                   </div>
                 ) : null}
                 <CardHeader className="pb-2">
@@ -1458,26 +1559,54 @@ function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
                 <CardContent className="flex-1">
                   <div className="mb-5">
                     {plan.monthlyPrice !== null ? (
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-4xl font-extrabold text-foreground">
-                          ${yearly ? Math.round(plan.yearlyPrice! / 12) : plan.monthlyPrice}
-                        </span>
-                        <span className="text-muted-foreground text-sm">/mo</span>
-                      </div>
+                      <>
+                        {/* Strikethrough original price + Save % badge */}
+                        {plan.originalMonthlyPrice > 0 && (
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-sm text-muted-foreground line-through">
+                              ${yearly ? plan.originalMonthlyPrice * 12 : plan.originalMonthlyPrice}
+                            </span>
+                            {(() => {
+                              const pct = yearly ? yearlySave : monthlySave;
+                              return pct > 0 ? (
+                                <Badge className="bg-amber-100 text-amber-700 border-0 text-xs px-1.5 py-0">
+                                  Save {pct}%
+                                </Badge>
+                              ) : null;
+                            })()}
+                          </div>
+                        )}
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-4xl font-extrabold text-foreground">
+                            ${yearly ? Math.round((plan.yearlyPrice ?? 0) / 12) : plan.monthlyPrice}
+                          </span>
+                          <span className="text-muted-foreground text-sm">/mo</span>
+                        </div>
+                        {yearly && plan.yearlyPrice !== null ? (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            ${plan.yearlyPrice}/year billed annually
+                          </p>
+                        ) : null}
+                      </>
                     ) : (
                       <div className="text-4xl font-bold text-foreground">Custom</div>
                     )}
-                    {plan.monthlyPrice !== null && yearly ? (
-                      <p className="text-xs text-muted-foreground mt-1">${plan.yearlyPrice}/year billed annually</p>
-                    ) : null}
                   </div>
                   <ul className="space-y-2.5">
-                    {plan.features.map((feature) => (
-                      <li key={feature} className="flex items-start gap-2.5 text-sm">
-                        <Check className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
-                        <span className="text-foreground/80">{feature}</span>
-                      </li>
-                    ))}
+                    {plan.features.map((feature, idx) => {
+                      // The first feature in each higher-tier plan is a
+                      // header line like "Everything in Starter, plus:" —
+                      // render it without a check icon for visual emphasis.
+                      const isHeader = idx === 0 && /^everything in/i.test(feature);
+                      return (
+                        <li key={feature} className="flex items-start gap-2.5 text-sm">
+                          {!isHeader && <Check className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />}
+                          <span className={cn(isHeader ? 'text-foreground font-semibold' : 'text-foreground/80')}>
+                            {feature}
+                          </span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </CardContent>
                 <CardFooter>

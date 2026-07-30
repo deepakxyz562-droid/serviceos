@@ -763,8 +763,8 @@ async function seedSubscriptionPlans(): Promise<unknown[]> {
     },
     {
       id: crypto.randomUUID(),
-      name: 'professional',
-      displayName: 'Professional',
+      name: 'business',
+      displayName: 'Business',
       description: 'For growing businesses that need advanced automation and AI features',
       price: 25,
       currency: 'USD',

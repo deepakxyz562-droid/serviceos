@@ -64,7 +64,7 @@ const features: Feature[] = [
     icon: Repeat,
     title: "Recurring Service Contract Billing",
     description:
-      "Set up weekly, bi-weekly, or monthly service contracts once, and ServiceOS auto-charges the customer's card after each completed visit. No more end-of-month invoice runs, no more chasing customers who are six weeks behind.",
+      "Set up weekly, bi-weekly, or monthly service contracts once, and ServiceOS sends automatic payment reminders after each completed visit. No more end-of-month invoice runs, no more chasing customers who are six weeks behind.",
   },
   {
     icon: Package,
@@ -94,7 +94,7 @@ const faqs = [
   {
     question: "How does recurring service contract billing work?",
     answer:
-      "Most pool service companies run on weekly or bi-weekly contracts billed monthly, and that recurring billing is the lifeblood of the business. In ServiceOS, you define each contract once — customer, frequency, monthly price, payment method — and the system charges the customer's card on file automatically after each visit, or on the first of the month depending on your preference. You see a dashboard of all active contracts, upcoming charges, and failed payments, and ServiceOS sends the customer a branded invoice after every transaction. You stop spending the last week of every month chasing customers who are six weeks behind.",
+      "Most pool service companies run on weekly or bi-weekly contracts billed monthly, and that recurring billing is the lifeblood of the business. In ServiceOS, you define each contract once — customer, frequency, monthly price, payment method — and the system generates a branded invoice after each visit, or on the first of the month depending on your preference, and sends it via Email & SMS with a secure payment link. ServiceOS follows up with automatic payment reminders for unpaid balances, so customers who fall behind get nudged without you having to chase them. You see a dashboard of all active contracts, upcoming invoices, and overdue balances, and you can pause service on a non-paying customer before they rack up eight weeks of unpaid cleanings. You stop spending the last week of every month chasing customers who are six weeks behind.",
   },
   {
     question: "Can ServiceOS handle pool equipment repairs and parts ordering?",
@@ -204,7 +204,7 @@ export default function PoolServiceSoftwarePage() {
                   "Routes auto-ordered by drive time — same 22 stops done in 7 hours flat",
                   "Every chemical reading logged, timestamped, and visible in the customer portal",
                   "Equipment inspections turn into repair quotes with one tap from the field",
-                  "Recurring contracts auto-charge after every visit — no end-of-month invoice run",
+                  "Recurring contracts auto-send invoices with reminders after every visit — no end-of-month invoice run",
                   "Failed payments flagged instantly — stop service before the customer owes 8 weeks",
                   "Openings and closings pre-scheduled in March, dispatched in the right order in May",
                 ].map((item) => (
@@ -224,7 +224,7 @@ export default function PoolServiceSoftwarePage() {
           Pool service is a recurring-revenue business with a daily operational grind. A typical tech visits 18 to 25 pools a day, logs chemical readings at every stop, inspects equipment, makes small adjustments, and tries to finish before dark. Multiply that across a team of three or four techs and you have hundreds of customer interactions every week, each one generating data — chemical levels, equipment condition, repair recommendations, time on site — that almost never gets captured without dedicated pool service software. ServiceOS is built to capture all of it, in seconds, from the technician's phone, and turn it into better routes, faster billing, and fewer customer disputes.
         </p>
         <p>
-          The recurring billing side of pool service is where most shops lose money quietly. Pool companies typically bill weekly or monthly in arrears, which means a customer who stops paying in May can still be on the route in July before anyone notices. ServiceOS fixes this by charging the customer's card on file after every completed visit, or on a fixed monthly cycle, and immediately flagging failed payments on the dispatch board. You see exactly who owes what, and you can pause service on a non-paying customer before they rack up eight weeks of unpaid cleanings. Most pool service companies recover 5 to 8 percent of revenue they were previously writing off within the first quarter of switching to ServiceOS.
+          The recurring billing side of pool service is where most shops lose money quietly. Pool companies typically bill weekly or monthly in arrears, which means a customer who stops paying in May can still be on the route in July before anyone notices. ServiceOS fixes this by generating a branded invoice after every completed visit (or on a fixed monthly cycle), sending it via Email & SMS with a secure payment link, and immediately flagging overdue balances on the dispatch board so you can follow up before the situation escalates. You see exactly who owes what, and you can pause service on a non-paying customer before they rack up eight weeks of unpaid cleanings. Most pool service companies recover 5 to 8 percent of revenue they were previously writing off within the first quarter of switching to ServiceOS.
         </p>
         <p>
           Then there is the chemical-logging problem, which becomes critical the moment a customer calls to complain about a green pool. Without a record of what was tested and adjusted on each visit, the customer's word stands against yours, and you end up crediting service calls you shouldn't have to. ServiceOS solves this by capturing pH, free chlorine, total alkalinity, and calcium hardness on every visit, timestamped and attached to the customer's account. When the complaint call comes in, you pull the chemical timeline, walk the customer through every reading, and the dispute usually ends in your favor. The same data also helps you spot pools that need more frequent service before they turn green in the first place.

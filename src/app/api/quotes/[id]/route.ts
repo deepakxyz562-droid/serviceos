@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { toISOString } from '@/lib/utils';
+import { EventBus } from '@/lib/event-bus';
 
 export async function GET(
   req: NextRequest,
@@ -111,6 +112,35 @@ export async function PUT(
       where: { id },
       data: updateData,
     });
+
+    // ─── Emit quote lifecycle events on status change ────────────────
+    // Best-effort — never fails the update. Only emits when the caller
+    // actually changed the status field (and it's one of the lifecycle
+    // statuses the EventBus knows about). `existing.status` is the
+    // pre-update value, so we can detect transitions.
+    if (status && status !== existing.status) {
+      try {
+        const eventData = {
+          quoteId: quote.id,
+          customerId: quote.customerId || null,
+          tenantId: quote.tenantId || null,
+          fromStatus: existing.status,
+          toStatus: status,
+          resourceType: 'quote',
+          resourceId: quote.id,
+        };
+        const ctx = { tenantId: quote.tenantId || undefined };
+        if (status === 'sent') {
+          await EventBus.emit('quote.sent', eventData, ctx);
+        } else if (status === 'accepted') {
+          await EventBus.emit('quote.accepted', eventData, ctx);
+        } else if (status === 'rejected') {
+          await EventBus.emit('quote.rejected', eventData, ctx);
+        }
+      } catch (eventErr) {
+        console.error('[Quotes PUT] quote status event failed:', eventErr);
+      }
+    }
 
     return NextResponse.json(quote);
   } catch (error) {

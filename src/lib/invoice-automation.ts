@@ -1297,3 +1297,190 @@ export async function notifyOwnerInvoiceCreated(invoiceId: string): Promise<void
     console.error('[InvoiceAutomation] notifyOwnerInvoiceCreated error:', err)
   }
 }
+
+// ─── Overdue invoice detector ───────────────────────────────────────────────
+//
+// The audit found that the `invoice.overdue` event is in trigger catalogs but
+// NEVER emitted by any code. This function is the fix: it finds all overdue
+// invoices (dueDate < now, status NOT in {paid, cancelled, draft}) and:
+//   1. Emits the 'invoice.overdue' EventBus event for each (so workflow
+//      automations like "send overdue reminder email" can fire)
+//   2. Creates a ScheduledMessage (channel=email if customer has email, else
+//      whatsapp if phone) for the overdue reminder — so the actual message
+//      dispatch happens through the same persistent pipeline as everything
+//      else (processDueScheduledMessages cron).
+//
+// De-dup: a ScheduledMessage with messageType='overdue_reminder' AND
+// invoiceId=invoice.id already existing means we've already processed this
+// invoice — skip. This makes the daily cron idempotent.
+//
+// Called by /api/cron/overdue-detector (recommended schedule: daily 8 AM).
+
+export async function detectAndEmitOverdueInvoices(): Promise<{ processed: number }> {
+  const now = new Date()
+
+  // Find all overdue invoices. We consider an invoice overdue when:
+  //   - dueDate is set and < now
+  //   - status is NOT 'paid', 'cancelled', or 'draft' (draft invoices have
+  //     never been sent; they can't be overdue)
+  //   - tenantId is set (without a tenant we can't dispatch reminders)
+  const overdueInvoices = await db.invoice.findMany({
+    where: {
+      dueDate: { lt: now },
+      status: { notIn: ['paid', 'cancelled', 'draft'] },
+      tenantId: { not: null },
+    },
+    include: { customer: true, tenant: true },
+  })
+
+  if (overdueInvoices.length === 0) {
+    return { processed: 0 }
+  }
+
+  let processed = 0
+
+  for (const invoice of overdueInvoices) {
+    const tenantId = invoice.tenantId || ''
+    const invoiceId = invoice.id
+    const customerId = invoice.customerId || null
+
+    // ── De-dup: skip if we've already created an overdue reminder for this invoice ──
+    try {
+      const existing = await db.scheduledMessage.findFirst({
+        where: {
+          messageType: 'overdue_reminder',
+          invoiceId,
+        },
+        select: { id: true, status: true },
+      })
+      if (existing) {
+        // Already processed — skip. (The existing reminder may be pending,
+        // sent, or failed; either way we don't want a daily cron spamming
+        // duplicate reminders.)
+        continue
+      }
+    } catch (err) {
+      console.warn(
+        `[InvoiceAutomation] detectAndEmitOverdueInvoices: dedup check failed for invoice ${invoice.number}:`,
+        err
+      )
+      // Continue anyway — better to risk a duplicate than to silently skip
+      // an overdue reminder.
+    }
+
+    // ── 1. Emit the invoice.overdue event ────────────────────────────
+    // Best-effort — never aborts the loop. Triggers workflow automations
+    // like "7 days after invoice overdue, send stern reminder".
+    try {
+      const { EventBus } = await import('@/lib/event-bus')
+      await EventBus.emit(
+        'invoice.overdue',
+        {
+          invoiceId,
+          invoiceNumber: invoice.number,
+          customerId,
+          tenantId,
+          total: Number(invoice.total),
+          currency: invoice.currency,
+          dueDate: invoice.dueDate ? invoice.dueDate.toISOString() : null,
+          resourceType: 'invoice',
+          resourceId: invoiceId,
+        },
+        { tenantId: tenantId || undefined }
+      )
+    } catch (eventErr) {
+      console.error(
+        `[InvoiceAutomation] detectAndEmitOverdueInvoices: invoice.overdue event failed for ${invoice.number}:`,
+        eventErr
+      )
+    }
+
+    // ── 2. Flip invoice status to 'overdue' (if it was 'sent') ──────
+    // Idempotent — only flips if the status is still 'sent'. If the user
+    // already manually marked it 'overdue', leave it alone. Best-effort.
+    if (invoice.status === 'sent') {
+      try {
+        await db.invoice.update({
+          where: { id: invoiceId },
+          data: { status: 'overdue' },
+        })
+      } catch (err) {
+        console.warn(
+          `[InvoiceAutomation] detectAndEmitOverdueInvoices: failed to flip invoice ${invoice.number} status to 'overdue':`,
+          err
+        )
+      }
+    }
+
+    // ── 3. Create the ScheduledMessage for the actual reminder ──────
+    // Channel: email if the customer has an email; else WhatsApp if they
+    // have a phone; else skip (no way to reach them — the event still fired
+    // so workflow automations could do something else, like create a task).
+    const customerEmail = invoice.customer?.email || null
+    const customerPhone = invoice.customer?.phone || null
+    const customerName = invoice.customer?.name || 'Customer'
+    const invoiceTotal = `$${Number(invoice.total).toFixed(2)} ${invoice.currency}`
+    const dueStr = invoice.dueDate
+      ? new Date(invoice.dueDate).toLocaleDateString()
+      : 'recently'
+
+    const channel: 'email' | 'whatsapp' | 'sms' = customerEmail
+      ? 'email'
+      : customerPhone
+        ? 'whatsapp'
+        : 'sms' // will be skipped at dispatch time if phone is null
+
+    const subject = `Invoice ${invoice.number} is overdue`
+    const bodyText = `Hi ${customerName},\n\nYour invoice ${invoice.number} for ${invoiceTotal} was due on ${dueStr}. Please complete payment at your earliest convenience.\n\n— ${invoice.tenant?.name || 'ServiceOS'}`
+
+    const bodyHtml = customerEmail
+      ? [
+          `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">`,
+          `<h2 style="color:#b91c1c;">Overdue Invoice</h2>`,
+          `<p>Hi ${customerName},</p>`,
+          `<p>Your invoice <strong>${invoice.number}</strong> for <strong>${invoiceTotal}</strong> was due on <strong>${dueStr}</strong> and is now overdue.</p>`,
+          `<p>Please complete payment at your earliest convenience. If you've already paid, please disregard this message.</p>`,
+          `<hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />`,
+          `<p style="font-size:12px;color:#9ca3af;">— ${invoice.tenant?.name || 'ServiceOS'}</p>`,
+          `</div>`,
+        ].join('\n')
+      : null
+
+    try {
+      await db.scheduledMessage.create({
+        data: {
+          tenantId,
+          customerId: customerId || undefined,
+          invoiceId,
+          messageType: 'overdue_reminder',
+          channel,
+          recipientEmail: customerEmail,
+          recipientPhone: customerPhone,
+          subject,
+          bodyText,
+          bodyHtml,
+          dueAt: new Date(), // due NOW — the next scheduled-messages cron tick picks it up
+          status: 'pending',
+          metadataJson: JSON.stringify({
+            invoiceNumber: invoice.number,
+            invoiceTotal,
+            dueDate: invoice.dueDate ? invoice.dueDate.toISOString() : null,
+            customerName,
+            triggeredBy: 'overdue-detector',
+          }),
+        },
+      })
+    } catch (err) {
+      console.error(
+        `[InvoiceAutomation] detectAndEmitOverdueInvoices: failed to create ScheduledMessage for invoice ${invoice.number}:`,
+        err
+      )
+      // Continue — the event still emitted; maybe a workflow will handle it.
+    }
+
+    processed++
+  }
+
+  return { processed }
+}
+

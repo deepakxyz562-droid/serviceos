@@ -15,7 +15,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { checkMenuLock } from '@/components/layout/upgrade-modal';
+import { checkMenuAccess } from '@/components/layout/upgrade-modal';
 import { resolvePlanTierClient } from '@/lib/plan-features';
 
 interface MobileNavItem {
@@ -83,10 +83,12 @@ export function MobileBottomNav() {
     return () => { cancelled = true; };
   }, [auth.user?.role, auth.user?.tenantId, auth.user?.isSuperAdmin, isSuperAdmin]);
 
-  // Pick the first 4 non-disabled, non-locked candidates so the nav stays a
-  // consistent width. Locked items (plan-gated) are skipped — they'd show a
-  // lock icon in the sidebar's "More" drawer, but the bottom nav is too small
-  // for that UX, so we just pick the next available item.
+  // Pick the first 4 non-disabled, accessible candidates so the nav stays a
+  // consistent width. Both HIDDEN (paid users below tier — item removed) and
+  // LOCKED (trial users — item shown with lock in the sidebar's "More" drawer)
+  // items are skipped from the 4-slot bottom nav bar — the bar is too small
+  // for a lock icon UX, and locked items still appear in the sidebar Sheet
+  // opened via the "More" button below.
   // While loading (null), render empty placeholders so the nav bar doesn't
   // flash all items before the disabled set is applied.
   const planTier = resolvePlanTierClient(
@@ -100,7 +102,10 @@ export function MobileBottomNav() {
       ? []  // loading — render no items (just the More button) to prevent flash
       : ownerNavCandidates
           .filter((item) => !disabledMenus.includes(item.view))
-          .filter((item) => !checkMenuLock(item.view, planTier, isSuperAdmin).locked)
+          .filter((item) => {
+            const access = checkMenuAccess(item.view, planTier, isSuperAdmin, auth.tenant?.planStatus);
+            return access.state !== 'hidden' && access.state !== 'locked';
+          })
           .slice(0, 4);
 
   return (

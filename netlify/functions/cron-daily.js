@@ -61,6 +61,37 @@ const CRON_ENDPOINTS = [
     path: '/api/cron/recurring-invoices',
     description: 'Auto-generates recurring invoices that are due today',
   },
+  {
+    name: 'recurring-jobs',
+    path: '/api/cron/recurring-jobs',
+    description: 'Auto-generates jobs + JobVisits for due RecurringJobSchedule rows (weekly / monthly / contract maintenance)',
+  },
+  // ── Reminders & Follow-up Engine (PHASE4-REMINDERS) ───────────────────
+  // The scheduled-messages / scheduled-executions endpoints run every 15
+  // minutes via Vercel Cron on Vercel deployments. On Netlify we still call
+  // them once a day here as a safety net (a daily run is better than zero),
+  // but for true 15-minute cadence on Netlify, configure a separate
+  // scheduled function or external scheduler.
+  {
+    name: 'scheduled-messages',
+    path: '/api/cron/scheduled-messages',
+    description: 'Dispatches due ScheduledMessage rows (appointment / payment / overdue / follow-up reminders)',
+  },
+  {
+    name: 'scheduled-executions',
+    path: '/api/cron/scheduled-executions',
+    description: 'Fires due delayed workflow automations (replaces setTimeout in trigger-engine)',
+  },
+  {
+    name: 'overdue-detector',
+    path: '/api/cron/overdue-detector',
+    description: 'Detects overdue invoices and emits invoice.overdue events + creates overdue reminder messages',
+  },
+  {
+    name: 'appointment-reminders',
+    path: '/api/cron/appointment-reminders',
+    description: 'Schedules customer reminders for upcoming JobVisits based on teamReminder (1h / 24h / 2d)',
+  },
 ];
 
 /**

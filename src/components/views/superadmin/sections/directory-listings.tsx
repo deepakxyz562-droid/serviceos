@@ -67,7 +67,7 @@ const COUNTRIES = [
 const TIERS = [
   { value: 'free', label: 'Free' },
   { value: 'claimed', label: 'Claimed' },
-  { value: 'pro', label: 'Pro' },
+  { value: 'business', label: 'Business' },
   { value: 'none', label: 'None (hidden)' },
 ];
 
@@ -139,7 +139,7 @@ const EMPTY_BULK_EDIT: BulkEditFields = {
 
 function tierBadgeClasses(tier: string): string {
   switch (tier) {
-    case 'pro':
+    case 'business':
       return 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20';
     case 'claimed':
       return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20';

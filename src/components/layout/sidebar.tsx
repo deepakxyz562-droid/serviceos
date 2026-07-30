@@ -69,6 +69,7 @@ import {
   Wallet,
   Clock,
   Lock,
+  Repeat,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -94,8 +95,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
-import { openUpgradeModal, checkMenuLock } from '@/components/layout/upgrade-modal';
-import { resolvePlanTierClient } from '@/lib/plan-features';
+import { openUpgradeModal, checkMenuAccess } from '@/components/layout/upgrade-modal';
+import { resolvePlanTierClient, PLAN_DISPLAY_NAMES } from '@/lib/plan-features';
 
 // ─── Nav item definition ────────────────────────────────────────────────────
 
@@ -140,6 +141,9 @@ const ownerNavSections: NavSection[] = [
       { view: 'employees', label: 'Employees', icon: UserCog },
       { view: 'timesheet', label: 'Timesheet', icon: Clock },
       { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },
+      { view: 'inventory', label: 'Inventory', icon: Package },
+      { view: 'purchaseOrders', label: 'Purchase Orders', icon: ClipboardList },
+      { view: 'recurringJobs', label: 'Recurring Jobs', icon: Repeat },
     ],
   },
   {
@@ -263,6 +267,9 @@ const superadminNavSections: NavSection[] = [
       { view: 'employees', label: 'Employees', icon: UserCog },
       { view: 'timesheet', label: 'Timesheet', icon: Clock },
       { view: 'serviceCatalog', label: 'Service Catalog', icon: BookOpen },
+      { view: 'inventory', label: 'Inventory', icon: Package },
+      { view: 'purchaseOrders', label: 'Purchase Orders', icon: ClipboardList },
+      { view: 'recurringJobs', label: 'Recurring Jobs', icon: Repeat },
     ],
   },
   {
@@ -527,31 +534,48 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
     const Icon = item.icon;
     const isActive = currentView === item.view;
 
-    // ── Plan-gated lock (generalized) ──────────────────────────────────
-    // Any menu item with a `minPlan` in MENU_CATALOG that exceeds the
-    // current tenant's plan tier renders with a Lock icon. Clicking it
-    // opens the UpgradeModal instead of navigating. Superadmins bypass.
+    // ── Plan-gated access (trial=LOCK, paid=HIDE) ─────────────────────────
+    // Behaviour matrix per spec:
+    //   - Superadmin: always visible (bypass).
+    //   - Trial users: LOCKED — items above their tier render with a Lock
+    //     icon + tooltip showing which plan unlocks them; click → UpgradeModal.
+    //   - Paid users below the required tier: HIDDEN — item is not rendered
+    //     at all (returns null, like the disabledMenus filter above).
     const planTier = resolvePlanTierClient(
       auth.tenant?.plan || 'starter',
       auth.tenant?.planStatus || 'active'
     );
-    const lockCheck = checkMenuLock(item.view, planTier, isSuperAdmin);
+    const accessCheck = checkMenuAccess(
+      item.view,
+      planTier,
+      isSuperAdmin,
+      auth.tenant?.planStatus
+    );
 
-    if (lockCheck.locked) {
+    // HIDDEN — paid users don't see items above their tier at all.
+    if (accessCheck.state === 'hidden') {
+      return null;
+    }
+
+    if (accessCheck.state === 'locked') {
       const showLabel = isMobile || leftSidebarOpen;
-      return (
+      const minPlanDisplay = accessCheck.minPlan
+        ? PLAN_DISPLAY_NAMES[accessCheck.minPlan] || accessCheck.minPlan
+        : '';
+      const tooltipText = `🔒 Available on ${minPlanDisplay} plan and above — Click to upgrade`;
+      const lockedButton = (
         <button
           key={item.view}
           type="button"
           aria-disabled="true"
-          title={`${item.label} — Available on ${lockCheck.minPlan} plan and above`}
+          title={tooltipText}
           onClick={(e) => {
             e.preventDefault();
             openUpgradeModal({
               menuKey: item.view,
               label: item.label,
-              description: lockCheck.description || `Available on the ${lockCheck.minPlan} plan and above.`,
-              minPlan: lockCheck.minPlan!,
+              description: accessCheck.description || `Available on the ${minPlanDisplay} plan and above.`,
+              minPlan: accessCheck.minPlan!,
             });
           }}
           className={cn(
@@ -569,6 +593,13 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
           )}
         </button>
       );
+
+      // NOTE: collapsed (icon-only) mode Tooltip wrapping is handled at the
+      // call site (section.items.map) — it picks between this button's
+      // `tooltipText` (locked) vs `item.label` (visible) based on the same
+      // access check. We deliberately DON'T wrap here to avoid nesting
+      // Tooltip-in-Tooltip (Radix Slot only accepts one child).
+      return lockedButton;
     }
 
     return (
@@ -711,14 +742,40 @@ function SidebarContent({ onLogout, isMobile = false }: AppSidebarProps & { isMo
                 {showItems && (
                   <nav className="flex flex-col gap-0.5 px-2">
                     {section.items.map((item) => {
+                      // Plan-gated access check (mirrors renderNavItem's
+                      // internal check). Recomputed here so we can:
+                      //   (a) skip HIDDEN items entirely — Radix Slot (used by
+                      //       TooltipTrigger asChild) requires a single non-null
+                      //       child, so we must not pass `null` from
+                      //       renderNavItem into the Tooltip wrapper below.
+                      //   (b) pick the right Tooltip text in collapsed mode
+                      //       (lock info for locked, label for visible).
+                      const tier = resolvePlanTierClient(
+                        auth.tenant?.plan || 'starter',
+                        auth.tenant?.planStatus || 'active'
+                      );
+                      const access = checkMenuAccess(
+                        item.view,
+                        tier,
+                        isSuperAdmin,
+                        auth.tenant?.planStatus
+                      );
+                      if (access.state === 'hidden') return null;
+
                       if (isExpandedMode) return renderNavItem(item);
+
+                      const collapsedTooltip =
+                        access.state === 'locked' && access.minPlan
+                          ? `🔒 Available on ${PLAN_DISPLAY_NAMES[access.minPlan] || access.minPlan} plan and above — Click to upgrade`
+                          : item.label;
+
                       return (
                         <Tooltip key={item.view}>
                           <TooltipTrigger asChild>
                             {renderNavItem(item)}
                           </TooltipTrigger>
                           <TooltipContent side="right" sideOffset={8}>
-                            {item.label}
+                            {collapsedTooltip}
                           </TooltipContent>
                         </Tooltip>
                       );

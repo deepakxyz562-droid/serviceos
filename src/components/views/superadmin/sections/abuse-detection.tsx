@@ -62,7 +62,7 @@ type RiskLevel = 'high' | 'medium' | 'low';
 
 interface FlaggedWorkspace {
   name: string;
-  plan: 'starter' | 'growth' | 'pro' | 'enterprise';
+  plan: 'starter' | 'growth' | 'business' | 'enterprise';
   violations: number;
   riskScore: number;
   riskLevel: RiskLevel;
@@ -73,7 +73,7 @@ const DEMO_FLAGGED_WORKSPACES: FlaggedWorkspace[] = [
   { name: 'ClearWell Cleaning', plan: 'starter', violations: 38, riskScore: 92, riskLevel: 'high', status: 'flagged' },
   { name: 'ShadySEO Co', plan: 'growth', violations: 27, riskScore: 78, riskLevel: 'high', status: 'under-review' },
   { name: 'BargainDeals 99', plan: 'starter', violations: 14, riskScore: 61, riskLevel: 'medium', status: 'flagged' },
-  { name: 'TestCorp Sandbox', plan: 'pro', violations: 9, riskScore: 42, riskLevel: 'medium', status: 'under-review' },
+  { name: 'TestCorp Sandbox', plan: 'business', violations: 9, riskScore: 42, riskLevel: 'medium', status: 'under-review' },
   { name: 'PixelPushers Ltd', plan: 'enterprise', violations: 3, riskScore: 21, riskLevel: 'low', status: 'flagged' },
 ];
 

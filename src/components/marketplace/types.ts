@@ -48,7 +48,7 @@ export interface ProviderListItem {
   cardType?: 'featured' | 'normal-full' | 'normal-minimal';
   /** Whether the tenant has been claimed by a real registered business owner. */
   claimed?: boolean;
-  /** Marketplace listing tier — 'none' | 'free' | 'claimed' | 'pro'. */
+  /** Marketplace listing tier — 'none' | 'free' | 'claimed' | 'business'. */
   listingTier?: string | null;
   /** Contact phone — used for the "Call Now" button on minimal cards. */
   phone?: string | null;
@@ -65,7 +65,7 @@ export interface ProviderListItem {
   stripeConnected: boolean;
   planStatus: string | null;
   /**
-   * Subscription plan tier — 'starter' | 'pro' | 'business' | 'enterprise'.
+   * Subscription plan tier — 'starter' | 'growth' | 'business' | 'enterprise'.
    * Used by the featured carousel to identify paid/active subscribers.
    */
   plan?: string | null;

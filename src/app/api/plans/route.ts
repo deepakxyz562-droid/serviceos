@@ -37,6 +37,9 @@ export async function GET() {
       description: p.description,
       monthlyPrice: p.monthlyPrice,
       yearlyPrice: p.yearlyPrice,
+      originalMonthlyPrice: p.originalMonthlyPrice ?? 0,
+      originalYearlyPrice: p.originalYearlyPrice ?? 0,
+      discountBadge: p.discountBadge ?? null,
       currency: p.currency,
       maxUsers: p.maxUsers,
       maxJobs: p.maxJobs,
@@ -48,6 +51,7 @@ export async function GET() {
       storageQuotaMb: p.storageQuotaMb,
       features: JSON.parse(p.featuresJson),
       popular: p.popular,
+      isAddon: p.isAddon,
       sortOrder: p.sortOrder,
     }));
 

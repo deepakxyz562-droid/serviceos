@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
         address: '4500 Main Street, Suite 200, Houston, TX 77002',
         country: 'US',
         currency: 'USD',
-        plan: 'pro',
+        plan: 'business',
         planStatus: 'active',
         planStartedAt: daysAgo(120),
         onboardingCompleted: true,
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
         name: 'ABC Plumbing',
         slug: 'abc-plumbing-demo',
         industry: 'plumbing',
-        plan: 'pro',
+        plan: 'business',
         ownerId: '', // update later
         tenantId: tenant.id,
       },
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
     // ─── 6. SUBSCRIPTION ─────────────────────────────────
     await db.subscription.create({
       data: {
-        tenantId: tenant.id, plan: 'pro', status: 'active', amount: 50,
+        tenantId: tenant.id, plan: 'business', status: 'active', amount: 149,
         currency: 'USD', billingCycle: 'monthly', startDate: daysAgo(120),
         maxUsers: 20, maxJobs: 9999, maxWorkflows: 999,
         featuresJson: JSON.stringify({ whatsappIntegration: true, customWorkflows: true, apiAccess: true, prioritySupport: true, smartDispatch: true, aiReceptionist: true }),

@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { toISOString } from '@/lib/utils';
 import { getExchangeRate, convertCurrency } from '@/lib/currency';
 import { getAuthUser } from '@/lib/auth';
+import { EventBus } from '@/lib/event-bus';
 
 export async function GET(req: NextRequest) {
   try {
@@ -130,6 +131,25 @@ export async function POST(req: NextRequest) {
         tenantId: bodyTenantId || null,
       },
     });
+
+    // ─── Emit quote.created event ───────────────────────────────────────
+    // Best-effort — never fails the quote creation. Triggers workflow
+    // automations like "1 hour after quote created" follow-ups.
+    try {
+      await EventBus.emit(
+        'quote.created',
+        {
+          quoteId: quote.id,
+          customerId: quote.customerId || null,
+          tenantId: quote.tenantId || null,
+          resourceType: 'quote',
+          resourceId: quote.id,
+        },
+        { tenantId: quote.tenantId || undefined }
+      );
+    } catch (eventErr) {
+      console.error('[Quotes POST] quote.created event failed:', eventErr);
+    }
 
     return NextResponse.json(quote, { status: 201 });
   } catch (error) {

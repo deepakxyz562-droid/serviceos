@@ -5,6 +5,7 @@ import { getAuthUser } from '@/lib/auth';
 import { getExchangeRate, convertCurrency } from '@/lib/currency';
 import { generateInvoiceNumber } from '@/lib/invoice-automation';
 import { logActivity } from '@/lib/activity-log';
+import { EventBus } from '@/lib/event-bus';
 
 /**
  * Resolves a tenant ID from the auth user, falling back to the first tenant
@@ -256,6 +257,28 @@ export async function POST(request: NextRequest) {
       });
     } catch (logErr) {
       console.error('[Invoices POST] Failed to log activity:', logErr);
+    }
+
+    // ─── Emit invoice.created event ─────────────────────────────────
+    // Best-effort — never fails the invoice creation. Triggers workflow
+    // automations and customer notifications.
+    try {
+      await EventBus.emit(
+        'invoice.created',
+        {
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.number,
+          customerId: invoice.customerId || null,
+          tenantId,
+          total,
+          currency: transactionCurrency,
+          resourceType: 'invoice',
+          resourceId: invoice.id,
+        },
+        { tenantId: tenantId || undefined }
+      );
+    } catch (eventErr) {
+      console.error('[Invoices POST] invoice.created event failed:', eventErr);
     }
 
     return NextResponse.json({ invoice }, { status: 201 });

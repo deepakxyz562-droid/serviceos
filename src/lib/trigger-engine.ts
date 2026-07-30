@@ -79,15 +79,17 @@ export const TRIGGER_CATALOG: TriggerDefinition[] = [
   { id: 'time.3d_after_job', label: '3 Days After Job Completed', description: '3 days after job completion for follow-up', category: 'Job Events', icon: 'Clock', event: 'job.completed', configurableFields: [{ key: 'delayMinutes', label: 'Delay (minutes)', type: 'number', defaultValue: 4320 }] },
 
   // ─── Invoice Events (Renamed from Finance) ────────────────────────────
-  { id: 'quote.created', label: 'Quote Created', description: 'When a new quote is created', category: 'Invoice Events', icon: 'FileText', event: 'payment.received' },
-  { id: 'quote.sent', label: 'Quote Sent', description: 'When a quote is sent to customer', category: 'Invoice Events', icon: 'Send', event: 'payment.received' },
-  { id: 'quote.accepted', label: 'Quote Accepted', description: 'When a quote is accepted', category: 'Invoice Events', icon: 'CheckCircle', event: 'payment.received' },
-  { id: 'quote.rejected', label: 'Quote Rejected', description: 'When a quote is rejected', category: 'Invoice Events', icon: 'XCircle', event: 'payment.received' },
-  { id: 'invoice.created', label: 'Invoice Created', description: 'When a new invoice is created', category: 'Invoice Events', icon: 'Receipt', event: 'payment.received' },
-  { id: 'invoice.paid', label: 'Invoice Paid', description: 'When an invoice is paid', category: 'Invoice Events', icon: 'Banknote', event: 'payment.received' },
-  { id: 'invoice.overdue', label: 'Invoice Overdue', description: 'When an invoice becomes overdue', category: 'Invoice Events', icon: 'AlertTriangle', event: 'payment.failed' },
-  { id: 'time.1d_after_quote', label: '1 Day After Quote Sent', description: '1 day after quote is sent without acceptance', category: 'Invoice Events', icon: 'Clock', event: 'payment.received', configurableFields: [{ key: 'delayMinutes', label: 'Delay (minutes)', type: 'number', defaultValue: 1440 }] },
-  { id: 'time.7d_after_invoice', label: '7 Days After Invoice Due', description: '7 days after invoice due date (overdue reminder)', category: 'Invoice Events', icon: 'Clock', event: 'payment.failed', configurableFields: [{ key: 'delayMinutes', label: 'Delay (minutes)', type: 'number', defaultValue: 10080 }] },
+  { id: 'quote.created', label: 'Quote Created', description: 'When a new quote is created', category: 'Invoice Events', icon: 'FileText', event: 'quote.created' },
+  { id: 'quote.sent', label: 'Quote Sent', description: 'When a quote is sent to customer', category: 'Invoice Events', icon: 'Send', event: 'quote.sent' },
+  { id: 'quote.accepted', label: 'Quote Accepted', description: 'When a quote is accepted', category: 'Invoice Events', icon: 'CheckCircle', event: 'quote.accepted' },
+  { id: 'quote.rejected', label: 'Quote Rejected', description: 'When a quote is rejected', category: 'Invoice Events', icon: 'XCircle', event: 'quote.rejected' },
+  { id: 'invoice.created', label: 'Invoice Created', description: 'When a new invoice is created', category: 'Invoice Events', icon: 'Receipt', event: 'invoice.created' },
+  { id: 'invoice.sent', label: 'Invoice Sent', description: 'When an invoice is sent to the customer', category: 'Invoice Events', icon: 'Send', event: 'invoice.sent' },
+  { id: 'invoice.paid', label: 'Invoice Paid', description: 'When an invoice is paid', category: 'Invoice Events', icon: 'Banknote', event: 'invoice.paid' },
+  { id: 'invoice.overdue', label: 'Invoice Overdue', description: 'When an invoice becomes overdue', category: 'Invoice Events', icon: 'AlertTriangle', event: 'invoice.overdue' },
+  { id: 'time.1d_after_quote', label: '1 Day After Quote Sent', description: '1 day after quote is sent without acceptance', category: 'Invoice Events', icon: 'Clock', event: 'quote.sent', configurableFields: [{ key: 'delayMinutes', label: 'Delay (minutes)', type: 'number', defaultValue: 1440 }] },
+  { id: 'time.3d_after_quote', label: '3 Days After Quote Sent', description: '3 days after quote is sent without acceptance', category: 'Invoice Events', icon: 'Clock', event: 'quote.sent', configurableFields: [{ key: 'delayMinutes', label: 'Delay (minutes)', type: 'number', defaultValue: 4320 }] },
+  { id: 'time.7d_after_invoice', label: '7 Days After Invoice Due', description: '7 days after invoice due date (overdue reminder)', category: 'Invoice Events', icon: 'Clock', event: 'invoice.overdue', configurableFields: [{ key: 'delayMinutes', label: 'Delay (minutes)', type: 'number', defaultValue: 10080 }] },
 
   // ─── WhatsApp Events ──────────────────────────────────────────────────
   { id: 'whatsapp.message_received', label: 'Message Received', description: 'When a WhatsApp message is received', category: 'WhatsApp Events', icon: 'MessageCircle', event: 'conversation.message_received' },
@@ -171,7 +173,16 @@ function getNestedValue(obj: Record<string, any>, path: string): any {
 
 // ─── Action Executor ─────────────────────────────────────────────────────────
 
-async function executeAction(
+/**
+ * Execute a single workflow action.
+ *
+ * Exported so the ScheduledExecution cron runner can reuse the exact same
+ * action executor when firing delayed automations (instead of duplicating the
+ * dispatch logic). The action shape matches what's stored in
+ * `WorkflowAutomation.actionsJson` and `ScheduledExecution.actionsJson`:
+ *   `{ type: string, config: Record<string, any> }`
+ */
+export async function executeAction(
   action: { type: string; config: Record<string, any> },
   payload: EventPayload
 ): Promise<{ success: boolean; result?: any; error?: string }> {
@@ -525,6 +536,12 @@ class TriggerEngineClass {
     let executionError: string | undefined
     const actionResults: any[] = []
 
+    // Destructure payload locals for the delayed-execution branch below.
+    // (The immediate branch uses `payload.*` directly via evaluateConditions /
+    // executeAction, but the ScheduledExecution persistence path needs
+    // `event` / `tenantId` / `data` as locals to build the row.)
+    const { event, data, tenantId } = payload
+
     try {
       // 1. Evaluate conditions
       const conditions: Condition[] = JSON.parse(automation.conditionsJson || '[]')
@@ -537,35 +554,53 @@ class TriggerEngineClass {
         // 2. Check trigger config for delays (time-based triggers)
         const triggerConfig = JSON.parse(automation.triggerConfigJson || '{}')
         if (triggerConfig.delayMinutes && triggerConfig.delayMinutes > 0) {
-          // Schedule delayed execution
-          console.log(`[TriggerEngine] Scheduling delayed execution for "${automation.name}" in ${triggerConfig.delayMinutes} minutes`)
-          setTimeout(async () => {
-            try {
-              const actions = JSON.parse(automation.actionsJson || '[]')
-              const results: { success: boolean; result?: any; error?: string }[] = []
-              for (const action of actions) {
-                const result = await executeAction(action, payload)
-                results.push(result)
-              }
-              
-              await db.triggerExecution.create({
-                data: {
-                  automationId: automation.id,
-                  triggerEvent: payload.event,
-                  triggerPayload: JSON.stringify(payload.data),
-                  conditionsMet: true,
-                  actionsResultsJson: JSON.stringify(results),
-                  status: results.every(r => r.success) ? 'success' : 'partial',
-                  durationMs: Date.now() - startTime,
-                  tenantId: payload.tenantId || null,
-                },
-              })
-            } catch (err: any) {
-              console.error(`[TriggerEngine] Delayed execution failed for "${automation.name}":`, err)
-            }
-          }, triggerConfig.delayMinutes * 60 * 1000)
-          
-          // Don't log as a full execution yet - it's scheduled
+          // ── Persist the delayed execution instead of using setTimeout ──
+          // setTimeout() dies on serverless cold-starts / server restarts — a
+          // 3-day follow-up would NEVER fire. We persist a ScheduledExecution
+          // row that the /api/cron/scheduled-executions cron picks up when
+          // due. The cron replays the actions via the shared executeAction().
+          console.log(
+            `[TriggerEngine] Scheduling delayed execution for "${automation.name}" in ${triggerConfig.delayMinutes} minutes (persisted to ScheduledExecution)`
+          )
+          try {
+            await db.scheduledExecution.create({
+              data: {
+                tenantId: tenantId || '',
+                automationId: automation.id,
+                triggerEvent: event,
+                entityType: (data.entityType as string | null) || (data.resourceType as string | null) || null,
+                entityId:
+                  (data.entityId as string | null) ||
+                  (data.resourceId as string | null) ||
+                  (data.invoiceId as string | null) ||
+                  (data.quoteId as string | null) ||
+                  (data.jobId as string | null) ||
+                  (data.customerId as string | null) ||
+                  (data.leadId as string | null) ||
+                  null,
+                delayMinutes: Number(triggerConfig.delayMinutes),
+                dueAt: new Date(Date.now() + Number(triggerConfig.delayMinutes) * 60 * 1000),
+                actionsJson: automation.actionsJson || '[]',
+                contextJson: JSON.stringify({
+                  event: payload.event,
+                  tenantId: payload.tenantId,
+                  workspaceId: payload.workspaceId,
+                  data: payload.data,
+                }),
+                status: 'pending',
+              },
+            })
+          } catch (err) {
+            console.error(
+              `[TriggerEngine] Failed to persist ScheduledExecution for "${automation.name}":`,
+              err
+            )
+            // Don't fall back to setTimeout — the audit said that path is
+            // broken on serverless. Surface the error and bail.
+          }
+
+          // Don't log as a full execution yet — it's scheduled. The cron
+          // runner will mirror a TriggerExecution row when it fires.
           return
         }
 

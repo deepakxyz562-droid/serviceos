@@ -69,7 +69,7 @@ const features: Feature[] = [
     icon: Building2,
     title: "Storefront Contract Billing",
     description:
-      "Set up weekly, bi-weekly, or monthly storefront contracts once, and ServiceOS auto-charges the property manager's card after each completed visit. Recurring commercial revenue lands in your account without a monthly invoice run or a follow-up phone call.",
+      "Set up weekly, bi-weekly, or monthly storefront contracts once, and ServiceOS sends the property manager a branded invoice with a payment link after each completed visit, plus automatic reminders for unpaid balances. Recurring commercial revenue stops slipping through the cracks without a monthly invoice run or a follow-up phone call.",
   },
   {
     icon: Sparkles,
@@ -93,7 +93,7 @@ const faqs = [
   {
     question: "Can ServiceOS handle both residential and storefront commercial contracts?",
     answer:
-      "Yes, and that mix is the hallmark of a healthy window cleaning business. Residential jobs are typically one-off or seasonal, billed per visit, and scheduled by route density. Storefront contracts are weekly, bi-weekly, or monthly, billed on a recurring cycle, and managed through the property manager rather than the building owner. ServiceOS handles both workflows on the same dispatch board. Storefront contracts auto-charge after every visit, residential jobs generate a one-time invoice on completion, and you see both revenue streams on a single dashboard. Many window cleaning companies use ServiceOS to deliberately grow their storefront book because the recurring revenue smooths out the seasonality of residential work.",
+      "Yes, and that mix is the hallmark of a healthy window cleaning business. Residential jobs are typically one-off or seasonal, billed per visit, and scheduled by route density. Storefront contracts are weekly, bi-weekly, or monthly, billed on a recurring cycle, and managed through the property manager rather than the building owner. ServiceOS handles both workflows on the same dispatch board. Storefront contracts auto-generate invoices with payment links after every visit, residential jobs generate a one-time invoice on completion, and you see both revenue streams on a single dashboard. Many window cleaning companies use ServiceOS to deliberately grow their storefront book because the recurring revenue smooths out the seasonality of residential work.",
   },
   {
     question: "How does ServiceOS track water-fed-pole versus squeegee jobs?",
@@ -103,7 +103,7 @@ const faqs = [
   {
     question: "How does recurring storefront billing work?",
     answer:
-      "Storefront contracts are typically billed on a fixed weekly or monthly price — for example, 85 dollars per visit, twice a month, for a chain of retail locations. In ServiceOS, you define each contract once with the customer, frequency, per-visit price, and payment method on file. After every completed visit, the system charges the card automatically and sends the property manager a branded receipt. Failed payments surface on the dispatch board so you can pause service before the customer owes three months of unpaid cleanings. You eliminate the monthly invoice run that used to eat two days of office time, and your recurring commercial revenue becomes truly passive.",
+      "Storefront contracts are typically billed on a fixed weekly or monthly price — for example, 85 dollars per visit, twice a month, for a chain of retail locations. In ServiceOS, you define each contract once with the customer, frequency, per-visit price, and payment method on file. After every completed visit, the system generates a branded invoice with a secure payment link and sends it to the property manager via Email & SMS. ServiceOS follows up with automatic reminders for unpaid balances, and overdue invoices surface on the dispatch board so you can pause service before the customer owes three months of unpaid cleanings. You eliminate the monthly invoice run that used to eat two days of office time, and your recurring commercial revenue becomes far more predictable.",
   },
   {
     question: "Can ServiceOS help me upsell hard-water stain removal and frame restoration?",
@@ -204,7 +204,7 @@ export default function WindowCleaningSoftwarePage() {
                   "Before and after photos on every pane — disputes resolved in seconds",
                   "Height-access checklist completed and timestamped on every work order",
                   "Job method tagged per stop — the right tech with the right gear shows up",
-                  "Storefront contracts auto-charge after every visit — no monthly invoice run",
+                  "Storefront contracts auto-send invoices with payment links after every visit — no monthly invoice run",
                   "Surcharge quotes sent from the field — upsell revenue captured every week",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2">
@@ -229,7 +229,7 @@ export default function WindowCleaningSoftwarePage() {
           The dispute problem is the second silent margin killer. A storefront manager calls and says the second-floor panes weren't done, or a homeowner claims the skylight still has streaks. Without photo proof, you end up sending a tech back out — unpaid — and the customer walks away thinking your work was sloppy. ServiceOS makes before-and-after photos on every pane a non-negotiable part of the workflow. Every photo is timestamped and attached to the work order, and when the dispute call comes in, you have the proof in front of you in 10 seconds. The disputes that used to cost you a free return trip now get resolved in your favor in a single phone call.
         </p>
         <p>
-          Finally, there is the recurring storefront revenue that smooths out the seasonality of residential work. Storefront contracts — weekly or bi-weekly cleanings of retail fronts, restaurants, and office buildings — are billed on a fixed cycle and managed through the property manager, not the building owner. ServiceOS auto-charges the card on file after every completed visit and sends a branded receipt, so the recurring revenue becomes truly passive. No end-of-month invoice run, no chasing property managers who pay net-60, no service pauses because someone forgot to follow up on a failed charge. The storefront book becomes the predictable base that lets you take on more lucrative residential work in the busy season without worrying about cash flow in the slow months.
+          Finally, there is the recurring storefront revenue that smooths out the seasonality of residential work. Storefront contracts — weekly or bi-weekly cleanings of retail fronts, restaurants, and office buildings — are billed on a fixed cycle and managed through the property manager, not the building owner. ServiceOS automatically generates a branded invoice with a payment link after every completed visit and sends it via Email & SMS, then follows up with payment reminders for any unpaid balance. No end-of-month invoice run, no chasing property managers who pay net-60, no service pauses because someone forgot to follow up on an overdue invoice. The storefront book becomes the predictable base that lets you take on more lucrative residential work in the busy season without worrying about cash flow in the slow months.
         </p>
       </ContentSection>
 

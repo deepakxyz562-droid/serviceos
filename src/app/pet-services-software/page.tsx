@@ -75,7 +75,7 @@ const features: Feature[] = [
     icon: Repeat,
     title: "Subscription Billing for Multi-Pet Households",
     description:
-      "Bill recurring pet care as a monthly subscription — 12 walks a month for one dog, twice-weekly sitting for two cats, mobile grooming every six weeks — and ServiceOS auto-charges the customer's card. Multi-pet households get a single consolidated invoice.",
+      "Bill recurring pet care as a monthly subscription — 12 walks a month for one dog, twice-weekly sitting for two cats, mobile grooming every six weeks — and ServiceOS sends automatic payment reminders after each visit. Multi-pet households get a single consolidated invoice.",
   },
 ];
 
@@ -103,7 +103,7 @@ const faqs = [
   {
     question: "How does subscription billing work for pet services?",
     answer:
-      "Most pet services businesses run on recurring weekly or monthly revenue — 12 dog walks a month at 25 dollars each, twice-weekly cat sitting at 30 dollars per visit, mobile grooming every six weeks at 80 dollars. ServiceOS lets you bill all of it as a monthly subscription that auto-charges the customer's card on file, with a single consolidated invoice for multi-pet households. Failed payments surface on the dashboard immediately so you can follow up before the customer owes three months of service. Most pet services companies using ServiceOS cut their days-sales-outstanding from 30-plus days to under 5, because the recurring billing just runs in the background without anyone in the office touching it.",
+      "Most pet services businesses run on recurring weekly or monthly revenue — 12 dog walks a month at 25 dollars each, twice-weekly cat sitting at 30 dollars per visit, mobile grooming every six weeks at 80 dollars. ServiceOS lets you bill all of it as a monthly subscription, with a single consolidated invoice for multi-pet households sent after each visit cycle. ServiceOS follows up with automatic payment reminders for unpaid balances, and overdue invoices surface on the dashboard immediately so you can follow up before the customer owes three months of service. Most pet services companies using ServiceOS cut their days-sales-outstanding from 30-plus days to under 10, because the recurring invoicing just runs in the background without anyone in the office touching it.",
   },
   {
     question: "Can ServiceOS handle mobile grooming in addition to walking and sitting?",
@@ -204,7 +204,7 @@ export default function PetServicesSoftwarePage() {
                   "GPS walk map and timestamp on every visit — proof the walk actually happened",
                   "Vaccination records tracked with expiration alerts — liability covered",
                   "Sitter check-in GPS-verified — they're at the right house at the right time",
-                  "Subscription billing auto-charges after every visit — no end-of-month chase",
+                  "Subscription billing auto-sends invoices with reminders after every visit — no end-of-month chase",
                   "Multi-pet households get one clean consolidated monthly invoice",
                 ].map((item) => (
                   <li key={item} className="flex items-start gap-2">
@@ -229,7 +229,7 @@ export default function PetServicesSoftwarePage() {
           The pet-profile and vaccination side is the silent liability that most pet services companies don't think about until it becomes a problem. If a dog in your pack walking service bites another dog and you can't produce proof of current rabies vaccination, you are exposed legally and operationally. ServiceOS makes pet records part of the workflow. Every pet has a full profile — vaccination records with expiration dates, behavioral notes, feeding instructions, vet and emergency contacts, and handling preferences. When a new sitter covers a route, they see every relevant note before they knock on the door. ServiceOS also flags pets whose vaccinations are expiring, so you can remind the customer to update their records before they become a liability for your business.
         </p>
         <p>
-          Finally, there is the recurring billing that determines whether a pet services business is operationally healthy or perpetually cash-strapped. Most pet services run on weekly or monthly recurring revenue — 12 walks a month, twice-weekly sitting, mobile grooming every six weeks — and chasing those payments at the end of the month eats office time and damages customer relationships. ServiceOS runs all of it as auto-charging subscriptions. The customer's card on file gets charged after every visit or on a fixed monthly cycle, multi-pet households get a single consolidated invoice, and failed payments surface immediately on the dashboard. Most pet services companies using ServiceOS cut their days-sales-outstanding from 30-plus days to under 5, which means the money hits the bank account before the customer has even thought about paying the invoice.
+          Finally, there is the recurring billing that determines whether a pet services business is operationally healthy or perpetually cash-strapped. Most pet services run on weekly or monthly recurring revenue — 12 walks a month, twice-weekly sitting, mobile grooming every six weeks — and chasing those payments at the end of the month eats office time and damages customer relationships. ServiceOS runs all of it as recurring subscriptions that auto-generate invoices with secure payment links. After every visit (or on a fixed monthly cycle) the customer receives a branded invoice by Email & SMS, multi-pet households get a single consolidated invoice, and ServiceOS follows up with automatic payment reminders for any unpaid balance. Overdue invoices surface immediately on the dashboard so you can follow up before the situation escalates. Most pet services companies using ServiceOS cut their days-sales-outstanding from 30-plus days to under 10, which means invoices get paid promptly without anyone in the office chasing them.
         </p>
       </ContentSection>
 

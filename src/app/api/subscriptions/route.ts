@@ -204,8 +204,11 @@ export async function GET() {
     let plans: Array<{
       id: string; code: string; name: string; description: string | null;
       monthlyPrice: number; yearlyPrice: number; currency: string;
+      originalMonthlyPrice: number; originalYearlyPrice: number;
+      discountBadge: string | null;
       maxUsers: number; maxJobs: number; maxWorkflows: number;
-      features: Record<string, boolean>; popular: boolean; sortOrder: number;
+      features: Record<string, boolean>; popular: boolean;
+      isAddon: boolean; sortOrder: number;
     }> = [];
     try {
       let planRows = await getActivePlans();
@@ -226,6 +229,9 @@ export async function GET() {
         monthlyPrice: p.monthlyPrice,
         yearlyPrice: p.yearlyPrice,
         currency: p.currency,
+        originalMonthlyPrice: p.originalMonthlyPrice ?? 0,
+        originalYearlyPrice: p.originalYearlyPrice ?? 0,
+        discountBadge: p.discountBadge ?? null,
         maxUsers: p.maxUsers,
         maxJobs: p.maxJobs,
         maxWorkflows: p.maxWorkflows,
@@ -233,6 +239,7 @@ export async function GET() {
         // be null/empty in older rows or Supabase REST edge cases.
         features: safeParseFeatures(p.featuresJson),
         popular: p.popular,
+        isAddon: p.isAddon ?? false,
         sortOrder: p.sortOrder,
       }));
     } catch (plansErr) {
@@ -338,7 +345,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const validPlans = ['starter', 'growth', 'pro', 'enterprise'];
+    const validPlans = ['starter', 'growth', 'business', 'enterprise'];
     if (!validPlans.includes(plan)) {
       return NextResponse.json(
         { error: `Invalid plan. Must be one of: ${validPlans.join(', ')}` },

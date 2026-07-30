@@ -1,6 +1,7 @@
 import { db } from '@/lib/db'
 import { getAuthUser } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
+import { EventBus } from '@/lib/event-bus'
 
 // GET /api/invoices/[id] — Get single invoice by ID
 //
@@ -164,6 +165,33 @@ export async function PUT(
       },
     })
 
+    // ─── Emit invoice lifecycle events on status change ──────────────
+    // Best-effort — never fails the update.
+    if (status && status !== existing.status) {
+      try {
+        const eventData = {
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.number,
+          customerId: invoice.customerId || null,
+          tenantId: invoice.tenantId || null,
+          total: Number(invoice.total),
+          currency: invoice.currency,
+          fromStatus: existing.status,
+          toStatus: status,
+          resourceType: 'invoice',
+          resourceId: invoice.id,
+        }
+        const ctx = { tenantId: invoice.tenantId || undefined }
+        if (status === 'sent') {
+          await EventBus.emit('invoice.sent', eventData, ctx)
+        } else if (status === 'paid') {
+          await EventBus.emit('invoice.paid', eventData, ctx)
+        }
+      } catch (eventErr) {
+        console.error('[Invoices PUT] invoice status event failed:', eventErr)
+      }
+    }
+
     return NextResponse.json(invoice)
   } catch (error) {
     console.error('Failed to update invoice:', error)
@@ -259,6 +287,37 @@ export async function PATCH(
         },
       },
     })
+
+    // ─── Emit invoice lifecycle events on status change ──────────────
+    // Best-effort — never fails the update. Mirrors the PUT handler so
+    // quick-action PATCHes (mark_sent, mark_paid) also fire events.
+    const newStatus = (updateData.status as string | undefined) ?? existing.status
+    if (newStatus !== existing.status) {
+      try {
+        const eventData = {
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.number,
+          customerId: invoice.customerId || null,
+          tenantId: invoice.tenantId || null,
+          total: Number(invoice.total),
+          currency: invoice.currency,
+          fromStatus: existing.status,
+          toStatus: newStatus,
+          resourceType: 'invoice',
+          resourceId: invoice.id,
+        }
+        const ctx = { tenantId: invoice.tenantId || undefined }
+        if (newStatus === 'sent') {
+          await EventBus.emit('invoice.sent', eventData, ctx)
+        } else if (newStatus === 'paid') {
+          await EventBus.emit('invoice.paid', eventData, ctx)
+        } else if (newStatus === 'overdue') {
+          await EventBus.emit('invoice.overdue', eventData, ctx)
+        }
+      } catch (eventErr) {
+        console.error('[Invoices PATCH] invoice status event failed:', eventErr)
+      }
+    }
 
     return NextResponse.json(invoice)
   } catch (error) {

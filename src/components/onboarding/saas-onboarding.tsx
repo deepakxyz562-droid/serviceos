@@ -142,33 +142,58 @@ const STEPS = [
   { id: 4, label: 'All Set!', icon: CheckCircle2 },
 ] as const;
 
-const PLANS = [
+// ─── Plan catalog (DB-backed at runtime — see useEffect below) ──────────────
+//
+// The local FALLBACK_PLANS array is used if the fetch to /api/plans fails
+// (network error, DB unreachable, etc.). At runtime we map DB Plan rows to
+// the same Plan shape. Canonical plan codes: starter | growth | business |
+// enterprise. NOTE: the mid-tier is code `growth` but its display name is
+// "Professional" (DB Plan.name); the legacy `pro` code was migrated to
+// `business` and is no longer a valid plan code.
+
+interface OnboardingPlan {
+  id: string;
+  name: string;
+  monthlyPrice: number;
+  yearlyPrice: number;
+  /** Strikethrough "original" monthly price (0 = no discount badge shown). */
+  originalMonthlyPrice: number;
+  description: string;
+  features: string[];
+  icon: typeof Zap;
+  popular?: boolean;
+}
+
+const FALLBACK_PLANS: OnboardingPlan[] = [
   {
     id: 'starter',
     name: 'Starter',
-    monthlyPrice: 10,
-    yearlyPrice: 60, // 50% off annual
-    description: 'Perfect for getting started',
-    features: ['1 user', '100 jobs/month', '10 workflows', 'Email support'],
+    monthlyPrice: 29,
+    yearlyPrice: 290, // 2 months free on yearly
+    originalMonthlyPrice: 49,
+    description: 'For solo pros & new businesses',
+    features: ['1 user', '200 jobs/month', 'CRM, jobs, scheduling, invoicing', 'Customer portal', 'Email support'],
     icon: Zap,
   },
   {
     id: 'growth',
-    name: 'Growth',
-    monthlyPrice: 25,
-    yearlyPrice: 150, // 50% off annual
-    description: 'For growing businesses',
-    features: ['5 users', '1,000 jobs/month', '50 workflows', 'Priority support', 'Custom templates'],
+    name: 'Professional',
+    monthlyPrice: 79,
+    yearlyPrice: 790, // 2 months free on yearly
+    originalMonthlyPrice: 129,
+    description: 'For growing teams — most popular',
+    features: ['Up to 5 users', 'Unlimited jobs', 'WhatsApp + Email + SMS', 'AI Assistant + AI Quote Generator', 'Workflow + Forms Builder', 'Omnichannel Inbox', 'API access'],
     icon: Star,
     popular: true,
   },
   {
-    id: 'pro',
-    name: 'Pro',
-    monthlyPrice: 50,
-    yearlyPrice: 300, // 50% off annual
-    description: 'For scaling operations',
-    features: ['Unlimited users', 'Unlimited jobs', 'Unlimited workflows', 'Priority support', 'Custom templates', 'API access', 'Advanced analytics'],
+    id: 'business',
+    name: 'Business',
+    monthlyPrice: 149,
+    yearlyPrice: 1490, // 2 months free on yearly
+    originalMonthlyPrice: 249,
+    description: 'For multi-branch operators',
+    features: ['Up to 20 users', 'AI Receptionist + AI Dispatcher', 'Inventory + Purchase Orders', 'Recurring Jobs', 'Route Optimization', 'Advanced Reports', 'Role Permissions'],
     icon: Crown,
   },
   {
@@ -176,11 +201,93 @@ const PLANS = [
     name: 'Enterprise',
     monthlyPrice: 0,
     yearlyPrice: 0,
+    originalMonthlyPrice: 0,
     description: 'For large organizations',
-    features: ['Everything in Pro', 'White-label', 'Dedicated account manager', 'Priority support', 'Custom integrations', 'SLA guarantee'],
+    features: ['Everything in Business', 'White-label branding', 'Advanced security & audit logs', 'Data retention policies', 'Dedicated support', 'Custom onboarding'],
     icon: Shield,
   },
-] as const;
+];
+
+// Maps a DB feature flag (boolean key from Plan.featuresJson) to a
+// human-readable display string shown in the plan card feature list.
+// Only `true` flags are surfaced; falsy/missing flags are omitted.
+const PLAN_FEATURE_LABELS: Record<string, string> = {
+  customerPortal: 'Customer Portal',
+  estimates: 'Quotes & Estimates',
+  invoicing: 'Invoices & Online Payments',
+  scheduling: 'Jobs & Scheduling',
+  calendar: 'Calendar',
+  dispatchBoard: 'Dispatch Board',
+  gpsTracking: 'GPS Tracking',
+  customer360: 'Customer 360',
+  salesPipeline: 'Leads & Sales Pipeline',
+  reviews: 'Reviews Management',
+  knowledgeBase: 'Knowledge Base',
+  documentCenter: 'Document Center',
+  timeTracking: 'Time Tracking & Expenses',
+  expenses: 'Expenses',
+  digitalSignatures: 'Digital Signatures',
+  beforeAfterPhotos: 'Before & After Photos',
+  onlinePayments: 'Online Payments',
+  onlineBooking: 'Online Booking',
+  employeePortal: 'Employee Portal',
+  basicReports: 'Basic Reports',
+  whatsappIntegration: 'WhatsApp Integration',
+  emailIntegration: 'Email Integration',
+  smsNumbers: 'SMS Numbers',
+  aiAssistant: 'AI Assistant',
+  aiQuoteGenerator: 'AI Quote Generator',
+  aiJobSummary: 'AI Job Summary',
+  aiSuggestedReplies: 'AI Suggested Replies',
+  aiFormGenerator: 'AI Form Generator',
+  customWorkflows: 'Workflow Builder',
+  formBuilder: 'Forms Builder',
+  marketingCampaigns: 'Marketing Campaigns',
+  broadcast: 'Broadcast',
+  customerSegments: 'Customer Segments',
+  templateStudio: 'Template Studio',
+  omnichannelInbox: 'Omnichannel Inbox',
+  liveChat: 'Live Chat Widget',
+  apiAccess: 'API Access',
+  webhooks: 'Webhooks',
+  aiReceptionist: 'AI Receptionist (Voice Agents)',
+  aiAgents: 'AI Agents',
+  aiPhoneNumbers: 'AI Phone Numbers',
+  aiCallHistory: 'AI Call History',
+  aiDispatcher: 'AI Dispatcher (Smart Dispatch)',
+  inventory: 'Inventory Management',
+  purchaseOrders: 'Purchase Orders',
+  recurringJobs: 'Recurring Jobs',
+  routeOptimization: 'Route Optimization',
+  advancedReports: 'Advanced Reports',
+  rolePermissions: 'Role Permissions',
+  whiteLabel: 'White Label Branding',
+  advancedSecurity: 'Advanced Security & Audit Logs',
+  dataRetention: 'Data Retention Policies',
+  dedicatedSupport: 'Dedicated Support',
+};
+
+/** Convert a DB plan's featuresJson object (boolean map) into a display string array. */
+function featuresFromJson(features: unknown): string[] {
+  if (!features || typeof features !== 'object') return [];
+  const obj = features as Record<string, unknown>;
+  const labels: string[] = [];
+  for (const key of Object.keys(obj)) {
+    if (obj[key] === true && PLAN_FEATURE_LABELS[key]) {
+      labels.push(PLAN_FEATURE_LABELS[key]);
+    }
+  }
+  return labels;
+}
+
+// Icon lookup by plan code — keeps the card UI consistent between
+// fallback and DB-backed plans.
+const PLAN_ICON_BY_CODE: Record<string, typeof Zap> = {
+  starter: Zap,
+  growth: Star,
+  business: Crown,
+  enterprise: Shield,
+};
 
 // ── Phase-3 Business Profile: day presets ───────────────────────────────────
 const DAYS_OF_WEEK: { key: string; label: string }[] = [
@@ -371,6 +478,14 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   // pending" banner (cancelled) or a "payment successful" banner (paid).
   const [paymentCompleted, setPaymentCompleted] = useState(false);
 
+  // Plan catalog — fetched from /api/plans on mount so prices stay in sync
+  // with the DB (editable by super-admins). Falls back to FALLBACK_PLANS
+  // (the hardcoded canonical plan list above) on any fetch failure.
+  const [plans, setPlans] = useState<OnboardingPlan[]>(FALLBACK_PLANS);
+  // Currency code from the DB plan rows (defaults to USD). Used by
+  // formatPrice() so we don't hardcode 'USD'.
+  const [planCurrency, setPlanCurrency] = useState<string>('USD');
+
   // -------------------------------------------------------------------------
   // Helpers
   // -------------------------------------------------------------------------
@@ -461,6 +576,52 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
     },
     [tenantId],
   );
+
+  // Fetch the plan catalog from the DB on mount so we always show live
+  // prices + feature sets (super-admins can edit them without a code
+  // deploy). Falls back to FALLBACK_PLANS on any failure — the wizard
+  // still works end-to-end even if /api/plans is unreachable.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/plans');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data?.plans || !Array.isArray(data.plans)) return;
+        // Filter out add-ons (ai_pro_addon etc.) — only standalone plans
+        // are shown on the plan picker.
+        const standalone = data.plans.filter(
+          (p: any) => !p.isAddon && !p.parentPlanCode,
+        );
+        if (standalone.length === 0) return;
+        const mapped: OnboardingPlan[] = standalone.map((p: any) => ({
+          id: p.code,
+          name: p.name,
+          monthlyPrice: Number(p.monthlyPrice) || 0,
+          yearlyPrice: Number(p.yearlyPrice) || 0,
+          originalMonthlyPrice: Number(p.originalMonthlyPrice) || 0,
+          description: p.description || '',
+          features: featuresFromJson(p.features),
+          icon: PLAN_ICON_BY_CODE[p.code] ?? Zap,
+          popular: !!p.popular,
+        }));
+        if (cancelled) return;
+        setPlans(mapped);
+        // Take currency from the first plan row (all rows share the same
+        // currency in the seed). Falls back to USD if missing.
+        if (standalone[0]?.currency) {
+          setPlanCurrency(String(standalone[0].currency));
+        }
+      } catch (err) {
+        // Network / parse error — keep FALLBACK_PLANS (already in state).
+        console.warn('[onboarding] Failed to fetch /api/plans, using fallback:', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // -------------------------------------------------------------------------
   // Step 1 validator & handler
@@ -711,7 +872,10 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
           goNext();
         } else {
           // 'pay' mode: open PayPal checkout inline.
-          const selectedPlan = PLANS.find((p) => p.id === step3.plan);
+          // Uses the live `plans` state (DB-backed) so the plan id passed
+          // to PayPal is always the canonical code (starter/growth/business/
+          // enterprise), never the legacy 'pro' code.
+          const selectedPlan = plans.find((p) => p.id === step3.plan);
           if (!selectedPlan || selectedPlan.monthlyPrice === 0) {
             toast.error('Please select a paid plan to subscribe.');
             return;
@@ -736,7 +900,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
         setSaving(false);
       }
     },
-    [createSubscription, saveTenantProgress, step3, goNext],
+    [createSubscription, saveTenantProgress, step3, goNext, plans],
   );
 
   // (was handleComplete) Now the 4th step — All Set!
@@ -769,14 +933,23 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
   // Format price
   // -------------------------------------------------------------------------
 
+  // Format a price using the live plan currency (DB-backed, defaults to
+  // USD). `0` is rendered as 'Custom' for the Enterprise plan.
   const formatPrice = (amount: number) => {
     if (amount === 0) return 'Custom';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: planCurrency,
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
+  };
+
+  // Percentage discount from an original price to a current price.
+  // Returns 0 if either value is missing/zero (no badge shown).
+  const discountPct = (original: number, current: number) => {
+    if (!original || original <= 0 || current >= original) return 0;
+    return Math.round(((original - current) / original) * 100);
   };
 
   // -------------------------------------------------------------------------
@@ -1490,18 +1663,26 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
         </span>
         {step3.billing === 'yearly' && (
           <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border-0 text-xs">
-            Save 50%!
+            Save ~17% (2 months free)
           </Badge>
         )}
       </div>
 
       {/* Plan Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {PLANS.map((plan) => {
+        {plans.map((plan) => {
           const PlanIcon = plan.icon;
           const isSelected = step3.plan === plan.id;
           const price =
             step3.billing === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
+          // Per-plan discount % for the strikethrough badge.
+          // Monthly: originalMonthlyPrice → monthlyPrice.
+          // Yearly:  originalMonthlyPrice * 12 → yearlyPrice.
+          const monthlySavePct = discountPct(plan.originalMonthlyPrice, plan.monthlyPrice);
+          const yearlySavePct = discountPct(
+            plan.originalMonthlyPrice * 12,
+            plan.yearlyPrice,
+          );
 
           return (
             <Card
@@ -1514,7 +1695,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
               )}
               onClick={() => setStep3((s) => ({ ...s, plan: plan.id }))}
             >
-              {'popular' in plan && (
+              {plan.popular && (
                 <div className="absolute top-0 right-0">
                   <div className="flex items-center gap-1 rounded-bl-lg bg-emerald-500 px-3 py-1 text-xs font-bold text-white">
                     <Sparkles className="h-3 w-3" />
@@ -1555,11 +1736,32 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
                     </div>
                   ) : (
                     <div>
-                      {/* Crossed-out original annual price (yearly only) */}
-                      {step3.billing === 'yearly' && (
-                        <p className="text-xs text-muted-foreground line-through mb-0.5">
-                          {formatPrice(plan.monthlyPrice * 12)}/yr
-                        </p>
+                      {/* Strikethrough original price + Save % badge.
+                          Monthly: show ~~originalMonthlyPrice~~ then current price.
+                          Yearly: show ~~originalMonthlyPrice*12~~ then yearlyPrice. */}
+                      {step3.billing === 'monthly' && plan.originalMonthlyPrice > 0 && (
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <p className="text-xs text-muted-foreground line-through">
+                            {formatPrice(plan.originalMonthlyPrice)}/mo
+                          </p>
+                          {monthlySavePct > 0 && (
+                            <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border-0 text-xs px-1.5 py-0">
+                              Save {monthlySavePct}%
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+                      {step3.billing === 'yearly' && plan.originalMonthlyPrice > 0 && (
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <p className="text-xs text-muted-foreground line-through">
+                            {formatPrice(plan.originalMonthlyPrice * 12)}/yr
+                          </p>
+                          {yearlySavePct > 0 && (
+                            <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border-0 text-xs px-1.5 py-0">
+                              Save {yearlySavePct}%
+                            </Badge>
+                          )}
+                        </div>
                       )}
                       <div className="flex items-baseline gap-1">
                         <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
@@ -1571,7 +1773,8 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
                       </div>
                       {step3.billing === 'yearly' && (
                         <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">
-                          {formatPrice(Math.round(plan.yearlyPrice / 12))}/mo · 50% off
+                          {formatPrice(Math.round(plan.yearlyPrice / 12))}/mo
+                          {yearlySavePct > 0 ? ` · ${yearlySavePct}% off` : ''}
                         </p>
                       )}
                     </div>
@@ -1662,7 +1865,7 @@ export function SaaSOnboarding({ tenant, user, onComplete }: SaaSOnboardingProps
       </div>
 
       <p className="text-center text-xs text-muted-foreground">
-        14-day free trial on all plans · No credit card required for trial · Cancel anytime · Yearly plans save 50% · Subscribe &amp; Pay Now sets up auto-recurring billing
+        14-day free trial on all plans · No credit card required for trial · Cancel anytime · Yearly plans save ~17% (2 months free) · Subscribe &amp; Pay Now bills through PayPal recurring subscriptions
       </p>
     </div>
   );

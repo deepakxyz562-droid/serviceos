@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Plan query param is required' }, { status: 400 });
     }
 
-    const validPlans = ['starter', 'growth', 'pro', 'enterprise'];
+    const validPlans = ['starter', 'growth', 'business', 'enterprise'];
     if (!validPlans.includes(newPlanCode)) {
       return NextResponse.json(
         { error: `Invalid plan. Must be one of: ${validPlans.join(', ')}` },

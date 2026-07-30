@@ -22,7 +22,7 @@ import { db } from '@/lib/db';
 /** Maximum featured providers shown on the marketplace at one time. */
 export const MAX_FEATURED = 4;
 
-const PAID_PLANS = new Set(['growth', 'pro', 'business', 'enterprise']);
+const PAID_PLANS = new Set(['starter', 'growth', 'business', 'enterprise']);
 
 export interface TenantFeaturedSignals {
   claimed: boolean;

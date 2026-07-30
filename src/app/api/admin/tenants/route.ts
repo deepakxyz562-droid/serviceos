@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
     const planConfig: Record<string, { amount: number; maxUsers: number; maxJobs: number; maxWorkflows: number }> = {
       starter: { amount: 10, maxUsers: 3, maxJobs: 100, maxWorkflows: 10 },
       growth: { amount: 25, maxUsers: 10, maxJobs: 500, maxWorkflows: 50 },
-      pro: { amount: 50, maxUsers: 50, maxJobs: 2000, maxWorkflows: 200 },
+      business: { amount: 50, maxUsers: 50, maxJobs: 2000, maxWorkflows: 200 },
       enterprise: { amount: 0, maxUsers: -1, maxJobs: -1, maxWorkflows: -1 },
     };
     const config = planConfig[selectedPlan] || planConfig.starter;
@@ -233,8 +233,8 @@ export async function POST(request: NextRequest) {
         maxWorkflows: config.maxWorkflows,
         featuresJson: JSON.stringify({
           whatsappIntegration: selectedPlan !== 'starter',
-          customWorkflows: selectedPlan === 'pro' || selectedPlan === 'enterprise',
-          apiAccess: selectedPlan === 'pro' || selectedPlan === 'enterprise',
+          customWorkflows: selectedPlan === 'business' || selectedPlan === 'enterprise',
+          apiAccess: selectedPlan === 'business' || selectedPlan === 'enterprise',
           prioritySupport: selectedPlan === 'enterprise',
         }),
         // Trial credit system defaults (explicit for clarity)

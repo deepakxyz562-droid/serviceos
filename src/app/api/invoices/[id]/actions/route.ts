@@ -7,6 +7,7 @@ import {
   sendInvoiceReminder,
   approveInvoice,
 } from '@/lib/invoice-automation';
+import { EventBus } from '@/lib/event-bus';
 
 // POST /api/invoices/[id]/actions
 // Body: { action: 'send' | 'send_email' | 'send_whatsapp' | 'mark_paid' | 'reminder' | 'approve' }
@@ -49,8 +50,33 @@ export async function POST(
         const anySuccess = channels.some((c) => c?.success);
         const anyRequested = channels.length > 0;
         // Update invoice status to 'sent' if any channel succeeded
-        if (anySuccess && invoice.status === 'draft') {
+        const wasDraft = invoice.status === 'draft';
+        if (anySuccess && wasDraft) {
           await db.invoice.update({ where: { id }, data: { status: 'sent', sentAt: new Date() } }).catch(() => {});
+        }
+        // ─── Emit invoice.sent event (only on draft → sent transition) ──
+        // Best-effort — never fails the response. sendInvoice() already
+        // dispatches the email/WhatsApp; this event drives workflow
+        // automations like "7 days after invoice sent, send follow-up".
+        if (anySuccess && wasDraft) {
+          try {
+            await EventBus.emit(
+              'invoice.sent',
+              {
+                invoiceId: invoice.id,
+                invoiceNumber: invoice.number,
+                customerId: invoice.customerId || null,
+                tenantId: invoice.tenantId || null,
+                fromStatus: 'draft',
+                toStatus: 'sent',
+                resourceType: 'invoice',
+                resourceId: invoice.id,
+              },
+              { tenantId: invoice.tenantId || undefined }
+            );
+          } catch (eventErr) {
+            console.error('[Invoice actions] invoice.sent event failed:', eventErr);
+          }
         }
         return NextResponse.json({
           success: anyRequested ? anySuccess : false,
@@ -60,9 +86,37 @@ export async function POST(
       }
 
       case 'mark_paid': {
+        const wasNotPaid = invoice.status !== 'paid';
         const result = await markInvoicePaid(id);
         // Fetch the updated invoice to return the new status
-        const updatedInvoice = result.success ? await db.invoice.findUnique({ where: { id }, select: { id: true, number: true, status: true, paidAt: true } }) : null;
+        const updatedInvoice = result.success ? await db.invoice.findUnique({ where: { id }, select: { id: true, number: true, status: true, paidAt: true, customerId: true, tenantId: true, total: true, currency: true } }) : null;
+        // ─── Emit invoice.paid event ──────────────────────────────────
+        // markInvoicePaid() already emits 'payment.received' (the legacy
+        // payment-side event); we additionally emit 'invoice.paid' so
+        // workflow automations keyed on this event can fire (e.g. "send
+        // thank-you email 1 hour after invoice paid").
+        if (result.success && wasNotPaid && updatedInvoice) {
+          try {
+            await EventBus.emit(
+              'invoice.paid',
+              {
+                invoiceId: updatedInvoice.id,
+                invoiceNumber: updatedInvoice.number,
+                customerId: updatedInvoice.customerId || null,
+                tenantId: updatedInvoice.tenantId || null,
+                total: Number(updatedInvoice.total),
+                currency: updatedInvoice.currency,
+                fromStatus: invoice.status,
+                toStatus: 'paid',
+                resourceType: 'invoice',
+                resourceId: updatedInvoice.id,
+              },
+              { tenantId: updatedInvoice.tenantId || undefined }
+            );
+          } catch (eventErr) {
+            console.error('[Invoice actions] invoice.paid event failed:', eventErr);
+          }
+        }
         return NextResponse.json({ success: result.success, action, error: result.error, invoice: updatedInvoice });
       }
 

@@ -162,7 +162,7 @@ export async function GET(request: NextRequest) {
         trialEndsAt <= now;
       const isEligibleForFeatured =
         r.claimed === true &&
-        ['growth', 'pro', 'business', 'enterprise'].includes(r.plan ?? '') &&
+        ['starter', 'growth', 'business', 'enterprise'].includes(r.plan ?? '') &&
         (r.planStatus === 'active' ||
           (r.planStatus === 'trial' &&
             (trialEndsAt === null || trialEndsAt > now)));

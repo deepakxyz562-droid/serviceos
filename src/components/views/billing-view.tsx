@@ -128,12 +128,20 @@ interface CatalogPlan {
   description: string | null;
   monthlyPrice: number;
   yearlyPrice: number;
+  /** Strikethrough "original" price (0 = no discount shown). */
+  originalMonthlyPrice?: number;
+  /** Strikethrough "original" yearly price (0 = no discount shown). */
+  originalYearlyPrice?: number;
+  /** Optional override text like "Launch offer" — when set, used instead of the auto-computed %. */
+  discountBadge?: string | null;
   currency: string;
   maxUsers: number;
   maxJobs: number;
   maxWorkflows: number;
   features: Record<string, boolean>;
   popular: boolean;
+  /** True for add-on plans (ai_pro_addon, marketplace_featured, etc.) — filtered out of the main plan grid. */
+  isAddon?: boolean;
   sortOrder: number;
 }
 
@@ -147,26 +155,88 @@ interface Plan {
   name: string;
   monthlyPrice: number;
   yearlyPrice: number;
-  /** Original monthly price before the 40% promotional discount (null for Enterprise/Custom). */
+  /** Original monthly price before the promotional discount (null/0 for Enterprise/Custom). */
   originalMonthlyPrice?: number | null;
+  /** Original yearly price before the promotional discount (null/0 = no discount shown). */
+  originalYearlyPrice?: number | null;
+  /** Optional override text like "Launch offer" — when set, used instead of the auto-computed %. */
+  discountBadge?: string | null;
   description: string;
   popular?: boolean;
   features: PlanFeature[];
 }
 
+// ─── Add-on catalog (static metadata; price/active come from DB) ─────────────
+// These three add-ons are rendered in the dedicated "Add-ons" section below
+// the main plan grid. The `code` matches the Plan.code in the DB so the
+// /api/addon-subscriptions POST can look up the live price.
+interface AddonCatalogEntry {
+  code: string;
+  name: string;
+  description: string;
+  /** Fallback monthly price shown while loading or if the plan isn't seeded yet. */
+  fallbackMonthlyPrice: number;
+  icon: React.ReactNode;
+}
+
+const ADDON_CATALOG: AddonCatalogEntry[] = [
+  {
+    code: 'ai_pro_addon',
+    name: 'AI Pro Add-on',
+    description: 'More AI usage — additional monthly AI credits for power users.',
+    fallbackMonthlyPrice: 19,
+    icon: <Sparkles className="h-5 w-5 text-purple-600 dark:text-purple-400" />,
+  },
+  {
+    code: 'marketplace_featured',
+    name: 'Marketplace Featured Listing',
+    description:
+      'Stand out in the marketplace with a featured badge and priority placement.',
+    fallbackMonthlyPrice: 19,
+    icon: <Star className="h-5 w-5 text-amber-600 dark:text-amber-400" />,
+  },
+  {
+    code: 'marketplace_premium',
+    name: 'Marketplace Premium Featured',
+    description: 'Top placement + premium badge + instant booking eligibility.',
+    fallbackMonthlyPrice: 49,
+    icon: <Crown className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />,
+  },
+];
+
+interface AddonSubscriptionRecord {
+  id: string;
+  addonCode: string;
+  displayName: string;
+  status: string;
+  amount: number;
+  currency: string;
+  billingCycle: string;
+  paymentProvider: string;
+  startDate: string;
+  endDate: string | null;
+  nextBillingAt: string | null;
+  cancelledAt: string | null;
+}
+
 // ─── Plan Data ───────────────────────────────────────────────────────────────
 
-const PLANS: Plan[] = [
+// FALLBACK_PLANS is only used when /api/subscriptions doesn't return a DB-backed
+// plan catalog (e.g. network/seed failure). The DB-backed catalog is the source
+// of truth — superadmins edit prices via the Plan Catalog UI and the new values
+// flow back through /api/subscriptions → data.plans.
+const FALLBACK_PLANS: Plan[] = [
   {
     id: 'starter',
     name: 'Starter',
-    monthlyPrice: 10,
-    originalMonthlyPrice: 17,
-    yearlyPrice: 60,
+    monthlyPrice: 29,
+    originalMonthlyPrice: 49,
+    originalYearlyPrice: 490,
+    yearlyPrice: 290,
     description: 'For solo entrepreneurs & freelancers',
     features: [
       { text: '1 user', included: true },
-      { text: '100 jobs/month', included: true },
+      { text: '200 jobs/month', included: true },
       { text: '10 workflows', included: true },
       { text: 'WhatsApp notifications', included: true },
       { text: 'Basic CRM', included: true },
@@ -180,15 +250,16 @@ const PLANS: Plan[] = [
   },
   {
     id: 'growth',
-    name: 'Growth',
-    monthlyPrice: 25,
-    originalMonthlyPrice: 42,
-    yearlyPrice: 150,
+    name: 'Professional',
+    monthlyPrice: 79,
+    originalMonthlyPrice: 129,
+    originalYearlyPrice: 1290,
+    yearlyPrice: 790,
     description: 'For growing service businesses',
     popular: true,
     features: [
       { text: '5 users', included: true },
-      { text: '1,000 jobs/month', included: true },
+      { text: 'Unlimited jobs/month', included: true },
       { text: '50 workflows', included: true },
       { text: 'WhatsApp notifications', included: true },
       { text: 'Advanced CRM', included: true },
@@ -203,10 +274,11 @@ const PLANS: Plan[] = [
   },
   {
     id: 'business',
-    name: 'Pro',
-    monthlyPrice: 50,
-    originalMonthlyPrice: 83,
-    yearlyPrice: 300,
+    name: 'Business',
+    monthlyPrice: 149,
+    originalMonthlyPrice: 249,
+    originalYearlyPrice: 2490,
+    yearlyPrice: 1490,
     description: 'For scaling organizations',
     features: [
       { text: 'Unlimited users', included: true },
@@ -233,7 +305,7 @@ const PLANS: Plan[] = [
       { text: 'Unlimited users', included: true },
       { text: 'Unlimited jobs', included: true },
       { text: 'Unlimited workflows', included: true },
-      { text: 'Everything in Pro', included: true },
+      { text: 'Everything in Business', included: true },
       { text: 'White-label branding', included: true },
       { text: 'Custom integrations', included: true },
       { text: 'SLA guarantee', included: true },
@@ -392,6 +464,11 @@ export function BillingView() {
     daysRemaining: number;
     newPlan: string;
   } | null>(null);
+  // ── Add-on subscriptions state (Phase 5) ─────────────────────────────────
+  const [addonSubscriptions, setAddonSubscriptions] = useState<AddonSubscriptionRecord[]>([]);
+  const [subscribingAddonCode, setSubscribingAddonCode] = useState<string | null>(null);
+  const [cancellingAddon, setCancellingAddon] = useState<AddonSubscriptionRecord | null>(null);
+  const [isCancellingAddon, setIsCancellingAddon] = useState(false);
 
   // Merge the /api/subscriptions JSON response into our SubscriptionData
   // shape. Shared between initial fetch + post-payment refetch.
@@ -451,36 +528,50 @@ export function BillingView() {
   }, [mergeJson]);
 
   // Compute the effective plan list: prefer DB-backed catalog from the API,
-  // fall back to the hardcoded PLANS constant.
+  // fall back to the hardcoded FALLBACK_PLANS constant.
   const effectivePlans: Plan[] = (data.plans && data.plans.length > 0
-    ? data.plans.map((cp) => {
-        // Map DB catalog plan → local Plan interface
-        const features: PlanFeature[] = [
-          { text: `${cp.maxUsers === 999 ? 'Unlimited' : cp.maxUsers} user${cp.maxUsers === 1 ? '' : 's'}`, included: true },
-          { text: `${cp.maxJobs === 99999 ? 'Unlimited' : cp.maxJobs.toLocaleString()} jobs/month`, included: true },
-          { text: `${cp.maxWorkflows === 999 ? 'Unlimited' : cp.maxWorkflows} workflows`, included: true },
-          { text: 'WhatsApp notifications', included: !!cp.features.whatsappIntegration },
-          { text: 'Custom workflows', included: !!cp.features.customWorkflows },
-          { text: 'API access', included: !!cp.features.apiAccess },
-          { text: 'Priority support', included: !!cp.features.prioritySupport },
-          { text: 'Lead pipeline', included: !!cp.features.leadPipeline },
-          { text: 'White-label', included: !!cp.features.whiteLabel },
-        ];
-        return {
-          id: cp.code as Plan['id'],
-          name: cp.name,
-          monthlyPrice: cp.monthlyPrice,
-          yearlyPrice: cp.yearlyPrice,
-          description: cp.description || '',
-          popular: cp.popular,
-          features,
-        } as Plan;
-      })
-    : PLANS);
+    ? data.plans
+        // Filter out add-on plans (ai_pro_addon, marketplace_*, etc.) — they
+        // are rendered in the dedicated Add-ons section below.
+        .filter((cp) => !cp.isAddon)
+        .map((cp) => {
+          // Map DB catalog plan → local Plan interface
+          const features: PlanFeature[] = [
+            { text: `${cp.maxUsers >= 999999 ? 'Unlimited' : cp.maxUsers} user${cp.maxUsers === 1 ? '' : 's'}`, included: true },
+            { text: `${cp.maxJobs >= 999999 ? 'Unlimited' : cp.maxJobs.toLocaleString()} jobs/month`, included: true },
+            { text: `${cp.maxWorkflows >= 999 ? 'Unlimited' : cp.maxWorkflows} workflows`, included: true },
+            { text: 'WhatsApp notifications', included: !!cp.features.whatsappIntegration },
+            { text: 'Custom workflows', included: !!cp.features.customWorkflows },
+            { text: 'API access', included: !!cp.features.apiAccess },
+            { text: 'Priority support', included: !!cp.features.prioritySupport },
+            { text: 'Lead pipeline', included: !!cp.features.salesPipeline },
+            { text: 'White-label', included: !!cp.features.whiteLabel },
+          ];
+          return {
+            id: cp.code as Plan['id'],
+            name: cp.name,
+            monthlyPrice: cp.monthlyPrice,
+            yearlyPrice: cp.yearlyPrice,
+            originalMonthlyPrice: cp.originalMonthlyPrice ?? null,
+            originalYearlyPrice: cp.originalYearlyPrice ?? null,
+            discountBadge: cp.discountBadge ?? null,
+            description: cp.description || '',
+            popular: cp.popular,
+            features,
+          } as Plan;
+        })
+    : FALLBACK_PLANS);
+
+  // Add-on plans (DB-backed) — used to look up live prices for the Add-ons
+  // section. Falls back to ADDON_CATALOG's fallbackMonthlyPrice when a plan
+  // isn't seeded yet.
+  const addonPlansFromDb: CatalogPlan[] = (data.plans || []).filter(
+    (cp) => cp.isAddon
+  );
 
   const trialDays = data.daysRemainingInTrial ?? getTrialDaysRemaining(data.trialEndsAt);
   const isTrialExpired = data.isTrialExpired === true;
-  const currentPlanData = effectivePlans.find((p) => p.id === data.plan) || PLANS[0];
+  const currentPlanData = effectivePlans.find((p) => p.id === data.plan) || FALLBACK_PLANS[0];
   const currentPrice = isYearly ? (currentPlanData?.yearlyPrice || 0) : (currentPlanData?.monthlyPrice || 0);
 
   const usageStats: UsageStat[] = [
@@ -639,6 +730,81 @@ export function BillingView() {
         setIsYearly((json.billingCycle || 'monthly') === 'yearly');
       })
       .catch(() => {});
+  }
+
+  // ── Add-on subscriptions: fetch + subscribe + cancel ──────────────────────
+  const refreshAddonSubscriptions = useCallback(async () => {
+    try {
+      const res = await authFetch('/api/addon-subscriptions');
+      if (!res.ok) return;
+      const json = await res.json();
+      setAddonSubscriptions((json.addons as AddonSubscriptionRecord[]) || []);
+    } catch {
+      // Non-fatal — the Add-ons section will just show Subscribe buttons.
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshAddonSubscriptions();
+  }, [refreshAddonSubscriptions]);
+
+  async function handleSubscribeAddon(addonCode: string) {
+    setSubscribingAddonCode(addonCode);
+    try {
+      const res = await authFetch('/api/addon-subscriptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          addonCode,
+          billingCycle: isYearly ? 'yearly' : 'monthly',
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || 'Failed to subscribe');
+      // If the API returned a checkout URL (real Creem/PayPal flow), redirect.
+      if (json.checkoutUrl) {
+        window.location.href = json.checkoutUrl;
+        return;
+      }
+      toast.success('Add-on activated', {
+        description:
+          json.message ||
+          'Your add-on is now active. The charge will appear on your next invoice.',
+      });
+      await refreshAddonSubscriptions();
+    } catch (err) {
+      toast.error('Failed to activate add-on', {
+        description: err instanceof Error ? err.message : 'Please try again.',
+      });
+    } finally {
+      setSubscribingAddonCode(null);
+    }
+  }
+
+  async function handleCancelAddon() {
+    if (!cancellingAddon) return;
+    setIsCancellingAddon(true);
+    try {
+      const res = await authFetch(
+        `/api/addon-subscriptions/${cancellingAddon.id}`,
+        { method: 'DELETE' }
+      );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || 'Failed to cancel');
+      toast.success('Add-on cancelled', {
+        description:
+          json.message ||
+          `Your ${cancellingAddon.displayName} add-on has been cancelled.`,
+      });
+      setCancellingAddon(null);
+      await refreshAddonSubscriptions();
+    } catch (err) {
+      toast.error('Failed to cancel add-on', {
+        description: err instanceof Error ? err.message : 'Please try again.',
+      });
+    } finally {
+      setIsCancellingAddon(false);
+    }
   }
 
   async function handleCancelSubscription() {
@@ -985,40 +1151,86 @@ export function BillingView() {
               </CardHeader>
               <CardContent className="flex-1 space-y-4">
                 <div>
-                  {plan.id === 'enterprise' ? (
+                  {plan.id === 'enterprise' || plan.monthlyPrice === 0 ? (
                     <p className="text-3xl font-bold">Custom</p>
                   ) : (
                     <>
-                      {/* Monthly mode: show original monthly price struck through (40% off promo) */}
-                      {!isYearly && plan.originalMonthlyPrice && plan.originalMonthlyPrice > plan.monthlyPrice && (
-                        <p className="text-sm text-muted-foreground line-through mb-0.5">
-                          {formatCurrency(plan.originalMonthlyPrice, 'USD')}<span className="text-xs">/mo</span>
-                        </p>
-                      )}
-                      {/* Yearly mode: show original yearly price struck through (50% off) */}
-                      {isYearly && plan.monthlyPrice > 0 && (
-                        <p className="text-sm text-muted-foreground line-through mb-0.5">
-                          {formatCurrency(plan.monthlyPrice * 12, 'USD')}<span className="text-xs">/yr</span>
-                        </p>
-                      )}
+                      {/* Monthly mode: show DB-fetched original monthly price struck through */}
+                      {!isYearly &&
+                        plan.originalMonthlyPrice &&
+                        plan.originalMonthlyPrice > plan.monthlyPrice &&
+                        plan.monthlyPrice > 0 && (
+                          <p className="text-sm text-muted-foreground line-through mb-0.5">
+                            {formatCurrency(plan.originalMonthlyPrice, 'USD')}
+                            <span className="text-xs">/mo</span>
+                          </p>
+                        )}
+                      {/* Yearly mode: show DB-fetched original yearly price struck through
+                          (fall back to originalMonthlyPrice*12 if originalYearlyPrice missing) */}
+                      {isYearly && plan.yearlyPrice > 0 && (() => {
+                        const origYearly =
+                          plan.originalYearlyPrice && plan.originalYearlyPrice > 0
+                            ? plan.originalYearlyPrice
+                            : plan.originalMonthlyPrice && plan.originalMonthlyPrice > 0
+                              ? plan.originalMonthlyPrice * 12
+                              : 0;
+                        if (origYearly > plan.yearlyPrice) {
+                          return (
+                            <p className="text-sm text-muted-foreground line-through mb-0.5">
+                              {formatCurrency(origYearly, 'USD')}
+                              <span className="text-xs">/yr</span>
+                            </p>
+                          );
+                        }
+                        return null;
+                      })()}
                       <span className="text-3xl font-bold text-emerald-600 dark:text-emerald-400">
                         {formatCurrency(price, 'USD')}
                       </span>
                       <span className="text-sm text-muted-foreground">
                         /{isYearly ? 'year' : 'month'}
                       </span>
-                      {/* Monthly: 40% off promotional badge */}
-                      {!isYearly && plan.originalMonthlyPrice && plan.originalMonthlyPrice > plan.monthlyPrice && (
-                        <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">
-                          Save 40% — limited time
-                        </p>
-                      )}
-                      {/* Yearly: effective monthly + 50% off */}
-                      {isYearly && plan.monthlyPrice > 0 && (
-                        <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">
-                          {formatCurrency(Math.round(plan.yearlyPrice / 12), 'USD')}/mo · 50% off
-                        </p>
-                      )}
+                      {/* Monthly discount badge — DB discountBadge OR auto-computed % */}
+                      {!isYearly &&
+                        plan.originalMonthlyPrice &&
+                        plan.originalMonthlyPrice > plan.monthlyPrice &&
+                        plan.monthlyPrice > 0 && (
+                          <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">
+                            {plan.discountBadge && plan.discountBadge.trim().length > 0
+                              ? plan.discountBadge
+                              : `Save ${Math.round(
+                                  ((plan.originalMonthlyPrice - plan.monthlyPrice) /
+                                    plan.originalMonthlyPrice) *
+                                    100
+                                )}%`}
+                          </p>
+                        )}
+                      {/* Yearly discount badge — DB discountBadge OR auto-computed % */}
+                      {isYearly && plan.yearlyPrice > 0 && (() => {
+                        const origYearly =
+                          plan.originalYearlyPrice && plan.originalYearlyPrice > 0
+                            ? plan.originalYearlyPrice
+                            : plan.originalMonthlyPrice && plan.originalMonthlyPrice > 0
+                              ? plan.originalMonthlyPrice * 12
+                              : 0;
+                        if (origYearly > plan.yearlyPrice) {
+                          const pct = Math.round(
+                            ((origYearly - plan.yearlyPrice) / origYearly) * 100
+                          );
+                          return (
+                            <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">
+                              {plan.discountBadge && plan.discountBadge.trim().length > 0
+                                ? plan.discountBadge
+                                : `${formatCurrency(Math.round(plan.yearlyPrice / 12), 'USD')}/mo · ${pct}% off`}
+                            </p>
+                          );
+                        }
+                        return (
+                          <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5 font-medium">
+                            {formatCurrency(Math.round(plan.yearlyPrice / 12), 'USD')}/mo
+                          </p>
+                        );
+                      })()}
                     </>
                   )}
                 </div>
@@ -1104,6 +1316,109 @@ export function BillingView() {
             </Card>
           );
         })}
+      </div>
+
+      {/* ── Add-ons ──────────────────────────────────────────────────────── */}
+      {/* Optional paid add-ons (AI credits, marketplace featured placement).
+          Prices come from the DB-backed Plan catalog (addonPlansFromDb). The
+          Subscribe button POSTs to /api/addon-subscriptions, which creates an
+          AddonSubscription row. Active add-ons show a Cancel button. */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+          <h2 className="text-lg font-semibold">Add-ons</h2>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Boost your plan with optional add-ons. Cancel anytime — billing is
+          prorated on your next invoice.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {ADDON_CATALOG.map((addon) => {
+            const dbPlan = addonPlansFromDb.find((p) => p.code === addon.code);
+            const monthlyPrice = dbPlan?.monthlyPrice ?? addon.fallbackMonthlyPrice;
+            const yearlyPrice = dbPlan?.yearlyPrice ?? monthlyPrice * 10;
+            const activeSub = addonSubscriptions.find(
+              (s) => s.addonCode === addon.code && s.status === 'active'
+            );
+            const isSubscribing = subscribingAddonCode === addon.code;
+            return (
+              <Card
+                key={addon.code}
+                className={`flex flex-col ${
+                  activeSub
+                    ? 'border-emerald-300 dark:border-emerald-700'
+                    : 'hover:border-emerald-300 hover:shadow-md dark:hover:border-emerald-700'
+                }`}
+              >
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      {addon.icon}
+                      <CardTitle className="text-base">{addon.name}</CardTitle>
+                    </div>
+                    {activeSub && (
+                      <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        Active
+                      </Badge>
+                    )}
+                  </div>
+                  <CardDescription className="mt-1">{addon.description}</CardDescription>
+                </CardHeader>
+                <CardContent className="flex-1">
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                      {formatCurrency(isYearly ? yearlyPrice : monthlyPrice, 'USD')}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      /{isYearly ? 'year' : 'month'}
+                    </span>
+                  </div>
+                  {isYearly && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {formatCurrency(Math.round(yearlyPrice / 12), 'USD')}/mo billed yearly
+                    </p>
+                  )}
+                </CardContent>
+                <CardFooter>
+                  {activeSub ? (
+                    <Button
+                      variant="outline"
+                      className="w-full text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 dark:border-red-800 dark:hover:bg-red-950/30"
+                      onClick={() => setCancellingAddon(activeSub)}
+                    >
+                      Cancel Add-on
+                    </Button>
+                  ) : (
+                    <Button
+                      className="w-full bg-emerald-600 text-white hover:bg-emerald-700"
+                      onClick={() => handleSubscribeAddon(addon.code)}
+                      disabled={isSubscribing}
+                    >
+                      {isSubscribing ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Activating…
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="mr-2 h-4 w-4" />
+                          Subscribe
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </CardFooter>
+              </Card>
+            );
+          })}
+        </div>
+        {addonSubscriptions.length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            {addonSubscriptions.length} active add-on
+            {addonSubscriptions.length === 1 ? '' : 's'} · manage cancellations
+            from each card above.
+          </p>
+        )}
       </div>
 
       {/* ── Payment Method ─────────────────────────────────────────────── */}
@@ -1507,6 +1822,57 @@ export function BillingView() {
                     ? 'Yes, Cancel Trial'
                     : 'Yes, Cancel Subscription'}
                 </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Cancel Add-on Confirmation Dialog (Phase 5) ─────────────────── */}
+      <Dialog
+        open={!!cancellingAddon}
+        onOpenChange={(open) => !open && setCancellingAddon(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
+              <AlertCircle className="h-5 w-5" />
+              Cancel {cancellingAddon?.displayName}?
+            </DialogTitle>
+            <DialogDescription className="text-left">
+              This add-on will be cancelled immediately. You will keep access
+              until the end of your current billing period, and the cancellation
+              will be reflected on your next invoice. You can re-subscribe
+              anytime from the Add-ons section.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
+            <Info className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              Your main subscription and data are unaffected — only this add-on
+              is cancelled.
+            </p>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setCancellingAddon(null)}
+              disabled={isCancellingAddon}
+            >
+              Keep Add-on
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleCancelAddon}
+              disabled={isCancellingAddon}
+            >
+              {isCancellingAddon ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Cancelling...
+                </>
+              ) : (
+                'Yes, Cancel Add-on'
               )}
             </Button>
           </DialogFooter>

@@ -64,6 +64,9 @@ export const MENU_CATALOG: MenuCatalogItem[] = [
   { key: 'employees', label: 'Employees', icon: 'UserCog', section: 'Operations', sortOrder: 23 },
   { key: 'timesheet', label: 'Timesheet', icon: 'Clock', section: 'Operations', sortOrder: 24 },
   { key: 'serviceCatalog', label: 'Service Catalog', icon: 'BookOpen', section: 'Operations', sortOrder: 25 },
+  { key: 'inventory', label: 'Inventory', icon: 'Package', section: 'Operations', sortOrder: 26, minPlan: 'business', upgradeDescription: 'Track stock-on-hand, SKUs, suppliers, and stock transactions across your warehouse.' },
+  { key: 'purchaseOrders', label: 'Purchase Orders', icon: 'ClipboardList', section: 'Operations', sortOrder: 27, minPlan: 'business', upgradeDescription: 'Create purchase orders to vendors, receive shipments, and auto-update inventory stock levels.' },
+  { key: 'recurringJobs', label: 'Recurring Jobs', icon: 'Repeat', section: 'Operations', sortOrder: 28, minPlan: 'business', upgradeDescription: 'Schedule recurring + contract jobs that auto-generate visits on a weekly, monthly, or custom cadence.' },
 
   // ─── Marketing ───────────────────────────────────────────────────────
   { key: 'campaigns', label: 'Campaigns', icon: 'Megaphone', section: 'Marketing', sortOrder: 30, minPlan: 'growth', upgradeDescription: 'Create and manage marketing campaigns across email, SMS, and WhatsApp to grow your customer base.' },

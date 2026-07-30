@@ -36,7 +36,7 @@ async function seedBusinessFlow() {
     data: {
       name: 'SparkClean Services',
       slug: 'sparkclean',
-      plan: 'pro',
+      plan: 'business',
       industry: 'cleaning',
       country: 'India',
       timezone: 'Asia/Kolkata',
@@ -52,7 +52,7 @@ async function seedBusinessFlow() {
   const workspace = await db.workspace.create({
     data: {
       name: 'SparkClean Main',
-      plan: 'pro',
+      plan: 'business',
       ownerId: 'temp',
       tenantId: tenant.id,
     },
@@ -121,7 +121,7 @@ async function seedBusinessFlow() {
   await db.subscription.create({
     data: {
       tenantId: tenant.id,
-      plan: 'pro',
+      plan: 'business',
       status: 'active',
       currentPeriodStart: new Date('2025-01-01'),
       currentPeriodEnd: new Date('2025-12-31'),

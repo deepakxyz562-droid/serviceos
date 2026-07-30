@@ -70,7 +70,7 @@ const features: Feature[] = [
     icon: FileText,
     title: "Auto-Invoicing After Each Visit",
     description:
-      "The moment a technician marks a visit complete, ServiceOS generates the invoice and sends it via Email & SMS with a payment link. Recurring customers can be set to auto-charge on file — zero chasing, zero missed invoices.",
+      "The moment a technician marks a visit complete, ServiceOS generates the invoice and sends it via Email & SMS with a payment link. Recurring invoices with automatic reminders — reduce missed payments.",
   },
   {
     icon: MapPin,
@@ -104,7 +104,7 @@ const faqs = [
   {
     question: "Can customers pay automatically for recurring lawn care?",
     answer:
-      "Absolutely. You can store customer payment methods securely and set recurring programs to auto-charge after each visit — so a customer on a six-treatment fertilization program gets charged automatically after each application, with the invoice sent via Email & SMS as a receipt. For customers who prefer to pay manually, ServiceOS sends the invoice with a payment link and follows up with automated reminders for unpaid balances. Most lawn care businesses using ServiceOS get paid 2x faster and recover 5–10% in missed-billing revenue that previously slipped through the cracks.",
+      "You can store customer payment methods securely, and recurring programs can be set up as recurring invoices that go out automatically after each visit — so a customer on a six-treatment fertilization program receives a branded invoice via Email & SMS as a receipt after each application, with a secure payment link. ServiceOS follows up with automated reminders for unpaid balances, so customers who prefer to pay manually still get nudged without you having to chase them. Most lawn care businesses using ServiceOS get paid 2x faster and recover 5–10% in missed-billing revenue that previously slipped through the cracks.",
   },
   {
     question: "Does ServiceOS work for both mowing and chemical application businesses?",
@@ -269,7 +269,7 @@ export default function LawnCareSoftwarePage() {
           up the phone. ServiceOS gives every customer a self-serve portal
           for schedules, treatment history, and invoices. Visits trigger
           automatic Email & SMS reminders and post-visit invoices with payment
-          links. Recurring programs can be set to auto-charge stored cards.
+          links. Recurring programs can be set up as automatic recurring invoices with payment reminders.
           The result: fewer office calls, faster payments, and customers who
           renew season after season because the experience is frictionless
           from the first treatment to the last.
