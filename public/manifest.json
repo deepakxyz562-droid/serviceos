@@ -91,6 +91,13 @@
       "description": "Open the calendar",
       "url": "/?view=calendar&source=shortcut",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Employee Login",
+      "short_name": "Employee",
+      "description": "Sign in to the employee portal — find your company and log in",
+      "url": "/?login=employee&source=shortcut",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ],
   "prefer_related_applications": false,

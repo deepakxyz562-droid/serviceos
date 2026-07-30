@@ -81,7 +81,9 @@ const CATEGORY_LABELS: Record<PlanFeatureCategory, string> = {
   crm: 'CRM & Core',
   communication: 'Communication',
   automation: 'Automation & Marketing',
+  operations: 'Operations & Scheduling',
   finance: 'Finance',
+  inventory: 'Inventory & Recurring',
   admin: 'Admin & Platform',
 };
 
@@ -89,7 +91,9 @@ const CATEGORY_ORDER: PlanFeatureCategory[] = [
   'crm',
   'communication',
   'automation',
+  'operations',
   'finance',
+  'inventory',
   'admin',
 ];
 
@@ -97,7 +101,9 @@ const CATEGORY_DESCRIPTIONS: Record<PlanFeatureCategory, string> = {
   crm: 'Core CRM modules available on every plan tier (including trial).',
   communication: 'Voice, SMS, and messaging add-ons. Trial/Starter are locked by default.',
   automation: 'Marketing campaigns, broadcasts, and journey automation.',
+  operations: 'Dispatch board, portals, booking, time tracking, expenses, signatures, photos, checklists, route optimization.',
   finance: 'Quotes and invoices — part of the core CRM surface.',
+  inventory: 'Inventory management, purchase orders, and recurring jobs.',
   admin: 'Platform-level admin features (white-label, API access). Business/Enterprise only.',
 };
 
@@ -206,10 +212,16 @@ export function PlanFeaturesSection() {
       crm: [],
       communication: [],
       automation: [],
+      operations: [],
       finance: [],
+      inventory: [],
       admin: [],
     };
     for (const f of features) {
+      // Defensive: skip any feature whose category isn't in the map (shouldn't
+      // happen now that all 7 categories are declared, but guards against
+      // future drift between this file and lib/plan-features.ts).
+      if (!map[f.category]) continue;
       map[f.category].push(f);
     }
     return CATEGORY_ORDER.map((cat) => ({

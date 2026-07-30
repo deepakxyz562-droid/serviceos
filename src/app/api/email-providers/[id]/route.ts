@@ -77,6 +77,14 @@ export async function PUT(request: NextRequest, { params }: Params) {
         { status: 404 }
       );
     }
+    // Issues 2+3+4: Tenants can only edit their OWN providers, not
+    // platform-shared ones. Superadmins can edit anything.
+    if (!isSuperAdmin && existing.isPlatform) {
+      return NextResponse.json(
+        { error: 'Platform-shared email providers can only be edited by the superadmin.' },
+        { status: 403 }
+      );
+    }
 
     const body = await request.json();
     const {
@@ -253,6 +261,14 @@ export async function DELETE(request: NextRequest, { params }: Params) {
       return NextResponse.json(
         { error: 'Email provider not found' },
         { status: 404 }
+      );
+    }
+    // Issues 2+3+4: Tenants can only delete their OWN providers, not
+    // platform-shared ones. Superadmins can delete anything.
+    if (!isSuperAdmin && existing.isPlatform) {
+      return NextResponse.json(
+        { error: 'Platform-shared email providers can only be deleted by the superadmin.' },
+        { status: 403 }
       );
     }
 

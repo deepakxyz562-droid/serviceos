@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Megaphone, Plus, Search, Play, Pause, Copy, Eye, Calendar,
   Users, Send, BarChart3, Clock, CheckCircle2, XCircle,
@@ -27,6 +27,7 @@ import { authFetch } from '@/lib/client-auth';
 import { useAppStore } from '@/store/app-store';
 import { useDemoPageSize } from '@/hooks/use-demo-page-size';
 import { CampaignProviderGate } from '@/components/marketing/campaign-provider-gate';
+import { useWhatsAppStatus } from '@/hooks/use-whatsapp-status';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -354,6 +355,59 @@ export function CampaignsView() {
   const setPendingCreate = useAppStore((s) => s.setPendingCreate);
   // Demo-mode page size cap (5 for demo tenant, else 50)
   const demoPageSize = useDemoPageSize(50);
+
+  // Issues 2+3+4: WhatsApp channel is only shown if the tenant has connected
+  // their own Meta Cloud API (useWhatsAppStatus returns enabled=true).
+  // Email + SMS channels are always shown (they're configured via the
+  // provider pages; the CampaignProviderGate still warns if they're missing).
+  const { status: waStatus } = useWhatsAppStatus();
+  const whatsappEnabled = !!waStatus?.enabled;
+
+  // Issues 2+3+4: Each channel is independently gated. We fetch the
+  // per-channel provider status and only show channels the tenant has
+  // configured their own credentials for. If the status fetch fails or is
+  // loading, we fail OPEN (show all channels) so the UI isn't broken.
+  const [channelStatus, setChannelStatus] = useState<{
+    sms: boolean; email: boolean; whatsapp: boolean;
+  } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await authFetch('/api/campaigns/provider-status');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        setChannelStatus({
+          sms: !!data?.sms?.configured,
+          email: !!data?.email?.configured,
+          whatsapp: !!data?.whatsapp?.configured,
+        });
+      } catch {
+        // Fail open — don't hide channels on a network error.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [whatsappEnabled]);
+
+  const CAMPAIGN_CHANNELSFiltered = useMemo(() => {
+    // While status is loading (null), show email + sms + multi (hide whatsapp
+    // unless useWhatsAppStatus says it's enabled). Once status loads, filter
+    // to only configured channels. Multi-channel only shows if at least 2
+    // channels are configured.
+    if (!channelStatus) {
+      return CAMPAIGN_CHANNELS.filter((c) => c.value !== 'whatsapp' || whatsappEnabled);
+    }
+    const { sms, email, whatsapp } = channelStatus;
+    const configuredCount = [sms, email, whatsapp].filter(Boolean).length;
+    return CAMPAIGN_CHANNELS.filter((c) => {
+      if (c.value === 'email') return email;
+      if (c.value === 'sms') return sms;
+      if (c.value === 'whatsapp') return whatsapp;
+      if (c.value === 'multi') return configuredCount >= 2;
+      return true;
+    });
+  }, [channelStatus, whatsappEnabled]);
 
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -1115,7 +1169,7 @@ export function CampaignsView() {
                 <Select value={createForm.channel} onValueChange={v => setCreateForm({ ...createForm, channel: v as CampaignChannel })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {CAMPAIGN_CHANNELS.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                    {CAMPAIGN_CHANNELSFiltered.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -1386,7 +1440,7 @@ export function CampaignsView() {
                 <Select value={editForm.channel} onValueChange={v => setEditForm({ ...editForm, channel: v as CampaignChannel })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {CAMPAIGN_CHANNELS.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                    {CAMPAIGN_CHANNELSFiltered.map(c => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

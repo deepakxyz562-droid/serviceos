@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getAuthUser } from '@/lib/auth';
-import { getPlanByCode } from '@/lib/billing-seed';
+import { getPlanByCode, seedPlans } from '@/lib/billing-seed';
 
 /**
  * /api/addon-subscriptions
@@ -117,9 +117,21 @@ export async function POST(req: NextRequest) {
 
     // Look up the Plan by code to get the live price. The Plan catalog is
     // seeded by seedPlans() — see src/lib/billing-seed.ts. If the plan is
-    // missing (e.g. catalog not yet seeded on this env), return a 404 with
-    // a clear message so the UI can surface it.
-    const plan = await getPlanByCode(addonCode);
+    // missing (e.g. catalog not yet seeded on this env, or seeded with an
+    // older PLAN_DEFS that didn't include add-ons), we run seedPlans() once
+    // (idempotent upserts) and retry the lookup before giving up. This
+    // mirrors what /api/plans and /api/plans/public already do.
+    let plan = await getPlanByCode(addonCode);
+    if (!plan) {
+      try {
+        await seedPlans();
+      } catch (seedErr) {
+        // Non-fatal — log and continue; the 404 below will fire if the
+        // re-seed didn't create the row.
+        console.warn('[addon-subscriptions] seedPlans fallback failed (non-fatal):', seedErr);
+      }
+      plan = await getPlanByCode(addonCode);
+    }
     if (!plan) {
       return NextResponse.json(
         { error: `Unknown add-on code: ${addonCode}. Has the plan catalog been seeded?` },

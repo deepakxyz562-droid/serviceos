@@ -251,7 +251,17 @@ export function SectionHeader({ title, description, icon: Icon, actions }: {
 
 // A "demo data" pill — used to clearly mark sections whose data is not yet
 // wired to a real backend, so it's obvious to the user what's mock vs. real.
-export function DemoDataPill() {
+// Pass `live` to render a green "Live data" pill when the section is wired
+// to a real backend; otherwise the amber "Demo data" pill is shown.
+export function DemoDataPill({ live }: { live?: boolean }) {
+  if (live) {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+        <span className="size-1 rounded-full bg-emerald-500" />
+        Live data
+      </span>
+    );
+  }
   return (
     <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400">
       <span className="size-1 rounded-full bg-amber-500" />

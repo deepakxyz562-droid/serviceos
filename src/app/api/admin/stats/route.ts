@@ -31,7 +31,7 @@ export async function GET() {
       churnedThisMonth,
       trialsConvertedThisMonth,
       trialsExpiredThisMonth,
-      allPaidInvoices,
+      paidInvoiceAggregate,
       monthlyPaidInvoices,
     ] = await Promise.all([
       // Total tenants
@@ -95,13 +95,17 @@ export async function GET() {
         },
       }),
 
-      // All paid invoices for revenue
-      db.invoice.findMany({
+      // Total revenue across all paid invoices — computed at the DB layer
+      // with `aggregate` instead of loading every invoice row into Node
+      // memory. Avoids O(N) row transfer just to sum a single column.
+      db.invoice.aggregate({
         where: { status: 'paid', paidAt: { not: null } },
-        select: { total: true, paidAt: true, tenantId: true },
+        _sum: { total: true },
       }),
 
-      // Monthly paid invoices for revenue chart
+      // Monthly paid invoices for revenue chart. We only need the `total`
+      // and `paidAt` columns to bucket by month, so select just those two
+      // (no tenantId, no other fields) to keep the row payload small.
       db.invoice.findMany({
         where: { status: 'paid', paidAt: { gte: twelveMonthsAgo } },
         select: { total: true, paidAt: true },
@@ -125,8 +129,8 @@ export async function GET() {
 
     const arr = mrr * 12;
 
-    // Calculate total revenue from paid invoices
-    const totalRevenue = allPaidInvoices.reduce((sum, inv) => sum + inv.total, 0);
+    // Calculate total revenue from paid invoices (computed at DB layer).
+    const totalRevenue = paidInvoiceAggregate._sum.total ?? 0;
 
     // Calculate churn rate
     const churnRate =
@@ -162,15 +166,24 @@ export async function GET() {
       });
     }
 
-    // Build tenants by plan map
+    // Build tenants by plan map. Include every plan the platform supports so
+    // tenants on `trial` or `business` aren't silently dropped from the
+    // by-plan breakdown (the previous map only had starter/growth/pro/
+    // enterprise and silently swallowed the rest).
     const tenantsByPlanMap: Record<string, number> = {
+      trial: 0,
       starter: 0,
       growth: 0,
+      business: 0,
       pro: 0,
       enterprise: 0,
     };
     tenantsByPlan.forEach((item) => {
-      tenantsByPlanMap[item.plan] = item._count.plan;
+      // Only assign if the plan key is one we expose; unknown plans are
+      // dropped intentionally to keep the breakdown stable for the UI.
+      if (item.plan in tenantsByPlanMap) {
+        tenantsByPlanMap[item.plan] = item._count.plan;
+      }
     });
 
     return NextResponse.json({

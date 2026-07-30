@@ -620,6 +620,82 @@ function KpiCard({ label, value, icon: Icon, trend, color, sub }: {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
+// STATUS BAR + LAST SYNCED BADGE
+// ═════════════════════════════════════════════════════════════════════════════
+// Extracted from `SuperAdminView` so the 8-second polling interval only
+// re-renders these tiny subtrees. Previously the polling state lived on
+// `SuperAdminView` itself, which meant the entire 2900-line component (and
+// its nested function-body Tab components) re-rendered every 8 seconds —
+// because the Tab components are redefined on every parent render, React
+// unmounts and remounts the active tab, losing all internal state and
+// re-firing all effects. Moving both pieces here isolates the re-render
+// to just these two small children.
+
+function SuperAdminStatusBar() {
+  const [statusItems, setStatusItems] = useState<StatusBarItem[]>(INITIAL_STATUS);
+  useEffect(() => {
+    const id = setInterval(() => {
+      setStatusItems((prev) => prev.map((item) => {
+        // Light jitter on the value; status stays healthy (real warnings
+        // would come from a real /api/health endpoint).
+        if (item.key === 'api') return { ...item, value: `${8 + Math.floor(Math.random() * 8)}ms` };
+        if (item.key === 'db') return { ...item, value: `${2 + Math.floor(Math.random() * 4)}ms` };
+        if (item.key === 'queue') return { ...item, value: `${Math.floor(Math.random() * 6)}` };
+        if (item.key === 'storage') return { ...item, value: `${77 + Math.floor(Math.random() * 3)}%` };
+        return item;
+      }));
+    }, 8000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <footer className="shrink-0 z-20 px-4 sm:px-6 lg:px-8 py-2 bg-background/95 backdrop-blur border-t border-border">
+      <div className="flex items-center gap-3 overflow-x-auto scrollbar-thin">
+        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground shrink-0">
+          <span className="size-1.5 bg-emerald-500 rounded-full animate-pulse" />
+          PLATFORM HEALTH
+        </span>
+        <div className="h-3 w-px bg-border shrink-0" />
+        {statusItems.map((item) => {
+          const dotColor = item.status === 'healthy' ? 'bg-emerald-500' : item.status === 'warning' ? 'bg-amber-500' : 'bg-red-500';
+          return (
+            <div key={item.key} className="flex items-center gap-1.5 shrink-0">
+              <span className={cn('size-1.5 rounded-full', dotColor, item.status === 'healthy' && 'animate-pulse')} />
+              <span className="text-[11px] font-medium text-muted-foreground">{item.label}</span>
+              <span className="text-[11px] font-mono text-foreground">{item.value}</span>
+            </div>
+          );
+        })}
+        <div className="h-3 w-px bg-border shrink-0" />
+        <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-medium shrink-0 ml-auto">
+          <span className="size-1 rounded-full bg-amber-500" />
+          Demo data
+        </span>
+      </div>
+    </footer>
+  );
+}
+
+function LastSyncedBadge() {
+  // Initialise with the current time so the badge shows a real value on the
+  // very first render — no need to synchronously setState inside the effect
+  // (which would trip the `react-hooks/set-state-in-effect` rule and cause
+  // a cascading re-render on mount).
+  const [lastSynced, setLastSynced] = useState<Date | null>(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setLastSynced(new Date()), 8000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div className="hidden lg:flex items-center gap-1.5 text-[11px] text-muted-foreground mr-2">
+      <CheckCircle2 className="size-3.5 text-emerald-500" />
+      <span>Synced {lastSynced ? lastSynced.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'}</span>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -634,27 +710,14 @@ export function SuperAdminView() {
   // Mobile sidebar drawer (slides in from the left below `lg:`).
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  // Bottom status bar — simulated live health data. Updates every 8s with
-  // small jittered values to feel alive. Real platform-health endpoints
-  // don't exist yet — this is a clearly-labeled demo indicator.
-  const [statusItems, setStatusItems] = useState<StatusBarItem[]>(INITIAL_STATUS);
-  const [lastSynced, setLastSynced] = useState<Date | null>(null);
-  useEffect(() => {
-    setLastSynced(new Date());
-    const id = setInterval(() => {
-      setStatusItems((prev) => prev.map((item) => {
-        // Light jitter on the value; status stays healthy (real warnings
-        // would come from a real /api/health endpoint).
-        if (item.key === 'api') return { ...item, value: `${8 + Math.floor(Math.random() * 8)}ms` };
-        if (item.key === 'db') return { ...item, value: `${2 + Math.floor(Math.random() * 4)}ms` };
-        if (item.key === 'queue') return { ...item, value: `${Math.floor(Math.random() * 6)}` };
-        if (item.key === 'storage') return { ...item, value: `${77 + Math.floor(Math.random() * 3)}%` };
-        return item;
-      }));
-      setLastSynced(new Date());
-    }, 8000);
-    return () => clearInterval(id);
-  }, []);
+  // NOTE: The bottom status-bar polling (8s interval) and the "Synced" badge
+  // in the top bar used to live here on `SuperAdminView` itself. That caused
+  // the entire 2900-line component (and its nested function-body Tab
+  // components) to re-render every 8 seconds, which unmounted/remounted the
+  // active tab and re-fired all its effects. Both pieces now live in the
+  // isolated child components `<SuperAdminStatusBar />` and
+  // `<LastSyncedBadge />` defined above — the parent no longer re-renders
+  // on the polling tick.
 
   // Guard: Only superadmin users can access this view
   const isSuperAdmin = !!(auth.user?.isSuperAdmin || auth.user?.role === 'superadmin' || auth.user?.role === 'super_admin' || (auth.user?.role === 'admin' && !auth.user?.tenantId));
@@ -793,10 +856,18 @@ export function SuperAdminView() {
   }, [tenants]);
 
   useEffect(() => {
-    if (tenants.length > 0 && creditsData.length === 0) {
+    // Gate the credits waterfall on the Credits tab being active. This is a
+    // sequential N+1 fetch (1 HTTP round-trip per tenant) that previously
+    // fired on every mount regardless of which tab was open — for 100
+    // tenants that's ~100 sequential round-trips = 10+ seconds of dead
+    // network time spent even if the user never opens Credits. We still
+    // keep the existing serial logic (batching is a separate API change),
+    // but only kick it off when the user actually navigates to Credits,
+    // and only once per session (guarded by `creditsData.length === 0`).
+    if (activeTab === 'credits' && tenants.length > 0 && creditsData.length === 0) {
       fetchAllCredits();
     }
-  }, [tenants.length, creditsData.length, fetchAllCredits]);
+  }, [activeTab, tenants.length, creditsData.length, fetchAllCredits]);
 
   useEffect(() => {
     if (tenants.length > 0 && !selectedTenantForFlags) {
@@ -2827,11 +2898,9 @@ export function SuperAdminView() {
           </div>
 
           <div className="flex items-center gap-1.5 ml-auto">
-            {/* Last synced indicator */}
-            <div className="hidden lg:flex items-center gap-1.5 text-[11px] text-muted-foreground mr-2">
-              <CheckCircle2 className="size-3.5 text-emerald-500" />
-              <span>Synced {lastSynced ? lastSynced.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'}</span>
-            </div>
+            {/* Last synced indicator — isolated child so the 8s polling
+                re-render doesn't bubble back up into SuperAdminView. */}
+            <LastSyncedBadge />
             {/* Refresh */}
             <Button variant="ghost" size="sm" className="h-9 w-9 p-0" onClick={() => { refetchStats(); refetchTenants(); }} aria-label="Refresh data">
               <RefreshCw className="size-4" />
@@ -2889,31 +2958,11 @@ export function SuperAdminView() {
         </main>
       </div>
 
-      {/* ─── Bottom Status Bar ──────────────────────────────────────────────── */}
-      <footer className="shrink-0 z-20 px-4 sm:px-6 lg:px-8 py-2 bg-background/95 backdrop-blur border-t border-border">
-        <div className="flex items-center gap-3 overflow-x-auto scrollbar-thin">
-          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-muted-foreground shrink-0">
-            <span className="size-1.5 bg-emerald-500 rounded-full animate-pulse" />
-            PLATFORM HEALTH
-          </span>
-          <div className="h-3 w-px bg-border shrink-0" />
-          {statusItems.map((item) => {
-            const dotColor = item.status === 'healthy' ? 'bg-emerald-500' : item.status === 'warning' ? 'bg-amber-500' : 'bg-red-500';
-            return (
-              <div key={item.key} className="flex items-center gap-1.5 shrink-0">
-                <span className={cn('size-1.5 rounded-full', dotColor, item.status === 'healthy' && 'animate-pulse')} />
-                <span className="text-[11px] font-medium text-muted-foreground">{item.label}</span>
-                <span className="text-[11px] font-mono text-foreground">{item.value}</span>
-              </div>
-            );
-          })}
-          <div className="h-3 w-px bg-border shrink-0" />
-          <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-medium shrink-0 ml-auto">
-            <span className="size-1 rounded-full bg-amber-500" />
-            Demo data
-          </span>
-        </div>
-      </footer>
+      {/* ─── Bottom Status Bar ────────────────────────────────────────────────
+          Rendered by `<SuperAdminStatusBar />` — an isolated child that
+          owns its own polling state so the 8s tick doesn't re-render
+          SuperAdminView (and thus the active tab). */}
+      <SuperAdminStatusBar />
     </div>
   );
 }

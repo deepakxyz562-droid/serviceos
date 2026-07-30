@@ -68,6 +68,14 @@ import {
 import { cn } from '@/lib/utils';
 import { mapIndustryToUrlSlug, slugifyCity } from '@/lib/seo/schemas';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { CompanyFinder } from '@/components/auth/company-finder';
+import {
   mpUrl,
   type ProviderListItem,
   type ProviderListResponse,
@@ -527,6 +535,38 @@ const faqs = [
 
 function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: () => void; onSignIn?: () => void; audience: Audience; onPick: (a: Audience) => void }) {
   const [mobileOpen, setMobileOpen] = React.useState(false);
+  // Issue 1: PWA-accessible employee login. The dialog lets an employee
+  // find their company by name/slug and routes to /{slug}/employee. Triggered
+  // by the navbar "Employee Login" link OR by the ?login=employee URL param
+  // (which is what the PWA manifest shortcut uses).
+  const [empLoginOpen, setEmpLoginOpen] = React.useState(false);
+
+  // Auto-open the employee login dialog when ?login=employee is in the URL
+  // (PWA manifest shortcut / shared link).
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('login') === 'employee') {
+        setEmpLoginOpen(true);
+        // Strip the param so a refresh doesn't re-open it.
+        params.delete('login');
+        const remaining = params.toString();
+        const newUrl = remaining
+          ? `${window.location.pathname}?${remaining}`
+          : window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const handleEmployeeSelect = (slug: string) => {
+    if (typeof window !== 'undefined') {
+      window.location.href = `/${slug}/employee`;
+    }
+  };
 
   // Audience-aware anchor link: if user is on marketplace fork, switch to CRM
   // fork first, THEN smooth-scroll to the anchor (after the CRM sections render).
@@ -567,6 +607,15 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
         </nav>
 
         <div className="hidden md:flex items-center gap-2">
+          {/* Issue 1: PWA-accessible employee login entry point */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setEmpLoginOpen(true)}
+            className="text-amber-700 hover:text-amber-800 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/40"
+          >
+            Employee Login
+          </Button>
           {onSignIn ? (
             <Button variant="ghost" size="sm" onClick={onSignIn} className="text-muted-foreground hover:text-foreground">Sign In</Button>
           ) : null}
@@ -633,11 +682,46 @@ function Navbar({ onGetStarted, onSignIn, audience, onPick }: { onGetStarted?: (
             <a href="/marketplace" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={() => setMobileOpen(false)}>Marketplace</a>
             <a href="#faq" className="block text-sm text-muted-foreground hover:text-foreground py-1.5" onClick={(e) => crmAnchorClick('#faq', e)}>FAQ</a>
             <Separator className="my-2" />
+            {/* Issue 1: PWA-accessible employee login entry point (mobile) */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+              onClick={() => { setEmpLoginOpen(true); setMobileOpen(false); }}
+            >
+              Employee Login
+            </Button>
             {onSignIn ? <Button variant="outline" size="sm" className="w-full" onClick={onSignIn}>Sign In</Button> : null}
             {onGetStarted ? <Button size="sm" className="w-full bg-emerald-600 text-white hover:bg-emerald-700" onClick={onGetStarted}>Get Started</Button> : null}
           </div>
         </div>
       ) : null}
+
+      {/* Issue 1: Employee login dialog — company finder → /{slug}/employee */}
+      <Dialog open={empLoginOpen} onOpenChange={setEmpLoginOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center size-10 rounded-lg bg-amber-500 shrink-0">
+                <HardHat className="size-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <DialogTitle>Employee Login</DialogTitle>
+                <DialogDescription className="mt-1">
+                  Find your company to sign in to the employee portal.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <CompanyFinder onSelect={handleEmployeeSelect} autoFocus />
+            <p className="text-xs text-muted-foreground text-center pt-2">
+              Don&apos;t know your company link? Search by business name above,
+              or ask your employer for the link.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 }
@@ -1442,7 +1526,11 @@ function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
   // curated marketing copy (features + icon + description stay hardcoded
   // so the landing page reads well — DB feature flags aren't curated for
   // marketing).
-  const [plans, setPlans] = React.useState<PricingPlan[]>(FALLBACK_PRICING_PLANS);
+  // Issue 6 fix: start with an EMPTY list + a `loading` flag so the first
+  // paint shows a skeleton (no hardcoded prices) instead of the fallback
+  // prices that get visibly swapped out a moment later (the "flicker").
+  const [plans, setPlans] = React.useState<PricingPlan[]>([]);
+  const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -1452,40 +1540,44 @@ function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
         if (!res.ok) return;
         const data = await res.json();
         if (!data?.plans || !Array.isArray(data.plans)) return;
-        // Index the curated fallback by code so we can overlay DB values
-        // while preserving the marketing-curated feature list + icon.
-        const curatedByCode = new Map<string, PricingPlan>(
-          FALLBACK_PRICING_PLANS.map((p) => [p.code, p]),
+        // Index the DB plans by code so we can overlay DB values onto the
+        // curated marketing copy (features list + icon stay hardcoded).
+        const dbByCode = new Map<string, any>(
+          data.plans.map((p: any) => [p.code, p]),
         );
-        const mapped: PricingPlan[] = data.plans
-          .map((p: any) => {
-            const curated = curatedByCode.get(p.code);
-            // For unknown plan codes, skip — only show plans we have
-            // curated marketing copy for.
-            if (!curated) return null;
-            return {
-              ...curated,
-              name: p.name || curated.name,
-              monthlyPrice: p.monthlyPrice !== null && p.monthlyPrice !== undefined && Number(p.monthlyPrice) > 0
-                ? Number(p.monthlyPrice)
-                : (curated.monthlyPrice !== null && curated.monthlyPrice !== undefined && curated.monthlyPrice > 0
-                    ? curated.monthlyPrice
-                    : null),
-              yearlyPrice: p.yearlyPrice !== null && p.yearlyPrice !== undefined && Number(p.yearlyPrice) > 0
-                ? Number(p.yearlyPrice)
-                : (curated.yearlyPrice !== null && curated.yearlyPrice !== undefined && curated.yearlyPrice > 0
-                    ? curated.yearlyPrice
-                    : null),
-              originalMonthlyPrice: Number(p.originalMonthlyPrice) || curated.originalMonthlyPrice,
-              popular: p.popular ?? curated.popular,
-            } as PricingPlan;
-          })
-          .filter((p: PricingPlan | null): p is PricingPlan => p !== null);
-        if (cancelled || mapped.length === 0) return;
+        // Issue 6 fix: iterate over the CURATED fallback list (not the DB
+        // list) so a missing/inactive DB row falls back to its hardcoded
+        // entry instead of disappearing. This guarantees all 4 cards
+        // (Starter, Professional/growth, Business, Enterprise) always render.
+        const mapped: PricingPlan[] = FALLBACK_PRICING_PLANS.map((curated) => {
+          const dbPlan = dbByCode.get(curated.code);
+          if (!dbPlan) return curated; // keep hardcoded fallback for this tier
+          return {
+            ...curated,
+            name: dbPlan.name || curated.name,
+            monthlyPrice: dbPlan.monthlyPrice !== null && dbPlan.monthlyPrice !== undefined && Number(dbPlan.monthlyPrice) > 0
+              ? Number(dbPlan.monthlyPrice)
+              : (curated.monthlyPrice !== null && curated.monthlyPrice !== undefined && curated.monthlyPrice > 0
+                  ? curated.monthlyPrice
+                  : null),
+            yearlyPrice: dbPlan.yearlyPrice !== null && dbPlan.yearlyPrice !== undefined && Number(dbPlan.yearlyPrice) > 0
+              ? Number(dbPlan.yearlyPrice)
+              : (curated.yearlyPrice !== null && curated.yearlyPrice !== undefined && curated.yearlyPrice > 0
+                  ? curated.yearlyPrice
+                  : null),
+            originalMonthlyPrice: Number(dbPlan.originalMonthlyPrice) || curated.originalMonthlyPrice,
+            popular: dbPlan.popular ?? curated.popular,
+          } as PricingPlan;
+        });
+        if (cancelled) return;
         setPlans(mapped);
       } catch (err) {
-        // Network / parse error — keep FALLBACK_PRICING_PLANS.
+        // Network / parse error — fall back to the curated list so the
+        // pricing section still renders.
         console.warn('[landing] Failed to fetch /api/plans/public, using fallback:', err);
+        if (!cancelled) setPlans(FALLBACK_PRICING_PLANS);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     })();
     return () => {
@@ -1529,7 +1621,29 @@ function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
-          {plans.map((plan) => {
+          {loading ? (
+            // Issue 6 fix: skeleton during the initial fetch so the user
+            // never sees hardcoded fallback prices that get swapped out.
+            Array.from({ length: 4 }).map((_, i) => (
+              <Card key={`skeleton-${i}`} className="border-border h-full flex flex-col">
+                <CardHeader className="pb-2">
+                  <div className="w-10 h-10 rounded-lg bg-muted mb-3" />
+                  <div className="h-5 w-24 bg-muted rounded mb-2" />
+                  <div className="h-3 w-32 bg-muted rounded" />
+                </CardHeader>
+                <CardContent className="flex-1 space-y-2">
+                  <div className="h-9 w-20 bg-muted rounded mb-4" />
+                  {Array.from({ length: 6 }).map((_, j) => (
+                    <div key={j} className="h-3 w-full bg-muted rounded" />
+                  ))}
+                </CardContent>
+                <CardFooter>
+                  <div className="h-9 w-full bg-muted rounded" />
+                </CardFooter>
+              </Card>
+            ))
+          ) : (
+            plans.map((plan) => {
             const Icon = plan.icon;
             const monthlySave = discountPct(plan.originalMonthlyPrice, plan.monthlyPrice ?? 0);
             const yearlySave = discountPct(
@@ -1627,7 +1741,8 @@ function CrmPricing({ onGetStarted }: { onGetStarted?: () => void }) {
                 </CardFooter>
               </Card>
             );
-          })}
+          })
+          )}
         </div>
 
         <p className="text-center text-xs text-muted-foreground mt-6">

@@ -11,6 +11,15 @@ export async function GET() {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
+    // Super admins (tenantId=null) have no tenant — return the platform
+    // default currency instead of crashing on findUnique({ where: { id: null } }).
+    if (!authUser.tenantId) {
+      return NextResponse.json({
+        baseCurrency: 'USD',
+        currency: 'USD',
+      });
+    }
+
     const tenant = await db.tenant.findUnique({
       where: { id: authUser.tenantId },
       select: { id: true, currency: true },

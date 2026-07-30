@@ -107,22 +107,37 @@ export function CampaignProviderGate({ onConfigure }: CampaignProviderGateProps)
     }
   }, [])
 
-  // Open the modal once we have status + not dismissed + not all configured.
+  // Open the modal once we have status + not dismissed + NOT all configured.
+  // Issues 2+3+4: The gate now only blocks when NO channels are configured
+  // (anyConfigured === false). If the tenant has at least one channel
+  // configured, they can create campaigns for that channel — the missing
+  // channels simply don't appear in the channel selector (handled by the
+  // parent CampaignsView). This makes each channel independently gated.
   useEffect(() => {
     if (isLoading) return
     if (dismissed) {
       setOpen(false)
       return
     }
-    if (status && !status.allConfigured) {
-      setOpen(true)
+    if (status) {
+      const anyConfigured = status.sms.configured || status.email.configured || status.whatsapp.configured
+      // Only block if NO channels are configured at all.
+      if (!anyConfigured) {
+        setOpen(true)
+      } else {
+        setOpen(false)
+      }
     } else {
       setOpen(false)
     }
   }, [isLoading, dismissed, status])
 
-  // While loading or dismissed or all configured → render nothing.
-  if (isLoading || dismissed || !status || status.allConfigured) {
+  // While loading or dismissed or at least one channel configured → render nothing.
+  if (isLoading || dismissed || !status) {
+    return null
+  }
+  const anyConfigured = status.sms.configured || status.email.configured || status.whatsapp.configured
+  if (anyConfigured) {
     return null
   }
 
@@ -189,9 +204,11 @@ export function CampaignProviderGate({ onConfigure }: CampaignProviderGateProps)
         </DialogHeader>
 
         <p className="text-sm text-muted-foreground leading-relaxed">
-          Before using campaigns, connect your own SMS, Email, and WhatsApp providers.
-          Platform-shared providers are not available for campaign sending — you need
-          your own credentials for reliable delivery and compliance.
+          Before using campaigns, connect at least one of your own SMS, Email, or
+          WhatsApp providers. Platform-shared providers are not available for
+          campaign sending — you need your own credentials for reliable delivery
+          and compliance. Each channel is independent: configure the ones you
+          want to use.
         </p>
 
         {/* 3-column status grid */}

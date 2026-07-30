@@ -43,11 +43,12 @@ export async function GET(request: NextRequest) {
       orderBy: [{ isDefaultTransactional: 'desc' }, { createdAt: 'desc' }],
     });
 
-    // ─── Issue 2: Tenants see only a minimal "email is enabled" view ────
-    // For non-superadmins we strip all config/credentials and return just
-    // the fields needed to know email is available (id, name, providerType,
-    // status, isPlatform). The full config (with masked secrets) is only
-    // returned to superadmins who can actually edit the provider.
+    // ─── Issues 2+3+4: Tenants now get full config (masked) for their OWN
+    // providers so they can edit/test/delete them. Platform-shared providers
+    // (isPlatform=true) created by the superadmin still return an empty
+    // config to tenants — they can see the provider exists but can't see
+    // the superadmin's credentials. Superadmins see masked config for
+    // everything (including platform providers).
     const masked = providers.map((p) => {
       const base = {
         id: p.id,
@@ -63,11 +64,12 @@ export async function GET(request: NextRequest) {
         replyTo: p.replyTo,
         createdAt: p.createdAt,
       };
-      if (!isSuperAdmin) {
-        // Tenants: no config details at all
+      // Platform-shared providers: tenants see no config details.
+      // Tenant-owned providers: tenants see masked config (secrets hidden).
+      // Superadmins: always see masked config.
+      if (!isSuperAdmin && p.isPlatform) {
         return { ...base, config: {}, configJson: undefined };
       }
-      // Superadmin: masked config (secrets hidden)
       return {
         ...base,
         config: maskedConfigFromString(p.configJson),
@@ -102,24 +104,23 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    // ─── Issue 2: Email provider config is SUPERADMIN-ONLY ─────────────
-    // Tenants must NOT create/edit/delete email providers. The platform
-    // email provider is configured once by the superadmin and shared across
-    // all tenants. Tenants only consume the platform relay for sending.
+    // ─── Issues 2+3+4: Email provider config is TENANT-ACCESSIBLE ──────
+    // Tenants MUST be able to configure their own email provider (SMTP,
+    // Resend, SendGrid, SES, etc.) for campaigns. The previous superadmin-
+    // only gate made campaigns impossible because the CampaignProviderGate
+    // requires a tenant-owned email provider. All 3 channels (Email, SMS,
+    // WhatsApp) now follow the same rule: if the tenant has added their
+    // own credentials → working; otherwise → hidden/disabled in the UI.
+    //
+    // Super admins (tenantId=null) can still create platform-shared
+    // providers (isPlatform=true) that all tenants can see but that don't
+    // count toward the campaign gate.
     const isSuperAdmin = user.isSuperAdmin || !user.tenantId;
-    if (!isSuperAdmin) {
-      return NextResponse.json(
-        { error: 'Forbidden — email provider configuration is managed by the platform superadmin.' },
-        { status: 403 },
-      );
-    }
-    // For super admins without a tenantId, attach the provider to the first tenant
-    // (or leave it as a cross-tenant platform provider if isPlatform=true).
-    // Never use 'default' as a fake tenantId — it breaks provider resolution.
     let tenantId = user.tenantId;
     if (!tenantId && isSuperAdmin) {
       // Super admin creating a provider — if isPlatform, attach to first tenant;
       // otherwise require the tenant to be specified in the body or use first tenant.
+      // Never use 'default' as a fake tenantId — it breaks provider resolution.
       const firstTenant = await db.tenant.findFirst({ orderBy: { createdAt: 'asc' } });
       tenantId = firstTenant?.id || 'platform';
     }

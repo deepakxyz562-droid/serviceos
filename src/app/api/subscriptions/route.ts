@@ -212,8 +212,19 @@ export async function GET() {
     }> = [];
     try {
       let planRows = await getActivePlans();
-      // Only seed if the catalog is genuinely empty — avoids per-request writes.
-      if (planRows.length === 0) {
+      // Re-seed if the catalog is empty OR if the add-on rows are missing.
+      // The add-on codes (ai_pro_addon, marketplace_featured,
+      // marketplace_premium) were added to PLAN_DEFS after the original 4
+      // core plans, so environments seeded with an older PLAN_DEFS will
+      // have the core plans but be missing the 3 add-ons — which breaks
+      // add-on activation with "Unknown add-on code". seedPlans() is
+      // idempotent (upserts), so calling it here is safe.
+      const REQUIRED_ADDON_CODES = ['ai_pro_addon', 'marketplace_featured', 'marketplace_premium'];
+      const presentAddonCodes = new Set(
+        planRows.filter((p) => p.isAddon).map((p) => p.code),
+      );
+      const missingAddons = REQUIRED_ADDON_CODES.some((c) => !presentAddonCodes.has(c));
+      if (planRows.length === 0 || missingAddons) {
         try {
           await seedPlans();
           planRows = await getActivePlans();
