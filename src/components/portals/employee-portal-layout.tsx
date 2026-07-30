@@ -713,7 +713,12 @@ function usePushAutoSubscribe() {
         if (!json.endpoint) return;
 
         // Persist server-side so the backend can actually send pushes.
-        const subRes = await authFetch('/api/notifications/push/subscribe?XTransformPort=3000', {
+        // Retry once on 401 — the token may not have been written to
+        // localStorage yet when the employee portal first mounts (auth
+        // hydration race). Without this retry, the subscription is silently
+        // dropped and the employee never receives pushes (the PushSubscription
+        // table stays empty even though permission was granted).
+        let subRes = await authFetch('/api/notifications/push/subscribe?XTransformPort=3000', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -722,6 +727,19 @@ function usePushAutoSubscribe() {
             expirationTime: json.expirationTime ?? null,
           }),
         });
+        if (subRes.status === 401) {
+          // Wait briefly for the auth store to hydrate, then retry once.
+          await new Promise((r) => setTimeout(r, 500));
+          subRes = await authFetch('/api/notifications/push/subscribe?XTransformPort=3000', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              endpoint: json.endpoint,
+              keys: json.keys,
+              expirationTime: json.expirationTime ?? null,
+            }),
+          });
+        }
         if (!subRes.ok) {
           // Server rejected the subscription — unsubscribe locally so we
           // don't leave a dangling browser subscription with no DB row.
@@ -857,7 +875,8 @@ function PushEnableBanner() {
       });
       const json = sub.toJSON();
       if (json.endpoint) {
-        const subRes = await authFetch('/api/notifications/push/subscribe?XTransformPort=3000', {
+        // Retry once on 401 — auth hydration race (same as usePushAutoSubscribe).
+        let subRes = await authFetch('/api/notifications/push/subscribe?XTransformPort=3000', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -866,6 +885,18 @@ function PushEnableBanner() {
             expirationTime: json.expirationTime ?? null,
           }),
         });
+        if (subRes.status === 401) {
+          await new Promise((r) => setTimeout(r, 500));
+          subRes = await authFetch('/api/notifications/push/subscribe?XTransformPort=3000', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              endpoint: json.endpoint,
+              keys: json.keys,
+              expirationTime: json.expirationTime ?? null,
+            }),
+          });
+        }
         if (!subRes.ok) {
           let errMsg = `Server returned ${subRes.status}`;
           let errCode: string | undefined;

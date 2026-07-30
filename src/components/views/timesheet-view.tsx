@@ -588,10 +588,25 @@ function OwnerTimesheet() {
   const [drillEmployee, setDrillEmployee] = useState<TeamRow | null>(null);
   const [tick, setTick] = useState(0);
 
+  // Auth-ready flag: wait for the auth store to be hydrated before the first
+  // fetch. Without this, the OwnerTimesheet mounts inside the Radix TabsContent
+  // and immediately fires `loadTeam()` — but on the very first mount after
+  // login/navigation, the JWT token may not yet be in localStorage, causing
+  // `getAuthUser()` to return null → 401 → "Failed to load team timesheet".
+  // The auth store is populated by `/api/auth/me` on app boot; once it's
+  // populated, we know the token is available.
+  const isAuthed = useAppStore((s) => s.auth?.isAuthenticated === true);
+
   const loadTeam = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await authFetch(`/api/time-tracking/team?period=${period}`);
+      let res = await authFetch(`/api/time-tracking/team?period=${period}`);
+      // Retry once on 401 — the token may not have been written to
+      // localStorage yet when the first request fired (auth hydration race).
+      if (res.status === 401) {
+        await new Promise((r) => setTimeout(r, 400));
+        res = await authFetch(`/api/time-tracking/team?period=${period}`);
+      }
       if (!res.ok) throw new Error('Failed to load team timesheet');
       const data = await res.json();
       setTeam(data.team || []);
@@ -605,8 +620,10 @@ function OwnerTimesheet() {
   }, [period]);
 
   useEffect(() => {
+    // Don't fetch until the auth store is hydrated — avoids the 401 race.
+    if (!isAuthed) return;
     loadTeam();
-  }, [loadTeam]);
+  }, [loadTeam, isAuthed]);
 
   // Live refresh for active timers
   useEffect(() => {

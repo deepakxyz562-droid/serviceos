@@ -253,27 +253,42 @@ async function resolveRecipientUserId(
 ): Promise<{ userId: string | null; tenantId: string | null }> {
   const resolvedTenantId = await resolveTenantId(payload.tenantId)
 
-  // 1. Explicit override
-  if (payload.pushUserId) {
-    return { userId: payload.pushUserId, tenantId: resolvedTenantId }
-  }
-  // 2. Employee → Employee.userId
+  // 1. Explicit override — BUT still resolve the tenantId from the Employee
+  //    record if possible. Previously this branch short-circuited and returned
+  //    `tenantId: resolvedTenantId` which was NULL when `payload.tenantId` was
+  //    undefined (the common case for Job events — Job uses `workspaceId`,
+  //    not `tenantId`). That caused the `if (userId && tenantId)` guard in
+  //    sendJobNotification() to skip the in-app + push channel entirely, so
+  //    employees never received push notifications even though permission was
+  //    granted. Now we fall through to the employee/job lookup to resolve the
+  //    real tenantId, only using the explicit userId override.
+  let overrideUserId: string | null = payload.pushUserId || null
+
+  // 2. Employee → Employee.userId + Employee.workspaceId (→ tenantId)
+  //    NOTE: Employee has `workspaceId`, NOT `tenantId`. resolveTenantId()
+  //    normalises workspaceId → tenantId via the Workspace table.
   if (payload.recipientRole === 'employee' && payload.employeeId) {
     try {
       const emp = await db.employee.findUnique({
         where: { id: payload.employeeId },
-        select: { userId: true, tenantId: true },
+        select: { userId: true, workspaceId: true },
       })
-      if (emp?.userId) {
-        const empTenantId = await resolveTenantId(emp.tenantId || payload.tenantId)
-        return { userId: emp.userId, tenantId: empTenantId || resolvedTenantId }
+      if (emp) {
+        const empTenantId = await resolveTenantId(emp.workspaceId || payload.tenantId)
+        // If the caller provided an explicit pushUserId, use it (it may be
+        // more up-to-date than the Employee.userId in edge cases). Otherwise
+        // use the Employee.userId.
+        const userId = overrideUserId || emp.userId
+        if (userId) {
+          return { userId, tenantId: empTenantId || resolvedTenantId }
+        }
       }
     } catch (e) {
       console.warn('[sendJobNotification] resolveRecipientUserId(employee) failed:', e)
     }
   }
-  // 3. Job → Job.assigneeId → Employee.userId (last resort, for employee events
-  //    where the caller didn't pass employeeId)
+  // 3. Job → Job.assigneeId → Employee.userId + Job.workspaceId (last resort,
+  //    for employee events where the caller didn't pass employeeId)
   if (payload.jobId) {
     try {
       const job = await db.job.findUnique({
@@ -283,22 +298,38 @@ async function resolveRecipientUserId(
       if (job?.assigneeId) {
         const emp = await db.employee.findUnique({
           where: { id: job.assigneeId },
-          select: { userId: true, tenantId: true },
+          select: { userId: true, workspaceId: true },
         })
-        if (emp?.userId) {
-          const empTenantId = await resolveTenantId(emp.tenantId || job.workspaceId || payload.tenantId)
-          return { userId: emp.userId, tenantId: empTenantId || resolvedTenantId }
+        if (emp) {
+          const empTenantId = await resolveTenantId(emp.workspaceId || job.workspaceId || payload.tenantId)
+          const userId = overrideUserId || emp.userId
+          if (userId) {
+            return { userId, tenantId: empTenantId || resolvedTenantId }
+          }
         }
       }
     } catch (e) {
       console.warn('[sendJobNotification] resolveRecipientUserId(job) failed:', e)
     }
   }
+  // Fallback: if we had an explicit pushUserId but couldn't resolve the
+  // tenantId from Employee/Job, return the userId with whatever tenantId we
+  // resolved (may be null — sendWebPushToUser handles null tenantId by
+  // querying all subscriptions for that userId regardless of tenant).
+  if (overrideUserId) {
+    return { userId: overrideUserId, tenantId: resolvedTenantId }
+  }
   return { userId: null, tenantId: resolvedTenantId }
 }
 
 // ── Channel 1: WhatsApp (existing logic, extracted into a helper) ──────────
 async function sendWhatsAppChannel(payload: NotificationPayload): Promise<SendResult> {
+  // Skip when there's no recipient phone — the employee may not have a phone
+  // on file. WhatsApp/SMS are phone-based channels; push/email/in-app still
+  // fire (they don't need a phone). Returning a simulated success avoids
+  // logging a failed send to an empty recipient.
+  if (!payload.to) return { success: true, simulated: true, externalId: `sim_${Date.now()}` }
+
   let sendResult: SendResult = { success: true, simulated: true, externalId: `sim_${Date.now()}` }
 
   try {
@@ -626,7 +657,7 @@ function escapeHtml(s: string): string {
 async function sendInAppAndPushChannels(
   payload: NotificationPayload,
   userId: string,
-  tenantId: string,
+  tenantId: string | null,
 ): Promise<void> {
   const title = derivePushTitle(payload)
   const body = derivePushBody(payload)
@@ -643,24 +674,28 @@ async function sendInAppAndPushChannels(
     markPushSent(userId, payload.eventType, dedupResourceId)
   }
 
-  // 3. In-app notification (bell + inbox)
-  try {
-    await createNotification({
-      tenantId,
-      recipientId: userId,
-      type: inAppType,
-      title,
-      message: body,
-      actionUrl,
-      actionLabel: payload.jobId ? 'View job' : 'Open',
-      priority: 'high',
-      senderType: 'system',
-      customerId: payload.customerId || undefined,
-      sourceType: payload.jobId ? 'Job' : undefined,
-      sourceId: payload.jobId || undefined,
-    })
-  } catch (err) {
-    console.error('[sendJobNotification] in-app create failed:', err)
+  // 3. In-app notification (bell + inbox) — only when tenantId is resolved
+  //    (AppNotification.tenantId is a required FK). Push (below) fires
+  //    regardless because sendWebPushToUser handles null tenantId.
+  if (tenantId) {
+    try {
+      await createNotification({
+        tenantId,
+        recipientId: userId,
+        type: inAppType,
+        title,
+        message: body,
+        actionUrl,
+        actionLabel: payload.jobId ? 'View job' : 'Open',
+        priority: 'high',
+        senderType: 'system',
+        customerId: payload.customerId || undefined,
+        sourceType: payload.jobId ? 'Job' : undefined,
+        sourceId: payload.jobId || undefined,
+      })
+    } catch (err) {
+      console.error('[sendJobNotification] in-app create failed:', err)
+    }
   }
 
   // 4. Web Push (device notification)
@@ -704,7 +739,14 @@ export async function sendJobNotification(
     sendSmsChannel(payload, tenantId),
     sendEmailChannel(payload, tenantId),
   ]
-  if (userId && tenantId) {
+  // In-app + Web Push — fire whenever we have a userId. sendWebPushToUser
+  // gracefully handles a null tenantId (queries all subscriptions for that
+  // userId regardless of tenant), so we don't gate on tenantId here. This
+  // fixes the bug where employees never received push notifications because
+  // the tenantId was null (Job uses workspaceId, not tenantId, and the
+  // resolution previously short-circuited before looking up the Employee's
+  // real tenantId).
+  if (userId) {
     channels.push(sendInAppAndPushChannels(payload, userId, tenantId))
   }
   await Promise.allSettled(channels)
@@ -821,8 +863,11 @@ export async function notifyEmployeeJobStarted(
   employee: Record<string, unknown>
 ): Promise<void> {
   const employeePhone = (employee.phone as string) || (employee.whatsappId as string) || ''
-  if (!employeePhone) return
-
+  // NOTE: We no longer early-return when employeePhone is empty. Previously
+  // `if (!employeePhone) return` skipped ALL channels (including push + email
+  // + in-app) even though those channels don't need a phone number. Now we
+  // proceed — sendJobNotification() + sendWhatsAppChannel() handle the empty-
+  // phone case gracefully (WhatsApp/SMS are skipped, push/email/in-app fire).
   const jobNumber = getJobNumber(job)
   const checkInTime = formatTime(job.actualStartTime as string | null)
 
@@ -858,8 +903,11 @@ export async function notifyEmployeeJobCompleted(
   employee: Record<string, unknown>
 ): Promise<void> {
   const employeePhone = (employee.phone as string) || (employee.whatsappId as string) || ''
-  if (!employeePhone) return
-
+  // NOTE: We no longer early-return when employeePhone is empty. Previously
+  // `if (!employeePhone) return` skipped ALL channels (including push + email
+  // + in-app) even though those channels don't need a phone number. Now we
+  // proceed — sendJobNotification() + sendWhatsAppChannel() handle the empty-
+  // phone case gracefully (WhatsApp/SMS are skipped, push/email/in-app fire).
   const jobNumber = getJobNumber(job)
   const completedJobs = ((employee.completedJobs as number) || 0) + 1
 

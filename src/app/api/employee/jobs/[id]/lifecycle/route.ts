@@ -3,6 +3,19 @@ import { getAuthUser } from '@/lib/auth';
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveEmployee } from '@/app/api/employee/shift/route';
 import { validateJobCompletionProof } from '@/lib/job-completion-validation';
+import { EventBus } from '@/lib/event-bus';
+
+/**
+ * fireAndForget — runs a promise in the background, logging any rejection.
+ * Used for EventBus emits so they never block the HTTP response.
+ */
+function fireAndForget<T>(
+  label: string,
+  task: Promise<T> | (() => Promise<T>),
+): void {
+  const p = typeof task === 'function' ? task() : task;
+  p.catch((err) => console.error(`[EmployeeJobLifecycle] ${label} failed:`, err));
+}
 
 /**
  * POST /api/employee/jobs/[id]/lifecycle
@@ -113,6 +126,16 @@ export async function POST(
           }),
           actionUrl: `/jobs?id=${job.id}`,
         });
+        // Emit EventBus event so the lifecycle-push-dispatcher sends a push
+        // notification to the tenant owner/admins. Without this, employee
+        // self-service actions (accept/start/complete) only create in-app
+        // AppNotification rows — no push is delivered.
+        fireAndForget('job.accepted event', EventBus.emit('job.accepted', {
+          job: { id: updatedJob.id, jobNumber: updatedJob.jobNumber, title: updatedJob.title, status: updatedJob.status, priority: updatedJob.priority, type: updatedJob.type, address: updatedJob.address, customerName: updatedJob.customerName, customerPhone: updatedJob.customerPhone, assigneeName: updatedJob.assigneeName, assigneePhone: updatedJob.assigneePhone, workspaceId: updatedJob.workspaceId },
+          employee: { id: employee.id, name: employee.name, phone: employee.phone },
+          customer: job.customerPhone ? { name: job.customerName, phone: job.customerPhone } : null,
+          resourceType: 'job', resourceId: updatedJob.id,
+        }, { tenantId: user.tenantId || updatedJob.workspaceId || undefined, workspaceId: updatedJob.workspaceId || undefined }));
         break;
       }
 
@@ -164,6 +187,14 @@ export async function POST(
           }),
           actionUrl: `/jobs?id=${job.id}`,
         });
+        // Emit EventBus event so the lifecycle-push-dispatcher sends a push
+        // notification to the tenant owner/admins.
+        fireAndForget('job.started event', EventBus.emit('job.started', {
+          job: { id: updatedJob.id, jobNumber: updatedJob.jobNumber, title: updatedJob.title, status: updatedJob.status, priority: updatedJob.priority, type: updatedJob.type, address: updatedJob.address, customerName: updatedJob.customerName, customerPhone: updatedJob.customerPhone, assigneeName: updatedJob.assigneeName, assigneePhone: updatedJob.assigneePhone, workspaceId: updatedJob.workspaceId },
+          employee: { id: employee.id, name: employee.name, phone: employee.phone },
+          customer: job.customerPhone ? { name: job.customerName, phone: job.customerPhone } : null,
+          resourceType: 'job', resourceId: updatedJob.id,
+        }, { tenantId: user.tenantId || updatedJob.workspaceId || undefined, workspaceId: updatedJob.workspaceId || undefined }));
         break;
       }
 
@@ -434,6 +465,15 @@ export async function POST(
           }),
           actionUrl: `/jobs?id=${job.id}`,
         });
+        // Emit EventBus event so the lifecycle-push-dispatcher sends a push
+        // notification to the tenant owner/admins. Without this, the owner
+        // never gets a push when an employee completes a job from their portal.
+        fireAndForget('job.completed event', EventBus.emit('job.completed', {
+          job: { id: updatedJob.id, jobNumber: updatedJob.jobNumber, title: updatedJob.title, status: updatedJob.status, priority: updatedJob.priority, type: updatedJob.type, address: updatedJob.address, customerName: updatedJob.customerName, customerPhone: updatedJob.customerPhone, assigneeName: updatedJob.assigneeName, assigneePhone: updatedJob.assigneePhone, workspaceId: updatedJob.workspaceId },
+          employee: { id: employee.id, name: employee.name, phone: employee.phone },
+          customer: job.customerPhone ? { name: job.customerName, phone: job.customerPhone } : null,
+          resourceType: 'job', resourceId: updatedJob.id,
+        }, { tenantId: user.tenantId || updatedJob.workspaceId || undefined, workspaceId: updatedJob.workspaceId || undefined }));
         break;
       }
 

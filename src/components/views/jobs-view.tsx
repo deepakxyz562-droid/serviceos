@@ -1242,14 +1242,33 @@ export function JobsView() {
       const res = await fetch(`/api/jobs?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        // Server-side same-day grace: the Active endpoint now excludes
-        // completed jobs unless they were completed today, so they stay
-        // visible here for the rest of the calendar day and move to the
-        // History tab tomorrow. We keep a thin client-side safety net that
-        // also hides soft-deleted rows (defensive — the server already does
-        // this via includeDeleted=false).
+        // SAME-DAY GRACE (client-side, UTC-safe):
+        // A job completed TODAY stays in the Active list for the rest of the
+        // calendar day (so the tenant can still review/edit it immediately)
+        // and only moves to the History tab the next day.
+        //
+        // This is enforced client-side (not server-side) because the Supabase
+        // REST adapter cannot handle the nested OR / { not: ... } structure
+        // that a server-side filter would require. UTC is used for the day
+        // comparison so the grace window is consistent regardless of the
+        // user's local timezone (matching how the server stores timestamps).
+        const now = new Date();
         const allJobs = Array.isArray(data) ? data : [];
-        setJobs(allJobs.filter((j: Job) => !j.deletedAt));
+        setJobs(
+          allJobs.filter((j: Job) => {
+            if (j.deletedAt) return false;
+            if (j.status !== 'completed') return true;
+            // Completed job — keep only if completed today (UTC same-day).
+            const completedAt = j.completedAt || j.actualEndTime;
+            if (!completedAt) return false; // legacy row, no timestamp
+            const cd = new Date(completedAt);
+            return (
+              cd.getUTCFullYear() === now.getUTCFullYear() &&
+              cd.getUTCMonth() === now.getUTCMonth() &&
+              cd.getUTCDate() === now.getUTCDate()
+            );
+          })
+        );
       }
     } catch {
       setJobs([]);

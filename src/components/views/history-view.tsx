@@ -63,6 +63,7 @@ interface HistoryJob {
   customerName?: string | null;
   assigneeName?: string | null;
   completedAt?: string | null;
+  actualEndTime?: string | null;
   deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -100,16 +101,33 @@ export function JobHistoryTab({ onSelectJob }: { onSelectJob?: (jobId: string) =
   const fetchJobs = useCallback(async () => {
     setLoading(true);
     try {
-      // Fetch completed + soft-deleted jobs. The server now applies the
-      // same-day grace filter (history=true excludes completed-today jobs),
-      // so we no longer need to re-filter client-side. This keeps the Active
-      // list and History list in sync regardless of client clock / refetch
-      // races.
+      // Fetch ALL jobs (including soft-deleted + completed) with the lighter
+      // `select` (history=true). The same-day grace filter is applied
+      // client-side using UTC comparison so completed-today jobs stay in the
+      // Active list and only move to History the next day. This is enforced
+      // client-side because the Supabase REST adapter cannot handle the
+      // nested OR structure a server-side filter would require.
       const res = await fetch('/api/jobs?includeDeleted=true&history=true');
       if (res.ok) {
         const data = await res.json();
         const all = Array.isArray(data) ? data : [];
-        setJobs(all);
+        const now = new Date();
+        // SAME-DAY GRACE: show soft-deleted jobs OR completed jobs that were
+        // NOT completed today (UTC). Completed-today jobs stay in Active.
+        setJobs(
+          all.filter((j) => {
+            if (j.deletedAt) return true; // soft-deleted → always in history
+            if (j.status !== 'completed') return false; // active job → not in history
+            const completedAt = j.completedAt || j.actualEndTime;
+            if (!completedAt) return true; // legacy completed job with no timestamp
+            const cd = new Date(completedAt);
+            const isToday =
+              cd.getUTCFullYear() === now.getUTCFullYear() &&
+              cd.getUTCMonth() === now.getUTCMonth() &&
+              cd.getUTCDate() === now.getUTCDate();
+            return !isToday; // completed before today → show in history
+          })
+        );
       }
     } catch {
       setJobs([]);

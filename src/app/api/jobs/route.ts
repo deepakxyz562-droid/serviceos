@@ -133,61 +133,22 @@ export async function GET(request: NextRequest) {
     if (customerId) where.customerId = customerId
 
     // ── History vs Active filtering ───────────────────────────────────
-    // history=true  → only completed + soft-deleted jobs (for the History tab)
-    // includeDeleted=false → exclude soft-deleted jobs (for the Active list)
+    // history=true  → lighter `select` (no relations) + take limit for the
+    //                 History tab. Returns ALL jobs (including soft-deleted +
+    //                 completed) — the client applies the same-day grace filter
+    //                 so completed-today jobs stay in the Active list.
+    // includeDeleted=false → exclude soft-deleted jobs (simple `deletedAt: null`
+    //                 filter that works in both Prisma SQLite AND the Supabase
+    //                 REST adapter).
     //
-    // SAME-DAY GRACE (server-enforced so the Active list + History list always
-    // agree, regardless of client clock / refetch races):
-    //   - A job completed TODAY stays in the Active list for the rest of the
-    //     calendar day (so the tenant can still review/edit it immediately).
-    //   - It only moves to History the NEXT calendar day.
-    //   - Soft-deleted (archived) jobs always appear in History regardless.
-    // The completion timestamp used is `completedAt ?? actualEndTime` so legacy
-    // rows without `completedAt` still get the grace window via `actualEndTime`.
-    const startOfToday = new Date()
-    startOfToday.setHours(0, 0, 0, 0)
-
-    // We accumulate extra AND-clauses here so they compose safely with the
-    // search OR (which is set separately below) instead of overwriting it.
-    const andClauses: Record<string, unknown>[] = []
-
-    if (historyMode) {
-      // Completed (before today) OR soft-deleted — exclude completed-today
-      // jobs (grace). Soft-deleted jobs always show.
-      andClauses.push({
-        OR: [
-          { deletedAt: { not: null } },
-          {
-            status: 'completed',
-            OR: [
-              { completedAt: { lt: startOfToday } },
-              { completedAt: null, actualEndTime: { lt: startOfToday } },
-              { completedAt: null, actualEndTime: null },
-            ],
-          },
-        ],
-      })
-    } else if (excludeDeleted) {
-      andClauses.push({ deletedAt: null })
-      // Active list: exclude completed jobs UNLESS they were completed today.
-      // Completed-today jobs stay visible so the tenant can review/edit them
-      // immediately; they move to History the next calendar day.
-      andClauses.push({
-        OR: [
-          { status: { not: 'completed' } },
-          {
-            status: 'completed',
-            OR: [
-              { completedAt: { gte: startOfToday } },
-              { completedAt: null, actualEndTime: { gte: startOfToday } },
-            ],
-          },
-        ],
-      })
-    }
-
-    if (andClauses.length > 0) {
-      where.AND = [...(where.AND as unknown[] || []), ...andClauses]
+    // NOTE: The same-day grace filter (completed-today jobs stay in Active,
+    // move to History tomorrow) is enforced CLIENT-SIDE using UTC comparison.
+    // It was previously server-side, but the nested `OR` inside `OR` +
+    // `{ not: ... }` inside `OR` structure was incompatible with the Supabase
+    // REST adapter (which silently drops `{ not: ... }` conditions inside OR
+    // and can't handle nested OR), causing jobs to disappear in production.
+    if (excludeDeleted && !historyMode) {
+      where.deletedAt = null
     }
 
     if (search) {
