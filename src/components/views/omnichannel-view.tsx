@@ -1,28 +1,22 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   MessageSquare, Globe, Facebook, Instagram, Target, Phone,
-  Send, Search, Settings, Wifi, WifiOff, Users,
-  Plus, CheckCheck, Loader2,
+  Send, Search, Settings, Wifi, Users,
+  CheckCheck, Loader2,
   ExternalLink, Sparkles, X, Filter,
-  Inbox, Mail, MessageCircle, User,
+  Mail, MessageCircle, User,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Textarea } from '@/components/ui/textarea';
-import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { authFetch } from '@/lib/api';
 import { useAppStore } from '@/store/app-store';
 import { AutoReplyCard } from '@/components/settings/sections/auto-reply-card';
 
@@ -63,14 +57,6 @@ interface Conversation {
   lead?: LeadInfo;
   messages: ConversationMessage[];
   autoLeadCreated?: boolean;
-}
-
-interface ChannelConfigItem {
-  id: string;
-  type: ChannelType;
-  name: string;
-  connected: boolean;
-  config: Record<string, string>;
 }
 
 interface OmnichannelStats {
@@ -202,61 +188,7 @@ function getChannelMeta(channel: string) {
   return CHANNEL_META[channel] || DEFAULT_META;
 }
 
-const CHANNEL_CONFIG_FIELDS: Record<ChannelType, { key: string; label: string; type: string }[]> = {
-  website: [
-    { key: 'webhookUrl', label: 'Webhook URL', type: 'url' },
-    { key: 'embedCode', label: 'Embed Code', type: 'text' },
-  ],
-  facebook: [
-    { key: 'pageId', label: 'Page ID', type: 'text' },
-    { key: 'accessToken', label: 'Access Token', type: 'password' },
-  ],
-  instagram: [
-    { key: 'businessAccountId', label: 'Business Account ID', type: 'text' },
-    { key: 'accessToken', label: 'Access Token', type: 'password' },
-  ],
-  google_ads: [
-    { key: 'customerId', label: 'Google Ads Customer ID', type: 'text' },
-    { key: 'developerToken', label: 'Developer Token', type: 'password' },
-  ],
-  justdial: [
-    { key: 'apiKey', label: 'API Key', type: 'password' },
-    { key: 'listingId', label: 'Listing ID', type: 'text' },
-  ],
-  email: [
-    { key: 'smtpHost', label: 'SMTP Host', type: 'text' },
-    { key: 'smtpPassword', label: 'SMTP Password', type: 'password' },
-  ],
-  sms: [
-    { key: 'provider', label: 'SMS Provider', type: 'text' },
-    { key: 'apiKey', label: 'API Key', type: 'password' },
-  ],
-  phone: [
-    { key: 'phoneNumber', label: 'Phone Number', type: 'tel' },
-    { key: 'provider', label: 'Provider', type: 'text' },
-  ],
-  manual: [],
-  whatsapp: [
-    { key: 'phoneNumber', label: 'Phone Number', type: 'tel' },
-    { key: 'apiKey', label: 'API Key', type: 'password' },
-  ],
-};
-
 const ALL_CHANNELS: ChannelType[] = ['website', 'facebook', 'instagram', 'google_ads', 'justdial', 'whatsapp'];
-
-// Test data for creating leads per channel
-const TEST_CUSTOMERS: Record<ChannelType, { name: string; phone: string; message: string }> = {
-  website: { name: 'Rahul Verma', phone: '+91 87654 32109', message: 'What are your pricing plans for office cleaning?' },
-  facebook: { name: 'Anita Desai', phone: '', message: 'Do you offer pest control services in Bandra?' },
-  instagram: { name: 'Vikram Patel', phone: '', message: 'Loved your recent post! Can I book a home sanitization?' },
-  google_ads: { name: 'Meera Joshi', phone: '+91 76543 21098', message: 'I clicked your ad - need plumbing service urgently' },
-  justdial: { name: 'Suresh Kumar', phone: '+91 65432 10987', message: 'Found you on JustDial - need AC repair service' },
-  email: { name: 'Deepa Nair', phone: '', message: 'I am writing to inquire about your home cleaning packages' },
-  sms: { name: 'Arjun Reddy', phone: '+91 94321 87654', message: 'Need pest control service ASAP' },
-  phone: { name: 'Kavita Shah', phone: '+91 83210 76543', message: 'Calling to book a deep cleaning appointment' },
-  manual: { name: 'Ravi Menon', phone: '+91 72109 65432', message: 'Walk-in customer inquiry about plumbing services' },
-  whatsapp: { name: 'Priya Sharma', phone: '+91 98765 43210', message: 'I need a deep cleaning service for my 3BHK apartment' },
-};
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -312,28 +244,21 @@ function ChannelBadge({ channel, compact = false }: { channel: string; compact?:
 export function OmnichannelView() {
   // ── State ──
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [channels, setChannels] = useState<ChannelConfigItem[]>([]);
   const [stats, setStats] = useState<OmnichannelStats | null>(null);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [activeChannelFilter, setActiveChannelFilter] = useState<ChannelType | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [showConfigDialog, setShowConfigDialog] = useState(false);
-  const [showTestDialog, setShowTestDialog] = useState(false);
   const [messageInput, setMessageInput] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [sendingMessage, setSendingMessage] = useState(false);
-  const [ingestingChannel, setIngestingChannel] = useState<ChannelType | null>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
-  const [editConfig, setEditConfig] = useState<Record<string, string>>({});
-  const [configChannelId, setConfigChannelId] = useState<string | null>(null);
 
   // ── Data Loading ──
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [convRes, channelRes, statsRes] = await Promise.all([
+      const [convRes, statsRes] = await Promise.all([
         fetch(`${API_BASE}/conversations`),
-        fetch(`${API_BASE}/channels`),
         fetch(`${API_BASE}/stats`),
       ]);
 
@@ -341,13 +266,6 @@ export function OmnichannelView() {
         const convData = await convRes.json();
         if (Array.isArray(convData)) {
           setConversations(convData);
-        }
-      }
-
-      if (channelRes.ok) {
-        const channelData = await channelRes.json();
-        if (Array.isArray(channelData)) {
-          setChannels(channelData);
         }
       }
 
@@ -450,107 +368,6 @@ export function OmnichannelView() {
     setSendingMessage(false);
   };
 
-  const handleToggleChannel = async (channelId: string) => {
-    const channel = channels.find(c => c.id === channelId);
-    if (!channel) return;
-
-    const newConnected = !channel.connected;
-
-    setChannels(prev => prev.map(c =>
-      c.id === channelId ? { ...c, connected: newConnected } : c
-    ));
-
-    try {
-      const res = await fetch(`${API_BASE}/channels/${channelId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ connected: newConnected }),
-      });
-      if (res.ok) {
-        toast.success(newConnected ? `${channel.name} connected` : `${channel.name} disconnected`);
-      } else {
-        throw new Error('Failed');
-      }
-    } catch {
-      toast.error('Failed to update channel');
-      // Revert
-      setChannels(prev => prev.map(c =>
-        c.id === channelId ? { ...c, connected: !newConnected } : c
-      ));
-    }
-  };
-
-  const handleOpenConfig = (channelId: string) => {
-    const channel = channels.find(c => c.id === channelId);
-    if (!channel) return;
-    setConfigChannelId(channelId);
-    setEditConfig({ ...channel.config });
-    setShowConfigDialog(true);
-  };
-
-  const handleSaveConfig = async () => {
-    if (!configChannelId) return;
-    const channel = channels.find(c => c.id === configChannelId);
-    if (!channel) return;
-
-    // Optimistically update
-    setChannels(prev => prev.map(c =>
-      c.id === configChannelId ? { ...c, config: { ...editConfig } } : c
-    ));
-
-    try {
-      const res = await fetch(`${API_BASE}/channels/${configChannelId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config: editConfig }),
-      });
-      if (res.ok) {
-        toast.success(`${channel.name} configuration saved`);
-      } else {
-        throw new Error('Failed');
-      }
-    } catch {
-      toast.error('Failed to save configuration');
-    }
-
-    setShowConfigDialog(false);
-    setConfigChannelId(null);
-  };
-
-  const handleIngestTest = async (channelType: ChannelType) => {
-    const testData = TEST_CUSTOMERS[channelType];
-    if (!testData) return;
-
-    setIngestingChannel(channelType);
-    try {
-      const res = await fetch(`${API_BASE}/ingest`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          channel: channelType,
-          name: testData.name,
-          phone: testData.phone || undefined,
-          message: testData.message,
-        }),
-      });
-
-      if (res.ok) {
-        const result = await res.json();
-        toast.success(`Test lead created via ${getChannelMeta(channelType).label}${result.autoLeadCreated ? ' (auto-lead created!)' : ''}`);
-        setShowTestDialog(false);
-        // Reload data to show the new conversation
-        await loadData();
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        toast.error(errData.error || `Failed to ingest test lead via ${getChannelMeta(channelType).label}`);
-      }
-    } catch {
-      toast.error('Failed to ingest test lead');
-    } finally {
-      setIngestingChannel(null);
-    }
-  };
-
   // ── Render ──
 
   if (isLoading) {
@@ -603,11 +420,8 @@ export function OmnichannelView() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowTestDialog(true)}>
-              <Plus className="size-3.5 mr-1" /> Create Test Lead
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setShowConfigDialog(true)}>
-              <Settings className="size-3.5 mr-1" /> Configure
+            <Button variant="outline" size="sm" onClick={() => useAppStore.getState().setCurrentView('channels')}>
+              <Settings className="size-3.5 mr-1" /> Configure Channels
             </Button>
           </div>
         </div>
@@ -669,43 +483,17 @@ export function OmnichannelView() {
 
       {/* ── Empty State ── */}
       {isEmpty ? (
-        <div className="flex-1 flex items-center justify-center bg-slate-50 dark:bg-slate-950">
-          <div className="text-center max-w-md px-6">
-            <div className="flex items-center justify-center size-16 rounded-full bg-slate-100 dark:bg-slate-800 mx-auto mb-4">
-              <Inbox className="size-8 text-muted-foreground" />
-            </div>
-            <h3 className="text-lg font-semibold mb-2">No conversations yet</h3>
-            <p className="text-sm text-muted-foreground mb-6">
-              Start by creating a test lead from any channel, or connect your channels to receive incoming messages.
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {ALL_CHANNELS.map(ch => {
-                const meta = getChannelMeta(ch);
-                const Icon = meta.icon;
-                const isConnected = channels.find(c => c.type === ch)?.connected;
-                return (
-                  <Button
-                    key={ch}
-                    variant="outline"
-                    size="sm"
-                    className={cn('gap-1.5 h-auto py-2', isConnected ? meta.borderColor : '')}
-                    onClick={() => handleIngestTest(ch)}
-                    disabled={!!ingestingChannel}
-                  >
-                    {ingestingChannel === ch ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <Icon className="size-3.5" />
-                    )}
-                    {meta.label}
-                  </Button>
-                );
-              })}
-            </div>
-            <p className="text-xs text-muted-foreground mt-4">
-              Each test creates a conversation with auto-lead creation
-            </p>
+        <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+            <MessageSquare className="h-6 w-6 text-muted-foreground" />
           </div>
+          <h3 className="mb-2 text-lg font-semibold">No conversations yet</h3>
+          <p className="mb-6 max-w-sm text-sm text-muted-foreground">
+            Connect a channel (WhatsApp, SMS, Email, Web Chat) to start receiving customer messages here.
+          </p>
+          <Button onClick={() => useAppStore.getState().setCurrentView('channels')}>
+            <Settings className="size-3.5 mr-2" /> Configure Channels
+          </Button>
         </div>
       ) : (
         /* ── 3-Column Layout ── */
@@ -1089,14 +877,6 @@ export function OmnichannelView() {
                       <CardTitle className="text-sm font-semibold">Quick Actions</CardTitle>
                     </CardHeader>
                     <CardContent className="px-4 pb-4 space-y-2">
-                      {!selectedConversation.lead && (
-                        <Button variant="outline" size="sm" className="w-full justify-start gap-2" onClick={() => {
-                          handleIngestTest(selectedConversation.channel);
-                        }} disabled={!!ingestingChannel}>
-                          {ingestingChannel ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
-                          Create Lead
-                        </Button>
-                      )}
                       <Button variant="outline" size="sm" className="w-full justify-start gap-2">
                         <MessageSquare className="size-3.5" />
                         Send WhatsApp
@@ -1113,144 +893,6 @@ export function OmnichannelView() {
           </div>
         </div>
       )}
-
-      {/* ── Create Test Lead Dialog ── */}
-      <Dialog open={showTestDialog} onOpenChange={setShowTestDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Create Test Lead</DialogTitle>
-            <DialogDescription>
-              Create a test lead from any channel to see how the omnichannel inbox works with auto-lead creation.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid grid-cols-2 gap-3 py-4">
-            {ALL_CHANNELS.map(ch => {
-              const meta = getChannelMeta(ch);
-              const Icon = meta.icon;
-              const isRunning = ingestingChannel === ch;
-              return (
-                <Button
-                  key={ch}
-                  variant="outline"
-                  className={cn('h-auto py-3 flex flex-col items-center gap-2', meta.borderColor)}
-                  onClick={() => handleIngestTest(ch)}
-                  disabled={!!ingestingChannel}
-                >
-                  {isRunning ? (
-                    <Loader2 className="size-5 animate-spin" />
-                  ) : (
-                    <div className={cn('size-10 rounded-full flex items-center justify-center', meta.bgColor)}>
-                      <Icon className={cn('size-5', meta.textColor)} />
-                    </div>
-                  )}
-                  <span className="text-xs font-medium">{meta.label}</span>
-                </Button>
-              );
-            })}
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowTestDialog(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Channel Configuration Dialog ── */}
-      <Dialog open={showConfigDialog} onOpenChange={setShowConfigDialog}>
-        <DialogContent className="sm:max-w-2xl max-h-[80vh]">
-          <DialogHeader>
-            <DialogTitle>Configure Channels</DialogTitle>
-            <DialogDescription>
-              Connect and configure your messaging channels. Connected channels will automatically create leads from incoming messages.
-            </DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="max-h-[60vh] pr-2">
-            <div className="space-y-4 py-4">
-              {channels.map(ch => {
-                const meta = getChannelMeta(ch.type);
-                const Icon = meta.icon;
-                const configFields = CHANNEL_CONFIG_FIELDS[ch.type as ChannelType];
-                const isEditing = configChannelId === ch.id;
-
-                return (
-                  <Card key={ch.id} className="shadow-none">
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className={cn('size-10 rounded-full flex items-center justify-center', meta.bgColor)}>
-                            <Icon className={cn('size-5', meta.textColor)} />
-                          </div>
-                          <div>
-                            <p className="font-medium text-sm">{ch.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {ch.connected ? 'Connected' : 'Disconnected'}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Switch
-                            checked={ch.connected}
-                            onCheckedChange={() => handleToggleChannel(ch.id)}
-                          />
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              if (isEditing) {
-                                handleSaveConfig();
-                              } else {
-                                handleOpenConfig(ch.id);
-                              }
-                            }}
-                          >
-                            {isEditing ? 'Save' : <Settings className="size-4" />}
-                          </Button>
-                        </div>
-                      </div>
-
-                      {isEditing && configFields && (
-                        <div className="space-y-3 border-t pt-3">
-                          {configFields.map(field => (
-                            <div key={field.key} className="space-y-1">
-                              <Label className="text-xs">{field.label}</Label>
-                              <Input
-                                type={field.type}
-                                value={editConfig[field.key] || ''}
-                                onChange={e => setEditConfig(prev => ({ ...prev, [field.key]: e.target.value }))}
-                                className="h-8 text-sm"
-                              />
-                            </div>
-                          ))}
-                          <div className="flex justify-end gap-2">
-                            <Button variant="ghost" size="sm" onClick={() => setConfigChannelId(null)}>
-                              Cancel
-                            </Button>
-                            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={handleSaveConfig}>
-                              Save Config
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-
-                      {!ch.connected && !isEditing && (
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
-                          <WifiOff className="size-3" />
-                          <span>Connect to start receiving messages</span>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          </ScrollArea>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => {
-              setShowConfigDialog(false);
-              setConfigChannelId(null);
-            }}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

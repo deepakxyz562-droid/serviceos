@@ -113,7 +113,7 @@ const PACKS: IndustryPack[] = [
   },
   {
     id: 'landscaping-pro', name: 'Landscaping Pro Pack', industry: 'Landscaping',
-    description: 'Lawn care and landscaping operations — route optimization, seasonal service plans, crew dispatch, and equipment maintenance schedules.',
+    description: 'Lawn care and landscaping operations — smart auto-dispatch, seasonal service plans, crew dispatch, and equipment maintenance schedules.',
     icon: Trees, gradient: 'from-green-500/20 to-green-500/5', iconColor: 'text-green-600 dark:text-green-400',
     templates: 19, workflows: 6, forms: 9, rating: 4.7, installs: '1.0K', installsRaw: 1000, price: 39,
   },

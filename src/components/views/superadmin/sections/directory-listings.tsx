@@ -107,6 +107,10 @@ interface SeedResult {
   failed: number;
   total: number;
   osmElements?: number;
+  // Categories that returned 0 OSM elements (HTTP 200 with an empty array —
+  // NOT thrown errors). Surfaced by the API so the UI can render an amber
+  // warning instead of a misleading green success banner with 0 inserts.
+  emptyCategories?: string[];
   sample: { name: string; industry: string; city: string }[];
   error?: string;
 }
@@ -345,21 +349,43 @@ function SeedTab() {
           {!loading && result && (
             <div className="space-y-4">
               {result.success ? (
-                <div className="flex items-start gap-3 p-3 rounded-md border border-emerald-500/30 bg-emerald-500/10">
-                  <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-                  <div className="text-sm">
-                    <p className="font-medium text-emerald-700 dark:text-emerald-300">Seeding complete</p>
-                    <p className="text-muted-foreground mt-0.5">
-                      Inserted <strong>{result.inserted}</strong>, skipped{' '}
-                      <strong>{result.skipped}</strong> duplicates, failed{' '}
-                      <strong>{result.failed}</strong>
-                      {typeof result.osmElements === 'number' && (
-                        <> · {result.osmElements} OSM elements fetched</>
+                // Bug D: when Overpass returned 0 OSM elements (HTTP 200 with
+                // empty array) and nothing threw, render an amber warning
+                // instead of a misleading green "success" banner with 0 inserts.
+                (result.osmElements ?? 0) === 0 && result.failed === 0 ? (
+                  <div className="flex items-start gap-3 p-3 rounded-md border border-amber-500/30 bg-amber-500/10">
+                    <AlertTriangle className="size-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div className="text-sm">
+                      <p className="font-medium text-amber-700 dark:text-amber-300">No OSM data found</p>
+                      <p className="text-muted-foreground mt-0.5">
+                        No OSM data found for the selected categories in this
+                        city. Try different categories or a nearby major city.
+                      </p>
+                      {result.emptyCategories && result.emptyCategories.length > 0 && (
+                        <p className="text-xs text-muted-foreground mt-1.5">
+                          Categories with 0 results:{' '}
+                          {result.emptyCategories.map(industryLabel).join(', ')}
+                        </p>
                       )}
-                      .
-                    </p>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-start gap-3 p-3 rounded-md border border-emerald-500/30 bg-emerald-500/10">
+                    <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                    <div className="text-sm">
+                      <p className="font-medium text-emerald-700 dark:text-emerald-300">Seeding complete</p>
+                      <p className="text-muted-foreground mt-0.5">
+                        Inserted <strong>{result.inserted}</strong>, skipped{' '}
+                        <strong>{result.skipped}</strong> duplicates, failed{' '}
+                        <strong>{result.failed}</strong>
+                        {typeof result.osmElements === 'number' && (
+                          <> · {result.osmElements} OSM elements fetched</>
+                        )}
+                        .
+                      </p>
+                    </div>
+                  </div>
+                )
               ) : (
                 <div className="flex items-start gap-3 p-3 rounded-md border border-red-500/30 bg-red-500/10">
                   <AlertTriangle className="size-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />

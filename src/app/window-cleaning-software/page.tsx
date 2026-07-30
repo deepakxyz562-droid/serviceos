@@ -20,7 +20,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Window Cleaning Software — Routes, Photo Proof & Storefront Billing | ServiceOS",
   description:
-    "Window cleaning software for recurring route optimization, height-access safety checklists, before-and-after photo proof, and storefront contract billing. Start free today.",
+    "Window cleaning software for recurring smart auto-dispatch, height-access safety checklists, before-and-after photo proof, and storefront contract billing. Start free today.",
   keywords: [
     "window cleaning software",
     "window cleaning CRM",
@@ -116,7 +116,7 @@ export default function WindowCleaningSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "ServiceOS — Window Cleaning Business Software",
     description:
-      "Window cleaning CRM and route software with recurring route optimization, height-access safety checklists, before-and-after photo proof, storefront contract billing, and surcharge quoting.",
+      "Window cleaning CRM and route software with recurring smart auto-dispatch, height-access safety checklists, before-and-after photo proof, storefront contract billing, and surcharge quoting.",
     url: "https://serviceos.com/window-cleaning-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
@@ -136,7 +136,7 @@ export default function WindowCleaningSoftwarePage() {
       <CornerstoneHero
         eyebrow="Window Cleaning Software"
         title="Window Cleaning Software That Tightens Routes, Protects Against Disputes, and Bills Storefronts on Autopilot"
-        subtitle="From recurring residential route optimization to height-access safety checklists, photo proof, and storefront contract billing, ServiceOS is the window cleaning CRM built for crews on the move."
+        subtitle="From recurring residential smart auto-dispatch to height-access safety checklists, photo proof, and storefront contract billing, ServiceOS is the window cleaning CRM built for crews on the move."
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link

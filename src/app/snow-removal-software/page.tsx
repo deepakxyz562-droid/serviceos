@@ -21,13 +21,13 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Snow Removal Software — Auto-Dispatch, Per-Inch Billing & Proof of Service | ServiceOS",
   description:
-    "Snow and ice management software for weather-triggered auto-dispatch, per-inch and seasonal contract billing, salt inventory tracking, plow route optimization, and 24-hour proof-of-service logs. Start free today.",
+    "Snow and ice management software for weather-triggered auto-dispatch, per-inch and seasonal contract billing, salt inventory tracking, plow smart auto-dispatch, and 24-hour proof-of-service logs. Start free today.",
   keywords: [
     "snow removal software",
     "snow plow software",
     "snow and ice management software",
     "snow removal CRM",
-    "plow route optimization",
+    "plow smart auto-dispatch",
   ],
   alternates: { canonical: "https://serviceos.com/snow-removal-software" },
   openGraph: {
@@ -62,7 +62,7 @@ const features: Feature[] = [
   },
   {
     icon: Truck,
-    title: "Plow Route Optimization",
+    title: "Plow Smart Auto-Dispatch",
     description:
       "ServiceOS optimizes plow routes by service area, priority (hospital vs. retail vs. residential), and equipment (truck plow vs. skid steer vs. salt spreader). Each driver gets an ordered route on their phone with turn-by-turn directions between properties.",
   },
@@ -97,7 +97,7 @@ const faqs = [
       "Salt is one of the biggest variable costs in snow removal, and it's notoriously hard to track — spreaders don't measure precisely, drivers over-apply, and inventory shrinks. ServiceOS lets drivers log salt load-outs and application amounts per property, tracks inventory across your yard and each truck, and flags when stock is running low before the next storm. Salt usage flows onto per-inch and per-service invoices where applicable, so you're not eating material costs on seasonal contracts that didn't budget for them. Most snow operators recover 10–20% in salt cost in the first season of accurate tracking.",
   },
   {
-    question: "How does plow route optimization work?",
+    question: "How does plow smart auto-dispatch work?",
     answer:
       "ServiceOS clusters your service properties by area and priority — hospitals and emergency facilities first, then commercial lots, then residential drives — and optimizes the driving order within each cluster based on equipment type (truck plow, skid steer, salt spreader). Each driver sees their ordered route on their phone with turn-by-turn directions between properties, and completed stops check off automatically based on GPS. When a route falls behind in a storm, you can see the backlog and redirect a nearby crew in real time — instead of discovering at sunrise that a whole neighborhood didn't get plowed.",
   },
@@ -117,7 +117,7 @@ export default function SnowRemovalSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "ServiceOS — Snow Removal Business Software",
     description:
-      "Snow and ice management CRM software with weather-triggered auto-dispatch, per-inch and seasonal contract billing, salt inventory tracking, plow route optimization, crew GPS tracking, and 24-hour proof-of-service logs.",
+      "Snow and ice management CRM software with weather-triggered auto-dispatch, per-inch and seasonal contract billing, salt inventory tracking, plow smart auto-dispatch, crew GPS tracking, and 24-hour proof-of-service logs.",
     url: "https://serviceos.com/snow-removal-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },

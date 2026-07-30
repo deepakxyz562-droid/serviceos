@@ -159,7 +159,7 @@ const howItWorksSteps = [
     step: 2,
     title: 'Dispatch & Track Jobs',
     subtitle: 'Smart Routing · Real-time',
-    description: 'Assign jobs to the nearest available technician with route optimization, live status tracking, and automated customer notifications.',
+    description: 'Assign jobs to the nearest available technician with smart auto-dispatch, live status tracking, and automated customer notifications.',
     icon: Route,
     image: '/images/landing/step-dispatch.png',
   },
@@ -198,7 +198,7 @@ const featurePillars = [
     title: 'Operations & Dispatch',
     tagline: 'Run jobs like clockwork',
     image: '/images/landing/pillar-operations.png',
-    features: ['Bookings & calendar', 'Smart dispatch center', 'Route optimization', 'Employee timesheets', 'Service catalog & checklists', 'Job status tracking'],
+    features: ['Bookings & calendar', 'Smart dispatch center', 'Smart auto-dispatch', 'Employee timesheets', 'Service catalog & checklists', 'Job status tracking'],
   },
   {
     icon: Inbox,

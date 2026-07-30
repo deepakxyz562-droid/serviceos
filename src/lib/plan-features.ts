@@ -76,7 +76,7 @@ export const PLAN_FEATURE_DEFS: PlanFeatureDef[] = [
   { key: 'retargeting', label: 'Retargeting', description: 'Audience retargeting rules', category: 'automation' },
   { key: 'journey_automation', label: 'Journey Automation', description: 'Customer journey automation', category: 'automation' },
 
-  // ── Operations — starter+ (route optimization business+) ─────────────────
+  // ── Operations — starter+ ─────────────────────────────────────────────────
   { key: 'dispatch_board', label: 'Dispatch Board', description: 'Visual dispatch + assignment board', category: 'operations' },
   { key: 'gps_tracking', label: 'GPS Tracking', description: 'Live field-staff GPS tracking', category: 'operations' },
   { key: 'customer_portal', label: 'Customer Portal', description: 'Customer-facing portal for bookings + invoices', category: 'operations' },
@@ -87,7 +87,11 @@ export const PLAN_FEATURE_DEFS: PlanFeatureDef[] = [
   { key: 'digital_signatures', label: 'Digital Signatures', description: 'Collect signatures on quotes, invoices, waivers', category: 'operations' },
   { key: 'before_after_photos', label: 'Before/After Photos', description: 'Photo documentation on jobs', category: 'operations' },
   { key: 'checklists', label: 'Checklists', description: 'Job + QA checklists', category: 'operations' },
-  { key: 'route_optimization', label: 'Route Optimization', description: 'Optimize multi-stop routes for field staff', category: 'operations' },
+  // NOTE: `route_optimization` flag retained for backwards-compat with seeded PlanFeatureMatrix
+  // rows, but is DISABLED on every tier (the standalone route-optimization-view.tsx was a stub
+  // and has been deleted). The real, working feature is Smart Auto-Dispatch (see dispatch-view
+  // + /api/dispatch/smart), which is gated by `dispatch_board` + `gps_tracking` instead.
+  { key: 'route_optimization', label: 'Smart Auto-Dispatch', description: 'Auto-assign jobs to the nearest available technician', category: 'operations' },
 
   // ── Finance — starter+ ───────────────────────────────────────────────────
   { key: 'online_payments', label: 'Online Payments', description: 'Card + PayPal payments via checkout links', category: 'finance' },
@@ -151,7 +155,9 @@ export const DEFAULT_PLAN_MATRIX: Record<PlanTier, Record<string, boolean>> = {
     // Automation (workflows only — so trial users can experiment)
     workflows: true, form_builder: false, marketing_campaigns: false, broadcast: false,
     customer_segments: false, template_studio: false, retargeting: false, journey_automation: false,
-    // Operations (all basic — excludes route_optimization which is business+)
+    // Operations (all basic — route_optimization is disabled on every tier; the standalone
+    // route-optimization-view.tsx was a stub and has been deleted. Real auto-dispatch lives in
+    // dispatch-view via /api/dispatch/smart, gated by dispatch_board + gps_tracking.)
     // dispatch_board + gps_tracking are growth+/business+ per tier model (solo operator doesn't need them)
     dispatch_board: false, gps_tracking: false, customer_portal: true, employee_portal: true,
     online_booking: true, time_tracking: true, expenses: true, digital_signatures: true,
@@ -208,7 +214,8 @@ export const DEFAULT_PLAN_MATRIX: Record<PlanTier, Record<string, boolean>> = {
     document_center: true, role_permissions: false, advanced_reports: false,
     data_retention: false, advanced_security: false,
   },
-  // Business — adds AI Receptionist, SMS numbers, inventory, route opt, RBAC, reports
+  // Business — adds AI Receptionist, SMS numbers, inventory, RBAC, reports
+  // (route_optimization stays false — see note above the trial block; the dead stub view is gone)
   business: {
     customers: true, leads: true, jobs: true, quotes: true, invoices: true,
     reports: true, customer_360: true, sales_pipeline: true, reviews: true,
@@ -220,7 +227,7 @@ export const DEFAULT_PLAN_MATRIX: Record<PlanTier, Record<string, boolean>> = {
     customer_segments: true, template_studio: true, retargeting: false, journey_automation: false,
     dispatch_board: true, gps_tracking: true, customer_portal: true, employee_portal: true,
     online_booking: true, time_tracking: true, expenses: true, digital_signatures: true,
-    before_after_photos: true, checklists: true, route_optimization: true,
+    before_after_photos: true, checklists: true, route_optimization: false,
     online_payments: true, recurring_invoices: true, service_plans: true, warranties: true,
     tax_rules: true, multi_currency: true,
     inventory: true, purchase_orders: true, recurring_jobs: true,
@@ -229,6 +236,7 @@ export const DEFAULT_PLAN_MATRIX: Record<PlanTier, Record<string, boolean>> = {
     data_retention: false, advanced_security: false,
   },
   // Enterprise — adds white-label, data retention, advanced security
+  // (route_optimization stays false — see note above the trial block; the dead stub view is gone)
   enterprise: {
     customers: true, leads: true, jobs: true, quotes: true, invoices: true,
     reports: true, customer_360: true, sales_pipeline: true, reviews: true,
@@ -240,7 +248,7 @@ export const DEFAULT_PLAN_MATRIX: Record<PlanTier, Record<string, boolean>> = {
     customer_segments: true, template_studio: true, retargeting: false, journey_automation: false,
     dispatch_board: true, gps_tracking: true, customer_portal: true, employee_portal: true,
     online_booking: true, time_tracking: true, expenses: true, digital_signatures: true,
-    before_after_photos: true, checklists: true, route_optimization: true,
+    before_after_photos: true, checklists: true, route_optimization: false,
     online_payments: true, recurring_invoices: true, service_plans: true, warranties: true,
     tax_rules: true, multi_currency: true,
     inventory: true, purchase_orders: true, recurring_jobs: true,

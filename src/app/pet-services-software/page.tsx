@@ -108,7 +108,7 @@ const faqs = [
   {
     question: "Can ServiceOS handle mobile grooming in addition to walking and sitting?",
     answer:
-      "Yes. Mobile grooming is a slightly different workflow — appointments are longer, the groomer drives a fully equipped van, and the job includes a documented service menu — but it fits cleanly into the same ServiceOS platform. The groomer's schedule is built the same way a walker's is, with route optimization between appointments. The pet profile carries grooming-specific notes — coat type, last groom, skin conditions, behavior during grooming — so a new groomer covering a route has everything they need. Billing works the same way, either as a one-time invoice per groom or as a recurring subscription for customers who book every six weeks. A pet services company running all three lines — walking, sitting, and mobile grooming — sees everything on one dispatch board.",
+      "Yes. Mobile grooming is a slightly different workflow — appointments are longer, the groomer drives a fully equipped van, and the job includes a documented service menu — but it fits cleanly into the same ServiceOS platform. The groomer's schedule is built the same way a walker's is, with smart auto-dispatch between appointments. The pet profile carries grooming-specific notes — coat type, last groom, skin conditions, behavior during grooming — so a new groomer covering a route has everything they need. Billing works the same way, either as a one-time invoice per groom or as a recurring subscription for customers who book every six weeks. A pet services company running all three lines — walking, sitting, and mobile grooming — sees everything on one dispatch board.",
   },
 ];
 

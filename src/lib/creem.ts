@@ -30,11 +30,22 @@
  * supported by Creem when you don't want to pre-create a product for every
  * price point.
  *
- * ── API assumptions (Creem docs were not fetchable in this sandbox) ────────
- *   Base URL:        https://api.creem.io
- *   Auth header:     x-api-key: <apiKey>
- *   Create session:  POST /v1/checkout/sessions
- *   List products:   GET  /v1/products   (used by the "Test Connection" button)
+ * ── API spec (verified against https://docs.creem.io/api-reference) ──────────
+ *   Base URL:        https://api.creem.io (live) / https://test-api.creem.io (test)
+ *                    Host is selected by key prefix: `creem_test_*` → test host.
+ *   Auth header:     x-api-key: <apiKey>   (API keys start with `creem_`)
+ *   Idempotency:     Idempotency-Key: <string>  (optional, recommended on writes)
+ *   Create session:  POST /v1/checkouts
+ *   Create product:  POST /v1/products
+ *                    Body: { name, description, price (cents), currency,
+ *                            billing_type: "recurring"|"onetime",
+ *                            billing_period: "every-month"|"every-year"|...,
+ *                            tax_mode: "inclusive"|"exclusive",
+ *                            tax_category: "saas"|... }
+ *                    `price` is an integer in CENTS (e.g. $29 → 2900).
+ *                    Must be 0 (free) or >= 100 (>= $1.00).
+ *   List products:   GET  /v1/products?product_id=<id>
+ *                    (used by the "Test Connection" button — 404 proves auth OK)
  *   Webhook header:  creem-signature: <hex HMAC-SHA256 of raw body>
  *   Webhook events:  checkout.session.completed, subscription.active,
  *                    subscription.canceled, subscription.updated
@@ -42,11 +53,12 @@
  *                    (Creem may also send `{ type, data: { object } }` —
  *                     the webhook route normalises both shapes.)
  *
- * These assumptions follow the Stripe / Paddle merchant-of-record convention.
- * If the live Creem API differs, adjust the request/response handling here —
- * the rest of the app (API routes, UI) does not depend on the wire format.
+ * NOTE: API keys (`creem_...`) and webhook secrets (`whsec_...`) are DIFFERENT
+ * credentials. The API key authenticates outbound API calls; the webhook secret
+ * verifies inbound webhook signatures. Confusing the two is the most common
+ * setup mistake — the superadmin UI clarifies the distinction inline.
  */
-import { createHmac, timingSafeEqual } from 'crypto';
+import { createHmac, timingSafeEqual, randomUUID } from 'crypto';
 import { db } from '@/lib/db';
 import { getPlanByCode } from '@/lib/billing-seed';
 import { logger } from '@/lib/logger';
@@ -308,24 +320,59 @@ export function verifyCreemWebhookSignature(
 
 // ─── Product creation ────────────────────────────────────────────────────────
 
+/**
+ * Creem `billing_type` enum — verified against the Create Product API docs.
+ * - `recurring` → a subscription that bills on a `billing_period` schedule.
+ * - `onetime`   → a one-off purchase (no `billing_period` needed).
+ */
+export type CreemBillingType = 'recurring' | 'onetime';
+
+/**
+ * Creem `billing_period` enum — verified against the Create Product API docs.
+ * Only meaningful when `billing_type` = `recurring`.
+ */
+export type CreemBillingPeriod =
+  | 'once'
+  | 'every-day'
+  | 'every-month'
+  | 'every-three-months'
+  | 'every-six-months'
+  | 'every-year';
+
 export interface CreateCreemProductInput {
-  /** Human-readable product name, e.g. "ServiceOS Growth — Monthly". */
+  /** Human-readable product name, e.g. "ServiceOS Professional — Monthly". */
   name: string;
-  /** Optional long-form description shown in the Creem dashboard. */
-  description?: string;
+  /**
+   * REQUIRED by the Creem API — long-form description shown in the Creem
+   * dashboard. The function throws early if this is missing/empty so the
+   * caller gets a clear validation message rather than an HTTP 400.
+   */
+  description: string;
+  /**
+   * Price in MAJOR currency units (e.g. `29` for $29, `0.29` for $0.29).
+   * The function converts this to CENTS internally (`priceInDollars * 100`)
+   * because Creem's `price` field is an integer in the smallest currency
+   * unit. Free products are sent as `price: 0`.
+   */
+  priceInDollars: number;
+  /** ISO currency code, e.g. 'USD' or 'EUR'. Sent as a TOP-LEVEL field. */
+  currency: string;
+  /** Creem billing_type — 'recurring' (subscription) or 'onetime' (one-off). */
+  billingType: CreemBillingType;
+  /**
+   * Required when `billingType`='recurring'. Creem enum:
+   * 'once' | 'every-day' | 'every-month' | 'every-three-months' |
+   * 'every-six-months' | 'every-year'.
+   */
+  billingPeriod?: CreemBillingPeriod;
   /** Tax mode — default 'exclusive' (tax added on top at checkout). */
   taxMode?: 'inclusive' | 'exclusive';
   /**
-   * Creem may require billing_type at product creation time — pass it through.
-   * Defaults to 'recurring' (we only use Creem for subscriptions).
+   * Optional idempotency key — sent as the `Idempotency-Key` header so the
+   * admin can safely retry "Create All" without creating duplicate products.
+   * Defaults to a per-call UUID.
    */
-  billingType?: 'one_time' | 'recurring';
-  /** Price in MAJOR currency units (e.g. 29.00 for $29). */
-  priceAmount?: number;
-  /** ISO currency code, e.g. 'USD'. */
-  priceCurrency?: string;
-  /** For recurring products, the billing interval. Defaults to 'month'. */
-  billingInterval?: 'month' | 'year';
+  idempotencyKey?: string;
 }
 
 export interface CreateCreemProductResult {
@@ -338,16 +385,25 @@ export interface CreateCreemProductResult {
 /**
  * Create a Creem Product via `POST /v1/products`.
  *
- * Uses the merchant-of-record convention (similar to Paddle / Lemon Squeezy):
- *   - `name`, `description`, `tax_mode`, `billing_type` at the top level
- *   - `prices` array with one entry specifying amount (major units), currency,
- *     and — for recurring products — `interval` + `interval_count`.
+ * Verified against the official Creem API docs
+ * (https://docs.creem.io/api-reference/endpoint/create-product):
+ *   - `name`, `description`, `price`, `currency`, `billing_type` are all
+ *     REQUIRED top-level fields.
+ *   - `price` is an INTEGER in CENTS — e.g. $29 → `2900`, $0.29 → `29`.
+ *     Must be `0` (free product) or `>= 100` (>= $1.00); values 1–99 are
+ *     rejected by Creem with HTTP 400.
+ *   - `currency` is a TOP-LEVEL field (NOT inside a `prices[]` array).
+ *     Enum: `"USD"` | `"EUR"`.
+ *   - `billing_type` enum: `"recurring"` | `"onetime"`.
+ *   - `billing_period` is REQUIRED when `billing_type`="recurring". Enum:
+ *     `"once"` | `"every-day"` | `"every-month"` | `"every-three-months"` |
+ *     `"every-six-months"` | `"every-year"`.
+ *   - `tax_mode` enum: `"inclusive"` | `"exclusive"` (default `exclusive`).
+ *   - `tax_category` enum: `"saas"` | `"digital-goods-service"` | `"ebooks"`.
+ *     We send `"saas"` for all ServiceOS products (recommended for SaaS).
  *
- * NOTE: Creem's exact API shape was not fetchable in this sandbox; this
- * function follows the merchant-of-record convention. If the live Creem API
- * differs (e.g. it accepts a flat `price` field instead of a `prices` array),
- * only this function needs adjusting — callers receive `{ productId, raw }`
- * and do not depend on the wire format.
+ * Auth: `x-api-key: <apiKey>` header. Idempotency: `Idempotency-Key: <string>`
+ * header (recommended so retries don't duplicate products).
  *
  * Throws a clear Error on non-2xx with the response body included.
  */
@@ -361,50 +417,52 @@ export async function createCreemProduct(
     );
   }
 
-  const billingType = input.billingType ?? 'recurring';
-  const taxMode = input.taxMode ?? 'exclusive';
-  const currency = input.priceCurrency ?? 'USD';
+  // ── Validate required fields BEFORE calling Creem ───────────────────────
+  // Creem's API returns a generic 400 for missing `description`, so we throw
+  // a clearer error here to make debugging easier.
+  if (!input.description || input.description.trim().length === 0) {
+    throw new Error(
+      `createCreemProduct: \`description\` is required by the Creem API and cannot be empty (product "${input.name}").`
+    );
+  }
+  if (input.billingType === 'recurring' && !input.billingPeriod) {
+    throw new Error(
+      `createCreemProduct: \`billingPeriod\` is required when billingType='recurring' (product "${input.name}"). ` +
+        `Use one of: every-day, every-month, every-three-months, every-six-months, every-year.`
+    );
+  }
 
-  // ── Build the POST /v1/products request body ───────────────────────────
-  // Assumed shape (merchant-of-record convention):
-  //   {
-  //     "name": "ServiceOS Growth — Monthly",
-  //     "description": "...",
-  //     "tax_mode": "exclusive",
-  //     "billing_type": "recurring",
-  //     "prices": [
-  //       {
-  //         "amount": 29,
-  //         "currency": "USD",
-  //         "type": "recurring",
-  //         "interval": "month",
-  //         "interval_count": 1
-  //       }
-  //     ]
-  //   }
+  const billingType = input.billingType;
+  const taxMode = input.taxMode ?? 'exclusive';
+  const currency = input.currency ?? 'USD';
+
+  // Convert price from MAJOR units (dollars) to CENTS — Creem's `price` field
+  // is an integer in the smallest currency unit. e.g. $29 → 2900, $0.29 → 29.
+  // Free products are sent as 0. Values 1–99 are rejected by Creem.
+  const priceCents = Math.round(input.priceInDollars * 100);
+
+  // ── Build the POST /v1/products request body (verified against docs) ────
+  // Required:  name, description, price (cents), currency, billing_type
+  // Optional:  billing_period (required when billing_type=recurring),
+  //            tax_mode, tax_category, image_url, etc.
   const body: Record<string, unknown> = {
     name: input.name,
-    tax_mode: taxMode,
+    description: input.description,
+    price: priceCents,
+    currency,
     billing_type: billingType,
+    tax_mode: taxMode,
+    // Recommended for SaaS subscriptions so Creem applies the correct tax
+    // rules in supported jurisdictions.
+    tax_category: 'saas',
   };
-  if (input.description) body.description = input.description;
-
-  // Attach the price as a single-element `prices` array. Creem's MoR convention
-  // (like Paddle / Lemon Squeezy) attaches prices to the product at creation
-  // time. If Creem's actual API accepts a flat `price` field instead, this is
-  // the only block that needs to change.
-  if (input.priceAmount !== undefined && input.priceAmount > 0) {
-    const priceEntry: Record<string, unknown> = {
-      amount: input.priceAmount,
-      currency,
-      type: billingType,
-    };
-    if (billingType === 'recurring') {
-      priceEntry.interval = input.billingInterval ?? 'month';
-      priceEntry.interval_count = 1;
-    }
-    body.prices = [priceEntry];
+  if (billingType === 'recurring') {
+    body.billing_period = input.billingPeriod;
   }
+
+  // Idempotency-Key lets the admin retry "Create All" safely without
+  // creating duplicate products. Default to a per-call UUID.
+  const idempotencyKey = input.idempotencyKey || randomUUID();
 
   const res = await fetch(`${getBaseUrl(cfg.apiKey)}/v1/products`, {
     method: 'POST',
@@ -412,6 +470,7 @@ export async function createCreemProduct(
       'x-api-key': cfg.apiKey,
       'Content-Type': 'application/json',
       Accept: 'application/json',
+      'Idempotency-Key': idempotencyKey,
     },
     body: JSON.stringify(body),
     // Don't let a hung Creem API block the request indefinitely.
@@ -483,13 +542,22 @@ export interface CreateAllProductsResult {
 
 /**
  * Create all expected Creem products in sequence:
- *   - starter  × (monthly + yearly)
- *   - growth   × (monthly + yearly)
- *   - business × (monthly + yearly)
- *   - sms_number (monthly only — $5/month add-on)
+ *   - starter     × (monthly + yearly)
+ *   - growth      × (monthly + yearly)   [plan name displayed as "Professional"]
+ *   - business    × (monthly + yearly)
+ *   - sms_number  (monthly only — $5/month add-on)
  *
- * Enterprise is contact-sales (monthlyPrice=0) so it is SKIPPED — no product
- * needs to be created for it in Creem.
+ * That's 6 plan products + 1 SMS product = up to 7 products.
+ *
+ * Enterprise is "Custom" pricing (monthlyPrice=0 / contact-sales) so it is
+ * SKIPPED — Creem's checkout flow cannot process $0 plans, and an Enterprise
+ * subscription is activated via a separate manual flow (superadmin confirmation).
+ *
+ * Only MAIN plans are synced (`isAddon: false`). The 3 add-on plans
+ * (`ai_pro_addon`, `marketplace_featured`, `marketplace_premium`) are billed
+ * via `paymentProvider='none'` in the addon-subscriptions route and have no
+ * Creem checkout flow, so creating Creem products for them would waste API
+ * calls for IDs that are never read.
  *
  * This function ONLY reads the Plan catalog from the DB and calls Creem. It
  * does NOT write to the DB. The caller (admin route) is responsible for
@@ -504,34 +572,45 @@ export async function createAllCreemProducts(): Promise<CreateAllProductsResult>
   const created: CreateAllProductsResult['created'] = [];
   const failed: CreateAllProductsResult['failed'] = [];
 
-  // Load the plan catalog. Codes: starter, growth, business, enterprise.
-  // Skip any plan with monthlyPrice<=0 (enterprise — contact-sales).
+  // Load the plan catalog. Filter `isAddon: false` so we ONLY sync the 4 main
+  // plans (starter, growth/"Professional", business, enterprise), NOT the
+  // 3 add-on plans (ai_pro_addon, marketplace_featured, marketplace_premium)
+  // which are billed via a separate manual confirmation flow.
   const plans = await db.plan.findMany({
-    where: { isActive: true },
+    where: { isActive: true, isAddon: false },
     orderBy: { sortOrder: 'asc' },
   });
 
   for (const plan of plans) {
+    // Skip Enterprise — "Custom" pricing (monthlyPrice=0). Creem's checkout
+    // cannot process $0 plans, so creating an Enterprise product would be
+    // useless. The admin can still create one manually if they later add a
+    // paid Enterprise tier.
     if (!plan.monthlyPrice || plan.monthlyPrice <= 0) continue;
 
     for (const cycle of ['monthly', 'yearly'] as const) {
       const price = cycle === 'yearly' ? plan.yearlyPrice : plan.monthlyPrice;
       if (!price || price <= 0) continue;
 
+      // Map internal cycle → Creem `billing_period` enum (verified against docs).
+      const billingPeriod: CreemBillingPeriod =
+        cycle === 'yearly' ? 'every-year' : 'every-month';
       const cycleLabel = cycle === 'yearly' ? 'Yearly' : 'Monthly';
       const name = `ServiceOS ${plan.name} — ${cycleLabel}`;
       const description =
         plan.description || `ServiceOS ${plan.name} plan, ${cycle} subscription`;
-      const billingInterval = cycle === 'yearly' ? 'year' : 'month';
 
       try {
         const result = await createCreemProduct({
           name,
           description,
           billingType: 'recurring',
-          priceAmount: price,
-          priceCurrency: plan.currency || 'USD',
-          billingInterval,
+          billingPeriod,
+          priceInDollars: price,
+          currency: plan.currency || 'USD',
+          // Stable idempotency key per plan×cycle so retrying "Create All"
+          // doesn't create duplicate products in the Creem dashboard.
+          idempotencyKey: `${plan.code}-${cycle}`,
         });
         created.push({
           key: `${plan.code}_${cycle}`,
@@ -562,9 +641,10 @@ export async function createAllCreemProducts(): Promise<CreateAllProductsResult>
       description:
         'Dedicated phone number for SMS + voice. Billed monthly per number.',
       billingType: 'recurring',
-      priceAmount: 5,
-      priceCurrency: 'USD',
-      billingInterval: 'month',
+      billingPeriod: 'every-month',
+      priceInDollars: 5,
+      currency: 'USD',
+      idempotencyKey: 'sms_number-monthly',
     });
     created.push({
       key: 'sms_number_monthly',

@@ -102,14 +102,20 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Call Creem ────────────────────────────────────────────────────────
-    const billingInterval = cycle === 'yearly' ? 'year' : 'month';
+    // Map internal cycle → Creem `billing_period` enum (verified against docs).
+    const billingPeriod = cycle === 'yearly' ? 'every-year' : 'every-month';
     const result = await createCreemProduct({
       name,
       description,
       billingType: 'recurring',
-      priceAmount: price,
-      priceCurrency: currency,
-      billingInterval,
+      billingPeriod,
+      // `priceInDollars` is in MAJOR units — createCreemProduct converts to
+      // cents internally (e.g. $29 → 2900) before sending to Creem.
+      priceInDollars: price,
+      currency,
+      // Stable idempotency key per plan×cycle so retrying this single-product
+      // create doesn't duplicate the product in the Creem dashboard.
+      idempotencyKey: `${effectiveKey}-${cycle}`,
     });
 
     // ── Persist into RevenueFeatureToggle.configJson.products[effectiveKey][cycle] ──

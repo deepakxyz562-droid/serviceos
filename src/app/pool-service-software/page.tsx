@@ -21,7 +21,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Pool Service Software — Routes, Chemical Logs & Recurring Billing | ServiceOS",
   description:
-    "Pool service software for weekly route optimization, chemical-level logging, equipment inspections, recurring contract billing, and a customer portal. Start free today.",
+    "Pool service software for weekly smart auto-dispatch, chemical-level logging, equipment inspections, recurring contract billing, and a customer portal. Start free today.",
   keywords: [
     "pool service software",
     "pool service CRM",
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
 const features: Feature[] = [
   {
     icon: Waves,
-    title: "Weekly Route Optimization",
+    title: "Weekly Smart Auto-Dispatch",
     description:
       "ServiceOS orders your pool techs' stops by drive time and zip code density, not by memory. A 22-pool Tuesday route that used to take 9 hours gets done in 7, and the tech sees turn-by-turn navigation to every stop on their phone.",
   },
@@ -117,7 +117,7 @@ export default function PoolServiceSoftwarePage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "ServiceOS — Pool Service Business Software",
     description:
-      "Pool service CRM and route software with weekly route optimization, chemical-level logging, equipment inspections, recurring contract billing, parts ordering, and a customer portal.",
+      "Pool service CRM and route software with weekly smart auto-dispatch, chemical-level logging, equipment inspections, recurring contract billing, parts ordering, and a customer portal.",
     url: "https://serviceos.com/pool-service-software",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
@@ -137,7 +137,7 @@ export default function PoolServiceSoftwarePage() {
       <CornerstoneHero
         eyebrow="Pool Service Software"
         title="Pool Service Software That Logs Every Chemical, Optimizes Every Route, and Bills Every Contract"
-        subtitle="From weekly route optimization to chemical logging, equipment inspections, and recurring billing, ServiceOS is the pool service CRM built for cleaning and maintenance companies."
+        subtitle="From weekly smart auto-dispatch to chemical logging, equipment inspections, and recurring billing, ServiceOS is the pool service CRM built for cleaning and maintenance companies."
       >
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link

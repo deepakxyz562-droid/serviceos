@@ -24,7 +24,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Scheduling & Dispatch Software for Field Service | ServiceOS",
   description:
-    "Drag-and-drop scheduling, smart dispatch based on skills and location, recurring jobs, real-time GPS tracking, and route optimization. The scheduling & dispatch software service businesses actually use.",
+    "Drag-and-drop scheduling, smart dispatch based on skills and location, recurring jobs, real-time GPS tracking, and smart auto-dispatch. The scheduling & dispatch software service businesses actually use.",
   keywords: [
     "scheduling and dispatch software",
     "dispatch software",
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Scheduling & Dispatch Software for Field Service | ServiceOS",
     description:
-      "Drag-and-drop scheduling, smart dispatch, real-time GPS tracking, and route optimization in one platform. Stop juggling text messages and Excel — start dispatching.",
+      "Drag-and-drop scheduling, smart dispatch, real-time GPS tracking, and smart auto-dispatch in one platform. Stop juggling text messages and Excel — start dispatching.",
     url: "https://serviceos.com/scheduling-and-dispatch",
     siteName: "ServiceOS",
     type: "website",
@@ -71,7 +71,7 @@ const features: Feature[] = [
   },
   {
     icon: Route,
-    title: "Route optimization",
+    title: "Smart Auto-Dispatch",
     description:
       "ServiceOS reorders each technician's daily jobs to minimize drive time. Less windshield time means more jobs per day, less fuel, and earlier finishes — without you having to manually optimize routes.",
   },
@@ -106,7 +106,7 @@ const audiences = [
     icon: Sparkle,
     name: "Cleaning services",
     blurb:
-      "Recurring weekly and bi-weekly cleanings auto-scheduled. Cleaner attendance and route optimization built in for teams on the move.",
+      "Recurring weekly and bi-weekly cleanings auto-scheduled. Cleaner attendance and smart auto-dispatch built in for teams on the move.",
   },
 ];
 
@@ -147,7 +147,7 @@ export default function SchedulingAndDispatchPage() {
   const appSchema = getSoftwareApplicationSchema({
     name: "ServiceOS — Scheduling & Dispatch Software",
     description:
-      "Drag-and-drop scheduling, smart technician dispatch based on skills and location, recurring job automation, real-time GPS tracking, and route optimization for field service businesses.",
+      "Drag-and-drop scheduling, smart technician dispatch based on skills and location, recurring job automation, real-time GPS tracking, and smart auto-dispatch for field service businesses.",
     url: "https://serviceos.com/scheduling-and-dispatch",
     applicationCategory: "BusinessApplication",
     offers: { price: "0", priceCurrency: "USD" },
@@ -275,7 +275,7 @@ export default function SchedulingAndDispatchPage() {
           navigation. They get a push notification too, so dispatches
           are never missed. As they move through their day, you see
           everything in real time: live GPS location, current job status,
-          and ETA to the next appointment. The <strong>route optimization
+          and ETA to the next appointment. The <strong>smart auto-dispatch
           engine</strong> reorders each technician&apos;s remaining jobs to
           minimize drive time, which means more jobs per day, less fuel
           burned, and earlier finishes. When a customer calls asking

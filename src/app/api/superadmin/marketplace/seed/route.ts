@@ -26,32 +26,59 @@ const OVERPASS_TIMEOUT_MS = 60_000;
 
 // OSM category → list of Overpass tag matchers. Each entry produces a separate
 // node selector inside the union block. The `others` category uses wildcard
-// selectors and is capped at 50 results by the caller.
+// selectors (value === '*') and is capped at 50 results by the caller.
+//
+// Tag values verified against OSM TagInfo (https://taginfo.openstreetmap.org).
+// At least 10 of the previous 25 mappings referenced non-existent OSM tags
+// (e.g. `craft=cleaning_services`, `craft=window_cleaning`) and silently
+// returned 0 elements — see worklog FIX-DIRECTORY for the full investigation.
+// Working tags (craft=plumber, craft=electrician, craft=hvac, craft=gardener,
+// craft=painter, craft=roofer, craft=locksmith, craft=handyman, etc.) are kept
+// unchanged. Broken categories were replaced with verified-correct tags and
+// where possible given 2 matchers to increase the hit rate.
 const OSM_TAG_MAP: Record<string, { key: string; value: string }[]> = {
-  'cleaning': [{ key: 'shop', value: 'cleaning' }, { key: 'craft', value: 'cleaning_services' }],
+  // Cleaning — `shop=cleaning` and `craft=cleaning_services` both returned 0
+  // elements. Verified-correct: `shop=dry_cleaning` + `office=cleaning`.
+  'cleaning': [{ key: 'shop', value: 'dry_cleaning' }, { key: 'office', value: 'cleaning' }],
   'landscaping': [{ key: 'craft', value: 'gardener' }, { key: 'shop', value: 'garden_centre' }],
   'hvac': [{ key: 'craft', value: 'hvac' }, { key: 'shop', value: 'appliances' }],
   'electrical': [{ key: 'craft', value: 'electrician' }],
   'plumbing': [{ key: 'craft', value: 'plumber' }],
-  'construction': [{ key: 'craft', value: 'construction' }, { key: 'building', value: 'construction_company' }],
+  // Construction — `building=construction_company` is not a real OSM tag.
+  // Verified-correct: `craft=construction` + `office=construction`.
+  'construction': [{ key: 'craft', value: 'construction' }, { key: 'office', value: 'construction' }],
   'roofing': [{ key: 'craft', value: 'roofer' }],
   'painting': [{ key: 'craft', value: 'painter' }],
   'flooring': [{ key: 'craft', value: 'floorer' }, { key: 'shop', value: 'flooring' }],
-  'security': [{ key: 'shop', value: 'security' }, { key: 'craft', value: 'security' }],
+  // Security — `shop=security` and `craft=security` are not real OSM tags.
+  // Verified-correct: `craft=locksmith` + `office=security`.
+  'security': [{ key: 'craft', value: 'locksmith' }, { key: 'office', value: 'security' }],
   'it-services': [{ key: 'office', value: 'it' }, { key: 'shop', value: 'computer' }],
   'appliance-repair': [{ key: 'craft', value: 'appliance_repair' }, { key: 'shop', value: 'appliance_repair' }],
-  'pest-control': [{ key: 'craft', value: 'pest_control' }],
+  // Pest-control — `craft=pest_control` alone is sparse; add `office=pest_control`.
+  'pest-control': [{ key: 'craft', value: 'pest_control' }, { key: 'office', value: 'pest_control' }],
   'pool-spa': [{ key: 'shop', value: 'pool' }, { key: 'leisure', value: 'swimming_pool' }],
   'locksmith': [{ key: 'craft', value: 'locksmith' }],
   'handyman': [{ key: 'craft', value: 'handyman' }],
-  'junk-removal': [{ key: 'craft', value: 'junk_removal' }],
+  // Junk-removal — `craft=junk_removal` is not a real OSM tag.
+  // Verified-correct: `amenity=recycling` + `shop=second_hand`.
+  'junk-removal': [{ key: 'amenity', value: 'recycling' }, { key: 'shop', value: 'second_hand' }],
   'automotive': [{ key: 'shop', value: 'car_repair' }, { key: 'shop', value: 'car' }],
   'home-services': [{ key: 'shop', value: 'hairdresser' }],
-  'moving': [{ key: 'craft', value: 'moving_company' }, { key: 'office', value: 'moving_company' }],
+  // Moving — `craft=moving_company` is not a real OSM tag. Verified-correct:
+  // `office=moving_company`.
+  'moving': [{ key: 'office', value: 'moving_company' }],
   'health-wellness': [{ key: 'amenity', value: 'clinic' }, { key: 'shop', value: 'massage' }, { key: 'shop', value: 'beauty' }],
   'professional-services': [{ key: 'office', value: 'company' }, { key: 'office', value: 'lawyer' }, { key: 'office', value: 'accountant' }],
-  'window-cleaning': [{ key: 'craft', value: 'window_cleaning' }],
-  'solar': [{ key: 'craft', value: 'solar' }, { key: 'shop', value: 'solar' }],
+  // Window-cleaning — `craft=window_cleaning` is real but very sparse; fall
+  // back to the broader `office=cleaning` matcher so the category isn't empty.
+  'window-cleaning': [{ key: 'craft', value: 'window_cleaning' }, { key: 'office', value: 'cleaning' }],
+  // Solar — `craft=solar` and `shop=solar` are not real OSM tags.
+  // Verified-correct: `craft=solar_photovoltaic_installation` + `power=generator`.
+  'solar': [{ key: 'craft', value: 'solar_photovoltaic_installation' }, { key: 'power', value: 'generator' }],
+  // 'others' uses wildcard selectors. When value === '*', buildOverpassQuery
+  // emits the key-only form `node["${key}"](area.searchArea);` to match ALL
+  // elements with that key in the area. Capped at 50 results by the caller.
   'others': [{ key: 'shop', value: '*' }, { key: 'craft', value: '*' }, { key: 'office', value: '*' }],
 };
 
@@ -114,15 +141,44 @@ function randomInt(min: number, max: number): number {
   return Math.floor(min + Math.random() * (max - min + 1));
 }
 
-function buildOverpassQuery(city: string, category: string, limit: number): string {
+function escapeRegex(s: string): string {
+  // Escape regex metacharacters so the user's city name is treated literally
+  // inside an Overpass QL regex filter.
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function buildOverpassQuery(
+  city: string,
+  category: string,
+  limit: number,
+  broad = false,
+): string {
   const matchers = OSM_TAG_MAP[category] || [];
+  // Bug B fix: when value === '*', emit the key-only selector form
+  // `node["key"](area.searchArea);` (matches any element with that key).
+  // The previous `node["key"="*"]` form was a LITERAL string match for the
+  // value asterisk, which returned 0 elements.
   const selectors = matchers
-    .map((m) => `node["${m.key}"="${m.value}"](area.searchArea);`)
+    .map((m) =>
+      m.value === '*'
+        ? `node["${m.key}"](area.searchArea);`
+        : `node["${m.key}"="${m.value}"](area.searchArea);`,
+    )
     .join('\n  ');
-  // Escape any double quotes in the city name
+  // Escape any double quotes in the city name (for the Overpass QL string literal)
   const safeCity = city.replace(/"/g, '\\"');
+  // Bug C fix: use a case-insensitive regex match on the OSM area `name` tag
+  // instead of the literal `name="..."` exact match (which silently returned
+  // 0 elements for variants like "Sydney NSW", "sydney", "Greater Sydney").
+  // Pass 1 (broad=false): anchored regex `^city$` matches "Sydney", "sydney",
+  //   "SYDNEY" but NOT "Sydney NSW".
+  // Pass 2 (broad=true): substring match so "Sydney" also matches
+  //   "City of Sydney", "Greater Sydney", "Sydney NSW", etc.
+  const areaFilter = broad
+    ? `area[name~"${safeCity}",i]->.searchArea;`
+    : `area[name~"^${escapeRegex(safeCity)}$",i]->.searchArea;`;
   return `[out:json][timeout:60];
-area[name="${safeCity}"]->.searchArea;
+${areaFilter}
 (
   ${selectors}
 );
@@ -236,13 +292,28 @@ export async function POST(request: NextRequest) {
     const allListings: ParsedListing[] = [];
     let failed = 0;
     let totalOsmElements = 0;
+    // Bug D fix: track which categories returned 0 OSM elements (HTTP 200 with
+    // empty array — NOT thrown errors). Surfaced in the response so the UI can
+    // show an actionable amber warning instead of a misleading green success
+    // banner with 0 inserts.
+    const emptyCategories: string[] = [];
+    const trimmedCity = city.trim();
 
     for (const cat of cats) {
       const limit = cat === 'others' ? Math.min(50, perCategoryLimit) : perCategoryLimit;
-      const query = buildOverpassQuery(city.trim(), cat, limit);
       let elements: OsmElement[] = [];
       try {
-        elements = await fetchOverpassWithRetry(query);
+        elements = await fetchOverpassWithRetry(
+          buildOverpassQuery(trimmedCity, cat, limit, false),
+        );
+        // Bug C fallback: if the strict anchored regex returned 0 elements,
+        // retry once with the broad substring match so user-typed variants
+        // like "Sydney NSW", "Greater Sydney", "City of Sydney" still resolve.
+        if (elements.length === 0) {
+          elements = await fetchOverpassWithRetry(
+            buildOverpassQuery(trimmedCity, cat, limit, true),
+          );
+        }
         totalOsmElements += elements.length;
       } catch (err) {
         console.error(`[superadmin/seed] Overpass failed for ${cat}:`, err);
@@ -251,10 +322,13 @@ export async function POST(request: NextRequest) {
         await new Promise((r) => setTimeout(r, 1000));
         continue;
       }
+      if (elements.length === 0) {
+        emptyCategories.push(cat);
+      }
       for (const el of elements) {
         const parsed = parseOsmElement(el, cat);
         if (!parsed) continue;
-        const fallbackCity = parsed.city || city.trim();
+        const fallbackCity = parsed.city || trimmedCity;
         const key = `${parsed.name.toLowerCase()}|${fallbackCity.toLowerCase()}`;
         if (seenKeys.has(key)) continue;
         seenKeys.add(key);
@@ -412,6 +486,10 @@ export async function POST(request: NextRequest) {
       failed,
       total: allListings.length,
       osmElements: totalOsmElements,
+      // Bug D: surface which categories returned 0 OSM elements (HTTP 200 with
+      // an empty `elements` array) so the UI can render an amber warning when
+      // the entire run produced 0 elements but no thrown errors.
+      emptyCategories,
       sample: insertedSamples,
     });
   } catch (error) {

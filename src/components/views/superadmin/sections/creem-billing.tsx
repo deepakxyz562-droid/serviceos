@@ -102,8 +102,11 @@ const PRODUCT_INPUT_DEFS: Array<{
 }> = [
   { planCode: 'starter', planName: 'Starter', cycle: 'monthly', cycleLabel: 'Monthly' },
   { planCode: 'starter', planName: 'Starter', cycle: 'yearly', cycleLabel: 'Yearly' },
-  { planCode: 'growth', planName: 'Growth', cycle: 'monthly', cycleLabel: 'Monthly' },
-  { planCode: 'growth', planName: 'Growth', cycle: 'yearly', cycleLabel: 'Yearly' },
+  // planCode `growth` is the internal DB code; the user-facing plan name is
+  // "Professional" (see src/lib/billing-seed.ts PLAN_DEFS). Show the
+  // user-facing name so the admin can match the slot to the marketing copy.
+  { planCode: 'growth', planName: 'Professional', cycle: 'monthly', cycleLabel: 'Monthly' },
+  { planCode: 'growth', planName: 'Professional', cycle: 'yearly', cycleLabel: 'Yearly' },
   { planCode: 'business', planName: 'Business', cycle: 'monthly', cycleLabel: 'Monthly' },
   { planCode: 'business', planName: 'Business', cycle: 'yearly', cycleLabel: 'Yearly' },
   { planCode: 'enterprise', planName: 'Enterprise', cycle: 'monthly', cycleLabel: 'Monthly' },
@@ -124,7 +127,9 @@ const ADDON_INPUT_DEFS: Array<{
     addonKey: 'sms_number',
     addonName: 'SMS Number Add-on',
     cycle: 'monthly',
-    cycleLabel: 'Monthly £5',
+    // Currency is USD ($5/month) — see src/app/api/sms/numbers/buy/route.ts
+    // and createAllCreemProducts() in src/lib/creem.ts which both use 'USD'.
+    cycleLabel: 'Monthly $5',
   },
 ];
 
@@ -302,18 +307,26 @@ export function CreemBillingSection() {
       }
       const createdCount: number = data.created?.length || 0;
       const failedCount: number = data.failed?.length || 0;
+      // Surface the FIRST failure's error message so the admin can see WHY
+      // Creem rejected the request without digging through server logs. The
+      // full per-product error list is logged server-side by the route handler.
+      const firstError: string | undefined = data.failed?.[0]?.error;
+      const truncatedError =
+        firstError && firstError.length > 200
+          ? `${firstError.slice(0, 200)}…`
+          : firstError;
       if (createdCount > 0) {
         toast.success(`Created ${createdCount} product${createdCount === 1 ? '' : 's'} in Creem`, {
           description:
             failedCount > 0
-              ? `${failedCount} product(s) failed to create. See server logs for details.`
+              ? `${failedCount} product(s) failed to create. First error: ${truncatedError || 'unknown'}. Check server console for full details.`
               : 'Product IDs have been saved and auto-filled below.',
         });
       } else {
         toast.error('No products were created', {
           description:
             failedCount > 0
-              ? `${failedCount} product(s) failed. Check your Creem API key and try again.`
+              ? `${failedCount} product(s) failed. First error: ${truncatedError || 'unknown'}. Check server console for full details.`
               : 'Please check your Creem API key and try again.',
         });
       }
@@ -519,14 +532,28 @@ export function CreemBillingSection() {
             <p className="text-xs text-muted-foreground">
               {isConfigured
                 ? 'Leave blank to keep the current key. Enter a new value to replace it.'
-                : 'Find your API key in the Creem dashboard under Settings → API Keys.'}
+                : 'Find your API key in the Creem dashboard under Developers.'}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Your API key starts with{' '}
+              <code className="font-mono text-foreground">creem_</code> (found in
+              Dashboard → Developers). The webhook secret below (starts with{' '}
+              <code className="font-mono text-foreground">whsec_</code>) is a
+              SEPARATE field used only to verify webhook signatures — it cannot
+              authenticate API calls.
             </p>
           </div>
 
-          {/* Webhook Secret input */}
+          {/* Webhook Secret input — used ONLY to verify inbound webhook
+              signatures. This is NOT an API key and cannot authenticate
+              outbound API calls. The two credentials have different prefixes:
+              API key → `creem_…`, webhook secret → `whsec_…`. */}
           <div className="space-y-1.5">
             <Label htmlFor="creem-webhook-secret" className="text-sm font-medium">
-              Webhook Secret
+              Webhook Secret{' '}
+              <span className="text-muted-foreground font-normal">
+                (for signature verification, NOT API calls)
+              </span>
             </Label>
             <div className="relative">
               <Input
@@ -679,10 +706,13 @@ export function CreemBillingSection() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Create all products in Creem?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will create up to 9 products in your Creem account
-                    (starter, growth, business, enterprise × monthly/yearly +
-                    the SMS Number add-on). Enterprise is contact-sales so it
-                    will be skipped automatically. Continue?
+                    This will create up to 7 products in your Creem account
+                    (starter, Professional, business × monthly/yearly + the SMS
+                    Number add-on; Enterprise is &quot;Custom&quot; pricing so
+                    it is skipped automatically — Creem&apos;s checkout
+                    can&apos;t process $0 plans). Add-on plans (AI Pro,
+                    Marketplace Featured/Premium) are billed via a separate
+                    manual flow and are not created here. Continue?
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
