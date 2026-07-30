@@ -1011,6 +1011,7 @@ export function LineItemRow({
             value={item.unitCost ?? '0'}
             onChange={(e) => onChange({ ...item, unitCost: e.target.value })}
           />
+          <p className="text-[10px] text-muted-foreground/70 mt-0.5">For profit margin only</p>
         </div>
         <div>
           <Label className="text-[11px] text-muted-foreground mb-1">Unit price</Label>
@@ -1027,6 +1028,7 @@ export function LineItemRow({
           <div className="h-9 flex items-center px-3 rounded-md border bg-muted/50 text-sm font-semibold">
             {symbol}{total.toFixed(2)}
           </div>
+          <p className="text-[10px] text-muted-foreground/70 mt-0.5">{item.quantity || '0'} × {symbol}{(Number(item.unitPrice) || 0).toFixed(2)}</p>
         </div>
       </div>
     </div>

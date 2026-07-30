@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   LayoutDashboard,
   Briefcase,
@@ -94,6 +94,10 @@ import {
 import { JobExpensesSection } from '@/components/job/job-expenses-section';
 import { ScheduledVisitsSection } from '@/components/job/scheduled-visits-section';
 import { PushPermissionCard } from '@/components/pwa/push-permission';
+import {
+  GpsTrackingProvider,
+  useGpsTracking,
+} from '@/hooks/use-gps-tracking';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -587,6 +591,13 @@ function useJobDetailSheet({
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
+  // ── GPS tracking (shared via context from EmployeePortalLayout) ──────
+  // On `start_travel` we capture the current position (triggers the browser
+  // permission prompt the first time) and start a 30s ping interval so the
+  // admin Dispatch map shows this technician moving in real time.
+  // On `arrive` / `complete` we stop the interval.
+  const { captureOnce, startTracking, stopTracking } = useGpsTracking();
+
   // ── Sync selectedJob from the jobs array whenever jobs change ────────
   // After a lifecycle action (accept/start_travel/arrive/etc.) we call
   // `refetch()`, which recomputes `lifecycleState` + `lifecycleTimestamps`
@@ -606,12 +617,24 @@ function useJobDetailSheet({
   const handleLifecycleAction = async (action: string, jobId: string) => {
     setActionLoading(`${action}-${jobId}`);
     try {
+      // For travel/arrive/complete, capture the current GPS position so the
+      // backend can record where the technician was when the transition
+      // happened. captureOnce() triggers the browser permission prompt the
+      // first time — it resolves to {} on failure (lifecycle still proceeds).
+      const body: Record<string, unknown> = { action };
+      if (action === 'start_travel' || action === 'arrive' || action === 'complete') {
+        const coords = await captureOnce();
+        if (coords.latitude != null && coords.longitude != null) {
+          body.latitude = coords.latitude;
+          body.longitude = coords.longitude;
+        }
+      }
       const res = await authFetch(
         `/api/employee/jobs/${jobId}/lifecycle?XTransformPort=3000`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action }),
+          body: JSON.stringify(body),
         }
       );
       if (res.ok) {
@@ -625,6 +648,14 @@ function useJobDetailSheet({
           complete: 'completed',
         };
         toast.success(`Job ${actionLabels[action] || action} successfully`);
+        // Manage GPS tracking based on action:
+        //  - start_travel: begin 30s pings (tagged with jobId)
+        //  - arrive / complete: stop the ping interval
+        if (action === 'start_travel') {
+          startTracking(jobId);
+        } else if (action === 'arrive' || action === 'complete') {
+          stopTracking();
+        }
         // refetch() updates the `jobs` array; the sync effect above will
         // refresh `selectedJob` from the new data so the action buttons
         // advance.
@@ -1339,10 +1370,29 @@ function TimelineItem({ label, ts }: { label: string; ts: string }) {
 // ─── Editable Product / Service (line items) section for the employee sheet ──
 // Employees can add / edit / remove line items and save them to the job via
 // PUT /api/jobs/[id] (lineItemsJson). Kept compact to fit inside the Sheet.
+//
+// The "Item name" field is a lightweight autocomplete backed by the tenant's
+// Service Catalog (GET /api/services?active=true). Picking a catalog entry
+// pre-fills name + unitPrice. Employees can still type a custom name — the
+// catalog is a convenience, not a requirement.
 function EmployeeLineItemsSection({ job }: { job: Job }) {
   const [items, setItems] = useState<LineItem[]>(() => parseLineItems(job.lineItemsJson));
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [services, setServices] = useState<CatalogService[]>([]);
+
+  // Fetch the tenant's service catalog once (same API the admin Jobs form
+  // uses). Employees are authorized — the endpoint only requires a tenantId,
+  // which the employee JWT carries.
+  useEffect(() => {
+    authFetch('/api/services?active=true&limit=200&XTransformPort=3000')
+      .then((r) => (r.ok ? r.json() : { services: [] }))
+      .then((data) => {
+        const list = Array.isArray(data) ? data : data?.services ?? [];
+        setServices(list);
+      })
+      .catch(() => setServices([]));
+  }, []);
 
   // Re-sync from the job when it changes (e.g. sheet re-opened for another job)
   useEffect(() => {
@@ -1408,59 +1458,13 @@ function EmployeeLineItemsSection({ job }: { job: Job }) {
       ) : (
         <div className="space-y-2">
           {items.map((it, idx) => (
-            <div key={it.id} className="rounded-md border border-border/60 bg-background p-2 space-y-1.5">
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={it.name}
-                  onChange={(e) => update(idx, { name: e.target.value })}
-                  placeholder="Item name"
-                  className="flex-1 min-w-0 h-7 text-sm bg-transparent border-0 outline-none placeholder:text-muted-foreground/60 font-medium"
-                />
-                <button
-                  onClick={() => remove(idx)}
-                  className="text-muted-foreground hover:text-red-600 shrink-0"
-                  aria-label="Remove item"
-                >
-                  <XCircle className="size-4" />
-                </button>
-              </div>
-              <div className="grid grid-cols-3 gap-1.5">
-                <label className="block">
-                  <span className="text-[10px] text-muted-foreground">Qty</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={it.quantity}
-                    onChange={(e) => update(idx, { quantity: e.target.value })}
-                    className="w-full h-7 text-sm rounded border border-border/60 px-1.5 bg-background"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-[10px] text-muted-foreground">Unit cost</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={it.unitCost ?? '0'}
-                    onChange={(e) => update(idx, { unitCost: e.target.value })}
-                    className="w-full h-7 text-sm rounded border border-border/60 px-1.5 bg-background"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-[10px] text-muted-foreground">Unit price</span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={it.unitPrice}
-                    onChange={(e) => update(idx, { unitPrice: e.target.value })}
-                    className="w-full h-7 text-sm rounded border border-border/60 px-1.5 bg-background"
-                  />
-                </label>
-              </div>
-            </div>
+            <EmployeeLineItemRow
+              key={it.id}
+              item={it}
+              services={services}
+              onChange={(patch) => update(idx, patch)}
+              onRemove={() => remove(idx)}
+            />
           ))}
           <div className="flex items-center justify-between pt-1 text-sm">
             <span className="text-muted-foreground">Subtotal</span>
@@ -1480,6 +1484,152 @@ function EmployeeLineItemsSection({ job }: { job: Job }) {
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Single line-item row with catalog autocomplete ──────────────────────
+// Extracted from EmployeeLineItemsSection so each row manages its own
+// dropdown focus state without re-rendering the whole list.
+function EmployeeLineItemRow({
+  item,
+  services,
+  onChange,
+  onRemove,
+}: {
+  item: LineItem;
+  services: CatalogService[];
+  onChange: (patch: Partial<LineItem>) => void;
+  onRemove: () => void;
+}) {
+  const [focused, setFocused] = useState(false);
+  const [highlightIdx, setHighlightIdx] = useState(0);
+
+  const query = item.name.trim().toLowerCase();
+  const matches = useMemo(() => {
+    if (!query) return services.slice(0, 8);
+    return services.filter((s) => s.name.toLowerCase().includes(query)).slice(0, 8);
+  }, [services, query]);
+
+  const showDropdown = focused;
+  const noMatches = matches.length === 0;
+
+  const pickService = (svc: CatalogService) => {
+    onChange({
+      serviceId: svc.id,
+      name: svc.name,
+      unitPrice: String(svc.basePrice ?? 0),
+    });
+    setFocused(false);
+  };
+
+  return (
+    <div className="rounded-md border border-border/60 bg-background p-2 space-y-1.5">
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1 min-w-0">
+          <input
+            type="text"
+            value={item.name}
+            onChange={(e) => {
+              onChange({ name: e.target.value, serviceId: null });
+              setHighlightIdx(0);
+            }}
+            onFocus={() => { setFocused(true); setHighlightIdx(0); }}
+            onBlur={() => { setTimeout(() => setFocused(false), 150); }}
+            onKeyDown={(e) => {
+              if (!showDropdown) return;
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setHighlightIdx((i) => Math.min(i + 1, matches.length - 1));
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setHighlightIdx((i) => Math.max(i - 1, 0));
+              } else if (e.key === 'Enter') {
+                if (matches[highlightIdx]) {
+                  e.preventDefault();
+                  pickService(matches[highlightIdx]);
+                }
+              } else if (e.key === 'Escape') {
+                setFocused(false);
+              }
+            }}
+            placeholder="Type to search service catalog…"
+            className="w-full h-7 text-sm bg-transparent border-0 outline-none placeholder:text-muted-foreground/60 font-medium"
+          />
+          {showDropdown && (
+            <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md max-h-56 overflow-y-auto">
+              {noMatches ? (
+                <div className="px-3 py-2 text-xs text-muted-foreground">
+                  {item.name.trim() ? 'No matching service — type a custom name' : 'Start typing to search the catalog'}
+                </div>
+              ) : (
+                matches.map((svc, i) => (
+                  <button
+                    type="button"
+                    key={svc.id}
+                    onMouseDown={(e) => { e.preventDefault(); pickService(svc); }}
+                    className={cn(
+                      'flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent',
+                      i === highlightIdx && 'bg-accent',
+                    )}
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{svc.name}</p>
+                      {svc.category && <p className="text-[10px] text-muted-foreground truncate">{svc.category}</p>}
+                    </div>
+                    <span className="text-xs font-semibold text-emerald-700 whitespace-nowrap">
+                      ₹{svc.basePrice.toFixed(2)}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+        <button
+          onClick={onRemove}
+          className="text-muted-foreground hover:text-red-600 shrink-0"
+          aria-label="Remove item"
+        >
+          <XCircle className="size-4" />
+        </button>
+      </div>
+      <div className="grid grid-cols-3 gap-1.5">
+        <label className="block">
+          <span className="text-[10px] text-muted-foreground">Qty</span>
+          <input
+            type="number"
+            min="0"
+            step="any"
+            value={item.quantity}
+            onChange={(e) => onChange({ quantity: e.target.value })}
+            className="w-full h-7 text-sm rounded border border-border/60 px-1.5 bg-background"
+          />
+        </label>
+        <label className="block">
+          <span className="text-[10px] text-muted-foreground">Unit cost</span>
+          <input
+            type="number"
+            min="0"
+            step="any"
+            value={item.unitCost ?? '0'}
+            onChange={(e) => onChange({ unitCost: e.target.value })}
+            className="w-full h-7 text-sm rounded border border-border/60 px-1.5 bg-background"
+          />
+          <span className="text-[9px] text-muted-foreground/70 block leading-tight mt-0.5">For profit only</span>
+        </label>
+        <label className="block">
+          <span className="text-[10px] text-muted-foreground">Unit price</span>
+          <input
+            type="number"
+            min="0"
+            step="any"
+            value={item.unitPrice}
+            onChange={(e) => onChange({ unitPrice: e.target.value })}
+            className="w-full h-7 text-sm rounded border border-border/60 px-1.5 bg-background"
+          />
+        </label>
+      </div>
     </div>
   );
 }
@@ -2258,6 +2408,12 @@ function AttendanceView() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
+  // GPS tracking — shared via context. Clock-in captures the current position
+  // (triggers the browser permission prompt) and starts a 30s ping interval
+  // so the admin Dispatch map shows this technician. Clock-out stops it.
+  const { captureOnce, startTracking, stopTracking, gpsActive, locationDenied, gpsSupported } =
+    useGpsTracking();
+
   // Live "now" tick so the timer refreshes every second while clocked in.
   useEffect(() => {
     if (!activeShift || activeShift.status === 'completed') return;
@@ -2289,15 +2445,25 @@ function AttendanceView() {
   const handleClockIn = async () => {
     setActionLoading('clockin');
     try {
+      // Capture current position — this triggers the browser's location
+      // permission prompt the first time. Clock-in still works if the user
+      // denies or the device doesn't support geolocation.
+      const coords = await captureOnce();
       const res = await authFetch('/api/employee/shift?XTransformPort=3000', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+        }),
       });
       if (res.ok) {
         const data = await res.json();
         setActiveShift(data.shift);
         toast.success('Clocked in — have a great shift!');
+        // Start continuous GPS tracking for the shift (no jobId — this is a
+        // shift-level ping, not job-specific). Pings /api/gps/track every 30s.
+        startTracking();
         await refresh();
       } else if (res.status === 409) {
         toast.info('Already clocked in');
@@ -2330,6 +2496,8 @@ function AttendanceView() {
         };
         toast.success(labels[action]);
         if (action === 'clockout') {
+          // Stop GPS tracking when the shift ends.
+          stopTracking();
           setActiveShift(null);
         } else if (data.shift) {
           setActiveShift(data.shift);
@@ -3358,6 +3526,39 @@ function MobileBottomNav({
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
+// GPS status banner — shown across all employee sub-views so the technician
+// can see when tracking is active (green) or when location permission was
+// denied (amber, with a hint to re-enable). Rendered inside the
+// GpsTrackingProvider so it can read the shared GPS state.
+function GpsStatusBanner() {
+  const { gpsActive, locationDenied, gpsSupported } = useGpsTracking();
+  if (!gpsSupported) return null;
+  if (locationDenied) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 mb-3">
+        <AlertCircle className="size-4 text-amber-600 shrink-0" />
+        <p className="text-xs text-amber-800 dark:text-amber-200 flex-1">
+          Location permission denied — enable it in your browser settings so you appear on the dispatch map.
+        </p>
+      </div>
+    );
+  }
+  if (gpsActive) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-3 py-2 mb-3">
+        <span className="relative flex size-2.5 shrink-0">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+          <span className="relative inline-flex size-2.5 rounded-full bg-emerald-500" />
+        </span>
+        <p className="text-xs text-emerald-800 dark:text-emerald-200 flex-1">
+          GPS tracking active — your location is being shared with dispatch.
+        </p>
+      </div>
+    );
+  }
+  return null;
+}
+
 export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
   const [activeView, setActiveView] = useState<EmployeeSubView>('home');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -3422,6 +3623,7 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
   };
 
   return (
+    <GpsTrackingProvider employeeId={employeeId}>
     <div
       className="h-[100dvh] flex overflow-hidden bg-background"
       style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
@@ -3525,6 +3727,7 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
 
         {/* Content — extra bottom padding on mobile clears the fixed bottom tab bar */}
         <main className="flex-1 overflow-auto bg-muted/30 p-4 lg:p-6 pb-20 md:pb-6">
+          <GpsStatusBanner />
           {renderSubView()}
         </main>
       </div>
@@ -3532,6 +3735,7 @@ export function EmployeePortalLayout({ onLogout }: EmployeePortalLayoutProps) {
       {/* Mobile bottom tab bar (phones only) */}
       <MobileBottomNav activeView={activeView} onViewChange={handleViewChange} />
     </div>
+    </GpsTrackingProvider>
   );
 }
 

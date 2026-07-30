@@ -125,6 +125,10 @@ interface Job {
   quotedAmount?: number;
   actualStartTime?: string;
   actualEndTime?: string;
+  // When the job was marked completed (set by lifecycle/complete endpoints).
+  // Used for the same-day grace filter: completed jobs stay in the Active
+  // list for the rest of the calendar day they were completed.
+  completedAt?: string | null;
   notes?: string;
   customerId?: string;
   customerName?: string;
@@ -1218,12 +1222,24 @@ export function JobsView() {
       const res = await fetch(`/api/jobs?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
-        // Client-side filter: hide soft-deleted jobs (shown in History tab)
-        // AND exclude completed jobs from the active list — completed jobs
-        // are surfaced in the History tab instead, keeping the Jobs page
-        // focused on work-in-progress.
+        // Client-side filter: hide soft-deleted jobs (shown in History tab).
+        // Completed jobs are excluded from the active list — EXCEPT when they
+        // were completed today (same-day grace): the tenant can still see and
+        // edit them on the Jobs page for the rest of the calendar day. They
+        // move to the History tab the next day.
         const allJobs = Array.isArray(data) ? data : [];
-        setJobs(allJobs.filter((j: Job) => !j.deletedAt && j.status !== 'completed'));
+        const now = new Date();
+        const isSameDay = (d: Date) =>
+          d.getFullYear() === now.getFullYear() &&
+          d.getMonth() === now.getMonth() &&
+          d.getDate() === now.getDate();
+        setJobs(allJobs.filter((j: Job) => {
+          if (j.deletedAt) return false;
+          if (j.status !== 'completed') return true;
+          // Completed today → keep visible in Active list.
+          const completedAt = j.completedAt || j.actualEndTime;
+          return completedAt ? isSameDay(new Date(completedAt)) : false;
+        }));
       }
     } catch {
       setJobs([]);
@@ -3134,10 +3150,13 @@ export function JobsView() {
                       {lineItems.map((it, i) => (
                         <tr key={i} className="border-b border-border/40 last:border-0">
                           <td className="px-2 py-2.5 font-medium text-foreground">{it.name || 'Custom item'}{it.description && <span className="block text-xs text-muted-foreground font-normal">{it.description}</span>}</td>
-                          <td className="px-2 py-2.5 text-center text-muted-foreground">{it.quantity || 1}</td>
+                          <td className="px-2 py-2.5 text-center text-muted-foreground">{Number(it.quantity) || 0}</td>
                           <td className="px-2 py-2.5 text-right text-muted-foreground">{symbol}{(Number(it.unitCost) || 0).toFixed(2)}</td>
                           <td className="px-2 py-2.5 text-right text-muted-foreground">{symbol}{(Number(it.unitPrice) || 0).toFixed(2)}</td>
-                          <td className="px-2 py-2.5 text-right font-semibold text-foreground">{symbol}{((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1)).toFixed(2)}</td>
+                          <td className="px-2 py-2.5 text-right font-semibold text-foreground">
+                            {symbol}{((Number(it.unitPrice) || 0) * (Number(it.quantity) || 0)).toFixed(2)}
+                            <span className="block text-[10px] font-normal text-muted-foreground/70">{Number(it.quantity) || 0} × {symbol}{(Number(it.unitPrice) || 0).toFixed(2)}</span>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -3606,7 +3625,29 @@ export function JobsView() {
 
       {jobsTab === 'history' ? (
         <div className="mt-4">
-          <JobHistoryTab />
+          <JobHistoryTab
+            onSelectJob={async (jobId) => {
+              // Fetch the full job record (the History tab only has a minimal
+              // summary), then open the detail page so the tenant can view
+              // and edit the completed job (fix a mistake, add a missed item,
+              // etc.). Edits are saved through the normal PUT /api/jobs/[id].
+              try {
+                const res = await fetch(`/api/jobs/${jobId}`);
+                if (res.ok) {
+                  const data = await res.json();
+                  const fullJob = data.job ?? data;
+                  // Switch to the Active tab so the detail page renders (the
+                  // History tab doesn't have a detail panel).
+                  setJobsTab('active');
+                  await openJobDetail(fullJob);
+                } else {
+                  toast.error('Failed to load job details');
+                }
+              } catch {
+                toast.error('Network error');
+              }
+            }}
+          />
         </div>
       ) : (
         <>

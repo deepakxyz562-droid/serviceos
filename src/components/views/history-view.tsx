@@ -85,7 +85,7 @@ interface HistoryLead {
 
 // ─── Job History Tab ────────────────────────────────────────────────────────
 
-export function JobHistoryTab() {
+export function JobHistoryTab({ onSelectJob }: { onSelectJob?: (jobId: string) => void } = {}) {
   const [jobs, setJobs] = useState<HistoryJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -105,8 +105,22 @@ export function JobHistoryTab() {
       if (res.ok) {
         const data = await res.json();
         const all = Array.isArray(data) ? data : [];
-        // Show only completed or soft-deleted jobs
-        setJobs(all.filter((j: HistoryJob) => j.status === 'completed' || j.deletedAt));
+        // Show completed or soft-deleted jobs — BUT apply same-day grace:
+        // a job completed today stays in the Active list (Jobs page) for the
+        // rest of the calendar day and only appears here tomorrow. Soft-deleted
+        // (archived) jobs always show regardless of completion date.
+        const now = new Date();
+        const isSameDay = (d: Date) =>
+          d.getFullYear() === now.getFullYear() &&
+          d.getMonth() === now.getMonth() &&
+          d.getDate() === now.getDate();
+        setJobs(all.filter((j: HistoryJob) => {
+          if (j.deletedAt) return true; // archived jobs always show
+          if (j.status !== 'completed') return false;
+          // Completed — check if it was completed today (grace period).
+          if (j.completedAt && isSameDay(new Date(j.completedAt))) return false;
+          return true; // completed before today → show in history
+        }));
       }
     } catch {
       setJobs([]);
@@ -252,15 +266,21 @@ export function JobHistoryTab() {
       ) : (
         <div className="space-y-2">
           {filtered.map((job) => (
-            <Card key={job.id} className="hover:shadow-sm transition-shadow">
+            <Card key={job.id} className={`hover:shadow-sm transition-shadow ${onSelectJob && !job.deletedAt ? 'cursor-pointer' : ''}`}>
               <CardContent className="p-4 flex items-center gap-4">
                 <input
                   type="checkbox"
                   checked={selectedIds.has(job.id)}
                   onChange={() => toggleSelect(job.id)}
-                  className="size-4 rounded cursor-pointer"
+                  className="size-4 rounded cursor-pointer shrink-0"
+                  onClick={(e) => e.stopPropagation()}
                 />
-                <div className="flex-1 min-w-0">
+                <div
+                  className="flex-1 min-w-0"
+                  onClick={() => {
+                    if (onSelectJob && !job.deletedAt) onSelectJob(job.id);
+                  }}
+                >
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-xs font-mono text-muted-foreground">{job.jobNumber || job.id.slice(0, 8).toUpperCase()}</span>
                     {job.deletedAt ? (
@@ -284,12 +304,27 @@ export function JobHistoryTab() {
                     {job.deletedAt && <span>· Archived {new Date(job.deletedAt).toLocaleDateString()}</span>}
                   </div>
                 </div>
-                <div className="text-right shrink-0">
-                  {job.quotedAmount != null && (
-                    <p className="text-sm font-semibold">${job.quotedAmount.toFixed(2)}</p>
-                  )}
-                  {job.amountCollected != null && (
-                    <p className="text-xs text-emerald-600">Collected ${job.amountCollected.toFixed(2)}</p>
+                <div className="text-right shrink-0 flex items-center gap-3">
+                  <div>
+                    {job.quotedAmount != null && (
+                      <p className="text-sm font-semibold">${job.quotedAmount.toFixed(2)}</p>
+                    )}
+                    {job.amountCollected != null && (
+                      <p className="text-xs text-emerald-600">Collected ${job.amountCollected.toFixed(2)}</p>
+                    )}
+                  </div>
+                  {onSelectJob && !job.deletedAt && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectJob(job.id);
+                      }}
+                      className="shrink-0 min-h-[36px]"
+                    >
+                      View / Edit
+                    </Button>
                   )}
                 </div>
               </CardContent>

@@ -166,8 +166,13 @@ export async function PUT(
         );
       }
     }
-    if (body.status === 'completed') {
+    // Only set actualEndTime + free up the assignee on the FIRST transition
+    // to 'completed'. Guard with `existingJob.status !== 'completed'` so that
+    // editing a completed job (e.g. fixing a line item) does NOT overwrite
+    // the original completion timestamp or double-count completedJobs.
+    if (body.status === 'completed' && existingJob.status !== 'completed') {
       updateData.actualEndTime = new Date();
+      updateData.completedAt = new Date();
       if (existingJob.assigneeId) {
         // Only mark as 'available' if no other active jobs remain.
         const otherActiveJobs = await db.job.count({
@@ -185,6 +190,14 @@ export async function PUT(
           },
         });
       }
+    }
+
+    // If status is being changed AWAY from 'completed' (e.g. tenant reopens a
+    // completed job to fix a mistake), clear the completion timestamps so the
+    // job doesn't look finished in the detail view or trigger same-day grace.
+    if (body.status && body.status !== 'completed' && existingJob.status === 'completed') {
+      updateData.actualEndTime = null;
+      updateData.completedAt = null;
     }
 
     // If status is being changed to 'cancelled', free up the assignee
